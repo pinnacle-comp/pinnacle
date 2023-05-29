@@ -12,18 +12,18 @@ pub enum Float {
     Floating,
 }
 
-impl Default for WindowState {
-    fn default() -> Self {
-        Self::new() // TODO: maybe actual defaults
-    }
-}
-
 impl WindowState {
     pub fn new() -> Self {
         Self {
             floating: Float::NotFloating(None), // TODO: get this from a config file instead of
                                                 // |     hardcoding
         }
+    }
+}
+
+impl Default for WindowState {
+    fn default() -> Self {
+        Self::new() // TODO: maybe actual defaults
     }
 }
 

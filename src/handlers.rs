@@ -25,7 +25,13 @@ use smithay::{
     },
 };
 
-use crate::{ClientState, State};
+use crate::{
+    layout::{
+        automatic::{MasterStack, MasterStackSide},
+        Layout,
+    },
+    ClientState, State,
+};
 
 impl BufferHandler for State {
     fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {}
@@ -115,14 +121,28 @@ impl XdgShellHandler for State {
         &mut self.xdg_shell_state
     }
 
+    // TODO: this shouldn't call send_configure
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
-        self.space.map_element(window, (50, 50), true);
+        self.space.map_element(window, (0, 0), true);
+
+        let windows: Vec<Window> = self.space.elements().cloned().collect();
+        let layout = MasterStack {
+            side: MasterStackSide::Left,
+        };
+
+        layout.layout_windows(self, windows);
 
         // TODO: refresh all window geometries
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        let windows: Vec<Window> = self.space.elements().cloned().collect();
+        let layout = MasterStack {
+            side: MasterStackSide::Left,
+        };
+
+        layout.layout_windows(self, windows);
         // TODO: refresh geometries
     }
 

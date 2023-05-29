@@ -1,5 +1,6 @@
 mod grab;
 mod handlers;
+mod layout;
 mod pointer;
 mod window;
 mod xdg;
