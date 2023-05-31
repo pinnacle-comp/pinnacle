@@ -11,6 +11,7 @@ use smithay::{
             Client,
         },
     },
+    utils::Serial,
     wayland::{
         buffer::BufferHandler,
         compositor::{self, CompositorClientState, CompositorHandler, CompositorState},
@@ -43,7 +44,24 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        // println!("CompositorHandler commit()");
+
         utils::on_commit_buffer_handler::<Self>(surface);
+
+        if !compositor::is_sync_subsurface(surface) {
+            let mut root = surface.clone();
+            while let Some(parent) = compositor::get_parent(&root) {
+                root = parent;
+            }
+            if let Some(window) = self
+                .space
+                .elements()
+                .find(|w| w.toplevel().wl_surface() == &root)
+            {
+                // println!("window.on_commit");
+                window.on_commit();
+            }
+        };
 
         if let Some(window) = self
             .space
@@ -51,9 +69,6 @@ impl CompositorHandler for State {
             .find(|w| w.toplevel().wl_surface() == surface)
             .cloned()
         {
-            // TODO: from smallvil: check if subsurfaces are synced then do on_commit or something
-            window.on_commit();
-
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
                     .data_map
@@ -63,8 +78,10 @@ impl CompositorHandler for State {
                     .unwrap()
                     .initial_configure_sent
             });
+            // println!("initial_configure_sent is {}", initial_configure_sent);
 
             if !initial_configure_sent {
+                // println!("initial configure");
                 window.toplevel().send_configure();
             }
         }
@@ -96,16 +113,11 @@ impl SeatHandler for State {
         &mut self.seat_state
     }
 
-    fn cursor_image(&mut self, _seat: &smithay::input::Seat<Self>, _image: CursorImageStatus) {
-        self.cursor_status = _image;
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        self.cursor_status = image;
     }
 
-    fn focus_changed(
-        &mut self,
-        _seat: &smithay::input::Seat<Self>,
-        _focused: Option<&Self::KeyboardFocus>,
-    ) {
-    }
+    fn focus_changed(&mut self, _seat: &Seat<Self>, _focused: Option<&Self::KeyboardFocus>) {}
 }
 delegate_seat!(State);
 
@@ -128,6 +140,7 @@ impl XdgShellHandler for State {
 
         let windows: Vec<Window> = self.space.elements().cloned().collect();
         let layout = MasterStack {
+            windows: Vec::new(),
             side: MasterStackSide::Left,
         };
 
@@ -139,6 +152,7 @@ impl XdgShellHandler for State {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let windows: Vec<Window> = self.space.elements().cloned().collect();
         let layout = MasterStack {
+            windows: Vec::new(),
             side: MasterStackSide::Left,
         };
 
@@ -148,12 +162,7 @@ impl XdgShellHandler for State {
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {}
 
-    fn move_request(
-        &mut self,
-        surface: ToplevelSurface,
-        seat: WlSeat,
-        serial: smithay::utils::Serial,
-    ) {
+    fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
         crate::xdg::request::move_request(
             self,
             &surface,
@@ -166,7 +175,7 @@ impl XdgShellHandler for State {
         &mut self,
         surface: ToplevelSurface,
         seat: WlSeat,
-        serial: smithay::utils::Serial,
+        serial: Serial,
         edges: ResizeEdge,
     ) {
         const BUTTON_LEFT: u32 = 0x110;
@@ -180,7 +189,7 @@ impl XdgShellHandler for State {
         );
     }
 
-    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: smithay::utils::Serial) {}
+    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {}
 
     // TODO: impl the rest of the fns in XdgShellHandler
 }

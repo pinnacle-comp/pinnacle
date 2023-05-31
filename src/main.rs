@@ -2,6 +2,7 @@ mod grab;
 mod handlers;
 mod layout;
 mod pointer;
+mod tag;
 mod window;
 mod xdg;
 
@@ -180,11 +181,20 @@ fn main() -> Result<(), Box<dyn Error>> {
                             press_state,
                             serial,
                             time,
-                            |_a, _modifiers, keysym| {
+                            |_state, _modifiers, keysym| {
                                 if press_state == KeyState::Pressed
                                     && keysym.modified_sym() == keysyms::KEY_L
                                 {
+                                    println!("pressed L");
                                     FilterResult::Intercept(1)
+                                } else if press_state == KeyState::Pressed
+                                    && keysym.modified_sym() == keysyms::KEY_K
+                                {
+                                    FilterResult::Intercept(2)
+                                } else if press_state == KeyState::Pressed
+                                    && keysym.modified_sym() == keysyms::KEY_J
+                                {
+                                    FilterResult::Intercept(3)
                                 } else if keysym.modified_sym() == keysyms::KEY_Control_L {
                                     match press_state {
                                         KeyState::Pressed => {
@@ -203,8 +213,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                         state.move_mode = move_mode;
 
-                        if action == Some(1) {
-                            std::process::Command::new("alacritty").spawn().unwrap();
+                        match action {
+                            Some(1) => {
+                                std::process::Command::new("alacritty").spawn().unwrap();
+                            }
+                            Some(2) => {
+                                std::process::Command::new("nautilus").spawn().unwrap();
+                            }
+                            Some(3) => {
+                                std::process::Command::new("kitty").spawn().unwrap();
+                            }
+                            Some(_) => {}
+                            None => {}
                         }
                     }
                     InputEvent::PointerMotion { event } => {}
@@ -268,7 +288,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 const BUTTON_RIGHT: u32 = 0x111;
                                 if state.move_mode {
                                     if event.button_code() == BUTTON_LEFT {
-                                        // BTN_RIGHT
                                         crate::xdg::request::move_request_force(
                                             state,
                                             window.toplevel(),
