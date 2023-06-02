@@ -9,10 +9,10 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::shell::xdg::SurfaceCachedState,
+    wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
 };
 
-use crate::{window::SurfaceState, State};
+use crate::{backend::Backend, window::SurfaceState, State};
 
 pub struct ResizeSurfaceGrab<S: SeatHandler> {
     start_data: GrabStartData<S>,
@@ -52,12 +52,12 @@ impl<S: SeatHandler> ResizeSurfaceGrab<S> {
     }
 }
 
-impl PointerGrab<State> for ResizeSurfaceGrab<State> {
+impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
     fn motion(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
-        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
+        _focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &smithay::input::pointer::MotionEvent,
     ) {
         handle.motion(data, None, event);
@@ -85,13 +85,13 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
             new_window_height = self.initial_window_rect.size.h + delta.y;
         }
 
-        let (min_size, max_size) = smithay::wayland::compositor::with_states(
-            self.window.toplevel().wl_surface(),
-            |states| {
+        let (min_size, max_size) = match self.window.wl_surface() {
+            Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
                 let data = states.cached_state.current::<SurfaceCachedState>();
                 (data.min_size, data.max_size)
-            },
-        );
+            }),
+            None => ((0, 0).into(), (0, 0).into()),
+        };
 
         let min_width = i32::min(1, min_size.w);
         let min_height = i32::min(1, min_size.h);
@@ -124,9 +124,9 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
 
     fn relative_motion(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
-        focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
+        focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         handle.relative_motion(data, focus, event);
@@ -134,8 +134,8 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
 
     fn button(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
         event: &ButtonEvent,
     ) {
         handle.button(data, event);
@@ -162,14 +162,14 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
 
     fn axis(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
         details: AxisFrame,
     ) {
         handle.axis(data, details);
     }
 
-    fn start_data(&self) -> &GrabStartData<State> {
+    fn start_data(&self) -> &GrabStartData<State<B>> {
         &self.start_data
     }
 }

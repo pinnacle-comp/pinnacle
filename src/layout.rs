@@ -2,16 +2,19 @@ use std::{error::Error, fmt::Display};
 
 use smithay::desktop::Window;
 
-use crate::State;
+use crate::{backend::Backend, State};
 
 pub mod automatic;
 pub mod manual;
 
-pub trait Layout {
-    fn layout_windows(&self, state: &mut State, windows: Vec<Window>);
-    fn add_window(&mut self, state: &mut State, window: Window);
-    fn remove_window(&mut self, state: &mut State, window: Window)
-        -> Result<(), RemoveWindowError>;
+pub trait Layout<B: Backend> {
+    fn layout_windows(&self, state: &mut State<B>, windows: Vec<Window>);
+    fn add_window(&mut self, state: &mut State<B>, window: Window);
+    fn remove_window(
+        &mut self,
+        state: &mut State<B>,
+        window: Window,
+    ) -> Result<(), RemoveWindowError>;
 }
 
 #[derive(Debug)]

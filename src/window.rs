@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use smithay::{reexports::wayland_server::protocol::wl_surface::WlSurface, wayland::compositor};
 
-use crate::State;
+use crate::{backend::Backend, State};
 
 use self::window_state::{Float, WindowState};
 
@@ -22,7 +22,7 @@ pub trait SurfaceState: Default + 'static {
     }
 }
 
-pub fn toggle_floating(state: &mut State, wl_surface: &WlSurface) {
+pub fn toggle_floating<B: Backend>(state: &mut State<B>, wl_surface: &WlSurface) {
     WindowState::with_state(wl_surface, |window_state| {
         let window = state
             .space

@@ -13,7 +13,7 @@ use smithay::{
     utils::{IsAlive, Logical, Point},
 };
 
-use crate::State;
+use crate::{backend::Backend, State};
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
@@ -21,12 +21,12 @@ pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub initial_window_loc: Point<i32, Logical>,
 }
 
-impl PointerGrab<State> for MoveSurfaceGrab<State> {
+impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     fn motion(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
-        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
+        _focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &MotionEvent,
     ) {
         handle.motion(data, None, event);
@@ -44,9 +44,9 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
 
     fn relative_motion(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
-        focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
+        focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &RelativeMotionEvent,
     ) {
         handle.relative_motion(data, focus, event);
@@ -54,8 +54,8 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
 
     fn button(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
         event: &ButtonEvent,
     ) {
         handle.button(data, event);
@@ -69,14 +69,14 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
 
     fn axis(
         &mut self,
-        data: &mut State,
-        handle: &mut PointerInnerHandle<'_, State>,
+        data: &mut State<B>,
+        handle: &mut PointerInnerHandle<'_, State<B>>,
         details: AxisFrame,
     ) {
         handle.axis(data, details);
     }
 
-    fn start_data(&self) -> &GrabStartData<State> {
+    fn start_data(&self) -> &GrabStartData<State<B>> {
         &self.start_data
     }
 }

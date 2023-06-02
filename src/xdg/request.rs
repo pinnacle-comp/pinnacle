@@ -6,14 +6,15 @@ use smithay::{
 };
 
 use crate::{
+    backend::Backend,
     grab::{move_grab::MoveSurfaceGrab, resize_grab::ResizeSurfaceGrab},
     State,
 };
 
-pub fn move_request(
-    state: &mut State,
+pub fn move_request<B: Backend>(
+    state: &mut State<B>,
     surface: &ToplevelSurface,
-    seat: &Seat<State>,
+    seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
 ) {
     println!("move_request started");
@@ -45,10 +46,10 @@ pub fn move_request(
 }
 
 // TODO: see how this interacts with drag and drop and other grabs
-pub fn move_request_force(
-    state: &mut State,
+pub fn move_request_force<B: Backend>(
+    state: &mut State<B>,
     surface: &ToplevelSurface,
-    seat: &Seat<State>,
+    seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
 ) {
     println!("move_request_force started");
@@ -82,10 +83,10 @@ pub fn move_request_force(
     pointer.set_grab(state, grab, serial, Focus::Clear);
 }
 
-pub fn resize_request(
-    state: &mut State,
+pub fn resize_request<B: Backend>(
+    state: &mut State<B>,
     surface: &ToplevelSurface,
-    seat: &Seat<State>,
+    seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
     edges: xdg_toplevel::ResizeEdge,
     button_used: u32,
@@ -124,10 +125,10 @@ pub fn resize_request(
     }
 }
 
-pub fn resize_request_force(
-    state: &mut State,
+pub fn resize_request_force<B: Backend>(
+    state: &mut State<B>,
     surface: &ToplevelSurface,
-    seat: &Seat<State>,
+    seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
     edges: xdg_toplevel::ResizeEdge,
     button_used: u32,

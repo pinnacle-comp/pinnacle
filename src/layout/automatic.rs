@@ -1,6 +1,6 @@
 use smithay::desktop::Window;
 
-use crate::State;
+use crate::{backend::Backend, State};
 
 use super::{Layout, RemoveWindowError};
 
@@ -19,8 +19,8 @@ pub enum MasterStackSide {
     Bottom,
 }
 
-impl Layout for MasterStack {
-    fn layout_windows(&self, state: &mut State, windows: Vec<Window>) {
+impl<B: Backend> Layout<B> for MasterStack {
+    fn layout_windows(&self, state: &mut State<B>, windows: Vec<Window>) {
         match self.side {
             MasterStackSide::Left => {
                 // println!("MasterStack layout_windows");
@@ -98,13 +98,13 @@ impl Layout for MasterStack {
         }
     }
 
-    fn add_window(&mut self, state: &mut State, window: Window) {
+    fn add_window(&mut self, state: &mut State<B>, window: Window) {
         self.windows.push(window);
     }
 
     fn remove_window(
         &mut self,
-        state: &mut State,
+        state: &mut State<B>,
         window: Window,
     ) -> Result<(), RemoveWindowError> {
         let pos = self
