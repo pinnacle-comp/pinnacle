@@ -1,6 +1,6 @@
 use smithay::desktop::Window;
 
-use crate::{backend::Backend, State};
+use crate::{backend::Backend, state::State};
 
 use super::{Layout, RemoveWindowError};
 

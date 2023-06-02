@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use smithay::{reexports::wayland_server::protocol::wl_surface::WlSurface, wayland::compositor};
 
-use crate::{backend::Backend, State};
+use crate::{backend::Backend, state::State};
 
 use self::window_state::{Float, WindowState};
 

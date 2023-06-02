@@ -12,7 +12,7 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
 };
 
-use crate::{backend::Backend, window::SurfaceState, State};
+use crate::{backend::Backend, state::State, window::SurfaceState};
 
 pub struct ResizeSurfaceGrab<S: SeatHandler> {
     start_data: GrabStartData<S>,

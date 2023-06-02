@@ -37,7 +37,7 @@ use crate::{
         automatic::{MasterStack, MasterStackSide},
         Layout,
     },
-    ClientState, State,
+    state::{ClientState, State},
 };
 
 impl<B: Backend> BufferHandler for State<B> {

@@ -4,23 +4,23 @@ use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
         egl::EGLDevice,
-        input::{
-            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputEvent, KeyState,
-            KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
-        },
         renderer::{
-            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement,
-            gles::GlesRenderer, ImportDma,
+            damage::{self, OutputDamageTracker},
+            element::{
+                default_primary_scanout_output_compare, surface::WaylandSurfaceRenderElement,
+            },
+            gles::GlesRenderer,
+            ImportDma,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
     delegate_dmabuf,
-    desktop::{space, Space, Window, WindowSurfaceType},
-    input::{
-        keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, CursorImageStatus, MotionEvent},
-        SeatState,
+    desktop::{
+        space,
+        utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
+        Space, Window,
     },
+    input::{pointer::CursorImageStatus, SeatState},
     output::{Output, Subpixel},
     reexports::{
         calloop::{
@@ -28,10 +28,10 @@ use smithay::{
             timer::{TimeoutAction, Timer},
             EventLoop, Interest, Mode, PostAction,
         },
-        wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
+        winit::platform::wayland,
     },
-    utils::{Clock, Monotonic, Physical, Point, Scale, Transform, SERIAL_COUNTER},
+    utils::{Clock, Monotonic, Physical, Point, Scale, Transform},
     wayland::{
         compositor::CompositorState,
         data_device::DataDeviceState,
@@ -39,6 +39,7 @@ use smithay::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
+        fractional_scale::with_fractional_scale,
         output::OutputManagerState,
         shell::xdg::XdgShellState,
         shm::ShmState,
@@ -46,7 +47,7 @@ use smithay::{
     },
 };
 
-use crate::{CalloopData, ClientState, State};
+use crate::state::{CalloopData, ClientState, State};
 
 use super::Backend;
 
@@ -203,6 +204,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
     };
 
     let state = State {
+        // TODO: move winit_backend and damage_tracker into their own scope so I can't access them
+        // |     from after this
         backend_data: WinitData {
             backend: winit_backend,
             damage_tracker,
@@ -259,7 +262,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             WinitEvent::Focus(_) => {}
             WinitEvent::Input(input_evt) => {
                 state.process_input_event(&seat, input_evt);
-            } // TODO:
+            }
             WinitEvent::Refresh => {}
         });
 
@@ -270,34 +273,110 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        state.backend_data.backend.bind().unwrap();
+        let full_redraw = &mut state.backend_data.full_redraw;
 
+        let render_res = state.backend_data.backend.bind().and_then(|_| {
+            let age = if *full_redraw > 0 {
+                0
+            } else {
+                state.backend_data.backend.buffer_age().unwrap_or(0)
+            };
+
+            let renderer = state.backend_data.backend.renderer();
+
+            // render_output()
+            let output_render_elements =
+                space::space_render_elements(renderer, [&state.space], &output, 1.0).unwrap();
+
+            state
+                .backend_data
+                .damage_tracker
+                .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
+                .map_err(|err| match err {
+                    damage::Error::Rendering(err) => err.into(),
+                    damage::Error::OutputNoMode(_) => todo!(),
+                })
+        });
+
+        match render_res {
+            Ok((damage, states)) => {
+                let has_rendered = damage.is_some();
+                if let Some(damage) = damage {
+                    if let Err(err) = state.backend_data.backend.submit(Some(&*damage)) {
+                        // TODO: WARN
+                    }
+                }
+                let throttle = Some(Duration::from_secs(1));
+
+                state.space.elements().for_each(|window| {
+                    window.with_surfaces(|surface, states_inner| {
+                        let primary_scanout_output = update_surface_primary_scanout_output(
+                            surface,
+                            &output,
+                            states_inner,
+                            &states,
+                            default_primary_scanout_output_compare,
+                        );
+
+                        if let Some(output) = primary_scanout_output {
+                            with_fractional_scale(states_inner, |fraction_scale| {
+                                fraction_scale
+                                    .set_preferred_scale(output.current_scale().fractional_scale());
+                            });
+                        }
+                    });
+
+                    if state.space.outputs_for_element(window).contains(&output) {
+                        window.send_frame(
+                            &output,
+                            state.clock.now(),
+                            throttle,
+                            surface_primary_scanout_output,
+                        );
+                        // TODO: dmabuf_feedback
+                    }
+                });
+
+                if has_rendered {
+                    // TODO:
+                }
+            }
+            Err(err) => {
+                // TODO: WARN
+            }
+        }
+
+        //
+        //
+        //
+        //
+        //
         let scale = Scale::from(output.current_scale().fractional_scale());
         let cursor_pos = state.pointer_location;
         let _cursor_pos_scaled: Point<i32, Physical> = cursor_pos.to_physical(scale).to_i32_round();
 
-        space::render_output::<_, WaylandSurfaceRenderElement<GlesRenderer>, _, _>(
-            &output,
-            state.backend_data.backend.renderer(),
-            1.0,
-            0,
-            [&state.space],
-            &[],
-            &mut state.backend_data.damage_tracker,
-            [0.5, 0.5, 0.5, 1.0],
-        )
-        .unwrap();
-
-        state.backend_data.backend.submit(None).unwrap();
-
-        state.space.elements().for_each(|window| {
-            window.send_frame(
-                &output,
-                start_time.elapsed(),
-                Some(Duration::ZERO),
-                |_, _| Some(output.clone()),
-            )
-        });
+        // space::render_output::<_, WaylandSurfaceRenderElement<GlesRenderer>, _, _>(
+        //     &output,
+        //     state.backend_data.backend.renderer(),
+        //     1.0,
+        //     0,
+        //     [&state.space],
+        //     &[],
+        //     &mut state.backend_data.damage_tracker,
+        //     [0.5, 0.5, 0.5, 1.0],
+        // )
+        // .unwrap();
+        //
+        // state.backend_data.backend.submit(None).unwrap();
+        //
+        // state.space.elements().for_each(|window| {
+        //     window.send_frame(
+        //         &output,
+        //         start_time.elapsed(),
+        //         Some(Duration::ZERO),
+        //         |_, _| Some(output.clone()),
+        //     )
+        // });
 
         state.space.refresh();
 

@@ -13,7 +13,7 @@ use smithay::{
     utils::{IsAlive, Logical, Point},
 };
 
-use crate::{backend::Backend, State};
+use crate::{backend::Backend, state::State};
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,

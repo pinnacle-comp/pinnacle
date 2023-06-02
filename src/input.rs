@@ -13,7 +13,7 @@ use smithay::{
     utils::{Point, SERIAL_COUNTER},
 };
 
-use crate::{backend::winit::WinitData, State};
+use crate::{backend::winit::WinitData, state::State};
 
 impl State<WinitData> {
     pub fn process_input_event<B: InputBackend>(
@@ -22,8 +22,7 @@ impl State<WinitData> {
         event: InputEvent<B>,
     ) {
         match event {
-            // TODO: extract input events
-            // |     into separate function
+            // TODO: rest of input events
 
             // InputEvent::DeviceAdded { device } => todo!(),
             // InputEvent::DeviceRemoved { device } => todo!(),

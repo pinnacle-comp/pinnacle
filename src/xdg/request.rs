@@ -8,7 +8,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     grab::{move_grab::MoveSurfaceGrab, resize_grab::ResizeSurfaceGrab},
-    State,
+    state::State,
 };
 
 pub fn move_request<B: Backend>(
