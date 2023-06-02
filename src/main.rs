@@ -1,56 +1,33 @@
 mod backend;
 mod grab;
 mod handlers;
+mod input;
 mod layout;
 mod pointer;
 mod tag;
 mod window;
 mod xdg;
 
-use std::{error::Error, os::fd::AsRawFd, sync::Arc, time::Duration};
+use std::error::Error;
 
 use backend::{winit::WinitData, Backend};
 use smithay::{
-    backend::{
-        egl::EGLDevice,
-        input::{
-            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputEvent, KeyState,
-            KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
-        },
-        renderer::{
-            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement,
-            gles::GlesRenderer, ImportDma,
-        },
-        winit::{WinitError, WinitEvent},
-    },
-    desktop::{space, Space, Window, WindowSurfaceType},
-    input::{
-        keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, CursorImageStatus, MotionEvent},
-        SeatState,
-    },
-    output::{Output, Subpixel},
+    desktop::{Space, Window},
+    input::{pointer::CursorImageStatus, SeatState},
     reexports::{
-        calloop::{
-            generic::Generic,
-            timer::{TimeoutAction, Timer},
-            EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction,
-        },
-        wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
+        calloop::{LoopHandle, LoopSignal},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             Display,
         },
     },
-    utils::{Clock, Logical, Monotonic, Physical, Point, Scale, Transform, SERIAL_COUNTER},
+    utils::{Clock, Logical, Monotonic, Point},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         data_device::DataDeviceState,
-        dmabuf::{DmabufFeedbackBuilder, DmabufState},
         output::OutputManagerState,
         shell::xdg::XdgShellState,
         shm::ShmState,
-        socket::ListeningSocketSource,
     },
 };
 

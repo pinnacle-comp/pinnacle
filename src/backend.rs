@@ -2,6 +2,7 @@ use smithay::{output::Output, reexports::wayland_server::protocol::wl_surface::W
 
 pub mod winit;
 
+/// A trait defining common methods for each available backend: winit and tty-udev
 pub trait Backend: 'static {
     fn seat_name(&self) -> String;
     fn reset_buffers(&mut self, output: &Output);

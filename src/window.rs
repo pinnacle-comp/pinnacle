@@ -9,6 +9,7 @@ use self::window_state::{Float, WindowState};
 pub mod window_state;
 
 pub trait SurfaceState: Default + 'static {
+    /// Access the [SurfaceState] associated with a [WlSurface]
     fn with_state<F, T>(wl_surface: &WlSurface, function: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
