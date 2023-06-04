@@ -66,22 +66,16 @@ impl State<WinitData> {
 
                 self.move_mode = move_mode;
 
-                match action {
-                    Some(1) => {
-                        std::process::Command::new("alacritty").spawn().unwrap();
-                    }
-                    Some(2) => {
-                        std::process::Command::new("nautilus").spawn().unwrap();
-                    }
-                    Some(3) => {
-                        std::process::Command::new("kitty").spawn().unwrap();
-                    }
-                    Some(4) => {
-                        std::process::Command::new("foot").spawn().unwrap();
-                    }
-                    Some(_) => {}
-                    None => {}
-                }
+                std::process::Command::new(match action {
+                    Some(1) => "alacritty",
+                    Some(2) => "nautilus",
+                    Some(3) => "kitty",
+                    Some(4) => "foot",
+                    Some(_) | None => return,
+                })
+                .env("WAYLAND_DISPLAY", self.socket_name.clone())
+                .spawn()
+                .unwrap();
             }
             InputEvent::PointerMotion { event } => {}
             InputEvent::PointerMotionAbsolute { event } => {

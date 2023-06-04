@@ -6,11 +6,9 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{
-                default_primary_scanout_output_compare, surface::WaylandSurfaceRenderElement,
-            },
+            element::default_primary_scanout_output_compare,
             gles::GlesRenderer,
-            ImportDma,
+            ImportDma, ImportMemWl,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
@@ -29,7 +27,6 @@ use smithay::{
             EventLoop, Interest, Mode, PostAction,
         },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
-        winit::platform::wayland,
     },
     utils::{Clock, Monotonic, Physical, Point, Scale, Transform},
     wayland::{
@@ -39,11 +36,12 @@ use smithay::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
-        fractional_scale::with_fractional_scale,
+        fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
         output::OutputManagerState,
         shell::xdg::XdgShellState,
         shm::ShmState,
         socket::ListeningSocketSource,
+        viewporter::ViewporterState,
     },
 };
 
@@ -77,7 +75,7 @@ impl DmabufHandler for State<WinitData> {
 
     fn dmabuf_imported(
         &mut self,
-        global: &DmabufGlobal,
+        _global: &DmabufGlobal,
         dmabuf: Dmabuf,
     ) -> Result<(), ImportError> {
         self.backend_data
@@ -203,7 +201,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let state = State {
+    let mut state = State {
         // TODO: move winit_backend and damage_tracker into their own scope so I can't access them
         // |     from after this
         backend_data: WinitData {
@@ -226,9 +224,18 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             &display_handle,
         ),
         xdg_shell_state: XdgShellState::new::<State<WinitData>>(&display_handle),
+        viewporter_state: ViewporterState::new::<State<WinitData>>(&display_handle),
+        fractional_scale_manager_state: FractionalScaleManagerState::new::<State<WinitData>>(
+            &display_handle,
+        ),
 
         move_mode: false,
+        socket_name: socket_name.clone(),
     };
+
+    state
+        .shm_state
+        .update_formats(state.backend_data.backend.renderer().shm_formats());
 
     let mut data = CalloopData { display, state };
 
@@ -274,6 +281,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         };
 
         let full_redraw = &mut state.backend_data.full_redraw;
+        *full_redraw = full_redraw.saturating_sub(1);
 
         let render_res = state.backend_data.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -302,7 +310,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             Ok((damage, states)) => {
                 let has_rendered = damage.is_some();
                 if let Some(damage) = damage {
-                    if let Err(err) = state.backend_data.backend.submit(Some(&*damage)) {
+                    if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
                         // TODO: WARN
                     }
                 }
@@ -346,37 +354,9 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             }
         }
 
-        //
-        //
-        //
-        //
-        //
         let scale = Scale::from(output.current_scale().fractional_scale());
         let cursor_pos = state.pointer_location;
         let _cursor_pos_scaled: Point<i32, Physical> = cursor_pos.to_physical(scale).to_i32_round();
-
-        // space::render_output::<_, WaylandSurfaceRenderElement<GlesRenderer>, _, _>(
-        //     &output,
-        //     state.backend_data.backend.renderer(),
-        //     1.0,
-        //     0,
-        //     [&state.space],
-        //     &[],
-        //     &mut state.backend_data.damage_tracker,
-        //     [0.5, 0.5, 0.5, 1.0],
-        // )
-        // .unwrap();
-        //
-        // state.backend_data.backend.submit(None).unwrap();
-        //
-        // state.space.elements().for_each(|window| {
-        //     window.send_frame(
-        //         &output,
-        //         start_time.elapsed(),
-        //         Some(Duration::ZERO),
-        //         |_, _| Some(output.clone()),
-        //     )
-        // });
 
         state.space.refresh();
 

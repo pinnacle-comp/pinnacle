@@ -84,6 +84,8 @@ impl<B: Backend> Layout<B> for MasterStack {
                     }
                 }
 
+                state.backend_data.reset_buffers(&output);
+
                 // INFO: We send configures when the event loop is idle so
                 // |     CompositorHandler::commit() sends the initial configure
                 state.loop_handle.insert_idle(|_calloop_data| {
