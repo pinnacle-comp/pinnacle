@@ -152,8 +152,6 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
     output.set_preferred(mode);
 
-    let mut damage_tracker = OutputDamageTracker::from_output(&output);
-
     let render_node =
         EGLDevice::device_for_display(winit_backend.renderer().egl_context().display())
             .and_then(|device| device.try_get_render_node());
@@ -170,11 +168,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             Some(dmabuf_default_feedback)
         }
         Ok(None) => {
-            eprintln!("failed to query render node, dmabuf will use v3"); // TODO: tracing
+            tracing::warn!("failed to query render node, dmabuf will use v3"); // TODO: tracing
             None
         }
         Err(err) => {
-            // TODO: tracing
+            tracing::warn!("{}", err);
             None
         }
     };
@@ -206,7 +204,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         // |     from after this
         backend_data: WinitData {
             backend: winit_backend,
-            damage_tracker,
+            damage_tracker: OutputDamageTracker::from_output(&output),
             dmabuf_state,
             full_redraw: 0,
         },
@@ -237,17 +235,12 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         .shm_state
         .update_formats(state.backend_data.backend.renderer().shm_formats());
 
-    let mut data = CalloopData { display, state };
-
-    data.state.space.map_output(&output, (0, 0));
+    state.space.map_output(&output, (0, 0));
 
     std::env::set_var("WAYLAND_DISPLAY", socket_name);
 
-    let start_time = std::time::Instant::now();
-    let timer = Timer::immediate();
-
     // TODO: pointer
-    evt_loop_handle.insert_source(timer, move |_instant, _metadata, data| {
+    evt_loop_handle.insert_source(Timer::immediate(), move |_instant, _metadata, data| {
         let display = &mut data.display;
         let state = &mut data.state;
 
@@ -311,7 +304,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 let has_rendered = damage.is_some();
                 if let Some(damage) = damage {
                     if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
-                        // TODO: WARN
+                        tracing::warn!("{}", err);
                     }
                 }
                 let throttle = Some(Duration::from_secs(1));
@@ -350,7 +343,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 }
             }
             Err(err) => {
-                // TODO: WARN
+                tracing::warn!("{}", err);
             }
         }
 
@@ -365,7 +358,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         TimeoutAction::ToDuration(Duration::from_millis(6))
     })?;
 
-    event_loop.run(None, &mut data, |_data| {})?;
+    event_loop.run(None, &mut CalloopData { display, state }, |_data| {})?;
 
     Ok(())
 }

@@ -25,8 +25,8 @@ use smithay::{
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         shell::xdg::{
-            Configure, PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface,
-            XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler,
+            XdgShellState, XdgToplevelSurfaceData,
         },
         shm::{ShmHandler, ShmState},
     },
@@ -34,10 +34,7 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    layout::{
-        automatic::{MasterStack, MasterStackSide},
-        Layout,
-    },
+    layout::Layout,
     state::{ClientState, State},
 };
 
@@ -91,22 +88,12 @@ impl<B: Backend> CompositorHandler for State<B> {
             while let Some(parent) = compositor::get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self
-                .space
-                .elements()
-                .find(|w| w.toplevel().wl_surface() == &root)
-            {
-                // println!("window.on_commit");
+            if let Some(window) = self.window_for_surface(surface) {
                 window.on_commit();
             }
         };
 
-        if let Some(window) = self
-            .space
-            .elements()
-            .find(|w| w.toplevel().wl_surface() == surface)
-            .cloned()
-        {
+        if let Some(window) = self.window_for_surface(surface) {
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
                     .data_map
@@ -128,7 +115,7 @@ impl<B: Backend> CompositorHandler for State<B> {
             }
         }
 
-        crate::grab::resize_grab::handle_commit(&mut self.space, surface);
+        crate::grab::resize_grab::handle_commit(self, surface);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -178,32 +165,16 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        surface.with_pending_state(|state| {
-            let size = state.size.unwrap_or((0, 0).into());
-            println!("current size is {}, {}", size.w, size.h);
-            // state.size = Some((500, 250).into());
-            state.size = Some((1500, 1250).into());
-        });
         let window = Window::new(surface);
-        self.space.map_element(window, (100, 100), true);
-
+        self.space.map_element(window, (0, 0), true);
         let windows: Vec<Window> = self.space.elements().cloned().collect();
-        let layout = MasterStack {
-            windows: Vec::new(),
-            side: MasterStackSide::Left,
-        };
 
-        // layout.layout_windows(self, windows);
+        Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let windows: Vec<Window> = self.space.elements().cloned().collect();
-        let layout = MasterStack {
-            windows: Vec::new(),
-            side: MasterStackSide::Left,
-        };
-
-        // layout.layout_windows(self, windows);
+        Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {}

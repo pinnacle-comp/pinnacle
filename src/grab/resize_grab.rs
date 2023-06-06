@@ -209,13 +209,9 @@ impl ResizeSurfaceState {
 
 impl SurfaceState for ResizeSurfaceState {}
 
-pub fn handle_commit(space: &mut Space<Window>, surface: &WlSurface) -> Option<()> {
-    let window = space
-        .elements()
-        .find(|w| w.toplevel().wl_surface() == surface)
-        .cloned()?;
-
-    let mut window_loc = space.element_location(&window)?;
+pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> Option<()> {
+    let window = state.window_for_surface(surface)?;
+    let mut window_loc = state.space.element_location(&window)?;
     let geometry = window.geometry();
 
     let new_loc: Point<Option<i32>, Logical> = ResizeSurfaceState::with_state(surface, |state| {
@@ -249,7 +245,7 @@ pub fn handle_commit(space: &mut Space<Window>, surface: &WlSurface) -> Option<(
     }
 
     if new_loc.x.is_some() || new_loc.y.is_some() {
-        space.map_element(window, window_loc, false);
+        state.space.map_element(window, window_loc, false);
     }
 
     Some(())

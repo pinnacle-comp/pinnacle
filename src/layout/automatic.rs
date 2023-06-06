@@ -2,27 +2,12 @@ use smithay::desktop::Window;
 
 use crate::{backend::Backend, state::State};
 
-use super::{Layout, RemoveWindowError};
+use super::{Direction, Layout};
 
-/// A layout which puts one "master" window on one half of the screen and splits other windows
-/// among the other half.
-pub struct MasterStack {
-    pub windows: Vec<Window>,
-    /// Which side of the screen the master window will be on
-    pub side: MasterStackSide,
-}
-
-pub enum MasterStackSide {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-impl<B: Backend> Layout<B> for MasterStack {
-    fn layout_windows(&self, state: &mut State<B>, windows: Vec<Window>) {
-        match self.side {
-            MasterStackSide::Left => {
+impl Layout {
+    pub fn master_stack<B: Backend>(state: &mut State<B>, windows: Vec<Window>, side: Direction) {
+        match side {
+            Direction::Left => {
                 // println!("MasterStack layout_windows");
                 let window_count = windows.len();
                 if window_count == 0 {
@@ -94,29 +79,9 @@ impl<B: Backend> Layout<B> for MasterStack {
                     }
                 });
             }
-            MasterStackSide::Right => todo!(),
-            MasterStackSide::Top => todo!(),
-            MasterStackSide::Bottom => todo!(),
+            Direction::Right => todo!(),
+            Direction::Top => todo!(),
+            Direction::Bottom => todo!(),
         }
-    }
-
-    fn add_window(&mut self, state: &mut State<B>, window: Window) {
-        self.windows.push(window);
-    }
-
-    fn remove_window(
-        &mut self,
-        state: &mut State<B>,
-        window: Window,
-    ) -> Result<(), RemoveWindowError> {
-        let pos = self
-            .windows
-            .iter()
-            .position(|win| window == win.clone())
-            .ok_or(RemoveWindowError::NotFound)?;
-
-        self.windows.remove(pos);
-
-        Ok(())
     }
 }

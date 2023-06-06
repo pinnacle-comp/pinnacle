@@ -25,12 +25,7 @@ pub trait SurfaceState: Default + 'static {
 
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, wl_surface: &WlSurface) {
     WindowState::with_state(wl_surface, |window_state| {
-        let window = state
-            .space
-            .elements()
-            .find(|w| w.toplevel().wl_surface() == wl_surface)
-            .unwrap()
-            .clone();
+        let window = state.window_for_surface(wl_surface).unwrap();
         match window_state.floating {
             Float::NotFloating(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {

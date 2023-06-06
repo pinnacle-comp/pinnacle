@@ -47,6 +47,16 @@ pub struct State<B: Backend> {
     pub socket_name: OsString,
 }
 
+impl<B: Backend> State<B> {
+    /// Returns the [Window] associated with a given [WlSurface].
+    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
+        self.space
+            .elements()
+            .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
+            .cloned()
+    }
+}
+
 pub struct CalloopData {
     pub display: Display<State<WinitData>>,
     pub state: State<WinitData>,
@@ -62,13 +72,4 @@ impl ClientData for ClientState {
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
 
     // fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {}
-}
-
-impl<B: Backend> State<B> {
-    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
-        self.space
-            .elements()
-            .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
-            .cloned()
-    }
 }

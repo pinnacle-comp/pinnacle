@@ -24,12 +24,7 @@ pub fn move_request<B: Backend>(
     let pointer = seat.get_pointer().unwrap();
     if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, wl_surface, serial)
     {
-        let window = state
-            .space
-            .elements()
-            .find(|w| w.toplevel().wl_surface() == wl_surface)
-            .unwrap()
-            .clone();
+        let window = state.window_for_surface(wl_surface).unwrap();
 
         let initial_window_loc = state.space.element_location(&window).unwrap();
 
@@ -57,12 +52,7 @@ pub fn move_request_force<B: Backend>(
     let wl_surface = surface.wl_surface();
 
     let pointer = seat.get_pointer().unwrap();
-    let window = state
-        .space
-        .elements()
-        .find(|w| w.toplevel().wl_surface() == wl_surface)
-        .unwrap()
-        .clone();
+    let window = state.window_for_surface(wl_surface).unwrap();
 
     let initial_window_loc = state.space.element_location(&window).unwrap();
 
@@ -97,12 +87,7 @@ pub fn resize_request<B: Backend>(
 
     if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, wl_surface, serial)
     {
-        let window = state
-            .space
-            .elements()
-            .find(|w| w.toplevel().wl_surface() == wl_surface)
-            .unwrap()
-            .clone(); // TODO: move this search into its own function
+        let window = state.window_for_surface(wl_surface).unwrap();
 
         let initial_window_loc = state.space.element_location(&window).unwrap();
         let initial_window_size = window.geometry().size;
@@ -138,12 +123,7 @@ pub fn resize_request_force<B: Backend>(
 
     let pointer = seat.get_pointer().unwrap();
 
-    let window = state
-        .space
-        .elements()
-        .find(|w| w.toplevel().wl_surface() == wl_surface)
-        .unwrap()
-        .clone(); // TODO: move this search into its own function
+    let window = state.window_for_surface(wl_surface).unwrap();
 
     let initial_window_loc = state.space.element_location(&window).unwrap();
     let initial_window_size = window.geometry().size;
