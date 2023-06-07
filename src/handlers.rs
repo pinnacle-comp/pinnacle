@@ -2,8 +2,14 @@ use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_output,
     delegate_seat, delegate_shm, delegate_viewporter, delegate_xdg_shell,
-    desktop::Window,
-    input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
+    desktop::{
+        find_popup_root_surface, PopupKeyboardGrab, PopupKind, PopupManager, PopupPointerGrab,
+        PopupUngrabStrategy, Space, Window,
+    },
+    input::{
+        pointer::{CursorImageStatus, Focus},
+        Seat, SeatHandler, SeatState,
+    },
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
@@ -25,8 +31,8 @@ use smithay::{
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         shell::xdg::{
-            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler,
-            XdgShellState, XdgToplevelSurfaceData,
+            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
+            XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
         },
         shm::{ShmHandler, ShmState},
     },
@@ -93,27 +99,9 @@ impl<B: Backend> CompositorHandler for State<B> {
             }
         };
 
-        if let Some(window) = self.window_for_surface(surface) {
-            let initial_configure_sent = compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<XdgToplevelSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .initial_configure_sent
-            });
-            // println!("initial_configure_sent is {}", initial_configure_sent);
+        self.popup_manager.commit(surface);
 
-            if !initial_configure_sent {
-                println!("initial configure");
-                window.toplevel().send_configure();
-                // println!(
-                //     "ensured_configured: {}",
-                //     window.toplevel().ensure_configured()
-                // );
-            }
-        }
+        ensure_initial_configure(surface, self);
 
         crate::grab::resize_grab::handle_commit(self, surface);
     }
@@ -123,6 +111,44 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 }
 delegate_compositor!(@<B: Backend> State<B>);
+fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B>) {
+    if let Some(window) = state.window_for_surface(surface) {
+        let initial_configure_sent = compositor::with_states(surface, |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .initial_configure_sent
+        });
+        // println!("initial_configure_sent is {}", initial_configure_sent);
+
+        if !initial_configure_sent {
+            window.toplevel().send_configure();
+        }
+        return;
+    }
+
+    if let Some(popup) = state.popup_manager.find_popup(surface) {
+        let PopupKind::Xdg(ref popup) = popup;
+        let initial_configure_sent = compositor::with_states(surface, |states| {
+            states
+                .data_map
+                .get::<XdgPopupSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .initial_configure_sent
+        });
+        if !initial_configure_sent {
+            popup
+                .send_configure()
+                .expect("popup initial configure failed");
+        }
+    }
+    // TODO: layer map thingys
+}
 
 impl<B: Backend> ClientDndGrabHandler for State<B> {}
 impl<B: Backend> ServerDndGrabHandler for State<B> {}
@@ -136,7 +162,7 @@ impl<B: Backend> DataDeviceHandler for State<B> {
 }
 delegate_data_device!(@<B: Backend> State<B>);
 
-impl<B: Backend + 'static> SeatHandler for State<B> {
+impl<B: Backend> SeatHandler for State<B> {
     type KeyboardFocus = WlSurface;
     type PointerFocus = WlSurface;
 
@@ -145,6 +171,7 @@ impl<B: Backend + 'static> SeatHandler for State<B> {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        tracing::info!("new cursor image: {:?}", image);
         self.cursor_status = image;
     }
 
@@ -177,7 +204,11 @@ impl<B: Backend> XdgShellHandler for State<B> {
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }
 
-    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {}
+    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+        if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
+            tracing::warn!("failed to track popup: {}", err);
+        }
+    }
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
         crate::xdg::request::move_request(
@@ -206,7 +237,58 @@ impl<B: Backend> XdgShellHandler for State<B> {
         );
     }
 
-    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {}
+    fn reposition_request(
+        &mut self,
+        surface: PopupSurface,
+        positioner: PositionerState,
+        token: u32,
+    ) {
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+            state.positioner = positioner;
+        });
+        surface.send_repositioned(token);
+    }
+
+    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
+        let seat: Seat<State<B>> = Seat::from_resource(&seat).unwrap();
+        let popup_kind = PopupKind::Xdg(surface);
+        if let Some(root) = find_popup_root_surface(&popup_kind)
+            .ok()
+            .and_then(|root| self.window_for_surface(&root))
+        {
+            if let Ok(mut grab) = self.popup_manager.grab_popup(
+                root.toplevel().wl_surface().clone(),
+                popup_kind,
+                &seat,
+                serial,
+            ) {
+                if let Some(keyboard) = seat.get_keyboard() {
+                    if keyboard.is_grabbed()
+                        && !(keyboard.has_grab(serial)
+                            || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
+                    {
+                        grab.ungrab(PopupUngrabStrategy::All);
+                        return;
+                    }
+
+                    keyboard.set_focus(self, grab.current_grab(), serial);
+                    keyboard.set_grab(PopupKeyboardGrab::new(&grab), serial);
+                }
+                if let Some(pointer) = seat.get_pointer() {
+                    if pointer.is_grabbed()
+                        && !(pointer.has_grab(serial)
+                            || pointer
+                                .has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
+                    {
+                        grab.ungrab(PopupUngrabStrategy::All);
+                        return;
+                    }
+                    pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+                }
+            }
+        }
+    }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
         // println!("surface ack_configure: {:?}", configure);

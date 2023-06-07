@@ -9,3 +9,6 @@ edition = "2021"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 smithay = { git = "https://github.com/Smithay/smithay" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", optional = true }
+thiserror = "1.0.40"
+xcursor = { version = "0.3.4", optional = true }

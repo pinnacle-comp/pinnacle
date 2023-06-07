@@ -4,7 +4,7 @@ mod handlers;
 mod input;
 mod layout;
 mod pointer;
-mod shell;
+mod render;
 mod state;
 mod tag;
 mod window;

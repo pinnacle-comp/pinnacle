@@ -1,5 +1,6 @@
 use smithay::{output::Output, reexports::wayland_server::protocol::wl_surface::WlSurface};
 
+pub mod udev;
 pub mod winit;
 
 /// A trait defining common methods for each available backend: winit and tty-udev

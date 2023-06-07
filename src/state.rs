@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 
 use smithay::{
-    desktop::{Space, Window},
+    desktop::{PopupManager, Space, Window},
     input::{pointer::CursorImageStatus, SeatState},
     reexports::{
         calloop::{LoopHandle, LoopSignal},
@@ -28,23 +28,28 @@ use crate::backend::{winit::WinitData, Backend};
 
 pub struct State<B: Backend> {
     pub backend_data: B,
+
     pub loop_signal: LoopSignal,
     pub loop_handle: LoopHandle<'static, CalloopData>,
     pub clock: Clock<Monotonic>,
+
+    pub space: Space<Window>,
+    pub move_mode: bool,
+    pub socket_name: OsString,
+
     pub compositor_state: CompositorState,
     pub data_device_state: DataDeviceState,
     pub seat_state: SeatState<Self>,
     pub shm_state: ShmState,
-    pub space: Space<Window>,
-    pub cursor_status: CursorImageStatus,
-    pub pointer_location: Point<f64, Logical>,
     pub output_manager_state: OutputManagerState,
     pub xdg_shell_state: XdgShellState,
     pub viewporter_state: ViewporterState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
 
-    pub move_mode: bool,
-    pub socket_name: OsString,
+    pub popup_manager: PopupManager,
+
+    pub cursor_status: CursorImageStatus,
+    pub pointer_location: Point<f64, Logical>,
 }
 
 impl<B: Backend> State<B> {

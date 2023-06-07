@@ -86,6 +86,8 @@ impl State<WinitData> {
                 let serial = SERIAL_COUNTER.next_serial();
                 let pointer = seat.get_pointer().unwrap();
 
+                self.pointer_location = pointer_loc;
+
                 let surface_under_pointer =
                     self.space
                         .element_under(pointer_loc)
@@ -268,7 +270,6 @@ impl State<WinitData> {
                     frame = frame.stop(Axis::Vertical);
                 }
 
-                println!("axisframe: {:?}", frame);
                 pointer.axis(self, frame);
             }
 

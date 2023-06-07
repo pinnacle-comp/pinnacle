@@ -1,4 +1,9 @@
-use std::{error::Error, os::fd::AsRawFd, sync::Arc, time::Duration};
+use std::{
+    error::Error,
+    os::fd::AsRawFd,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use smithay::{
     backend::{
@@ -6,8 +11,11 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::default_primary_scanout_output_compare,
-            gles::GlesRenderer,
+            element::{
+                default_primary_scanout_output_compare, surface::WaylandSurfaceRenderElement,
+                AsRenderElements,
+            },
+            gles::{GlesRenderer, GlesTexture},
             ImportDma, ImportMemWl,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
@@ -16,9 +24,12 @@ use smithay::{
     desktop::{
         space,
         utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
-        Space, Window,
+        PopupManager, Space, Window,
     },
-    input::{pointer::CursorImageStatus, SeatState},
+    input::{
+        pointer::{CursorImageAttributes, CursorImageStatus},
+        SeatState,
+    },
     output::{Output, Subpixel},
     reexports::{
         calloop::{
@@ -28,9 +39,9 @@ use smithay::{
         },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
-    utils::{Clock, Monotonic, Physical, Point, Scale, Transform},
+    utils::{Clock, IsAlive, Monotonic, Physical, Point, Scale, Transform},
     wayland::{
-        compositor::CompositorState,
+        compositor::{self, CompositorState},
         data_device::DataDeviceState,
         dmabuf::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
@@ -45,7 +56,11 @@ use smithay::{
     },
 };
 
-use crate::state::{CalloopData, ClientState, State};
+use crate::{
+    layout::{Direction, Layout},
+    render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
+    state::{CalloopData, ClientState, State},
+};
 
 use super::Backend;
 
@@ -214,10 +229,10 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         compositor_state: CompositorState::new::<State<WinitData>>(&display_handle),
         data_device_state: DataDeviceState::new::<State<WinitData>>(&display_handle),
         seat_state,
-        shm_state: ShmState::new::<State<WinitData>>(&display_handle, Vec::new()),
+        pointer_location: (0.0, 0.0).into(),
+        shm_state: ShmState::new::<State<WinitData>>(&display_handle, vec![]),
         space: Space::<Window>::default(),
         cursor_status: CursorImageStatus::Default,
-        pointer_location: (0.0, 0.0).into(),
         output_manager_state: OutputManagerState::new_with_xdg_output::<State<WinitData>>(
             &display_handle,
         ),
@@ -229,6 +244,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
         move_mode: false,
         socket_name: socket_name.clone(),
+
+        popup_manager: PopupManager::default(),
     };
 
     state
@@ -238,6 +255,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
     state.space.map_output(&output, (0, 0));
 
     std::env::set_var("WAYLAND_DISPLAY", socket_name);
+
+    let mut pointer_element = PointerElement::<GlesTexture>::new();
 
     // TODO: pointer
     evt_loop_handle.insert_source(Timer::immediate(), move |_instant, _metadata, data| {
@@ -258,6 +277,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                     None,
                     None,
                 );
+                Layout::master_stack(
+                    state,
+                    state.space.elements().cloned().collect(),
+                    Direction::Left,
+                );
             }
             WinitEvent::Focus(_) => {}
             WinitEvent::Input(input_evt) => {
@@ -273,8 +297,49 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             }
         };
 
+        if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
+            if !surface.alive() {
+                state.cursor_status = CursorImageStatus::Default;
+            }
+        }
+
+        let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
+
+        pointer_element.set_status(state.cursor_status.clone());
+
         let full_redraw = &mut state.backend_data.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
+
+        let scale = Scale::from(output.current_scale().fractional_scale());
+        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
+            compositor::with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<Mutex<CursorImageAttributes>>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .hotspot
+            })
+        } else {
+            (0, 0).into()
+        };
+        let cursor_pos = state.pointer_location - cursor_hotspot.to_f64();
+        let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round::<i32>();
+
+        let mut custom_render_elements = Vec::<CustomRenderElements<GlesRenderer>>::new();
+
+        custom_render_elements.extend(pointer_element.render_elements(
+            state.backend_data.backend.renderer(),
+            cursor_pos_scaled,
+            scale,
+            1.0,
+        ));
+
+        tracing::info!(
+            "custom_render_elements len = {}",
+            custom_render_elements.len()
+        );
 
         let render_res = state.backend_data.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -286,8 +351,23 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             let renderer = state.backend_data.backend.renderer();
 
             // render_output()
-            let output_render_elements =
+            let space_render_elements =
                 space::space_render_elements(renderer, [&state.space], &output, 1.0).unwrap();
+
+            let mut output_render_elements = Vec::<
+                OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+            >::new();
+
+            output_render_elements.extend(
+                custom_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
+            output_render_elements.extend(
+                space_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
 
             state
                 .backend_data
@@ -307,6 +387,13 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         tracing::warn!("{}", err);
                     }
                 }
+
+                state
+                    .backend_data
+                    .backend
+                    .window()
+                    .set_cursor_visible(cursor_visible);
+
                 let throttle = Some(Duration::from_secs(1));
 
                 state.space.elements().for_each(|window| {
@@ -347,13 +434,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             }
         }
 
-        let scale = Scale::from(output.current_scale().fractional_scale());
-        let cursor_pos = state.pointer_location;
-        let _cursor_pos_scaled: Point<i32, Physical> = cursor_pos.to_physical(scale).to_i32_round();
-
         state.space.refresh();
-
-        display.flush_clients().unwrap();
+        state.popup_manager.cleanup();
+        display
+            .flush_clients()
+            .expect("failed to flush client buffers");
 
         TimeoutAction::ToDuration(Duration::from_millis(6))
     })?;
