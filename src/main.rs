@@ -1,4 +1,5 @@
 mod backend;
+mod cursor;
 mod grab;
 mod handlers;
 mod input;
@@ -25,6 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tracing::info!("Starting winit backend");
-    crate::backend::winit::run_winit()?;
+    // crate::backend::winit::run_winit()?;
+    crate::backend::udev::run_udev()?;
     Ok(())
 }

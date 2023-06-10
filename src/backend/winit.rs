@@ -1,9 +1,4 @@
-use std::{
-    error::Error,
-    os::fd::AsRawFd,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{error::Error, sync::Mutex, time::Duration};
 
 use smithay::{
     backend::{
@@ -24,42 +19,31 @@ use smithay::{
     desktop::{
         space,
         utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
-        PopupManager, Space, Window,
     },
-    input::{
-        pointer::{CursorImageAttributes, CursorImageStatus},
-        SeatState,
-    },
+    input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, Subpixel},
     reexports::{
         calloop::{
-            generic::Generic,
             timer::{TimeoutAction, Timer},
-            EventLoop, Interest, Mode, PostAction,
+            EventLoop,
         },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
-    utils::{Clock, IsAlive, Monotonic, Physical, Point, Scale, Transform},
+    utils::{IsAlive, Scale, Transform},
     wayland::{
-        compositor::{self, CompositorState},
-        data_device::DataDeviceState,
+        compositor::{self},
         dmabuf::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
-        fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
-        output::OutputManagerState,
-        shell::xdg::XdgShellState,
-        shm::ShmState,
-        socket::ListeningSocketSource,
-        viewporter::ViewporterState,
+        fractional_scale::with_fractional_scale,
     },
 };
 
 use crate::{
     layout::{Direction, Layout},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
-    state::{CalloopData, ClientState, State},
+    state::{CalloopData, State},
 };
 
 use super::Backend;
@@ -104,41 +88,12 @@ impl DmabufHandler for State<WinitData> {
 delegate_dmabuf!(State<WinitData>);
 
 pub fn run_winit() -> Result<(), Box<dyn Error>> {
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<CalloopData<WinitData>> = EventLoop::try_new()?;
 
     let mut display: Display<State<WinitData>> = Display::new()?;
-
-    let socket = ListeningSocketSource::new_auto()?;
-    let socket_name = socket.socket_name().to_os_string();
-
-    let evt_loop_handle = event_loop.handle();
-
-    evt_loop_handle.insert_source(socket, |stream, _metadata, data| {
-        data.display
-            .handle()
-            .insert_client(stream, Arc::new(ClientState::default()))
-            .unwrap();
-    })?;
-
-    evt_loop_handle.insert_source(
-        Generic::new(
-            display.backend().poll_fd().as_raw_fd(),
-            Interest::READ,
-            Mode::Level,
-        ),
-        |_readiness, _metadata, data| {
-            data.display.dispatch_clients(&mut data.state)?;
-            Ok(PostAction::Continue)
-        },
-    )?;
-
     let display_handle = display.handle();
 
-    let mut seat_state = SeatState::<State<WinitData>>::new();
-    let mut seat = seat_state.new_wl_seat(&display_handle, "seat1");
-
-    seat.add_keyboard(Default::default(), 500, 50)?;
-    seat.add_pointer();
+    let evt_loop_handle = event_loop.handle();
 
     let (mut winit_backend, mut winit_evt_loop) = smithay::backend::winit::init::<GlesRenderer>()?;
 
@@ -214,39 +169,17 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut state = State {
-        // TODO: move winit_backend and damage_tracker into their own scope so I can't access them
-        // |     from after this
-        backend_data: WinitData {
+    let mut state = State::init(
+        WinitData {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
             dmabuf_state,
             full_redraw: 0,
         },
-        loop_signal: event_loop.get_signal(),
-        loop_handle: event_loop.handle(),
-        clock: Clock::<Monotonic>::new()?,
-        compositor_state: CompositorState::new::<State<WinitData>>(&display_handle),
-        data_device_state: DataDeviceState::new::<State<WinitData>>(&display_handle),
-        seat_state,
-        pointer_location: (0.0, 0.0).into(),
-        shm_state: ShmState::new::<State<WinitData>>(&display_handle, vec![]),
-        space: Space::<Window>::default(),
-        cursor_status: CursorImageStatus::Default,
-        output_manager_state: OutputManagerState::new_with_xdg_output::<State<WinitData>>(
-            &display_handle,
-        ),
-        xdg_shell_state: XdgShellState::new::<State<WinitData>>(&display_handle),
-        viewporter_state: ViewporterState::new::<State<WinitData>>(&display_handle),
-        fractional_scale_manager_state: FractionalScaleManagerState::new::<State<WinitData>>(
-            &display_handle,
-        ),
-
-        move_mode: false,
-        socket_name: socket_name.clone(),
-
-        popup_manager: PopupManager::default(),
-    };
+        &mut display,
+        event_loop.get_signal(),
+        evt_loop_handle,
+    )?;
 
     state
         .shm_state
@@ -254,194 +187,191 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
     state.space.map_output(&output, (0, 0));
 
-    std::env::set_var("WAYLAND_DISPLAY", socket_name);
-
     let mut pointer_element = PointerElement::<GlesTexture>::new();
 
     // TODO: pointer
-    evt_loop_handle.insert_source(Timer::immediate(), move |_instant, _metadata, data| {
-        let display = &mut data.display;
-        let state = &mut data.state;
+    state
+        .loop_handle
+        .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
+            let display = &mut data.display;
+            let state = &mut data.state;
 
-        let result = winit_evt_loop.dispatch_new_events(|event| match event {
-            WinitEvent::Resized {
-                size,
-                scale_factor: _,
-            } => {
-                output.change_current_state(
-                    Some(smithay::output::Mode {
-                        size,
-                        refresh: 144_000,
-                    }),
-                    None,
-                    None,
-                    None,
-                );
-                Layout::master_stack(
-                    state,
-                    state.space.elements().cloned().collect(),
-                    Direction::Left,
-                );
-            }
-            WinitEvent::Focus(_) => {}
-            WinitEvent::Input(input_evt) => {
-                state.process_input_event(&seat, input_evt);
-            }
-            WinitEvent::Refresh => {}
-        });
+            let result = winit_evt_loop.dispatch_new_events(|event| match event {
+                WinitEvent::Resized {
+                    size,
+                    scale_factor: _,
+                } => {
+                    output.change_current_state(
+                        Some(smithay::output::Mode {
+                            size,
+                            refresh: 144_000,
+                        }),
+                        None,
+                        None,
+                        None,
+                    );
+                    Layout::master_stack(
+                        state,
+                        state.space.elements().cloned().collect(),
+                        Direction::Left,
+                    );
+                }
+                WinitEvent::Focus(_) => {}
+                WinitEvent::Input(input_evt) => {
+                    state.process_input_event(input_evt);
+                }
+                WinitEvent::Refresh => {}
+            });
 
-        match result {
-            Ok(_) => {}
-            Err(WinitError::WindowClosed) => {
-                state.loop_signal.stop();
-            }
-        };
-
-        if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
-            if !surface.alive() {
-                state.cursor_status = CursorImageStatus::Default;
-            }
-        }
-
-        let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
-
-        pointer_element.set_status(state.cursor_status.clone());
-
-        let full_redraw = &mut state.backend_data.full_redraw;
-        *full_redraw = full_redraw.saturating_sub(1);
-
-        let scale = Scale::from(output.current_scale().fractional_scale());
-        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
-            compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<Mutex<CursorImageAttributes>>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .hotspot
-            })
-        } else {
-            (0, 0).into()
-        };
-        let cursor_pos = state.pointer_location - cursor_hotspot.to_f64();
-        let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round::<i32>();
-
-        let mut custom_render_elements = Vec::<CustomRenderElements<GlesRenderer>>::new();
-
-        custom_render_elements.extend(pointer_element.render_elements(
-            state.backend_data.backend.renderer(),
-            cursor_pos_scaled,
-            scale,
-            1.0,
-        ));
-
-        tracing::info!(
-            "custom_render_elements len = {}",
-            custom_render_elements.len()
-        );
-
-        let render_res = state.backend_data.backend.bind().and_then(|_| {
-            let age = if *full_redraw > 0 {
-                0
-            } else {
-                state.backend_data.backend.buffer_age().unwrap_or(0)
+            match result {
+                Ok(_) => {}
+                Err(WinitError::WindowClosed) => {
+                    state.loop_signal.stop();
+                }
             };
 
-            let renderer = state.backend_data.backend.renderer();
-
-            // render_output()
-            let space_render_elements =
-                space::space_render_elements(renderer, [&state.space], &output, 1.0).unwrap();
-
-            let mut output_render_elements = Vec::<
-                OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
-            >::new();
-
-            output_render_elements.extend(
-                custom_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-            output_render_elements.extend(
-                space_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-
-            state
-                .backend_data
-                .damage_tracker
-                .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
-                .map_err(|err| match err {
-                    damage::Error::Rendering(err) => err.into(),
-                    damage::Error::OutputNoMode(_) => todo!(),
-                })
-        });
-
-        match render_res {
-            Ok((damage, states)) => {
-                let has_rendered = damage.is_some();
-                if let Some(damage) = damage {
-                    if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
-                        tracing::warn!("{}", err);
-                    }
+            if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
+                if !surface.alive() {
+                    state.cursor_status = CursorImageStatus::Default;
                 }
+            }
+
+            let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
+
+            pointer_element.set_status(state.cursor_status.clone());
+
+            let full_redraw = &mut state.backend_data.full_redraw;
+            *full_redraw = full_redraw.saturating_sub(1);
+
+            let scale = Scale::from(output.current_scale().fractional_scale());
+            let cursor_hotspot =
+                if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
+                    compositor::with_states(surface, |states| {
+                        states
+                            .data_map
+                            .get::<Mutex<CursorImageAttributes>>()
+                            .unwrap()
+                            .lock()
+                            .unwrap()
+                            .hotspot
+                    })
+                } else {
+                    (0, 0).into()
+                };
+            let cursor_pos = state.pointer_location - cursor_hotspot.to_f64();
+            let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round::<i32>();
+
+            let mut custom_render_elements = Vec::<CustomRenderElements<GlesRenderer>>::new();
+
+            custom_render_elements.extend(pointer_element.render_elements(
+                state.backend_data.backend.renderer(),
+                cursor_pos_scaled,
+                scale,
+                1.0,
+            ));
+
+            let render_res = state.backend_data.backend.bind().and_then(|_| {
+                let age = if *full_redraw > 0 {
+                    0
+                } else {
+                    state.backend_data.backend.buffer_age().unwrap_or(0)
+                };
+
+                let renderer = state.backend_data.backend.renderer();
+
+                // render_output()
+                let space_render_elements =
+                    space::space_render_elements(renderer, [&state.space], &output, 1.0).unwrap();
+
+                let mut output_render_elements = Vec::<
+                    OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+                >::new();
+
+                output_render_elements.extend(
+                    custom_render_elements
+                        .into_iter()
+                        .map(OutputRenderElements::from),
+                );
+                output_render_elements.extend(
+                    space_render_elements
+                        .into_iter()
+                        .map(OutputRenderElements::from),
+                );
 
                 state
                     .backend_data
-                    .backend
-                    .window()
-                    .set_cursor_visible(cursor_visible);
+                    .damage_tracker
+                    .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
+                    .map_err(|err| match err {
+                        damage::Error::Rendering(err) => err.into(),
+                        damage::Error::OutputNoMode(_) => todo!(),
+                    })
+            });
 
-                let throttle = Some(Duration::from_secs(1));
+            match render_res {
+                Ok((damage, states)) => {
+                    let has_rendered = damage.is_some();
+                    if let Some(damage) = damage {
+                        if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
+                            tracing::warn!("{}", err);
+                        }
+                    }
 
-                state.space.elements().for_each(|window| {
-                    window.with_surfaces(|surface, states_inner| {
-                        let primary_scanout_output = update_surface_primary_scanout_output(
-                            surface,
-                            &output,
-                            states_inner,
-                            &states,
-                            default_primary_scanout_output_compare,
-                        );
+                    state
+                        .backend_data
+                        .backend
+                        .window()
+                        .set_cursor_visible(cursor_visible);
 
-                        if let Some(output) = primary_scanout_output {
-                            with_fractional_scale(states_inner, |fraction_scale| {
-                                fraction_scale
-                                    .set_preferred_scale(output.current_scale().fractional_scale());
-                            });
+                    let throttle = Some(Duration::from_secs(1));
+
+                    state.space.elements().for_each(|window| {
+                        window.with_surfaces(|surface, states_inner| {
+                            let primary_scanout_output = update_surface_primary_scanout_output(
+                                surface,
+                                &output,
+                                states_inner,
+                                &states,
+                                default_primary_scanout_output_compare,
+                            );
+
+                            if let Some(output) = primary_scanout_output {
+                                with_fractional_scale(states_inner, |fraction_scale| {
+                                    fraction_scale.set_preferred_scale(
+                                        output.current_scale().fractional_scale(),
+                                    );
+                                });
+                            }
+                        });
+
+                        if state.space.outputs_for_element(window).contains(&output) {
+                            window.send_frame(
+                                &output,
+                                state.clock.now(),
+                                throttle,
+                                surface_primary_scanout_output,
+                            );
+                            // TODO: dmabuf_feedback
                         }
                     });
 
-                    if state.space.outputs_for_element(window).contains(&output) {
-                        window.send_frame(
-                            &output,
-                            state.clock.now(),
-                            throttle,
-                            surface_primary_scanout_output,
-                        );
-                        // TODO: dmabuf_feedback
+                    if has_rendered {
+                        // TODO:
                     }
-                });
-
-                if has_rendered {
-                    // TODO:
+                }
+                Err(err) => {
+                    tracing::warn!("{}", err);
                 }
             }
-            Err(err) => {
-                tracing::warn!("{}", err);
-            }
-        }
 
-        state.space.refresh();
-        state.popup_manager.cleanup();
-        display
-            .flush_clients()
-            .expect("failed to flush client buffers");
+            state.space.refresh();
+            state.popup_manager.cleanup();
+            display
+                .flush_clients()
+                .expect("failed to flush client buffers");
 
-        TimeoutAction::ToDuration(Duration::from_millis(6))
-    })?;
+            TimeoutAction::ToDuration(Duration::from_millis(6))
+        })?;
 
     event_loop.run(None, &mut CalloopData { display, state }, |_data| {})?;
 

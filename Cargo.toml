@@ -11,4 +11,24 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 smithay = { git = "https://github.com/Smithay/smithay" }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", optional = true }
 thiserror = "1.0.40"
-xcursor = { version = "0.3.4", optional = true }
+xcursor = {version = "0.3.4", optional = true }
+image = {version = "0.24.0", default-features = false, optional = true}
+
+[features]
+default = ["egl", "winit", "udev"]
+egl = ["smithay/use_system_lib", "smithay/backend_egl"]
+udev = [
+  "smithay-drm-extras",
+  "smithay/backend_libinput",
+  "smithay/backend_udev",
+  "smithay/backend_drm",
+  "smithay/backend_gbm",
+  "smithay/backend_vulkan",
+  "smithay/backend_egl",
+  "smithay/backend_session_libseat",
+  "image",
+  "smithay/renderer_gl",
+  "smithay/renderer_multi",
+  "xcursor",
+]
+winit = ["smithay/backend_winit", "smithay/backend_drm"]
