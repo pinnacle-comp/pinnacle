@@ -181,16 +181,16 @@ pub fn take_presentation_feedback(
             );
         }
     });
-    let map = smithay::desktop::layer_map_for_output(output);
-    for layer_surface in map.layers() {
-        layer_surface.take_presentation_feedback(
-            &mut output_presentation_feedback,
-            surface_primary_scanout_output,
-            |surface, _| {
-                surface_presentation_feedback_flags_from_states(surface, render_element_states)
-            },
-        );
-    }
+    // let map = smithay::desktop::layer_map_for_output(output);
+    // for layer_surface in map.layers() {
+    //     layer_surface.take_presentation_feedback(
+    //         &mut output_presentation_feedback,
+    //         surface_primary_scanout_output,
+    //         |surface, _| {
+    //             surface_presentation_feedback_flags_from_states(surface, render_element_states)
+    //         },
+    //     );
+    // }
 
     output_presentation_feedback
 }
