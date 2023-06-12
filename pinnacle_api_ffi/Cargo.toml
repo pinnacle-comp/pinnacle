@@ -1,0 +1,7 @@
+[package]
+name = "pinnacle_api_ffi"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pinnacle_api = { path = "../pinnacle_api" }

@@ -1,24 +1,24 @@
 use std::{
+    error::Error,
     io::Read,
     mem::size_of,
-    os::unix::net::{UnixDatagram, UnixListener, UnixStream},
+    os::{
+        fd::AsRawFd,
+        unix::net::{UnixListener, UnixStream},
+    },
+    path::Path,
 };
 
 const SOCKET_PATH: &str = "/tmp/pinnacle_socket";
 
-pub fn new_socket() {
-    let socket = UnixDatagram::bind("/something/other").unwrap();
-    let socket2 = UnixStream::connect("/fsalkfhgtew").unwrap();
-}
+pub fn run() -> Result<(), Box<dyn Error>> {
+    let socket_path = Path::new(SOCKET_PATH);
 
-pub fn start() {
-    let listener = match UnixListener::bind(SOCKET_PATH) {
-        Ok(socket) => socket,
-        Err(err) => {
-            eprintln!("Failed to create UnixListener: {}", err);
-            return;
-        }
-    };
+    if socket_path.exists() {
+        std::fs::remove_file(socket_path)?;
+    }
+
+    let listener = UnixListener::bind(SOCKET_PATH)?;
 
     for stream in listener.incoming() {
         match stream {
@@ -30,6 +30,8 @@ pub fn start() {
             }
         }
     }
+
+    Ok(())
 }
 
 fn handle_client(mut stream: UnixStream) {
@@ -37,15 +39,13 @@ fn handle_client(mut stream: UnixStream) {
     stream.read_exact(&mut buf).unwrap();
 
     let thing = rkyv::check_archived_root::<Message>(&buf).unwrap();
-    println!("{}", thing.msg);
+    println!("{}", thing.number2);
 }
 
 #[repr(C)]
 #[derive(rkyv::Archive)]
 #[archive(check_bytes)]
-struct Message {
+pub struct Message {
     number: u32,
-    msg: String,
-    num2: u64,
-    num3: u8,
+    number2: u8,
 }

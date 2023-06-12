@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "pinnacle",
-    "pinnacle_api"
+    "pinnacle_api",
+    "pinnacle_api_ffi"
 ]
