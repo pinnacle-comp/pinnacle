@@ -1,38 +1,54 @@
 -- require("luarocks.loader")
 
+package.path = "./lib/?.lua;./lib/?/init.lua;" .. package.path
 package.cpath = "./lib/?.so;" .. package.cpath
 
 local socket = require("posix.sys.socket")
-local unistd = require("posix.unistd")
-local ffi = require("cffi")
+local msgpack = require("lib.msgpack")
 
 local SOCKET_PATH = "/tmp/pinnacle_socket"
+
+local CONFIG_PATH = os.getenv("XDG_CONFIG_HOME") .. "/pinnacle/init.lua"
+
+package.path = CONFIG_PATH .. ";" .. package.path
 
 local sockaddr = {
     family = socket.AF_UNIX,
     path = SOCKET_PATH,
 }
 
-local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0))
+local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0), "Failed to create socket")
 print("created socket at fd " .. socket_fd)
 
-if 0 ~= socket.connect(socket_fd, sockaddr) then
-    assert(false)
+assert(0 == socket.connect(socket_fd, sockaddr), "Failed to connect to Pinnacle socket")
+
+function SendMsg(data)
+    socket.send(socket_fd, msgpack.encode(data))
 end
 
-ffi.cdef([[
-typedef struct Message { uint32_t number; uint8_t number2; } message;
-]])
+---@type function[]
+CallbackTable = {}
 
-local type = ffi.typeof("message")
+assert(pcall(require, "pinnacle"), "config file not found")
 
-local struct = ffi.new(type, {
-    number = 12,
-    number2 = 254,
-})
-local size = ffi.sizeof("message")
-local str = ffi.string(struct, size)
-
-socket.send(socket_fd, str)
+-- local str = msgpack.encode({
+--     SetMousebind = { button = 6 },
+-- })
+-- local str = msgpack.encode({
+--     SetKeybind = {
+--         key = "This is a key",
+--         modifiers = { "ctrl", "boogers", "numpty" },
+--     },
+-- })
+-- print(str)
+--
+-- socket.send(socket_fd, str)
 
 -- unistd.close(socket_fd)
+
+-- local keys = require("keys")
+--
+-- local input = require("input")
+-- input.keybind({ "Shift", "Ctrl" }, keys.c, "CloseWindow")
+while true do
+end

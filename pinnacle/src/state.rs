@@ -67,7 +67,7 @@ pub struct State<B: Backend> {
 impl<B: Backend> State<B> {
     pub fn init(
         backend_data: B,
-        display: &mut Display<State<B>>,
+        display: &mut Display<Self>,
         loop_signal: LoopSignal,
         loop_handle: LoopHandle<'static, CalloopData<B>>,
     ) -> Result<Self, Box<dyn Error>> {
@@ -106,19 +106,17 @@ impl<B: Backend> State<B> {
             loop_signal,
             loop_handle,
             clock: Clock::<Monotonic>::new()?,
-            compositor_state: CompositorState::new::<State<B>>(&display_handle),
-            data_device_state: DataDeviceState::new::<State<B>>(&display_handle),
+            compositor_state: CompositorState::new::<Self>(&display_handle),
+            data_device_state: DataDeviceState::new::<Self>(&display_handle),
             seat_state,
             pointer_location: (0.0, 0.0).into(),
-            shm_state: ShmState::new::<State<B>>(&display_handle, vec![]),
+            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
             space: Space::<Window>::default(),
             cursor_status: CursorImageStatus::Default,
-            output_manager_state: OutputManagerState::new_with_xdg_output::<State<B>>(
-                &display_handle,
-            ),
-            xdg_shell_state: XdgShellState::new::<State<B>>(&display_handle),
-            viewporter_state: ViewporterState::new::<State<B>>(&display_handle),
-            fractional_scale_manager_state: FractionalScaleManagerState::new::<State<B>>(
+            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
+            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
+            viewporter_state: ViewporterState::new::<Self>(&display_handle),
+            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
                 &display_handle,
             ),
 
