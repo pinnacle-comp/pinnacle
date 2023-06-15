@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use pinnacle_api::message::{ModifierMask, Modifiers};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -17,6 +20,10 @@ use crate::{
     backend::{udev::UdevData, winit::WinitData, Backend},
     state::State,
 };
+
+pub struct InputState {
+    pub keybinds: HashMap<(ModifierMask, u32), u32>,
+}
 
 impl<B: Backend> State<B> {
     pub fn surface_under<P>(&self, point: P) -> Option<(Window, Point<i32, Logical>)>
@@ -189,8 +196,28 @@ impl<B: Backend> State<B> {
             press_state,
             serial,
             time,
-            |state, _modifiers, keysym| {
+            |state, modifiers, keysym| {
                 if press_state == KeyState::Pressed {
+                    let mut modifier_mask = Vec::<Modifiers>::new();
+                    if modifiers.alt {
+                        modifier_mask.push(Modifiers::Alt);
+                    }
+                    if modifiers.shift {
+                        modifier_mask.push(Modifiers::Shift);
+                    }
+                    if modifiers.ctrl {
+                        modifier_mask.push(Modifiers::Ctrl);
+                    }
+                    if modifiers.logo {
+                        modifier_mask.push(Modifiers::Super);
+                    }
+                    if let Some(callback_id) = state
+                        .input_state
+                        .keybinds
+                        .get(&(modifier_mask.into(), keysym.modified_sym()))
+                    {
+                        return FilterResult::Intercept(1);
+                    }
                     match keysym.modified_sym() {
                         keysyms::KEY_L => return FilterResult::Intercept(1),
                         keysyms::KEY_K => return FilterResult::Intercept(2),

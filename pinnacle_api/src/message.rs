@@ -21,8 +21,23 @@ pub enum Action {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Modifiers {
-    Shift,
-    Ctrl,
-    Alt,
-    Super,
+    Shift = 0b0000_0001,
+    Ctrl = 0b0000_0010,
+    Alt = 0b0000_0100,
+    Super = 0b0000_1000,
+}
+
+/// A bitmask of [Modifiers] for the purpose of hashing.
+#[derive(PartialEq, Eq, Hash)]
+pub struct ModifierMask(u8);
+
+impl<T: IntoIterator<Item = Modifiers>> From<T> for ModifierMask {
+    fn from(value: T) -> Self {
+        let value = value.into_iter();
+        let mut mask: u8 = 0b0000_0000;
+        for modifier in value {
+            mask |= modifier as u8;
+        }
+        Self(mask)
+    }
 }

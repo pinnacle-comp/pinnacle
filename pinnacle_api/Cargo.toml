@@ -12,3 +12,4 @@ serde = { version = "1.0.164", features = ["derive"] }
 serde_json = { version = "1.0.96" }
 rmp-serde = { version = "1.1.1" }
 xkbcommon = { version = "0.5.0" }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "9b3d173" }

@@ -1,5 +1,6 @@
-use std::{error::Error, os::fd::AsRawFd, sync::Arc};
+use std::{collections::HashMap, error::Error, os::fd::AsRawFd, sync::Arc};
 
+use pinnacle_api::{message::Msg, PinnacleSocketSource, PinnacleStreamSource};
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{
@@ -34,7 +35,7 @@ use smithay::{
     },
 };
 
-use crate::backend::Backend;
+use crate::{backend::Backend, input::InputState};
 
 pub struct State<B: Backend> {
     pub backend_data: B,
@@ -57,6 +58,7 @@ pub struct State<B: Backend> {
     pub xdg_shell_state: XdgShellState,
     pub viewporter_state: ViewporterState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
+    pub input_state: InputState,
 
     pub popup_manager: PopupManager,
 
@@ -95,6 +97,29 @@ impl<B: Backend> State<B> {
             },
         )?;
 
+        loop_handle.insert_source(PinnacleSocketSource::new()?, |stream, _, data| {
+            data.state
+                .loop_handle
+                .insert_source(PinnacleStreamSource::new(stream), |msg, _, data| {
+                    // TODO: do stuff with msg
+                    match msg {
+                        Msg::SetKeybind {
+                            key,
+                            modifiers,
+                            callback_id,
+                        } => {
+                            tracing::info!("set keybind: {:?}, {}", modifiers, key);
+                            data.state
+                                .input_state
+                                .keybinds
+                                .insert((modifiers.into(), key), callback_id);
+                        }
+                        Msg::SetMousebind { button } => todo!(),
+                    };
+                })
+                .unwrap();
+        })?;
+
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
         let mut seat = seat_state.new_wl_seat(&display_handle, backend_data.seat_name());
@@ -119,6 +144,9 @@ impl<B: Backend> State<B> {
             fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
                 &display_handle,
             ),
+            input_state: InputState {
+                keybinds: HashMap::new(),
+            },
 
             seat,
 
@@ -135,6 +163,17 @@ impl<B: Backend> State<B> {
             .elements()
             .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
             .cloned()
+    }
+
+    pub fn handle_msg(msg: Msg) {
+        match msg {
+            Msg::SetKeybind {
+                key,
+                modifiers,
+                callback_id,
+            } => todo!(),
+            Msg::SetMousebind { button } => todo!(),
+        }
     }
 }
 
