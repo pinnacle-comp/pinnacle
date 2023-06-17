@@ -138,7 +138,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             Some(dmabuf_default_feedback)
         }
         Ok(None) => {
-            tracing::warn!("failed to query render node, dmabuf will use v3"); // TODO: tracing
+            tracing::warn!("failed to query render node, dmabuf will use v3");
             None
         }
         Err(err) => {
@@ -180,6 +180,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         event_loop.get_signal(),
         evt_loop_handle,
     )?;
+
+    // std::process::Command::new("lua")
+    //     .arg("../pinnacle_api_lua/init.lua")
+    //     .spawn()
+    //     .unwrap();
 
     state
         .shm_state

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pinnacle_api::message::{ModifierMask, Modifiers};
+use crate::api::msg::{ModifierMask, Modifiers, OutgoingMsg};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -216,13 +216,13 @@ impl<B: Backend> State<B> {
                         .keybinds
                         .get(&(modifier_mask.into(), keysym.modified_sym()))
                     {
-                        return FilterResult::Intercept(1);
+                        return FilterResult::Intercept(*callback_id);
                     }
                     match keysym.modified_sym() {
-                        keysyms::KEY_L => return FilterResult::Intercept(1),
-                        keysyms::KEY_K => return FilterResult::Intercept(2),
-                        keysyms::KEY_J => return FilterResult::Intercept(3),
-                        keysyms::KEY_H => return FilterResult::Intercept(4),
+                        keysyms::KEY_L => return FilterResult::Intercept(100),
+                        keysyms::KEY_K => return FilterResult::Intercept(200),
+                        keysyms::KEY_J => return FilterResult::Intercept(300),
+                        keysyms::KEY_H => return FilterResult::Intercept(400),
                         keysyms::KEY_Escape => {
                             state.loop_signal.stop();
                             return FilterResult::Intercept(0);
@@ -250,11 +250,22 @@ impl<B: Backend> State<B> {
         self.move_mode = move_mode;
 
         let program = match action {
-            Some(1) => "alacritty",
-            Some(2) => "nautilus",
-            Some(3) => "kitty",
-            Some(4) => "foot",
-            Some(_) | None => return,
+            Some(100) => "alacritty",
+            Some(200) => "nautilus",
+            Some(300) => "kitty",
+            Some(400) => "foot",
+            Some(callback_id) => {
+                if let Some(stream) = self.api_state.stream.as_mut() {
+                    if let Err(err) =
+                        crate::api::send_to_client(stream, &OutgoingMsg::CallCallback(callback_id))
+                    {
+                        // TODO: print error
+                    }
+                }
+
+                return;
+            }
+            None => return,
         };
 
         tracing::info!("Spawning {}", program);

@@ -41,3 +41,9 @@ impl<T: IntoIterator<Item = Modifiers>> From<T> for ModifierMask {
         Self(mask)
     }
 }
+
+/// Messages sent from the server to each client.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum OutgoingMsg {
+    CallCallback(u32),
+}

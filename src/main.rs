@@ -1,3 +1,4 @@
+mod api;
 mod backend;
 mod cursor;
 mod grab;

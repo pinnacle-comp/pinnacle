@@ -1,6 +1,11 @@
-use std::{collections::HashMap, error::Error, os::fd::AsRawFd, sync::Arc};
+use std::{
+    collections::HashMap,
+    error::Error,
+    os::{fd::AsRawFd, unix::net::UnixStream},
+    sync::Arc,
+};
 
-use pinnacle_api::{message::Msg, PinnacleSocketSource, PinnacleStreamSource};
+use crate::api::{msg::Msg, PinnacleSocketSource, PinnacleStreamSource};
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{
@@ -13,7 +18,10 @@ use smithay::{
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        calloop::{
+            self, channel::Event, generic::Generic, Interest, LoopHandle, LoopSignal, Mode,
+            PostAction,
+        },
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
@@ -59,6 +67,7 @@ pub struct State<B: Backend> {
     pub viewporter_state: ViewporterState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_state: InputState,
+    pub api_state: ApiState,
 
     pub popup_manager: PopupManager,
 
@@ -97,28 +106,57 @@ impl<B: Backend> State<B> {
             },
         )?;
 
-        loop_handle.insert_source(PinnacleSocketSource::new()?, |stream, _, data| {
-            data.state
-                .loop_handle
-                .insert_source(PinnacleStreamSource::new(stream), |msg, _, data| {
-                    // TODO: do stuff with msg
-                    match msg {
-                        Msg::SetKeybind {
-                            key,
-                            modifiers,
-                            callback_id,
-                        } => {
-                            tracing::info!("set keybind: {:?}, {}", modifiers, key);
-                            data.state
-                                .input_state
-                                .keybinds
-                                .insert((modifiers.into(), key), callback_id);
-                        }
-                        Msg::SetMousebind { button } => todo!(),
-                    };
-                })
-                .unwrap();
+        let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
+        loop_handle.insert_source(rx_channel, |msg, _, data| match msg {
+            Event::Msg(msg) => {
+                match msg {
+                    Msg::SetKeybind {
+                        key,
+                        modifiers,
+                        callback_id,
+                    } => {
+                        tracing::info!("set keybind: {:?}, {}", modifiers, key);
+                        data.state
+                            .input_state
+                            .keybinds
+                            .insert((modifiers.into(), key), callback_id);
+                    }
+                    Msg::SetMousebind { button } => todo!(),
+                };
+            }
+            Event::Closed => todo!(),
         })?;
+
+        // std::thread::spawn(move || {
+        //     crate::api::init_api_socket(tx_channel).unwrap();
+        // });
+
+        loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
+            if let Some(old_stream) = data.state.api_state.stream.replace(stream) {
+                old_stream.shutdown(std::net::Shutdown::Both).unwrap();
+            }
+        })?;
+        //     data.state
+        //         .loop_handle
+        //         .insert_source(PinnacleStreamSource::new(stream), |msg, _, data| {
+        //             // TODO: do stuff with msg
+        //             match msg {
+        //                 Msg::SetKeybind {
+        //                     key,
+        //                     modifiers,
+        //                     callback_id,
+        //                 } => {
+        //                     tracing::info!("set keybind: {:?}, {}", modifiers, key);
+        //                     data.state
+        //                         .input_state
+        //                         .keybinds
+        //                         .insert((modifiers.into(), key), callback_id);
+        //                 }
+        //                 Msg::SetMousebind { button } => todo!(),
+        //             };
+        //         })
+        //         .unwrap();
+        // })?;
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -147,6 +185,7 @@ impl<B: Backend> State<B> {
             input_state: InputState {
                 keybinds: HashMap::new(),
             },
+            api_state: ApiState { stream: None },
 
             seat,
 
@@ -165,6 +204,7 @@ impl<B: Backend> State<B> {
             .cloned()
     }
 
+    // TODO:
     pub fn handle_msg(msg: Msg) {
         match msg {
             Msg::SetKeybind {
@@ -230,4 +270,8 @@ pub fn take_presentation_feedback(
     // }
 
     output_presentation_feedback
+}
+
+pub struct ApiState {
+    pub stream: Option<UnixStream>,
 }

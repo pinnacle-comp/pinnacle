@@ -346,7 +346,12 @@ return {
         end
     end,
 
-    -- primary decode function
+    -- Decode a string of MessagePack data into objects.
+    --
+    ---@param data string The MessagePack packet
+    ---@param position any
+    ---@return any ... The decoded values unpacked. If decoding failed, nil
+    ---@return string | nil error The string "cannot decode MessagePack" if decoding failed
     decode = function(data, position)
         local values, value, ok = {}
         position = position or 1
