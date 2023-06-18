@@ -11,12 +11,9 @@ pub enum Msg {
     SetMousebind {
         button: u8,
     },
-    // Action(Action),
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum Action {
-    CloseWindow { client_id: Option<u32> },
+    CloseWindow {
+        client_id: Option<u32>,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -42,7 +39,7 @@ impl<T: IntoIterator<Item = Modifiers>> From<T> for ModifierMask {
     }
 }
 
-/// Messages sent from the server to each client.
+/// Messages sent from the server to the client.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum OutgoingMsg {
     CallCallback(u32),

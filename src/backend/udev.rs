@@ -3,7 +3,7 @@ use std::{
     error::Error,
     os::fd::FromRawFd,
     path::Path,
-    sync::{atomic::Ordering, Mutex},
+    sync::Mutex,
     time::Duration,
 };
 
@@ -67,9 +67,7 @@ use smithay::{
             presentation_time::server::wp_presentation_feedback,
         },
         wayland_server::{
-            backend::GlobalId,
-            protocol::wl_surface::{self, WlSurface},
-            Display, DisplayHandle,
+            backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
     utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Scale, Transform},

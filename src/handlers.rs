@@ -4,8 +4,8 @@ use smithay::{
     delegate_presentation, delegate_relative_pointer, delegate_seat, delegate_shm,
     delegate_viewporter, delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, PopupKeyboardGrab, PopupKind, PopupManager, PopupPointerGrab,
-        PopupUngrabStrategy, Space, Window,
+        find_popup_root_surface, PopupKeyboardGrab, PopupKind, PopupPointerGrab,
+        PopupUngrabStrategy, Window,
     },
     input::{
         pointer::{CursorImageStatus, Focus},
@@ -19,7 +19,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::Serial,
+    utils::{Serial, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -32,8 +32,8 @@ use smithay::{
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         shell::xdg::{
-            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
-            XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+            PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler,
+            XdgShellState, XdgToplevelSurfaceData,
         },
         shm::{ShmHandler, ShmState},
     },
@@ -112,6 +112,7 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 }
 delegate_compositor!(@<B: Backend> State<B>);
+
 fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B>) {
     if let Some(window) = state.window_for_surface(surface) {
         let initial_configure_sent = compositor::with_states(surface, |states| {
@@ -194,15 +195,25 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
-        self.space.map_element(window, (0, 0), true);
+        self.space.map_element(window.clone(), (0, 0), true);
+        self.set_focus(window, SERIAL_COUNTER.next_serial());
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        let windows: Vec<Window> = self.space.elements().cloned().collect();
+        let mut windows: Vec<Window> = self.space.elements().cloned().collect();
+        windows.retain(|window| window.toplevel() != &surface);
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
+        let focus = self
+            .focus_state
+            .current_focus()
+            .map(|win| win.toplevel().wl_surface().clone());
+        self.seat
+            .get_keyboard()
+            .unwrap()
+            .set_focus(self, focus, SERIAL_COUNTER.next_serial());
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
@@ -289,10 +300,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 }
             }
         }
-    }
-
-    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        // println!("surface ack_configure: {:?}", configure);
     }
 
     // TODO: impl the rest of the fns in XdgShellHandler

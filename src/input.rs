@@ -9,7 +9,7 @@ use smithay::{
     desktop::{Window, WindowSurfaceType},
     input::{
         keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
+        pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
@@ -21,8 +21,18 @@ use crate::{
     state::State,
 };
 
+#[derive(Default)]
 pub struct InputState {
+    /// A hashmap of modifier keys and keycodes to callback IDs
     pub keybinds: HashMap<(ModifierMask, u32), u32>,
+    /// A hashmap of modifier keys and mouse button codes to callback IDs
+    pub mousebinds: HashMap<(ModifierMask, u32), u32>,
+}
+
+impl InputState {
+    pub fn new() -> Self {
+        Default::default()
+    }
 }
 
 impl<B: Backend> State<B> {
@@ -121,8 +131,8 @@ impl<B: Backend> State<B> {
                     // Move window to top of stack.
                     self.space.raise_element(&window, true);
 
-                    // Focus on window.
-                    keyboard.set_focus(self, Some(window.toplevel().wl_surface().clone()), serial);
+                    self.set_focus(window, serial);
+
                     self.space.elements().for_each(|window| {
                         window.toplevel().send_configure();
                     });

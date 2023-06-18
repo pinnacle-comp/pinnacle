@@ -1,11 +1,13 @@
 use std::{
-    collections::HashMap,
     error::Error,
     os::{fd::AsRawFd, unix::net::UnixStream},
     sync::Arc,
 };
 
-use crate::api::{msg::Msg, PinnacleSocketSource};
+use crate::{
+    api::{msg::Msg, PinnacleSocketSource},
+    focus::FocusState,
+};
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{
@@ -28,7 +30,7 @@ use smithay::{
             Display,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point},
+    utils::{Clock, IsAlive, Logical, Monotonic, Point},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -68,6 +70,7 @@ pub struct State<B: Backend> {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_state: InputState,
     pub api_state: ApiState,
+    pub focus_state: FocusState,
 
     pub popup_manager: PopupManager,
 
@@ -122,41 +125,31 @@ impl<B: Backend> State<B> {
                             .insert((modifiers.into(), key), callback_id);
                     }
                     Msg::SetMousebind { button } => todo!(),
+                    Msg::CloseWindow { client_id } => {
+                        tracing::info!("CloseWindow {:?}", client_id);
+                        if let Some(window) = data
+                            .state
+                            .seat
+                            .get_keyboard()
+                            .unwrap()
+                            .current_focus()
+                            .and_then(|wl_surface| data.state.window_for_surface(&wl_surface))
+                        {
+                            window.toplevel().send_close();
+                        }
+                    }
                 };
             }
             Event::Closed => todo!(),
         })?;
 
-        // std::thread::spawn(move || {
-        //     crate::api::init_api_socket(tx_channel).unwrap();
-        // });
-
+        // We want to replace the client id a new one pops up
+        // INFO: this source try_clone()s the stream
         loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
             if let Some(old_stream) = data.state.api_state.stream.replace(stream) {
                 old_stream.shutdown(std::net::Shutdown::Both).unwrap();
             }
         })?;
-        //     data.state
-        //         .loop_handle
-        //         .insert_source(PinnacleStreamSource::new(stream), |msg, _, data| {
-        //             // TODO: do stuff with msg
-        //             match msg {
-        //                 Msg::SetKeybind {
-        //                     key,
-        //                     modifiers,
-        //                     callback_id,
-        //                 } => {
-        //                     tracing::info!("set keybind: {:?}, {}", modifiers, key);
-        //                     data.state
-        //                         .input_state
-        //                         .keybinds
-        //                         .insert((modifiers.into(), key), callback_id);
-        //                 }
-        //                 Msg::SetMousebind { button } => todo!(),
-        //             };
-        //         })
-        //         .unwrap();
-        // })?;
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -182,10 +175,9 @@ impl<B: Backend> State<B> {
             fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
                 &display_handle,
             ),
-            input_state: InputState {
-                keybinds: HashMap::new(),
-            },
-            api_state: ApiState { stream: None },
+            input_state: InputState::new(),
+            api_state: ApiState::new(),
+            focus_state: FocusState::new(),
 
             seat,
 
@@ -202,18 +194,6 @@ impl<B: Backend> State<B> {
             .elements()
             .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
             .cloned()
-    }
-
-    // TODO:
-    pub fn handle_msg(msg: Msg) {
-        match msg {
-            Msg::SetKeybind {
-                key,
-                modifiers,
-                callback_id,
-            } => todo!(),
-            Msg::SetMousebind { button } => todo!(),
-        }
     }
 }
 
@@ -272,6 +252,13 @@ pub fn take_presentation_feedback(
     output_presentation_feedback
 }
 
+#[derive(Default)]
 pub struct ApiState {
     pub stream: Option<UnixStream>,
+}
+
+impl ApiState {
+    pub fn new() -> Self {
+        Default::default()
+    }
 }

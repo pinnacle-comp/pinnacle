@@ -1,5 +1,5 @@
 use smithay::{
-    desktop::{Space, Window},
+    desktop::Window,
     input::{
         pointer::{AxisFrame, ButtonEvent, GrabStartData, PointerGrab, PointerInnerHandle},
         SeatHandler,

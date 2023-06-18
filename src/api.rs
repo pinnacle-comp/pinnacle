@@ -2,7 +2,7 @@ pub mod msg;
 
 use std::{
     io::{self, Read, Write},
-    os::unix::net::{UnixDatagram, UnixListener, UnixStream},
+    os::unix::net::{UnixListener, UnixStream},
     path::Path,
 };
 

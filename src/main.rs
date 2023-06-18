@@ -1,6 +1,7 @@
 mod api;
 mod backend;
 mod cursor;
+mod focus;
 mod grab;
 mod handlers;
 mod input;

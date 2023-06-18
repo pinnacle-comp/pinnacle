@@ -83,7 +83,6 @@ while true do
     assert(msg_bytes)
 
     local tb = msgpack.decode(msg_bytes)
-    print(tb)
 
     if tb.CallCallback then
         CallbackTable[tb.CallCallback]()

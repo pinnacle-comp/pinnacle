@@ -40,6 +40,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         let new_loc = self.initial_window_loc.to_f64() + delta;
         data.space
             .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+        data.focus_state.set_focus(self.window.clone());
     }
 
     fn relative_motion(

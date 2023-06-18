@@ -1,8 +1,4 @@
-use smithay::{
-    backend::input::{InputBackend, InputEvent},
-    output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
-};
+use smithay::{output::Output, reexports::wayland_server::protocol::wl_surface::WlSurface};
 
 pub mod udev;
 pub mod winit;

@@ -73,6 +73,7 @@ impl Layout {
 
                 // INFO: We send configures when the event loop is idle so
                 // |     CompositorHandler::commit() sends the initial configure
+                // TODO: maybe check if the initial configure was sent instead?
                 state.loop_handle.insert_idle(|_calloop_data| {
                     for win in windows {
                         win.toplevel().send_pending_configure();
