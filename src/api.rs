@@ -57,7 +57,7 @@ impl PinnacleSocketSource {
             }
         }
 
-        let listener = UnixListener::bind(SOCKET_PATH)?;
+        let listener = UnixListener::bind(socket_path)?;
         listener.set_nonblocking(true)?;
 
         let socket = Generic::new(listener, Interest::READ, Mode::Level);

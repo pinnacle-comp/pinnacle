@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::api::{msg::Msg, PinnacleSocketSource, PinnacleStreamSource};
+use crate::api::{msg::Msg, PinnacleSocketSource};
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{

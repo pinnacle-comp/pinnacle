@@ -84,4 +84,8 @@ while true do
 
     local tb = msgpack.decode(msg_bytes)
     print(tb)
+
+    if tb.CallCallback then
+        CallbackTable[tb.CallCallback]()
+    end
 end
