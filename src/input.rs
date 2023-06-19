@@ -131,7 +131,7 @@ impl<B: Backend> State<B> {
                     // Move window to top of stack.
                     self.space.raise_element(&window, true);
 
-                    self.set_focus(window, serial);
+                    keyboard.set_focus(self, Some(window.toplevel().wl_surface().clone()), serial);
 
                     self.space.elements().for_each(|window| {
                         window.toplevel().send_configure();

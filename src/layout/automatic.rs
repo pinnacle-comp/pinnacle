@@ -1,14 +1,24 @@
 use smithay::desktop::Window;
 
-use crate::{backend::Backend, state::State};
+use crate::{
+    backend::Backend,
+    state::State,
+    window::window_state::{Float, WindowState},
+};
 
 use super::{Direction, Layout};
 
 impl Layout {
-    pub fn master_stack<B: Backend>(state: &mut State<B>, windows: Vec<Window>, side: Direction) {
+    pub fn master_stack<B: Backend>(
+        state: &mut State<B>,
+        mut windows: Vec<Window>,
+        side: Direction,
+    ) {
+        windows.retain(|win| {
+            WindowState::with_state(win, |state| matches!(state.floating, Float::Tiled(_)))
+        });
         match side {
             Direction::Left => {
-                // println!("MasterStack layout_windows");
                 let window_count = windows.len();
                 if window_count == 0 {
                     return;

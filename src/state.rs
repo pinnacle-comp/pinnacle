@@ -127,15 +127,14 @@ impl<B: Backend> State<B> {
                     Msg::SetMousebind { button } => todo!(),
                     Msg::CloseWindow { client_id } => {
                         tracing::info!("CloseWindow {:?}", client_id);
-                        if let Some(window) = data
-                            .state
-                            .seat
-                            .get_keyboard()
-                            .unwrap()
-                            .current_focus()
-                            .and_then(|wl_surface| data.state.window_for_surface(&wl_surface))
-                        {
+                        if let Some(window) = data.state.focus_state.current_focus() {
                             window.toplevel().send_close();
+                        }
+                    }
+                    Msg::ToggleFloating { client_id } => {
+                        // TODO: add client_ids
+                        if let Some(window) = data.state.focus_state.current_focus() {
+                            crate::window::toggle_floating(&mut data.state, &window);
                         }
                     }
                 };

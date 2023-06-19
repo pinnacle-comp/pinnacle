@@ -14,6 +14,9 @@ pub enum Msg {
     CloseWindow {
         client_id: Option<u32>,
     },
+    ToggleFloating {
+        client_id: Option<u32>,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

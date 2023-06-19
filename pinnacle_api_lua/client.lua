@@ -10,4 +10,14 @@ function M.close_window(client_id)
     })
 end
 
+---Toggle a window's floating status.
+---@param client_id integer? The id of the window you want to toggle, or nil to toggle the currently focused window, if any.
+function M.toggle_floating(client_id)
+    SendMsg({
+        ToggleFloating = {
+            client_id = client_id or "nil",
+        },
+    })
+end
+
 return M

@@ -177,7 +177,13 @@ impl<B: Backend> SeatHandler for State<B> {
         self.cursor_status = image;
     }
 
-    fn focus_changed(&mut self, _seat: &Seat<Self>, _focused: Option<&Self::KeyboardFocus>) {}
+    fn focus_changed(&mut self, _seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
+        if let Some(wl_surface) = focused {
+            if let Some(window) = self.window_for_surface(wl_surface) {
+                self.focus_state.set_focus(window);
+            }
+        }
+    }
 }
 delegate_seat!(@<B: Backend> State<B>);
 
@@ -195,8 +201,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
+
         self.space.map_element(window.clone(), (0, 0), true);
-        self.set_focus(window, SERIAL_COUNTER.next_serial());
+        self.loop_handle.insert_idle(move |data| {
+            data.state.seat.get_keyboard().unwrap().set_focus(
+                &mut data.state,
+                Some(window.toplevel().wl_surface().clone()),
+                SERIAL_COUNTER.next_serial(),
+            )
+        });
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         Layout::master_stack(self, windows, crate::layout::Direction::Left);

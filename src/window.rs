@@ -1,8 +1,11 @@
 use std::cell::RefCell;
 
-use smithay::{reexports::wayland_server::protocol::wl_surface::WlSurface, wayland::compositor};
+use smithay::{
+    desktop::Window, reexports::wayland_server::protocol::wl_surface::WlSurface,
+    wayland::compositor,
+};
 
-use crate::{backend::Backend, state::State};
+use crate::{backend::Backend, layout::Layout, state::State};
 
 use self::window_state::{Float, WindowState};
 
@@ -23,32 +26,35 @@ pub trait SurfaceState: Default + 'static {
     }
 }
 
-pub fn toggle_floating<B: Backend>(state: &mut State<B>, wl_surface: &WlSurface) {
-    WindowState::with_state(wl_surface, |window_state| {
-        let window = state.window_for_surface(wl_surface).unwrap();
+pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
+    tracing::info!("toggling floating");
+    WindowState::with_state(window, |window_state| {
         match window_state.floating {
-            Float::NotFloating(prev_loc_and_size) => {
+            Float::Tiled(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {
+                    tracing::info!("changing size and loc");
                     window.toplevel().with_pending_state(|state| {
                         state.size = Some(prev_size);
                     });
 
                     window.toplevel().send_pending_configure();
 
-                    state.space.map_element(window, prev_loc, false); // TODO: should it activate?
+                    state.space.map_element(window.clone(), prev_loc, false); // TODO: should it activate?
                 }
 
-                window_state.floating = Float::Floating
+                window_state.floating = Float::Floating;
             }
             Float::Floating => {
-                // TODO: recompute all non-floating window positions
-
-                window_state.floating = Float::NotFloating(Some((
-                    state.space.element_location(&window).unwrap(), // We get the location this way
+                window_state.floating = Float::Tiled(Some((
+                    state.space.element_location(window).unwrap(), // We get the location this way
                     // because window.geometry().loc doesn't seem to be the actual location
                     window.geometry().size,
                 )));
             }
         }
-    })
+    });
+
+    let windows = state.space.elements().cloned().collect::<Vec<_>>();
+    Layout::master_stack(state, windows, crate::layout::Direction::Left);
+    state.space.raise_element(window, true);
 }
