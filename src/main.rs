@@ -15,8 +15,6 @@ mod xdg;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // pinnacle_api::run()?;
-
     match tracing_subscriber::EnvFilter::try_from_default_env() {
         Ok(env_filter) => {
             tracing_subscriber::fmt()
@@ -29,8 +27,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    tracing::info!("Starting winit backend");
-    crate::backend::winit::run_winit()?;
-    // crate::backend::udev::run_udev()?;
+    let mut args = std::env::args().skip(1);
+    if let Some("--winit") = args.next().as_deref() {
+        tracing::info!("Starting winit backend");
+        crate::backend::winit::run_winit()?;
+    } else {
+        tracing::info!("Starting udev backend");
+        crate::backend::udev::run_udev()?;
+    }
+
     Ok(())
 }

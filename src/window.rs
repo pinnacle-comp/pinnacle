@@ -27,12 +27,10 @@ pub trait SurfaceState: Default + 'static {
 }
 
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
-    tracing::info!("toggling floating");
     WindowState::with_state(window, |window_state| {
         match window_state.floating {
             Float::Tiled(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {
-                    tracing::info!("changing size and loc");
                     window.toplevel().with_pending_state(|state| {
                         state.size = Some(prev_size);
                     });
@@ -46,8 +44,9 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
             }
             Float::Floating => {
                 window_state.floating = Float::Tiled(Some((
-                    state.space.element_location(window).unwrap(), // We get the location this way
-                    // because window.geometry().loc doesn't seem to be the actual location
+                    // We get the location this way because window.geometry().loc
+                    // doesn't seem to be the actual location
+                    state.space.element_location(window).unwrap(),
                     window.geometry().size,
                 )));
             }
