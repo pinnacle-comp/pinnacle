@@ -28,12 +28,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let mut args = std::env::args().skip(1);
-    if let Some("--winit") = args.next().as_deref() {
-        tracing::info!("Starting winit backend");
-        crate::backend::winit::run_winit()?;
-    } else {
-        tracing::info!("Starting udev backend");
-        crate::backend::udev::run_udev()?;
+    match args.next().as_deref() {
+        Some("--winit") => {
+            tracing::info!("Starting winit backend");
+            crate::backend::winit::run_winit()?;
+        }
+        Some("--udev") => {
+            tracing::info!("Starting udev backend");
+            crate::backend::udev::run_udev()?;
+        }
+        Some(arg) => tracing::error!("Unknown argument {}", arg),
+        None => {
+            println!(
+                "Specify a backend:\n\t--udev to launch Pinnacle in a tty, or\n\t--winit to launch Pinnacle as an ordinary window in your graphical environment."
+            );
+        }
     }
 
     Ok(())
