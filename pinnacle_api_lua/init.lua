@@ -1,19 +1,9 @@
--- require("luarocks.loader")
-
-local LOCAL_PATH = "/home/jason/projects/pinnacle/pinnacle_api_lua"
-
-package.path = LOCAL_PATH .. "/lib/?.lua;" .. LOCAL_PATH .. "/lib/?/init.lua;" .. package.path
-package.cpath = LOCAL_PATH .. "/lib/?.so;" .. package.cpath
+-- require("luarocks.loader") TODO:
 
 local socket = require("posix.sys.socket")
-local fcntl = require("posix.fcntl")
 local msgpack = require("msgpack")
 
 local SOCKET_PATH = "/tmp/pinnacle_socket"
-
-local CONFIG_PATH = (os.getenv("XDG_CONFIG_HOME") or "~/.config") .. "/pinnacle/init.lua"
-
-package.path = CONFIG_PATH .. ";" .. package.path
 
 ---@type integer
 local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0), "Failed to create socket")
@@ -32,10 +22,11 @@ function SendMsg(data)
     socket.send(socket_fd, encoded)
 end
 
----@type function[]
+---@type fun()[]
 CallbackTable = {}
 
-assert(pcall(require, "pinnacle"), "config file not found")
+local CONFIG_PATH = os.getenv("PINNACLE_CONFIG")
+dofile(CONFIG_PATH)
 
 ---Read the specified number of bytes.
 ---@param socket_fd integer The socket file descriptor
@@ -71,7 +62,6 @@ local function read_exact(socket_fd, count)
     return data
 end
 
--- TODO: set timeouts so that you actually make sure the msg is correct
 while true do
     local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
     assert(msg_len_bytes)

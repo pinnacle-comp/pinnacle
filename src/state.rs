@@ -30,7 +30,7 @@ use smithay::{
             Display,
         },
     },
-    utils::{Clock, IsAlive, Logical, Monotonic, Point},
+    utils::{Clock, Logical, Monotonic, Point},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -142,13 +142,44 @@ impl<B: Backend> State<B> {
             Event::Closed => todo!(),
         })?;
 
-        // We want to replace the client id a new one pops up
+        // We want to replace the client if a new one pops up
         // INFO: this source try_clone()s the stream
         loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
             if let Some(old_stream) = data.state.api_state.stream.replace(stream) {
                 old_stream.shutdown(std::net::Shutdown::Both).unwrap();
             }
         })?;
+
+        // TODO: move all this into the lua api
+        let config_path = std::env::var("PINNACLE_CONFIG").unwrap_or_else(|_| {
+            let mut default_path =
+                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+            default_path.push_str("/pinnacle/init.lua");
+            default_path
+        });
+
+        let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
+        let mut local_lua_path = std::env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        local_lua_path.push_str("/pinnacle_api_lua"); // TODO: get from crate root
+        let new_lua_path =
+            format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
+
+        let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
+        let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
+
+        std::process::Command::new("lua5.4")
+            .arg(format!(
+                "{}/pinnacle_api_lua/init.lua",
+                std::env::current_dir().unwrap().to_string_lossy()
+            ))
+            .env("PINNACLE_CONFIG", config_path)
+            .env("LUA_PATH", new_lua_path)
+            .env("LUA_CPATH", new_lua_cpath)
+            .spawn()
+            .unwrap();
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
