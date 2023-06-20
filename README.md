@@ -1,11 +1,4 @@
-<div align="center">
-    <font size="50">
-        <strong>
-            Pinnacle
-        </strong>
-    </font>
-</div>
-
+# <div align="center">Pinnacle</div>
 <div align="center">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="/assets/cool_logo_dark_theme.png">
