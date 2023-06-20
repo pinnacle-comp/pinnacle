@@ -163,7 +163,7 @@ impl<B: Backend> State<B> {
             .unwrap()
             .to_string_lossy()
             .to_string();
-        local_lua_path.push_str("/pinnacle_api_lua"); // TODO: get from crate root
+        local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
         let new_lua_path =
             format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
 
@@ -171,11 +171,7 @@ impl<B: Backend> State<B> {
         let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
 
         std::process::Command::new("lua5.4")
-            .arg(format!(
-                "{}/pinnacle_api_lua/init.lua",
-                std::env::current_dir().unwrap().to_string_lossy()
-            ))
-            .env("PINNACLE_CONFIG", config_path)
+            .arg(config_path)
             .env("LUA_PATH", new_lua_path)
             .env("LUA_CPATH", new_lua_cpath)
             .spawn()
