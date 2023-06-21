@@ -5,7 +5,7 @@ local M = {}
 function M.close_window(client_id)
     SendMsg({
         CloseWindow = {
-            client_id = client_id or "nil",
+            client_id = client_id,
         },
     })
 end
@@ -15,7 +15,7 @@ end
 function M.toggle_floating(client_id)
     SendMsg({
         ToggleFloating = {
-            client_id = client_id or "nil",
+            client_id = client_id,
         },
     })
 end

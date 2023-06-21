@@ -89,20 +89,22 @@ Lua = {
 ```
 into your Lua language server settings.
 
+Doc website soon:tm:
+
 ## Controls
 The following controls are currently hardcoded:
 
  - `Esc`: Stop Pinnacle
  - `Ctrl + Left Mouse`: Move a window
  - `Ctrl + Right Mouse`: Resize a window
- - `Shift + L`: Open Alacritty
- - `Shift + K`: Open Nautilus
- - `Shift + J`: Open Kitty
- - `Shift + H`: Open Foot
 
 The following controls are set in the [`example_config`](api/lua/example_config.lua):
  - `Ctrl + Alt + C`: Close the currently focused window
  - `Ctrl + Alt + Space`: Toggle "floating" for the currently focused window
+ - `Ctrl + Return`: Open Alacritty
+ - `Ctrl + 1`: Open Kitty
+ - `Ctrl + 2`: Open Foot
+ - `Ctrl + 3`: Open Nautilus
 
 "Floating" is in quotes because while windows do currently tile themselves, tiled ones can still be moved just like a floating window. Toggling to and from floating will retile all tiled windows.
 

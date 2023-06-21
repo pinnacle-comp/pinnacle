@@ -43,6 +43,8 @@ end
 local pinnacle = {
     input = require("input"),
     client = require("client"),
+    keys = require("keys"),
+    process = require("process"),
 }
 
 ---Configure Pinnacle. You should put mostly eveything into the config_func to avoid invalid state.
@@ -58,7 +60,7 @@ function M.setup(config_func)
         path = SOCKET_PATH,
     }), "Failed to connect to Pinnacle socket")
 
-    ---@type fun()[]
+    ---@type fun(args: table?)[]
     CallbackTable = {}
 
     function SendMsg(data)
@@ -82,9 +84,14 @@ function M.setup(config_func)
         assert(msg_bytes)
 
         local tb = msgpack.decode(msg_bytes)
+        print(msg_bytes)
 
-        if tb.CallCallback then
-            CallbackTable[tb.CallCallback]()
+        if tb.CallCallback and tb.CallCallback.callback_id then
+            if tb.CallCallback.args then -- TODO: can just inline
+                CallbackTable[tb.CallCallback.callback_id](tb.CallCallback.args)
+            else
+                CallbackTable[tb.CallCallback.callback_id](nil)
+            end
         end
     end
 end

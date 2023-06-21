@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::api::msg::{ModifierMask, Modifiers, OutgoingMsg};
+use crate::api::msg::{CallbackId, ModifierMask, Modifiers, OutgoingMsg};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -266,9 +266,13 @@ impl<B: Backend> State<B> {
             Some(400) => "foot",
             Some(callback_id) => {
                 if let Some(stream) = self.api_state.stream.as_mut() {
-                    if let Err(err) =
-                        crate::api::send_to_client(stream, &OutgoingMsg::CallCallback(callback_id))
-                    {
+                    if let Err(err) = crate::api::send_to_client(
+                        &mut self.api_state.stream.as_ref().unwrap().lock().unwrap(),
+                        &OutgoingMsg::CallCallback {
+                            callback_id: CallbackId(callback_id),
+                            args: None,
+                        },
+                    ) {
                         // TODO: print error
                     }
                 }
