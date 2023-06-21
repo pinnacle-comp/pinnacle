@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     api::{
-        msg::{Args, CallbackId, Msg, OutgoingMsg},
+        msg::{Args, Msg, OutgoingMsg},
         PinnacleSocketSource,
     },
     focus::FocusState,
@@ -53,6 +53,7 @@ use smithay::{
 
 use crate::{backend::Backend, input::InputState};
 
+/// The main state of the application.
 pub struct State<B: Backend> {
     pub backend_data: B,
 
@@ -85,6 +86,10 @@ pub struct State<B: Backend> {
 }
 
 impl<B: Backend> State<B> {
+    /// Create the main [State].
+    ///
+    /// This will set the WAYLAND_DISPLAY environment variable, insert Wayland necessary sources
+    /// into the event loop, and run an implementation of the config API (currently Lua).
     pub fn init(
         backend_data: B,
         display: &mut Display<Self>,
