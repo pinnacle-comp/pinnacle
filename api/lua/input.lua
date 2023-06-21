@@ -1,4 +1,4 @@
-local M = {
+local input = {
     keys = require("keys"),
 }
 
@@ -6,7 +6,7 @@ local M = {
 ---@param key Keys The key for the keybind. NOTE: uppercase and lowercase characters are considered different.
 ---@param modifiers Modifiers[] Which modifiers need to be pressed for the keybind to trigger.
 ---@param action fun() What to run.
-function M.keybind(modifiers, key, action)
+function input.keybind(modifiers, key, action)
     table.insert(CallbackTable, action)
     SendMsg({
         SetKeybind = {
@@ -17,4 +17,4 @@ function M.keybind(modifiers, key, action)
     })
 end
 
-return M
+return input

@@ -1,3 +1,13 @@
+-- Just like in Awesome, if you want access to Luarocks packages, this needs to be called.
+-- NOTE: The loader doesn't load from the local Luarocks directory (probably in ~/.luarocks),
+-- |     so if you have any rocks installed with --local,
+-- |     you may need to add those paths to package.path and package.cpath.
+-- Alternatively, you can add
+--     eval $(luarocks path --bin)
+-- to your shell's startup script to permanently have access to Luarocks in all your Lua files.
+pcall(require, "luarocks.loader")
+
+-- Neovim users be like:
 require("pinnacle").setup(function(pinnacle)
     local input = pinnacle.input  --Key and mouse binds
     local client = pinnacle.client --Window management

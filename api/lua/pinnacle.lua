@@ -40,9 +40,15 @@ local function read_exact(socket_fd, count)
 end
 
 ---@class Pinnacle
+---The main Pinnacle table, where all of the config options come from.
+---
+---While you *can* import the fields directly, all config must be in the `setup` function, so you might as well just use the provided table. The ability to directly `require` fields may be dropped in the future.
 local pinnacle = {
+    ---Key and mouse binds
     input = require("input"),
+    ---Window management
     client = require("client"),
+    ---Process spawning
     process = require("process"),
 }
 
