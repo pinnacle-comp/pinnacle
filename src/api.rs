@@ -66,7 +66,6 @@ impl PinnacleSocketSource {
     }
 }
 
-#[must_use]
 pub fn send_to_client(
     stream: &mut UnixStream,
     msg: &OutgoingMsg,

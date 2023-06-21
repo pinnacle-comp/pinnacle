@@ -1,10 +1,16 @@
 require("pinnacle").setup(function(pinnacle)
-    local input = pinnacle.input
-    local client = pinnacle.client
-    local keys = pinnacle.keys
-    local process = pinnacle.process
+    local input = pinnacle.input  --Key and mouse binds
+    local client = pinnacle.client --Window management
+    local process = pinnacle.process -- Process spawning
 
-    input.keybind({ "Alt", "Ctrl" }, keys.c, client.close_window)
+    -- Every key supported by xkbcommon.
+    -- Support for just putting in a string of a key is intended.
+    local keys = input.keys
+
+    -- Keybinds ----------------------------------------------------------------------
+    input.keybind({ "Ctrl", "Alt" }, keys.c, client.close_window)
+
+    -- NOTE: In tiled mode you can still move stuff around as if it's floating. Actual tiling is TODO
     input.keybind({ "Ctrl", "Alt" }, keys.space, client.toggle_floating)
 
     input.keybind({ "Ctrl" }, keys.Return, function()

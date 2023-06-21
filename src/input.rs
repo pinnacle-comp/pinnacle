@@ -228,17 +228,6 @@ impl<B: Backend> State<B> {
                     {
                         return FilterResult::Intercept(*callback_id);
                     }
-                    match keysym.modified_sym() {
-                        keysyms::KEY_L => return FilterResult::Intercept(100),
-                        keysyms::KEY_K => return FilterResult::Intercept(200),
-                        keysyms::KEY_J => return FilterResult::Intercept(300),
-                        keysyms::KEY_H => return FilterResult::Intercept(400),
-                        keysyms::KEY_Escape => {
-                            state.loop_signal.stop();
-                            return FilterResult::Intercept(0);
-                        }
-                        _ => {}
-                    }
                 }
 
                 if keysym.modified_sym() == keysyms::KEY_Control_L {
@@ -259,34 +248,19 @@ impl<B: Backend> State<B> {
 
         self.move_mode = move_mode;
 
-        let program = match action {
-            Some(100) => "alacritty",
-            Some(200) => "nautilus",
-            Some(300) => "kitty",
-            Some(400) => "foot",
-            Some(callback_id) => {
-                if let Some(stream) = self.api_state.stream.as_mut() {
-                    if let Err(err) = crate::api::send_to_client(
-                        &mut self.api_state.stream.as_ref().unwrap().lock().unwrap(),
-                        &OutgoingMsg::CallCallback {
-                            callback_id: CallbackId(callback_id),
-                            args: None,
-                        },
-                    ) {
-                        // TODO: print error
-                    }
+        if let Some(callback_id) = action {
+            if let Some(stream) = self.api_state.stream.as_ref() {
+                if let Err(err) = crate::api::send_to_client(
+                    &mut stream.lock().unwrap(),
+                    &OutgoingMsg::CallCallback {
+                        callback_id: CallbackId(callback_id),
+                        args: None,
+                    },
+                ) {
+                    // TODO: print error
                 }
-
-                return;
             }
-            None => return,
-        };
-
-        tracing::info!("Spawning {}", program);
-        std::process::Command::new(program)
-            .env("WAYLAND_DISPLAY", self.socket_name.clone())
-            .spawn()
-            .unwrap();
+        }
     }
 }
 

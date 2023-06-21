@@ -77,7 +77,7 @@ It is *highly* recommended to use the [Lua language server](https://github.com/L
 Install the [Lua](https://marketplace.visualstudio.com/items?itemName=sumneko.lua) plugin, then go into its settings and add the absolute(?) path to the [`api/lua`](api/lua) directory to Workspace: Library.
 
 #### For Neovim:
-Pass
+Pass this table into your Lua language server settings:
 ```lua
 Lua = {
     workspace = {
@@ -87,28 +87,18 @@ Lua = {
     }
 }
 ```
-into your Lua language server settings.
 
 Doc website soon:tm:
 
 ## Controls
 The following controls are currently hardcoded:
 
- - `Esc`: Stop Pinnacle
  - `Ctrl + Left Mouse`: Move a window
  - `Ctrl + Right Mouse`: Resize a window
 
-The following controls are set in the [`example_config`](api/lua/example_config.lua):
- - `Ctrl + Alt + C`: Close the currently focused window
- - `Ctrl + Alt + Space`: Toggle "floating" for the currently focused window
- - `Ctrl + Return`: Open Alacritty
- - `Ctrl + 1`: Open Kitty
- - `Ctrl + 2`: Open Foot
- - `Ctrl + 3`: Open Nautilus
-
-"Floating" is in quotes because while windows do currently tile themselves, tiled ones can still be moved just like a floating window. Toggling to and from floating will retile all tiled windows.
-
-The only layout currently is a master stack with the master on the left side.
+You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
 
 ## A Small Note
 This is currently just a summer project I'm working on, but I hope that I can work on it enough that it becomes somewhat usable! If development slows down during the rest of the year, it's because :star:university:star:.
+
+Also the only layout is kinda wonk right now if you close all but one window

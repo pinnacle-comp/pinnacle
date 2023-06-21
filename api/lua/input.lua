@@ -1,4 +1,6 @@
-local M = {}
+local M = {
+    keys = require("keys"),
+}
 
 ---Set a keybind. If called on an already existing keybind, it gets replaced.
 ---@param key Keys The key for the keybind. NOTE: uppercase and lowercase characters are considered different.

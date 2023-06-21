@@ -41,6 +41,10 @@ pub enum Msg {
         #[serde(default)]
         callback_id: Option<CallbackId>,
     },
+
+    // Pinnacle management
+    /// Quit the compositor.
+    Quit,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]

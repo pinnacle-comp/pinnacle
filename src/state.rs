@@ -118,6 +118,7 @@ impl<B: Backend> State<B> {
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
         loop_handle.insert_source(rx_channel, |msg, _, data| match msg {
             Event::Msg(msg) => {
+                // TODO: move this into its own function
                 match msg {
                     Msg::SetKeybind {
                         key,
@@ -162,6 +163,8 @@ impl<B: Backend> State<B> {
                                 .stdin(if callback_id.is_some() {
                                     Stdio::piped()
                                 } else {
+                                    // piping to null because foot won't open without a callback_id
+                                    // otherwise
                                     Stdio::null()
                                 })
                                 .stdout(if callback_id.is_some() {
@@ -180,81 +183,84 @@ impl<B: Backend> State<B> {
 
                         // TODO: find a way to make this hellish code look better, deal with unwraps
                         if let Some(callback_id) = callback_id {
-                            let stdout = child.stdout.take().unwrap();
-                            let stderr = child.stderr.take().unwrap();
-                            let stream = data.state.api_state.stream.as_ref().unwrap().clone();
-                            // data.state
-                            //     .api_state
-                            //     .stream
-                            //     .replace(stream.try_clone().unwrap());
-                            let stream2 = stream.clone();
-                            let stream3 = stream.clone();
-                            std::thread::spawn(move || {
-                                // TODO: maybe make this not a thread?
-                                let mut reader = BufReader::new(stdout);
-                                loop {
-                                    let mut buf = String::new();
-                                    match reader.read_line(&mut buf) {
-                                        Ok(0) => break, // EOF
-                                        Ok(_) => {
-                                            let mut stream = stream.lock().unwrap();
-                                            crate::api::send_to_client(
-                                                &mut stream,
-                                                &OutgoingMsg::CallCallback {
-                                                    callback_id,
-                                                    args: Some(Args::Spawn {
-                                                        stdout: Some(
-                                                            buf.trim_end_matches('\n').to_string(),
-                                                        ),
-                                                        stderr: None,
-                                                        exit_code: None,
-                                                        exit_msg: None,
-                                                    }),
-                                                },
-                                            )
-                                            .unwrap();
-                                        }
-                                        Err(err) => {
-                                            tracing::error!("child read err: {err}");
-                                            break;
-                                        }
-                                    }
-                                }
-                            });
-                            std::thread::spawn(move || {
-                                let mut reader = BufReader::new(stderr);
-                                loop {
-                                    let mut buf = String::new();
-                                    match reader.read_line(&mut buf) {
-                                        Ok(0) => break, // EOF
-                                        Ok(_) => {
-                                            let mut stream = stream2.lock().unwrap();
-                                            crate::api::send_to_client(
-                                                &mut stream,
-                                                &OutgoingMsg::CallCallback {
-                                                    callback_id,
-                                                    args: Some(Args::Spawn {
-                                                        stdout: None,
-                                                        stderr: Some(
-                                                            buf.trim_end_matches('\n').to_string(),
-                                                        ),
-                                                        exit_code: None,
-                                                        exit_msg: None,
-                                                    }),
-                                                },
-                                            )
-                                            .unwrap();
-                                        }
-                                        Err(err) => {
-                                            tracing::error!("child read err: {err}");
-                                            break;
+                            let stdout = child.stdout.take();
+                            let stderr = child.stderr.take();
+                            let stream_out = data.state.api_state.stream.as_ref().unwrap().clone();
+                            let stream_err = stream_out.clone();
+                            let stream_exit = stream_out.clone();
+
+                            if let Some(stdout) = stdout {
+                                std::thread::spawn(move || {
+                                    // TODO: maybe find a way to make this async?
+                                    let mut reader = BufReader::new(stdout);
+                                    loop {
+                                        let mut buf = String::new();
+                                        match reader.read_line(&mut buf) {
+                                            Ok(0) => break, // stream closed
+                                            Ok(_) => {
+                                                let mut stream = stream_out.lock().unwrap();
+                                                crate::api::send_to_client(
+                                                    &mut stream,
+                                                    &OutgoingMsg::CallCallback {
+                                                        callback_id,
+                                                        args: Some(Args::Spawn {
+                                                            stdout: Some(
+                                                                buf.trim_end_matches('\n')
+                                                                    .to_string(),
+                                                            ),
+                                                            stderr: None,
+                                                            exit_code: None,
+                                                            exit_msg: None,
+                                                        }),
+                                                    },
+                                                )
+                                                .unwrap();
+                                            }
+                                            Err(err) => {
+                                                tracing::error!("child read err: {err}");
+                                                break;
+                                            }
                                         }
                                     }
-                                }
-                            });
+                                });
+                            }
+                            if let Some(stderr) = stderr {
+                                std::thread::spawn(move || {
+                                    let mut reader = BufReader::new(stderr);
+                                    loop {
+                                        let mut buf = String::new();
+                                        match reader.read_line(&mut buf) {
+                                            Ok(0) => break, // stream closed
+                                            Ok(_) => {
+                                                let mut stream = stream_err.lock().unwrap();
+                                                crate::api::send_to_client(
+                                                    &mut stream,
+                                                    &OutgoingMsg::CallCallback {
+                                                        callback_id,
+                                                        args: Some(Args::Spawn {
+                                                            stdout: None,
+                                                            stderr: Some(
+                                                                buf.trim_end_matches('\n')
+                                                                    .to_string(),
+                                                            ),
+                                                            exit_code: None,
+                                                            exit_msg: None,
+                                                        }),
+                                                    },
+                                                )
+                                                .unwrap();
+                                            }
+                                            Err(err) => {
+                                                tracing::error!("child read err: {err}");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                });
+                            }
                             std::thread::spawn(move || match child.wait() {
                                 Ok(exit_status) => {
-                                    let mut stream = stream3.lock().unwrap();
+                                    let mut stream = stream_exit.lock().unwrap();
                                     crate::api::send_to_client(
                                         &mut stream,
                                         &OutgoingMsg::CallCallback {
@@ -275,9 +281,14 @@ impl<B: Backend> State<B> {
                             });
                         }
                     }
-
-                    // TODO: add the rest
-                    _ => (),
+                    Msg::SpawnShell {
+                        shell,
+                        command,
+                        callback_id,
+                    } => todo!(),
+                    Msg::Quit => {
+                        data.state.loop_signal.stop();
+                    }
                 };
             }
             Event::Closed => todo!(),

@@ -43,9 +43,13 @@ end
 local pinnacle = {
     input = require("input"),
     client = require("client"),
-    keys = require("keys"),
     process = require("process"),
 }
+
+---Quit Pinnacle.
+function pinnacle.quit()
+    SendMsg("Quit")
+end
 
 ---Configure Pinnacle. You should put mostly eveything into the config_func to avoid invalid state.
 ---The function takes one argument: the Pinnacle table, which is how you'll access all of the available config options.
