@@ -22,7 +22,6 @@ require("pinnacle").setup(function(pinnacle)
 
     input.keybind({ "Ctrl", "Alt" }, keys.c, client.close_window)
 
-    -- NOTE: In tiled mode you can still move stuff around as if it's floating. Actual tiling is TODO
     input.keybind({ "Ctrl", "Alt" }, keys.space, client.toggle_floating)
 
     input.keybind({ "Ctrl" }, keys.Return, function()
