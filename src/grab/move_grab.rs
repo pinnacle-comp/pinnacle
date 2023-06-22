@@ -10,10 +10,14 @@ use smithay::{
         },
         SeatHandler,
     },
-    utils::{IsAlive, Logical, Point},
+    utils::{IsAlive, Logical, Point, Rectangle},
 };
 
-use crate::{backend::Backend, state::State};
+use crate::{
+    backend::Backend,
+    state::State,
+    window::window_state::{Float, WindowState},
+};
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
@@ -36,11 +40,47 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             return;
         }
 
-        let delta = event.location - self.start_data.location;
-        let new_loc = self.initial_window_loc.to_f64() + delta;
-        data.space
-            .map_element(self.window.clone(), new_loc.to_i32_round(), true);
-        data.focus_state.set_focus(self.window.clone());
+        let tiled = WindowState::with_state(&self.window, |state| {
+            matches!(state.floating, Float::Tiled(_))
+        });
+
+        if tiled {
+            let window_under = data
+                .space
+                .elements()
+                .find(|&win| {
+                    if let Some(loc) = data.space.element_location(win) {
+                        let size = win.geometry().size;
+                        let rect = Rectangle { size, loc };
+                        rect.contains(event.location.to_i32_round())
+                    } else {
+                        false
+                    }
+                })
+                .cloned();
+
+            if let Some(window_under) = window_under {
+                if window_under == self.window {
+                    return;
+                }
+
+                let window_under_floating = WindowState::with_state(&window_under, |state| {
+                    matches!(state.floating, Float::Floating)
+                });
+
+                if window_under_floating {
+                    return;
+                }
+
+                tracing::info!("{:?}, {:?}", self.window.geometry(), self.window.bbox());
+                data.swap_window_positions(&self.window, &window_under);
+            }
+        } else {
+            let delta = event.location - self.start_data.location;
+            let new_loc = self.initial_window_loc.to_f64() + delta;
+            data.space
+                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+        }
     }
 
     fn relative_motion(

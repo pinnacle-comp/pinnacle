@@ -379,14 +379,6 @@ impl<B: Backend> State<B> {
             popup_manager: PopupManager::default(),
         })
     }
-
-    /// Returns the [Window] associated with a given [WlSurface].
-    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
-        self.space
-            .elements()
-            .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
-            .cloned()
-    }
 }
 
 pub struct CalloopData<B: Backend> {

@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 
 use smithay::{
-    desktop::Window, reexports::wayland_server::protocol::wl_surface::WlSurface,
-    wayland::compositor,
+    desktop::Window,
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    wayland::{compositor, seat::WaylandFocus},
 };
 
 use crate::{backend::Backend, layout::Layout, state::State};
@@ -23,6 +24,36 @@ pub trait SurfaceState: Default + 'static {
 
             function(&mut state.borrow_mut())
         })
+    }
+}
+
+impl<B: Backend> State<B> {
+    /// Returns the [Window] associated with a given [WlSurface].
+    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
+        self.space
+            .elements()
+            .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
+            .cloned()
+    }
+
+    pub fn swap_window_positions(&mut self, win1: &Window, win2: &Window) {
+        let win1_loc = self.space.element_location(win1).unwrap(); // TODO: handle unwraps
+        let win2_loc = self.space.element_location(win2).unwrap();
+        let win1_geo = self.space.element_geometry(win1).unwrap();
+        let win2_geo = self.space.element_geometry(win2).unwrap();
+
+        win1.toplevel().with_pending_state(|state| {
+            state.size = Some(win2_geo.size);
+        });
+        win2.toplevel().with_pending_state(|state| {
+            state.size = Some(win1_geo.size);
+        });
+
+        self.space.map_element(win1.clone(), win2_loc, false);
+        self.space.map_element(win2.clone(), win1_loc, false);
+
+        win1.toplevel().send_pending_configure();
+        win2.toplevel().send_pending_configure();
     }
 }
 
