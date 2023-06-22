@@ -412,6 +412,7 @@ pub struct SurfaceDmabufFeedback<'a> {
     pub scanout_feedback: &'a DmabufFeedback,
 }
 
+// TODO: docs
 pub fn take_presentation_feedback(
     output: &Output,
     space: &Space<Window>,
@@ -444,6 +445,7 @@ pub fn take_presentation_feedback(
     output_presentation_feedback
 }
 
+/// State containing the config API's stream.
 #[derive(Default)]
 pub struct ApiState {
     pub stream: Option<Arc<Mutex<UnixStream>>>,

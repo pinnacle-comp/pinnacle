@@ -1,11 +1,11 @@
-#![warn(missing_docs)] // pretty sure this only warns the main file because nothing else is public
+#![warn(missing_docs)] // pretty sure this only warns in the main file because nothing else is public
 
 //! A very, VERY WIP Smithay-based Wayland compositor.
 //!
 //! Pinnacle is heavily inspired by the [Awesome Window Manager](https://awesomewm.org),
 //! and this is an attempt to make something akin to it for Wayland.
 //!
-//! While Pinnacle is not a library, this documentation serves to guide those who would like to
+//! While Pinnacle is not a library, this documentation serves to guide those who want to
 //! contribute or learn how building something like this works.
 
 mod api;
