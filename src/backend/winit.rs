@@ -87,6 +87,7 @@ impl DmabufHandler for State<WinitData> {
 }
 delegate_dmabuf!(State<WinitData>);
 
+/// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> Result<(), Box<dyn Error>> {
     let mut event_loop: EventLoop<CalloopData<WinitData>> = EventLoop::try_new()?;
 
@@ -105,11 +106,12 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
     let physical_properties = smithay::output::PhysicalProperties {
         size: (0, 0).into(),
         subpixel: Subpixel::Unknown,
-        make: "Comp make".to_string(),
-        model: "Comp model".to_string(),
+        make: "Pinnacle".to_string(),
+        model: "69LongMonitorNameXQ83VGX Super Ultra Pro Max XTX Ti Plus with Max-Q Design (and Knuckles)"
+            .to_string(),
     };
 
-    let output = Output::new("27GL83A".to_string(), physical_properties);
+    let output = Output::new("Pinnacle window".to_string(), physical_properties);
 
     output.create_global::<State<WinitData>>(&display_handle);
 
@@ -180,11 +182,6 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         event_loop.get_signal(),
         evt_loop_handle,
     )?;
-
-    // std::process::Command::new("lua")
-    //     .arg("../pinnacle_api_lua/init.lua")
-    //     .spawn()
-    //     .unwrap();
 
     state
         .shm_state
