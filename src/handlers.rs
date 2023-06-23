@@ -223,7 +223,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
         });
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
-        Layout::master_stack(self, windows, crate::layout::Direction::Left);
+        self.loop_handle.insert_idle(|data| {
+            Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+        });
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {

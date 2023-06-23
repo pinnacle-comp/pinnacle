@@ -93,8 +93,20 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
             None => ((0, 0).into(), (0, 0).into()),
         };
 
-        let min_width = i32::min(1, min_size.w);
-        let min_height = i32::min(1, min_size.h);
+        tracing::info!("min and max size: {min_size:?}, {max_size:?}");
+        let geo = self.window.geometry().loc;
+        tracing::info!("geo loc: {}, {}", geo.x, geo.y);
+
+        // HACK: Here I set the min height to be self.window.geometry().loc.y.abs() because if it's
+        // |     lower then the compositor crashes trying to create a size with height -1 if you make the
+        // |     window height too small.
+        // |     However I don't know if the loc.y from window.geometry will always be the negative
+        // |     of the csd height.
+        let min_width = i32::max(1, min_size.w);
+        let min_height = i32::max(
+            i32::max(0, self.window.geometry().loc.y.abs()) + 1,
+            min_size.h,
+        );
 
         let max_width = if max_size.w != 0 {
             max_size.w

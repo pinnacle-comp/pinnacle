@@ -4,7 +4,10 @@ use std::{
     io::{BufRead, BufReader},
     os::{fd::AsRawFd, unix::net::UnixStream},
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use crate::{
@@ -32,7 +35,6 @@ use smithay::{
         },
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
-            protocol::wl_surface::WlSurface,
             Display,
         },
     },
@@ -43,7 +45,6 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
-        seat::WaylandFocus,
         shell::xdg::XdgShellState,
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -84,6 +85,8 @@ pub struct State<B: Backend> {
     pub cursor_status: CursorImageStatus,
     pub pointer_location: Point<f64, Logical>,
 }
+
+static NUM: AtomicU32 = AtomicU32::new(0);
 
 impl<B: Backend> State<B> {
     /// Create the main [State].
@@ -165,26 +168,31 @@ impl<B: Backend> State<B> {
                         let mut child =
                             std::process::Command::new(OsString::from(command.next().unwrap()))
                                 .env("WAYLAND_DISPLAY", data.state.socket_name.clone())
-                                .stdin(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    // piping to null because foot won't open without a callback_id
-                                    // otherwise
-                                    Stdio::null()
-                                })
-                                .stdout(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    Stdio::null()
-                                })
-                                .stderr(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    Stdio::null()
-                                })
+                                .stdin(Stdio::null())
+                                .stdout(Stdio::null())
+                                .stderr(Stdio::null())
+                                // .stdin(if callback_id.is_some() {
+                                //     Stdio::piped()
+                                // } else {
+                                //     // piping to null because foot won't open without a callback_id
+                                //     // otherwise
+                                //     Stdio::null()
+                                // })
+                                // .stdout(if callback_id.is_some() {
+                                //     Stdio::piped()
+                                // } else {
+                                //     Stdio::null()
+                                // })
+                                // .stderr(if callback_id.is_some() {
+                                //     Stdio::piped()
+                                // } else {
+                                //     Stdio::null()
+                                // })
                                 .args(command)
                                 .spawn()
                                 .unwrap(); // TODO: handle unwrap
+                        NUM.store(NUM.load(Ordering::SeqCst) + 1, Ordering::SeqCst);
+                        tracing::info!("{} processes", NUM.load(Ordering::SeqCst));
 
                         // TODO: find a way to make this hellish code look better, deal with unwraps
                         if let Some(callback_id) = callback_id {

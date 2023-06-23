@@ -6,7 +6,9 @@ use smithay::{
 };
 
 pub struct WindowState {
+    /// Whether the window is floating or tiled.
     pub floating: Float,
+    /// The window's resize state. See [WindowResizeState] for more.
     pub resize_state: WindowResizeState,
 }
 
@@ -50,7 +52,7 @@ pub enum WindowResizeState {
 }
 
 pub enum Float {
-    /// An [Option] of a tuple of the previous location and previous size of the window
+    /// The previous location and size of the window when it was floating, if any.
     Tiled(Option<(Point<i32, Logical>, Size<i32, Logical>)>),
     Floating,
 }
@@ -74,11 +76,12 @@ impl Float {
 }
 
 impl WindowState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Default::default()
     }
 
-    /// Access a [Window]'s state
+    /// Access a [Window]'s state, optionally returning something.
     pub fn with_state<F, T>(window: &Window, mut func: F) -> T
     where
         F: FnMut(&mut Self) -> T,

@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use smithay::{
     desktop::Window,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::SERIAL_COUNTER,
     wayland::{compositor, seat::WaylandFocus},
 };
 
@@ -43,7 +42,10 @@ impl<B: Backend> State<B> {
             .cloned()
     }
 
+    /// Swap the positions and sizes of two windows.
     pub fn swap_window_positions(&mut self, win1: &Window, win2: &Window) {
+        // FIXME: moving the mouse quickly will break swapping
+
         let win1_loc = self.space.element_location(win1).unwrap(); // TODO: handle unwraps
         let win2_loc = self.space.element_location(win2).unwrap();
         let win1_geo = win1.geometry();
@@ -73,6 +75,7 @@ impl<B: Backend> State<B> {
     }
 }
 
+/// Toggle a window's floating status.
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     WindowState::with_state(window, |window_state| {
         match window_state.floating {
