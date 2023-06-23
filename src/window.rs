@@ -3,17 +3,24 @@ use std::cell::RefCell;
 use smithay::{
     desktop::Window,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
+    utils::SERIAL_COUNTER,
     wayland::{compositor, seat::WaylandFocus},
 };
 
-use crate::{backend::Backend, layout::Layout, state::State};
+use crate::{
+    backend::Backend, layout::Layout, state::State, window::window_state::WindowResizeState,
+};
 
 use self::window_state::{Float, WindowState};
 
 pub mod window_state;
 
 pub trait SurfaceState: Default + 'static {
-    /// Access the [SurfaceState] associated with a [WlSurface]
+    /// Access the [SurfaceState] associated with a [WlSurface].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if you use it within itself due to the use of a [RefCell].
     fn with_state<F, T>(wl_surface: &WlSurface, function: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
@@ -39,8 +46,10 @@ impl<B: Backend> State<B> {
     pub fn swap_window_positions(&mut self, win1: &Window, win2: &Window) {
         let win1_loc = self.space.element_location(win1).unwrap(); // TODO: handle unwraps
         let win2_loc = self.space.element_location(win2).unwrap();
-        let win1_geo = self.space.element_geometry(win1).unwrap();
-        let win2_geo = self.space.element_geometry(win2).unwrap();
+        let win1_geo = win1.geometry();
+        let win2_geo = win2.geometry();
+        // tracing::info!("win1: {:?}, {:?}", win1_loc, win1_geo);
+        // tracing::info!("win2: {:?}, {:?}", win2_loc, win2_geo);
 
         win1.toplevel().with_pending_state(|state| {
             state.size = Some(win2_geo.size);
@@ -49,11 +58,18 @@ impl<B: Backend> State<B> {
             state.size = Some(win1_geo.size);
         });
 
-        self.space.map_element(win1.clone(), win2_loc, false);
-        self.space.map_element(win2.clone(), win1_loc, false);
+        let serial = win1.toplevel().send_configure();
+        WindowState::with_state(win1, |state| {
+            state.resize_state = WindowResizeState::WaitingForAck(serial, win2_loc);
+        });
 
-        win1.toplevel().send_pending_configure();
-        win2.toplevel().send_pending_configure();
+        let serial = win2.toplevel().send_configure();
+        WindowState::with_state(win2, |state| {
+            state.resize_state = WindowResizeState::WaitingForAck(serial, win1_loc);
+        });
+
+        // self.space.map_element(win1.clone(), win2_loc, false);
+        // self.space.map_element(win2.clone(), win1_loc, false);
     }
 }
 

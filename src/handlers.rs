@@ -32,8 +32,8 @@ use smithay::{
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         shell::xdg::{
-            PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler,
-            XdgShellState, XdgToplevelSurfaceData,
+            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
+            XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
         },
         shm::{ShmHandler, ShmState},
     },
@@ -43,6 +43,7 @@ use crate::{
     backend::Backend,
     layout::Layout,
     state::{ClientState, State},
+    window::window_state::{WindowResizeState, WindowState},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -86,8 +87,6 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // println!("CompositorHandler commit()");
-
         utils::on_commit_buffer_handler::<Self>(surface);
 
         if !compositor::is_sync_subsurface(surface) {
@@ -105,6 +104,17 @@ impl<B: Backend> CompositorHandler for State<B> {
         ensure_initial_configure(surface, self);
 
         crate::grab::resize_grab::handle_commit(self, surface);
+
+        if let Some(window) = self.window_for_surface(surface) {
+            WindowState::with_state(&window, |state| {
+                if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
+                    // tracing::info!("Committing, new location");
+                    state.resize_state = WindowResizeState::Idle;
+                    self.space.map_element(window.clone(), new_pos, false);
+                }
+                // state.resize_state
+            });
+        }
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -127,13 +137,14 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
         // println!("initial_configure_sent is {}", initial_configure_sent);
 
         if !initial_configure_sent {
+            tracing::info!("Initial configure");
             window.toplevel().send_configure();
         }
         return;
     }
 
     if let Some(popup) = state.popup_manager.find_popup(surface) {
-        let PopupKind::Xdg(ref popup) = popup;
+        let PopupKind::Xdg(popup) = &popup;
         let initial_configure_sent = compositor::with_states(surface, |states| {
             states
                 .data_map
@@ -312,6 +323,26 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
                 }
             }
+        }
+    }
+
+    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
+        // TODO: add serial to WaitingForAck
+        if let Some(window) = self.window_for_surface(&surface) {
+            WindowState::with_state(&window, |state| {
+                if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
+                    match &configure {
+                        Configure::Toplevel(configure) => {
+                            // tracing::info!("acking before serial check");
+                            if configure.serial >= serial {
+                                // tracing::info!("acking, serial >=");
+                                state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
+                            }
+                        }
+                        Configure::Popup(_) => todo!(),
+                    }
+                }
+            });
         }
     }
 

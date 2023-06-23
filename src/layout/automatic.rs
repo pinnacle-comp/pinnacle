@@ -1,9 +1,13 @@
-use smithay::desktop::Window;
+use smithay::{
+    desktop::Window,
+    utils::SERIAL_COUNTER,
+    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
+};
 
 use crate::{
     backend::Backend,
     state::State,
-    window::window_state::{Float, WindowState},
+    window::window_state::{WindowResizeState, WindowState},
 };
 
 use super::{Direction, Layout};
@@ -14,11 +18,11 @@ impl Layout {
         mut windows: Vec<Window>,
         side: Direction,
     ) {
-        windows.retain(|win| {
-            WindowState::with_state(win, |state| matches!(state.floating, Float::Tiled(_)))
-        });
+        windows.retain(|win| WindowState::with_state(win, |state| state.floating.is_tiled()));
         match side {
             Direction::Left => {
+                let serial = SERIAL_COUNTER.next_serial();
+
                 let window_count = windows.len();
                 if window_count == 0 {
                     return;
@@ -37,9 +41,31 @@ impl Layout {
                         tl_state.size = Some(state.space.output_geometry(&output).unwrap().size);
                     });
 
-                    state
-                        .space
-                        .map_element(window, output.current_location(), false);
+                    WindowState::with_state(&window, |state| {
+                        state.resize_state =
+                            WindowResizeState::WaitingForAck(serial, output.current_location());
+                    });
+
+                    // state.loop_handle.insert_idle(move |_calloop_data| {
+                    //     window.toplevel().send_pending_configure();
+                    // });
+                    let initial_configure_sent =
+                        compositor::with_states(window.toplevel().wl_surface(), |states| {
+                            states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .unwrap()
+                                .lock()
+                                .unwrap()
+                                .initial_configure_sent
+                        });
+                    if initial_configure_sent {
+                        window.toplevel().send_pending_configure();
+                    }
+
+                    // state
+                    //     .space
+                    //     .map_element(window, output.current_location(), false);
                     return;
                 }
 
@@ -55,9 +81,14 @@ impl Layout {
                         tl_state.size = Some(size);
                     });
 
-                    state
-                        .space
-                        .map_element(first_window.clone(), output.current_location(), false);
+                    // state
+                    //     .space
+                    //     .map_element(first_window.clone(), output.current_location(), false);
+
+                    WindowState::with_state(first_window, |state| {
+                        state.resize_state =
+                            WindowResizeState::WaitingForAck(serial, output.current_location());
+                    });
 
                     let window_count = windows.len() as i32;
                     let height = output_size.h / window_count;
@@ -73,22 +104,33 @@ impl Layout {
 
                         let mut new_loc = output.current_location();
                         new_loc.x = x;
-                        new_loc.y = i as i32 * height;
+                        new_loc.y = (i as i32) * height;
 
-                        state.space.map_element(win.clone(), new_loc, false);
+                        // state.space.map_element(win.clone(), new_loc, false);
+                        WindowState::with_state(win, |state| {
+                            state.resize_state = WindowResizeState::WaitingForAck(serial, new_loc);
+                        });
                     }
                 }
-
-                state.backend_data.reset_buffers(&output);
 
                 // INFO: We send configures when the event loop is idle so
                 // |     CompositorHandler::commit() sends the initial configure
                 // TODO: maybe check if the initial configure was sent instead?
-                state.loop_handle.insert_idle(|_calloop_data| {
-                    for win in windows {
+                for win in windows {
+                    let initial_configure_sent =
+                        compositor::with_states(win.toplevel().wl_surface(), |states| {
+                            states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .unwrap()
+                                .lock()
+                                .unwrap()
+                                .initial_configure_sent
+                        });
+                    if initial_configure_sent {
                         win.toplevel().send_pending_configure();
                     }
-                });
+                }
             }
             Direction::Right => todo!(),
             Direction::Top => todo!(),

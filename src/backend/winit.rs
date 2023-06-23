@@ -375,7 +375,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             TimeoutAction::ToDuration(Duration::from_millis(6))
         })?;
 
-    event_loop.run(None, &mut CalloopData { display, state }, |_data| {})?;
+    event_loop.run(
+        Some(Duration::from_millis(6)),
+        &mut CalloopData { display, state },
+        |_data| {},
+    )?;
 
     Ok(())
 }

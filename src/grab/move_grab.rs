@@ -40,14 +40,20 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             return;
         }
 
-        let tiled = WindowState::with_state(&self.window, |state| {
-            matches!(state.floating, Float::Tiled(_))
-        });
+        data.space.raise_element(&self.window, false);
+
+        // tracing::info!("window geo is: {:?}", self.window.geometry());
+        // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
+
+        let tiled = WindowState::with_state(&self.window, |state| state.floating.is_tiled());
 
         if tiled {
+            // INFO: this is being used instead of space.element_under(event.location) because that
+            // |     uses the bounding box, which is different from the actual geometry
             let window_under = data
                 .space
                 .elements()
+                .rev()
                 .find(|&win| {
                     if let Some(loc) = data.space.element_location(win) {
                         let size = win.geometry().size;
@@ -64,15 +70,13 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                let window_under_floating = WindowState::with_state(&window_under, |state| {
-                    matches!(state.floating, Float::Floating)
-                });
+                let window_under_floating =
+                    WindowState::with_state(&window_under, |state| state.floating.is_floating());
 
                 if window_under_floating {
                     return;
                 }
 
-                tracing::info!("{:?}, {:?}", self.window.geometry(), self.window.bbox());
                 data.swap_window_positions(&self.window, &window_under);
             }
         } else {

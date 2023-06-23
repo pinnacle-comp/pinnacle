@@ -100,5 +100,3 @@ You can find the rest of the controls in the [`example_config`](api/lua/example_
 
 ## A Small Note
 This is currently just a summer project I'm working on, but I hope that I can work on it enough that it becomes somewhat usable! If development slows down during the rest of the year, it's because :star:university:star:.
-
-Also the only layout is kinda wonk right now if you close all but one window
