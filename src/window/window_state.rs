@@ -28,9 +28,9 @@ pub struct WindowState {
 ///
 /// [`space.map_element()`]: smithay::desktop::space::Space#method.map_element
 /// [`with_pending_state()`]: smithay::wayland::shell::xdg::ToplevelSurface#method.with_pending_state
-/// [`Idle`]: self::WindowResizeState#variant.Idle
-/// [`WaitingForAck`]: self::WindowResizeState#variant.WaitingForAck
-/// [`WaitingForCommit`]: self::WindowResizeState#variant.WaitingForCommit
+/// [`Idle`]: WindowResizeState::Idle
+/// [`WaitingForAck`]: WindowResizeState::WaitingForAck
+/// [`WaitingForCommit`]: WindowResizeState::WaitingForCommit
 /// [`resize_state`]: WindowState#structfield.resize_state
 /// [`XdgShellHandler.ack_configure()`]: smithay::wayland::shell::xdg::XdgShellHandler#method.ack_configure
 /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
