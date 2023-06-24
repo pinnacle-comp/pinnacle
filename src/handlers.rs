@@ -224,6 +224,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         self.loop_handle.insert_idle(|data| {
+            tracing::info!("Layout master_stack");
             Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
         });
     }

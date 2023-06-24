@@ -19,6 +19,7 @@ mod layout;
 mod pointer;
 mod render;
 mod state;
+mod tag;
 mod window;
 mod xdg;
 
@@ -50,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(arg) => tracing::error!("Unknown argument {}", arg),
         None => {
             println!(
-                "Specify a backend:\n\t--udev to launch Pinnacle in a tty, or\n\t--winit to launch Pinnacle as an ordinary window in your graphical environment."
+                "Specify a backend:\n\t--udev to launch Pinnacle in a tty, or\n\t--winit to launch Pinnacle as a window in your graphical environment."
             );
         }
     }

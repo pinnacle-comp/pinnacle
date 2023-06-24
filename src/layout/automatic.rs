@@ -24,18 +24,24 @@ impl Layout {
                 if window_count == 0 {
                     return;
                 }
-                let output = state
-                    .space
-                    .output_under(state.pointer_location)
-                    .next()
-                    .unwrap()
-                    .clone();
-                let output_size = state.space.output_geometry(&output).unwrap().size;
+                // TODO: change focused_output to be not an option
+                let Some(output) = state
+                    .focus_state
+                    .focused_output
+                    .as_ref()
+                    .or_else(|| state.space.outputs().next()) 
+                else {
+                    tracing::warn!("no connected outputs");
+                    return;
+                    // TODO: no idea what happens if you spawn a window while no monitors are
+                    // |     connected, figure that out
+                };
+                let output_size = state.space.output_geometry(output).unwrap().size;
                 if window_count == 1 {
                     let window = windows[0].clone();
 
                     window.toplevel().with_pending_state(|tl_state| {
-                        tl_state.size = Some(state.space.output_geometry(&output).unwrap().size);
+                        tl_state.size = Some(state.space.output_geometry(output).unwrap().size);
                     });
 
                     let initial_configure_sent =
@@ -64,7 +70,7 @@ impl Layout {
                 let first_window = windows.next().unwrap();
 
                 first_window.toplevel().with_pending_state(|tl_state| {
-                    let mut size = state.space.output_geometry(&output).unwrap().size;
+                    let mut size = state.space.output_geometry(output).unwrap().size;
                     size.w /= 2;
                     tl_state.size = Some(size);
                 });
@@ -93,11 +99,26 @@ impl Layout {
                 let x = output.current_location().x + output_size.w / 2;
 
                 for (i, win) in windows.enumerate() {
+                    // let (min_size, _max_size) = match win.wl_surface() {
+                    //     Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
+                    //         let data = states.cached_state.current::<SurfaceCachedState>();
+                    //         (data.min_size, data.max_size)
+                    //     }),
+                    //     None => ((0, 0).into(), (0, 0).into()),
+                    // };
+                    // let min_height =
+                    //     i32::max(i32::max(0, win.geometry().loc.y.abs()) + 1, min_size.h);
                     win.toplevel().with_pending_state(|state| {
                         let mut new_size = output_size;
                         new_size.w /= 2;
-                        new_size.w = new_size.w.clamp(40, i32::MAX);
+                        new_size.w = new_size.w.clamp(1, i32::MAX);
                         new_size.h /= window_count;
+                        // INFO: The newest window won't have its geometry.loc set until after here and I don't know
+                        // |     why, so this is hardcoded to 40. I don't anticipate people using
+                        // |     windows that are that short, so figuring it out is low priority.
+                        // |     Kitty specifically will crash the compositor if it's resized such
+                        // |     that the bottom border goes above the bottom of the title bar if
+                        // |     this is set too low.
                         new_size.h = new_size.h.clamp(40, i32::MAX);
                         state.size = Some(new_size);
                     });
@@ -105,8 +126,6 @@ impl Layout {
                     let mut new_loc = output.current_location();
                     new_loc.x = x;
                     new_loc.y = (i as i32) * height;
-
-                    // state.space.map_element(win.clone(), new_loc, false);
 
                     let initial_configure_sent =
                         compositor::with_states(win.toplevel().wl_surface(), |states| {

@@ -11,6 +11,7 @@ use smithay::{
         SeatHandler,
     },
     utils::{IsAlive, Logical, Point, Rectangle},
+    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 
 use crate::{backend::Backend, state::State, window::window_state::WindowState};

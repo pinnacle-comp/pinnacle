@@ -97,6 +97,3 @@ The following controls are currently hardcoded:
  - `Ctrl + Right Mouse`: Resize a window
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
-
-## A Small Note
-This is currently just a summer project I'm working on, but I hope that I can work on it enough that it becomes somewhat usable! If development slows down during the rest of the year, it's because :star:university:star:.

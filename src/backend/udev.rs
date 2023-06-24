@@ -668,26 +668,23 @@ impl SurfaceComposition {
                 renderer.set_debug_flags(current_debug_flags);
                 res
             }
-            SurfaceComposition::Compositor(compositor) => {
-                tracing::info!("compositor.render_frame");
-                compositor
-                    .render_frame(renderer, elements, clear_color)
-                    .map(|render_frame_result| {
-                        (
-                            render_frame_result.damage.is_some(),
-                            render_frame_result.states,
-                        )
-                    })
-                    .map_err(|err| match err {
-                        smithay::backend::drm::compositor::RenderFrameError::PrepareFrame(err) => {
-                            err.into()
-                        }
-                        smithay::backend::drm::compositor::RenderFrameError::RenderFrame(
-                            damage::Error::Rendering(err),
-                        ) => err.into(),
-                        _ => unreachable!(),
-                    })
-            }
+            SurfaceComposition::Compositor(compositor) => compositor
+                .render_frame(renderer, elements, clear_color)
+                .map(|render_frame_result| {
+                    (
+                        render_frame_result.damage.is_some(),
+                        render_frame_result.states,
+                    )
+                })
+                .map_err(|err| match err {
+                    smithay::backend::drm::compositor::RenderFrameError::PrepareFrame(err) => {
+                        err.into()
+                    }
+                    smithay::backend::drm::compositor::RenderFrameError::RenderFrame(
+                        damage::Error::Rendering(err),
+                    ) => err.into(),
+                    _ => unreachable!(),
+                }),
         }
     }
 }
@@ -859,7 +856,6 @@ impl State<UdevData> {
                         return;
                     }
                 };
-            tracing::info!("***** surface composition :: SURFACE *****");
             SurfaceComposition::Surface {
                 surface: gbm_surface,
                 damage_tracker: OutputDamageTracker::from_output(&output),
@@ -913,7 +909,6 @@ impl State<UdevData> {
                     return;
                 }
             };
-            tracing::info!("***** surface composition :: COMPOSITOR *****");
             SurfaceComposition::Compositor(compositor)
         };
 
@@ -1194,7 +1189,6 @@ impl State<UdevData> {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        tracing::info!("********* DATA.STATE.RENDER()");
         let device_backend = match self.backend_data.backends.get_mut(&node) {
             Some(backend) => backend,
             None => {

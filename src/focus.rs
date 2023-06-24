@@ -1,8 +1,9 @@
-use smithay::{desktop::Window, utils::IsAlive};
+use smithay::{desktop::Window, output::Output, utils::IsAlive};
 
 #[derive(Default)]
 pub struct FocusState {
     focus_stack: Vec<Window>,
+    pub focused_output: Option<Output>,
 }
 
 impl FocusState {

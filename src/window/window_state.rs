@@ -5,11 +5,14 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
+use crate::tag::Tag;
+
 pub struct WindowState {
     /// Whether the window is floating or tiled.
     pub floating: Float,
     /// The window's resize state. See [WindowResizeState] for more.
     pub resize_state: WindowResizeState,
+    pub tags: Vec<Tag>,
 }
 
 /// The state of a window's resize operation.
@@ -102,9 +105,9 @@ impl WindowState {
 impl Default for WindowState {
     fn default() -> Self {
         Self {
-            // TODO: get this from a config file instead of hardcoding
             floating: Float::Tiled(None),
-            resize_state: Default::default(),
+            resize_state: WindowResizeState::Idle,
+            tags: vec![],
         }
     }
 }

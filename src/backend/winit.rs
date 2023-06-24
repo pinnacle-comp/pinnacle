@@ -31,7 +31,7 @@ use smithay::{
     },
     utils::{IsAlive, Scale, Transform},
     wayland::{
-        compositor::{self},
+        compositor,
         dmabuf::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
@@ -182,6 +182,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         event_loop.get_signal(),
         evt_loop_handle,
     )?;
+
+    state.focus_state.focused_output = Some(output.clone());
 
     state
         .shm_state

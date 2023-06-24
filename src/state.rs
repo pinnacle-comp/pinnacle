@@ -137,7 +137,7 @@ impl<B: Backend> State<B> {
                         data.state
                             .input_state
                             .keybinds
-                            .insert((modifiers.into(), key), callback_id.0);
+                            .insert((modifiers.into(), key), callback_id);
                     }
                     Msg::SetMousebind { button } => todo!(),
                     Msg::CloseWindow { client_id } => {
