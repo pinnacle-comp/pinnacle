@@ -16,6 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Get dependencies
-        run: sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev
+        run: sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev
       - name: Clippy
         run: cargo clippy
