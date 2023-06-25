@@ -16,6 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install addlicense
-        run: sudo go install github.com/google/addlicense@latest
+        run: go install github.com/google/addlicense@latest
       - name: Check headers
-        run: $GOPATH/bin/addlicense -check -l mpl *.rs
+        run: $HOME/go/bin/addlicense -check -l mpl *.rs
