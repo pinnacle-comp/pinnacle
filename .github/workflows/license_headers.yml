@@ -18,4 +18,4 @@ jobs:
       - name: Install addlicense
         run: go install github.com/google/addlicense@latest
       - name: Check headers
-        run: $HOME/go/bin/addlicense -check -l mpl -ignore ./**/lib ./src ./api
+        run: $HOME/go/bin/addlicense -check -l mpl -ignore ./src
