@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Unlicense
+
 --[[----------------------------------------------------------------------------
 
 	MessagePack encoder / decoder written in pure Lua 5.3 / Lua 5.4

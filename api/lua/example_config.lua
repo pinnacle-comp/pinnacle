@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: MIT
+
 -- Just like in Awesome, if you want access to Luarocks packages, this needs to be called.
 -- NOTE: The loader doesn't load from the local Luarocks directory (probably in ~/.luarocks),
 -- |     so if you have any rocks installed with --local,
