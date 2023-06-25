@@ -219,7 +219,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 &mut data.state,
                 Some(window.toplevel().wl_surface().clone()),
                 SERIAL_COUNTER.next_serial(),
-            )
+            );
         });
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
@@ -290,7 +290,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
-        let seat: Seat<State<B>> = Seat::from_resource(&seat).unwrap();
+        let seat: Seat<Self> = Seat::from_resource(&seat).unwrap();
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind)
             .ok()
