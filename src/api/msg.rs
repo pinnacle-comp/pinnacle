@@ -7,7 +7,7 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::window::tag::Tag;
+use crate::window::{tag::Tag, window_state::WindowId, WindowProperties};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -39,6 +39,10 @@ pub enum Msg {
     ToggleTag {
         tag: Tag,
     },
+    SetWindowSize {
+        window_id: WindowId,
+        size: (i32, i32),
+    },
 
     // Process management
     /// Spawn a program with an optional callback.
@@ -59,6 +63,20 @@ pub enum Msg {
     // Pinnacle management
     /// Quit the compositor.
     Quit,
+
+    Request(Request),
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct RequestId(pub u32);
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+/// Messages that require a server response, usually to provide some data.
+pub enum Request {
+    GetWindowByAppId { id: RequestId, app_id: String },
+    GetWindowByTitle { id: RequestId, title: String },
+    GetWindowByFocus { id: RequestId },
+    GetAllWindows { id: RequestId },
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
@@ -111,11 +129,16 @@ pub enum OutgoingMsg {
         #[serde(default)]
         args: Option<Args>,
     },
+    RequestResponse {
+        request_id: RequestId,
+        response: RequestResponse,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum Args {
+    /// Send a message with lines from the spawned process.
     Spawn {
         #[serde(default)]
         stdout: Option<String>,
@@ -126,4 +149,10 @@ pub enum Args {
         #[serde(default)]
         exit_msg: Option<String>,
     },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum RequestResponse {
+    Window { window: WindowProperties },
+    GetAllWindows { windows: Vec<WindowProperties> },
 }

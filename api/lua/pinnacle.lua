@@ -4,11 +4,9 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
--- require("luarocks.loader") TODO:
 local socket = require("posix.sys.socket")
 local msgpack = require("msgpack")
 
-local M = {}
 local SOCKET_PATH = "/tmp/pinnacle_socket"
 
 ---Read the specified number of bytes.
@@ -66,7 +64,7 @@ end
 ---Configure Pinnacle. You should put mostly eveything into the config_func to avoid invalid state.
 ---The function takes one argument: the Pinnacle table, which is how you'll access all of the available config options.
 ---@param config_func fun(pinnacle: Pinnacle)
-function M.setup(config_func)
+function pinnacle.setup(config_func)
     ---@type integer
     local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0), "Failed to create socket")
     print("created socket at fd " .. socket_fd)
@@ -87,9 +85,13 @@ function M.setup(config_func)
         socket.send(socket_fd, encoded)
     end
 
-    config_func(pinnacle)
+    function SendRequest(data)
+        SendMsg({
+            Request = data,
+        })
+    end
 
-    while true do
+    function ReadMsg()
         local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
         assert(msg_len_bytes)
 
@@ -102,6 +104,23 @@ function M.setup(config_func)
         local tb = msgpack.decode(msg_bytes)
         print(msg_bytes)
 
+        return tb
+    end
+
+    Requests = {
+        id = 1,
+    }
+    function Requests:next()
+        local id = self.id
+        self.id = self.id + 1
+        return id
+    end
+
+    config_func(pinnacle)
+
+    while true do
+        local tb = ReadMsg()
+
         if tb.CallCallback and tb.CallCallback.callback_id then
             if tb.CallCallback.args then -- TODO: can just inline
                 CallbackTable[tb.CallCallback.callback_id](tb.CallCallback.args)
@@ -109,7 +128,12 @@ function M.setup(config_func)
                 CallbackTable[tb.CallCallback.callback_id](nil)
             end
         end
+
+        -- if tb.RequestResponse then
+        --     local req_id = tb.RequestResponse.request_id
+        --     Requests[req_id] = tb.RequestResponse.response
+        -- end
     end
 end
 
-return M
+return pinnacle

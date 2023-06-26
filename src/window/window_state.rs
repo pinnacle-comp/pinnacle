@@ -4,7 +4,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use smithay::{
     desktop::Window,
@@ -13,7 +16,20 @@ use smithay::{
 
 use super::tag::Tag;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WindowId(u32);
+
+static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+impl WindowId {
+    pub fn next() -> Self {
+        Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 pub struct WindowState {
+    /// The id of this window.
+    pub id: WindowId,
     /// Whether the window is floating or tiled.
     pub floating: Float,
     /// The window's resize state. See [WindowResizeState] for more.
@@ -112,6 +128,8 @@ impl WindowState {
 impl Default for WindowState {
     fn default() -> Self {
         Self {
+            // INFO: I think this will assign the id on use of the state, not on window spawn.
+            id: WindowId::next(),
             floating: Float::Tiled(None),
             resize_state: WindowResizeState::Idle,
             tags: vec![],
