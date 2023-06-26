@@ -18,10 +18,11 @@ use std::{
 
 use crate::{
     api::{
-        msg::{Args, Msg, OutgoingMsg},
+        msg::{Args, Msg, OutgoingMsg, Request, RequestResponse},
         PinnacleSocketSource,
     },
     focus::FocusState,
+    window::{window_state::WindowState, WindowProperties},
 };
 use smithay::{
     backend::renderer::element::RenderElementStates,
@@ -46,12 +47,12 @@ use smithay::{
     },
     utils::{Clock, Logical, Monotonic, Point},
     wayland::{
-        compositor::{CompositorClientState, CompositorState},
+        compositor::{self, CompositorClientState, CompositorState},
         data_device::DataDeviceState,
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
-        shell::xdg::XdgShellState,
+        shell::xdg::{XdgShellState, XdgToplevelSurfaceData},
         shm::ShmState,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
@@ -304,9 +305,106 @@ impl<B: Backend> State<B> {
                     } => todo!(),
                     Msg::MoveToTag { tag } => todo!(),
                     Msg::ToggleTag { tag } => todo!(),
+
+                    Msg::SetWindowSize { window_id, size } => {
+                        let Some(window) = data.state.space.elements().find(|&win| {
+                            WindowState::with_state(win, |state| state.id == window_id)
+                        }) else { return; };
+
+                        // TODO: tiled vs floating
+                        window.toplevel().with_pending_state(|state| {
+                            state.size = Some(size.into());
+                        });
+                        window.toplevel().send_pending_configure();
+                    }
+
                     Msg::Quit => {
                         data.state.loop_signal.stop();
                     }
+
+                    Msg::Request(request) => match request {
+                        Request::GetWindowByAppId { id, app_id } => todo!(),
+                        Request::GetWindowByTitle { id, title } => todo!(),
+                        Request::GetWindowByFocus { id } => {
+                            let Some(current_focus) = data.state.focus_state.current_focus() else { return; };
+                            let (app_id, title) = compositor::with_states(
+                                current_focus.toplevel().wl_surface(), 
+                                |states| {
+                                    let lock = states.
+                                        data_map
+                                        .get::<XdgToplevelSurfaceData>()
+                                        .unwrap()
+                                        .lock()
+                                        .unwrap();
+                                    (lock.app_id.clone(), lock.title.clone())
+                                }
+                            );
+                            let (window_id, floating) = WindowState::with_state(&current_focus, |state| {
+                                (state.id, state.floating.is_floating())
+                            });
+                            // TODO: unwrap
+                            let location = data.state.space.element_location(&current_focus).unwrap(); 
+                            let props = WindowProperties {
+                                id: window_id,
+                                app_id,
+                                title,
+                                size: current_focus.geometry().size.into(),
+                                location: location.into(),
+                                floating,
+                            };
+                            let stream = data.state.api_state.stream.as_ref().unwrap();
+                            let mut stream = stream.lock().unwrap();
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    request_id: id, 
+                                    response: RequestResponse::Window { window: props }
+                                }
+                            )
+                            .unwrap();
+                        },
+                        Request::GetAllWindows { id } => {
+                            let window_props = data.state.space.elements().map(|win| {
+
+                                let (app_id, title) = compositor::with_states(
+                                    win.toplevel().wl_surface(), 
+                                    |states| {
+                                        let lock = states.
+                                            data_map
+                                            .get::<XdgToplevelSurfaceData>()
+                                            .unwrap()
+                                            .lock()
+                                            .unwrap();
+                                        (lock.app_id.clone(), lock.title.clone())
+                                    }
+                                );
+                                let (window_id, floating) = WindowState::with_state(win, |state| {
+                                    (state.id, state.floating.is_floating())
+                                });
+                                // TODO: unwrap
+                                let location = data.state.space.element_location(win).unwrap(); 
+                                WindowProperties {
+                                    id: window_id,
+                                    app_id,
+                                    title,
+                                    size: win.geometry().size.into(),
+                                    location: location.into(),
+                                    floating,
+                                }
+                            }).collect::<Vec<_>>();
+
+                            let stream = data.state.api_state.stream.as_ref().unwrap();
+                            let mut stream = stream.lock().unwrap();
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    request_id: id, 
+                                    response: RequestResponse::GetAllWindows { windows: window_props },
+                                }
+                            )
+                            .unwrap();
+                        }
+                    },
                 };
             }
             Event::Closed => todo!(),

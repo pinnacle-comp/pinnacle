@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use smithay::{
     desktop::Window,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
+    utils::{Logical, Point, Size},
     wayland::{compositor, seat::WaylandFocus},
 };
 
@@ -16,7 +17,7 @@ use crate::{
     backend::Backend, layout::Layout, state::State, window::window_state::WindowResizeState,
 };
 
-use self::window_state::{Float, WindowState};
+use self::window_state::{Float, WindowId, WindowState};
 
 pub mod tag;
 pub mod window_state;
@@ -114,4 +115,16 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     let windows = state.space.elements().cloned().collect::<Vec<_>>();
     Layout::master_stack(state, windows, crate::layout::Direction::Left);
     state.space.raise_element(window, true);
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct WindowProperties {
+    pub id: WindowId,
+    pub app_id: Option<String>,
+    pub title: Option<String>,
+    /// Width and height
+    pub size: (i32, i32),
+    /// x and y
+    pub location: (i32, i32),
+    pub floating: bool,
 }

@@ -41,4 +41,18 @@ require("pinnacle").setup(function(pinnacle)
     input.keybind({ "Ctrl" }, keys.KEY_3, function()
         process.spawn("nautilus")
     end)
+
+    input.keybind({ "Ctrl", "Alt" }, keys.w, function()
+        local win = client.get_window("focus")
+        win:set_size({ w = 500, h = 500 })
+    end)
+
+    input.keybind({ "Ctrl", "Alt" }, keys.e, function()
+        local windows = client.get_windows()
+        for k, v in pairs(windows) do
+            for k2, v2 in pairs(v) do
+                print(k2 .. ": " .. tostring(v2))
+            end
+        end
+    end)
 end)
