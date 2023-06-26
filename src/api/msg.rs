@@ -7,6 +7,8 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
+use crate::window::tag::Tag;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
 
@@ -30,6 +32,12 @@ pub enum Msg {
     ToggleFloating {
         #[serde(default)]
         client_id: Option<u32>,
+    },
+    MoveToTag {
+        tag: Tag,
+    },
+    ToggleTag {
+        tag: Tag,
     },
 
     // Process management

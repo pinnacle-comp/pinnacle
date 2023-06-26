@@ -4,4 +4,25 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-pub struct Tag(u32);
+use smithay::desktop::Window;
+
+use crate::{backend::Backend, state::State};
+
+use super::window_state::WindowState;
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Tag(String);
+
+impl Tag {
+    /// Returns all windows that have this tag.
+    pub fn windows<B: Backend>(&self, state: &State<B>) -> Vec<Window> {
+        state
+            .space
+            .elements()
+            .filter(|&window| {
+                WindowState::with_state(window, |win_state| win_state.tags.contains(self))
+            })
+            .cloned()
+            .collect()
+    }
+}

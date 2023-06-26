@@ -18,6 +18,7 @@ pub struct WindowState {
     pub floating: Float,
     /// The window's resize state. See [WindowResizeState] for more.
     pub resize_state: WindowResizeState,
+    /// What tags the window is currently on.
     pub tags: Vec<Tag>,
 }
 

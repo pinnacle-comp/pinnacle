@@ -12,8 +12,6 @@
 //! While Pinnacle is not a library, this documentation serves to guide those who want to
 //! contribute or learn how building something like this works.
 
-// test
-
 mod api;
 mod backend;
 mod cursor;
@@ -22,6 +20,7 @@ mod grab;
 mod handlers;
 mod input;
 mod layout;
+mod output;
 mod pointer;
 mod render;
 mod state;

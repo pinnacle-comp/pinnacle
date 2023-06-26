@@ -21,12 +21,13 @@ use self::window_state::{Float, WindowState};
 pub mod tag;
 pub mod window_state;
 
+// TODO: maybe get rid of this and move the fn into resize_surface state because it's the only user
 pub trait SurfaceState: Default + 'static {
-    /// Access the [SurfaceState] associated with a [WlSurface].
+    /// Access the [`SurfaceState`] associated with a [`WlSurface`].
     ///
     /// # Panics
     ///
-    /// This function will panic if you use it within itself due to the use of a [RefCell].
+    /// This function will panic if you use it within itself due to the use of a [`RefCell`].
     fn with_state<F, T>(wl_surface: &WlSurface, function: F) -> T
     where
         F: FnOnce(&mut Self) -> T,

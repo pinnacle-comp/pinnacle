@@ -92,8 +92,6 @@ pub struct State<B: Backend> {
     pub pointer_location: Point<f64, Logical>,
 }
 
-static NUM: AtomicU32 = AtomicU32::new(0);
-
 impl<B: Backend> State<B> {
     /// Create the main [State].
     ///
@@ -133,6 +131,7 @@ impl<B: Backend> State<B> {
         loop_handle.insert_source(rx_channel, |msg, _, data| match msg {
             Event::Msg(msg) => {
                 // TODO: move this into its own function
+                // TODO: no like seriously this is getting a bit unwieldy
                 match msg {
                     Msg::SetKeybind {
                         key,
@@ -177,28 +176,26 @@ impl<B: Backend> State<B> {
                                 .stdin(Stdio::null())
                                 .stdout(Stdio::null())
                                 .stderr(Stdio::null())
-                                // .stdin(if callback_id.is_some() {
-                                //     Stdio::piped()
-                                // } else {
-                                //     // piping to null because foot won't open without a callback_id
-                                //     // otherwise
-                                //     Stdio::null()
-                                // })
-                                // .stdout(if callback_id.is_some() {
-                                //     Stdio::piped()
-                                // } else {
-                                //     Stdio::null()
-                                // })
-                                // .stderr(if callback_id.is_some() {
-                                //     Stdio::piped()
-                                // } else {
-                                //     Stdio::null()
-                                // })
+                                .stdin(if callback_id.is_some() {
+                                    Stdio::piped()
+                                } else {
+                                    // piping to null because foot won't open without a callback_id
+                                    // otherwise
+                                    Stdio::null()
+                                })
+                                .stdout(if callback_id.is_some() {
+                                    Stdio::piped()
+                                } else {
+                                    Stdio::null()
+                                })
+                                .stderr(if callback_id.is_some() {
+                                    Stdio::piped()
+                                } else {
+                                    Stdio::null()
+                                })
                                 .args(command)
                                 .spawn()
                                 .unwrap(); // TODO: handle unwrap
-                        NUM.store(NUM.load(Ordering::SeqCst) + 1, Ordering::SeqCst);
-                        tracing::info!("{} processes", NUM.load(Ordering::SeqCst));
 
                         // TODO: find a way to make this hellish code look better, deal with unwraps
                         if let Some(callback_id) = callback_id {
@@ -208,9 +205,9 @@ impl<B: Backend> State<B> {
                             let stream_err = stream_out.clone();
                             let stream_exit = stream_out.clone();
 
+                            // TODO: make this not use 3 whole threads per process
                             if let Some(stdout) = stdout {
                                 std::thread::spawn(move || {
-                                    // TODO: maybe find a way to make this async?
                                     let mut reader = BufReader::new(stdout);
                                     loop {
                                         let mut buf = String::new();
@@ -305,6 +302,8 @@ impl<B: Backend> State<B> {
                         command,
                         callback_id,
                     } => todo!(),
+                    Msg::MoveToTag { tag } => todo!(),
+                    Msg::ToggleTag { tag } => todo!(),
                     Msg::Quit => {
                         data.state.loop_signal.stop();
                     }
