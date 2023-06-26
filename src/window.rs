@@ -18,6 +18,7 @@ use crate::{
 
 use self::window_state::{Float, WindowState};
 
+pub mod tag;
 pub mod window_state;
 
 pub trait SurfaceState: Default + 'static {

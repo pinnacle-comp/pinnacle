@@ -11,7 +11,7 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use crate::tag::Tag;
+use super::tag::Tag;
 
 pub struct WindowState {
     /// Whether the window is floating or tiled.
