@@ -24,9 +24,6 @@ local function new_window(props)
     return props
 end
 
--- NOTE: these functions are duplicated here for documentation
--- |     and because I don't know of a better way
-
 ---Set a window's size.
 ---@param size { w: integer?, h: integer? }
 function window:set_size(size)
@@ -129,6 +126,8 @@ function client.get_windows()
             id = Requests:next(),
         },
     })
+
+    -- INFO: these read synchronously so this should always work IF the server works correctly
 
     local window_props = ReadMsg().RequestResponse.response.GetAllWindows.windows
     ---@type Window[]
