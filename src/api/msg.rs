@@ -136,7 +136,6 @@ pub enum OutgoingMsg {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
 pub enum Args {
     /// Send a message with lines from the spawned process.
     Spawn {

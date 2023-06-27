@@ -14,25 +14,26 @@ function process.spawn(command, callback)
     local callback_id = nil
 
     if callback ~= nil then
+        ---@param args Args
         table.insert(CallbackTable, function(args)
-            local args = args or {}
+            local args = args.Spawn or {} -- don't know if the `or {}` is necessary
             callback(args.stdout, args.stderr, args.exit_code, args.exit_msg)
         end)
         callback_id = #CallbackTable
     end
 
-    local command_str = command
-    local command = command
-    if type(command_str) == "string" then
-        command = {}
-        for i in string.gmatch(command_str, "%S+") do
-            table.insert(command, i)
+    local command_arr = {}
+    if type(command) == "string" then
+        for i in string.gmatch(command, "%S+") do
+            table.insert(command_arr, i)
         end
+    else
+        command_arr = command
     end
 
     SendMsg({
         Spawn = {
-            command = command,
+            command = command_arr,
             callback_id = callback_id,
         },
     })
