@@ -77,6 +77,7 @@ function pinnacle.setup(config_func)
     ---@type fun(args: table?)[]
     CallbackTable = {}
 
+    ---@param data Msg
     function SendMsg(data)
         local encoded = msgpack.encode(data)
         assert(encoded)
@@ -85,6 +86,7 @@ function pinnacle.setup(config_func)
         socket.send(socket_fd, encoded)
     end
 
+    ---@param data Request
     function SendRequest(data)
         SendMsg({
             Request = data,
@@ -101,6 +103,7 @@ function pinnacle.setup(config_func)
         local msg_bytes, err_msg2, err_num2 = read_exact(socket_fd, msg_len)
         assert(msg_bytes)
 
+        ---@type IncomingMsg
         local tb = msgpack.decode(msg_bytes)
         print(msg_bytes)
 
