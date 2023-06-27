@@ -16,29 +16,16 @@ local window = {}
 ---@param props { id: integer, app_id: string?, title: string?, size: { w: integer, h: integer }, location: { x: integer, y: integer }, floating: boolean }
 ---@return Window
 local function new_window(props)
-    ---Set a window's size.
-    ---@param size { w: integer?, h: integer? }
-    function props:set_size(size)
-        self.size = {
-            w = size.w or self.size.w,
-            h = size.h or self.size.h,
-        }
-        SendMsg({
-            SetWindowSize = {
-                window_id = self.id,
-                size = { self.size.w, self.size.h },
-            },
-        })
-    end
-
-    ---Get a window's size.
-    ---@return { w: integer, h: integer }
-    function props:get_size()
-        return self.size
+    -- Copy functions over
+    for k, v in pairs(window) do
+        props[k] = v
     end
 
     return props
 end
+
+-- NOTE: these functions are duplicated here for documentation
+-- |     and because I don't know of a better way
 
 ---Set a window's size.
 ---@param size { w: integer?, h: integer? }
@@ -143,8 +130,10 @@ function client.get_windows()
         },
     })
 
-    local windows = ReadMsg().RequestResponse.response.GetAllWindows.windows
-    for i, v in ipairs(windows) do
+    local window_props = ReadMsg().RequestResponse.response.GetAllWindows.windows
+    ---@type Window[]
+    local windows = {}
+    for i, v in ipairs(window_props) do
         windows[i] = {
             id = v.id,
             app_id = v.app_id or "",
