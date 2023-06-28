@@ -99,6 +99,7 @@ function client.get_window(identifier)
     local response = ReadMsg()
 
     local props = response.RequestResponse.response.Window.window
+
     ---@type Window
     local win = {
         id = props.id,

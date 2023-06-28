@@ -4,11 +4,19 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
+---@diagnostic disable: redefined-local
+
 local process = {}
 
 ---Spawn a process with an optional callback for its stdout and stderr.
+---
+---`callback` has the following parameters:
+--- - `stdout`: The process's stdout printed this line.
+--- - `stderr`: The process's stderr printed this line.
+--- - `exit_code`: The process exited with this code.
+--- - `exit_msg`: The process exited with this message.
 ---@param command string|string[] The command as one whole string or a table of each of its arguments
----@param callback fun(stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string?)? A callback to do something whenever the process's stdout or stderr print a line. Only one will be non-nil at a time.
+---@param callback fun(stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string?)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
 function process.spawn(command, callback)
     ---@type integer|nil
     local callback_id = nil
