@@ -6,19 +6,16 @@
 
 use std::{
     error::Error,
-    ffi::OsString,
+    ffi::{CString, OsString},
     io::{BufRead, BufReader},
     os::{fd::AsRawFd, unix::net::UnixStream},
     process::Stdio,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 use crate::{
     api::{
-        msg::{Args, Msg, OutgoingMsg, Request, RequestResponse},
+        msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestResponse},
         PinnacleSocketSource,
     },
     focus::FocusState,
@@ -94,7 +91,7 @@ pub struct State<B: Backend> {
 }
 
 impl<B: Backend> State<B> {
-    /// Create the main [State].
+    /// Create the main [`State`].
     ///
     /// This will set the WAYLAND_DISPLAY environment variable, insert Wayland necessary sources
     /// into the event loop, and run an implementation of the config API (currently Lua).
@@ -108,6 +105,19 @@ impl<B: Backend> State<B> {
         let socket_name = socket.socket_name().to_os_string();
 
         std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
+
+        // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
+        // example. Because of this, opening up only around 100 processes would exhaust the file
+        // descriptor limit on my system (Arch btw) and cause a "Too many open files" crash.
+        //
+        // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
+        // environment, I *think* this is ok.
+        smithay::reexports::nix::sys::resource::setrlimit(
+            smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
+            65536,
+            65536 * 2,
+        )
+        .unwrap();
 
         loop_handle.insert_source(socket, |stream, _metadata, data| {
             data.display
@@ -133,6 +143,7 @@ impl<B: Backend> State<B> {
             Event::Msg(msg) => {
                 // TODO: move this into its own function
                 // TODO: no like seriously this is getting a bit unwieldy
+                // TODO: no like rustfmt literally refuses to format the code below
                 match msg {
                     Msg::SetKeybind {
                         key,
@@ -164,139 +175,7 @@ impl<B: Backend> State<B> {
                         command,
                         callback_id,
                     } => {
-                        let mut command = command.into_iter().peekable();
-                        if command.peek().is_none() {
-                            // TODO: notify that command was nothing
-                            return;
-                        }
-
-                        // TODO: may need to set env for WAYLAND_DISPLAY
-                        let mut child =
-                            std::process::Command::new(OsString::from(command.next().unwrap()))
-                                .env("WAYLAND_DISPLAY", data.state.socket_name.clone())
-                                .stdin(Stdio::null())
-                                .stdout(Stdio::null())
-                                .stderr(Stdio::null())
-                                .stdin(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    // piping to null because foot won't open without a callback_id
-                                    // otherwise
-                                    Stdio::null()
-                                })
-                                .stdout(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    Stdio::null()
-                                })
-                                .stderr(if callback_id.is_some() {
-                                    Stdio::piped()
-                                } else {
-                                    Stdio::null()
-                                })
-                                .args(command)
-                                .spawn()
-                                .unwrap(); // TODO: handle unwrap
-
-                        // TODO: find a way to make this hellish code look better, deal with unwraps
-                        if let Some(callback_id) = callback_id {
-                            let stdout = child.stdout.take();
-                            let stderr = child.stderr.take();
-                            let stream_out = data.state.api_state.stream.as_ref().unwrap().clone();
-                            let stream_err = stream_out.clone();
-                            let stream_exit = stream_out.clone();
-
-                            // TODO: make this not use 3 whole threads per process
-                            if let Some(stdout) = stdout {
-                                std::thread::spawn(move || {
-                                    let mut reader = BufReader::new(stdout);
-                                    loop {
-                                        let mut buf = String::new();
-                                        match reader.read_line(&mut buf) {
-                                            Ok(0) => break, // stream closed
-                                            Ok(_) => {
-                                                let mut stream = stream_out.lock().unwrap();
-                                                crate::api::send_to_client(
-                                                    &mut stream,
-                                                    &OutgoingMsg::CallCallback {
-                                                        callback_id,
-                                                        args: Some(Args::Spawn {
-                                                            stdout: Some(
-                                                                buf.trim_end_matches('\n')
-                                                                    .to_string(),
-                                                            ),
-                                                            stderr: None,
-                                                            exit_code: None,
-                                                            exit_msg: None,
-                                                        }),
-                                                    },
-                                                )
-                                                .unwrap();
-                                            }
-                                            Err(err) => {
-                                                tracing::error!("child read err: {err}");
-                                                break;
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                            if let Some(stderr) = stderr {
-                                std::thread::spawn(move || {
-                                    let mut reader = BufReader::new(stderr);
-                                    loop {
-                                        let mut buf = String::new();
-                                        match reader.read_line(&mut buf) {
-                                            Ok(0) => break, // stream closed
-                                            Ok(_) => {
-                                                let mut stream = stream_err.lock().unwrap();
-                                                crate::api::send_to_client(
-                                                    &mut stream,
-                                                    &OutgoingMsg::CallCallback {
-                                                        callback_id,
-                                                        args: Some(Args::Spawn {
-                                                            stdout: None,
-                                                            stderr: Some(
-                                                                buf.trim_end_matches('\n')
-                                                                    .to_string(),
-                                                            ),
-                                                            exit_code: None,
-                                                            exit_msg: None,
-                                                        }),
-                                                    },
-                                                )
-                                                .unwrap();
-                                            }
-                                            Err(err) => {
-                                                tracing::error!("child read err: {err}");
-                                                break;
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                            std::thread::spawn(move || match child.wait() {
-                                Ok(exit_status) => {
-                                    let mut stream = stream_exit.lock().unwrap();
-                                    crate::api::send_to_client(
-                                        &mut stream,
-                                        &OutgoingMsg::CallCallback {
-                                            callback_id,
-                                            args: Some(Args::Spawn {
-                                                stdout: None,
-                                                stderr: None,
-                                                exit_code: exit_status.code(),
-                                                exit_msg: Some(exit_status.to_string()),
-                                            }),
-                                        },
-                                    )
-                                    .unwrap()
-                                }
-                                Err(err) => {
-                                    tracing::warn!("child wait() err: {err}");
-                                }
-                            });
-                        }
+                        data.state.handle_spawn(command, callback_id);
                     }
                     Msg::SpawnShell {
                         shell,
@@ -489,6 +368,136 @@ impl<B: Backend> State<B> {
 
             popup_manager: PopupManager::default(),
         })
+    }
+
+    pub fn handle_spawn(&self, command: Vec<String>, callback_id: Option<CallbackId>) {
+        let mut command = command.into_iter().peekable();
+        if command.peek().is_none() {
+            // TODO: notify that command was nothing
+            return;
+        }
+
+        let mut child = std::process::Command::new(OsString::from(command.next().unwrap()))
+            .env("WAYLAND_DISPLAY", self.socket_name.clone())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(if callback_id.is_some() {
+                Stdio::piped()
+            } else {
+                // piping to null because foot won't open without a callback_id
+                // otherwise
+                Stdio::null()
+            })
+            .stdout(if callback_id.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .stderr(if callback_id.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .args(command)
+            .spawn()
+            .unwrap(); // TODO: handle unwrap
+
+        // TODO: find a way to make this hellish code look better, deal with unwraps
+        if let Some(callback_id) = callback_id {
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+            let stream_out = self.api_state.stream.as_ref().unwrap().clone();
+            let stream_err = stream_out.clone();
+            let stream_exit = stream_out.clone();
+
+            // TODO: make this not use 3 whole threads per process
+            if let Some(stdout) = stdout {
+                std::thread::spawn(move || {
+                    let mut reader = BufReader::new(stdout);
+                    loop {
+                        let mut buf = String::new();
+                        match reader.read_line(&mut buf) {
+                            Ok(0) => break, // stream closed
+                            Ok(_) => {
+                                let mut stream = stream_out.lock().unwrap();
+                                crate::api::send_to_client(
+                                    &mut stream,
+                                    &OutgoingMsg::CallCallback {
+                                        callback_id,
+                                        args: Some(Args::Spawn {
+                                            stdout: Some(buf.trim_end_matches('\n').to_string()),
+                                            stderr: None,
+                                            exit_code: None,
+                                            exit_msg: None,
+                                        }),
+                                    },
+                                )
+                                .unwrap();
+                            }
+                            Err(err) => {
+                                tracing::error!("child read err: {err}");
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            if let Some(stderr) = stderr {
+                std::thread::spawn(move || {
+                    let mut reader = BufReader::new(stderr);
+                    loop {
+                        let mut buf = String::new();
+                        match reader.read_line(&mut buf) {
+                            Ok(0) => break, // stream closed
+                            Ok(_) => {
+                                let mut stream = stream_err.lock().unwrap();
+                                crate::api::send_to_client(
+                                    &mut stream,
+                                    &OutgoingMsg::CallCallback {
+                                        callback_id,
+                                        args: Some(Args::Spawn {
+                                            stdout: None,
+                                            stderr: Some(buf.trim_end_matches('\n').to_string()),
+                                            exit_code: None,
+                                            exit_msg: None,
+                                        }),
+                                    },
+                                )
+                                .unwrap();
+                            }
+                            Err(err) => {
+                                tracing::error!("child read err: {err}");
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            std::thread::spawn(move || match child.wait() {
+                Ok(exit_status) => {
+                    let mut stream = stream_exit.lock().unwrap();
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::Spawn {
+                                stdout: None,
+                                stderr: None,
+                                exit_code: exit_status.code(),
+                                exit_msg: Some(exit_status.to_string()),
+                            }),
+                        },
+                    )
+                    .unwrap()
+                }
+                Err(err) => {
+                    tracing::warn!("child wait() err: {err}");
+                }
+            });
+        } else {
+            std::thread::spawn(move || child.wait());
+        }
     }
 }
 
