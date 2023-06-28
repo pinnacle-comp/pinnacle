@@ -11,8 +11,8 @@ pcall(require, "luarocks.loader")
 
 -- Neovim users be like:
 require("pinnacle").setup(function(pinnacle)
-    local input = pinnacle.input  --Key and mouse binds
-    local client = pinnacle.client --Window management
+    local input = pinnacle.input  -- Key and mouse binds
+    local client = pinnacle.client -- Window management
     local process = pinnacle.process -- Process spawning
 
     -- Every key supported by xkbcommon.
