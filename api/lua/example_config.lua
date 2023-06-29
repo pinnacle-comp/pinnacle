@@ -28,7 +28,7 @@ require("pinnacle").setup(function(pinnacle)
 
     input.keybind({ "Ctrl" }, keys.Return, function()
         process.spawn("alacritty", function(stdout, stderr, exit_code, exit_msg)
-            -- do something with the output here
+            -- do something with the output here; remember to check for nil!
         end)
     end)
 

@@ -6,8 +6,7 @@
 
 use std::{
     error::Error,
-    ffi::{CString, OsString},
-    io::{BufRead, BufReader},
+    ffi::OsString,
     os::{fd::AsRawFd, unix::net::UnixStream},
     process::Stdio,
     sync::{Arc, Mutex},
@@ -21,6 +20,8 @@ use crate::{
     focus::FocusState,
     window::{window_state::WindowState, WindowProperties},
 };
+use calloop::futures::Scheduler;
+use futures_lite::AsyncBufReadExt;
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{
@@ -88,6 +89,8 @@ pub struct State<B: Backend> {
 
     pub cursor_status: CursorImageStatus,
     pub pointer_location: Point<f64, Logical>,
+
+    pub async_scheduler: Scheduler<()>,
 }
 
 impl<B: Backend> State<B> {
@@ -290,6 +293,8 @@ impl<B: Backend> State<B> {
         })?;
 
         // We want to replace the client if a new one pops up
+        // TODO: there should only ever be one client working at a time, and creating a new client
+        // |     when one is already running should be impossible.
         // INFO: this source try_clone()s the stream
         loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
             if let Some(old_stream) = data
@@ -305,6 +310,9 @@ impl<B: Backend> State<B> {
                     .unwrap();
             }
         })?;
+
+        let (executor, sched) = calloop::futures::executor::<()>().unwrap();
+        loop_handle.insert_source(executor, |_, _, _| {})?;
 
         // TODO: move all this into the lua api
         let config_path = std::env::var("PINNACLE_CONFIG").unwrap_or_else(|_| {
@@ -367,6 +375,8 @@ impl<B: Backend> State<B> {
             socket_name: socket_name.to_string_lossy().to_string(),
 
             popup_manager: PopupManager::default(),
+
+            async_scheduler: sched,
         })
     }
 
@@ -377,11 +387,8 @@ impl<B: Backend> State<B> {
             return;
         }
 
-        let mut child = std::process::Command::new(OsString::from(command.next().unwrap()))
+        let mut child = async_process::Command::new(OsString::from(command.next().unwrap()))
             .env("WAYLAND_DISPLAY", self.socket_name.clone())
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
             .stdin(if callback_id.is_some() {
                 Stdio::piped()
             } else {
@@ -411,14 +418,14 @@ impl<B: Backend> State<B> {
             let stream_err = stream_out.clone();
             let stream_exit = stream_out.clone();
 
-            // TODO: make this not use 3 whole threads per process
             if let Some(stdout) = stdout {
-                std::thread::spawn(move || {
-                    let mut reader = BufReader::new(stdout);
+                let future = async move {
+                    // TODO: use BufReader::new().lines()
+                    let mut reader = futures_lite::io::BufReader::new(stdout);
                     loop {
                         let mut buf = String::new();
-                        match reader.read_line(&mut buf) {
-                            Ok(0) => break, // stream closed
+                        match reader.read_line(&mut buf).await {
+                            Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_out.lock().unwrap();
                                 crate::api::send_to_client(
@@ -436,20 +443,21 @@ impl<B: Backend> State<B> {
                                 .unwrap();
                             }
                             Err(err) => {
-                                tracing::error!("child read err: {err}");
+                                tracing::warn!("child read err: {err}");
                                 break;
-                            }
+                            },
                         }
                     }
-                });
+                };
+                self.async_scheduler.schedule(future).unwrap();
             }
             if let Some(stderr) = stderr {
-                std::thread::spawn(move || {
-                    let mut reader = BufReader::new(stderr);
+                let future = async move {
+                    let mut reader = futures_lite::io::BufReader::new(stderr);
                     loop {
                         let mut buf = String::new();
-                        match reader.read_line(&mut buf) {
-                            Ok(0) => break, // stream closed
+                        match reader.read_line(&mut buf).await {
+                            Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_err.lock().unwrap();
                                 crate::api::send_to_client(
@@ -467,36 +475,39 @@ impl<B: Backend> State<B> {
                                 .unwrap();
                             }
                             Err(err) => {
-                                tracing::error!("child read err: {err}");
+                                tracing::warn!("child read err: {err}");
                                 break;
-                            }
+                            },
                         }
                     }
-                });
+                };
+                self.async_scheduler.schedule(future).unwrap();
             }
-            std::thread::spawn(move || match child.wait() {
-                Ok(exit_status) => {
-                    let mut stream = stream_exit.lock().unwrap();
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::CallCallback {
-                            callback_id,
-                            args: Some(Args::Spawn {
-                                stdout: None,
-                                stderr: None,
-                                exit_code: exit_status.code(),
-                                exit_msg: Some(exit_status.to_string()),
-                            }),
-                        },
-                    )
-                    .unwrap()
+
+            let future = async move {
+                match child.status().await {
+                    Ok(exit_status) => {
+                        let mut stream = stream_exit.lock().unwrap();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::CallCallback {
+                                callback_id,
+                                args: Some(Args::Spawn {
+                                    stdout: None,
+                                    stderr: None,
+                                    exit_code: exit_status.code(),
+                                    exit_msg: Some(exit_status.to_string()),
+                                }),
+                            },
+                        )
+                        .unwrap()
+                    }
+                    Err(err) => {
+                        tracing::warn!("child wait() err: {err}");
+                    }
                 }
-                Err(err) => {
-                    tracing::warn!("child wait() err: {err}");
-                }
-            });
-        } else {
-            std::thread::spawn(move || child.wait());
+            };
+            self.async_scheduler.schedule(future).unwrap();
         }
     }
 }

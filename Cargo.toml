@@ -17,6 +17,9 @@ image = {version = "0.24.0", default-features = false, optional = true}
 serde = { version = "1.0.164", features = ["derive"] }
 rmp = { version = "0.8.11" }
 rmp-serde = { version = "1.1.1" }
+calloop = { version = "0.10.1", features = ["executor", "futures-io"] }
+futures-lite = { version = "1.13.0" }
+async-process = { version = "1.7.0" }
 
 [features]
 default = ["egl", "winit", "udev"]
