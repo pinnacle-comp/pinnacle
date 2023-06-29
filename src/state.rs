@@ -115,18 +115,19 @@ impl<B: Backend> State<B> {
         //
         // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
         // environment, I *think* this is ok.
-        smithay::reexports::nix::sys::resource::setrlimit(
-            smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
-            65536,
-            65536 * 2,
-        )
-        .unwrap();
+        if let Err(err) = smithay::reexports::nix::sys::resource::setrlimit(
+                    smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
+                    65536,
+                    65536 * 2,
+                ) {
+            tracing::error!("Could not raise fd limit: errno {err}");
+        }
 
         loop_handle.insert_source(socket, |stream, _metadata, data| {
             data.display
                 .handle()
                 .insert_client(stream, Arc::new(ClientState::default()))
-                .unwrap();
+                .expect("Could not insert client into loop handle");
         })?;
 
         loop_handle.insert_source(
@@ -180,11 +181,6 @@ impl<B: Backend> State<B> {
                     } => {
                         data.state.handle_spawn(command, callback_id);
                     }
-                    Msg::SpawnShell {
-                        shell,
-                        command,
-                        callback_id,
-                    } => todo!(),
                     Msg::MoveToTag { tag } => todo!(),
                     Msg::ToggleTag { tag } => todo!(),
 
@@ -215,9 +211,9 @@ impl<B: Backend> State<B> {
                                     let lock = states.
                                         data_map
                                         .get::<XdgToplevelSurfaceData>()
-                                        .unwrap()
+                                        .expect("XdgToplevelSurfaceData doesn't exist")
                                         .lock()
-                                        .unwrap();
+                                        .expect("Couldn't lock XdgToplevelSurfaceData");
                                     (lock.app_id.clone(), lock.title.clone())
                                 }
                             );
@@ -234,8 +230,8 @@ impl<B: Backend> State<B> {
                                 location: location.into(),
                                 floating,
                             };
-                            let stream = data.state.api_state.stream.as_ref().unwrap();
-                            let mut stream = stream.lock().unwrap();
+                            let stream = data.state.api_state.stream.as_ref().expect("Stream doesn't exist");
+                            let mut stream = stream.lock().expect("Couldn't lock stream");
                             crate::api::send_to_client(
                                 &mut stream, 
                                 &OutgoingMsg::RequestResponse { 
@@ -243,7 +239,7 @@ impl<B: Backend> State<B> {
                                     response: RequestResponse::Window { window: props }
                                 }
                             )
-                            .unwrap();
+                            .expect("Send to client failed");
                         },
                         Request::GetAllWindows { id } => {
                             let window_props = data.state.space.elements().map(|win| {
@@ -254,9 +250,9 @@ impl<B: Backend> State<B> {
                                         let lock = states.
                                             data_map
                                             .get::<XdgToplevelSurfaceData>()
-                                            .unwrap()
+                                            .expect("XdgToplevelSurfaceData doesn't exist")
                                             .lock()
-                                            .unwrap();
+                                            .expect("Couldn't lock XdgToplevelSurfaceData");
                                         (lock.app_id.clone(), lock.title.clone())
                                     }
                                 );
@@ -264,7 +260,7 @@ impl<B: Backend> State<B> {
                                     (state.id, state.floating.is_floating())
                                 });
                                 // TODO: unwrap
-                                let location = data.state.space.element_location(win).unwrap(); 
+                                let location = data.state.space.element_location(win).expect("Window location doesn't exist"); 
                                 WindowProperties {
                                     id: window_id,
                                     app_id,
@@ -275,8 +271,9 @@ impl<B: Backend> State<B> {
                                 }
                             }).collect::<Vec<_>>();
 
-                            let stream = data.state.api_state.stream.as_ref().unwrap();
-                            let mut stream = stream.lock().unwrap();
+                            // FIXME: figure out what to do if error
+                            let stream = data.state.api_state.stream.as_ref().expect("Stream doesn't exist");
+                            let mut stream = stream.lock().expect("Couldn't lock stream");
                             crate::api::send_to_client(
                                 &mut stream, 
                                 &OutgoingMsg::RequestResponse { 
@@ -284,7 +281,7 @@ impl<B: Backend> State<B> {
                                     response: RequestResponse::GetAllWindows { windows: window_props },
                                 }
                             )
-                            .unwrap();
+                            .expect("Couldn't send to client");
                         }
                     },
                 };
@@ -305,13 +302,13 @@ impl<B: Backend> State<B> {
             {
                 old_stream
                     .lock()
-                    .unwrap()
+                    .expect("Couldn't lock old stream")
                     .shutdown(std::net::Shutdown::Both)
-                    .unwrap();
+                    .expect("Couldn't shutdown old stream");
             }
         })?;
 
-        let (executor, sched) = calloop::futures::executor::<()>().unwrap();
+        let (executor, sched) = calloop::futures::executor::<()>().expect("Couldn't create executor");
         loop_handle.insert_source(executor, |_, _, _| {})?;
 
         // TODO: move all this into the lua api
@@ -324,7 +321,7 @@ impl<B: Backend> State<B> {
 
         let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
         let mut local_lua_path = std::env::current_dir()
-            .unwrap()
+            .expect("Couldn't get current dir")
             .to_string_lossy()
             .to_string();
         local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
@@ -339,7 +336,7 @@ impl<B: Backend> State<B> {
             .env("LUA_PATH", new_lua_path)
             .env("LUA_CPATH", new_lua_cpath)
             .spawn()
-            .unwrap();
+            .expect("Could not start config process");
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -381,13 +378,14 @@ impl<B: Backend> State<B> {
     }
 
     pub fn handle_spawn(&self, command: Vec<String>, callback_id: Option<CallbackId>) {
-        let mut command = command.into_iter().peekable();
-        if command.peek().is_none() {
+        let mut command = command.into_iter();
+        let Some(program) = command.next() else {
             // TODO: notify that command was nothing
             return;
-        }
+        };
 
-        let mut child = async_process::Command::new(OsString::from(command.next().unwrap()))
+        let program = OsString::from(program);
+        let Ok(mut child) = async_process::Command::new(&program)
             .env("WAYLAND_DISPLAY", self.socket_name.clone())
             .stdin(if callback_id.is_some() {
                 Stdio::piped()
@@ -408,13 +406,17 @@ impl<B: Backend> State<B> {
             })
             .args(command)
             .spawn()
-            .unwrap(); // TODO: handle unwrap
+        else {
+            // TODO: notify user that program doesn't exist
+            tracing::warn!("tried to run {}, but it doesn't exist", program.to_string_lossy());
+            return;
+        };
 
         // TODO: find a way to make this hellish code look better, deal with unwraps
         if let Some(callback_id) = callback_id {
             let stdout = child.stdout.take();
             let stderr = child.stderr.take();
-            let stream_out = self.api_state.stream.as_ref().unwrap().clone();
+            let stream_out = self.api_state.stream.as_ref().expect("Stream doesn't exist").clone();
             let stream_err = stream_out.clone();
             let stream_exit = stream_out.clone();
 
@@ -427,7 +429,7 @@ impl<B: Backend> State<B> {
                         match reader.read_line(&mut buf).await {
                             Ok(0) => break,
                             Ok(_) => {
-                                let mut stream = stream_out.lock().unwrap();
+                                let mut stream = stream_out.lock().expect("Couldn't lock stream");
                                 crate::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
@@ -440,7 +442,7 @@ impl<B: Backend> State<B> {
                                         }),
                                     },
                                 )
-                                .unwrap();
+                                .expect("Send to client failed"); // TODO: notify instead of crash
                             }
                             Err(err) => {
                                 tracing::warn!("child read err: {err}");
@@ -449,7 +451,11 @@ impl<B: Backend> State<B> {
                         }
                     }
                 };
-                self.async_scheduler.schedule(future).unwrap();
+
+                // This is not important enough to crash on error, so just print the error instead
+                if let Err(err) = self.async_scheduler.schedule(future) {
+                    tracing::error!("Failed to schedule future: {err}");
+                }
             }
             if let Some(stderr) = stderr {
                 let future = async move {
@@ -459,7 +465,7 @@ impl<B: Backend> State<B> {
                         match reader.read_line(&mut buf).await {
                             Ok(0) => break,
                             Ok(_) => {
-                                let mut stream = stream_err.lock().unwrap();
+                                let mut stream = stream_err.lock().expect("Couldn't lock stream");
                                 crate::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
@@ -472,7 +478,7 @@ impl<B: Backend> State<B> {
                                         }),
                                     },
                                 )
-                                .unwrap();
+                                .expect("Send to client failed"); // TODO: notify instead of crash
                             }
                             Err(err) => {
                                 tracing::warn!("child read err: {err}");
@@ -481,13 +487,15 @@ impl<B: Backend> State<B> {
                         }
                     }
                 };
-                self.async_scheduler.schedule(future).unwrap();
+                if let Err(err) = self.async_scheduler.schedule(future) {
+                    tracing::error!("Failed to schedule future: {err}");
+                }
             }
 
             let future = async move {
                 match child.status().await {
                     Ok(exit_status) => {
-                        let mut stream = stream_exit.lock().unwrap();
+                        let mut stream = stream_exit.lock().expect("Couldn't lock stream");
                         crate::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
@@ -500,14 +508,16 @@ impl<B: Backend> State<B> {
                                 }),
                             },
                         )
-                        .unwrap()
+                        .expect("Send to client failed"); // TODO: notify instead of crash
                     }
                     Err(err) => {
                         tracing::warn!("child wait() err: {err}");
                     }
                 }
             };
-            self.async_scheduler.schedule(future).unwrap();
+            if let Err(err) = self.async_scheduler.schedule(future) {
+                tracing::error!("Failed to schedule future: {err}");
+            }
         }
     }
 }

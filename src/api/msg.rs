@@ -52,14 +52,6 @@ pub enum Msg {
         callback_id: Option<CallbackId>,
     },
 
-    /// Run a command using the optionally specified shell and callback.
-    SpawnShell {
-        shell: Option<String>,
-        command: Vec<String>,
-        #[serde(default)]
-        callback_id: Option<CallbackId>,
-    },
-
     // Pinnacle management
     /// Quit the compositor.
     Quit,

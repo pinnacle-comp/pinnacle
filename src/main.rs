@@ -13,6 +13,7 @@
 //! contribute or learn how building something like this works.
 
 #![deny(unused_imports)] // gonna force myself to keep stuff clean
+#![warn(clippy::unwrap_used)]
 
 mod api;
 mod backend;

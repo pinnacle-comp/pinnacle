@@ -7,6 +7,7 @@
 // from anvil
 // TODO: figure out what this stuff does
 
+#![allow(clippy::unwrap_used)] // I don't know what this stuff does yet
 use std::{
     collections::{HashMap, HashSet},
     error::Error,

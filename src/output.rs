@@ -24,7 +24,10 @@ impl OutputState {
             .user_data()
             .insert_if_missing(|| RefCell::<Self>::default);
 
-        let state = output.user_data().get::<RefCell<Self>>().unwrap();
+        let state = output
+            .user_data()
+            .get::<RefCell<Self>>()
+            .expect("RefCell doesn't exist in data map (This should NEVER happen. If you see this, something oofed big-time.)");
 
         func(&mut state.borrow_mut())
     }
