@@ -34,7 +34,10 @@ pub trait SurfaceState: Default + 'static {
     {
         compositor::with_states(wl_surface, |states| {
             states.data_map.insert_if_missing(RefCell::<Self>::default);
-            let state = states.data_map.get::<RefCell<Self>>().unwrap();
+            let state = states
+                .data_map
+                .get::<RefCell<Self>>()
+                .expect("This should never happen");
 
             function(&mut state.borrow_mut())
         })

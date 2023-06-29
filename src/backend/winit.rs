@@ -142,7 +142,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 .collect::<Vec<_>>();
             let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
                 .build()
-                .unwrap();
+                .expect("DmabufFeedbackBuilder error");
             Some(dmabuf_default_feedback)
         }
         Ok(None) => {
@@ -260,9 +260,9 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         states
                             .data_map
                             .get::<Mutex<CursorImageAttributes>>()
-                            .unwrap()
+                            .expect("Mutex<CursorImageAttributes> wasn't in the data map")
                             .lock()
-                            .unwrap()
+                            .expect("Failed to lock Mutex<CursorImageAttributes>")
                             .hotspot
                     })
                 } else {
@@ -291,7 +291,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
                 // render_output()
                 let space_render_elements =
-                    space::space_render_elements(renderer, [&state.space], &output, 1.0).unwrap();
+                    space::space_render_elements(renderer, [&state.space], &output, 1.0)
+                        .expect("Failed to get render elements");
 
                 let mut output_render_elements = Vec::<
                     OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,

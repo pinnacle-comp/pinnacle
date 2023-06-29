@@ -53,8 +53,8 @@ impl<B: Backend> State<B> {
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
-        let pointer = self.seat.get_pointer().unwrap();
-        let keyboard = self.seat.get_keyboard().unwrap();
+        let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
+        let keyboard = self.seat.get_keyboard().expect("Seat has no keyboard"); // FIXME: handle err
 
         // A serial is a number sent with a event that is sent back to the
         // server by the clients in further requests. This allows the server to
@@ -198,7 +198,10 @@ impl<B: Backend> State<B> {
             frame = frame.stop(Axis::Vertical);
         }
 
-        self.seat.get_pointer().unwrap().axis(self, frame);
+        self.seat
+            .get_pointer()
+            .expect("Seat has no pointer")
+            .axis(self, frame); // FIXME: handle err
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
@@ -206,58 +209,62 @@ impl<B: Backend> State<B> {
         let time = event.time_msec();
         let press_state = event.state();
         let mut move_mode = false;
-        let action = self.seat.get_keyboard().unwrap().input(
-            self,
-            event.key_code(),
-            press_state,
-            serial,
-            time,
-            |state, modifiers, keysym| {
-                if press_state == KeyState::Pressed {
-                    let mut modifier_mask = Vec::<Modifiers>::new();
-                    if modifiers.alt {
-                        modifier_mask.push(Modifiers::Alt);
+        let action = self
+            .seat
+            .get_keyboard()
+            .expect("Seat has no keyboard") // FIXME: handle err
+            .input(
+                self,
+                event.key_code(),
+                press_state,
+                serial,
+                time,
+                |state, modifiers, keysym| {
+                    if press_state == KeyState::Pressed {
+                        let mut modifier_mask = Vec::<Modifiers>::new();
+                        if modifiers.alt {
+                            modifier_mask.push(Modifiers::Alt);
+                        }
+                        if modifiers.shift {
+                            modifier_mask.push(Modifiers::Shift);
+                        }
+                        if modifiers.ctrl {
+                            modifier_mask.push(Modifiers::Ctrl);
+                        }
+                        if modifiers.logo {
+                            modifier_mask.push(Modifiers::Super);
+                        }
+                        if let Some(callback_id) = state
+                            .input_state
+                            .keybinds
+                            .get(&(modifier_mask.into(), keysym.modified_sym()))
+                        {
+                            return FilterResult::Intercept(*callback_id);
+                        }
                     }
-                    if modifiers.shift {
-                        modifier_mask.push(Modifiers::Shift);
-                    }
-                    if modifiers.ctrl {
-                        modifier_mask.push(Modifiers::Ctrl);
-                    }
-                    if modifiers.logo {
-                        modifier_mask.push(Modifiers::Super);
-                    }
-                    if let Some(callback_id) = state
-                        .input_state
-                        .keybinds
-                        .get(&(modifier_mask.into(), keysym.modified_sym()))
-                    {
-                        return FilterResult::Intercept(*callback_id);
-                    }
-                }
 
-                if keysym.modified_sym() == keysyms::KEY_Control_L {
-                    match press_state {
-                        KeyState::Pressed => {
-                            move_mode = true;
+                    if keysym.modified_sym() == keysyms::KEY_Control_L {
+                        match press_state {
+                            KeyState::Pressed => {
+                                move_mode = true;
+                            }
+                            KeyState::Released => {
+                                move_mode = false;
+                            }
                         }
-                        KeyState::Released => {
-                            move_mode = false;
-                        }
+                        FilterResult::Forward
+                    } else {
+                        FilterResult::Forward
                     }
-                    FilterResult::Forward
-                } else {
-                    FilterResult::Forward
-                }
-            },
-        );
+                },
+            );
 
         self.move_mode = move_mode;
 
         if let Some(callback_id) = action {
             if let Some(stream) = self.api_state.stream.as_ref() {
                 if let Err(err) = crate::api::send_to_client(
-                    &mut stream.lock().unwrap(),
+                    &mut stream.lock().expect("Could not lock stream mutex"),
                     &OutgoingMsg::CallCallback {
                         callback_id,
                         args: None,
@@ -288,11 +295,14 @@ impl State<WinitData> {
     }
 
     fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
-        let output = self.space.outputs().next().unwrap();
-        let output_geo = self.space.output_geometry(output).unwrap();
+        let Some(output) = self.space.outputs().next() else { return; };
+        let output_geo = self
+            .space
+            .output_geometry(output)
+            .expect("Output geometry doesn't exist");
         let pointer_loc = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
         let serial = SERIAL_COUNTER.next_serial();
-        let pointer = self.seat.get_pointer().unwrap();
+        let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
 
         // tracing::info!("pointer_loc: {:?}", pointer_loc);
 
@@ -407,16 +417,35 @@ impl State<UdevData> {
         let serial = SERIAL_COUNTER.next_serial();
 
         let max_x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
+            acc + self
+                .space
+                .output_geometry(o)
+                .expect("Output geometry doesn't exist")
+                .size
+                .w
         });
 
-        let max_h_output = self
+        let Some(max_h_output) = self
             .space
             .outputs()
-            .max_by_key(|o| self.space.output_geometry(o).unwrap().size.h)
-            .unwrap();
+            .max_by_key(|o| {
+                self.space
+                    .output_geometry(o)
+                    .expect("Output geometry doesn't exist")
+                    .size
+                    .h
+            })
+        else {
+            tracing::warn!("Pointer moved, but there was no output");
+            return;
+        };
 
-        let max_y = self.space.output_geometry(max_h_output).unwrap().size.h;
+        let max_y = self
+            .space
+            .output_geometry(max_h_output)
+            .expect("Output geometry doesn't exist")
+            .size
+            .h;
 
         self.pointer_location.x = event.x_transformed(max_x);
         self.pointer_location.y = event.y_transformed(max_y);
@@ -447,17 +476,31 @@ impl State<UdevData> {
 
         let (pos_x, pos_y) = pos.into();
         let max_x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
+            acc + self
+                .space
+                .output_geometry(o)
+                .expect("Output geometry doesn't exist")
+                .size
+                .w
         });
         let clamped_x = pos_x.clamp(0.0, max_x as f64);
         let max_y = self
             .space
             .outputs()
             .find(|o| {
-                let geo = self.space.output_geometry(o).unwrap();
+                let geo = self
+                    .space
+                    .output_geometry(o)
+                    .expect("Output geometry doesn't exist");
                 geo.contains((clamped_x as i32, 0))
             })
-            .map(|o| self.space.output_geometry(o).unwrap().size.h);
+            .map(|o| {
+                self.space
+                    .output_geometry(o)
+                    .expect("Output geometry doesn't exist")
+                    .size
+                    .h
+            });
 
         if let Some(max_y) = max_y {
             let clamped_y = pos_y.clamp(0.0, max_y as f64);

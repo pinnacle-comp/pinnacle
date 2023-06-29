@@ -54,14 +54,17 @@ use self::msg::{Msg, OutgoingMsg};
 
 const SOCKET_PATH: &str = "/tmp/pinnacle_socket";
 
-fn handle_client(mut stream: UnixStream, sender: Sender<Msg>) {
+fn handle_client(
+    mut stream: UnixStream,
+    sender: Sender<Msg>,
+) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let mut len_marker_bytes = [0u8; 4];
         if let Err(err) = stream.read_exact(&mut len_marker_bytes) {
             if err.kind() == io::ErrorKind::UnexpectedEof {
                 tracing::warn!("stream closed: {}", err);
-                stream.shutdown(std::net::Shutdown::Both).unwrap();
-                break;
+                stream.shutdown(std::net::Shutdown::Both)?;
+                break Ok(());
             }
         };
 
@@ -71,15 +74,14 @@ fn handle_client(mut stream: UnixStream, sender: Sender<Msg>) {
         if let Err(err) = stream.read_exact(msg_bytes.as_mut_slice()) {
             if err.kind() == io::ErrorKind::UnexpectedEof {
                 tracing::warn!("stream closed: {}", err);
-                stream.shutdown(std::net::Shutdown::Both).unwrap();
-                break;
+                stream.shutdown(std::net::Shutdown::Both)?;
+                break Ok(());
             }
         };
-        let msg: Msg = rmp_serde::from_slice(msg_bytes.as_slice()).unwrap(); // TODO: handle error
+        let msg: Msg = rmp_serde::from_slice(msg_bytes.as_slice())?; // TODO: handle error
 
-        sender.send(msg).unwrap();
+        sender.send(msg)?;
     }
-    tracing::info!("end of handle_client");
 }
 
 pub struct PinnacleSocketSource {
@@ -151,10 +153,15 @@ impl EventSource for PinnacleSocketSource {
             .process_events(readiness, token, |_readiness, listener| {
                 while let Ok((stream, _sock_addr)) = listener.accept() {
                     let sender = self.sender.clone();
-                    let callback_stream = stream.try_clone().unwrap(); // TODO: error
+                    let callback_stream = match stream.try_clone() {
+                        Ok(callback_stream) => callback_stream,
+                        Err(err) => return Err(err),
+                    };
                     callback(callback_stream, &mut ());
                     std::thread::spawn(move || {
-                        handle_client(stream, sender);
+                        if let Err(err) = handle_client(stream, sender) {
+                            tracing::error!("handle_client errored: {err}");
+                        }
                     });
                 }
 

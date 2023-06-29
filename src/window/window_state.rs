@@ -119,7 +119,7 @@ impl WindowState {
         let mut state = window
             .user_data()
             .get::<RefCell<Self>>()
-            .unwrap()
+            .expect("This should never happen")
             .borrow_mut();
         func(&mut state)
     }

@@ -77,7 +77,9 @@ impl<B: Backend> CompositorHandler for State<B> {
             });
             if let Some(dmabuf) = maybe_dmabuf {
                 if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
-                    let client = surface.client().unwrap();
+                    let client = surface
+                        .client()
+                        .expect("Surface has no client/is no longer alive");
                     let res = state.loop_handle.insert_source(source, move |_, _, data| {
                         data.state
                             .client_compositor_state(&client)
@@ -124,7 +126,10 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        &client.get_data::<ClientState>().unwrap().compositor_state
+        &client
+            .get_data::<ClientState>()
+            .expect("ClientState wasn't in client's data map")
+            .compositor_state
     }
 }
 delegate_compositor!(@<B: Backend> State<B>);
@@ -135,9 +140,9 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
             states
                 .data_map
                 .get::<XdgToplevelSurfaceData>()
-                .unwrap()
+                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
                 .lock()
-                .unwrap()
+                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
                 .initial_configure_sent
         });
         // println!("initial_configure_sent is {}", initial_configure_sent);
@@ -155,9 +160,9 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
             states
                 .data_map
                 .get::<XdgPopupSurfaceData>()
-                .unwrap()
+                .expect("XdgPopupSurfaceData wasn't in popup's data map")
                 .lock()
-                .unwrap()
+                .expect("Failed to lock Mutex<XdgPopupSurfaceData>")
                 .initial_configure_sent
         });
         if !initial_configure_sent {
@@ -221,11 +226,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
         self.space.map_element(window.clone(), (0, 0), true);
         self.loop_handle.insert_idle(move |data| {
-            data.state.seat.get_keyboard().unwrap().set_focus(
-                &mut data.state,
-                Some(window.toplevel().wl_surface().clone()),
-                SERIAL_COUNTER.next_serial(),
-            );
+            data.state
+                .seat
+                .get_keyboard()
+                .expect("Seat had no keyboard") // FIXME: actually handle error
+                .set_focus(
+                    &mut data.state,
+                    Some(window.toplevel().wl_surface().clone()),
+                    SERIAL_COUNTER.next_serial(),
+                );
         });
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
@@ -245,11 +254,11 @@ impl<B: Backend> XdgShellHandler for State<B> {
             .map(|win| win.toplevel().wl_surface().clone());
         self.seat
             .get_keyboard()
-            .unwrap()
+            .expect("Seat had no keyboard")
             .set_focus(self, focus, SERIAL_COUNTER.next_serial());
     }
 
-    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+    fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
             tracing::warn!("failed to track popup: {}", err);
         }
@@ -259,7 +268,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         crate::xdg::request::move_request(
             self,
             &surface,
-            &Seat::from_resource(&seat).unwrap(),
+            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
             serial,
         );
     }
@@ -275,7 +284,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         crate::xdg::request::resize_request(
             self,
             &surface,
-            &Seat::from_resource(&seat).unwrap(),
+            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
             serial,
             edges,
             BUTTON_LEFT,
@@ -296,7 +305,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
-        let seat: Seat<Self> = Seat::from_resource(&seat).unwrap();
+        let seat: Seat<Self> = Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind)
             .ok()
