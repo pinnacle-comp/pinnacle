@@ -105,7 +105,7 @@ function pinnacle.setup(config_func)
 
         ---@type IncomingMsg
         local tb = msgpack.decode(msg_bytes)
-        print(msg_bytes)
+        -- print(msg_bytes)
 
         return tb
     end
