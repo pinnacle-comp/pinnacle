@@ -12,6 +12,8 @@
 //! While Pinnacle is not a library, this documentation serves to guide those who want to
 //! contribute or learn how building something like this works.
 
+#![deny(unused_imports)] // gonna force myself to keep stuff clean
+
 mod api;
 mod backend;
 mod cursor;

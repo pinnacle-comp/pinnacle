@@ -9,7 +9,6 @@ use std::cell::RefCell;
 use smithay::{
     desktop::Window,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Point, Size},
     wayland::{compositor, seat::WaylandFocus},
 };
 
