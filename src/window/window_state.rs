@@ -14,11 +14,12 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use super::tag::Tag;
+use crate::tag::{Tag, TagId, TagState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
 
+// TODO: this probably doesn't need to be atomic
 static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WindowId {
@@ -35,7 +36,16 @@ pub struct WindowState {
     /// The window's resize state. See [WindowResizeState] for more.
     pub resize_state: WindowResizeState,
     /// What tags the window is currently on.
-    pub tags: Vec<Tag>,
+    pub tags: Vec<TagId>,
+}
+
+/// Returns a vec of references to all the tags the window is on.
+pub fn tags<'a>(tag_state: &'a TagState, window: &Window) -> Vec<&'a Tag> {
+    tag_state
+        .tags
+        .iter()
+        .filter(|&tag| WindowState::with_state(window, |state| state.tags.contains(&tag.id)))
+        .collect()
 }
 
 /// The state of a window's resize operation.

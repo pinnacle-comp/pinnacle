@@ -26,6 +26,7 @@ impl Layout {
         windows.retain(|win| WindowState::with_state(win, |state| state.floating.is_tiled()));
         match side {
             Direction::Left => {
+                tracing::info!("Laying out windows");
                 let window_count = windows.len();
                 if window_count == 0 {
                     return;
@@ -42,6 +43,7 @@ impl Layout {
                     // TODO: no idea what happens if you spawn a window while no monitors are
                     // |     connected, figure that out
                 };
+                tracing::info!("got output");
                 let output_size = state.space.output_geometry(output).unwrap().size;
                 if window_count == 1 {
                     let window = windows[0].clone();
@@ -72,6 +74,7 @@ impl Layout {
                     return;
                 }
 
+                tracing::warn!("layed out first window");
                 let mut windows = windows.iter();
                 let first_window = windows.next().unwrap();
 
@@ -92,6 +95,7 @@ impl Layout {
                             .initial_configure_sent
                     });
                 if initial_configure_sent {
+                    tracing::info!("sending resize thingy first_window");
                     WindowState::with_state(first_window, |state| {
                         state.resize_state = WindowResizeState::WaitingForAck(
                             first_window.toplevel().send_configure(),
@@ -144,6 +148,7 @@ impl Layout {
                                 .initial_configure_sent
                         });
                     if initial_configure_sent {
+                        tracing::info!("sending resize thingy");
                         WindowState::with_state(win, |state| {
                             state.resize_state = WindowResizeState::WaitingForAck(
                                 win.toplevel().send_configure(),

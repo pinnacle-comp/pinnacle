@@ -27,6 +27,7 @@ mod output;
 mod pointer;
 mod render;
 mod state;
+mod tag;
 mod window;
 mod xdg;
 

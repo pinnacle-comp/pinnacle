@@ -8,11 +8,11 @@ use std::cell::RefCell;
 
 use smithay::output::Output;
 
-use crate::window::tag::Tag;
+use crate::tag::TagId;
 
 #[derive(Default)]
 pub struct OutputState {
-    focused_tags: Vec<Tag>,
+    pub focused_tags: Vec<TagId>,
 }
 
 impl OutputState {
@@ -22,7 +22,7 @@ impl OutputState {
     {
         output
             .user_data()
-            .insert_if_missing(|| RefCell::<Self>::default);
+            .insert_if_missing(RefCell::<Self>::default);
 
         let state = output
             .user_data()

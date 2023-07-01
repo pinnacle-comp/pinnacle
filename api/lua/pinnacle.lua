@@ -54,6 +54,8 @@ local pinnacle = {
     client = require("client"),
     ---Process spawning
     process = require("process"),
+    ---Tag management
+    tag = require("tag"),
 }
 
 ---Quit Pinnacle.

@@ -14,6 +14,10 @@
 ---@field SetWindowSize { window_id: integer, size: { w: integer, h: integer } }
 ---@field Spawn { command: string[], callback_id: integer? }
 ---@field Request Request
+--Tags
+---@field ToggleTag { tag_id: string }
+---@field AddTags { tags: string[] }
+---@field RemoveTags { tags: string[] }
 
 ---@alias Msg _Msg | "Quit"
 

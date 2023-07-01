@@ -48,6 +48,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     layout::Layout,
+    output::OutputState,
     state::{ClientState, State},
     window::window_state::{WindowResizeState, WindowState},
 };
@@ -116,7 +117,7 @@ impl<B: Backend> CompositorHandler for State<B> {
         if let Some(window) = self.window_for_surface(surface) {
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
-                    // tracing::info!("Committing, new location");
+                    tracing::info!("Committing, new location");
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
@@ -224,6 +225,18 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
+        WindowState::with_state(&window, |state| {
+            state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
+                OutputState::with(focused_output, |state| state.focused_tags.to_vec())
+            } else if let Some(first_tag) = self.tag_state.tags.first() {
+                vec![first_tag.id.clone()]
+            } else {
+                vec![]
+            };
+            tracing::info!("new window, tags are {:?}", state.tags);
+        });
+
+        self.windows.push(window.clone());
         self.space.map_element(window.clone(), (0, 0), true);
         self.loop_handle.insert_idle(move |data| {
             data.state
@@ -236,6 +249,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     SERIAL_COUNTER.next_serial(),
                 );
         });
+
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         self.loop_handle.insert_idle(|data| {
@@ -345,15 +359,18 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        // TODO: add serial to WaitingForAck
+        tracing::info!("ack configure start");
         if let Some(window) = self.window_for_surface(&surface) {
+            tracing::info!("in window_for_surface");
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             // tracing::info!("acking before serial check");
+                            tracing::info!("configure serial: {:?}", configure.serial);
+                            tracing::info!("provided serial: {:?}", serial);
                             if configure.serial >= serial {
-                                // tracing::info!("acking, serial >=");
+                                tracing::info!("acking, serial >=");
                                 state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
                             }
                         }
@@ -363,6 +380,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
             });
         }
     }
+
+    // fn minimize_request(&mut self, surface: ToplevelSurface) {
+    //     if let Some(window) = self.window_for_surface(surface.wl_surface()) {
+    //         self.space.unmap_elem(&window);
+    //     }
+    // }
 
     // TODO: impl the rest of the fns in XdgShellHandler
 }

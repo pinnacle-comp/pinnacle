@@ -14,6 +14,7 @@ require("pinnacle").setup(function(pinnacle)
     local input = pinnacle.input  -- Key and mouse binds
     local client = pinnacle.client -- Window management
     local process = pinnacle.process -- Process spawning
+    local tag = pinnacle.tag      -- Tag management
 
     -- Every key supported by xkbcommon.
     -- Support for just putting in a string of a key is intended.
@@ -40,5 +41,25 @@ require("pinnacle").setup(function(pinnacle)
     end)
     input.keybind({ "Ctrl" }, keys.KEY_3, function()
         process.spawn("nautilus")
+    end)
+
+    -- Tags ---------------------------------------------------------------------------
+    tag.add("1", "2", "3", "4", "5")
+    tag.toggle("1")
+
+    input.keybind({ "Ctrl", "Shift" }, keys.KEY_1, function()
+        tag.toggle("1")
+    end)
+    input.keybind({ "Ctrl", "Shift" }, keys.KEY_2, function()
+        tag.toggle("2")
+    end)
+    input.keybind({ "Ctrl", "Shift" }, keys.KEY_3, function()
+        tag.toggle("3")
+    end)
+    input.keybind({ "Ctrl", "Shift" }, keys.KEY_4, function()
+        tag.toggle("4")
+    end)
+    input.keybind({ "Ctrl", "Shift" }, keys.KEY_5, function()
+        tag.toggle("5")
     end)
 end)

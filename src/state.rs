@@ -18,7 +18,7 @@ use crate::{
         PinnacleSocketSource,
     },
     focus::FocusState,
-    window::{window_state::WindowState, WindowProperties},
+    window::{window_state::WindowState, WindowProperties}, output::OutputState, tag::{TagState, Tag}, layout::Layout,
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -84,11 +84,13 @@ pub struct State<B: Backend> {
     pub input_state: InputState,
     pub api_state: ApiState,
     pub focus_state: FocusState,
+    pub tag_state: TagState,
 
     pub popup_manager: PopupManager,
 
     pub cursor_status: CursorImageStatus,
     pub pointer_location: Point<f64, Logical>,
+    pub windows: Vec<Window>,
 
     pub async_scheduler: Scheduler<()>,
 }
@@ -181,8 +183,6 @@ impl<B: Backend> State<B> {
                     } => {
                         data.state.handle_spawn(command, callback_id);
                     }
-                    Msg::MoveToTag { tag } => todo!(),
-                    Msg::ToggleTag { tag } => todo!(),
 
                     Msg::SetWindowSize { window_id, size } => {
                         let Some(window) = data.state.space.elements().find(|&win| {
@@ -195,6 +195,57 @@ impl<B: Backend> State<B> {
                         });
                         window.toplevel().send_pending_configure();
                     }
+                    Msg::MoveToTag { tag_id } => todo!(),
+                    Msg::ToggleTag { tag_id } => {
+                        let windows = OutputState::with(data.state.focus_state.focused_output.as_ref().unwrap(), |state| {
+                            if state.focused_tags
+                                .iter()
+                                .any(|tg| tg == &tag_id)
+                            {
+                                tracing::info!("Toggle tag {tag_id:?} off");
+                                state.focused_tags.retain(|tg| tg != &tag_id);
+                            } else {
+                                tracing::info!("Toggle tag {tag_id:?} on");
+                                state.focused_tags.push(tag_id.clone());
+                            }
+                            // re-layout
+                            for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
+                                let should_render = WindowState::with_state(&window, |win_state| {
+                                    for tag_id in win_state.tags.iter() {
+                                        if state.focused_tags.contains(tag_id) {
+                                            return true;
+                                        }
+                                    }
+                                    false
+                                });
+                                if !should_render {
+                                    data.state.space.unmap_elem(&window);
+                                }
+                            }
+
+                            data.state.windows.iter().filter(|&win| {
+                                WindowState::with_state(win, |win_state| {
+                                    for tag_id in win_state.tags.iter() {
+                                        if state.focused_tags.contains(tag_id) {
+                                            return true;
+                                        }
+                                    }
+                                    false
+                                })
+                            }).cloned().collect::<Vec<_>>()
+
+                        });
+
+                        tracing::info!("Laying out {} windows", windows.len());
+                        
+                        Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+                    },
+                    Msg::AddTags { tags } => {
+                        data.state.tag_state.tags.extend(tags.into_iter().map(|tag| Tag { id: tag, windows: vec![] }));
+                    },
+                    Msg::RemoveTags { tags } => {
+                        data.state.tag_state.tags.retain(|tag| !tags.contains(&tag.id));
+                    },
 
                     Msg::Quit => {
                         data.state.loop_signal.stop();
@@ -365,6 +416,7 @@ impl<B: Backend> State<B> {
             input_state: InputState::new(),
             api_state: ApiState::new(),
             focus_state: FocusState::new(),
+            tag_state: TagState::new(),
 
             seat,
 
@@ -374,6 +426,8 @@ impl<B: Backend> State<B> {
             popup_manager: PopupManager::default(),
 
             async_scheduler: sched,
+
+            windows: vec![],
         })
     }
 
@@ -412,7 +466,6 @@ impl<B: Backend> State<B> {
             return;
         };
 
-        // TODO: find a way to make this hellish code look better, deal with unwraps
         if let Some(callback_id) = callback_id {
             let stdout = child.stdout.take();
             let stderr = child.stderr.take();
@@ -535,8 +588,6 @@ impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
 
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
-
-    // fn debug(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {}
 }
 
 #[derive(Debug, Copy, Clone)]

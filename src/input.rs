@@ -234,10 +234,15 @@ impl<B: Backend> State<B> {
                         if modifiers.logo {
                             modifier_mask.push(Modifiers::Super);
                         }
+                        let raw_sym = if keysym.raw_syms().len() == 1 {
+                            keysym.raw_syms()[0]
+                        } else {
+                            keysyms::KEY_NoSymbol
+                        };
                         if let Some(callback_id) = state
                             .input_state
                             .keybinds
-                            .get(&(modifier_mask.into(), keysym.modified_sym()))
+                            .get(&(modifier_mask.into(), raw_sym))
                         {
                             return FilterResult::Intercept(*callback_id);
                         }
