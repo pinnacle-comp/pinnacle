@@ -227,7 +227,13 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
         WindowState::with_state(&window, |state| {
             state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
-                OutputState::with(focused_output, |state| state.focused_tags.to_vec())
+                OutputState::with(focused_output, |state| {
+                    state
+                        .focused_tags
+                        .iter()
+                        .filter_map(|(id, active)| active.then_some(id.clone()))
+                        .collect()
+                })
             } else if let Some(first_tag) = self.tag_state.tags.first() {
                 vec![first_tag.id.clone()]
             } else {
@@ -259,6 +265,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        self.windows.retain(|window| window.toplevel() != &surface);
         let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         windows.retain(|window| window.toplevel() != &surface);
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
@@ -359,18 +366,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        tracing::info!("ack configure start");
         if let Some(window) = self.window_for_surface(&surface) {
-            tracing::info!("in window_for_surface");
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
-                            // tracing::info!("acking before serial check");
-                            tracing::info!("configure serial: {:?}", configure.serial);
-                            tracing::info!("provided serial: {:?}", serial);
                             if configure.serial >= serial {
-                                tracing::info!("acking, serial >=");
                                 state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
                             }
                         }

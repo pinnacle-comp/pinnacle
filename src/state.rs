@@ -9,7 +9,7 @@ use std::{
     ffi::OsString,
     os::{fd::AsRawFd, unix::net::UnixStream},
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, path::Path,
 };
 
 use crate::{
@@ -197,51 +197,113 @@ impl<B: Backend> State<B> {
                     }
                     Msg::MoveToTag { tag_id } => todo!(),
                     Msg::ToggleTag { tag_id } => {
-                        let windows = OutputState::with(data.state.focus_state.focused_output.as_ref().unwrap(), |state| {
-                            if state.focused_tags
-                                .iter()
-                                .any(|tg| tg == &tag_id)
-                            {
-                                tracing::info!("Toggle tag {tag_id:?} off");
-                                state.focused_tags.retain(|tg| tg != &tag_id);
-                            } else {
-                                tracing::info!("Toggle tag {tag_id:?} on");
-                                state.focused_tags.push(tag_id.clone());
-                            }
-                            // re-layout
-                            for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
-                                let should_render = WindowState::with_state(&window, |win_state| {
-                                    for tag_id in win_state.tags.iter() {
-                                        if state.focused_tags.contains(tag_id) {
-                                            return true;
-                                        }
+                        let windows = OutputState::with(
+                            data
+                                .state
+                                .focus_state
+                                .focused_output
+                                .as_ref()
+                                .unwrap(), // TODO: handle error
+                            |state| {
+                                match state.focused_tags.get_mut(&tag_id) {
+                                    Some(id) => {
+                                        *id = !*id;
+                                        tracing::debug!("toggled tag {tag_id:?} {}", if *id { "on" } else { "off" });
                                     }
-                                    false
-                                });
-                                if !should_render {
-                                    data.state.space.unmap_elem(&window);
+                                    None => {
+                                        state.focused_tags.insert(tag_id.clone(), true);
+                                        tracing::debug!("toggled tag {tag_id:?} on");
+                                    }
                                 }
-                            }
-
-                            data.state.windows.iter().filter(|&win| {
-                                WindowState::with_state(win, |win_state| {
-                                    for tag_id in win_state.tags.iter() {
-                                        if state.focused_tags.contains(tag_id) {
-                                            return true;
+                                // re-layout
+                                for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
+                                    let should_render = WindowState::with_state(&window, |win_state| {
+                                        for tag_id in win_state.tags.iter() {
+                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                                                return true;
+                                            }
                                         }
+                                        false
+                                    });
+                                    if !should_render {
+                                        data.state.space.unmap_elem(&window);
                                     }
-                                    false
-                                })
-                            }).cloned().collect::<Vec<_>>()
+                                }
 
-                        });
+                                data.state.windows.iter().filter(|&win| {
+                                    WindowState::with_state(win, |win_state| {
+                                        for tag_id in win_state.tags.iter() {
+                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                                                return true;
+                                            }
+                                        }
+                                        false
+                                    })
+                                }).cloned().collect::<Vec<_>>()
+                            }
+                        );
 
                         tracing::info!("Laying out {} windows", windows.len());
                         
                         Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
                     },
+                    Msg::SwitchToTag { tag_id } => {
+                        let windows = OutputState::with(data
+                            .state
+                            .focus_state
+                            .focused_output
+                            .as_ref()
+                            .unwrap(), 
+                            |state| {
+                                for (_, active) in state.focused_tags.iter_mut() {
+                                    *active = false;
+                                }
+                                if let Some(active) = state.focused_tags.get_mut(&tag_id) {
+                                    *active = true;
+                                } else {
+                                    state.focused_tags.insert(tag_id.clone(), true);
+                                }
+
+                                // TODO: extract into fn, same with the one up there
+                                for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
+                                    let should_render = WindowState::with_state(&window, |win_state| {
+                                        for tag_id in win_state.tags.iter() {
+                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                                                return true;
+                                            }
+                                        }
+                                        false
+                                    });
+                                    if !should_render {
+                                        data.state.space.unmap_elem(&window);
+                                    }
+                                }
+
+                                data.state.windows.iter().filter(|&win| {
+                                    WindowState::with_state(win, |win_state| {
+                                        for tag_id in win_state.tags.iter() {
+                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                                                return true;
+                                            }
+                                        }
+                                        false
+                                    })
+                                }).cloned().collect::<Vec<_>>()
+                            }
+                        );
+
+                        Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+                    }
                     Msg::AddTags { tags } => {
-                        data.state.tag_state.tags.extend(tags.into_iter().map(|tag| Tag { id: tag, windows: vec![] }));
+                        data
+                            .state
+                            .tag_state
+                            .tags
+                            .extend(
+                                tags
+                                    .into_iter()
+                                    .map(|tag| Tag { id: tag, windows: vec![] })
+                            );
                     },
                     Msg::RemoveTags { tags } => {
                         data.state.tag_state.tags.retain(|tag| !tags.contains(&tag.id));
@@ -370,24 +432,29 @@ impl<B: Backend> State<B> {
             default_path
         });
 
-        let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
-        let mut local_lua_path = std::env::current_dir()
-            .expect("Couldn't get current dir")
-            .to_string_lossy()
-            .to_string();
-        local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
-        let new_lua_path =
+        if Path::new(&config_path).exists() {
+            let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
+            let mut local_lua_path = std::env::current_dir()
+                .expect("Couldn't get current dir")
+                .to_string_lossy()
+                .to_string();
+            local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
+            let new_lua_path =
             format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
 
-        let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
-        let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
+            let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
+            let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
 
-        std::process::Command::new("lua5.4")
-            .arg(config_path)
-            .env("LUA_PATH", new_lua_path)
-            .env("LUA_CPATH", new_lua_cpath)
-            .spawn()
-            .expect("Could not start config process");
+            std::process::Command::new("lua5.4")
+                .arg(config_path)
+                .env("LUA_PATH", new_lua_path)
+                .env("LUA_CPATH", new_lua_cpath)
+                .spawn()
+                .expect("Could not start config process");
+        } else {
+            tracing::error!("Could not find {}", config_path);
+        }
+
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();

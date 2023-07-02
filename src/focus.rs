@@ -17,7 +17,7 @@ impl FocusState {
         Default::default()
     }
 
-    /// Get the currently focused window.
+    /// Get the currently focused window. If there is none, the previous focus is returned.
     pub fn current_focus(&mut self) -> Option<Window> {
         while let Some(window) = self.focus_stack.last() {
             if window.alive() {

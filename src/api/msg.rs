@@ -40,12 +40,16 @@ pub enum Msg {
         window_id: WindowId,
         size: (i32, i32),
     },
-
-    // Tag management
     MoveToTag {
+        // TODO:
         tag_id: TagId,
     },
+
+    // Tag management
     ToggleTag {
+        tag_id: TagId,
+    },
+    SwitchToTag {
         tag_id: TagId,
     },
     AddTags {

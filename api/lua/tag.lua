@@ -45,4 +45,14 @@ function tag.toggle(name)
     })
 end
 
+---Switch to a tag, deactivating any other active tags.
+---@param name string The name of the tag.
+function tag.switch_to(name)
+    SendMsg({
+        SwitchToTag = {
+            tag_id = name,
+        },
+    })
+end
+
 return tag

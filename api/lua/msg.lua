@@ -16,6 +16,7 @@
 ---@field Request Request
 --Tags
 ---@field ToggleTag { tag_id: string }
+---@field SwitchToTag { tag_id: string }
 ---@field AddTags { tags: string[] }
 ---@field RemoveTags { tags: string[] }
 

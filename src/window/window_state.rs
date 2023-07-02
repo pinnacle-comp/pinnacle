@@ -126,12 +126,11 @@ impl WindowState {
             .user_data()
             .insert_if_missing(RefCell::<Self>::default);
 
-        let mut state = window
+        let state = window
             .user_data()
             .get::<RefCell<Self>>()
-            .expect("This should never happen")
-            .borrow_mut();
-        func(&mut state)
+            .expect("This should never happen");
+        func(&mut state.borrow_mut())
     }
 }
 

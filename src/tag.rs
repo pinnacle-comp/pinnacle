@@ -6,7 +6,7 @@
 
 use smithay::desktop::Window;
 
-#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TagId(String);
 
 #[derive(Debug)]
