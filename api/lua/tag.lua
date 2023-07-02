@@ -8,6 +8,8 @@ local tag = {}
 
 ---Add tags.
 ---
+---If you need to add the strings in a table, use `tag.add_table` instead.
+---
 ---# Example
 ---
 ---```lua
@@ -25,7 +27,7 @@ function tag.add(...)
     })
 end
 
----Like `tag.add(...)`, but with a table of strings instead.
+---Like `tag.add`, but with a table of strings instead.
 ---@param tags string[] The names of the new tags you want to add, as a table.
 function tag.add_table(tags)
     SendMsg({

@@ -4,7 +4,7 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@alias Modifiers "Alt" | "Ctrl" | "Shift" | "Super"
+---@alias Modifier "Alt" | "Ctrl" | "Shift" | "Super"
 
 ---@enum Keys
 local M = {

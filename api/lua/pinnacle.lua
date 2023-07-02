@@ -51,7 +51,7 @@ local pinnacle = {
     ---Key and mouse binds
     input = require("input"),
     ---Window management
-    client = require("client"),
+    window = require("window"),
     ---Process spawning
     process = require("process"),
     ---Tag management

@@ -195,9 +195,34 @@ impl<B: Backend> State<B> {
                         });
                         window.toplevel().send_pending_configure();
                     }
-                    Msg::MoveToTag { tag_id } => todo!(),
+                    Msg::MoveWindowToTag { window_id, tag_id } => {
+                        if let Some(window) = data.state.windows.iter().find(|&win| {
+                            WindowState::with_state(win, |state| state.id == window_id)
+                        }) {
+                            WindowState::with_state(window, |state| {
+                                state.tags = vec![tag_id.clone()];
+                            });
+                        }
+
+                        data.state.re_layout();
+                    },
+                    Msg::ToggleTagOnWindow { window_id, tag_id } => {
+                        if let Some(window) = data.state.windows.iter().find(|&win| {
+                            WindowState::with_state(win, |state| state.id == window_id)
+                        }) {
+                            WindowState::with_state(window, |state| {
+                                if state.tags.contains(&tag_id) {
+                                    state.tags.retain(|id| id != &tag_id);
+                                } else {
+                                    state.tags.push(tag_id.clone());
+                                }
+                            });
+
+                            data.state.re_layout();
+                        }
+                    },
                     Msg::ToggleTag { tag_id } => {
-                        let windows = OutputState::with(
+                        OutputState::with(
                             data
                                 .state
                                 .focus_state
@@ -215,40 +240,13 @@ impl<B: Backend> State<B> {
                                         tracing::debug!("toggled tag {tag_id:?} on");
                                     }
                                 }
-                                // re-layout
-                                for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
-                                    let should_render = WindowState::with_state(&window, |win_state| {
-                                        for tag_id in win_state.tags.iter() {
-                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                                return true;
-                                            }
-                                        }
-                                        false
-                                    });
-                                    if !should_render {
-                                        data.state.space.unmap_elem(&window);
-                                    }
-                                }
-
-                                data.state.windows.iter().filter(|&win| {
-                                    WindowState::with_state(win, |win_state| {
-                                        for tag_id in win_state.tags.iter() {
-                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                                return true;
-                                            }
-                                        }
-                                        false
-                                    })
-                                }).cloned().collect::<Vec<_>>()
                             }
                         );
 
-                        tracing::info!("Laying out {} windows", windows.len());
-                        
-                        Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+                        data.state.re_layout();
                     },
                     Msg::SwitchToTag { tag_id } => {
-                        let windows = OutputState::with(data
+                        OutputState::with(data
                             .state
                             .focus_state
                             .focused_output
@@ -263,36 +261,10 @@ impl<B: Backend> State<B> {
                                 } else {
                                     state.focused_tags.insert(tag_id.clone(), true);
                                 }
-
-                                // TODO: extract into fn, same with the one up there
-                                for window in data.state.space.elements().cloned().collect::<Vec<_>>() {
-                                    let should_render = WindowState::with_state(&window, |win_state| {
-                                        for tag_id in win_state.tags.iter() {
-                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                                return true;
-                                            }
-                                        }
-                                        false
-                                    });
-                                    if !should_render {
-                                        data.state.space.unmap_elem(&window);
-                                    }
-                                }
-
-                                data.state.windows.iter().filter(|&win| {
-                                    WindowState::with_state(win, |win_state| {
-                                        for tag_id in win_state.tags.iter() {
-                                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                                return true;
-                                            }
-                                        }
-                                        false
-                                    })
-                                }).cloned().collect::<Vec<_>>()
                             }
                         );
 
-                        Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+                        data.state.re_layout();
                     }
                     Msg::AddTags { tags } => {
                         data
@@ -639,6 +611,37 @@ impl<B: Backend> State<B> {
                 tracing::error!("Failed to schedule future: {err}");
             }
         }
+    }
+
+    pub fn re_layout(&mut self) {
+        let windows = OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
+            for window in self.space.elements().cloned().collect::<Vec<_>>() {
+                let should_render = WindowState::with_state(&window, |win_state| {
+                    for tag_id in win_state.tags.iter() {
+                        if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                            return true;
+                        }
+                    }
+                    false
+                });
+                if !should_render {
+                    self.space.unmap_elem(&window);
+                }
+            }
+
+            self.windows.iter().filter(|&win| {
+                WindowState::with_state(win, |win_state| {
+                    for tag_id in win_state.tags.iter() {
+                        if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                            return true;
+                        }
+                    }
+                    false
+                })
+            }).cloned().collect::<Vec<_>>()
+        });
+
+        Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }
 }
 

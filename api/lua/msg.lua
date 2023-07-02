@@ -9,9 +9,13 @@
 ---@class _Msg
 ---@field SetKeybind { key: Keys, modifiers: Modifiers[], callback_id: integer }
 ---@field SetMousebind { button: integer }
+--Windows
 ---@field CloseWindow { client_id: integer? }
 ---@field ToggleFloating { client_id: integer? }
 ---@field SetWindowSize { window_id: integer, size: { w: integer, h: integer } }
+---@field MoveWindowToTag { window_id: integer, tag_id: string }
+---@field ToggleTagOnWindow { window_id: integer, tag_id: string }
+--
 ---@field Spawn { command: string[], callback_id: integer? }
 ---@field Request Request
 --Tags
