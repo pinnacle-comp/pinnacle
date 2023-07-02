@@ -48,6 +48,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     layout::Layout,
+    output::OutputState,
     state::{ClientState, State},
     window::window_state::{WindowResizeState, WindowState},
 };
@@ -116,11 +117,9 @@ impl<B: Backend> CompositorHandler for State<B> {
         if let Some(window) = self.window_for_surface(surface) {
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
-                    // tracing::info!("Committing, new location");
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
-                // state.resize_state
             });
         }
     }
@@ -224,6 +223,24 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
+        WindowState::with_state(&window, |state| {
+            state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
+                OutputState::with(focused_output, |state| {
+                    state
+                        .focused_tags
+                        .iter()
+                        .filter_map(|(id, active)| active.then_some(id.clone()))
+                        .collect()
+                })
+            } else if let Some(first_tag) = self.tag_state.tags.first() {
+                vec![first_tag.id.clone()]
+            } else {
+                vec![]
+            };
+            tracing::debug!("new window, tags are {:?}", state.tags);
+        });
+
+        self.windows.push(window.clone());
         self.space.map_element(window.clone(), (0, 0), true);
         self.loop_handle.insert_idle(move |data| {
             data.state
@@ -236,6 +253,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     SERIAL_COUNTER.next_serial(),
                 );
         });
+
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         self.loop_handle.insert_idle(|data| {
@@ -245,6 +263,8 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        tracing::debug!("toplevel destroyed");
+        self.windows.retain(|window| window.toplevel() != &surface);
         let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         windows.retain(|window| window.toplevel() != &surface);
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
@@ -345,15 +365,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        // TODO: add serial to WaitingForAck
+        tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
+            tracing::debug!("found window for surface");
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
-                            // tracing::info!("acking before serial check");
                             if configure.serial >= serial {
-                                // tracing::info!("acking, serial >=");
+                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
                             }
                         }
@@ -361,8 +381,30 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     }
                 }
             });
+
+            // HACK: If a window is currently going through something that generates a bunch of
+            // |     commits, like an animation, unmapping it while it's doing that has a chance
+            // |     to cause any send_configures to not trigger a commit. I'm not sure if this is because of
+            // |     the way I've implemented things or if it's something else. Because of me
+            // |     mapping the element in commit, this means that the window won't reappear on a tag
+            // |     change. The code below is a workaround until I can figure it out.
+            if !self.space.elements().any(|win| win == &window) {
+                tracing::debug!("remapping window");
+                WindowState::with_state(&window, |state| {
+                    if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
+                        self.space.map_element(window.clone(), new_loc, false);
+                        state.resize_state = WindowResizeState::Idle;
+                    }
+                });
+            }
         }
     }
+
+    // fn minimize_request(&mut self, surface: ToplevelSurface) {
+    //     if let Some(window) = self.window_for_surface(surface.wl_surface()) {
+    //         self.space.unmap_elem(&window);
+    //     }
+    // }
 
     // TODO: impl the rest of the fns in XdgShellHandler
 }

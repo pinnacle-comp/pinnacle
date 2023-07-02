@@ -12,33 +12,108 @@ pcall(require, "luarocks.loader")
 -- Neovim users be like:
 require("pinnacle").setup(function(pinnacle)
     local input = pinnacle.input  -- Key and mouse binds
-    local client = pinnacle.client -- Window management
+    local window = pinnacle.window -- Window management
     local process = pinnacle.process -- Process spawning
+    local tag = pinnacle.tag      -- Tag management
 
     -- Every key supported by xkbcommon.
     -- Support for just putting in a string of a key is intended.
     local keys = input.keys
 
+    ---@type Modifier
+    local mod_key = "Ctrl" -- This is set to `Ctrl` instead of `Super` to not conflict with your WM/DE keybinds
+    -- ^ Add type annotations for that sweet, sweet autocomplete
+
+    local terminal = "alacritty"
+
     -- Keybinds ----------------------------------------------------------------------
-    input.keybind({ "Ctrl", "Alt" }, keys.q, pinnacle.quit)
+    input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
-    input.keybind({ "Ctrl", "Alt" }, keys.c, client.close_window)
+    input.keybind({ mod_key, "Alt" }, keys.c, window.close_window)
 
-    input.keybind({ "Ctrl", "Alt" }, keys.space, client.toggle_floating)
+    input.keybind({ mod_key, "Alt" }, keys.space, window.toggle_floating)
 
-    input.keybind({ "Ctrl" }, keys.Return, function()
-        process.spawn("alacritty", function(stdout, stderr, exit_code, exit_msg)
-            -- do something with the output here; remember to check for nil!
+    input.keybind({ mod_key }, keys.Return, function()
+        process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
+            -- do something with the output here
         end)
     end)
 
-    input.keybind({ "Ctrl" }, keys.KEY_1, function()
+    input.keybind({ mod_key }, keys.l, function()
         process.spawn("kitty")
     end)
-    input.keybind({ "Ctrl" }, keys.KEY_2, function()
+    input.keybind({ mod_key }, keys.k, function()
         process.spawn("foot")
     end)
-    input.keybind({ "Ctrl" }, keys.KEY_3, function()
+    input.keybind({ mod_key }, keys.j, function()
         process.spawn("nautilus")
+    end)
+
+    -- Tags ---------------------------------------------------------------------------
+    tag.add("1", "2", "3", "4", "5")
+    tag.toggle("1")
+
+    input.keybind({ mod_key }, keys.KEY_1, function()
+        tag.switch_to("1")
+    end)
+    input.keybind({ mod_key }, keys.KEY_2, function()
+        tag.switch_to("2")
+    end)
+    input.keybind({ mod_key }, keys.KEY_3, function()
+        tag.switch_to("3")
+    end)
+    input.keybind({ mod_key }, keys.KEY_4, function()
+        tag.switch_to("4")
+    end)
+    input.keybind({ mod_key }, keys.KEY_5, function()
+        tag.switch_to("5")
+    end)
+
+    input.keybind({ mod_key, "Shift" }, keys.KEY_1, function()
+        tag.toggle("1")
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.KEY_2, function()
+        tag.toggle("2")
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.KEY_3, function()
+        tag.toggle("3")
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.KEY_4, function()
+        tag.toggle("4")
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.KEY_5, function()
+        tag.toggle("5")
+    end)
+
+    input.keybind({ mod_key, "Alt" }, keys.KEY_1, function()
+        window.get_focused():move_to_tag("1")
+    end)
+    input.keybind({ mod_key, "Alt" }, keys.KEY_2, function()
+        window.get_focused():move_to_tag("2")
+    end)
+    input.keybind({ mod_key, "Alt" }, keys.KEY_3, function()
+        window.get_focused():move_to_tag("3")
+    end)
+    input.keybind({ mod_key, "Alt" }, keys.KEY_4, function()
+        window.get_focused():move_to_tag("4")
+    end)
+    input.keybind({ mod_key, "Alt" }, keys.KEY_5, function()
+        window.get_focused():move_to_tag("5")
+    end)
+
+    input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_1, function()
+        window.get_focused():toggle_tag("1")
+    end)
+    input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_2, function()
+        window.get_focused():toggle_tag("2")
+    end)
+    input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_3, function()
+        window.get_focused():toggle_tag("3")
+    end)
+    input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_4, function()
+        window.get_focused():toggle_tag("4")
+    end)
+    input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_5, function()
+        window.get_focused():toggle_tag("5")
     end)
 end)

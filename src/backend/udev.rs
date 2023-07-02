@@ -225,7 +225,13 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
     };
-    let mut state = State::init(
+
+    //
+    //
+    //
+    //
+
+    let mut state = State::<UdevData>::init(
         data,
         &mut display,
         event_loop.get_signal(),
@@ -236,6 +242,39 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
      * Initialize the udev backend
      */
     let udev_backend = UdevBackend::new(state.seat.name())?;
+
+    for (device_id, path) in udev_backend.device_list() {
+        if let Err(err) = DrmNode::from_dev_id(device_id)
+            .map_err(DeviceAddError::DrmNode)
+            .and_then(|node| state.device_added(node, path))
+        {
+            tracing::error!("Skipping device {device_id}: {err}");
+        }
+    }
+    event_loop
+        .handle()
+        .insert_source(udev_backend, move |event, _, data| match event {
+            UdevEvent::Added { device_id, path } => {
+                if let Err(err) = DrmNode::from_dev_id(device_id)
+                    .map_err(DeviceAddError::DrmNode)
+                    .and_then(|node| data.state.device_added(node, &path))
+                {
+                    tracing::error!("Skipping device {device_id}: {err}");
+                }
+            }
+            UdevEvent::Changed { device_id } => {
+                if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                    data.state.device_changed(node)
+                }
+            }
+            UdevEvent::Removed { device_id } => {
+                if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                    data.state.device_removed(node)
+                }
+            }
+        })
+        .unwrap();
+
     /*
      * Initialize libinput backend
      */
@@ -299,14 +338,6 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
         })
         .unwrap();
 
-    for (device_id, path) in udev_backend.device_list() {
-        if let Err(err) = DrmNode::from_dev_id(device_id)
-            .map_err(DeviceAddError::DrmNode)
-            .and_then(|node| state.device_added(node, path))
-        {
-            tracing::error!("Skipping device {device_id}: {err}");
-        }
-    }
     state.shm_state.update_formats(
         state
             .backend_data
@@ -421,30 +452,6 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                 });
             });
         });
-
-    event_loop
-        .handle()
-        .insert_source(udev_backend, move |event, _, data| match event {
-            UdevEvent::Added { device_id, path } => {
-                if let Err(err) = DrmNode::from_dev_id(device_id)
-                    .map_err(DeviceAddError::DrmNode)
-                    .and_then(|node| data.state.device_added(node, &path))
-                {
-                    tracing::error!("Skipping device {device_id}: {err}");
-                }
-            }
-            UdevEvent::Changed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.state.device_changed(node)
-                }
-            }
-            UdevEvent::Removed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.state.device_removed(node)
-                }
-            }
-        })
-        .unwrap();
 
     event_loop.run(
         Some(Duration::from_millis(6)),
@@ -828,6 +835,8 @@ impl State<UdevData> {
             },
         );
         let global = output.create_global::<State<UdevData>>(&self.backend_data.display_handle);
+
+        self.focus_state.focused_output = Some(output.clone());
 
         let x = self.space.outputs().fold(0, |acc, o| {
             acc + self.space.output_geometry(o).unwrap().size.w

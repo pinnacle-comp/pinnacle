@@ -44,6 +44,7 @@ impl Layout {
                 };
                 let output_size = state.space.output_geometry(output).unwrap().size;
                 if window_count == 1 {
+                    tracing::debug!("Laying out only window");
                     let window = windows[0].clone();
 
                     window.toplevel().with_pending_state(|tl_state| {
@@ -60,8 +61,10 @@ impl Layout {
                                 .unwrap()
                                 .initial_configure_sent
                         });
+                    tracing::debug!("initial configure sent is {initial_configure_sent}");
                     if initial_configure_sent {
                         WindowState::with_state(&window, |state| {
+                            tracing::debug!("sending configure");
                             state.resize_state = WindowResizeState::WaitingForAck(
                                 window.toplevel().send_configure(),
                                 output.current_location(),
@@ -72,6 +75,7 @@ impl Layout {
                     return;
                 }
 
+                tracing::debug!("layed out first window");
                 let mut windows = windows.iter();
                 let first_window = windows.next().unwrap();
 
@@ -105,15 +109,6 @@ impl Layout {
                 let x = output.current_location().x + output_size.w / 2;
 
                 for (i, win) in windows.enumerate() {
-                    // let (min_size, _max_size) = match win.wl_surface() {
-                    //     Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
-                    //         let data = states.cached_state.current::<SurfaceCachedState>();
-                    //         (data.min_size, data.max_size)
-                    //     }),
-                    //     None => ((0, 0).into(), (0, 0).into()),
-                    // };
-                    // let min_height =
-                    //     i32::max(i32::max(0, win.geometry().loc.y.abs()) + 1, min_size.h);
                     win.toplevel().with_pending_state(|state| {
                         let mut new_size = output_size;
                         new_size.w /= 2;

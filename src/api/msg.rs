@@ -7,7 +7,10 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::window::{tag::Tag, window_state::WindowId, WindowProperties};
+use crate::{
+    tag::TagId,
+    window::{window_state::WindowId, WindowProperties},
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -33,15 +36,31 @@ pub enum Msg {
         #[serde(default)]
         client_id: Option<u32>,
     },
-    MoveToTag {
-        tag: Tag,
-    },
-    ToggleTag {
-        tag: Tag,
-    },
     SetWindowSize {
         window_id: WindowId,
         size: (i32, i32),
+    },
+    MoveWindowToTag {
+        window_id: WindowId,
+        tag_id: TagId,
+    },
+    ToggleTagOnWindow {
+        window_id: WindowId,
+        tag_id: TagId,
+    },
+
+    // Tag management
+    ToggleTag {
+        tag_id: TagId,
+    },
+    SwitchToTag {
+        tag_id: TagId,
+    },
+    AddTags {
+        tags: Vec<TagId>,
+    },
+    RemoveTags {
+        tags: Vec<TagId>,
     },
 
     // Process management

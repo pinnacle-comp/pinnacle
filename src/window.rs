@@ -18,7 +18,6 @@ use crate::{
 
 use self::window_state::{Float, WindowId, WindowState};
 
-pub mod tag;
 pub mod window_state;
 
 // TODO: maybe get rid of this and move the fn into resize_surface state because it's the only user
@@ -51,6 +50,12 @@ impl<B: Backend> State<B> {
             .elements()
             .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
             .cloned()
+            .or_else(|| {
+                self.windows
+                    .iter()
+                    .find(|&win| win.toplevel().wl_surface() == surface)
+                    .cloned()
+            })
     }
 
     /// Swap the positions and sizes of two windows.

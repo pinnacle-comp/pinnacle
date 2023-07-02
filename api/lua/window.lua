@@ -11,13 +11,13 @@
 ---@field private size { w: integer, h: integer } The size of the window
 ---@field private location { x: integer, y: integer } The location of the window
 ---@field private floating boolean Whether the window is floating or not (tiled)
-local window = {}
+local win = {}
 
 ---@param props { id: integer, app_id: string?, title: string?, size: { w: integer, h: integer }, location: { x: integer, y: integer }, floating: boolean }
 ---@return Window
 local function new_window(props)
     -- Copy functions over
-    for k, v in pairs(window) do
+    for k, v in pairs(win) do
         props[k] = v
     end
 
@@ -26,7 +26,7 @@ end
 
 ---Set a window's size.
 ---@param size { w: integer?, h: integer? }
-function window:set_size(size)
+function win:set_size(size)
     self.size = {
         w = size.w or self.size.w,
         h = size.h or self.size.h,
@@ -39,19 +39,41 @@ function window:set_size(size)
     })
 end
 
+---Move a window to a tag, removing all other ones.
+---@param name string The name of the tag.
+function win:move_to_tag(name)
+    SendMsg({
+        MoveWindowToTag = {
+            window_id = self.id,
+            tag_id = name,
+        },
+    })
+end
+
+---Toggle the specified tag for this window.
+---@param name string The name of the tag.
+function win:toggle_tag(name)
+    SendMsg({
+        ToggleTagOnWindow = {
+            window_id = self.id,
+            tag_id = name,
+        },
+    })
+end
+
 ---Get a window's size.
 ---@return { w: integer, h: integer }
-function window:get_size()
+function win:get_size()
     return self.size
 end
 
 -------------------------------------------------------------------
 
-local client = {}
+local window = {}
 
 ---Close a window.
 ---@param client_id integer? The id of the window you want closed, or nil to close the currently focused window, if any.
-function client.close_window(client_id)
+function window.close_window(client_id)
     SendMsg({
         CloseWindow = {
             client_id = client_id,
@@ -61,7 +83,7 @@ end
 
 ---Toggle a window's floating status.
 ---@param client_id integer? The id of the window you want to toggle, or nil to toggle the currently focused window, if any.
-function client.toggle_floating(client_id)
+function window.toggle_floating(client_id)
     SendMsg({
         ToggleFloating = {
             client_id = client_id,
@@ -69,39 +91,25 @@ function client.toggle_floating(client_id)
     })
 end
 
----Get a window.
----@param identifier { app_id: string } | { title: string } | "focus" A table with either the key app_id or title, depending if you want to get the window via its app_id or title, OR the string "focus" to get the currently focused window.
----@return Window
-function client.get_window(identifier)
+---Get a window by its app id (aka its X11 class).
+---@param app_id string The window's app id. For example, Alacritty's app id is "Alacritty".
+---@return Window window -- TODO: nil
+function window.get_by_app_id(app_id)
     local req_id = Requests:next()
-    if type(identifier) == "string" then
-        SendRequest({
-            GetWindowByFocus = {
-                id = req_id,
-            },
-        })
-    elseif identifier.app_id then
-        SendRequest({
-            GetWindowByAppId = {
-                id = req_id,
-                app_id = identifier.app_id,
-            },
-        })
-    else
-        SendRequest({
-            GetWindowByTitle = {
-                id = req_id,
-                title = identifier.title,
-            },
-        })
-    end
+
+    SendRequest({
+        GetWindowByAppId = {
+            id = req_id,
+            app_id = app_id,
+        },
+    })
 
     local response = ReadMsg()
 
     local props = response.RequestResponse.response.Window.window
 
     ---@type Window
-    local win = {
+    local wind = {
         id = props.id,
         app_id = props.app_id or "",
         title = props.title or "",
@@ -116,12 +124,82 @@ function client.get_window(identifier)
         floating = props.floating,
     }
 
-    return new_window(win)
+    return new_window(wind)
+end
+
+---Get a window by its title.
+---@param title string The window's title.
+---@return Window
+function window.get_by_title(title)
+    local req_id = Requests:next()
+
+    SendRequest({
+        GetWindowByTitle = {
+            id = req_id,
+            title = title,
+        },
+    })
+
+    local response = ReadMsg()
+
+    local props = response.RequestResponse.response.Window.window
+
+    ---@type Window
+    local wind = {
+        id = props.id,
+        app_id = props.app_id or "",
+        title = props.title or "",
+        size = {
+            w = props.size[1],
+            h = props.size[2],
+        },
+        location = {
+            x = props.location[1],
+            y = props.location[2],
+        },
+        floating = props.floating,
+    }
+
+    return new_window(wind)
+end
+
+---Get the currently focused window.
+---@return Window
+function window.get_focused()
+    local req_id = Requests:next()
+
+    SendRequest({
+        GetWindowByFocus = {
+            id = req_id,
+        },
+    })
+
+    local response = ReadMsg()
+
+    local props = response.RequestResponse.response.Window.window
+
+    ---@type Window
+    local wind = {
+        id = props.id,
+        app_id = props.app_id or "",
+        title = props.title or "",
+        size = {
+            w = props.size[1],
+            h = props.size[2],
+        },
+        location = {
+            x = props.location[1],
+            y = props.location[2],
+        },
+        floating = props.floating,
+    }
+
+    return new_window(wind)
 end
 
 ---Get all windows.
 ---@return Window[]
-function client.get_windows()
+function window.get_windows()
     SendRequest({
         GetAllWindows = {
             id = Requests:next(),
@@ -152,6 +230,4 @@ function client.get_windows()
     return windows
 end
 
--- local win = client.get_window("focus")
-
-return client
+return window

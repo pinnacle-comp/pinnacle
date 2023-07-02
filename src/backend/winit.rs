@@ -177,7 +177,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut state = State::init(
+    let mut state = State::<WinitData>::init(
         WinitData {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
@@ -387,7 +387,9 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
     event_loop.run(
         Some(Duration::from_millis(6)),
         &mut CalloopData { display, state },
-        |_data| {},
+        |_data| {
+            // println!("{}", _data.state.space.elements().count());
+        },
     )?;
 
     Ok(())
