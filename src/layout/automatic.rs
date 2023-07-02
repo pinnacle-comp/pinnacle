@@ -46,6 +46,7 @@ impl Layout {
                 tracing::info!("got output");
                 let output_size = state.space.output_geometry(output).unwrap().size;
                 if window_count == 1 {
+                    tracing::debug!("Laying out only window");
                     let window = windows[0].clone();
 
                     window.toplevel().with_pending_state(|tl_state| {
@@ -62,8 +63,10 @@ impl Layout {
                                 .unwrap()
                                 .initial_configure_sent
                         });
+                    tracing::debug!("initial configure sent is {initial_configure_sent}");
                     if initial_configure_sent {
                         WindowState::with_state(&window, |state| {
+                            tracing::debug!("sending configure");
                             state.resize_state = WindowResizeState::WaitingForAck(
                                 window.toplevel().send_configure(),
                                 output.current_location(),
@@ -74,7 +77,7 @@ impl Layout {
                     return;
                 }
 
-                tracing::warn!("layed out first window");
+                tracing::debug!("layed out first window");
                 let mut windows = windows.iter();
                 let first_window = windows.next().unwrap();
 

@@ -96,6 +96,8 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        tracing::debug!("top of commit");
+
         utils::on_commit_buffer_handler::<Self>(surface);
 
         if !compositor::is_sync_subsurface(surface) {
@@ -116,8 +118,9 @@ impl<B: Backend> CompositorHandler for State<B> {
 
         if let Some(window) = self.window_for_surface(surface) {
             WindowState::with_state(&window, |state| {
+                tracing::debug!("in commit with_state");
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
-                    tracing::info!("Committing, new location");
+                    tracing::debug!("Committing, new location is {new_pos:?}");
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
@@ -239,7 +242,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
             } else {
                 vec![]
             };
-            tracing::info!("new window, tags are {:?}", state.tags);
+            tracing::debug!("new window, tags are {:?}", state.tags);
         });
 
         self.windows.push(window.clone());
@@ -265,6 +268,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        tracing::debug!("toplevel destroyed");
         self.windows.retain(|window| window.toplevel() != &surface);
         let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         windows.retain(|window| window.toplevel() != &surface);
@@ -366,12 +370,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
+        tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
+            tracing::debug!("found window for surface");
             WindowState::with_state(&window, |state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
+                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
                             }
                         }
@@ -379,6 +386,21 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     }
                 }
             });
+
+            // HACK: If a window is currently going through something that generates a bunch of
+            // |     commits, like an animation, unmapping it while it's doing that has a chance
+            // |     to cause any send_configures to not trigger a commit. I'm not sure if this is because of
+            // |     the way I've implemented things or if it's something else. Because of me
+            // |     mapping the element in commit, this means that the window won't reappear on a tag
+            // |     change. The code below is a workaround.
+            if !self.space.elements().any(|win| win == &window) {
+                WindowState::with_state(&window, |state| {
+                    if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
+                        self.space.map_element(window.clone(), new_loc, false);
+                        state.resize_state = WindowResizeState::Idle;
+                    }
+                });
+            }
         }
     }
 

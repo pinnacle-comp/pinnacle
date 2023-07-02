@@ -261,6 +261,7 @@ impl<B: Backend> State<B> {
                                 } else {
                                     state.focused_tags.insert(tag_id.clone(), true);
                                 }
+                                tracing::debug!("focused tags: {:?}", state.focused_tags);
                             }
                         );
 
@@ -640,6 +641,8 @@ impl<B: Backend> State<B> {
                 })
             }).cloned().collect::<Vec<_>>()
         });
+
+        tracing::debug!("Laying out {} windows", windows.len());
 
         Layout::master_stack(self, windows, crate::layout::Direction::Left);
     }

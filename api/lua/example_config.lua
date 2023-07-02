@@ -39,6 +39,16 @@ require("pinnacle").setup(function(pinnacle)
         end)
     end)
 
+    input.keybind({ mod_key }, keys.l, function()
+        process.spawn("kitty")
+    end)
+    input.keybind({ mod_key }, keys.k, function()
+        process.spawn("foot")
+    end)
+    input.keybind({ mod_key }, keys.j, function()
+        process.spawn("nautilus")
+    end)
+
     -- Tags ---------------------------------------------------------------------------
     tag.add("1", "2", "3", "4", "5")
     tag.toggle("1")
