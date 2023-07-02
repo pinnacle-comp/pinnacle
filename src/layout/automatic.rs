@@ -26,7 +26,6 @@ impl Layout {
         windows.retain(|win| WindowState::with_state(win, |state| state.floating.is_tiled()));
         match side {
             Direction::Left => {
-                tracing::info!("Laying out windows");
                 let window_count = windows.len();
                 if window_count == 0 {
                     return;
@@ -43,7 +42,6 @@ impl Layout {
                     // TODO: no idea what happens if you spawn a window while no monitors are
                     // |     connected, figure that out
                 };
-                tracing::info!("got output");
                 let output_size = state.space.output_geometry(output).unwrap().size;
                 if window_count == 1 {
                     tracing::debug!("Laying out only window");
@@ -98,7 +96,6 @@ impl Layout {
                             .initial_configure_sent
                     });
                 if initial_configure_sent {
-                    tracing::info!("sending resize thingy first_window");
                     WindowState::with_state(first_window, |state| {
                         state.resize_state = WindowResizeState::WaitingForAck(
                             first_window.toplevel().send_configure(),
@@ -112,15 +109,6 @@ impl Layout {
                 let x = output.current_location().x + output_size.w / 2;
 
                 for (i, win) in windows.enumerate() {
-                    // let (min_size, _max_size) = match win.wl_surface() {
-                    //     Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
-                    //         let data = states.cached_state.current::<SurfaceCachedState>();
-                    //         (data.min_size, data.max_size)
-                    //     }),
-                    //     None => ((0, 0).into(), (0, 0).into()),
-                    // };
-                    // let min_height =
-                    //     i32::max(i32::max(0, win.geometry().loc.y.abs()) + 1, min_size.h);
                     win.toplevel().with_pending_state(|state| {
                         let mut new_size = output_size;
                         new_size.w /= 2;
@@ -151,7 +139,6 @@ impl Layout {
                                 .initial_configure_sent
                         });
                     if initial_configure_sent {
-                        tracing::info!("sending resize thingy");
                         WindowState::with_state(win, |state| {
                             state.resize_state = WindowResizeState::WaitingForAck(
                                 win.toplevel().send_configure(),

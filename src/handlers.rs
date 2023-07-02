@@ -96,8 +96,6 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        tracing::debug!("top of commit");
-
         utils::on_commit_buffer_handler::<Self>(surface);
 
         if !compositor::is_sync_subsurface(surface) {
@@ -118,13 +116,10 @@ impl<B: Backend> CompositorHandler for State<B> {
 
         if let Some(window) = self.window_for_surface(surface) {
             WindowState::with_state(&window, |state| {
-                tracing::debug!("in commit with_state");
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
-                    tracing::debug!("Committing, new location is {new_pos:?}");
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
-                // state.resize_state
             });
         }
     }
@@ -392,8 +387,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
             // |     to cause any send_configures to not trigger a commit. I'm not sure if this is because of
             // |     the way I've implemented things or if it's something else. Because of me
             // |     mapping the element in commit, this means that the window won't reappear on a tag
-            // |     change. The code below is a workaround.
+            // |     change. The code below is a workaround until I can figure it out.
             if !self.space.elements().any(|win| win == &window) {
+                tracing::debug!("remapping window");
                 WindowState::with_state(&window, |state| {
                     if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
                         self.space.map_element(window.clone(), new_loc, false);
