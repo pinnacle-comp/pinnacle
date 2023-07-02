@@ -245,6 +245,12 @@ impl<B: Backend> State<B> {
                             .get(&(modifier_mask.into(), raw_sym))
                         {
                             return FilterResult::Intercept(*callback_id);
+                        } else if modifiers.ctrl
+                            && modifiers.shift
+                            && modifiers.alt
+                            && keysym.modified_sym() == keysyms::KEY_Escape
+                        {
+                            return FilterResult::Intercept(CallbackId(999999));
                         }
                     }
 
@@ -267,6 +273,9 @@ impl<B: Backend> State<B> {
         self.move_mode = move_mode;
 
         if let Some(callback_id) = action {
+            if callback_id.0 == 999999 {
+                self.loop_signal.stop();
+            }
             if let Some(stream) = self.api_state.stream.as_ref() {
                 if let Err(err) = crate::api::send_to_client(
                     &mut stream.lock().expect("Could not lock stream mutex"),

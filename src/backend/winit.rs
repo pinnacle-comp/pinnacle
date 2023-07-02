@@ -177,7 +177,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let mut state = State::init(
+    let mut state = State::<WinitData>::init(
         WinitData {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
