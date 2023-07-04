@@ -17,6 +17,7 @@ impl FocusState {
         Default::default()
     }
 
+    // TODO: how does this work with unmapped windows?
     /// Get the currently focused window. If there is none, the previous focus is returned.
     pub fn current_focus(&mut self) -> Option<Window> {
         while let Some(window) = self.focus_stack.last() {

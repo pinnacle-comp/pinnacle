@@ -96,6 +96,8 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        tracing::debug!("commit");
+
         utils::on_commit_buffer_handler::<Self>(surface);
 
         if !compositor::is_sync_subsurface(surface) {
@@ -147,7 +149,7 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
         // println!("initial_configure_sent is {}", initial_configure_sent);
 
         if !initial_configure_sent {
-            tracing::info!("Initial configure");
+            tracing::debug!("Initial configure");
             window.toplevel().send_configure();
         }
         return;
@@ -257,7 +259,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         let windows: Vec<Window> = self.space.elements().cloned().collect();
 
         self.loop_handle.insert_idle(|data| {
-            tracing::info!("Layout master_stack");
+            tracing::debug!("Layout master_stack");
             Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
         });
     }
@@ -389,11 +391,13 @@ impl<B: Backend> XdgShellHandler for State<B> {
             // |     mapping the element in commit, this means that the window won't reappear on a tag
             // |     change. The code below is a workaround until I can figure it out.
             if !self.space.elements().any(|win| win == &window) {
-                tracing::debug!("remapping window");
                 WindowState::with_state(&window, |state| {
                     if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
-                        self.space.map_element(window.clone(), new_loc, false);
-                        state.resize_state = WindowResizeState::Idle;
+                        tracing::debug!("remapping window");
+                        let win = window.clone();
+                        self.loop_handle.insert_idle(move |data| {
+                            data.state.space.map_element(win, new_loc, false);
+                        });
                     }
                 });
             }
