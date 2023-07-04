@@ -49,6 +49,7 @@ impl Layout {
 
                     window.toplevel().with_pending_state(|tl_state| {
                         tl_state.size = Some(state.space.output_geometry(output).unwrap().size);
+                        tracing::debug!("only size is {:?}", tl_state.size);
                     });
 
                     let initial_configure_sent =
@@ -83,6 +84,7 @@ impl Layout {
                     let mut size = state.space.output_geometry(output).unwrap().size;
                     size.w /= 2;
                     tl_state.size = Some(size);
+                    tracing::debug!("first size is {:?}", tl_state.size);
                 });
 
                 let initial_configure_sent =
@@ -97,6 +99,7 @@ impl Layout {
                     });
                 if initial_configure_sent {
                     WindowState::with_state(first_window, |state| {
+                        tracing::debug!("sending resize state");
                         state.resize_state = WindowResizeState::WaitingForAck(
                             first_window.toplevel().send_configure(),
                             output.current_location(),
@@ -122,6 +125,7 @@ impl Layout {
                         // |     this is set too low.
                         new_size.h = new_size.h.clamp(40, i32::MAX);
                         state.size = Some(new_size);
+                        tracing::debug!("size is {:?}", state.size);
                     });
 
                     let mut new_loc = output.current_location();

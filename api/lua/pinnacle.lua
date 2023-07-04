@@ -99,6 +99,8 @@ function pinnacle.setup(config_func)
         local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
         assert(msg_len_bytes)
 
+        -- TODO: break here if error in read_exact
+
         ---@type integer
         local msg_len = string.unpack("=I4", msg_len_bytes)
 

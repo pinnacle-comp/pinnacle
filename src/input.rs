@@ -263,10 +263,8 @@ impl<B: Backend> State<B> {
                                 move_mode = false;
                             }
                         }
-                        FilterResult::Forward
-                    } else {
-                        FilterResult::Forward
                     }
+                    FilterResult::Forward
                 },
             );
 
