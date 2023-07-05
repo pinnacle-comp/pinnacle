@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashSet};
 
 use smithay::output::Output;
 
@@ -12,7 +12,7 @@ use crate::tag::TagId;
 
 #[derive(Default)]
 pub struct OutputState {
-    pub focused_tags: HashMap<TagId, bool>,
+    pub focused_tags: HashSet<TagId>,
 }
 
 impl OutputState {

@@ -47,7 +47,7 @@ use smithay::{
 };
 
 use crate::{
-    layout::{Direction, Layout},
+    layout::{Direction, Layouts},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
     state::{CalloopData, State},
 };
@@ -220,7 +220,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                         None,
                     );
-                    Layout::master_stack(
+                    Layouts::master_stack(
                         state,
                         state.space.elements().cloned().collect(),
                         Direction::Left,

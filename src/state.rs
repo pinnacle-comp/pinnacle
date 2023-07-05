@@ -18,9 +18,8 @@ use crate::{
         msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestResponse},
         PinnacleSocketSource,
     },
-    backend::{udev::UdevData, winit::WinitData},
     focus::FocusState,
-    layout::Layout,
+    layout::{Layout, LayoutVec},
     output::OutputState,
     tag::{Tag, TagState},
     window::{window_state::WindowState, WindowProperties},
@@ -179,16 +178,13 @@ impl<B: Backend> State<B> {
             Msg::ToggleTag { tag_id } => {
                 OutputState::with(
                     self.focus_state.focused_output.as_ref().unwrap(), // TODO: handle error
-                    |state| match state.focused_tags.get_mut(&tag_id) {
-                        Some(id) => {
-                            *id = !*id;
-                            tracing::debug!(
-                                "toggled tag {tag_id:?} {}",
-                                if *id { "on" } else { "off" }
-                            );
-                        }
-                        None => {
-                            state.focused_tags.insert(tag_id.clone(), true);
+                    |state| {
+                        let should_remove = state.focused_tags.get(&tag_id).is_some();
+                        if should_remove {
+                            state.focused_tags.remove(&tag_id);
+                            tracing::debug!("toggled tag {tag_id:?} off");
+                        } else {
+                            state.focused_tags.insert(tag_id.clone());
                             tracing::debug!("toggled tag {tag_id:?} on");
                         }
                     },
@@ -198,24 +194,26 @@ impl<B: Backend> State<B> {
             }
             Msg::SwitchToTag { tag_id } => {
                 OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
-                    for (_, active) in state.focused_tags.iter_mut() {
-                        *active = false;
-                    }
-                    if let Some(active) = state.focused_tags.get_mut(&tag_id) {
-                        *active = true;
-                    } else {
-                        state.focused_tags.insert(tag_id.clone(), true);
-                    }
+                    state.focused_tags.clear();
+                    state.focused_tags.insert(tag_id.clone());
                     tracing::debug!("focused tags: {:?}", state.focused_tags);
                 });
 
                 self.re_layout();
             }
             Msg::AddTags { tags } => {
-                self.tag_state.tags.extend(tags.into_iter().map(|tag| Tag {
-                    id: tag,
-                    windows: vec![],
-                }));
+                if let Some(output) = self
+                    .focus_state
+                    .focused_output
+                    .as_ref()
+                    .or_else(|| self.space.outputs().next())
+                {
+                    self.tag_state.tags.extend(tags.into_iter().map(|tag| Tag {
+                        id: tag,
+                        windows: vec![],
+                        output: output.clone(),
+                    }));
+                }
             }
             Msg::RemoveTags { tags } => {
                 self.tag_state.tags.retain(|tag| !tags.contains(&tag.id));
@@ -473,12 +471,12 @@ impl<B: Backend> State<B> {
     }
 
     pub fn re_layout(&mut self) {
-        let windows =
+        let mut windows =
             OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
                 for window in self.space.elements().cloned().collect::<Vec<_>>() {
                     let should_render = WindowState::with_state(&window, |win_state| {
                         for tag_id in win_state.tags.iter() {
-                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                            if state.focused_tags.get(tag_id).is_some() {
                                 return true;
                             }
                         }
@@ -494,7 +492,7 @@ impl<B: Backend> State<B> {
                     .filter(|&win| {
                         WindowState::with_state(win, |win_state| {
                             for tag_id in win_state.tags.iter() {
-                                if *state.focused_tags.get(tag_id).unwrap_or(&false) {
+                                if state.focused_tags.get(tag_id).is_some() {
                                     return true;
                                 }
                             }
@@ -507,168 +505,21 @@ impl<B: Backend> State<B> {
 
         tracing::debug!("Laying out {} windows", windows.len());
 
-        Layout::master_stack(self, windows, crate::layout::Direction::Left);
+        windows.as_master_stack().layout(
+            &self.space,
+            self.focus_state.focused_output.as_ref().unwrap(),
+        );
+
+        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
     }
 }
 
-impl State<WinitData> {
-    /// Create the main [`State`].
-    ///
-    /// This will set the WAYLAND_DISPLAY environment variable, insert Wayland necessary sources
-    /// into the event loop, and run an implementation of the config API (currently Lua).
+impl<B: Backend> State<B> {
     pub fn init(
-        backend_data: WinitData,
+        backend_data: B,
         display: &mut Display<Self>,
         loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData<WinitData>>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let socket = ListeningSocketSource::new_auto()?;
-        let socket_name = socket.socket_name().to_os_string();
-
-        std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
-
-        // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
-        // example. Because of this, opening up only around 100 processes would exhaust the file
-        // descriptor limit on my system (Arch btw) and cause a "Too many open files" crash.
-        //
-        // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
-        // environment, I *think* this is ok.
-        if let Err(err) = smithay::reexports::nix::sys::resource::setrlimit(
-            smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
-            65536,
-            65536 * 2,
-        ) {
-            tracing::error!("Could not raise fd limit: errno {err}");
-        }
-
-        loop_handle.insert_source(socket, |stream, _metadata, data| {
-            data.display
-                .handle()
-                .insert_client(stream, Arc::new(ClientState::default()))
-                .expect("Could not insert client into loop handle");
-        })?;
-
-        loop_handle.insert_source(
-            Generic::new(
-                display.backend().poll_fd().as_raw_fd(),
-                Interest::READ,
-                Mode::Level,
-            ),
-            |_readiness, _metadata, data| {
-                data.display.dispatch_clients(&mut data.state)?;
-                Ok(PostAction::Continue)
-            },
-        )?;
-
-        let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
-        loop_handle.insert_source(rx_channel, |msg, _, data| match msg {
-            Event::Msg(msg) => data.state.handle_msg(msg),
-            Event::Closed => todo!(),
-        })?;
-
-        // We want to replace the client if a new one pops up
-        // TODO: there should only ever be one client working at a time, and creating a new client
-        // |     when one is already running should be impossible.
-        // INFO: this source try_clone()s the stream
-        loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
-            if let Some(old_stream) = data
-                .state
-                .api_state
-                .stream
-                .replace(Arc::new(Mutex::new(stream)))
-            {
-                old_stream
-                    .lock()
-                    .expect("Couldn't lock old stream")
-                    .shutdown(std::net::Shutdown::Both)
-                    .expect("Couldn't shutdown old stream");
-            }
-        })?;
-
-        let (executor, sched) =
-            calloop::futures::executor::<()>().expect("Couldn't create executor");
-        loop_handle.insert_source(executor, |_, _, _| {})?;
-
-        // TODO: move all this into the lua api
-        let config_path = std::env::var("PINNACLE_CONFIG").unwrap_or_else(|_| {
-            let mut default_path =
-                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
-            default_path.push_str("/pinnacle/init.lua");
-            default_path
-        });
-
-        if Path::new(&config_path).exists() {
-            let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
-            let mut local_lua_path = std::env::current_dir()
-                .expect("Couldn't get current dir")
-                .to_string_lossy()
-                .to_string();
-            local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
-            let new_lua_path =
-            format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
-
-            let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
-            let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
-
-            std::process::Command::new("lua5.4")
-                .arg(config_path)
-                .env("LUA_PATH", new_lua_path)
-                .env("LUA_CPATH", new_lua_cpath)
-                .spawn()
-                .expect("Could not start config process");
-        } else {
-            tracing::error!("Could not find {}", config_path);
-        }
-
-        let display_handle = display.handle();
-        let mut seat_state = SeatState::new();
-        let mut seat = seat_state.new_wl_seat(&display_handle, backend_data.seat_name());
-        seat.add_pointer();
-        seat.add_keyboard(XkbConfig::default(), 200, 25)?;
-
-        Ok(Self {
-            backend_data,
-            loop_signal,
-            loop_handle,
-            clock: Clock::<Monotonic>::new()?,
-            compositor_state: CompositorState::new::<Self>(&display_handle),
-            data_device_state: DataDeviceState::new::<Self>(&display_handle),
-            seat_state,
-            pointer_location: (0.0, 0.0).into(),
-            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
-            space: Space::<Window>::default(),
-            cursor_status: CursorImageStatus::Default,
-            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
-            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
-            viewporter_state: ViewporterState::new::<Self>(&display_handle),
-            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
-                &display_handle,
-            ),
-            input_state: InputState::new(),
-            api_state: ApiState::new(),
-            focus_state: FocusState::new(),
-            tag_state: TagState::new(),
-
-            seat,
-
-            move_mode: false,
-            socket_name: socket_name.to_string_lossy().to_string(),
-
-            popup_manager: PopupManager::default(),
-
-            async_scheduler: sched,
-
-            windows: vec![],
-        })
-    }
-}
-
-impl State<UdevData> {
-    pub fn init(
-        backend_data: UdevData,
-        display: &mut Display<Self>,
-        loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData<UdevData>>,
+        loop_handle: LoopHandle<'static, CalloopData<B>>,
     ) -> Result<Self, Box<dyn Error>> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();

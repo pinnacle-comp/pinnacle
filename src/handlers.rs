@@ -47,7 +47,7 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    layout::Layout,
+    layout::{Layout, LayoutVec},
     output::OutputState,
     state::{ClientState, State},
     window::window_state::{WindowResizeState, WindowState},
@@ -96,7 +96,7 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        tracing::debug!("commit");
+        // tracing::debug!("commit");
 
         utils::on_commit_buffer_handler::<Self>(surface);
 
@@ -228,12 +228,16 @@ impl<B: Backend> XdgShellHandler for State<B> {
         WindowState::with_state(&window, |state| {
             state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
                 OutputState::with(focused_output, |state| {
-                    state
-                        .focused_tags
-                        .iter()
-                        .filter_map(|(id, active)| active.then_some(id.clone()))
-                        .collect()
-                })
+                    let output_tags: Vec<crate::tag::TagId> =
+                        state.focused_tags.iter().cloned().collect();
+                    if !output_tags.is_empty() {
+                        output_tags
+                    } else if let Some(first_tag) = self.tag_state.tags.first() {
+                        vec![first_tag.id.clone()]
+                    } else {
+                        vec![]
+                    }
+                }) // TODO: repetition
             } else if let Some(first_tag) = self.tag_state.tags.first() {
                 vec![first_tag.id.clone()]
             } else {
@@ -244,6 +248,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
         self.windows.push(window.clone());
         self.space.map_element(window.clone(), (0, 0), true);
+        let clone = window.clone();
         self.loop_handle.insert_idle(move |data| {
             data.state
                 .seat
@@ -251,25 +256,61 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     &mut data.state,
-                    Some(window.toplevel().wl_surface().clone()),
+                    Some(clone.toplevel().wl_surface().clone()),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
 
-        let windows: Vec<Window> = self.space.elements().cloned().collect();
-
-        self.loop_handle.insert_idle(|data| {
-            tracing::debug!("Layout master_stack");
-            Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
+        self.loop_handle.insert_idle(move |data| {
+            if let Some(focused_output) = &data.state.focus_state.focused_output {
+                OutputState::with(focused_output, |state| {
+                    if let Some(id) = state.focused_tags.iter().next() {
+                        // TODO: make it work with more than one active tag
+                        let tag = data
+                            .state
+                            .tag_state
+                            .tags
+                            .iter_mut()
+                            .find(|tag| &tag.id == id)
+                            .unwrap();
+                        tag.windows.as_master_stack().add(
+                            &data.state.space,
+                            focused_output,
+                            window.clone(),
+                        );
+                    }
+                });
+            }
         });
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
+        let window = self
+            .windows
+            .iter()
+            .find(|&win| win.toplevel() == &surface)
+            .unwrap();
+        if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
+            OutputState::with(focused_output, |state| {
+                if let Some(id) = state.focused_tags.iter().next() {
+                    // TODO: make it work with more than one active tag
+                    let tag = self
+                        .tag_state
+                        .tags
+                        .iter_mut()
+                        .find(|tag| &tag.id == id)
+                        .unwrap();
+                    tag.windows
+                        .as_master_stack()
+                        .remove(&self.space, focused_output, window);
+                }
+            });
+        }
         self.windows.retain(|window| window.toplevel() != &surface);
-        let mut windows: Vec<Window> = self.space.elements().cloned().collect();
-        windows.retain(|window| window.toplevel() != &surface);
-        Layout::master_stack(self, windows, crate::layout::Direction::Left);
+        // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
+        // windows.retain(|window| window.toplevel() != &surface);
+        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
         let focus = self
             .focus_state
             .current_focus()

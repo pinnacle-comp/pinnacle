@@ -15,9 +15,9 @@ use crate::{
     window::window_state::{WindowResizeState, WindowState},
 };
 
-use super::{Direction, Layout};
+use super::{Direction, Layouts};
 
-impl Layout {
+impl Layouts {
     pub fn master_stack<B: Backend>(
         state: &mut State<B>,
         mut windows: Vec<Window>,

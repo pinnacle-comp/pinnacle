@@ -4,7 +4,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use smithay::desktop::Window;
+use smithay::{desktop::Window, output::Output};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TagId(String);
@@ -13,6 +13,7 @@ pub struct TagId(String);
 pub struct Tag {
     pub id: TagId,
     pub windows: Vec<Window>,
+    pub output: Output,
     // TODO: layout
 }
 

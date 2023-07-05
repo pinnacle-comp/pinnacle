@@ -13,7 +13,7 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend, layout::Layout, state::State, window::window_state::WindowResizeState,
+    backend::Backend, layout::Layouts, state::State, window::window_state::WindowResizeState,
 };
 
 use self::window_state::{Float, WindowId, WindowState};
@@ -120,7 +120,7 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     });
 
     let windows = state.space.elements().cloned().collect::<Vec<_>>();
-    Layout::master_stack(state, windows, crate::layout::Direction::Left);
+    Layouts::master_stack(state, windows, crate::layout::Direction::Left);
     state.space.raise_element(window, true);
 }
 
