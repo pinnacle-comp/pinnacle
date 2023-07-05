@@ -247,7 +247,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         });
 
         self.windows.push(window.clone());
-        self.space.map_element(window.clone(), (0, 0), true);
+        // self.space.map_element(window.clone(), (0, 0), true);
         let clone = window.clone();
         self.loop_handle.insert_idle(move |data| {
             data.state
@@ -264,20 +264,25 @@ impl<B: Backend> XdgShellHandler for State<B> {
         self.loop_handle.insert_idle(move |data| {
             if let Some(focused_output) = &data.state.focus_state.focused_output {
                 OutputState::with(focused_output, |state| {
-                    if let Some(id) = state.focused_tags.iter().next() {
-                        // TODO: make it work with more than one active tag
-                        let tag = data
-                            .state
-                            .tag_state
-                            .tags
-                            .iter_mut()
-                            .find(|tag| &tag.id == id)
-                            .unwrap();
-                        tag.windows.as_master_stack().add(
-                            &data.state.space,
-                            focused_output,
-                            window.clone(),
-                        );
+                    let window = window.clone();
+                    let mut tags = data
+                        .state
+                        .tag_state
+                        .tags
+                        .iter_mut()
+                        .filter(|tg| state.focused_tags.contains(&tg.id));
+
+                    if let Some(first) = tags.next() {
+                        let mut layout = first.windows.as_master_stack();
+
+                        for tg in tags {
+                            layout = layout.chain_with(&mut tg.windows);
+                        }
+
+                        layout.add(&data.state.space, focused_output, window);
+                    }
+                    for tag in data.state.tag_state.tags.iter() {
+                        tracing::debug!("tag {:?}, {}", tag.id, tag.windows.len());
                     }
                 });
             }
@@ -293,20 +298,36 @@ impl<B: Backend> XdgShellHandler for State<B> {
             .unwrap();
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
             OutputState::with(focused_output, |state| {
-                if let Some(id) = state.focused_tags.iter().next() {
-                    // TODO: make it work with more than one active tag
-                    let tag = self
-                        .tag_state
-                        .tags
-                        .iter_mut()
-                        .find(|tag| &tag.id == id)
-                        .unwrap();
-                    tag.windows
-                        .as_master_stack()
-                        .remove(&self.space, focused_output, window);
+                let mut tags = self
+                    .tag_state
+                    .tags
+                    .iter_mut()
+                    .filter(|tg| state.focused_tags.contains(&tg.id));
+
+                if let Some(first) = tags.next() {
+                    tracing::debug!("first tag: {:?}", first.id);
+                    let mut layout = first.windows.as_master_stack();
+
+                    for tg in tags {
+                        tracing::debug!("tag: {:?}", tg.id);
+                        layout = layout.chain_with(&mut tg.windows);
+                    }
+
+                    // This will only remove the window from focused tags...
+                    layout.remove(&self.space, focused_output, window);
+                }
+
+                // ...so here we remove the window from any tag that isn't focused
+                for tag in self.tag_state.tags.iter_mut() {
+                    tag.windows.retain(|el| el != window);
                 }
             });
         }
+
+        for tag in self.tag_state.tags.iter() {
+            tracing::debug!("tag {:?}, {}", tag.id, tag.windows.len());
+        }
+
         self.windows.retain(|window| window.toplevel() != &surface);
         // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         // windows.retain(|window| window.toplevel() != &surface);

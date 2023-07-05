@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use itertools::Itertools;
 use smithay::{
     desktop::{space::SpaceElement, Space, Window},
     output::Output,
@@ -25,10 +26,10 @@ pub enum Direction {
 }
 
 pub struct MasterStack<'a, S: SpaceElement> {
-    inner: &'a mut Vec<S>,
+    inner: Vec<&'a mut Vec<S>>,
 }
 
-pub trait Layout<S: SpaceElement> {
+pub trait Layout<'a, S: SpaceElement> {
     /// Add a [`SpaceElement`] to this layout and update positions.
     fn add(&mut self, space: &Space<S>, output: &Output, elem: S);
     /// Remove a [`SpaceElement`] from this layout and update positions.
@@ -40,15 +41,21 @@ pub trait Layout<S: SpaceElement> {
 
     /// Perform a full layout with all elements. Use this when you are switching from another layout.
     fn layout(&self, space: &Space<S>, output: &Output);
+
+    fn chain_with(self, vec: &'a mut Vec<S>) -> Self;
 }
 
-impl<S: SpaceElement + Eq> MasterStack<'_, S> {
-    pub fn master(&self) -> Option<&S> {
-        self.inner.first()
+impl MasterStack<'_, Window> {
+    pub fn master(&self) -> Option<&Window> {
+        self.inner.iter().flat_map(|vec| vec.iter()).next()
     }
 
-    pub fn stack(&self) -> impl Iterator<Item = &S> {
-        self.inner.iter().skip(1)
+    pub fn stack(&self) -> impl Iterator<Item = &Window> {
+        self.inner
+            .iter()
+            .flat_map(|vec| vec.iter())
+            .unique()
+            .skip(1)
     }
 }
 
@@ -104,9 +111,11 @@ pub fn swap_window_positions(space: &Space<Window>, win1: &Window, win2: &Window
     });
 }
 
-impl Layout<Window> for MasterStack<'_, Window> {
+impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
     fn add(&mut self, space: &Space<Window>, output: &Output, elem: Window) {
-        self.inner.push(elem);
+        for vec in self.inner.iter_mut() {
+            vec.push(elem.clone());
+        }
 
         if self.stack().count() == 0 {
             let Some(master) = self.master() else { unreachable!() };
@@ -147,7 +156,9 @@ impl Layout<Window> for MasterStack<'_, Window> {
     }
 
     fn remove(&mut self, space: &Space<Window>, output: &Output, elem: &Window) {
-        self.inner.retain(|el| el != elem);
+        for vec in self.inner.iter_mut() {
+            vec.retain(|el| el != elem);
+        }
 
         let Some(master) = self.master() else { return };
 
@@ -173,7 +184,7 @@ impl Layout<Window> for MasterStack<'_, Window> {
     }
 
     fn swap(&mut self, space: &Space<Window>, elem1: &Window, elem2: &Window) {
-        let mut elems = self.inner.iter_mut();
+        let mut elems = self.inner.iter_mut().flat_map(|vec| vec.iter_mut());
         let first = elems.find(|elem| *elem == elem1);
         let second = elems.find(|elem| *elem == elem2);
         if let Some(first) = first {
@@ -223,6 +234,12 @@ impl Layout<Window> for MasterStack<'_, Window> {
             self.layout_stack(space, output);
         }
     }
+
+    /// Chain another tag's windows to this one to be layed out.
+    fn chain_with(mut self, vec: &'a mut Vec<Window>) -> Self {
+        self.inner.push(vec);
+        self
+    }
 }
 
 pub trait LayoutVec<S: SpaceElement> {
@@ -233,6 +250,6 @@ pub trait LayoutVec<S: SpaceElement> {
 
 impl<S: SpaceElement> LayoutVec<S> for Vec<S> {
     fn as_master_stack(&mut self) -> MasterStack<S> {
-        MasterStack { inner: self }
+        MasterStack { inner: vec![self] }
     }
 }
