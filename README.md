@@ -23,6 +23,7 @@ Cool stuff happens on the dev branch sometimes, check it out!
 - [ ] Layout system
 - [ ] Server-side decorations
 - [ ] The other stuff Awesome has
+- [ ] XWayland support
 - [x] Is very cool :thumbsup:
 
 ## Info
