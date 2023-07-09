@@ -21,8 +21,6 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    layout::{Layout, LayoutVec},
-    output::OutputState,
     state::State,
     window::window_state::{WindowResizeState, WindowState},
 };
@@ -93,25 +91,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                // data.swap_window_positions(&self.window, &window_under);
-                let output = data.focus_state.focused_output.as_ref().unwrap();
-                OutputState::with(output, |state| {
-                    let mut tags = data
-                        .tag_state
-                        .tags
-                        .iter_mut()
-                        .filter(|tg| state.tags.contains(&tg.id));
-
-                    if let Some(first) = tags.next() {
-                        let mut layout = first.windows.as_master_stack();
-
-                        for tg in tags {
-                            layout = layout.chain_with(&mut tg.windows);
-                        }
-
-                        layout.swap(&data.space, &self.window, &window_under);
-                    }
-                })
+                data.swap_window_positions(&self.window, &window_under);
             }
         } else {
             let delta = event.location - self.start_data.location;

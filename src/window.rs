@@ -14,7 +14,7 @@ use smithay::{
 
 use crate::{backend::Backend, state::State};
 
-use self::window_state::{Float, WindowId, WindowState};
+use self::window_state::{CommitState, Float, WindowId, WindowState};
 
 pub mod window_state;
 
@@ -86,7 +86,12 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     });
 
     state.re_layout();
-    state.space.raise_element(window, true);
+
+    // FIXME: every window gets mapped after this raise in `commit`, making this useless
+    WindowState::with(window, |state| {
+        state.needs_raise = CommitState::RequestReceived(window.toplevel().send_configure());
+    });
+    // state.space.raise_element(window, true);
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

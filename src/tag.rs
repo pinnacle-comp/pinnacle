@@ -4,26 +4,44 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use smithay::{desktop::Window, output::Output};
+use std::{
+    hash::Hash,
+    sync::atomic::{AtomicU32, Ordering},
+};
+
+use smithay::output::Output;
+
+static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
-pub struct TagId(String);
+pub struct TagId(u32);
+
+impl TagId {
+    fn next() -> Self {
+        Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 #[derive(Debug)]
 pub struct Tag {
+    /// The internal id of this tag.
     pub id: TagId,
-    pub windows: Vec<Window>,
+    /// The name of this tag.
+    pub name: String,
+    /// The output that this tag should be on.
     pub output: Output,
+    /// Whether this tag is active or not.
+    pub active: bool,
     // TODO: layout
 }
 
-#[derive(Debug, Default)]
-pub struct TagState {
-    pub tags: Vec<Tag>,
-}
-
-impl TagState {
-    pub fn new() -> Self {
-        Default::default()
+impl Tag {
+    pub fn new(name: String, output: Output) -> Self {
+        Self {
+            id: TagId::next(),
+            name,
+            output,
+            active: false,
+        }
     }
 }

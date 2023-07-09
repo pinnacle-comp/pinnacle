@@ -50,7 +50,7 @@ use crate::{
     layout::{Layout, LayoutVec},
     output::OutputState,
     state::{ClientState, State},
-    window::window_state::{WindowResizeState, WindowState},
+    window::window_state::{CommitState, WindowResizeState, WindowState},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -121,6 +121,17 @@ impl<B: Backend> CompositorHandler for State<B> {
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
+                }
+
+                if let CommitState::Acked = state.needs_raise {
+                    let clone = window.clone();
+
+                    // FIXME: happens before the other windows ack, so it's useless
+                    self.loop_handle.insert_idle(move |data| {
+                        tracing::debug!("raising window");
+                        data.state.space.raise_element(&clone, true);
+                    });
+                    state.needs_raise = CommitState::Idle;
                 }
             });
         }
@@ -226,28 +237,31 @@ impl<B: Backend> XdgShellHandler for State<B> {
         let window = Window::new(surface);
 
         WindowState::with(&window, |state| {
-            state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
-                OutputState::with(focused_output, |state| {
-                    let output_tags: Vec<crate::tag::TagId> = state.tags.iter().cloned().collect();
+            state.tags = match (
+                &self.focus_state.focused_output,
+                self.space.outputs().next(),
+            ) {
+                (Some(output), _) | (None, Some(output)) => OutputState::with(output, |state| {
+                    let output_tags = state
+                        .focused_tags()
+                        .map(|tag| tag.id.clone())
+                        .collect::<Vec<_>>();
                     if !output_tags.is_empty() {
                         output_tags
-                    } else if let Some(first_tag) = self.tag_state.tags.first() {
+                    } else if let Some(first_tag) = state.tags.first() {
                         vec![first_tag.id.clone()]
                     } else {
                         vec![]
                     }
-                }) // TODO: repetition
-            } else if let Some(first_tag) = self.tag_state.tags.first() {
-                vec![first_tag.id.clone()]
-            } else {
-                vec![]
+                }),
+                (None, None) => vec![],
             };
+
             tracing::debug!("new window, tags are {:?}", state.tags);
         });
 
         self.windows.push(window.clone());
         // self.space.map_element(window.clone(), (0, 0), true);
-        let clone = window.clone();
         self.loop_handle.insert_idle(move |data| {
             data.state
                 .seat
@@ -255,7 +269,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     &mut data.state,
-                    Some(clone.toplevel().wl_surface().clone()),
+                    Some(window.toplevel().wl_surface().clone()),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
@@ -263,26 +277,10 @@ impl<B: Backend> XdgShellHandler for State<B> {
         self.loop_handle.insert_idle(move |data| {
             if let Some(focused_output) = &data.state.focus_state.focused_output {
                 OutputState::with(focused_output, |state| {
-                    let window = window.clone();
-                    let mut tags = data
-                        .state
-                        .tag_state
-                        .tags
-                        .iter_mut()
-                        .filter(|tg| state.tags.contains(&tg.id));
-
-                    if let Some(first) = tags.next() {
-                        let mut layout = first.windows.as_master_stack();
-
-                        for tg in tags {
-                            layout = layout.chain_with(&mut tg.windows);
-                        }
-
-                        layout.add(&data.state.space, focused_output, window);
-                    }
-                    for tag in data.state.tag_state.tags.iter() {
-                        tracing::debug!("tag {:?}, {}", tag.id, tag.windows.len());
-                    }
+                    data.state
+                        .windows
+                        .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                        .layout(&data.state.space, focused_output);
                 });
             }
         });
@@ -290,44 +288,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
-        let window = self
-            .windows
-            .iter()
-            .find(|&win| win.toplevel() == &surface)
-            .unwrap();
+        self.windows.retain(|window| window.toplevel() != &surface);
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
             OutputState::with(focused_output, |state| {
-                let mut tags = self
-                    .tag_state
-                    .tags
-                    .iter_mut()
-                    .filter(|tg| state.tags.contains(&tg.id));
-
-                if let Some(first) = tags.next() {
-                    tracing::debug!("first tag: {:?}", first.id);
-                    let mut layout = first.windows.as_master_stack();
-
-                    for tg in tags {
-                        tracing::debug!("tag: {:?}", tg.id);
-                        layout = layout.chain_with(&mut tg.windows);
-                    }
-
-                    // This will only remove the window from focused tags...
-                    layout.remove(&self.space, focused_output, window);
-                }
-
-                // ...so here we remove the window from any tag that isn't focused
-                for tag in self.tag_state.tags.iter_mut() {
-                    tag.windows.retain(|el| el != window);
-                }
+                self.windows
+                    .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                    .layout(&self.space, focused_output);
             });
         }
 
-        for tag in self.tag_state.tags.iter() {
-            tracing::debug!("tag {:?}, {}", tag.id, tag.windows.len());
-        }
-
-        self.windows.retain(|window| window.toplevel() != &surface);
         // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         // windows.retain(|window| window.toplevel() != &surface);
         // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
@@ -442,6 +411,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
                         }
                         Configure::Popup(_) => todo!(),
                     }
+                }
+                if let CommitState::RequestReceived(_serial) = state.needs_raise {
+                    state.needs_raise = CommitState::Acked;
                 }
             });
 

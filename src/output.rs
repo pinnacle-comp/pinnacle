@@ -4,15 +4,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{cell::RefCell, collections::HashSet};
+use std::cell::RefCell;
 
 use smithay::output::Output;
 
-use crate::tag::TagId;
+use crate::tag::Tag;
 
 #[derive(Default)]
 pub struct OutputState {
-    pub tags: HashSet<TagId>,
+    pub tags: Vec<Tag>,
+}
+
+impl OutputState {
+    pub fn focused_tags(&mut self) -> impl Iterator<Item = &mut Tag> {
+        self.tags.iter_mut().filter(|tag| tag.active)
+    }
 }
 
 impl OutputState {
@@ -24,10 +30,10 @@ impl OutputState {
             .user_data()
             .insert_if_missing(RefCell::<Self>::default);
 
-        let state = output
+        let mut state = output
             .user_data()
             .get::<RefCell<Self>>()
-            .expect("RefCell doesn't exist in data map (This should NEVER happen. If you see this, something oofed big-time.)");
+            .expect("RefCell not in data map");
 
         func(&mut state.borrow_mut())
     }

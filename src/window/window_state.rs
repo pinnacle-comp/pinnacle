@@ -14,7 +14,7 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use crate::tag::{Tag, TagId, TagState};
+use crate::tag::TagId;
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
@@ -37,15 +37,15 @@ pub struct WindowState {
     pub resize_state: WindowResizeState,
     /// What tags the window is currently on.
     pub tags: Vec<TagId>,
+
+    // FIXME: this is a bandaid to get floating working again, figure out an actual solution
+    pub needs_raise: CommitState,
 }
 
-/// Returns a vec of references to all the tags the window is on.
-pub fn tags<'a>(tag_state: &'a TagState, window: &Window) -> Vec<&'a Tag> {
-    tag_state
-        .tags
-        .iter()
-        .filter(|&tag| WindowState::with(window, |state| state.tags.contains(&tag.id)))
-        .collect()
+pub enum CommitState {
+    Idle,
+    RequestReceived(Serial),
+    Acked,
 }
 
 /// The state of a window's resize operation.
@@ -142,6 +142,7 @@ impl Default for WindowState {
             floating: Float::Tiled(None),
             resize_state: WindowResizeState::Idle,
             tags: vec![],
+            needs_raise: CommitState::Idle,
         }
     }
 }
