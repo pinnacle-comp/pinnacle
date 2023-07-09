@@ -12,7 +12,7 @@ use crate::tag::TagId;
 
 #[derive(Default)]
 pub struct OutputState {
-    pub focused_tags: HashSet<TagId>,
+    pub tags: HashSet<TagId>,
 }
 
 impl OutputState {

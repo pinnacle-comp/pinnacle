@@ -9,14 +9,10 @@ use smithay::{
     desktop::{space::SpaceElement, Space, Window},
     output::Output,
     utils::{Logical, Size},
+    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 
 use crate::window::window_state::{WindowResizeState, WindowState};
-
-pub mod automatic;
-pub mod manual;
-
-pub struct Layouts;
 
 pub enum Direction {
     Left,
@@ -75,7 +71,7 @@ impl MasterStack<'_, Window> {
                 state.size = Some((output_geo.size.w / 2, height).into());
             });
 
-            WindowState::with_state(win, |state| {
+            WindowState::with(win, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     win.toplevel().send_configure(),
                     (output_geo.size.w / 2, i as i32 * height).into(),
@@ -101,12 +97,12 @@ pub fn swap_window_positions(space: &Space<Window>, win1: &Window, win2: &Window
     });
 
     let serial = win1.toplevel().send_configure();
-    WindowState::with_state(win1, |state| {
+    WindowState::with(win1, |state| {
         state.resize_state = WindowResizeState::WaitingForAck(serial, win2_loc);
     });
 
     let serial = win2.toplevel().send_configure();
-    WindowState::with_state(win2, |state| {
+    WindowState::with(win2, |state| {
         state.resize_state = WindowResizeState::WaitingForAck(serial, win1_loc);
     });
 }
@@ -127,7 +123,7 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
                 state.size = Some(output_geo.size);
             });
 
-            WindowState::with_state(master, |state| {
+            WindowState::with(master, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
                     (0, 0).into(),
@@ -143,7 +139,7 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
                 state.size = Some((output_geo.size.w / 2, output_geo.size.h).into());
             });
 
-            WindowState::with_state(master, |state| {
+            WindowState::with(master, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
                     (0, 0).into(),
@@ -172,7 +168,7 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
                 state.size = Some(output_geo.size);
             });
 
-            WindowState::with_state(master, |state| {
+            WindowState::with(master, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
                     (0, 0).into(),
@@ -184,14 +180,45 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
     }
 
     fn swap(&mut self, space: &Space<Window>, elem1: &Window, elem2: &Window) {
-        let mut elems = self.inner.iter_mut().flat_map(|vec| vec.iter_mut());
-        let first = elems.find(|elem| *elem == elem1);
-        let second = elems.find(|elem| *elem == elem2);
+        tracing::debug!("top of swap");
+
+        let mut elems = self
+            .inner
+            .iter_mut()
+            .flat_map(|vec| vec.iter_mut())
+            .filter(|elem| *elem == elem1 || *elem == elem2)
+            .unique_by(|win| WindowState::with(win, |state| state.id));
+
+        let (first, second) = (elems.next(), elems.next());
+
         if let Some(first) = first {
             if let Some(second) = second {
                 std::mem::swap(first, second);
             }
         }
+
+        let wins = self
+            .inner
+            .iter()
+            .map(|vec| {
+                vec.iter()
+                    .enumerate()
+                    .map(|(i, win)| {
+                        compositor::with_states(win.toplevel().wl_surface(), |states| {
+                            let lock = states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData doesn't exist")
+                                .lock()
+                                .expect("Couldn't lock XdgToplevelSurfaceData");
+                            (i, lock.app_id.clone().unwrap_or("".to_string()))
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        tracing::debug!("windows are: {wins:?}");
 
         swap_window_positions(space, elem1, elem2);
     }
@@ -205,6 +232,27 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
             tracing::error!("could not get output geometry");
             return;
         };
+        let wins = self
+            .inner
+            .iter()
+            .map(|vec| {
+                vec.iter()
+                    .enumerate()
+                    .map(|(i, win)| {
+                        compositor::with_states(win.toplevel().wl_surface(), |states| {
+                            let lock = states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData doesn't exist")
+                                .lock()
+                                .expect("Couldn't lock XdgToplevelSurfaceData");
+                            (i, lock.app_id.clone().unwrap_or("".to_string()))
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        tracing::debug!("windows are: {wins:?}");
 
         if self.stack().count() == 0 {
             // one window
@@ -212,7 +260,7 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
                 state.size = Some(output_geo.size);
             });
 
-            WindowState::with_state(master, |state| {
+            WindowState::with(master, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
                     (0, 0).into(),
@@ -224,7 +272,7 @@ impl<'a> Layout<'a, Window> for MasterStack<'a, Window> {
             master.toplevel().with_pending_state(|state| {
                 state.size = Some(new_master_size);
             });
-            WindowState::with_state(master, |state| {
+            WindowState::with(master, |state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
                     (0, 0).into(),

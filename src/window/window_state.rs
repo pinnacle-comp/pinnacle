@@ -16,7 +16,7 @@ use smithay::{
 
 use crate::tag::{Tag, TagId, TagState};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
 
 // TODO: this probably doesn't need to be atomic
@@ -44,7 +44,7 @@ pub fn tags<'a>(tag_state: &'a TagState, window: &Window) -> Vec<&'a Tag> {
     tag_state
         .tags
         .iter()
-        .filter(|&tag| WindowState::with_state(window, |state| state.tags.contains(&tag.id)))
+        .filter(|&tag| WindowState::with(window, |state| state.tags.contains(&tag.id)))
         .collect()
 }
 
@@ -118,7 +118,7 @@ impl WindowState {
     }
 
     /// Access a [Window]'s state, optionally returning something.
-    pub fn with_state<F, T>(window: &Window, mut func: F) -> T
+    pub fn with<F, T>(window: &Window, mut func: F) -> T
     where
         F: FnMut(&mut Self) -> T,
     {

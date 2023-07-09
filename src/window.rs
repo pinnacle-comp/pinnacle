@@ -12,9 +12,7 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus},
 };
 
-use crate::{
-    backend::Backend, layout::Layouts, state::State, window::window_state::WindowResizeState,
-};
+use crate::{backend::Backend, state::State};
 
 use self::window_state::{Float, WindowId, WindowState};
 
@@ -57,43 +55,11 @@ impl<B: Backend> State<B> {
                     .cloned()
             })
     }
-
-    /// Swap the positions and sizes of two windows.
-    pub fn swap_window_positions(&mut self, win1: &Window, win2: &Window) {
-        // FIXME: moving the mouse quickly will break swapping
-
-        let win1_loc = self.space.element_location(win1).unwrap(); // TODO: handle unwraps
-        let win2_loc = self.space.element_location(win2).unwrap();
-        let win1_geo = win1.geometry();
-        let win2_geo = win2.geometry();
-        // tracing::info!("win1: {:?}, {:?}", win1_loc, win1_geo);
-        // tracing::info!("win2: {:?}, {:?}", win2_loc, win2_geo);
-
-        win1.toplevel().with_pending_state(|state| {
-            state.size = Some(win2_geo.size);
-        });
-        win2.toplevel().with_pending_state(|state| {
-            state.size = Some(win1_geo.size);
-        });
-
-        let serial = win1.toplevel().send_configure();
-        WindowState::with_state(win1, |state| {
-            state.resize_state = WindowResizeState::WaitingForAck(serial, win2_loc);
-        });
-
-        let serial = win2.toplevel().send_configure();
-        WindowState::with_state(win2, |state| {
-            state.resize_state = WindowResizeState::WaitingForAck(serial, win1_loc);
-        });
-
-        // self.space.map_element(win1.clone(), win2_loc, false);
-        // self.space.map_element(win2.clone(), win1_loc, false);
-    }
 }
 
 /// Toggle a window's floating status.
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
-    WindowState::with_state(window, |window_state| {
+    WindowState::with(window, |window_state| {
         match window_state.floating {
             Float::Tiled(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {
@@ -119,8 +85,7 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
         }
     });
 
-    let windows = state.space.elements().cloned().collect::<Vec<_>>();
-    Layouts::master_stack(state, windows, crate::layout::Direction::Left);
+    state.re_layout();
     state.space.raise_element(window, true);
 }
 

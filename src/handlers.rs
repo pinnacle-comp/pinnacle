@@ -117,7 +117,7 @@ impl<B: Backend> CompositorHandler for State<B> {
         crate::grab::resize_grab::handle_commit(self, surface);
 
         if let Some(window) = self.window_for_surface(surface) {
-            WindowState::with_state(&window, |state| {
+            WindowState::with(&window, |state| {
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
@@ -225,11 +225,10 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
-        WindowState::with_state(&window, |state| {
+        WindowState::with(&window, |state| {
             state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
                 OutputState::with(focused_output, |state| {
-                    let output_tags: Vec<crate::tag::TagId> =
-                        state.focused_tags.iter().cloned().collect();
+                    let output_tags: Vec<crate::tag::TagId> = state.tags.iter().cloned().collect();
                     if !output_tags.is_empty() {
                         output_tags
                     } else if let Some(first_tag) = self.tag_state.tags.first() {
@@ -270,7 +269,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                         .tag_state
                         .tags
                         .iter_mut()
-                        .filter(|tg| state.focused_tags.contains(&tg.id));
+                        .filter(|tg| state.tags.contains(&tg.id));
 
                     if let Some(first) = tags.next() {
                         let mut layout = first.windows.as_master_stack();
@@ -302,7 +301,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     .tag_state
                     .tags
                     .iter_mut()
-                    .filter(|tg| state.focused_tags.contains(&tg.id));
+                    .filter(|tg| state.tags.contains(&tg.id));
 
                 if let Some(first) = tags.next() {
                     tracing::debug!("first tag: {:?}", first.id);
@@ -429,10 +428,10 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        tracing::debug!("start of ack_configure");
+        // tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
-            tracing::debug!("found window for surface");
-            WindowState::with_state(&window, |state| {
+            // tracing::debug!("found window for surface");
+            WindowState::with(&window, |state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
@@ -453,7 +452,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
             // |     mapping the element in commit, this means that the window won't reappear on a tag
             // |     change. The code below is a workaround until I can figure it out.
             if !self.space.elements().any(|win| win == &window) {
-                WindowState::with_state(&window, |state| {
+                WindowState::with(&window, |state| {
                     if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
                         tracing::debug!("remapping window");
                         let win = window.clone();
