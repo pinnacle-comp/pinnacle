@@ -29,7 +29,6 @@ pub struct MasterStack<S: SpaceElement> {
 }
 
 pub trait Layout<'a, S: SpaceElement> {
-    /// Perform a full layout with all elements. Use this when you are switching from another layout.
     fn layout(&self, space: &Space<S>, output: &Output);
 }
 

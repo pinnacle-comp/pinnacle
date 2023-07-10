@@ -22,7 +22,10 @@ use crate::{
     layout::{Layout, LayoutVec},
     output::OutputState,
     tag::Tag,
-    window::{window_state::WindowState, WindowProperties},
+    window::{
+        window_state::{WindowResizeState, WindowState},
+        WindowProperties,
+    },
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -508,9 +511,12 @@ impl<B: Backend> State<B> {
 
     pub fn re_layout(&mut self) {
         let output = self.focus_state.focused_output.as_ref().unwrap();
-        OutputState::with(output, |state| {
-            for window in self.space.elements().cloned().collect::<Vec<_>>() {
-                let should_render = WindowState::with(&window, |win_state| {
+        let (render, do_not_render) = OutputState::with(output, |state| {
+            self.windows
+                .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                .layout(&self.space, output);
+            self.windows.iter().cloned().partition::<Vec<_>, _>(|win| {
+                WindowState::with(win, |win_state| {
                     if win_state.floating.is_floating() {
                         return true;
                     }
@@ -520,15 +526,42 @@ impl<B: Backend> State<B> {
                         }
                     }
                     false
+                })
+            })
+        });
+        self.schedule_on_commit(render, |data| {
+            for win in do_not_render {
+                data.state.space.unmap_elem(&win);
+            }
+        });
+    }
+
+    /// Schedule something to be done when windows have finished committing and have become
+    /// idle.
+    pub fn schedule_on_commit<F>(&mut self, windows: Vec<Window>, on_commit: F)
+    where
+        F: FnOnce(&mut CalloopData<B>) + 'static,
+    {
+        tracing::debug!("scheduling on_commit");
+        self.loop_handle.insert_idle(|data| {
+            tracing::debug!("running idle cb");
+            tracing::debug!("win len is {}", windows.len());
+            for window in windows.iter() {
+                WindowState::with(window, |state| {
+                    tracing::debug!("win state is {:?}", state.resize_state);
                 });
-                if !should_render {
-                    self.space.unmap_elem(&window);
+                if WindowState::with(window, |state| {
+                    !matches!(state.resize_state, WindowResizeState::Idle)
+                }) {
+                    tracing::debug!("some windows not idle");
+                    data.state.loop_handle.insert_idle(|data| {
+                        data.state.schedule_on_commit(windows, on_commit);
+                    });
+                    return;
                 }
             }
 
-            self.windows
-                .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
-                .layout(&self.space, output);
+            on_commit(data);
         });
     }
 }
