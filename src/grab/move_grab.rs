@@ -21,8 +21,8 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    state::State,
-    window::window_state::{WindowResizeState, WindowState},
+    state::{State, WithState},
+    window::window_state::WindowResizeState,
 };
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
@@ -51,7 +51,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
 
-        let tiled = WindowState::with(&self.window, |state| state.floating.is_tiled());
+        let tiled = self.window.with_state(|state| state.floating.is_tiled());
 
         if tiled {
             // INFO: this is being used instead of space.element_under(event.location) because that
@@ -76,16 +76,14 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                let is_floating =
-                    WindowState::with(&window_under, |state| state.floating.is_floating());
+                let is_floating = window_under.with_state(|state| state.floating.is_floating());
 
                 if is_floating {
                     return;
                 }
 
-                let has_pending_resize = WindowState::with(&window_under, |state| {
-                    !matches!(state.resize_state, WindowResizeState::Idle)
-                });
+                let has_pending_resize = window_under
+                    .with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle));
 
                 if has_pending_resize {
                     return;

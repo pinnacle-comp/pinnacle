@@ -12,9 +12,9 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    state::State,
+    state::{State, WithState},
     tag::TagId,
-    window::window_state::{WindowResizeState, WindowState},
+    window::window_state::WindowResizeState,
 };
 
 pub enum Direction {
@@ -24,12 +24,12 @@ pub enum Direction {
     Bottom,
 }
 
-pub struct MasterStack<S: SpaceElement> {
-    inner: Vec<S>,
+pub trait Layout<S: SpaceElement> {
+    fn layout(&self, space: &Space<S>, output: &Output);
 }
 
-pub trait Layout<'a, S: SpaceElement> {
-    fn layout(&self, space: &Space<S>, output: &Output);
+pub struct MasterStack<S: SpaceElement> {
+    inner: Vec<S>,
 }
 
 impl MasterStack<Window> {
@@ -40,9 +40,7 @@ impl MasterStack<Window> {
     pub fn stack(&self) -> impl Iterator<Item = &Window> {
         self.inner.iter().skip(1)
     }
-}
 
-impl MasterStack<Window> {
     fn layout_stack(&self, space: &Space<Window>, output: &Output) {
         let stack_count = self.stack().count();
 
@@ -58,7 +56,7 @@ impl MasterStack<Window> {
                 state.size = Some((output_geo.size.w / 2, height).into());
             });
 
-            WindowState::with(win, |state| {
+            win.with_state(|state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     win.toplevel().send_configure(),
                     (output_geo.size.w / 2, i as i32 * height).into(),
@@ -66,6 +64,96 @@ impl MasterStack<Window> {
             });
         }
     }
+}
+
+impl Layout<Window> for MasterStack<Window> {
+    fn layout(&self, space: &Space<Window>, output: &Output) {
+        let Some(master) = self.master() else {
+            return;
+        };
+
+        let Some(output_geo) = space.output_geometry(output) else {
+            tracing::error!("could not get output geometry");
+            return;
+        };
+
+        if self.stack().count() == 0 {
+            // one window
+            master.toplevel().with_pending_state(|state| {
+                state.size = Some(output_geo.size);
+            });
+
+            master.with_state(|state| {
+                state.resize_state = WindowResizeState::WaitingForAck(
+                    master.toplevel().send_configure(),
+                    (0, 0).into(),
+                );
+            });
+        } else {
+            let new_master_size: Size<i32, Logical> =
+                (output_geo.size.w / 2, output_geo.size.h).into();
+            master.toplevel().with_pending_state(|state| {
+                state.size = Some(new_master_size);
+            });
+            master.with_state(|state| {
+                state.resize_state = WindowResizeState::WaitingForAck(
+                    master.toplevel().send_configure(),
+                    (0, 0).into(),
+                );
+            });
+
+            self.layout_stack(space, output);
+        }
+    }
+}
+
+pub struct Dwindle<S: SpaceElement> {
+    inner: Vec<S>,
+}
+
+impl Layout<Window> for Dwindle<Window> {
+    fn layout(&self, space: &Space<Window>, output: &Output) {
+        todo!()
+    }
+}
+
+pub trait LayoutVec<S: SpaceElement> {
+    /// Interpret this vec as a master-stack layout.
+    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<S>;
+    fn to_dwindle(&self, tags: Vec<TagId>) -> Dwindle<S>;
+}
+
+impl LayoutVec<Window> for Vec<Window> {
+    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<Window> {
+        MasterStack {
+            inner: filter_windows(self, tags),
+        }
+    }
+
+    fn to_dwindle(&self, tags: Vec<TagId>) -> Dwindle<Window> {
+        Dwindle {
+            inner: filter_windows(self, tags),
+        }
+    }
+}
+
+fn filter_windows(windows: &[Window], tags: Vec<TagId>) -> Vec<Window> {
+    windows
+        .iter()
+        .filter(|window| {
+            window.with_state(|state| {
+                state.floating.is_tiled() && {
+                    for tag_id in state.tags.iter() {
+                        if tags.iter().any(|tag| tag == tag_id) {
+                            return true;
+                        }
+                    }
+                    false
+                }
+            })
+        })
+        .cloned()
+        .collect()
 }
 
 impl<B: Backend> State<B> {
@@ -85,12 +173,12 @@ impl<B: Backend> State<B> {
         });
 
         let serial = win1.toplevel().send_configure();
-        WindowState::with(win1, |state| {
+        win1.with_state(|state| {
             state.resize_state = WindowResizeState::WaitingForAck(serial, win2_loc);
         });
 
         let serial = win2.toplevel().send_configure();
-        WindowState::with(win2, |state| {
+        win2.with_state(|state| {
             state.resize_state = WindowResizeState::WaitingForAck(serial, win1_loc);
         });
 
@@ -105,76 +193,6 @@ impl<B: Backend> State<B> {
             if let Some(second) = second {
                 std::mem::swap(first, second);
             }
-        }
-    }
-}
-
-impl<'a> Layout<'a, Window> for MasterStack<Window> {
-    fn layout(&self, space: &Space<Window>, output: &Output) {
-        let Some(master) = self.master() else {
-            return;
-        };
-
-        let Some(output_geo) = space.output_geometry(output) else {
-            tracing::error!("could not get output geometry");
-            return;
-        };
-
-        if self.stack().count() == 0 {
-            // one window
-            master.toplevel().with_pending_state(|state| {
-                state.size = Some(output_geo.size);
-            });
-
-            WindowState::with(master, |state| {
-                state.resize_state = WindowResizeState::WaitingForAck(
-                    master.toplevel().send_configure(),
-                    (0, 0).into(),
-                );
-            });
-        } else {
-            let new_master_size: Size<i32, Logical> =
-                (output_geo.size.w / 2, output_geo.size.h).into();
-            master.toplevel().with_pending_state(|state| {
-                state.size = Some(new_master_size);
-            });
-            WindowState::with(master, |state| {
-                state.resize_state = WindowResizeState::WaitingForAck(
-                    master.toplevel().send_configure(),
-                    (0, 0).into(),
-                );
-            });
-
-            self.layout_stack(space, output);
-        }
-    }
-}
-
-pub trait LayoutVec<S: SpaceElement> {
-    /// Interpret this vec as a master-stack layout.
-    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<S>;
-    // fn as_binary_tree(&mut self); TODO:
-}
-
-impl LayoutVec<Window> for Vec<Window> {
-    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<Window> {
-        MasterStack {
-            inner: self
-                .iter()
-                .filter(|window| {
-                    WindowState::with(window, |state| {
-                        state.floating.is_tiled() && {
-                            for tag_id in state.tags.iter() {
-                                if tags.iter().any(|tag| tag == tag_id) {
-                                    return true;
-                                }
-                            }
-                            false
-                        }
-                    })
-                })
-                .cloned()
-                .collect(),
         }
     }
 }

@@ -14,7 +14,7 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use crate::tag::TagId;
+use crate::{state::WithState, tag::TagId};
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
@@ -37,15 +37,6 @@ pub struct WindowState {
     pub resize_state: WindowResizeState,
     /// What tags the window is currently on.
     pub tags: Vec<TagId>,
-
-    // FIXME: this is a bandaid to get floating working again, figure out an actual solution
-    pub needs_raise: CommitState,
-}
-
-pub enum CommitState {
-    Idle,
-    RequestReceived(Serial),
-    Acked,
 }
 
 /// The state of a window's resize operation.
@@ -116,20 +107,23 @@ impl WindowState {
     pub fn new() -> Self {
         Default::default()
     }
+}
 
-    /// Access a [Window]'s state, optionally returning something.
-    pub fn with<F, T>(window: &Window, mut func: F) -> T
+impl WithState for Window {
+    type State = WindowState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
     where
-        F: FnMut(&mut Self) -> T,
+        F: FnMut(&mut Self::State) -> T,
     {
-        window
-            .user_data()
-            .insert_if_missing(RefCell::<Self>::default);
+        self.user_data()
+            .insert_if_missing(RefCell::<Self::State>::default);
 
-        let state = window
+        let state = self
             .user_data()
-            .get::<RefCell<Self>>()
-            .expect("This should never happen");
+            .get::<RefCell<Self::State>>()
+            .expect("RefCell not in data map");
+
         func(&mut state.borrow_mut())
     }
 }
@@ -142,7 +136,6 @@ impl Default for WindowState {
             floating: Float::Tiled(None),
             resize_state: WindowResizeState::Idle,
             tags: vec![],
-            needs_raise: CommitState::Idle,
         }
     }
 }

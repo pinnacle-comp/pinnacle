@@ -4,42 +4,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::cell::RefCell;
-
 use smithay::{
-    desktop::Window,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
-    wayland::{compositor, seat::WaylandFocus},
+    desktop::Window, reexports::wayland_server::protocol::wl_surface::WlSurface,
+    wayland::seat::WaylandFocus,
 };
 
-use crate::{backend::Backend, output::OutputState, state::State};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+};
 
-use self::window_state::{Float, WindowId, WindowState};
+use self::window_state::{Float, WindowId};
 
 pub mod window_state;
-
-// TODO: maybe get rid of this and move the fn into resize_surface state because it's the only user
-pub trait SurfaceState: Default + 'static {
-    /// Access the [`SurfaceState`] associated with a [`WlSurface`].
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if you use it within itself due to the use of a [`RefCell`].
-    fn with_state<F, T>(wl_surface: &WlSurface, function: F) -> T
-    where
-        F: FnOnce(&mut Self) -> T,
-    {
-        compositor::with_states(wl_surface, |states| {
-            states.data_map.insert_if_missing(RefCell::<Self>::default);
-            let state = states
-                .data_map
-                .get::<RefCell<Self>>()
-                .expect("This should never happen");
-
-            function(&mut state.borrow_mut())
-        })
-    }
-}
 
 impl<B: Backend> State<B> {
     /// Returns the [Window] associated with a given [WlSurface].
@@ -59,7 +36,7 @@ impl<B: Backend> State<B> {
 
 /// Toggle a window's floating status.
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
-    WindowState::with(window, |window_state| {
+    window.with_state(|window_state| {
         match window_state.floating {
             Float::Tiled(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {
@@ -88,13 +65,13 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     state.re_layout();
 
     let output = state.focus_state.focused_output.as_ref().unwrap();
-    let render = OutputState::with(output, |op_state| {
+    let render = output.with_state(|op_state| {
         state
             .windows
             .iter()
             .cloned()
             .filter(|win| {
-                WindowState::with(win, |win_state| {
+                win.with_state(|win_state| {
                     if win_state.floating.is_floating() {
                         return true;
                     }

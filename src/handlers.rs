@@ -48,9 +48,8 @@ use smithay::{
 use crate::{
     backend::Backend,
     layout::{Layout, LayoutVec},
-    output::OutputState,
-    state::{ClientState, State},
-    window::window_state::{CommitState, WindowResizeState, WindowState},
+    state::{ClientState, State, WithState},
+    window::window_state::WindowResizeState,
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -117,21 +116,10 @@ impl<B: Backend> CompositorHandler for State<B> {
         crate::grab::resize_grab::handle_commit(self, surface);
 
         if let Some(window) = self.window_for_surface(surface) {
-            WindowState::with(&window, |state| {
+            window.with_state(|state| {
                 if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
-                }
-
-                if let CommitState::Acked = state.needs_raise {
-                    let clone = window.clone();
-
-                    // FIXME: happens before the other windows ack, so it's useless
-                    self.loop_handle.insert_idle(move |data| {
-                        tracing::debug!("raising window");
-                        data.state.space.raise_element(&clone, true);
-                    });
-                    state.needs_raise = CommitState::Idle;
                 }
             });
         }
@@ -236,12 +224,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
-        WindowState::with(&window, |state| {
+        window.with_state(|state| {
             state.tags = match (
                 &self.focus_state.focused_output,
                 self.space.outputs().next(),
             ) {
-                (Some(output), _) | (None, Some(output)) => OutputState::with(output, |state| {
+                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
                     let output_tags = state
                         .focused_tags()
                         .map(|tag| tag.id.clone())
@@ -276,7 +264,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
         self.loop_handle.insert_idle(move |data| {
             if let Some(focused_output) = &data.state.focus_state.focused_output {
-                OutputState::with(focused_output, |state| {
+                focused_output.with_state(|state| {
                     data.state
                         .windows
                         .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
@@ -290,7 +278,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         tracing::debug!("toplevel destroyed");
         self.windows.retain(|window| window.toplevel() != &surface);
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
-            OutputState::with(focused_output, |state| {
+            focused_output.with_state(|state| {
                 self.windows
                     .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
                     .layout(&self.space, focused_output);
@@ -400,7 +388,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         // tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
             // tracing::debug!("found window for surface");
-            WindowState::with(&window, |state| {
+            window.with_state(|state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
@@ -412,9 +400,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
                         Configure::Popup(_) => todo!(),
                     }
                 }
-                if let CommitState::RequestReceived(_serial) = state.needs_raise {
-                    state.needs_raise = CommitState::Acked;
-                }
             });
 
             // HACK: If a window is currently going through something that generates a bunch of
@@ -424,7 +409,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
             // |     mapping the element in commit, this means that the window won't reappear on a tag
             // |     change. The code below is a workaround until I can figure it out.
             if !self.space.elements().any(|win| win == &window) {
-                WindowState::with(&window, |state| {
+                window.with_state(|state| {
                     if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
                         tracing::debug!("remapping window");
                         let win = window.clone();

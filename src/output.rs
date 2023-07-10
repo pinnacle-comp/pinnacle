@@ -8,33 +8,34 @@ use std::cell::RefCell;
 
 use smithay::output::Output;
 
-use crate::tag::Tag;
+use crate::{state::WithState, tag::Tag};
 
 #[derive(Default)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
 }
 
-impl OutputState {
-    pub fn focused_tags(&mut self) -> impl Iterator<Item = &mut Tag> {
-        self.tags.iter_mut().filter(|tag| tag.active)
+impl WithState for Output {
+    type State = OutputState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T,
+    {
+        self.user_data()
+            .insert_if_missing(RefCell::<Self::State>::default);
+
+        let state = self
+            .user_data()
+            .get::<RefCell<Self::State>>()
+            .expect("RefCell not in data map");
+
+        func(&mut state.borrow_mut())
     }
 }
 
 impl OutputState {
-    pub fn with<F, T>(output: &Output, mut func: F) -> T
-    where
-        F: FnMut(&mut Self) -> T,
-    {
-        output
-            .user_data()
-            .insert_if_missing(RefCell::<Self>::default);
-
-        let mut state = output
-            .user_data()
-            .get::<RefCell<Self>>()
-            .expect("RefCell not in data map");
-
-        func(&mut state.borrow_mut())
+    pub fn focused_tags(&mut self) -> impl Iterator<Item = &mut Tag> {
+        self.tags.iter_mut().filter(|tag| tag.active)
     }
 }

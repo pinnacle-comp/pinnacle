@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    cell::RefCell,
     error::Error,
     ffi::OsString,
     os::{fd::AsRawFd, unix::net::UnixStream},
@@ -19,13 +20,10 @@ use crate::{
         PinnacleSocketSource,
     },
     focus::FocusState,
+    grab::resize_grab::ResizeSurfaceState,
     layout::{Layout, LayoutVec},
-    output::OutputState,
     tag::Tag,
-    window::{
-        window_state::{WindowResizeState, WindowState},
-        WindowProperties,
-    },
+    window::{window_state::WindowResizeState, WindowProperties},
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -47,6 +45,7 @@ use smithay::{
         },
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
+            protocol::wl_surface::WlSurface,
             Display,
         },
     },
@@ -138,7 +137,7 @@ impl<B: Backend> State<B> {
 
             Msg::SetWindowSize { window_id, size } => {
                 let Some(window) = self.space.elements().find(|&win| {
-                    WindowState::with(win, |state| state.id == window_id)
+                    win.with_state( |state| state.id == window_id)
                 }) else { return; };
 
                 // TODO: tiled vs floating
@@ -151,18 +150,19 @@ impl<B: Backend> State<B> {
                 if let Some(window) = self
                     .windows
                     .iter()
-                    .find(|&win| WindowState::with(win, |state| state.id == window_id))
+                    .find(|&win| win.with_state(|state| state.id == window_id))
                 {
-                    WindowState::with(window, |state| {
-                        OutputState::with(
-                            &self.focus_state.focused_output.as_ref().unwrap(),
-                            |op_state| {
+                    window.with_state(|state| {
+                        self.focus_state
+                            .focused_output
+                            .as_ref()
+                            .unwrap()
+                            .with_state(|op_state| {
                                 let tag = op_state.tags.iter().find(|tag| tag.name == tag_id);
                                 if let Some(tag) = tag {
                                     state.tags = vec![tag.id.clone()];
                                 }
-                            },
-                        );
+                            });
                     });
                 }
 
@@ -172,12 +172,14 @@ impl<B: Backend> State<B> {
                 if let Some(window) = self
                     .windows
                     .iter()
-                    .find(|&win| WindowState::with(win, |state| state.id == window_id))
+                    .find(|&win| win.with_state(|state| state.id == window_id))
                 {
-                    WindowState::with(window, |state| {
-                        OutputState::with(
-                            &self.focus_state.focused_output.as_ref().unwrap(),
-                            |op_state| {
+                    window.with_state(|state| {
+                        self.focus_state
+                            .focused_output
+                            .as_ref()
+                            .unwrap()
+                            .with_state(|op_state| {
                                 let tag = op_state.tags.iter().find(|tag| tag.name == tag_id);
                                 if let Some(tag) = tag {
                                     if state.tags.contains(&tag.id) {
@@ -186,50 +188,54 @@ impl<B: Backend> State<B> {
                                         state.tags.push(tag.id.clone());
                                     }
                                 }
-                            },
-                        );
+                            });
                     });
 
                     self.re_layout();
                 }
             }
             Msg::ToggleTag { tag_id } => {
-                OutputState::with(
-                    self.focus_state.focused_output.as_ref().unwrap(), // TODO: handle error
-                    |state| {
+                self.focus_state
+                    .focused_output
+                    .as_ref()
+                    .unwrap()
+                    .with_state(|state| {
                         if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name == tag_id) {
                             tag.active = !tag.active;
                         }
-                    },
-                );
+                    });
 
                 self.re_layout();
             }
             Msg::SwitchToTag { tag_id } => {
-                OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
-                    if !state.tags.iter().any(|tag| tag.name == tag_id) {
-                        // TODO: notify error
-                        return;
-                    }
-                    for tag in state.tags.iter_mut() {
-                        tag.active = false;
-                    }
+                self.focus_state
+                    .focused_output
+                    .as_ref()
+                    .unwrap()
+                    .with_state(|state| {
+                        if !state.tags.iter().any(|tag| tag.name == tag_id) {
+                            // TODO: notify error
+                            return;
+                        }
+                        for tag in state.tags.iter_mut() {
+                            tag.active = false;
+                        }
 
-                    let Some(tag) = state.tags.iter_mut().find(|tag| tag.name == tag_id) else {
+                        let Some(tag) = state.tags.iter_mut().find(|tag| tag.name == tag_id) else {
                         unreachable!()
                     };
-                    tag.active = true;
+                        tag.active = true;
 
-                    tracing::debug!(
-                        "focused tags: {:?}",
-                        state
-                            .tags
-                            .iter()
-                            .filter(|tag| tag.active)
-                            .map(|tag| &tag.name)
-                            .collect::<Vec<_>>()
-                    );
-                });
+                        tracing::debug!(
+                            "focused tags: {:?}",
+                            state
+                                .tags
+                                .iter()
+                                .filter(|tag| tag.active)
+                                .map(|tag| &tag.name)
+                                .collect::<Vec<_>>()
+                        );
+                    });
 
                 self.re_layout();
             }
@@ -241,7 +247,7 @@ impl<B: Backend> State<B> {
                     .as_ref()
                     .or_else(|| self.space.outputs().next())
                 {
-                    OutputState::with(output, |state| {
+                    output.with_state(|state| {
                         state.tags.extend(
                             tags.clone()
                                 .into_iter()
@@ -252,7 +258,7 @@ impl<B: Backend> State<B> {
             }
             Msg::RemoveTags { tags } => {
                 for output in self.space.outputs() {
-                    OutputState::with(output, |state| {
+                    output.with_state(|state| {
                         state.tags.retain(|tag| !tags.contains(&tag.name));
                     });
                 }
@@ -277,9 +283,8 @@ impl<B: Backend> State<B> {
                                 .expect("Couldn't lock XdgToplevelSurfaceData");
                             (lock.app_id.clone(), lock.title.clone())
                         });
-                    let (window_id, floating) = WindowState::with(&current_focus, |state| {
-                        (state.id, state.floating.is_floating())
-                    });
+                    let (window_id, floating) =
+                        current_focus.with_state(|state| (state.id, state.floating.is_floating()));
                     // TODO: unwrap
                     let location = self.space.element_location(&current_focus).unwrap();
                     let props = WindowProperties {
@@ -320,9 +325,8 @@ impl<B: Backend> State<B> {
                                         .expect("Couldn't lock XdgToplevelSurfaceData");
                                     (lock.app_id.clone(), lock.title.clone())
                                 });
-                            let (window_id, floating) = WindowState::with(win, |state| {
-                                (state.id, state.floating.is_floating())
-                            });
+                            let (window_id, floating) =
+                                win.with_state(|state| (state.id, state.floating.is_floating()));
                             // TODO: unwrap
                             let location = self
                                 .space
@@ -511,12 +515,12 @@ impl<B: Backend> State<B> {
 
     pub fn re_layout(&mut self) {
         let output = self.focus_state.focused_output.as_ref().unwrap();
-        let (render, do_not_render) = OutputState::with(output, |state| {
+        let (render, do_not_render) = output.with_state(|state| {
             self.windows
                 .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
                 .layout(&self.space, output);
             self.windows.iter().cloned().partition::<Vec<_>, _>(|win| {
-                WindowState::with(win, |win_state| {
+                win.with_state(|win_state| {
                     if win_state.floating.is_floating() {
                         return true;
                     }
@@ -547,12 +551,11 @@ impl<B: Backend> State<B> {
             tracing::debug!("running idle cb");
             tracing::debug!("win len is {}", windows.len());
             for window in windows.iter() {
-                WindowState::with(window, |state| {
+                window.with_state(|state| {
                     tracing::debug!("win state is {:?}", state.resize_state);
                 });
-                if WindowState::with(window, |state| {
-                    !matches!(state.resize_state, WindowResizeState::Idle)
-                }) {
+                if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle))
+                {
                     tracing::debug!("some windows not idle");
                     data.state.loop_handle.insert_idle(|data| {
                         data.state.schedule_on_commit(windows, on_commit);
@@ -782,5 +785,38 @@ pub struct ApiState {
 impl ApiState {
     pub fn new() -> Self {
         Default::default()
+    }
+}
+
+pub trait WithState {
+    type State: Default;
+    fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T;
+}
+
+#[derive(Default, Debug)]
+pub struct WlSurfaceState {
+    pub resize_state: ResizeSurfaceState,
+}
+
+impl WithState for WlSurface {
+    type State = WlSurfaceState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T,
+    {
+        compositor::with_states(self, |states| {
+            states
+                .data_map
+                .insert_if_missing(RefCell::<Self::State>::default);
+            let state = states
+                .data_map
+                .get::<RefCell<Self::State>>()
+                .expect("This should never happen");
+
+            func(&mut state.borrow_mut())
+        })
     }
 }
