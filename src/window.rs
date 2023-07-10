@@ -12,9 +12,9 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus},
 };
 
-use crate::{backend::Backend, state::State};
+use crate::{backend::Backend, output::OutputState, state::State};
 
-use self::window_state::{CommitState, Float, WindowId, WindowState};
+use self::window_state::{Float, WindowId, WindowState};
 
 pub mod window_state;
 
@@ -87,11 +87,32 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
 
     state.re_layout();
 
-    // FIXME: every window gets mapped after this raise in `commit`, making this useless
-    WindowState::with(window, |state| {
-        state.needs_raise = CommitState::RequestReceived(window.toplevel().send_configure());
+    let output = state.focus_state.focused_output.as_ref().unwrap();
+    let render = OutputState::with(output, |op_state| {
+        state
+            .windows
+            .iter()
+            .cloned()
+            .filter(|win| {
+                WindowState::with(win, |win_state| {
+                    if win_state.floating.is_floating() {
+                        return true;
+                    }
+                    for tag_id in win_state.tags.iter() {
+                        if op_state.focused_tags().any(|tag| &tag.id == tag_id) {
+                            return true;
+                        }
+                    }
+                    false
+                })
+            })
+            .collect::<Vec<_>>()
     });
-    // state.space.raise_element(window, true);
+
+    let clone = window.clone();
+    state.schedule_on_commit(render, move |data| {
+        data.state.space.raise_element(&clone, true);
+    });
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
