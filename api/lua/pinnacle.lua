@@ -56,6 +56,8 @@ local pinnacle = {
     process = require("process"),
     ---Tag management
     tag = require("tag"),
+    ---Output management
+    output = require("output"),
 }
 
 ---Quit Pinnacle.
@@ -112,15 +114,6 @@ function pinnacle.setup(config_func)
         -- print(msg_bytes)
 
         return tb
-    end
-
-    Requests = {
-        id = 1,
-    }
-    function Requests:next()
-        local id = self.id
-        self.id = self.id + 1
-        return id
     end
 
     config_func(pinnacle)

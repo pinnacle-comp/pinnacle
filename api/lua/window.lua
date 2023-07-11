@@ -13,7 +13,7 @@
 ---@field private floating boolean Whether the window is floating or not (tiled)
 local win = {}
 
----@param props { id: integer, app_id: string?, title: string?, size: { w: integer, h: integer }, location: { x: integer, y: integer }, floating: boolean }
+---@param props Window
 ---@return Window
 local function new_window(props)
     -- Copy functions over
@@ -91,15 +91,14 @@ function window.toggle_floating(client_id)
     })
 end
 
+---TODO: This function is not implemented yet.
+---
 ---Get a window by its app id (aka its X11 class).
 ---@param app_id string The window's app id. For example, Alacritty's app id is "Alacritty".
 ---@return Window window -- TODO: nil
 function window.get_by_app_id(app_id)
-    local req_id = Requests:next()
-
     SendRequest({
         GetWindowByAppId = {
-            id = req_id,
             app_id = app_id,
         },
     })
@@ -127,15 +126,14 @@ function window.get_by_app_id(app_id)
     return new_window(wind)
 end
 
+---TODO: This function is not implemented yet.
+---
 ---Get a window by its title.
 ---@param title string The window's title.
 ---@return Window
 function window.get_by_title(title)
-    local req_id = Requests:next()
-
     SendRequest({
         GetWindowByTitle = {
-            id = req_id,
             title = title,
         },
     })
@@ -166,13 +164,7 @@ end
 ---Get the currently focused window.
 ---@return Window
 function window.get_focused()
-    local req_id = Requests:next()
-
-    SendRequest({
-        GetWindowByFocus = {
-            id = req_id,
-        },
-    })
+    SendRequest("GetWindowByFocus")
 
     local response = ReadMsg()
 
@@ -199,12 +191,8 @@ end
 
 ---Get all windows.
 ---@return Window[]
-function window.get_windows()
-    SendRequest({
-        GetAllWindows = {
-            id = Requests:next(),
-        },
-    })
+function window.get_all()
+    SendRequest("GetAllWindows")
 
     -- INFO: these read synchronously so this should always work IF the server works correctly
 

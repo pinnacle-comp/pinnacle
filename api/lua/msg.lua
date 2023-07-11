@@ -7,7 +7,7 @@
 ---@meta _
 
 ---@class _Msg
----@field SetKeybind { key: Keys, modifiers: Modifiers[], callback_id: integer }
+---@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }
 ---@field SetMousebind { button: integer }
 --Windows
 ---@field CloseWindow { client_id: integer? }
@@ -21,25 +21,38 @@
 --Tags
 ---@field ToggleTag { tag_id: string }
 ---@field SwitchToTag { tag_id: string }
----@field AddTags { tags: string[] }
----@field RemoveTags { tags: string[] }
+---@field AddTags { output_name: string, tags: string[] }
+---@field RemoveTags { output_name: string, tags: string[] }
+--Outputs
+---@field ConnectForAllOutputs { callback_id: integer }
 
 ---@alias Msg _Msg | "Quit"
 
----@class Request
----@field GetWindowByFocus { id: integer }
----@field GetAllWindows { id: integer }
+--------------------------------------------------------------------------------------------
+
+---@class _Request
+--Windows
+---@field GetWindowByAppId { app_id: string }
+---@field GetWindowByTitle { title: string }
+--Outputs
+---@field GetOutputByName { name: string }
+---@field GetOutputsByModel { model: string }
+---@field GetOutputsByRes { res: integer[] }
+
+---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows"
 
 ---@class IncomingMsg
 ---@field CallCallback { callback_id: integer, args: Args }
----@field RequestResponse { request_id: integer, response: RequestResponse }
+---@field RequestResponse { response: RequestResponse }
 
 ---@class Args
 ---@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }
+---@field ConnectForAllOutputs { output_name: string }
 
 ---@class RequestResponse
 ---@field Window { window: WindowProperties }
 ---@field GetAllWindows { windows: WindowProperties[] }
+---@field Outputs { names: string[] }
 
 ---@class WindowProperties
 ---@field id integer

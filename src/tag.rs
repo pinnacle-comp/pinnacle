@@ -9,8 +9,6 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use smithay::output::Output;
-
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
@@ -28,19 +26,16 @@ pub struct Tag {
     pub id: TagId,
     /// The name of this tag.
     pub name: String,
-    /// The output that this tag should be on.
-    pub output: Output,
     /// Whether this tag is active or not.
     pub active: bool,
     // TODO: layout
 }
 
 impl Tag {
-    pub fn new(name: String, output: Output) -> Self {
+    pub fn new(name: String) -> Self {
         Self {
             id: TagId::next(),
             name,
-            output,
             active: false,
         }
     }

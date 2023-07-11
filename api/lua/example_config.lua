@@ -11,10 +11,11 @@ pcall(require, "luarocks.loader")
 
 -- Neovim users be like:
 require("pinnacle").setup(function(pinnacle)
-    local input = pinnacle.input  -- Key and mouse binds
+    local input = pinnacle.input -- Key and mouse binds
     local window = pinnacle.window -- Window management
     local process = pinnacle.process -- Process spawning
-    local tag = pinnacle.tag      -- Tag management
+    local tag = pinnacle.tag -- Tag management
+    local output = pinnacle.output -- Output management
 
     -- Every key supported by xkbcommon.
     -- Support for just putting in a string of a key is intended.
@@ -27,6 +28,7 @@ require("pinnacle").setup(function(pinnacle)
     local terminal = "alacritty"
 
     -- Keybinds ----------------------------------------------------------------------
+
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
     input.keybind({ mod_key, "Alt" }, keys.c, window.close_window)
@@ -49,8 +51,18 @@ require("pinnacle").setup(function(pinnacle)
         process.spawn("nautilus")
     end)
 
+    input.keybind({ mod_key }, keys.g, function()
+        local op = output.get_by_res(2560, 1440)
+        for _, v in pairs(op) do
+            print(v.name)
+        end
+    end)
+
     -- Tags ---------------------------------------------------------------------------
-    tag.add("1", "2", "3", "4", "5")
+
+    output.connect_for_all(function(op)
+        tag.add(op, "1", "2", "3", "4", "5")
+    end)
     tag.toggle("1")
 
     input.keybind({ mod_key }, keys.KEY_1, function()

@@ -98,6 +98,10 @@ pub struct State<B: Backend> {
     pub windows: Vec<Window>,
 
     pub async_scheduler: Scheduler<()>,
+
+    // TODO: move into own struct
+    // |     basically just clean this mess up
+    pub output_callback_ids: Vec<CallbackId>,
 }
 
 impl<B: Backend> State<B> {
@@ -240,28 +244,49 @@ impl<B: Backend> State<B> {
                 self.re_layout();
             }
             // TODO: add output
-            Msg::AddTags { tags } => {
+            Msg::AddTags { output_name, tags } => {
                 if let Some(output) = self
-                    .focus_state
-                    .focused_output
-                    .as_ref()
-                    .or_else(|| self.space.outputs().next())
+                    .space
+                    .outputs()
+                    .find(|output| output.name() == output_name)
                 {
                     output.with_state(|state| {
-                        state.tags.extend(
-                            tags.clone()
-                                .into_iter()
-                                .map(|name| Tag::new(name, output.clone())),
-                        );
+                        state.tags.extend(tags.iter().cloned().map(Tag::new));
                     });
                 }
             }
-            Msg::RemoveTags { tags } => {
-                for output in self.space.outputs() {
+            Msg::RemoveTags { output_name, tags } => {
+                if let Some(output) = self
+                    .space
+                    .outputs()
+                    .find(|output| output.name() == output_name)
+                {
                     output.with_state(|state| {
                         state.tags.retain(|tag| !tags.contains(&tag.name));
                     });
                 }
+            }
+
+            Msg::ConnectForAllOutputs { callback_id } => {
+                let stream = self
+                    .api_state
+                    .stream
+                    .as_ref()
+                    .expect("Stream doesn't exist");
+                let mut stream = stream.lock().expect("Couldn't lock stream");
+                for output in self.space.outputs() {
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::ConnectForAllOutputs {
+                                output_name: output.name(),
+                            }),
+                        },
+                    )
+                    .expect("Send to client failed");
+                }
+                self.output_callback_ids.push(callback_id);
             }
 
             Msg::Quit => {
@@ -269,9 +294,9 @@ impl<B: Backend> State<B> {
             }
 
             Msg::Request(request) => match request {
-                Request::GetWindowByAppId { id, app_id } => todo!(),
-                Request::GetWindowByTitle { id, title } => todo!(),
-                Request::GetWindowByFocus { id } => {
+                Request::GetWindowByAppId { app_id } => todo!(),
+                Request::GetWindowByTitle { title } => todo!(),
+                Request::GetWindowByFocus => {
                     let Some(current_focus) = self.focus_state.current_focus() else { return; };
                     let (app_id, title) =
                         compositor::with_states(current_focus.toplevel().wl_surface(), |states| {
@@ -304,13 +329,12 @@ impl<B: Backend> State<B> {
                     crate::api::send_to_client(
                         &mut stream,
                         &OutgoingMsg::RequestResponse {
-                            request_id: id,
                             response: RequestResponse::Window { window: props },
                         },
                     )
                     .expect("Send to client failed");
                 }
-                Request::GetAllWindows { id } => {
+                Request::GetAllWindows => {
                     let window_props = self
                         .space
                         .elements()
@@ -353,13 +377,84 @@ impl<B: Backend> State<B> {
                     crate::api::send_to_client(
                         &mut stream,
                         &OutgoingMsg::RequestResponse {
-                            request_id: id,
                             response: RequestResponse::GetAllWindows {
                                 windows: window_props,
                             },
                         },
                     )
                     .expect("Couldn't send to client");
+                }
+                Request::GetOutputByName { name } => {
+                    let names = self
+                        .space
+                        .outputs()
+                        .filter(|output| output.name() == name)
+                        .map(|output| output.name())
+                        .collect::<Vec<_>>();
+                    let stream = self
+                        .api_state
+                        .stream
+                        .as_ref()
+                        .expect("Stream doesn't exist");
+                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::RequestResponse {
+                            response: RequestResponse::Outputs { names },
+                        },
+                    )
+                    .unwrap();
+                }
+                Request::GetOutputsByModel { model } => {
+                    let names = self
+                        .space
+                        .outputs()
+                        .filter(|output| output.physical_properties().model == model)
+                        .map(|output| output.name())
+                        .collect::<Vec<_>>();
+                    let stream = self
+                        .api_state
+                        .stream
+                        .as_ref()
+                        .expect("Stream doesn't exist");
+                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::RequestResponse {
+                            response: RequestResponse::Outputs { names },
+                        },
+                    )
+                    .unwrap();
+                }
+                Request::GetOutputsByRes { res } => {
+                    let names = self
+                        .space
+                        .outputs()
+                        .filter_map(|output| {
+                            if let Some(mode) = output.current_mode() {
+                                if mode.size == (res.0 as i32, res.1 as i32).into() {
+                                    Some(output.name())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    let stream = self
+                        .api_state
+                        .stream
+                        .as_ref()
+                        .expect("Stream doesn't exist");
+                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::RequestResponse {
+                            response: RequestResponse::Outputs { names },
+                        },
+                    )
+                    .unwrap();
                 }
             },
         }
@@ -718,6 +813,7 @@ impl<B: Backend> State<B> {
             async_scheduler: sched,
 
             windows: vec![],
+            output_callback_ids: vec![],
         })
     }
 }
@@ -779,6 +875,7 @@ pub fn take_presentation_feedback(
 /// State containing the config API's stream.
 #[derive(Default)]
 pub struct ApiState {
+    // TODO: this may not need to be in an arc mutex because of the move to async
     pub stream: Option<Arc<Mutex<UnixStream>>>,
 }
 

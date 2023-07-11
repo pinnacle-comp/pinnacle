@@ -17,7 +17,7 @@ pub enum Msg {
     // Input
     SetKeybind {
         key: u32,
-        modifiers: Vec<Modifiers>,
+        modifiers: Vec<Modifier>,
         callback_id: CallbackId,
     },
     SetMousebind {
@@ -47,18 +47,28 @@ pub enum Msg {
     },
 
     // Tag management
+    //  FIXME: tag_id should not be a string
     ToggleTag {
         tag_id: String,
     },
+    //  FIXME: tag_id should not be a string
     SwitchToTag {
         tag_id: String,
     },
     AddTags {
+        /// The name of the output you want these tags on.
+        output_name: String,
         tags: Vec<String>,
     },
     RemoveTags {
-        // TODO:
+        /// The name of the output you want these tags removed from.
+        output_name: String,
         tags: Vec<String>,
+    },
+
+    // Output management
+    ConnectForAllOutputs {
+        callback_id: CallbackId,
     },
 
     // Process management
@@ -82,14 +92,17 @@ pub struct RequestId(pub u32);
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 /// Messages that require a server response, usually to provide some data.
 pub enum Request {
-    GetWindowByAppId { id: RequestId, app_id: String },
-    GetWindowByTitle { id: RequestId, title: String },
-    GetWindowByFocus { id: RequestId },
-    GetAllWindows { id: RequestId },
+    GetWindowByAppId { app_id: String },
+    GetWindowByTitle { title: String },
+    GetWindowByFocus,
+    GetAllWindows,
+    GetOutputByName { name: String },
+    GetOutputsByModel { model: String },
+    GetOutputsByRes { res: (u32, u32) },
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub enum Modifiers {
+pub enum Modifier {
     Shift = 0b0000_0001,
     Ctrl = 0b0000_0010,
     Alt = 0b0000_0100,
@@ -100,7 +113,7 @@ pub enum Modifiers {
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ModifierMask(u8);
 
-impl<T: IntoIterator<Item = Modifiers>> From<T> for ModifierMask {
+impl<T: IntoIterator<Item = Modifier>> From<T> for ModifierMask {
     fn from(value: T) -> Self {
         let value = value.into_iter();
         let mut mask: u8 = 0b0000_0000;
@@ -112,19 +125,19 @@ impl<T: IntoIterator<Item = Modifiers>> From<T> for ModifierMask {
 }
 
 impl ModifierMask {
-    pub fn values(self) -> Vec<Modifiers> {
-        let mut res = Vec::<Modifiers>::new();
-        if self.0 & Modifiers::Shift as u8 == Modifiers::Shift as u8 {
-            res.push(Modifiers::Shift);
+    pub fn values(self) -> Vec<Modifier> {
+        let mut res = Vec::<Modifier>::new();
+        if self.0 & Modifier::Shift as u8 == Modifier::Shift as u8 {
+            res.push(Modifier::Shift);
         }
-        if self.0 & Modifiers::Ctrl as u8 == Modifiers::Ctrl as u8 {
-            res.push(Modifiers::Ctrl);
+        if self.0 & Modifier::Ctrl as u8 == Modifier::Ctrl as u8 {
+            res.push(Modifier::Ctrl);
         }
-        if self.0 & Modifiers::Alt as u8 == Modifiers::Alt as u8 {
-            res.push(Modifiers::Alt);
+        if self.0 & Modifier::Alt as u8 == Modifier::Alt as u8 {
+            res.push(Modifier::Alt);
         }
-        if self.0 & Modifiers::Super as u8 == Modifiers::Super as u8 {
-            res.push(Modifiers::Super);
+        if self.0 & Modifier::Super as u8 == Modifier::Super as u8 {
+            res.push(Modifier::Super);
         }
         res
     }
@@ -139,7 +152,6 @@ pub enum OutgoingMsg {
         args: Option<Args>,
     },
     RequestResponse {
-        request_id: RequestId,
         response: RequestResponse,
     },
 }
@@ -157,10 +169,14 @@ pub enum Args {
         #[serde(default)]
         exit_msg: Option<String>,
     },
+    ConnectForAllOutputs {
+        output_name: String,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum RequestResponse {
     Window { window: WindowProperties },
     GetAllWindows { windows: Vec<WindowProperties> },
+    Outputs { names: Vec<String> },
 }

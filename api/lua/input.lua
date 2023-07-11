@@ -9,9 +9,19 @@ local input = {
 }
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
+---
+---# Example
+---
+---```lua
+----- The following sets Super + Return to open Alacritty
+---
+---input.keybind({ "Super" }, input.keys.Return, function()
+---    process.spawn("Alacritty")
+---end)
+---```
 ---@param key Keys The key for the keybind.
 ---@param modifiers (Modifier)[] Which modifiers need to be pressed for the keybind to trigger.
----@param action fun() What to run.
+---@param action fun() What to do.
 function input.keybind(modifiers, key, action)
     table.insert(CallbackTable, action)
     SendMsg({
