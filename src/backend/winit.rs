@@ -219,7 +219,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                         None,
                     );
-                    state.re_layout();
+                    state.re_layout(&output);
                 }
                 WinitEvent::Focus(_) => {}
                 WinitEvent::Input(input_evt) => {

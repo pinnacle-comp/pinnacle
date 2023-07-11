@@ -162,15 +162,16 @@ impl<B: Backend> State<B> {
                             .as_ref()
                             .unwrap()
                             .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name == tag_id);
+                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
                                 if let Some(tag) = tag {
-                                    state.tags = vec![tag.id.clone()];
+                                    state.tags = vec![tag.clone()];
                                 }
                             });
                     });
                 }
 
-                self.re_layout();
+                let output = self.focus_state.focused_output.clone().unwrap();
+                self.re_layout(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
                 if let Some(window) = self
@@ -184,64 +185,66 @@ impl<B: Backend> State<B> {
                             .as_ref()
                             .unwrap()
                             .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name == tag_id);
+                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
                                 if let Some(tag) = tag {
-                                    if state.tags.contains(&tag.id) {
-                                        state.tags.retain(|id| id != &tag.id);
+                                    if state.tags.contains(&tag) {
+                                        state.tags.retain(|tg| tg != tag);
                                     } else {
-                                        state.tags.push(tag.id.clone());
+                                        state.tags.push(tag.clone());
                                     }
                                 }
                             });
                     });
 
-                    self.re_layout();
+                    let output = self.focus_state.focused_output.clone().unwrap();
+                    self.re_layout(&output);
                 }
             }
-            Msg::ToggleTag { tag_id } => {
-                self.focus_state
-                    .focused_output
-                    .as_ref()
-                    .unwrap()
-                    .with_state(|state| {
-                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name == tag_id) {
-                            tag.active = !tag.active;
+            Msg::ToggleTag { output_name, tag_name } => {
+                tracing::debug!("ToggleTag");
+
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
+
+                    output.with_state(|state| {
+                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
+                            tracing::debug!("Setting tag {tag:?} to {}", !tag.active());
+                            tag.set_active(!tag.active());
                         }
                     });
-
-                self.re_layout();
+                    self.re_layout(&output);
+                }
             }
-            Msg::SwitchToTag { tag_id } => {
-                self.focus_state
-                    .focused_output
-                    .as_ref()
-                    .unwrap()
-                    .with_state(|state| {
-                        if !state.tags.iter().any(|tag| tag.name == tag_id) {
+            Msg::SwitchToTag { output_name, tag_name } => {
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
+
+                    output.with_state(|state| {
+                        if !state.tags.iter().any(|tag| tag.name() == tag_name) {
                             // TODO: notify error
                             return;
                         }
                         for tag in state.tags.iter_mut() {
-                            tag.active = false;
+                            tag.set_active(false);
                         }
 
-                        let Some(tag) = state.tags.iter_mut().find(|tag| tag.name == tag_id) else {
-                        unreachable!()
-                    };
-                        tag.active = true;
+                        let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) else {
+                            unreachable!()
+                        };
+                        tag.set_active(true);
 
                         tracing::debug!(
                             "focused tags: {:?}",
                             state
                                 .tags
                                 .iter()
-                                .filter(|tag| tag.active)
-                                .map(|tag| &tag.name)
+                                .filter(|tag| tag.active())
+                                .map(|tag| tag.name())
                                 .collect::<Vec<_>>()
                         );
                     });
-
-                self.re_layout();
+                    self.re_layout(&output);
+                }
             }
             // TODO: add output
             Msg::AddTags { output_name, tags } => {
@@ -251,7 +254,10 @@ impl<B: Backend> State<B> {
                     .find(|output| output.name() == output_name)
                 {
                     output.with_state(|state| {
-                        state.tags.extend(tags.iter().cloned().map(Tag::new));
+                        state
+                            .tags
+                            .extend(tags.iter().cloned().map(Tag::new));
+                        tracing::debug!("tags added, are now {:?}", state.tags);
                     });
                 }
             }
@@ -262,7 +268,7 @@ impl<B: Backend> State<B> {
                     .find(|output| output.name() == output_name)
                 {
                     output.with_state(|state| {
-                        state.tags.retain(|tag| !tags.contains(&tag.name));
+                        state.tags.retain(|tag| !tags.contains(&tag.name()));
                     });
                 }
             }
@@ -456,6 +462,28 @@ impl<B: Backend> State<B> {
                     )
                     .unwrap();
                 }
+                Request::GetOutputByFocus => {
+                    let names = self
+                        .focus_state
+                        .focused_output
+                        .as_ref()
+                        .map(|output| output.name())
+                        .into_iter()
+                        .collect::<Vec<_>>();
+                    let stream = self
+                        .api_state
+                        .stream
+                        .as_ref()
+                        .expect("Stream doesn't exist");
+                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::RequestResponse {
+                            response: RequestResponse::Outputs { names },
+                        },
+                    )
+                    .unwrap();
+                }
             },
         }
     }
@@ -608,19 +636,25 @@ impl<B: Backend> State<B> {
         }
     }
 
-    pub fn re_layout(&mut self) {
-        let output = self.focus_state.focused_output.as_ref().unwrap();
+    pub fn re_layout(&mut self, output: &Output) {
+        let windows = self.windows.iter().filter(|win| {
+                win.with_state(|state| state.tags.iter().any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output)))
+            }).cloned().collect::<Vec<_>>();
         let (render, do_not_render) = output.with_state(|state| {
             self.windows
-                .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                .to_master_stack(
+                    output,
+                    state.focused_tags().map(|tag| tag.clone()).collect(),
+                )
                 .layout(&self.space, output);
-            self.windows.iter().cloned().partition::<Vec<_>, _>(|win| {
+
+            windows.iter().cloned().partition::<Vec<_>, _>(|win| {
                 win.with_state(|win_state| {
                     if win_state.floating.is_floating() {
                         return true;
                     }
-                    for tag_id in win_state.tags.iter() {
-                        if state.focused_tags().any(|tag| &tag.id == tag_id) {
+                    for tag in win_state.tags.iter() {
+                        if state.focused_tags().any(|tg| tg == tag) {
                             return true;
                         }
                     }

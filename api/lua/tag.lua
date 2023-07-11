@@ -54,26 +54,42 @@ function tag.add_table(output, tags)
     })
 end
 
----Toggle a tag on the currently focused output.
+---Toggle a tag on the specified output. If `output` isn't specified, toggle it on the currently focused output instead.
 ---
 ---# Example
 ---
 ---```lua
 ----- Assuming all tags are toggled off...
----tag.toggle("1")
----tag.toggle("2")
+---local op = output.get_by_name("DP-1")
+---tag.toggle("1", op)
+---tag.toggle("2", op)
 ----- will cause windows on both tags 1 and 2 to be displayed at the same time.
 ---```
 ---@param name string The name of the tag.
-function tag.toggle(name)
-    SendMsg({
-        ToggleTag = {
-            tag_id = name,
-        },
-    })
+---@param output Output? The output.
+function tag.toggle(name, output)
+    if output ~= nil then
+        SendMsg({
+            ToggleTag = {
+                output_name = output.name,
+                tag_name = name,
+            },
+        })
+    else
+        local op = require("output").get_focused()
+        if op ~= nil then
+            SendMsg({
+                ToggleTag = {
+                    output_name = op.name,
+                    tag_name = name,
+                },
+            })
+        end
+    end
 end
 
----Switch to a tag on the currently focused output, deactivating any other active tags on that output.
+---Switch to a tag on the specified output, deactivating any other active tags on it.
+---If `output` is not specified, this uses the currently focused output instead.
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
@@ -83,12 +99,26 @@ end
 ---tag.switch_to("3") -- Switches to and displays *only* windows on tag 3
 ---```
 ---@param name string The name of the tag.
-function tag.switch_to(name)
-    SendMsg({
-        SwitchToTag = {
-            tag_id = name,
-        },
-    })
+---@param output Output? The output.
+function tag.switch_to(name, output)
+    if output ~= nil then
+        SendMsg({
+            SwitchToTag = {
+                output_name = output.name,
+                tag_name = name,
+            },
+        })
+    else
+        local op = require("output").get_focused()
+        if op ~= nil then
+            SendMsg({
+                SwitchToTag = {
+                    output_name = op.name,
+                    tag_name = name,
+                },
+            })
+        end
+    end
 end
 
 return tag

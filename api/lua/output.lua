@@ -57,7 +57,7 @@ function output.get_by_name(name)
     end
 end
 
----NOTE: This may or may not be what is reported by other monitor listing utilities. One of my monitors fails to report itself in Smithay when it is correctly picked up by tools like wlr-randr. I'll fix this in the future.
+---NOTE: This may or may not be what is reported by other monitor listing utilities. Pinnacle currently fails to pick up one of my monitors' models when it is correctly picked up by tools like wlr-randr. I'll fix this in the future.
 ---
 ---Get outputs by their model.
 ---This is something like "DELL E2416H" or whatever gibberish monitor manufacturers call their displays.
@@ -112,10 +112,31 @@ function output.get_by_res(width, height)
     return outputs
 end
 
+---Get the currently focused output. This is currently the one with the cursor on it.
+---@return Output|nil output The output, or nil if none are focused.
+function output.get_focused()
+    SendMsg({
+        Request = "GetOutputByFocus",
+    })
+
+    local response = ReadMsg()
+
+    local names = response.RequestResponse.response.Outputs.names
+
+    if names[1] ~= nil then
+        return new_output({ name = names[1] })
+    else
+        return nil
+    end
+end
+
 ---Connect a function to be run on all current and future outputs.
 ---
 ---When called, `connect_for_all` will immediately run `func` with all currently connected outputs.
 ---If a new output is connected, `func` will also be called with it.
+---
+---Please note: this function will be run *after* Pinnacle processes your entire config.
+---For example, if you define tags in `func` but toggle them directly after `connect_for_all`, nothing will happen as the tags haven't been added yet.
 ---@param func fun(output: Output) The function that will be run.
 function output.connect_for_all(func)
     ---@param args Args

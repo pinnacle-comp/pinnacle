@@ -232,12 +232,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
                     let output_tags = state
                         .focused_tags()
-                        .map(|tag| tag.id.clone())
+                        .map(|tag| tag.clone())
                         .collect::<Vec<_>>();
                     if !output_tags.is_empty() {
                         output_tags
                     } else if let Some(first_tag) = state.tags.first() {
-                        vec![first_tag.id.clone()]
+                        vec![first_tag.clone()]
                     } else {
                         vec![]
                     }
@@ -267,7 +267,10 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 focused_output.with_state(|state| {
                     data.state
                         .windows
-                        .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                        .to_master_stack(
+                            focused_output,
+                            state.focused_tags().map(|tag| tag.clone()).collect(),
+                        )
                         .layout(&data.state.space, focused_output);
                 });
             }
@@ -280,7 +283,10 @@ impl<B: Backend> XdgShellHandler for State<B> {
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
             focused_output.with_state(|state| {
                 self.windows
-                    .to_master_stack(state.focused_tags().map(|tag| tag.id.clone()).collect())
+                    .to_master_stack(
+                        focused_output,
+                        state.focused_tags().map(|tag| tag.clone()).collect(),
+                    )
                     .layout(&self.space, focused_output);
             });
         }

@@ -62,8 +62,8 @@ require("pinnacle").setup(function(pinnacle)
 
     output.connect_for_all(function(op)
         tag.add(op, "1", "2", "3", "4", "5")
+        tag.toggle("1", op)
     end)
-    tag.toggle("1")
 
     input.keybind({ mod_key }, keys.KEY_1, function()
         tag.switch_to("1")

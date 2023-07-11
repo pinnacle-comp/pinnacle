@@ -62,7 +62,8 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
         }
     });
 
-    state.re_layout();
+    let output = state.focus_state.focused_output.clone().unwrap();
+    state.re_layout(&output);
 
     let output = state.focus_state.focused_output.as_ref().unwrap();
     let render = output.with_state(|op_state| {
@@ -75,8 +76,8 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
                     if win_state.floating.is_floating() {
                         return true;
                     }
-                    for tag_id in win_state.tags.iter() {
-                        if op_state.focused_tags().any(|tag| &tag.id == tag_id) {
+                    for tag in win_state.tags.iter() {
+                        if op_state.focused_tags().any(|tg| tg == tag) {
                             return true;
                         }
                     }

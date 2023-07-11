@@ -5,13 +5,22 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    cell::RefCell,
     hash::Hash,
+    rc::Rc,
     sync::atomic::{AtomicU32, Ordering},
+};
+
+use smithay::output::Output;
+
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
 };
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct TagId(u32);
 
 impl TagId {
@@ -21,22 +30,60 @@ impl TagId {
 }
 
 #[derive(Debug)]
-pub struct Tag {
+struct TagInner {
     /// The internal id of this tag.
-    pub id: TagId,
+    id: TagId,
     /// The name of this tag.
-    pub name: String,
+    name: String,
     /// Whether this tag is active or not.
-    pub active: bool,
+    active: bool,
     // TODO: layout
+}
+
+impl PartialEq for TagInner {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for TagInner {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tag(Rc<RefCell<TagInner>>);
+
+impl Tag {
+    pub fn id(&self) -> TagId {
+        self.0.borrow().id
+    }
+
+    pub fn name(&self) -> String {
+        self.0.borrow().name.clone()
+    }
+
+    pub fn active(&self) -> bool {
+        self.0.borrow().active
+    }
+
+    pub fn set_active(&mut self, active: bool) {
+        self.0.borrow_mut().active = active;
+    }
 }
 
 impl Tag {
     pub fn new(name: String) -> Self {
-        Self {
+        Self(Rc::new(RefCell::new(TagInner {
             id: TagId::next(),
             name,
             active: false,
-        }
+        })))
+    }
+}
+
+impl<B: Backend> State<B> {
+    pub fn output_for_tag(&self, tag: &Tag) -> Option<Output> {
+        self.space
+            .outputs()
+            .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == tag)))
+            .cloned()
     }
 }

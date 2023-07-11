@@ -49,11 +49,13 @@ pub enum Msg {
     // Tag management
     //  FIXME: tag_id should not be a string
     ToggleTag {
-        tag_id: String,
+        output_name: String,
+        tag_name: String,
     },
     //  FIXME: tag_id should not be a string
     SwitchToTag {
-        tag_id: String,
+        output_name: String,
+        tag_name: String,
     },
     AddTags {
         /// The name of the output you want these tags on.
@@ -99,6 +101,7 @@ pub enum Request {
     GetOutputByName { name: String },
     GetOutputsByModel { model: String },
     GetOutputsByRes { res: (u32, u32) },
+    GetOutputByFocus,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]

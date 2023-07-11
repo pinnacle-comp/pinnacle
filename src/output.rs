@@ -10,6 +10,9 @@ use smithay::output::Output;
 
 use crate::{state::WithState, tag::Tag};
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct OutputName(pub String);
+
 #[derive(Default)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
@@ -36,6 +39,6 @@ impl WithState for Output {
 
 impl OutputState {
     pub fn focused_tags(&mut self) -> impl Iterator<Item = &mut Tag> {
-        self.tags.iter_mut().filter(|tag| tag.active)
+        self.tags.iter_mut().filter(|tag| tag.active())
     }
 }

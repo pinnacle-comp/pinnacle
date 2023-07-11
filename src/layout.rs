@@ -13,7 +13,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    tag::TagId,
+    tag::Tag,
     window::window_state::WindowResizeState,
 };
 
@@ -30,6 +30,7 @@ pub trait Layout<S: SpaceElement> {
 
 pub struct MasterStack<S: SpaceElement> {
     inner: Vec<S>,
+    output: Output,
 }
 
 impl MasterStack<Window> {
@@ -49,6 +50,8 @@ impl MasterStack<Window> {
             return;
         };
 
+        let output_loc = output.current_location();
+
         let height = output_geo.size.h / stack_count as i32;
 
         for (i, win) in self.stack().enumerate() {
@@ -59,7 +62,11 @@ impl MasterStack<Window> {
             win.with_state(|state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     win.toplevel().send_configure(),
-                    (output_geo.size.w / 2, i as i32 * height).into(),
+                    (
+                        output_geo.size.w / 2 + output_loc.x,
+                        i as i32 * height + output_loc.y,
+                    )
+                        .into(),
                 );
             });
         }
@@ -77,6 +84,8 @@ impl Layout<Window> for MasterStack<Window> {
             return;
         };
 
+        let output_loc = output.current_location();
+
         if self.stack().count() == 0 {
             // one window
             master.toplevel().with_pending_state(|state| {
@@ -86,7 +95,7 @@ impl Layout<Window> for MasterStack<Window> {
             master.with_state(|state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
-                    (0, 0).into(),
+                    (output_loc.x, output_loc.y).into(),
                 );
             });
         } else {
@@ -98,7 +107,7 @@ impl Layout<Window> for MasterStack<Window> {
             master.with_state(|state| {
                 state.resize_state = WindowResizeState::WaitingForAck(
                     master.toplevel().send_configure(),
-                    (0, 0).into(),
+                    (output_loc.x, output_loc.y).into(),
                 );
             });
 
@@ -109,6 +118,7 @@ impl Layout<Window> for MasterStack<Window> {
 
 pub struct Dwindle<S: SpaceElement> {
     inner: Vec<S>,
+    output: Output,
 }
 
 impl Layout<Window> for Dwindle<Window> {
@@ -119,32 +129,34 @@ impl Layout<Window> for Dwindle<Window> {
 
 pub trait LayoutVec<S: SpaceElement> {
     /// Interpret this vec as a master-stack layout.
-    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<S>;
-    fn to_dwindle(&self, tags: Vec<TagId>) -> Dwindle<S>;
+    fn to_master_stack(&self, output: &Output, tags: Vec<Tag>) -> MasterStack<S>;
+    fn to_dwindle(&self, output: &Output, tags: Vec<Tag>) -> Dwindle<S>;
 }
 
 impl LayoutVec<Window> for Vec<Window> {
-    fn to_master_stack(&self, tags: Vec<TagId>) -> MasterStack<Window> {
+    fn to_master_stack(&self, output: &Output, tags: Vec<Tag>) -> MasterStack<Window> {
         MasterStack {
             inner: filter_windows(self, tags),
+            output: output.clone(), // TODO: get rid of?
         }
     }
 
-    fn to_dwindle(&self, tags: Vec<TagId>) -> Dwindle<Window> {
+    fn to_dwindle(&self, output: &Output, tags: Vec<Tag>) -> Dwindle<Window> {
         Dwindle {
             inner: filter_windows(self, tags),
+            output: output.clone(),
         }
     }
 }
 
-fn filter_windows(windows: &[Window], tags: Vec<TagId>) -> Vec<Window> {
+fn filter_windows(windows: &[Window], tags: Vec<Tag>) -> Vec<Window> {
     windows
         .iter()
         .filter(|window| {
             window.with_state(|state| {
                 state.floating.is_tiled() && {
-                    for tag_id in state.tags.iter() {
-                        if tags.iter().any(|tag| tag == tag_id) {
+                    for tag in state.tags.iter() {
+                        if tags.iter().any(|tg| tg == tag) {
                             return true;
                         }
                     }

@@ -14,7 +14,7 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use crate::{state::WithState, tag::TagId};
+use crate::{state::WithState, tag::Tag};
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
@@ -36,7 +36,7 @@ pub struct WindowState {
     /// The window's resize state. See [WindowResizeState] for more.
     pub resize_state: WindowResizeState,
     /// What tags the window is currently on.
-    pub tags: Vec<TagId>,
+    pub tags: Vec<Tag>,
 }
 
 /// The state of a window's resize operation.

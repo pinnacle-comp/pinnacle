@@ -19,8 +19,8 @@
 ---@field Spawn { command: string[], callback_id: integer? }
 ---@field Request Request
 --Tags
----@field ToggleTag { tag_id: string }
----@field SwitchToTag { tag_id: string }
+---@field ToggleTag { output_name: string, tag_name: string }
+---@field SwitchToTag { output_name: string, tag_name: string }
 ---@field AddTags { output_name: string, tags: string[] }
 ---@field RemoveTags { output_name: string, tags: string[] }
 --Outputs
@@ -39,7 +39,7 @@
 ---@field GetOutputsByModel { model: string }
 ---@field GetOutputsByRes { res: integer[] }
 
----@alias Request _Request | "GetWindowByFocus" | "GetAllWindows"
+---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputByFocus"
 
 ---@class IncomingMsg
 ---@field CallCallback { callback_id: integer, args: Args }
