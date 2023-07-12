@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use smithay::{
-    desktop::{space::SpaceElement, Space, Window},
+    desktop::{Space, Window},
     output::Output,
     utils::{Logical, Size},
 };
@@ -24,127 +24,187 @@ pub enum Direction {
     Bottom,
 }
 
-pub trait Layout<S: SpaceElement> {
-    fn layout(&self, space: &Space<S>, output: &Output);
+// TODO: couple this with the layouts
+#[derive(Debug, Clone, Copy)]
+pub enum Layout {
+    MasterStack,
+    Dwindle,
 }
 
-pub struct MasterStack<S: SpaceElement> {
-    inner: Vec<S>,
-    output: Output,
-}
+impl Layout {
+    pub fn layout(
+        &self,
+        windows: Vec<Window>,
+        tags: Vec<Tag>,
+        space: &Space<Window>,
+        output: &Output,
+    ) {
+        let windows = filter_windows(&windows, tags);
+        match self {
+            Layout::MasterStack => {
+                let master = windows.first();
+                let stack = windows.iter().skip(1);
 
-impl MasterStack<Window> {
-    pub fn master(&self) -> Option<&Window> {
-        self.inner.first()
-    }
+                let Some(master) = master else { return };
 
-    pub fn stack(&self) -> impl Iterator<Item = &Window> {
-        self.inner.iter().skip(1)
-    }
+                let Some(output_geo) = space.output_geometry(output) else {
+                    tracing::error!("could not get output geometry");
+                    return;
+                };
 
-    fn layout_stack(&self, space: &Space<Window>, output: &Output) {
-        let stack_count = self.stack().count();
+                let output_loc = output.current_location();
 
-        let Some(output_geo) = space.output_geometry(output) else {
-            tracing::error!("could not get output geometry");
-            return;
-        };
+                let stack_count = stack.clone().count();
 
-        let output_loc = output.current_location();
+                if stack_count == 0 {
+                    // one window
+                    master.toplevel().with_pending_state(|state| {
+                        state.size = Some(output_geo.size);
+                    });
 
-        let height = output_geo.size.h / stack_count as i32;
+                    master.with_state(|state| {
+                        state.resize_state = WindowResizeState::WaitingForAck(
+                            master.toplevel().send_configure(),
+                            (output_loc.x, output_loc.y).into(),
+                        );
+                    });
+                } else {
+                    let new_master_size: Size<i32, Logical> =
+                        (output_geo.size.w / 2, output_geo.size.h).into();
+                    master.toplevel().with_pending_state(|state| {
+                        state.size = Some(new_master_size);
+                    });
+                    master.with_state(|state| {
+                        state.resize_state = WindowResizeState::WaitingForAck(
+                            master.toplevel().send_configure(),
+                            (output_loc.x, output_loc.y).into(),
+                        );
+                    });
 
-        for (i, win) in self.stack().enumerate() {
-            win.toplevel().with_pending_state(|state| {
-                state.size = Some((output_geo.size.w / 2, height).into());
-            });
+                    let stack_count = stack_count;
 
-            win.with_state(|state| {
-                state.resize_state = WindowResizeState::WaitingForAck(
-                    win.toplevel().send_configure(),
-                    (
-                        output_geo.size.w / 2 + output_loc.x,
-                        i as i32 * height + output_loc.y,
-                    )
-                        .into(),
-                );
-            });
-        }
-    }
-}
+                    let Some(output_geo) = space.output_geometry(output) else {
+                        tracing::error!("could not get output geometry");
+                        return;
+                    };
 
-impl Layout<Window> for MasterStack<Window> {
-    fn layout(&self, space: &Space<Window>, output: &Output) {
-        let Some(master) = self.master() else {
-            return;
-        };
+                    let output_loc = output.current_location();
 
-        let Some(output_geo) = space.output_geometry(output) else {
-            tracing::error!("could not get output geometry");
-            return;
-        };
+                    let height = output_geo.size.h / stack_count as i32;
 
-        let output_loc = output.current_location();
+                    for (i, win) in stack.enumerate() {
+                        win.toplevel().with_pending_state(|state| {
+                            state.size = Some((output_geo.size.w / 2, height).into());
+                        });
 
-        if self.stack().count() == 0 {
-            // one window
-            master.toplevel().with_pending_state(|state| {
-                state.size = Some(output_geo.size);
-            });
+                        win.with_state(|state| {
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                win.toplevel().send_configure(),
+                                (
+                                    output_geo.size.w / 2 + output_loc.x,
+                                    i as i32 * height + output_loc.y,
+                                )
+                                    .into(),
+                            );
+                        });
+                    }
+                }
+            }
+            Layout::Dwindle => {
+                let mut iter = windows.windows(2).peekable();
+                let Some(output_geo) = space.output_geometry(output) else {
+                    tracing::error!("could not get output geometry");
+                    return;
+                };
 
-            master.with_state(|state| {
-                state.resize_state = WindowResizeState::WaitingForAck(
-                    master.toplevel().send_configure(),
-                    (output_loc.x, output_loc.y).into(),
-                );
-            });
-        } else {
-            let new_master_size: Size<i32, Logical> =
-                (output_geo.size.w / 2, output_geo.size.h).into();
-            master.toplevel().with_pending_state(|state| {
-                state.size = Some(new_master_size);
-            });
-            master.with_state(|state| {
-                state.resize_state = WindowResizeState::WaitingForAck(
-                    master.toplevel().send_configure(),
-                    (output_loc.x, output_loc.y).into(),
-                );
-            });
+                let output_loc = output.current_location();
 
-            self.layout_stack(space, output);
-        }
-    }
-}
+                if iter.peek().is_none() {
+                    if let Some(window) = windows.first() {
+                        window.toplevel().with_pending_state(|state| {
+                            state.size = Some(output_geo.size);
+                        });
 
-pub struct Dwindle<S: SpaceElement> {
-    inner: Vec<S>,
-    output: Output,
-}
+                        window.with_state(|state| {
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                window.toplevel().send_configure(),
+                                (output_loc.x, output_loc.y).into(),
+                            );
+                        });
+                    }
+                } else {
+                    let mut div_factor_w = 1;
+                    let mut div_factor_h = 1;
+                    let mut x_factor_1: f32;
+                    let mut y_factor_1: f32;
+                    let mut x_factor_2: f32 = 0.0;
+                    let mut y_factor_2: f32 = 0.0;
 
-impl Layout<Window> for Dwindle<Window> {
-    fn layout(&self, space: &Space<Window>, output: &Output) {
-        todo!()
-    }
-}
+                    for (i, wins) in iter.enumerate() {
+                        let win1 = &wins[0];
+                        let win2 = &wins[1];
 
-pub trait LayoutVec<S: SpaceElement> {
-    /// Interpret this vec as a master-stack layout.
-    fn to_master_stack(&self, output: &Output, tags: Vec<Tag>) -> MasterStack<S>;
-    fn to_dwindle(&self, output: &Output, tags: Vec<Tag>) -> Dwindle<S>;
-}
+                        if i % 2 == 0 {
+                            div_factor_w *= 2;
+                        } else {
+                            div_factor_h *= 2;
+                        }
 
-impl LayoutVec<Window> for Vec<Window> {
-    fn to_master_stack(&self, output: &Output, tags: Vec<Tag>) -> MasterStack<Window> {
-        MasterStack {
-            inner: filter_windows(self, tags),
-            output: output.clone(), // TODO: get rid of?
-        }
-    }
+                        win1.toplevel().with_pending_state(|state| {
+                            let new_size = (
+                                output_geo.size.w / div_factor_w,
+                                output_geo.size.h / div_factor_h,
+                            )
+                                .into();
+                            state.size = Some(new_size);
+                        });
+                        win2.toplevel().with_pending_state(|state| {
+                            let new_size = (
+                                output_geo.size.w / div_factor_w,
+                                output_geo.size.h / div_factor_h,
+                            )
+                                .into();
+                            state.size = Some(new_size);
+                        });
 
-    fn to_dwindle(&self, output: &Output, tags: Vec<Tag>) -> Dwindle<Window> {
-        Dwindle {
-            inner: filter_windows(self, tags),
-            output: output.clone(),
+                        x_factor_1 = x_factor_2;
+                        y_factor_1 = y_factor_2;
+
+                        if i % 2 == 0 {
+                            x_factor_2 += (1.0 - x_factor_2) / 2.0;
+                        } else {
+                            y_factor_2 += (1.0 - y_factor_2) / 2.0;
+                        }
+
+                        win1.with_state(|state| {
+                            let new_loc = (
+                                (output_geo.size.w as f32 * x_factor_1 + output_loc.x as f32)
+                                    as i32,
+                                (output_geo.size.h as f32 * y_factor_1 + output_loc.y as f32)
+                                    as i32,
+                            )
+                                .into();
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                win1.toplevel().send_configure(),
+                                new_loc,
+                            );
+                        });
+                        win2.with_state(|state| {
+                            let new_loc = (
+                                (output_geo.size.w as f32 * x_factor_2 + output_loc.x as f32)
+                                    as i32,
+                                (output_geo.size.h as f32 * y_factor_2 + output_loc.y as f32)
+                                    as i32,
+                            )
+                                .into();
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                win2.toplevel().send_configure(),
+                                new_loc,
+                            );
+                        });
+                    }
+                }
+            }
         }
     }
 }

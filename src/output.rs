@@ -38,7 +38,7 @@ impl WithState for Output {
 }
 
 impl OutputState {
-    pub fn focused_tags(&mut self) -> impl Iterator<Item = &mut Tag> {
-        self.tags.iter_mut().filter(|tag| tag.active())
+    pub fn focused_tags(&self) -> impl Iterator<Item = &Tag> {
+        self.tags.iter().filter(|tag| tag.active())
     }
 }

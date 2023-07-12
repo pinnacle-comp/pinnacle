@@ -47,12 +47,10 @@ pub enum Msg {
     },
 
     // Tag management
-    //  FIXME: tag_id should not be a string
     ToggleTag {
         output_name: String,
         tag_name: String,
     },
-    //  FIXME: tag_id should not be a string
     SwitchToTag {
         output_name: String,
         tag_name: String,
@@ -91,6 +89,7 @@ pub enum Msg {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct RequestId(pub u32);
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 /// Messages that require a server response, usually to provide some data.
 pub enum Request {

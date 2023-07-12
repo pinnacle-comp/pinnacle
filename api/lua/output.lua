@@ -112,7 +112,7 @@ function output.get_by_res(width, height)
     return outputs
 end
 
----Get the currently focused output. This is currently the one with the cursor on it.
+---Get the currently focused output. This is currently implemented as the one with the cursor on it.
 ---@return Output|nil output The output, or nil if none are focused.
 function output.get_focused()
     SendMsg({

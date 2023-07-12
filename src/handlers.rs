@@ -47,7 +47,6 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    layout::{Layout, LayoutVec},
     state::{ClientState, State, WithState},
     window::window_state::WindowResizeState,
 };
@@ -230,10 +229,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 self.space.outputs().next(),
             ) {
                 (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                    let output_tags = state
-                        .focused_tags()
-                        .map(|tag| tag.clone())
-                        .collect::<Vec<_>>();
+                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
                     if !output_tags.is_empty() {
                         output_tags
                     } else if let Some(first_tag) = state.tags.first() {
@@ -265,13 +261,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
         self.loop_handle.insert_idle(move |data| {
             if let Some(focused_output) = &data.state.focus_state.focused_output {
                 focused_output.with_state(|state| {
-                    data.state
-                        .windows
-                        .to_master_stack(
+                    let first_tag = state.focused_tags().next();
+                    if let Some(first_tag) = first_tag {
+                        first_tag.layout().layout(
+                            data.state.windows.clone(),
+                            state.focused_tags().cloned().collect(),
+                            &data.state.space,
                             focused_output,
-                            state.focused_tags().map(|tag| tag.clone()).collect(),
-                        )
-                        .layout(&data.state.space, focused_output);
+                        );
+                    }
                 });
             }
         });
@@ -282,12 +280,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
         self.windows.retain(|window| window.toplevel() != &surface);
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
             focused_output.with_state(|state| {
-                self.windows
-                    .to_master_stack(
+                let first_tag = state.focused_tags().next();
+                if let Some(first_tag) = first_tag {
+                    first_tag.layout().layout(
+                        self.windows.clone(),
+                        state.focused_tags().cloned().collect(),
+                        &self.space,
                         focused_output,
-                        state.focused_tags().map(|tag| tag.clone()).collect(),
-                    )
-                    .layout(&self.space, focused_output);
+                    );
+                }
             });
         }
 

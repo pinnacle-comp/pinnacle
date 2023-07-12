@@ -21,7 +21,6 @@ use crate::{
     },
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
-    layout::{Layout, LayoutVec},
     tag::Tag,
     window::{window_state::WindowResizeState, WindowProperties},
 };
@@ -187,7 +186,7 @@ impl<B: Backend> State<B> {
                             .with_state(|op_state| {
                                 let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
                                 if let Some(tag) = tag {
-                                    if state.tags.contains(&tag) {
+                                    if state.tags.contains(tag) {
                                         state.tags.retain(|tg| tg != tag);
                                     } else {
                                         state.tags.push(tag.clone());
@@ -638,15 +637,18 @@ impl<B: Backend> State<B> {
 
     pub fn re_layout(&mut self, output: &Output) {
         let windows = self.windows.iter().filter(|win| {
-                win.with_state(|state| state.tags.iter().any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output)))
-            }).cloned().collect::<Vec<_>>();
+            win.with_state(|state| state.tags.iter().any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output)))
+        }).cloned().collect::<Vec<_>>();
         let (render, do_not_render) = output.with_state(|state| {
-            self.windows
-                .to_master_stack(
+            let first_tag = state.focused_tags().next();
+            if let Some(first_tag) = first_tag {
+                first_tag.layout().layout(
+                    self.windows.clone(),
+                    state.focused_tags().cloned().collect(),
+                    &self.space,
                     output,
-                    state.focused_tags().map(|tag| tag.clone()).collect(),
-                )
-                .layout(&self.space, output);
+                );
+            }
 
             windows.iter().cloned().partition::<Vec<_>, _>(|win| {
                 win.with_state(|win_state| {

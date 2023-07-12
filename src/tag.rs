@@ -15,6 +15,7 @@ use smithay::output::Output;
 
 use crate::{
     backend::Backend,
+    layout::Layout,
     state::{State, WithState},
 };
 
@@ -37,7 +38,8 @@ struct TagInner {
     name: String,
     /// Whether this tag is active or not.
     active: bool,
-    // TODO: layout
+    /// What layout this tag has.
+    layout: Layout,
 }
 
 impl PartialEq for TagInner {
@@ -67,6 +69,10 @@ impl Tag {
     pub fn set_active(&mut self, active: bool) {
         self.0.borrow_mut().active = active;
     }
+
+    pub fn layout(&self) -> Layout {
+        self.0.borrow().layout
+    }
 }
 
 impl Tag {
@@ -75,6 +81,7 @@ impl Tag {
             id: TagId::next(),
             name,
             active: false,
+            layout: Layout::Dwindle, // TODO: get from config
         })))
     }
 }
