@@ -91,7 +91,7 @@ impl Layout {
 
                     let output_loc = output.current_location();
 
-                    let height = output_geo.size.h / stack_count as i32;
+                    let height = i32::max(output_geo.size.h / stack_count as i32, 40);
 
                     for (i, win) in stack.enumerate() {
                         win.toplevel().with_pending_state(|state| {
@@ -154,7 +154,7 @@ impl Layout {
                         win1.toplevel().with_pending_state(|state| {
                             let new_size = (
                                 output_geo.size.w / div_factor_w,
-                                output_geo.size.h / div_factor_h,
+                                i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
                             state.size = Some(new_size);
@@ -162,7 +162,7 @@ impl Layout {
                         win2.toplevel().with_pending_state(|state| {
                             let new_size = (
                                 output_geo.size.w / div_factor_w,
-                                output_geo.size.h / div_factor_h,
+                                i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
                             state.size = Some(new_size);
@@ -255,7 +255,7 @@ impl Layout {
                         win1.toplevel().with_pending_state(|state| {
                             let new_size = (
                                 output_geo.size.w / div_factor_w,
-                                output_geo.size.h / div_factor_h,
+                                i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
                             state.size = Some(new_size);
@@ -263,7 +263,7 @@ impl Layout {
                         win2.toplevel().with_pending_state(|state| {
                             let new_size = (
                                 output_geo.size.w / div_factor_w,
-                                output_geo.size.h / div_factor_h,
+                                i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
                             state.size = Some(new_size);
