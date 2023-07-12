@@ -66,12 +66,16 @@ impl Tag {
         self.0.borrow().active
     }
 
-    pub fn set_active(&mut self, active: bool) {
+    pub fn set_active(&self, active: bool) {
         self.0.borrow_mut().active = active;
     }
 
     pub fn layout(&self) -> Layout {
         self.0.borrow().layout
+    }
+
+    pub fn set_layout(&self, layout: Layout) {
+        self.0.borrow_mut().layout = layout;
     }
 }
 
@@ -81,7 +85,7 @@ impl Tag {
             id: TagId::next(),
             name,
             active: false,
-            layout: Layout::Dwindle, // TODO: get from config
+            layout: Layout::MasterStack, // TODO: get from config
         })))
     }
 }

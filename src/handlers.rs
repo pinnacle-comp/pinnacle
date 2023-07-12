@@ -19,7 +19,7 @@ use smithay::{
     },
     reexports::{
         calloop::Interest,
-        wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
+        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
             protocol::{wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface},
             Client, Resource,
@@ -223,6 +223,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
+        window.toplevel().with_pending_state(|tl_state| {
+            tl_state.states.set(xdg_toplevel::State::TiledTop);
+            tl_state.states.set(xdg_toplevel::State::TiledBottom);
+            tl_state.states.set(xdg_toplevel::State::TiledLeft);
+            tl_state.states.set(xdg_toplevel::State::TiledRight);
+        });
         window.with_state(|state| {
             state.tags = match (
                 &self.focus_state.focused_output,

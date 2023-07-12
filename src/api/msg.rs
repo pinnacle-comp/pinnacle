@@ -7,7 +7,10 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::window::{window_state::WindowId, WindowProperties};
+use crate::{
+    layout::Layout,
+    window::{window_state::WindowId, WindowProperties},
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -64,6 +67,11 @@ pub enum Msg {
         /// The name of the output you want these tags removed from.
         output_name: String,
         tags: Vec<String>,
+    },
+    SetLayout {
+        output_name: String,
+        tag_name: String,
+        layout: Layout,
     },
 
     // Output management

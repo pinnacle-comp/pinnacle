@@ -23,6 +23,7 @@
 ---@field SwitchToTag { output_name: string, tag_name: string }
 ---@field AddTags { output_name: string, tags: string[] }
 ---@field RemoveTags { output_name: string, tags: string[] }
+---@field SetLayout { output_name: string, tag_name: string, layout: Layout }
 --Outputs
 ---@field ConnectForAllOutputs { callback_id: integer }
 

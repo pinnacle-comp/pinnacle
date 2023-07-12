@@ -25,10 +25,11 @@ pub enum Direction {
 }
 
 // TODO: couple this with the layouts
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     MasterStack,
     Dwindle,
+    Spiral,
 }
 
 impl Layout {
@@ -175,6 +176,108 @@ impl Layout {
                         } else {
                             y_factor_2 += (1.0 - y_factor_2) / 2.0;
                         }
+
+                        win1.with_state(|state| {
+                            let new_loc = (
+                                (output_geo.size.w as f32 * x_factor_1 + output_loc.x as f32)
+                                    as i32,
+                                (output_geo.size.h as f32 * y_factor_1 + output_loc.y as f32)
+                                    as i32,
+                            )
+                                .into();
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                win1.toplevel().send_configure(),
+                                new_loc,
+                            );
+                        });
+                        win2.with_state(|state| {
+                            let new_loc = (
+                                (output_geo.size.w as f32 * x_factor_2 + output_loc.x as f32)
+                                    as i32,
+                                (output_geo.size.h as f32 * y_factor_2 + output_loc.y as f32)
+                                    as i32,
+                            )
+                                .into();
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                win2.toplevel().send_configure(),
+                                new_loc,
+                            );
+                        });
+                    }
+                }
+            }
+            Layout::Spiral => {
+                let mut iter = windows.windows(2).peekable();
+                let Some(output_geo) = space.output_geometry(output) else {
+                    tracing::error!("could not get output geometry");
+                    return;
+                };
+
+                let output_loc = output.current_location();
+
+                if iter.peek().is_none() {
+                    if let Some(window) = windows.first() {
+                        window.toplevel().with_pending_state(|state| {
+                            state.size = Some(output_geo.size);
+                        });
+
+                        window.with_state(|state| {
+                            state.resize_state = WindowResizeState::WaitingForAck(
+                                window.toplevel().send_configure(),
+                                (output_loc.x, output_loc.y).into(),
+                            );
+                        });
+                    }
+                } else {
+                    let mut div_factor_w = 1;
+                    let mut div_factor_h = 1;
+                    let mut x_factor_1: f32 = 0.0;
+                    let mut y_factor_1: f32;
+                    let mut x_factor_2: f32 = 0.0;
+                    let mut y_factor_2: f32;
+
+                    fn series(n: u32) -> f32 {
+                        (0..n)
+                            .map(|n| (-1i32).pow(n) as f32 * (1.0 / 2.0_f32.powi(n as i32)))
+                            .sum()
+                    }
+
+                    for (i, wins) in iter.enumerate() {
+                        let win1 = &wins[0];
+                        let win2 = &wins[1];
+
+                        if i % 2 == 0 {
+                            div_factor_w *= 2;
+                        } else {
+                            div_factor_h *= 2;
+                        }
+
+                        win1.toplevel().with_pending_state(|state| {
+                            let new_size = (
+                                output_geo.size.w / div_factor_w,
+                                output_geo.size.h / div_factor_h,
+                            )
+                                .into();
+                            state.size = Some(new_size);
+                        });
+                        win2.toplevel().with_pending_state(|state| {
+                            let new_size = (
+                                output_geo.size.w / div_factor_w,
+                                output_geo.size.h / div_factor_h,
+                            )
+                                .into();
+                            state.size = Some(new_size);
+                        });
+
+                        y_factor_1 = x_factor_1;
+                        y_factor_2 = x_factor_2;
+
+                        x_factor_1 = {
+                            let first = (i / 4) * 2;
+                            let indices = [first, first + 2, first + 3, first + 2];
+                            series(indices[i % 4] as u32)
+                        };
+                        x_factor_2 = series((i as u32 / 4 + 1) * 2);
 
                         win1.with_state(|state| {
                             let new_loc = (

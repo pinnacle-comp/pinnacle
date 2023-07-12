@@ -271,6 +271,18 @@ impl<B: Backend> State<B> {
                     });
                 }
             }
+            Msg::SetLayout { output_name, tag_name, layout } => {
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
+
+                    output.with_state(|state| {
+                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
+                            tag.set_layout(layout);
+                        }
+                    });
+                    self.re_layout(&output);
+                }
+            }
 
             Msg::ConnectForAllOutputs { callback_id } => {
                 let stream = self

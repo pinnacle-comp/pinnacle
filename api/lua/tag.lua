@@ -4,6 +4,11 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
+---@alias Layout
+---| "MasterStack" # One master window on the left with all other windows stacked to the right.
+---| "Dwindle" # Windows split in half towards the bottom right corner.
+---| "Spiral" # Windows split in half in a spiral.
+
 local tag = {}
 
 ---Add tags.
@@ -121,4 +126,30 @@ function tag.switch_to(name, output)
     end
 end
 
+---Set a layout for the tag on the specified output. If there is none, set it for the tag on the currently focused one.
+---@param name string The name of the tag.
+---@param layout Layout The layout.
+---@param output Output? The output.
+function tag.set_layout(name, layout, output)
+    if output ~= nil then
+        SendMsg({
+            SetLayout = {
+                output_name = output.name,
+                tag_name = name,
+                layout = layout,
+            },
+        })
+    else
+        local op = require("output").get_focused()
+        if op ~= nil then
+            SendMsg({
+                SetLayout = {
+                    output_name = op.name,
+                    tag_name = name,
+                    layout = layout,
+                },
+            })
+        end
+    end
+end
 return tag

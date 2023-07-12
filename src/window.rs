@@ -5,7 +5,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use smithay::{
-    desktop::Window, reexports::wayland_server::protocol::wl_surface::WlSurface,
+    desktop::Window,
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
     wayland::seat::WaylandFocus,
 };
 
@@ -46,10 +50,17 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
 
                     window.toplevel().send_pending_configure();
 
-                    state.space.map_element(window.clone(), prev_loc, false); // TODO: should it activate?
+                    state.space.map_element(window.clone(), prev_loc, false);
+                    // TODO: should it activate?
                 }
 
                 window_state.floating = Float::Floating;
+                window.toplevel().with_pending_state(|tl_state| {
+                    tl_state.states.unset(xdg_toplevel::State::TiledTop);
+                    tl_state.states.unset(xdg_toplevel::State::TiledBottom);
+                    tl_state.states.unset(xdg_toplevel::State::TiledLeft);
+                    tl_state.states.unset(xdg_toplevel::State::TiledRight);
+                });
             }
             Float::Floating => {
                 window_state.floating = Float::Tiled(Some((
@@ -58,6 +69,12 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
                     state.space.element_location(window).unwrap(),
                     window.geometry().size,
                 )));
+                window.toplevel().with_pending_state(|tl_state| {
+                    tl_state.states.set(xdg_toplevel::State::TiledTop);
+                    tl_state.states.set(xdg_toplevel::State::TiledBottom);
+                    tl_state.states.set(xdg_toplevel::State::TiledLeft);
+                    tl_state.states.set(xdg_toplevel::State::TiledRight);
+                });
             }
         }
     });
@@ -65,7 +82,6 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     let output = state.focus_state.focused_output.clone().unwrap();
     state.re_layout(&output);
 
-    let output = state.focus_state.focused_output.as_ref().unwrap();
     let render = output.with_state(|op_state| {
         state
             .windows

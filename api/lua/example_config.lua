@@ -65,6 +65,19 @@ require("pinnacle").setup(function(pinnacle)
         tag.toggle("1", op)
     end)
 
+    ---@type Layout[]
+    local layouts = { "MasterStack", "Dwindle", "Spiral" }
+    local index = 1
+
+    input.keybind({ mod_key }, keys.space, function()
+        tag.set_layout("1", layouts[index])
+        if index + 1 > #layouts then
+            index = 1
+        else
+            index = index + 1
+        end
+    end)
+
     input.keybind({ mod_key }, keys.KEY_1, function()
         tag.switch_to("1")
     end)
