@@ -1,3 +1,5 @@
+Cool stuff happens on the dev branch sometimes, check it out!
+
 # <div align="center">Pinnacle</div>
 <div align="center">
     <picture>
