@@ -91,23 +91,44 @@ impl Layout {
 
                     let output_loc = output.current_location();
 
+                    // INFO: Some windows crash the compositor if they become too short in height,
+                    // |     so they're limited to a minimum of 40 pixels as a workaround.
                     let height = i32::max(output_geo.size.h / stack_count as i32, 40);
+
+                    let mut empty_height_at_bottom =
+                        output_geo.size.h - (height * stack_count as i32);
+                    let mut heights = vec![height; stack_count];
+
+                    // PERF: this cycles through the vec adding 1 pixel until all space is filled
+                    if empty_height_at_bottom > 0 {
+                        'outer: loop {
+                            for ht in heights.iter_mut() {
+                                if empty_height_at_bottom == 0 {
+                                    break 'outer;
+                                }
+                                *ht += 1;
+                                empty_height_at_bottom -= 1;
+                            }
+                        }
+                    }
+
+                    let mut y = 0;
+
+                    tracing::debug!("heights: {heights:?}");
 
                     for (i, win) in stack.enumerate() {
                         win.toplevel().with_pending_state(|state| {
-                            state.size = Some((output_geo.size.w / 2, height).into());
+                            state.size = Some((output_geo.size.w / 2, heights[i]).into());
                         });
 
                         win.with_state(|state| {
                             state.resize_state = WindowResizeState::WaitingForAck(
                                 win.toplevel().send_configure(),
-                                (
-                                    output_geo.size.w / 2 + output_loc.x,
-                                    i as i32 * height + output_loc.y,
-                                )
-                                    .into(),
+                                (output_geo.size.w / 2 + output_loc.x, y + output_loc.y).into(),
                             );
                         });
+
+                        y += heights[i];
                     }
                 }
             }
@@ -236,6 +257,7 @@ impl Layout {
                     let mut x_factor_2: f32 = 0.0;
                     let mut y_factor_2: f32;
 
+                    // really starting to get flashbacks to calculus class here
                     fn series(n: u32) -> f32 {
                         (0..n)
                             .map(|n| (-1i32).pow(n) as f32 * (1.0 / 2.0_f32.powi(n as i32)))
