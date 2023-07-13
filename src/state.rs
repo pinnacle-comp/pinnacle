@@ -11,7 +11,7 @@ use std::{
     os::{fd::AsRawFd, unix::net::UnixStream},
     path::Path,
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, time::Duration,
 };
 
 use crate::{
@@ -676,6 +676,11 @@ impl<B: Backend> State<B> {
                 })
             })
         });
+        for window in render.iter() {
+            // INFO: Here we send a frame with a duration of 0. This is because some windows won't
+            // |     send a commit when they're not visible. More info in smithay::desktop::utils::send_frames_surface_tree
+            window.send_frame(output, self.clock.now(), Some(Duration::ZERO), surface_primary_scanout_output);
+        }
         self.schedule_on_commit(render, |data| {
             for win in do_not_render {
                 data.state.space.unmap_elem(&win);

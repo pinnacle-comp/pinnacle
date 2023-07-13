@@ -174,7 +174,7 @@ impl Layout {
 
                         win1.toplevel().with_pending_state(|state| {
                             let new_size = (
-                                output_geo.size.w / div_factor_w,
+                                i32::max(output_geo.size.w / div_factor_w, 1),
                                 i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
@@ -182,7 +182,7 @@ impl Layout {
                         });
                         win2.toplevel().with_pending_state(|state| {
                             let new_size = (
-                                output_geo.size.w / div_factor_w,
+                                i32::max(output_geo.size.w / div_factor_w, 1),
                                 i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
@@ -276,7 +276,7 @@ impl Layout {
 
                         win1.toplevel().with_pending_state(|state| {
                             let new_size = (
-                                output_geo.size.w / div_factor_w,
+                                i32::max(output_geo.size.w / div_factor_w, 1),
                                 i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();
@@ -284,7 +284,7 @@ impl Layout {
                         });
                         win2.toplevel().with_pending_state(|state| {
                             let new_size = (
-                                output_geo.size.w / div_factor_w,
+                                i32::max(output_geo.size.w / div_factor_w, 1),
                                 i32::max(output_geo.size.h / div_factor_h, 40),
                             )
                                 .into();

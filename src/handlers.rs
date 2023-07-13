@@ -398,9 +398,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        // tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
-            // tracing::debug!("found window for surface");
             window.with_state(|state| {
                 if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
                     match &configure {
@@ -414,24 +412,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     }
                 }
             });
-
-            // HACK: If a window is currently going through something that generates a bunch of
-            // |     commits, like an animation, unmapping it while it's doing that has a chance
-            // |     to cause any send_configures to not trigger a commit. I'm not sure if this is because of
-            // |     the way I've implemented things or if it's something else. Because of me
-            // |     mapping the element in commit, this means that the window won't reappear on a tag
-            // |     change. The code below is a workaround until I can figure it out.
-            if !self.space.elements().any(|win| win == &window) {
-                window.with_state(|state| {
-                    if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
-                        tracing::debug!("remapping window");
-                        let win = window.clone();
-                        self.loop_handle.insert_idle(move |data| {
-                            data.state.space.map_element(win, new_loc, false);
-                        });
-                    }
-                });
-            }
         }
     }
 
