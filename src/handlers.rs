@@ -116,7 +116,7 @@ impl<B: Backend> CompositorHandler for State<B> {
 
         if let Some(window) = self.window_for_surface(surface) {
             window.with_state(|state| {
-                if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
+                if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
@@ -400,12 +400,12 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
         if let Some(window) = self.window_for_surface(&surface) {
             window.with_state(|state| {
-                if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
+                if let WindowResizeState::Requested(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
                                 tracing::debug!("acked configure, new loc is {:?}", new_loc);
-                                state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
+                                state.resize_state = WindowResizeState::Acknowledged(new_loc);
                             }
                         }
                         Configure::Popup(_) => todo!(),

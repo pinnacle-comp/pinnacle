@@ -70,12 +70,12 @@ pub enum WindowResizeState {
     Idle,
     /// The window has received a configure request with a new size. The desired location and the
     /// configure request's serial should be provided here.
-    WaitingForAck(Serial, Point<i32, Logical>),
+    Requested(Serial, Point<i32, Logical>),
     /// The client has received the configure request and has successfully changed its size. It's
     /// now safe to move the window in [`CompositorHandler.commit()`] without flickering.
     ///
     /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
-    WaitingForCommit(Point<i32, Logical>),
+    Acknowledged(Point<i32, Logical>),
 }
 
 pub enum Float {

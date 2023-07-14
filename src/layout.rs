@@ -64,7 +64,7 @@ impl Layout {
                     });
 
                     master.with_state(|state| {
-                        state.resize_state = WindowResizeState::WaitingForAck(
+                        state.resize_state = WindowResizeState::Requested(
                             master.toplevel().send_configure(),
                             (output_loc.x, output_loc.y).into(),
                         );
@@ -76,7 +76,7 @@ impl Layout {
                         state.size = Some(new_master_size);
                     });
                     master.with_state(|state| {
-                        state.resize_state = WindowResizeState::WaitingForAck(
+                        state.resize_state = WindowResizeState::Requested(
                             master.toplevel().send_configure(),
                             (output_loc.x, output_loc.y).into(),
                         );
@@ -122,7 +122,7 @@ impl Layout {
                         });
 
                         win.with_state(|state| {
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 win.toplevel().send_configure(),
                                 (output_geo.size.w / 2 + output_loc.x, y + output_loc.y).into(),
                             );
@@ -148,7 +148,7 @@ impl Layout {
                         });
 
                         window.with_state(|state| {
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 window.toplevel().send_configure(),
                                 (output_loc.x, output_loc.y).into(),
                             );
@@ -206,7 +206,7 @@ impl Layout {
                                     as i32,
                             )
                                 .into();
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 win1.toplevel().send_configure(),
                                 new_loc,
                             );
@@ -219,7 +219,7 @@ impl Layout {
                                     as i32,
                             )
                                 .into();
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 win2.toplevel().send_configure(),
                                 new_loc,
                             );
@@ -243,7 +243,7 @@ impl Layout {
                         });
 
                         window.with_state(|state| {
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 window.toplevel().send_configure(),
                                 (output_loc.x, output_loc.y).into(),
                             );
@@ -309,7 +309,7 @@ impl Layout {
                                     as i32,
                             )
                                 .into();
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 win1.toplevel().send_configure(),
                                 new_loc,
                             );
@@ -322,7 +322,7 @@ impl Layout {
                                     as i32,
                             )
                                 .into();
-                            state.resize_state = WindowResizeState::WaitingForAck(
+                            state.resize_state = WindowResizeState::Requested(
                                 win2.toplevel().send_configure(),
                                 new_loc,
                             );
@@ -371,12 +371,12 @@ impl<B: Backend> State<B> {
 
         let serial = win1.toplevel().send_configure();
         win1.with_state(|state| {
-            state.resize_state = WindowResizeState::WaitingForAck(serial, win2_loc);
+            state.resize_state = WindowResizeState::Requested(serial, win2_loc);
         });
 
         let serial = win2.toplevel().send_configure();
         win2.with_state(|state| {
-            state.resize_state = WindowResizeState::WaitingForAck(serial, win1_loc);
+            state.resize_state = WindowResizeState::Requested(serial, win1_loc);
         });
 
         let mut elems = self
