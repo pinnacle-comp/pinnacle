@@ -4,6 +4,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use itertools::{Either, Itertools};
 use smithay::{
     desktop::{Space, Window},
     output::Output,
@@ -17,19 +18,16 @@ use crate::{
     window::window_state::WindowResizeState,
 };
 
-pub enum Direction {
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
 // TODO: couple this with the layouts
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     MasterStack,
     Dwindle,
     Spiral,
+    CornerTopLeft,
+    CornerTopRight,
+    CornerBottomLeft,
+    CornerBottomRight,
 }
 
 impl Layout {
@@ -41,19 +39,20 @@ impl Layout {
         output: &Output,
     ) {
         let windows = filter_windows(&windows, tags);
+
+        let Some(output_geo) = space.output_geometry(output) else {
+            tracing::error!("could not get output geometry");
+            return;
+        };
+
+        let output_loc = output.current_location();
+
         match self {
             Layout::MasterStack => {
                 let master = windows.first();
                 let stack = windows.iter().skip(1);
 
                 let Some(master) = master else { return };
-
-                let Some(output_geo) = space.output_geometry(output) else {
-                    tracing::error!("could not get output geometry");
-                    return;
-                };
-
-                let output_loc = output.current_location();
 
                 let stack_count = stack.clone().count();
 
@@ -84,62 +83,37 @@ impl Layout {
 
                     let stack_count = stack_count;
 
-                    let Some(output_geo) = space.output_geometry(output) else {
-                        tracing::error!("could not get output geometry");
-                        return;
-                    };
-
-                    let output_loc = output.current_location();
-
-                    // INFO: Some windows crash the compositor if they become too short in height,
-                    // |     so they're limited to a minimum of 40 pixels as a workaround.
-                    let height = i32::max(output_geo.size.h / stack_count as i32, 40);
-
-                    let mut empty_height_at_bottom =
-                        output_geo.size.h - (height * stack_count as i32);
-                    let mut heights = vec![height; stack_count];
-
-                    // PERF: this cycles through the vec adding 1 pixel until all space is filled
-                    if empty_height_at_bottom > 0 {
-                        'outer: loop {
-                            for ht in heights.iter_mut() {
-                                if empty_height_at_bottom == 0 {
-                                    break 'outer;
-                                }
-                                *ht += 1;
-                                empty_height_at_bottom -= 1;
-                            }
-                        }
+                    let height = output_geo.size.h as f32 / stack_count as f32;
+                    let mut y_s = vec![];
+                    for i in 0..stack_count {
+                        y_s.push((i as f32 * height).round() as i32);
                     }
-
-                    let mut y = 0;
-
-                    tracing::debug!("heights: {heights:?}");
+                    let heights = y_s
+                        .windows(2)
+                        .map(|pair| pair[1] - pair[0])
+                        .chain(vec![output_geo.size.h - y_s.last().expect("vec was empty")])
+                        .collect::<Vec<_>>();
 
                     for (i, win) in stack.enumerate() {
                         win.toplevel().with_pending_state(|state| {
-                            state.size = Some((output_geo.size.w / 2, heights[i]).into());
+                            // INFO: Some windows crash the compositor if they become too short in height,
+                            // |     so they're limited to a minimum of 40 pixels as a workaround.
+                            state.size =
+                                Some((output_geo.size.w / 2, i32::max(heights[i], 40)).into());
                         });
 
                         win.with_state(|state| {
                             state.resize_state = WindowResizeState::Requested(
                                 win.toplevel().send_configure(),
-                                (output_geo.size.w / 2 + output_loc.x, y + output_loc.y).into(),
+                                (output_geo.size.w / 2 + output_loc.x, y_s[i] + output_loc.y)
+                                    .into(),
                             );
                         });
-
-                        y += heights[i];
                     }
                 }
             }
             Layout::Dwindle => {
                 let mut iter = windows.windows(2).peekable();
-                let Some(output_geo) = space.output_geometry(output) else {
-                    tracing::error!("could not get output geometry");
-                    return;
-                };
-
-                let output_loc = output.current_location();
 
                 if iter.peek().is_none() {
                     if let Some(window) = windows.first() {
@@ -155,86 +129,93 @@ impl Layout {
                         });
                     }
                 } else {
-                    let mut div_factor_w = 1;
-                    let mut div_factor_h = 1;
-                    let mut x_factor_1: f32;
-                    let mut y_factor_1: f32;
-                    let mut x_factor_2: f32 = 0.0;
-                    let mut y_factor_2: f32 = 0.0;
-
                     for (i, wins) in iter.enumerate() {
                         let win1 = &wins[0];
                         let win2 = &wins[1];
 
-                        if i % 2 == 0 {
-                            div_factor_w *= 2;
-                        } else {
-                            div_factor_h *= 2;
+                        enum Slice {
+                            Right,
+                            Below,
                         }
 
-                        win1.toplevel().with_pending_state(|state| {
-                            let new_size = (
-                                i32::max(output_geo.size.w / div_factor_w, 1),
-                                i32::max(output_geo.size.h / div_factor_h, 40),
-                            )
-                                .into();
-                            state.size = Some(new_size);
-                        });
-                        win2.toplevel().with_pending_state(|state| {
-                            let new_size = (
-                                i32::max(output_geo.size.w / div_factor_w, 1),
-                                i32::max(output_geo.size.h / div_factor_h, 40),
-                            )
-                                .into();
-                            state.size = Some(new_size);
-                        });
-
-                        x_factor_1 = x_factor_2;
-                        y_factor_1 = y_factor_2;
-
-                        if i % 2 == 0 {
-                            x_factor_2 += (1.0 - x_factor_2) / 2.0;
+                        let slice = if i % 2 == 0 {
+                            Slice::Right
                         } else {
-                            y_factor_2 += (1.0 - y_factor_2) / 2.0;
+                            Slice::Below
+                        };
+
+                        if i == 0 {
+                            win1.toplevel()
+                                .with_pending_state(|state| state.size = Some(output_geo.size));
+                            win1.with_state(|state| {
+                                state.resize_state = WindowResizeState::Requested(
+                                    win1.toplevel().send_configure(),
+                                    output_loc,
+                                )
+                            });
                         }
 
-                        win1.with_state(|state| {
-                            let new_loc = (
-                                (output_geo.size.w as f32 * x_factor_1 + output_loc.x as f32)
-                                    as i32,
-                                (output_geo.size.h as f32 * y_factor_1 + output_loc.y as f32)
-                                    as i32,
-                            )
-                                .into();
-                            state.resize_state = WindowResizeState::Requested(
-                                win1.toplevel().send_configure(),
-                                new_loc,
-                            );
+                        let win1_size = win1.toplevel().with_pending_state(|state| {
+                            state.size.expect("size should have been set")
                         });
-                        win2.with_state(|state| {
-                            let new_loc = (
-                                (output_geo.size.w as f32 * x_factor_2 + output_loc.x as f32)
-                                    as i32,
-                                (output_geo.size.h as f32 * y_factor_2 + output_loc.y as f32)
-                                    as i32,
-                            )
-                                .into();
-                            state.resize_state = WindowResizeState::Requested(
-                                win2.toplevel().send_configure(),
-                                new_loc,
-                            );
+                        let win1_loc = win1.with_state(|state| {
+                            let WindowResizeState::Requested(_, loc) = state.resize_state else { unreachable!() };
+                            loc
                         });
+
+                        match slice {
+                            Slice::Right => {
+                                let width_partition = win1_size.w / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((width_partition, win1_size.h).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        (win1_loc.x + (win1_size.w - width_partition), win1_loc.y)
+                                            .into(),
+                                    );
+                                });
+                            }
+                            Slice::Below => {
+                                let height_partition = win1_size.h / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((win1_size.w, height_partition).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        (win1_loc.x, win1_loc.y + (win1_size.h - height_partition))
+                                            .into(),
+                                    );
+                                });
+                            }
+                        }
                     }
                 }
             }
             Layout::Spiral => {
                 let mut iter = windows.windows(2).peekable();
-                let Some(output_geo) = space.output_geometry(output) else {
-                    tracing::error!("could not get output geometry");
-                    return;
-                };
-
-                let output_loc = output.current_location();
 
                 if iter.peek().is_none() {
                     if let Some(window) = windows.first() {
@@ -250,86 +231,199 @@ impl Layout {
                         });
                     }
                 } else {
-                    let mut div_factor_w = 1;
-                    let mut div_factor_h = 1;
-                    let mut x_factor_1: f32 = 0.0;
-                    let mut y_factor_1: f32;
-                    let mut x_factor_2: f32 = 0.0;
-                    let mut y_factor_2: f32;
-
-                    // really starting to get flashbacks to calculus class here
-                    fn series(n: u32) -> f32 {
-                        (0..n)
-                            .map(|n| (-1i32).pow(n) as f32 * (1.0 / 2.0_f32.powi(n as i32)))
-                            .sum()
-                    }
-
                     for (i, wins) in iter.enumerate() {
                         let win1 = &wins[0];
                         let win2 = &wins[1];
 
-                        if i % 2 == 0 {
-                            div_factor_w *= 2;
-                        } else {
-                            div_factor_h *= 2;
+                        enum Slice {
+                            Above,
+                            Below,
+                            Left,
+                            Right,
                         }
 
-                        win1.toplevel().with_pending_state(|state| {
-                            let new_size = (
-                                i32::max(output_geo.size.w / div_factor_w, 1),
-                                i32::max(output_geo.size.h / div_factor_h, 40),
-                            )
-                                .into();
-                            state.size = Some(new_size);
-                        });
-                        win2.toplevel().with_pending_state(|state| {
-                            let new_size = (
-                                i32::max(output_geo.size.w / div_factor_w, 1),
-                                i32::max(output_geo.size.h / div_factor_h, 40),
-                            )
-                                .into();
-                            state.size = Some(new_size);
-                        });
-
-                        y_factor_1 = x_factor_1;
-                        y_factor_2 = x_factor_2;
-
-                        x_factor_1 = {
-                            let first = (i / 4) * 2;
-                            let indices = [first, first + 2, first + 3, first + 2];
-                            series(indices[i % 4] as u32)
+                        let slice = match i % 4 {
+                            0 => Slice::Right,
+                            1 => Slice::Below,
+                            2 => Slice::Left,
+                            3 => Slice::Above,
+                            _ => unreachable!(),
                         };
-                        x_factor_2 = series((i as u32 / 4 + 1) * 2);
 
-                        win1.with_state(|state| {
-                            let new_loc = (
-                                (output_geo.size.w as f32 * x_factor_1 + output_loc.x as f32)
-                                    as i32,
-                                (output_geo.size.h as f32 * y_factor_1 + output_loc.y as f32)
-                                    as i32,
-                            )
-                                .into();
-                            state.resize_state = WindowResizeState::Requested(
-                                win1.toplevel().send_configure(),
-                                new_loc,
-                            );
+                        if i == 0 {
+                            win1.toplevel()
+                                .with_pending_state(|state| state.size = Some(output_geo.size));
+                            win1.with_state(|state| {
+                                state.resize_state = WindowResizeState::Requested(
+                                    win1.toplevel().send_configure(),
+                                    output_loc,
+                                )
+                            });
+                        }
+
+                        let win1_size = win1.toplevel().with_pending_state(|state| {
+                            state.size.expect("size should have been set")
                         });
-                        win2.with_state(|state| {
-                            let new_loc = (
-                                (output_geo.size.w as f32 * x_factor_2 + output_loc.x as f32)
-                                    as i32,
-                                (output_geo.size.h as f32 * y_factor_2 + output_loc.y as f32)
-                                    as i32,
-                            )
-                                .into();
-                            state.resize_state = WindowResizeState::Requested(
-                                win2.toplevel().send_configure(),
-                                new_loc,
-                            );
+                        let win1_loc = win1.with_state(|state| {
+                            let WindowResizeState::Requested(_, loc) = state.resize_state else { unreachable!() };
+                            loc
                         });
+
+                        match slice {
+                            Slice::Above => {
+                                let height_partition = win1_size.h / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        (win1_loc.x, win1_loc.y + height_partition).into(),
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((win1_size.w, height_partition).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                            }
+                            Slice::Below => {
+                                let height_partition = win1_size.h / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((win1_size.w, height_partition).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        (win1_loc.x, win1_loc.y + (win1_size.h - height_partition))
+                                            .into(),
+                                    );
+                                });
+                            }
+                            Slice::Left => {
+                                let width_partition = win1_size.w / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        (win1_loc.x + width_partition, win1_loc.y).into(),
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((width_partition, win1_size.h).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                            }
+                            Slice::Right => {
+                                let width_partition = win1_size.w / 2;
+                                win1.toplevel().with_pending_state(|state| {
+                                    state.size =
+                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                });
+                                win1.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win1.toplevel().send_configure(),
+                                        win1_loc,
+                                    );
+                                });
+                                win2.toplevel().with_pending_state(|state| {
+                                    state.size = Some((width_partition, win1_size.h).into());
+                                });
+                                win2.with_state(|state| {
+                                    state.resize_state = WindowResizeState::Requested(
+                                        win2.toplevel().send_configure(),
+                                        (win1_loc.x + (win1_size.w - width_partition), win1_loc.y)
+                                            .into(),
+                                    );
+                                });
+                            }
+                        }
                     }
                 }
             }
+            Layout::CornerTopLeft => match windows.len() {
+                0 => (),
+                1 => {
+                    windows[0].toplevel().with_pending_state(|state| {
+                        state.size = Some(output_geo.size);
+                    });
+
+                    windows[0].with_state(|state| {
+                        state.resize_state = WindowResizeState::Requested(
+                            windows[0].toplevel().send_configure(),
+                            (output_loc.x, output_loc.y).into(),
+                        );
+                    });
+                }
+                2 => {
+                    windows[0].toplevel().with_pending_state(|state| {
+                        state.size = Some((output_geo.size.w / 2, output_geo.size.h).into());
+                    });
+                    windows[0].with_state(|state| {
+                        state.resize_state = WindowResizeState::Requested(
+                            windows[0].toplevel().send_configure(),
+                            (output_loc.x, output_loc.y).into(),
+                        );
+                    });
+                    windows[1].toplevel().with_pending_state(|state| {
+                        state.size = Some((output_geo.size.w / 2, output_geo.size.h).into());
+                    });
+                    windows[1].with_state(|state| {
+                        state.resize_state = WindowResizeState::Requested(
+                            windows[1].toplevel().send_configure(),
+                            (output_loc.x + output_geo.size.w / 2, output_loc.y).into(),
+                        );
+                    });
+                }
+                _ => {
+                    let mut windows = windows.into_iter();
+                    let Some(corner) = windows.next() else { unreachable!() };
+                    let (horiz_stack, vert_stack): (Vec<Window>, Vec<Window>) =
+                        windows.enumerate().partition_map(|(i, win)| {
+                            if i % 2 == 0 {
+                                Either::Left(win)
+                            } else {
+                                Either::Right(win)
+                            }
+                        });
+
+                    corner.toplevel().with_pending_state(|state| {
+                        state.size = Some((output_geo.size.w / 2, output_geo.size.h / 2).into());
+                    });
+                    corner.with_state(|state| {
+                        state.resize_state = WindowResizeState::Requested(
+                            corner.toplevel().send_configure(),
+                            (output_loc.x, output_loc.y).into(),
+                        );
+                    });
+                }
+            },
+            Layout::CornerTopRight => todo!(),
+            Layout::CornerBottomLeft => todo!(),
+            Layout::CornerBottomRight => todo!(),
         }
     }
 }
