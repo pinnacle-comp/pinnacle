@@ -11,7 +11,7 @@ use std::{
     os::{fd::AsRawFd, unix::net::UnixStream},
     path::Path,
     process::Stdio,
-    sync::{Arc, Mutex}, time::Duration,
+    sync::{Arc, Mutex},
 };
 
 use crate::{
@@ -676,45 +676,58 @@ impl<B: Backend> State<B> {
                 })
             })
         });
-        for window in render.iter() {
-            // INFO: Here we send a frame with a duration of 0. This is because some windows won't
-            // |     send a commit when they're not visible. More info in smithay::desktop::utils::send_frames_surface_tree
-            window.send_frame(output, self.clock.now(), Some(Duration::ZERO), surface_primary_scanout_output);
-        }
-        self.schedule_on_commit(render, |data| {
-            for win in do_not_render {
-                data.state.space.unmap_elem(&win);
-            }
-        });
-    }
 
-    /// Schedule something to be done when windows have finished committing and have become
-    /// idle.
-    pub fn schedule_on_commit<F>(&mut self, windows: Vec<Window>, on_commit: F)
-    where
-        F: FnOnce(&mut CalloopData<B>) + 'static,
-    {
-        tracing::debug!("scheduling on_commit");
+        let clone = render.clone();
         self.loop_handle.insert_idle(|data| {
-            tracing::debug!("running idle cb");
-            tracing::debug!("win len is {}", windows.len());
-            for window in windows.iter() {
-                window.with_state(|state| {
-                    tracing::debug!("win state is {:?}", state.resize_state);
-                });
-                if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle))
-                {
-                    tracing::debug!("some windows not idle");
-                    data.state.loop_handle.insert_idle(|data| {
-                        data.state.schedule_on_commit(windows, on_commit);
-                    });
-                    return;
+            schedule_on_commit(data, clone, |dt| {
+                for win in do_not_render {
+                    dt.state.space.unmap_elem(&win);
                 }
-            }
-
-            on_commit(data);
+            })
         });
+
+        // let blocker = WindowBlockerAll::new(render.clone());
+        // blocker.insert_into_loop(self);
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
+
+        // let (blocker, source) = WindowBlocker::block_all::<B>(render.clone());
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
+        // self.loop_handle.insert_idle(move |data| source(render.clone(), data));
+
+        // let (blocker, source) = WindowBlocker::new::<B>(render.clone());
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
+        // self.loop_handle.insert_idle(move |data| source(render.clone(), render.clone(), data));
     }
+}
+/// Schedule something to be done when windows have finished committing and have become
+/// idle.
+pub fn schedule_on_commit<F, B: Backend>(data: &mut CalloopData<B>, windows: Vec<Window>, on_commit: F)
+    where
+    F: FnOnce(&mut CalloopData<B>) + 'static,
+{
+    // tracing::debug!("scheduling on_commit");
+    // tracing::debug!("win len is {}", windows.len());
+    for window in windows.iter() {
+        window.with_state(|state| {
+            // tracing::debug!("win state is {:?}", state.resize_state);
+        });
+        if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle))
+        {
+            // tracing::debug!("some windows not idle");
+            data.state.loop_handle.insert_idle(|data| {
+                schedule_on_commit(data, windows, on_commit);
+            });
+            return;
+        }
+    }
+
+    on_commit(data);
 }
 
 impl<B: Backend> State<B> {

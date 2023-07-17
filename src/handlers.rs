@@ -4,14 +4,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::time::Duration;
+
 use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_output,
     delegate_presentation, delegate_relative_pointer, delegate_seat, delegate_shm,
     delegate_viewporter, delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, PopupKeyboardGrab, PopupKind, PopupPointerGrab,
-        PopupUngrabStrategy, Window,
+        find_popup_root_surface, utils::surface_primary_scanout_output, PopupKeyboardGrab,
+        PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
     },
     input::{
         pointer::{CursorImageStatus, Focus},
@@ -48,7 +50,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{ClientState, State, WithState},
-    window::window_state::WindowResizeState,
+    window::{window_state::WindowResizeState, WindowBlocker, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -122,6 +124,12 @@ impl<B: Backend> CompositorHandler for State<B> {
                 }
             });
         }
+        // let states = self
+        //     .windows
+        //     .iter()
+        //     .map(|win| win.with_state(|state| state.resize_state.clone()))
+        //     .collect::<Vec<_>>();
+        // tracing::debug!("states: {states:?}");
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -250,8 +258,67 @@ impl<B: Backend> XdgShellHandler for State<B> {
             tracing::debug!("new window, tags are {:?}", state.tags);
         });
 
+        let windows_on_output = self
+            .windows
+            .iter()
+            .filter(|win| {
+                win.with_state(|state| {
+                    self.focus_state
+                        .focused_output
+                        .as_ref()
+                        .unwrap()
+                        .with_state(|op_state| {
+                            op_state
+                                .tags
+                                .iter()
+                                .any(|tag| state.tags.iter().any(|tg| tg == tag))
+                        })
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
         self.windows.push(window.clone());
         // self.space.map_element(window.clone(), (0, 0), true);
+        if let Some(focused_output) = self.focus_state.focused_output.clone() {
+            focused_output.with_state(|state| {
+                let first_tag = state.focused_tags().next();
+                if let Some(first_tag) = first_tag {
+                    first_tag.layout().layout(
+                        self.windows.clone(),
+                        state.focused_tags().cloned().collect(),
+                        &self.space,
+                        &focused_output,
+                    );
+                }
+            });
+            BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
+            tracing::debug!(
+                "blocker {}",
+                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+            );
+            for win in windows_on_output.iter() {
+                compositor::add_blocker(win.toplevel().wl_surface(), WindowBlocker);
+            }
+            let clone = window.clone();
+            self.loop_handle.insert_idle(|data| {
+                crate::state::schedule_on_commit(data, vec![clone], move |data| {
+                    BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
+                    tracing::debug!(
+                        "blocker {}",
+                        BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+                    );
+                    for client in windows_on_output
+                        .iter()
+                        .filter_map(|win| win.toplevel().wl_surface().client())
+                    {
+                        data.state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(&mut data.state, &data.display.handle())
+                    }
+                })
+            });
+        }
         self.loop_handle.insert_idle(move |data| {
             data.state
                 .seat
@@ -262,22 +329,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     Some(window.toplevel().wl_surface().clone()),
                     SERIAL_COUNTER.next_serial(),
                 );
-        });
-
-        self.loop_handle.insert_idle(move |data| {
-            if let Some(focused_output) = &data.state.focus_state.focused_output {
-                focused_output.with_state(|state| {
-                    let first_tag = state.focused_tags().next();
-                    if let Some(first_tag) = first_tag {
-                        first_tag.layout().layout(
-                            data.state.windows.clone(),
-                            state.focused_tags().cloned().collect(),
-                            &data.state.space,
-                            focused_output,
-                        );
-                    }
-                });
-            }
         });
     }
 
@@ -404,8 +455,18 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
-                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
+                                // tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.resize_state = WindowResizeState::Acknowledged(new_loc);
+                                if let Some(focused_output) =
+                                    self.focus_state.focused_output.clone()
+                                {
+                                    window.send_frame(
+                                        &focused_output,
+                                        self.clock.now(),
+                                        Some(Duration::ZERO),
+                                        surface_primary_scanout_output,
+                                    );
+                                }
                             }
                         }
                         Configure::Popup(_) => todo!(),

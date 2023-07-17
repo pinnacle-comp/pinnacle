@@ -6,6 +6,7 @@
 
 use std::{
     cell::RefCell,
+    fmt,
     sync::atomic::{AtomicU32, Ordering},
 };
 
@@ -63,7 +64,7 @@ pub struct WindowState {
 /// [`resize_state`]: WindowState#structfield.resize_state
 /// [`XdgShellHandler.ack_configure()`]: smithay::wayland::shell::xdg::XdgShellHandler#method.ack_configure
 /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
-#[derive(Debug, Default)]
+#[derive(Default, Clone)]
 pub enum WindowResizeState {
     /// The window doesn't need to be moved.
     #[default]
@@ -76,6 +77,16 @@ pub enum WindowResizeState {
     ///
     /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
     Acknowledged(Point<i32, Logical>),
+}
+
+impl fmt::Debug for WindowResizeState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Idle => write!(f, "Idle"),
+            Self::Requested(_arg0, _arg1) => write!(f, "Requested"),
+            Self::Acknowledged(_arg0) => write!(f, "Acknowledged"),
+        }
+    }
 }
 
 pub enum Float {

@@ -119,7 +119,7 @@ pub enum Modifier {
     Super = 0b0000_1000,
 }
 
-/// A bitmask of [Modifiers] for the purpose of hashing.
+/// A bitmask of [`Modifier`]s for the purpose of hashing.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ModifierMask(u8);
 

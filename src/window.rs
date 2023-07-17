@@ -4,13 +4,18 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::sync::atomic::AtomicU32;
+
 use smithay::{
     desktop::Window,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    wayland::seat::WaylandFocus,
+    wayland::{
+        compositor::{Blocker, BlockerState},
+        seat::WaylandFocus,
+    },
 };
 
 use crate::{
@@ -104,8 +109,10 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     });
 
     let clone = window.clone();
-    state.schedule_on_commit(render, move |data| {
-        data.state.space.raise_element(&clone, true);
+    state.loop_handle.insert_idle(move |data| {
+        crate::state::schedule_on_commit(data, render, move |dt| {
+            dt.state.space.raise_element(&clone, true);
+        });
     });
 }
 
@@ -119,4 +126,17 @@ pub struct WindowProperties {
     /// x and y
     pub location: (i32, i32),
     pub floating: bool,
+}
+
+pub struct WindowBlocker;
+pub static BLOCKER_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+impl Blocker for WindowBlocker {
+    fn state(&self) -> BlockerState {
+        if BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            BlockerState::Pending
+        } else {
+            BlockerState::Released
+        }
+    }
 }
