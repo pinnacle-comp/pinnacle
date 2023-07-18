@@ -51,17 +51,11 @@ require("pinnacle").setup(function(pinnacle)
         process.spawn("nautilus")
     end)
 
-    input.keybind({ mod_key }, keys.g, function()
-        local op = output.get_by_res(2560, 1440)
-        for _, v in pairs(op) do
-            print(v.name)
-        end
-    end)
-
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)
-        tag.add(op, "1", "2", "3", "4", "5")
+        op:add_tags("1", "2", "3", "4", "5")
+        -- Same as tag.add(op, "1", "2", "3", "4", "5")
         tag.toggle("1", op)
     end)
 
@@ -83,6 +77,14 @@ require("pinnacle").setup(function(pinnacle)
             index = 1
         else
             index = index + 1
+        end
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.space, function()
+        tag.set_layout("1", layouts[index])
+        if index - 1 < 1 then
+            index = #layouts
+        else
+            index = index - 1
         end
     end)
 

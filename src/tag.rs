@@ -90,6 +90,11 @@ impl Tag {
     }
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct TagProperties {
+    pub id: TagId,
+}
+
 impl<B: Backend> State<B> {
     pub fn output_for_tag(&self, tag: &Tag) -> Option<Output> {
         self.space

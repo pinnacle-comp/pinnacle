@@ -39,6 +39,7 @@
 ---@field GetOutputByName { name: string }
 ---@field GetOutputsByModel { model: string }
 ---@field GetOutputsByRes { res: integer[] }
+---@field GetTagsByOutput { output: string }
 
 ---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputByFocus"
 
@@ -54,6 +55,7 @@
 ---@field Window { window: WindowProperties }
 ---@field GetAllWindows { windows: WindowProperties[] }
 ---@field Outputs { names: string[] }
+---@field Tags { tags: TagProperties[] }
 
 ---@class WindowProperties
 ---@field id integer
@@ -62,3 +64,6 @@
 ---@field size integer[] A two element int array, \[1\] = w, \[2\] = h
 ---@field location integer[] A two element int array, \[1\] = x, \[2\] = y
 ---@field floating boolean
+
+---@class TagProperties
+---@field id integer

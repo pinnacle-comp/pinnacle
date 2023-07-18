@@ -13,6 +13,21 @@
 ---| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
+---@class Tag
+---@field private id integer The internal id of this tag.
+local tg = {}
+
+---@param props Tag
+---@return Tag
+local function new_tag(props)
+    -- Copy functions over
+    for k, v in pairs(tg) do
+        props[k] = v
+    end
+
+    return props
+end
+
 local tag = {}
 
 ---Add tags.
@@ -53,12 +68,12 @@ end
 ---end
 ---```
 ---@param output Output The output you want these tags to be added to.
----@param tags string[] The names of the new tags you want to add, as a table.
-function tag.add_table(output, tags)
+---@param names string[] The names of the new tags you want to add, as a table.
+function tag.add_table(output, names)
     SendMsg({
         AddTags = {
             output_name = output.name,
-            tags = tags,
+            tags = names,
         },
     })
 end
@@ -156,4 +171,38 @@ function tag.set_layout(name, layout, output)
         end
     end
 end
+
+---Get all tags on the specified output.
+---
+---You can also use `output_obj:tags()`, which delegates to this function:
+---```lua
+---local tags_on_output = output.get_focused():tags()
+----- This is the same as
+----- local tags_on_output = tag.get_on_output(output.get_focused())
+---```
+---@param output Output
+---@return Tag[]
+function tag.get_on_output(output)
+    SendMsg({
+        Request = {
+            GetTagsByOutput = {
+                output = output.name,
+            },
+        },
+    })
+
+    local response = ReadMsg()
+
+    local tag_props = response.RequestResponse.response.Tags.tags
+
+    ---@type Tag[]
+    local tags = {}
+
+    for _, prop in pairs(tag_props) do
+        table.insert(tags, new_tag({ id = prop.id }))
+    end
+
+    return tags
+end
+
 return tag

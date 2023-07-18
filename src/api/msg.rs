@@ -9,6 +9,7 @@
 
 use crate::{
     layout::Layout,
+    tag::TagProperties,
     window::{window_state::WindowId, WindowProperties},
 };
 
@@ -109,6 +110,7 @@ pub enum Request {
     GetOutputsByModel { model: String },
     GetOutputsByRes { res: (u32, u32) },
     GetOutputByFocus,
+    GetTagsByOutput { output: String },
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
@@ -189,4 +191,5 @@ pub enum RequestResponse {
     Window { window: WindowProperties },
     GetAllWindows { windows: Vec<WindowProperties> },
     Outputs { names: Vec<String> },
+    Tags { tags: Vec<TagProperties> },
 }

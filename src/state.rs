@@ -21,7 +21,7 @@ use crate::{
     },
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
-    tag::Tag,
+    tag::{Tag, TagProperties},
     window::{window_state::WindowResizeState, WindowProperties},
 };
 use calloop::futures::Scheduler;
@@ -310,12 +310,19 @@ impl<B: Backend> State<B> {
                 self.loop_signal.stop();
             }
 
-            Msg::Request(request) => match request {
-                Request::GetWindowByAppId { app_id } => todo!(),
-                Request::GetWindowByTitle { title } => todo!(),
-                Request::GetWindowByFocus => {
-                    let Some(current_focus) = self.focus_state.current_focus() else { return; };
-                    let (app_id, title) =
+            Msg::Request(request) => {
+                let stream = self
+                    .api_state
+                    .stream
+                    .as_ref()
+                    .expect("Stream doesn't exist");
+                let mut stream = stream.lock().expect("Couldn't lock stream");
+                match request {
+                    Request::GetWindowByAppId { app_id } => todo!(),
+                    Request::GetWindowByTitle { title } => todo!(),
+                    Request::GetWindowByFocus => {
+                        let Some(current_focus) = self.focus_state.current_focus() else { return; };
+                        let (app_id, title) =
                         compositor::with_states(current_focus.toplevel().wl_surface(), |states| {
                             let lock = states
                                 .data_map
@@ -325,38 +332,32 @@ impl<B: Backend> State<B> {
                                 .expect("Couldn't lock XdgToplevelSurfaceData");
                             (lock.app_id.clone(), lock.title.clone())
                         });
-                    let (window_id, floating) =
+                        let (window_id, floating) =
                         current_focus.with_state(|state| (state.id, state.floating.is_floating()));
-                    // TODO: unwrap
-                    let location = self.space.element_location(&current_focus).unwrap();
-                    let props = WindowProperties {
-                        id: window_id,
-                        app_id,
-                        title,
-                        size: current_focus.geometry().size.into(),
-                        location: location.into(),
-                        floating,
-                    };
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Window { window: props },
-                        },
-                    )
-                    .expect("Send to client failed");
-                }
-                Request::GetAllWindows => {
-                    let window_props = self
-                        .space
-                        .elements()
-                        .map(|win| {
-                            let (app_id, title) =
+                        // TODO: unwrap
+                        let location = self.space.element_location(&current_focus).unwrap();
+                        let props = WindowProperties {
+                            id: window_id,
+                            app_id,
+                            title,
+                            size: current_focus.geometry().size.into(),
+                            location: location.into(),
+                            floating,
+                        };
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Window { window: props },
+                            },
+                        )
+                            .expect("Send to client failed");
+                    }
+                    Request::GetAllWindows => {
+                        let window_props = self
+                            .space
+                            .elements()
+                            .map(|win| {
+                                let (app_id, title) =
                                 compositor::with_states(win.toplevel().wl_surface(), |states| {
                                     let lock = states
                                         .data_map
@@ -366,134 +367,130 @@ impl<B: Backend> State<B> {
                                         .expect("Couldn't lock XdgToplevelSurfaceData");
                                     (lock.app_id.clone(), lock.title.clone())
                                 });
-                            let (window_id, floating) =
+                                let (window_id, floating) =
                                 win.with_state(|state| (state.id, state.floating.is_floating()));
-                            // TODO: unwrap
-                            let location = self
-                                .space
-                                .element_location(win)
-                                .expect("Window location doesn't exist");
-                            WindowProperties {
-                                id: window_id,
-                                app_id,
-                                title,
-                                size: win.geometry().size.into(),
-                                location: location.into(),
-                                floating,
-                            }
-                        })
-                        .collect::<Vec<_>>();
+                                // TODO: unwrap
+                                let location = self
+                                    .space
+                                    .element_location(win)
+                                    .expect("Window location doesn't exist");
+                                WindowProperties {
+                                    id: window_id,
+                                    app_id,
+                                    title,
+                                    size: win.geometry().size.into(),
+                                    location: location.into(),
+                                    floating,
+                                }
+                            })
+                            .collect::<Vec<_>>();
 
-                    // FIXME: figure out what to do if error
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::GetAllWindows {
-                                windows: window_props,
+                        // FIXME: figure out what to do if error
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::GetAllWindows {
+                                    windows: window_props,
+                                },
                             },
-                        },
-                    )
-                    .expect("Couldn't send to client");
-                }
-                Request::GetOutputByName { name } => {
-                    let names = self
-                        .space
-                        .outputs()
-                        .filter(|output| output.name() == name)
-                        .map(|output| output.name())
-                        .collect::<Vec<_>>();
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Outputs { names },
-                        },
-                    )
-                    .unwrap();
-                }
-                Request::GetOutputsByModel { model } => {
-                    let names = self
-                        .space
-                        .outputs()
-                        .filter(|output| output.physical_properties().model == model)
-                        .map(|output| output.name())
-                        .collect::<Vec<_>>();
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Outputs { names },
-                        },
-                    )
-                    .unwrap();
-                }
-                Request::GetOutputsByRes { res } => {
-                    let names = self
-                        .space
-                        .outputs()
-                        .filter_map(|output| {
-                            if let Some(mode) = output.current_mode() {
-                                if mode.size == (res.0 as i32, res.1 as i32).into() {
-                                    Some(output.name())
+                        )
+                            .expect("Couldn't send to client");
+                    }
+                    Request::GetOutputByName { name } => {
+                        // TODO: name better
+                        let names = self
+                            .space
+                            .outputs()
+                            .find(|output| output.name() == name)
+                            .map(|output| output.name());
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { 
+                                    names: if let Some(name) = names {
+                                        vec![name] 
+                                    } else { 
+                                        vec![] 
+                                    }
+                                },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputsByModel { model } => {
+                        let names = self
+                            .space
+                            .outputs()
+                            .filter(|output| output.physical_properties().model == model)
+                            .map(|output| output.name())
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputsByRes { res } => {
+                        let names = self
+                            .space
+                            .outputs()
+                            .filter_map(|output| {
+                                if let Some(mode) = output.current_mode() {
+                                    if mode.size == (res.0 as i32, res.1 as i32).into() {
+                                        Some(output.name())
+                                    } else {
+                                        None
+                                    }
                                 } else {
                                     None
                                 }
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Outputs { names },
-                        },
-                    )
-                    .unwrap();
-                }
-                Request::GetOutputByFocus => {
-                    let names = self
-                        .focus_state
-                        .focused_output
-                        .as_ref()
-                        .map(|output| output.name())
-                        .into_iter()
-                        .collect::<Vec<_>>();
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Outputs { names },
-                        },
-                    )
-                    .unwrap();
+                            })
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputByFocus => {
+                        let names = self
+                            .focus_state
+                            .focused_output
+                            .as_ref()
+                            .map(|output| output.name())
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetTagsByOutput { output } => {
+                        let output = self
+                            .space
+                            .outputs()
+                            .find(|op| op.name() == output);
+                        if let Some(output) = output {
+                            let tag_props = output.with_state(|state| {
+                                state.tags
+                                    .iter()
+                                    .map(|tag| TagProperties { id: tag.id() })
+                                    .collect::<Vec<_>>()
+                            });
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::Tags { tags: tag_props }
+                                }).unwrap();
+                        }
+                    }
                 }
             },
         }
