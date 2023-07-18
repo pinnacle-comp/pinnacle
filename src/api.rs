@@ -112,6 +112,7 @@ pub fn send_to_client(
     stream: &mut UnixStream,
     msg: &OutgoingMsg,
 ) -> Result<(), rmp_serde::encode::Error> {
+    // tracing::debug!("Sending {msg:?}");
     let msg = rmp_serde::to_vec_named(msg)?;
     let msg_len = msg.len() as u32;
     let bytes = msg_len.to_ne_bytes();

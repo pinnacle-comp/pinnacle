@@ -18,7 +18,10 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
 };
 
-use crate::{backend::Backend, state::State, window::SurfaceState};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+};
 
 pub struct ResizeSurfaceGrab<S: SeatHandler> {
     start_data: GrabStartData<S>,
@@ -40,8 +43,8 @@ impl<S: SeatHandler> ResizeSurfaceGrab<S> {
         initial_window_rect: Rectangle<i32, Logical>,
         button_used: u32,
     ) -> Self {
-        ResizeSurfaceState::with_state(window.toplevel().wl_surface(), |state| {
-            *state = ResizeSurfaceState::Resizing {
+        window.toplevel().wl_surface().with_state(|state| {
+            state.resize_state = ResizeSurfaceState::Resizing {
                 edges,
                 initial_window_rect,
             };
@@ -169,8 +172,8 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
 
             toplevel_surface.send_pending_configure();
 
-            ResizeSurfaceState::with_state(toplevel_surface.wl_surface(), |state| {
-                *state = ResizeSurfaceState::WaitingForLastCommit {
+            toplevel_surface.wl_surface().with_state(|state| {
+                state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                     edges: self.edges,
                     initial_window_rect: self.initial_window_rect,
                 };
@@ -193,7 +196,7 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
 }
 
 #[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
-enum ResizeSurfaceState {
+pub enum ResizeSurfaceState {
     #[default]
     Idle,
     Resizing {
@@ -225,15 +228,14 @@ impl ResizeSurfaceState {
     }
 }
 
-impl SurfaceState for ResizeSurfaceState {}
-
 pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> Option<()> {
     let window = state.window_for_surface(surface)?;
     let mut window_loc = state.space.element_location(&window)?;
     let geometry = window.geometry();
 
-    let new_loc: Point<Option<i32>, Logical> = ResizeSurfaceState::with_state(surface, |state| {
+    let new_loc: Point<Option<i32>, Logical> = surface.with_state(|state| {
         state
+            .resize_state
             .commit()
             .map(|(edges, initial_window_rect)| {
                 let mut new_x: Option<i32> = None;

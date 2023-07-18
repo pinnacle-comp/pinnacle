@@ -1,5 +1,3 @@
-Cool stuff happens on the dev branch sometimes, check it out!
-
 # <div align="center">Pinnacle</div>
 <div align="center">
     <picture>
@@ -18,10 +16,15 @@ Cool stuff happens on the dev branch sometimes, check it out!
 - [x] Udev backend
     - This is currently just a copy of Anvil's udev backend.
 - [x] Basic tags
-    - Tags are currently very jank on the udev backend with multiple monitors. If you're checking udev out, I suggest unplugging all but one monitor or just using the winit backend until I flesh out the tag system.
-- [ ] Widget system
 - [ ] Layout system
+    - [x] Left master stack, corner, dwindle, spiral layouts
+    - [ ] Other three master stack directions, floating, magnifier, maximized, and fullscreen layouts
+    - [ ] Resizable layouts
+- [ ] XWayland support
+- [ ] Layer-shell support
 - [ ] Server-side decorations
+- [ ] Animations and blur and all that pizazz
+- [ ] Widget system
 - [ ] The other stuff Awesome has
 - [x] Is very cool :thumbsup:
 
@@ -36,15 +39,18 @@ So, this is my attempt at making an Awesome-esque Wayland compositor.
 
 ## Dependencies
 You'll need the following packages, as specified by [Smithay](https://github.com/Smithay/smithay):
-```
-libwayland
-libxkbcommon
-libudev
-libinput
-libgdm
-libseat
-```
-Package names will vary across distros. TODO: list those names.
+`libwayland libxkbcommon libudev libinput libgdm libseat`
+- Arch:
+    ```
+    sudo pacman -S wayland libxkbcommon systemd-libs libinput libgdm seatd
+    ```
+- Debian:
+    ```
+    sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev
+    ```
+- TODO: other distros.
+
+You'll also need Lua 5.4 for configuration.
 
 ## Building
 Build the project with:
@@ -70,7 +76,7 @@ cargo run [--release] -- --<backend>
 - `udev`: run Pinnacle in a tty. NOTE: I tried running udev in Awesome and some things broke so uh, don't do that
 
 ## Configuration
-Please note: this is VERY WIP and has basically no options yet.
+Please note: this is VERY WIP and has few options.
 
 Pinnacle supports configuration through Lua (and hopefully more languages if it's not too unwieldy :crab:).
 
@@ -109,5 +115,6 @@ The following controls are currently hardcoded:
 
 - `Ctrl + Left Mouse`: Move a window
 - `Ctrl + Right Mouse`: Resize a window
+- `Ctrl + Alt + Shift + Esc`: Kill Pinnacle. This is for when the compositor inevitably locks up because I did a dumb thing :thumbsup:
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).

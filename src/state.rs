@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    cell::RefCell,
     error::Error,
     ffi::OsString,
     os::{fd::AsRawFd, unix::net::UnixStream},
@@ -18,12 +19,10 @@ use crate::{
         msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestResponse},
         PinnacleSocketSource,
     },
-    backend::{udev::UdevData, winit::WinitData},
     focus::FocusState,
-    layout::Layout,
-    output::OutputState,
-    tag::{Tag, TagState},
-    window::{window_state::WindowState, WindowProperties},
+    grab::resize_grab::ResizeSurfaceState,
+    tag::{Tag, TagProperties},
+    window::{window_state::WindowResizeState, WindowProperties},
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -45,6 +44,7 @@ use smithay::{
         },
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
+            protocol::wl_surface::WlSurface,
             Display,
         },
     },
@@ -89,7 +89,6 @@ pub struct State<B: Backend> {
     pub input_state: InputState,
     pub api_state: ApiState,
     pub focus_state: FocusState,
-    pub tag_state: TagState,
 
     pub popup_manager: PopupManager,
 
@@ -98,10 +97,15 @@ pub struct State<B: Backend> {
     pub windows: Vec<Window>,
 
     pub async_scheduler: Scheduler<()>,
+
+    // TODO: move into own struct
+    // |     basically just clean this mess up
+    pub output_callback_ids: Vec<CallbackId>,
 }
 
 impl<B: Backend> State<B> {
     pub fn handle_msg(&mut self, msg: Msg) {
+        // tracing::debug!("Got {msg:?}");
         match msg {
             Msg::SetKeybind {
                 key,
@@ -137,7 +141,7 @@ impl<B: Backend> State<B> {
 
             Msg::SetWindowSize { window_id, size } => {
                 let Some(window) = self.space.elements().find(|&win| {
-                    WindowState::with_state(win, |state| state.id == window_id)
+                    win.with_state( |state| state.id == window_id)
                 }) else { return; };
 
                 // TODO: tiled vs floating
@@ -150,87 +154,176 @@ impl<B: Backend> State<B> {
                 if let Some(window) = self
                     .windows
                     .iter()
-                    .find(|&win| WindowState::with_state(win, |state| state.id == window_id))
+                    .find(|&win| win.with_state(|state| state.id == window_id))
                 {
-                    WindowState::with_state(window, |state| {
-                        state.tags = vec![tag_id.clone()];
+                    window.with_state(|state| {
+                        self.focus_state
+                            .focused_output
+                            .as_ref()
+                            .unwrap()
+                            .with_state(|op_state| {
+                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
+                                if let Some(tag) = tag {
+                                    state.tags = vec![tag.clone()];
+                                }
+                            });
                     });
                 }
 
-                self.re_layout();
+                let output = self.focus_state.focused_output.clone().unwrap();
+                self.re_layout(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
                 if let Some(window) = self
                     .windows
                     .iter()
-                    .find(|&win| WindowState::with_state(win, |state| state.id == window_id))
+                    .find(|&win| win.with_state(|state| state.id == window_id))
                 {
-                    WindowState::with_state(window, |state| {
-                        if state.tags.contains(&tag_id) {
-                            state.tags.retain(|id| id != &tag_id);
-                        } else {
-                            state.tags.push(tag_id.clone());
-                        }
+                    window.with_state(|state| {
+                        self.focus_state
+                            .focused_output
+                            .as_ref()
+                            .unwrap()
+                            .with_state(|op_state| {
+                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
+                                if let Some(tag) = tag {
+                                    if state.tags.contains(tag) {
+                                        state.tags.retain(|tg| tg != tag);
+                                    } else {
+                                        state.tags.push(tag.clone());
+                                    }
+                                }
+                            });
                     });
 
-                    self.re_layout();
+                    let output = self.focus_state.focused_output.clone().unwrap();
+                    self.re_layout(&output);
                 }
             }
-            Msg::ToggleTag { tag_id } => {
-                OutputState::with(
-                    self.focus_state.focused_output.as_ref().unwrap(), // TODO: handle error
-                    |state| match state.focused_tags.get_mut(&tag_id) {
-                        Some(id) => {
-                            *id = !*id;
-                            tracing::debug!(
-                                "toggled tag {tag_id:?} {}",
-                                if *id { "on" } else { "off" }
-                            );
-                        }
-                        None => {
-                            state.focused_tags.insert(tag_id.clone(), true);
-                            tracing::debug!("toggled tag {tag_id:?} on");
-                        }
-                    },
-                );
+            Msg::ToggleTag { output_name, tag_name } => {
+                tracing::debug!("ToggleTag");
 
-                self.re_layout();
-            }
-            Msg::SwitchToTag { tag_id } => {
-                OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
-                    for (_, active) in state.focused_tags.iter_mut() {
-                        *active = false;
-                    }
-                    if let Some(active) = state.focused_tags.get_mut(&tag_id) {
-                        *active = true;
-                    } else {
-                        state.focused_tags.insert(tag_id.clone(), true);
-                    }
-                    tracing::debug!("focused tags: {:?}", state.focused_tags);
-                });
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
 
-                self.re_layout();
+                    output.with_state(|state| {
+                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
+                            tracing::debug!("Setting tag {tag:?} to {}", !tag.active());
+                            tag.set_active(!tag.active());
+                        }
+                    });
+                    self.re_layout(&output);
+                }
             }
-            Msg::AddTags { tags } => {
-                self.tag_state.tags.extend(tags.into_iter().map(|tag| Tag {
-                    id: tag,
-                    windows: vec![],
-                }));
+            Msg::SwitchToTag { output_name, tag_name } => {
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
+
+                    output.with_state(|state| {
+                        if !state.tags.iter().any(|tag| tag.name() == tag_name) {
+                            // TODO: notify error
+                            return;
+                        }
+                        for tag in state.tags.iter_mut() {
+                            tag.set_active(false);
+                        }
+
+                        let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) else {
+                            unreachable!()
+                        };
+                        tag.set_active(true);
+
+                        tracing::debug!(
+                            "focused tags: {:?}",
+                            state
+                                .tags
+                                .iter()
+                                .filter(|tag| tag.active())
+                                .map(|tag| tag.name())
+                                .collect::<Vec<_>>()
+                        );
+                    });
+                    self.re_layout(&output);
+                }
             }
-            Msg::RemoveTags { tags } => {
-                self.tag_state.tags.retain(|tag| !tags.contains(&tag.id));
+            // TODO: add output
+            Msg::AddTags { output_name, tags } => {
+                if let Some(output) = self
+                    .space
+                    .outputs()
+                    .find(|output| output.name() == output_name)
+                {
+                    output.with_state(|state| {
+                        state
+                            .tags
+                            .extend(tags.iter().cloned().map(Tag::new));
+                        tracing::debug!("tags added, are now {:?}", state.tags);
+                    });
+                }
+            }
+            Msg::RemoveTags { output_name, tags } => {
+                if let Some(output) = self
+                    .space
+                    .outputs()
+                    .find(|output| output.name() == output_name)
+                {
+                    output.with_state(|state| {
+                        state.tags.retain(|tag| !tags.contains(&tag.name()));
+                    });
+                }
+            }
+            Msg::SetLayout { output_name, tag_name, layout } => {
+                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
+                if let Some(output) = output {
+
+                    output.with_state(|state| {
+                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
+                            tag.set_layout(layout);
+                        }
+                    });
+                    self.re_layout(&output);
+                }
+            }
+
+            Msg::ConnectForAllOutputs { callback_id } => {
+                let stream = self
+                    .api_state
+                    .stream
+                    .as_ref()
+                    .expect("Stream doesn't exist");
+                let mut stream = stream.lock().expect("Couldn't lock stream");
+                for output in self.space.outputs() {
+                    crate::api::send_to_client(
+                        &mut stream,
+                        &OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::ConnectForAllOutputs {
+                                output_name: output.name(),
+                            }),
+                        },
+                    )
+                    .expect("Send to client failed");
+                }
+                self.output_callback_ids.push(callback_id);
             }
 
             Msg::Quit => {
                 self.loop_signal.stop();
             }
 
-            Msg::Request(request) => match request {
-                Request::GetWindowByAppId { id, app_id } => todo!(),
-                Request::GetWindowByTitle { id, title } => todo!(),
-                Request::GetWindowByFocus { id } => {
-                    let Some(current_focus) = self.focus_state.current_focus() else { return; };
-                    let (app_id, title) =
+            Msg::Request(request) => {
+                let stream = self
+                    .api_state
+                    .stream
+                    .as_ref()
+                    .expect("Stream doesn't exist");
+                let mut stream = stream.lock().expect("Couldn't lock stream");
+                match request {
+                    Request::GetWindowByAppId { app_id } => todo!(),
+                    Request::GetWindowByTitle { title } => todo!(),
+                    Request::GetWindowByFocus => {
+                        let Some(current_focus) = self.focus_state.current_focus() else { return; };
+                        let (app_id, title) =
                         compositor::with_states(current_focus.toplevel().wl_surface(), |states| {
                             let lock = states
                                 .data_map
@@ -240,40 +333,32 @@ impl<B: Backend> State<B> {
                                 .expect("Couldn't lock XdgToplevelSurfaceData");
                             (lock.app_id.clone(), lock.title.clone())
                         });
-                    let (window_id, floating) = WindowState::with_state(&current_focus, |state| {
-                        (state.id, state.floating.is_floating())
-                    });
-                    // TODO: unwrap
-                    let location = self.space.element_location(&current_focus).unwrap();
-                    let props = WindowProperties {
-                        id: window_id,
-                        app_id,
-                        title,
-                        size: current_focus.geometry().size.into(),
-                        location: location.into(),
-                        floating,
-                    };
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            request_id: id,
-                            response: RequestResponse::Window { window: props },
-                        },
-                    )
-                    .expect("Send to client failed");
-                }
-                Request::GetAllWindows { id } => {
-                    let window_props = self
-                        .space
-                        .elements()
-                        .map(|win| {
-                            let (app_id, title) =
+                        let (window_id, floating) =
+                        current_focus.with_state(|state| (state.id, state.floating.is_floating()));
+                        // TODO: unwrap
+                        let location = self.space.element_location(&current_focus).unwrap();
+                        let props = WindowProperties {
+                            id: window_id,
+                            app_id,
+                            title,
+                            size: current_focus.geometry().size.into(),
+                            location: location.into(),
+                            floating,
+                        };
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Window { window: props },
+                            },
+                        )
+                            .expect("Send to client failed");
+                    }
+                    Request::GetAllWindows => {
+                        let window_props = self
+                            .space
+                            .elements()
+                            .map(|win| {
+                                let (app_id, title) =
                                 compositor::with_states(win.toplevel().wl_surface(), |states| {
                                     let lock = states
                                         .data_map
@@ -283,42 +368,168 @@ impl<B: Backend> State<B> {
                                         .expect("Couldn't lock XdgToplevelSurfaceData");
                                     (lock.app_id.clone(), lock.title.clone())
                                 });
-                            let (window_id, floating) = WindowState::with_state(win, |state| {
-                                (state.id, state.floating.is_floating())
-                            });
-                            // TODO: unwrap
-                            let location = self
-                                .space
-                                .element_location(win)
-                                .expect("Window location doesn't exist");
-                            WindowProperties {
-                                id: window_id,
-                                app_id,
-                                title,
-                                size: win.geometry().size.into(),
-                                location: location.into(),
-                                floating,
-                            }
-                        })
-                        .collect::<Vec<_>>();
+                                let (window_id, floating) =
+                                win.with_state(|state| (state.id, state.floating.is_floating()));
+                                // TODO: unwrap
+                                let location = self
+                                    .space
+                                    .element_location(win)
+                                    .expect("Window location doesn't exist");
+                                WindowProperties {
+                                    id: window_id,
+                                    app_id,
+                                    title,
+                                    size: win.geometry().size.into(),
+                                    location: location.into(),
+                                    floating,
+                                }
+                            })
+                            .collect::<Vec<_>>();
 
-                    // FIXME: figure out what to do if error
-                    let stream = self
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            request_id: id,
-                            response: RequestResponse::GetAllWindows {
-                                windows: window_props,
+                        // FIXME: figure out what to do if error
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::GetAllWindows {
+                                    windows: window_props,
+                                },
                             },
-                        },
-                    )
-                    .expect("Couldn't send to client");
+                        )
+                            .expect("Couldn't send to client");
+                    }
+                    Request::GetOutputByName { name } => {
+                        // TODO: name better
+                        let names = self
+                            .space
+                            .outputs()
+                            .find(|output| output.name() == name)
+                            .map(|output| output.name());
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { 
+                                    names: if let Some(name) = names {
+                                        vec![name] 
+                                    } else { 
+                                        vec![] 
+                                    }
+                                },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputsByModel { model } => {
+                        let names = self
+                            .space
+                            .outputs()
+                            .filter(|output| output.physical_properties().model == model)
+                            .map(|output| output.name())
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputsByRes { res } => {
+                        let names = self
+                            .space
+                            .outputs()
+                            .filter_map(|output| {
+                                if let Some(mode) = output.current_mode() {
+                                    if mode.size == (res.0 as i32, res.1 as i32).into() {
+                                        Some(output.name())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetOutputByFocus => {
+                        let names = self
+                            .focus_state
+                            .focused_output
+                            .as_ref()
+                            .map(|output| output.name())
+                            .into_iter()
+                            .collect::<Vec<_>>();
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::RequestResponse {
+                                response: RequestResponse::Outputs { names },
+                            },
+                        )
+                            .unwrap();
+                    }
+                    Request::GetTagsByOutput { output } => {
+                        let output = self
+                            .space
+                            .outputs()
+                            .find(|op| op.name() == output);
+                        if let Some(output) = output {
+                            let tag_props = output.with_state(|state| {
+                                state.tags
+                                    .iter()
+                                    .map(|tag| TagProperties { id: tag.id() })
+                                    .collect::<Vec<_>>()
+                            });
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::Tags { tags: tag_props }
+                                }).unwrap();
+                        }
+                    }
+                    Request::GetTagActive { tag_id } => {
+                        let tag = self
+                            .space
+                            .outputs()
+                            .flat_map(|op| {
+                                op.with_state(|state| state.tags.clone())
+                            })
+                            .find(|tag| tag.id() == tag_id);
+                        if let Some(tag) = tag {
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::TagActive { 
+                                        active: tag.active() 
+                                    } 
+                                })
+                                .unwrap();
+                        }
+                    }
+                    Request::GetTagName { tag_id } => {
+                        let tag = self
+                            .space
+                            .outputs()
+                            .flat_map(|op| {
+                                op.with_state(|state| state.tags.clone())
+                            })
+                            .find(|tag| tag.id() == tag_id);
+                        if let Some(tag) = tag {
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::TagName { 
+                                        name: tag.name() 
+                                    } 
+                                })
+                                .unwrap();
+                        }
+                    }
                 }
             },
         }
@@ -472,203 +683,95 @@ impl<B: Backend> State<B> {
         }
     }
 
-    pub fn re_layout(&mut self) {
-        let windows =
-            OutputState::with(self.focus_state.focused_output.as_ref().unwrap(), |state| {
-                for window in self.space.elements().cloned().collect::<Vec<_>>() {
-                    let should_render = WindowState::with_state(&window, |win_state| {
-                        for tag_id in win_state.tags.iter() {
-                            if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                return true;
-                            }
-                        }
-                        false
-                    });
-                    if !should_render {
-                        self.space.unmap_elem(&window);
-                    }
-                }
-
-                self.windows
-                    .iter()
-                    .filter(|&win| {
-                        WindowState::with_state(win, |win_state| {
-                            for tag_id in win_state.tags.iter() {
-                                if *state.focused_tags.get(tag_id).unwrap_or(&false) {
-                                    return true;
-                                }
-                            }
-                            false
-                        })
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>()
-            });
-
-        tracing::debug!("Laying out {} windows", windows.len());
-
-        Layout::master_stack(self, windows, crate::layout::Direction::Left);
-    }
-}
-
-impl State<WinitData> {
-    /// Create the main [`State`].
-    ///
-    /// This will set the WAYLAND_DISPLAY environment variable, insert Wayland necessary sources
-    /// into the event loop, and run an implementation of the config API (currently Lua).
-    pub fn init(
-        backend_data: WinitData,
-        display: &mut Display<Self>,
-        loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData<WinitData>>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let socket = ListeningSocketSource::new_auto()?;
-        let socket_name = socket.socket_name().to_os_string();
-
-        std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
-
-        // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
-        // example. Because of this, opening up only around 100 processes would exhaust the file
-        // descriptor limit on my system (Arch btw) and cause a "Too many open files" crash.
-        //
-        // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
-        // environment, I *think* this is ok.
-        if let Err(err) = smithay::reexports::nix::sys::resource::setrlimit(
-            smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
-            65536,
-            65536 * 2,
-        ) {
-            tracing::error!("Could not raise fd limit: errno {err}");
-        }
-
-        loop_handle.insert_source(socket, |stream, _metadata, data| {
-            data.display
-                .handle()
-                .insert_client(stream, Arc::new(ClientState::default()))
-                .expect("Could not insert client into loop handle");
-        })?;
-
-        loop_handle.insert_source(
-            Generic::new(
-                display.backend().poll_fd().as_raw_fd(),
-                Interest::READ,
-                Mode::Level,
-            ),
-            |_readiness, _metadata, data| {
-                data.display.dispatch_clients(&mut data.state)?;
-                Ok(PostAction::Continue)
-            },
-        )?;
-
-        let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
-        loop_handle.insert_source(rx_channel, |msg, _, data| match msg {
-            Event::Msg(msg) => data.state.handle_msg(msg),
-            Event::Closed => todo!(),
-        })?;
-
-        // We want to replace the client if a new one pops up
-        // TODO: there should only ever be one client working at a time, and creating a new client
-        // |     when one is already running should be impossible.
-        // INFO: this source try_clone()s the stream
-        loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
-            if let Some(old_stream) = data
-                .state
-                .api_state
-                .stream
-                .replace(Arc::new(Mutex::new(stream)))
-            {
-                old_stream
-                    .lock()
-                    .expect("Couldn't lock old stream")
-                    .shutdown(std::net::Shutdown::Both)
-                    .expect("Couldn't shutdown old stream");
+    pub fn re_layout(&mut self, output: &Output) {
+        let windows = self.windows.iter().filter(|win| {
+            win.with_state(|state| state.tags.iter().any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output)))
+        }).cloned().collect::<Vec<_>>();
+        let (render, do_not_render) = output.with_state(|state| {
+            let first_tag = state.focused_tags().next();
+            if let Some(first_tag) = first_tag {
+                first_tag.layout().layout(
+                    self.windows.clone(),
+                    state.focused_tags().cloned().collect(),
+                    &self.space,
+                    output,
+                );
             }
-        })?;
 
-        let (executor, sched) =
-            calloop::futures::executor::<()>().expect("Couldn't create executor");
-        loop_handle.insert_source(executor, |_, _, _| {})?;
-
-        // TODO: move all this into the lua api
-        let config_path = std::env::var("PINNACLE_CONFIG").unwrap_or_else(|_| {
-            let mut default_path =
-                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
-            default_path.push_str("/pinnacle/init.lua");
-            default_path
+            windows.iter().cloned().partition::<Vec<_>, _>(|win| {
+                win.with_state(|win_state| {
+                    if win_state.floating.is_floating() {
+                        return true;
+                    }
+                    for tag in win_state.tags.iter() {
+                        if state.focused_tags().any(|tg| tg == tag) {
+                            return true;
+                        }
+                    }
+                    false
+                })
+            })
         });
 
-        if Path::new(&config_path).exists() {
-            let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
-            let mut local_lua_path = std::env::current_dir()
-                .expect("Couldn't get current dir")
-                .to_string_lossy()
-                .to_string();
-            local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
-            let new_lua_path =
-            format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
+        let clone = render.clone();
+        self.loop_handle.insert_idle(|data| {
+            schedule_on_commit(data, clone, |dt| {
+                for win in do_not_render {
+                    dt.state.space.unmap_elem(&win);
+                }
+            })
+        });
 
-            let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
-            let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
+        // let blocker = WindowBlockerAll::new(render.clone());
+        // blocker.insert_into_loop(self);
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
 
-            std::process::Command::new("lua5.4")
-                .arg(config_path)
-                .env("LUA_PATH", new_lua_path)
-                .env("LUA_CPATH", new_lua_cpath)
-                .spawn()
-                .expect("Could not start config process");
-        } else {
-            tracing::error!("Could not find {}", config_path);
-        }
+        // let (blocker, source) = WindowBlocker::block_all::<B>(render.clone());
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
+        // self.loop_handle.insert_idle(move |data| source(render.clone(), data));
 
-        let display_handle = display.handle();
-        let mut seat_state = SeatState::new();
-        let mut seat = seat_state.new_wl_seat(&display_handle, backend_data.seat_name());
-        seat.add_pointer();
-        seat.add_keyboard(XkbConfig::default(), 200, 25)?;
-
-        Ok(Self {
-            backend_data,
-            loop_signal,
-            loop_handle,
-            clock: Clock::<Monotonic>::new()?,
-            compositor_state: CompositorState::new::<Self>(&display_handle),
-            data_device_state: DataDeviceState::new::<Self>(&display_handle),
-            seat_state,
-            pointer_location: (0.0, 0.0).into(),
-            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
-            space: Space::<Window>::default(),
-            cursor_status: CursorImageStatus::Default,
-            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
-            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
-            viewporter_state: ViewporterState::new::<Self>(&display_handle),
-            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
-                &display_handle,
-            ),
-            input_state: InputState::new(),
-            api_state: ApiState::new(),
-            focus_state: FocusState::new(),
-            tag_state: TagState::new(),
-
-            seat,
-
-            move_mode: false,
-            socket_name: socket_name.to_string_lossy().to_string(),
-
-            popup_manager: PopupManager::default(),
-
-            async_scheduler: sched,
-
-            windows: vec![],
-        })
+        // let (blocker, source) = WindowBlocker::new::<B>(render.clone());
+        // for win in render.iter() {
+        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
+        // }
+        // self.loop_handle.insert_idle(move |data| source(render.clone(), render.clone(), data));
     }
 }
+/// Schedule something to be done when windows have finished committing and have become
+/// idle.
+pub fn schedule_on_commit<F, B: Backend>(data: &mut CalloopData<B>, windows: Vec<Window>, on_commit: F)
+    where
+    F: FnOnce(&mut CalloopData<B>) + 'static,
+{
+    // tracing::debug!("scheduling on_commit");
+    // tracing::debug!("win len is {}", windows.len());
+    for window in windows.iter() {
+        window.with_state(|state| {
+            // tracing::debug!("win state is {:?}", state.resize_state);
+        });
+        if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle))
+        {
+            // tracing::debug!("some windows not idle");
+            data.state.loop_handle.insert_idle(|data| {
+                schedule_on_commit(data, windows, on_commit);
+            });
+            return;
+        }
+    }
 
-impl State<UdevData> {
+    on_commit(data);
+}
+
+impl<B: Backend> State<B> {
     pub fn init(
-        backend_data: UdevData,
+        backend_data: B,
         display: &mut Display<Self>,
         loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData<UdevData>>,
+        loop_handle: LoopHandle<'static, CalloopData<B>>,
     ) -> Result<Self, Box<dyn Error>> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
@@ -801,7 +904,6 @@ impl State<UdevData> {
             input_state: InputState::new(),
             api_state: ApiState::new(),
             focus_state: FocusState::new(),
-            tag_state: TagState::new(),
 
             seat,
 
@@ -813,6 +915,7 @@ impl State<UdevData> {
             async_scheduler: sched,
 
             windows: vec![],
+            output_callback_ids: vec![],
         })
     }
 }
@@ -874,11 +977,45 @@ pub fn take_presentation_feedback(
 /// State containing the config API's stream.
 #[derive(Default)]
 pub struct ApiState {
+    // TODO: this may not need to be in an arc mutex because of the move to async
     pub stream: Option<Arc<Mutex<UnixStream>>>,
 }
 
 impl ApiState {
     pub fn new() -> Self {
         Default::default()
+    }
+}
+
+pub trait WithState {
+    type State: Default;
+    fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T;
+}
+
+#[derive(Default, Debug)]
+pub struct WlSurfaceState {
+    pub resize_state: ResizeSurfaceState,
+}
+
+impl WithState for WlSurface {
+    type State = WlSurfaceState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T,
+    {
+        compositor::with_states(self, |states| {
+            states
+                .data_map
+                .insert_if_missing(RefCell::<Self::State>::default);
+            let state = states
+                .data_map
+                .get::<RefCell<Self::State>>()
+                .expect("This should never happen");
+
+            func(&mut state.borrow_mut())
+        })
     }
 }

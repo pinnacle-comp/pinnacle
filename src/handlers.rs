@@ -4,14 +4,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::time::Duration;
+
 use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_output,
     delegate_presentation, delegate_relative_pointer, delegate_seat, delegate_shm,
     delegate_viewporter, delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, PopupKeyboardGrab, PopupKind, PopupPointerGrab,
-        PopupUngrabStrategy, Window,
+        find_popup_root_surface, utils::surface_primary_scanout_output, PopupKeyboardGrab,
+        PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
     },
     input::{
         pointer::{CursorImageStatus, Focus},
@@ -19,7 +21,7 @@ use smithay::{
     },
     reexports::{
         calloop::Interest,
-        wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
+        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
             protocol::{wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface},
             Client, Resource,
@@ -47,10 +49,8 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    layout::Layout,
-    output::OutputState,
-    state::{ClientState, State},
-    window::window_state::{WindowResizeState, WindowState},
+    state::{ClientState, State, WithState},
+    window::{window_state::WindowResizeState, WindowBlocker, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -96,7 +96,7 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        tracing::debug!("commit");
+        // tracing::debug!("commit");
 
         utils::on_commit_buffer_handler::<Self>(surface);
 
@@ -117,13 +117,19 @@ impl<B: Backend> CompositorHandler for State<B> {
         crate::grab::resize_grab::handle_commit(self, surface);
 
         if let Some(window) = self.window_for_surface(surface) {
-            WindowState::with_state(&window, |state| {
-                if let WindowResizeState::WaitingForCommit(new_pos) = state.resize_state {
+            window.with_state(|state| {
+                if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
             });
         }
+        // let states = self
+        //     .windows
+        //     .iter()
+        //     .map(|win| win.with_state(|state| state.resize_state.clone()))
+        //     .collect::<Vec<_>>();
+        // tracing::debug!("states: {states:?}");
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -225,25 +231,94 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new(surface);
 
-        WindowState::with_state(&window, |state| {
-            state.tags = if let Some(focused_output) = &self.focus_state.focused_output {
-                OutputState::with(focused_output, |state| {
-                    state
-                        .focused_tags
-                        .iter()
-                        .filter_map(|(id, active)| active.then_some(id.clone()))
-                        .collect()
-                })
-            } else if let Some(first_tag) = self.tag_state.tags.first() {
-                vec![first_tag.id.clone()]
-            } else {
-                vec![]
+        window.toplevel().with_pending_state(|tl_state| {
+            tl_state.states.set(xdg_toplevel::State::TiledTop);
+            tl_state.states.set(xdg_toplevel::State::TiledBottom);
+            tl_state.states.set(xdg_toplevel::State::TiledLeft);
+            tl_state.states.set(xdg_toplevel::State::TiledRight);
+        });
+        window.with_state(|state| {
+            state.tags = match (
+                &self.focus_state.focused_output,
+                self.space.outputs().next(),
+            ) {
+                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
+                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                    if !output_tags.is_empty() {
+                        output_tags
+                    } else if let Some(first_tag) = state.tags.first() {
+                        vec![first_tag.clone()]
+                    } else {
+                        vec![]
+                    }
+                }),
+                (None, None) => vec![],
             };
+
             tracing::debug!("new window, tags are {:?}", state.tags);
         });
 
+        let windows_on_output = self
+            .windows
+            .iter()
+            .filter(|win| {
+                win.with_state(|state| {
+                    self.focus_state
+                        .focused_output
+                        .as_ref()
+                        .unwrap()
+                        .with_state(|op_state| {
+                            op_state
+                                .tags
+                                .iter()
+                                .any(|tag| state.tags.iter().any(|tg| tg == tag))
+                        })
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
         self.windows.push(window.clone());
-        self.space.map_element(window.clone(), (0, 0), true);
+        // self.space.map_element(window.clone(), (0, 0), true);
+        if let Some(focused_output) = self.focus_state.focused_output.clone() {
+            focused_output.with_state(|state| {
+                let first_tag = state.focused_tags().next();
+                if let Some(first_tag) = first_tag {
+                    first_tag.layout().layout(
+                        self.windows.clone(),
+                        state.focused_tags().cloned().collect(),
+                        &self.space,
+                        &focused_output,
+                    );
+                }
+            });
+            BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
+            tracing::debug!(
+                "blocker {}",
+                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+            );
+            for win in windows_on_output.iter() {
+                compositor::add_blocker(win.toplevel().wl_surface(), WindowBlocker);
+            }
+            let clone = window.clone();
+            self.loop_handle.insert_idle(|data| {
+                crate::state::schedule_on_commit(data, vec![clone], move |data| {
+                    BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
+                    tracing::debug!(
+                        "blocker {}",
+                        BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+                    );
+                    for client in windows_on_output
+                        .iter()
+                        .filter_map(|win| win.toplevel().wl_surface().client())
+                    {
+                        data.state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(&mut data.state, &data.display.handle())
+                    }
+                })
+            });
+        }
         self.loop_handle.insert_idle(move |data| {
             data.state
                 .seat
@@ -255,21 +330,28 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     SERIAL_COUNTER.next_serial(),
                 );
         });
-
-        let windows: Vec<Window> = self.space.elements().cloned().collect();
-
-        self.loop_handle.insert_idle(|data| {
-            tracing::debug!("Layout master_stack");
-            Layout::master_stack(&mut data.state, windows, crate::layout::Direction::Left);
-        });
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
         self.windows.retain(|window| window.toplevel() != &surface);
-        let mut windows: Vec<Window> = self.space.elements().cloned().collect();
-        windows.retain(|window| window.toplevel() != &surface);
-        Layout::master_stack(self, windows, crate::layout::Direction::Left);
+        if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
+            focused_output.with_state(|state| {
+                let first_tag = state.focused_tags().next();
+                if let Some(first_tag) = first_tag {
+                    first_tag.layout().layout(
+                        self.windows.clone(),
+                        state.focused_tags().cloned().collect(),
+                        &self.space,
+                        focused_output,
+                    );
+                }
+            });
+        }
+
+        // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
+        // windows.retain(|window| window.toplevel() != &surface);
+        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
         let focus = self
             .focus_state
             .current_focus()
@@ -367,40 +449,30 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        tracing::debug!("start of ack_configure");
         if let Some(window) = self.window_for_surface(&surface) {
-            tracing::debug!("found window for surface");
-            WindowState::with_state(&window, |state| {
-                if let WindowResizeState::WaitingForAck(serial, new_loc) = state.resize_state {
+            window.with_state(|state| {
+                if let WindowResizeState::Requested(serial, new_loc) = state.resize_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
-                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
-                                state.resize_state = WindowResizeState::WaitingForCommit(new_loc);
+                                // tracing::debug!("acked configure, new loc is {:?}", new_loc);
+                                state.resize_state = WindowResizeState::Acknowledged(new_loc);
+                                if let Some(focused_output) =
+                                    self.focus_state.focused_output.clone()
+                                {
+                                    window.send_frame(
+                                        &focused_output,
+                                        self.clock.now(),
+                                        Some(Duration::ZERO),
+                                        surface_primary_scanout_output,
+                                    );
+                                }
                             }
                         }
                         Configure::Popup(_) => todo!(),
                     }
                 }
             });
-
-            // HACK: If a window is currently going through something that generates a bunch of
-            // |     commits, like an animation, unmapping it while it's doing that has a chance
-            // |     to cause any send_configures to not trigger a commit. I'm not sure if this is because of
-            // |     the way I've implemented things or if it's something else. Because of me
-            // |     mapping the element in commit, this means that the window won't reappear on a tag
-            // |     change. The code below is a workaround until I can figure it out.
-            if !self.space.elements().any(|win| win == &window) {
-                WindowState::with_state(&window, |state| {
-                    if let WindowResizeState::WaitingForCommit(new_loc) = state.resize_state {
-                        tracing::debug!("remapping window");
-                        let win = window.clone();
-                        self.loop_handle.insert_idle(move |data| {
-                            data.state.space.map_element(win, new_loc, false);
-                        });
-                    }
-                });
-            }
         }
     }
 

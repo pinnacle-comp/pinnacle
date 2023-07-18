@@ -11,10 +11,11 @@ pcall(require, "luarocks.loader")
 
 -- Neovim users be like:
 require("pinnacle").setup(function(pinnacle)
-    local input = pinnacle.input  -- Key and mouse binds
+    local input = pinnacle.input -- Key and mouse binds
     local window = pinnacle.window -- Window management
     local process = pinnacle.process -- Process spawning
-    local tag = pinnacle.tag      -- Tag management
+    local tag = pinnacle.tag -- Tag management
+    local output = pinnacle.output -- Output management
 
     -- Every key supported by xkbcommon.
     -- Support for just putting in a string of a key is intended.
@@ -27,6 +28,7 @@ require("pinnacle").setup(function(pinnacle)
     local terminal = "alacritty"
 
     -- Keybinds ----------------------------------------------------------------------
+
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
     input.keybind({ mod_key, "Alt" }, keys.c, window.close_window)
@@ -50,8 +52,65 @@ require("pinnacle").setup(function(pinnacle)
     end)
 
     -- Tags ---------------------------------------------------------------------------
-    tag.add("1", "2", "3", "4", "5")
-    tag.toggle("1")
+
+    output.connect_for_all(function(op)
+        op:add_tags("1", "2", "3", "4", "5")
+        -- Same as tag.add(op, "1", "2", "3", "4", "5")
+        tag.toggle("1", op)
+    end)
+
+    ---@type Layout[]
+    local layouts = {
+        "MasterStack",
+        "Dwindle",
+        "Spiral",
+        "CornerTopLeft",
+        "CornerTopRight",
+        "CornerBottomLeft",
+        "CornerBottomRight",
+    }
+    local indices = {}
+
+    -- Layout cycling
+    -- Yes, this is very complicated and yes, I'll cook up a way to make it less complicated.
+    input.keybind({ mod_key }, keys.space, function()
+        local tags = output.get_focused():tags()
+        for _, tg in pairs(tags) do
+            if tg:active() then
+                local name = tg:name()
+                tg:set_layout(layouts[indices[name] or 1])
+                if indices[name] == nil then
+                    indices[name] = 2
+                else
+                    if indices[name] + 1 > #layouts then
+                        indices[name] = 1
+                    else
+                        indices[name] = indices[name] + 1
+                    end
+                end
+                break
+            end
+        end
+    end)
+    input.keybind({ mod_key, "Shift" }, keys.space, function()
+        local tags = output.get_focused():tags()
+        for _, tg in pairs(tags) do
+            if tg:active() then
+                local name = tg:name()
+                tg:set_layout(layouts[indices[name] or #layouts])
+                if indices[name] == nil then
+                    indices[name] = #layouts - 1
+                else
+                    if indices[name] - 1 < 1 then
+                        indices[name] = #layouts
+                    else
+                        indices[name] = indices[name] - 1
+                    end
+                end
+                break
+            end
+        end
+    end)
 
     input.keybind({ mod_key }, keys.KEY_1, function()
         tag.switch_to("1")

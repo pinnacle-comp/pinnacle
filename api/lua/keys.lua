@@ -7,7 +7,7 @@
 ---@alias Modifier "Alt" | "Ctrl" | "Shift" | "Super"
 
 ---@enum Keys
-local M = {
+local keys = {
     NoSymbol = 0x00000000,
 
     VoidSymbol = 0x00ffffff,
@@ -4321,4 +4321,4 @@ local M = {
     block = 0x100000fc,
 }
 
-return M
+return keys

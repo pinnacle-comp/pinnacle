@@ -19,7 +19,11 @@ use smithay::{
     utils::{IsAlive, Logical, Point, Rectangle},
 };
 
-use crate::{backend::Backend, state::State, window::window_state::WindowState};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+    window::window_state::WindowResizeState,
+};
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
@@ -47,7 +51,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
 
-        let tiled = WindowState::with_state(&self.window, |state| state.floating.is_tiled());
+        let tiled = self.window.with_state(|state| state.floating.is_tiled());
 
         if tiled {
             // INFO: this is being used instead of space.element_under(event.location) because that
@@ -72,10 +76,16 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                let window_under_floating =
-                    WindowState::with_state(&window_under, |state| state.floating.is_floating());
+                let is_floating = window_under.with_state(|state| state.floating.is_floating());
 
-                if window_under_floating {
+                if is_floating {
+                    return;
+                }
+
+                let has_pending_resize = window_under
+                    .with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle));
+
+                if has_pending_resize {
                     return;
                 }
 
@@ -86,14 +96,6 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             let new_loc = self.initial_window_loc.to_f64() + delta;
             data.space
                 .map_element(self.window.clone(), new_loc.to_i32_round(), true);
-            // let loc = data
-            //     .space
-            //     .element_location(&self.window)
-            //     .unwrap_or((0, 0).into());
-            // tracing::info!("new loc from element_location: {}, {}", loc.x, loc.y);
-            // let geo = self.window.geometry();
-            // tracing::info!("geo loc: {}, {}", geo.loc.x, geo.loc.y);
-            // tracing::info!("geo size: {}, {}", geo.size.w, geo.size.h);
         }
     }
 

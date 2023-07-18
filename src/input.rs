@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::api::msg::{CallbackId, ModifierMask, Modifiers, OutgoingMsg};
+use crate::api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -221,18 +221,18 @@ impl<B: Backend> State<B> {
                 time,
                 |state, modifiers, keysym| {
                     if press_state == KeyState::Pressed {
-                        let mut modifier_mask = Vec::<Modifiers>::new();
+                        let mut modifier_mask = Vec::<Modifier>::new();
                         if modifiers.alt {
-                            modifier_mask.push(Modifiers::Alt);
+                            modifier_mask.push(Modifier::Alt);
                         }
                         if modifiers.shift {
-                            modifier_mask.push(Modifiers::Shift);
+                            modifier_mask.push(Modifier::Shift);
                         }
                         if modifiers.ctrl {
-                            modifier_mask.push(Modifiers::Ctrl);
+                            modifier_mask.push(Modifier::Ctrl);
                         }
                         if modifiers.logo {
-                            modifier_mask.push(Modifiers::Super);
+                            modifier_mask.push(Modifier::Super);
                         }
                         let raw_sym = if keysym.raw_syms().len() == 1 {
                             keysym.raw_syms()[0]

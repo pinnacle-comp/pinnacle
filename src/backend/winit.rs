@@ -47,7 +47,6 @@ use smithay::{
 };
 
 use crate::{
-    layout::{Direction, Layout},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
     state::{CalloopData, State},
 };
@@ -220,11 +219,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                         None,
                     );
-                    Layout::master_stack(
-                        state,
-                        state.space.elements().cloned().collect(),
-                        Direction::Left,
-                    );
+                    state.re_layout(&output);
                 }
                 WinitEvent::Focus(_) => {}
                 WinitEvent::Input(input_evt) => {

@@ -14,7 +14,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     grab::{move_grab::MoveSurfaceGrab, resize_grab::ResizeSurfaceGrab},
-    state::State,
+    state::{State, WithState},
 };
 
 pub fn move_request<B: Backend>(
@@ -94,6 +94,9 @@ pub fn resize_request<B: Backend>(
     if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, wl_surface, serial)
     {
         let window = state.window_for_surface(wl_surface).unwrap();
+        if window.with_state(|state| state.floating.is_tiled()) {
+            return;
+        }
 
         let initial_window_loc = state.space.element_location(&window).unwrap();
         let initial_window_size = window.geometry().size;
@@ -124,12 +127,15 @@ pub fn resize_request_force<B: Backend>(
     edges: xdg_toplevel::ResizeEdge,
     button_used: u32,
 ) {
-    println!("resize_request_force started with edges {:?}", edges);
     let wl_surface = surface.wl_surface();
 
     let pointer = seat.get_pointer().unwrap();
 
     let window = state.window_for_surface(wl_surface).unwrap();
+
+    if window.with_state(|state| state.floating.is_tiled()) {
+        return;
+    }
 
     let initial_window_loc = state.space.element_location(&window).unwrap();
     let initial_window_size = window.geometry().size;
