@@ -70,6 +70,8 @@ Or, run the project directly with
 cargo run [--release] -- --<backend>
 ```
 
+When running in debug mode, the compositor will drastically slow down if there are too many windows on screen. If you don't want this to happen, use release mode.
+
 `backend` can be one of two values:
 
 - `winit`: run Pinnacle as a window in your graphical environment
