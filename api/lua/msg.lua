@@ -10,9 +10,9 @@
 ---@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }
 ---@field SetMousebind { button: integer }
 --Windows
----@field CloseWindow { client_id: integer? }
----@field ToggleFloating { client_id: integer? }
----@field SetWindowSize { window_id: integer, size: { w: integer, h: integer } }
+---@field CloseWindow { window_id: integer }
+---@field ToggleFloating { window_id: integer }
+---@field SetWindowSize { window_id: integer, size: integer[] }
 ---@field MoveWindowToTag { window_id: integer, tag_id: string }
 ---@field ToggleTagOnWindow { window_id: integer, tag_id: string }
 --
@@ -21,8 +21,8 @@
 --Tags
 ---@field ToggleTag { output_name: string, tag_name: string }
 ---@field SwitchToTag { output_name: string, tag_name: string }
----@field AddTags { output_name: string, tags: string[] }
----@field RemoveTags { output_name: string, tags: string[] }
+---@field AddTags { output_name: string, tag_names: string[] }
+---@field RemoveTags { output_name: string, tag_names: string[] }
 ---@field SetLayout { output_name: string, tag_name: string, layout: Layout }
 --Outputs
 ---@field ConnectForAllOutputs { callback_id: integer }
@@ -36,12 +36,12 @@
 ---@field GetWindowByAppId { app_id: string }
 ---@field GetWindowByTitle { title: string }
 --Outputs
----@field GetOutputByName { name: string }
+---@field GetOutputByName { output_name: OutputName }
 ---@field GetOutputsByModel { model: string }
 ---@field GetOutputsByRes { res: integer[] }
----@field GetTagsByOutput { output: string }
----@field GetTagActive { tag_id: integer }
----@field GetTagName { tag_id: integer }
+---@field GetTagsByOutput { output_name: string }
+---@field GetTagActive { tag_id: TagId }
+---@field GetTagName { tag_id: TagId }
 
 ---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputByFocus"
 
@@ -53,21 +53,14 @@
 ---@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }
 ---@field ConnectForAllOutputs { output_name: string }
 
+---@alias WindowId integer
+---@alias TagId integer
+---@alias OutputName string
+
 ---@class RequestResponse
----@field Window { window: WindowProperties }
----@field GetAllWindows { windows: WindowProperties[] }
----@field Outputs { names: string[] }
----@field Tags { tags: TagProperties[] }
+---@field Window { window_id: WindowId|nil }
+---@field Windows { window_ids: WindowId[] }
+---@field Outputs { output_names: OutputName[] }
+---@field Tags { tag_ids: TagId[] }
 ---@field TagActive { active: boolean }
 ---@field TagName { name: string }
-
----@class WindowProperties
----@field id integer
----@field app_id string?
----@field title string?
----@field size integer[] A two element int array, \[1\] = w, \[2\] = h
----@field location integer[] A two element int array, \[1\] = x, \[2\] = y
----@field floating boolean
-
----@class TagProperties
----@field id integer

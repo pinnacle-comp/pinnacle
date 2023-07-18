@@ -31,7 +31,15 @@ require("pinnacle").setup(function(pinnacle)
 
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
-    input.keybind({ mod_key, "Alt" }, keys.c, window.close_window)
+    input.keybind({ mod_key, "Alt" }, keys.c, function()
+        -- The commented out line may crash the config process if you have no windows open.
+        -- There is no nil warning here due to limitations in Lua LS type checking, so check for nil as shown below.
+        -- window.get_focused():close()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:close()
+        end
+    end)
 
     input.keybind({ mod_key, "Alt" }, keys.space, window.toggle_floating)
 
@@ -72,7 +80,7 @@ require("pinnacle").setup(function(pinnacle)
     local indices = {}
 
     -- Layout cycling
-    -- Yes, this is very complicated and yes, I'll cook up a way to make it less complicated.
+    -- Yes, this is overly complicated and yes, I'll cook up a way to make it less so.
     input.keybind({ mod_key }, keys.space, function()
         local tags = output.get_focused():tags()
         for _, tg in pairs(tags) do

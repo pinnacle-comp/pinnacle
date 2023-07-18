@@ -48,7 +48,7 @@ local output = {}
 ---rather, "name" is the name of the connector the output is connected to.
 ---This should be something like "HDMI-A-0", "eDP-1", or similar.
 ---
----# Examples
+---### Example
 ---```lua
 ---local monitor = output.get_by_name("DP-1")
 ---print(monitor.name) -- should print `DP-1`
@@ -58,16 +58,16 @@ local output = {}
 function output.get_by_name(name)
     SendRequest({
         GetOutputByName = {
-            name = name,
+            output_name = name,
         },
     })
 
     local response = ReadMsg()
 
-    local names = response.RequestResponse.response.Outputs.names
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
-    if names[1] ~= nil then
-        return new_output({ name = names[1] })
+    if output_names[1] ~= nil then
+        return new_output({ name = output_names[1] })
     else
         return nil
     end
@@ -88,11 +88,11 @@ function output.get_by_model(model)
 
     local response = ReadMsg()
 
-    local names = response.RequestResponse.response.Outputs.names
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
     ---@type Output
     local outputs = {}
-    for _, v in pairs(names) do
+    for _, v in pairs(output_names) do
         table.insert(outputs, new_output({ name = v }))
     end
 
@@ -113,12 +113,12 @@ function output.get_by_res(width, height)
 
     local response = ReadMsg()
 
-    local names = response.RequestResponse.response.Outputs.names
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
     ---@type Output
     local outputs = {}
-    for _, v in pairs(names) do
-        table.insert(outputs, new_output({ name = v }))
+    for _, output_name in pairs(output_names) do
+        table.insert(outputs, new_output({ name = output_name }))
     end
 
     return outputs
@@ -145,16 +145,14 @@ end
 ---```
 ---@return Output|nil output The output, or nil if none are focused.
 function output.get_focused()
-    SendMsg({
-        Request = "GetOutputByFocus",
-    })
+    SendRequest("GetOutputByFocus")
 
     local response = ReadMsg()
 
-    local names = response.RequestResponse.response.Outputs.names
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
-    if names[1] ~= nil then
-        return new_output({ name = names[1] })
+    if output_names[1] ~= nil then
+        return new_output({ name = output_names[1] })
     else
         return nil
     end

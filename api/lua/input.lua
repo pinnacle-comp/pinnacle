@@ -10,7 +10,7 @@ local input = {
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
 ---
----# Example
+---### Example
 ---
 ---```lua
 ----- The following sets Super + Return to open Alacritty
