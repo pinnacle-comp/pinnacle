@@ -7,11 +7,7 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::{
-    layout::Layout,
-    tag::{TagId, TagProperties},
-    window::{window_state::WindowId, WindowProperties},
-};
+use crate::{layout::Layout, tag::TagId, window::window_state::WindowId};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -30,12 +26,10 @@ pub enum Msg {
 
     // Window management
     CloseWindow {
-        #[serde(default)]
-        client_id: Option<u32>,
+        window_id: WindowId,
     },
     ToggleFloating {
-        #[serde(default)]
-        client_id: Option<u32>,
+        window_id: WindowId,
     },
     SetWindowSize {
         window_id: WindowId,
@@ -62,12 +56,12 @@ pub enum Msg {
     AddTags {
         /// The name of the output you want these tags on.
         output_name: String,
-        tags: Vec<String>,
+        tag_names: Vec<String>,
     },
     RemoveTags {
         /// The name of the output you want these tags removed from.
         output_name: String,
-        tags: Vec<String>,
+        tag_names: Vec<String>,
     },
     SetLayout {
         output_name: String,
@@ -106,11 +100,11 @@ pub enum Request {
     GetWindowByTitle { title: String },
     GetWindowByFocus,
     GetAllWindows,
-    GetOutputByName { name: String },
+    GetOutputByName { output_name: String },
     GetOutputsByModel { model: String },
     GetOutputsByRes { res: (u32, u32) },
     GetOutputByFocus,
-    GetTagsByOutput { output: String },
+    GetTagsByOutput { output_name: String },
     GetTagActive { tag_id: TagId },
     GetTagName { tag_id: TagId },
 }
@@ -139,6 +133,7 @@ impl<T: IntoIterator<Item = Modifier>> From<T> for ModifierMask {
 }
 
 impl ModifierMask {
+    #[allow(dead_code)]
     pub fn values(self) -> Vec<Modifier> {
         let mut res = Vec::<Modifier>::new();
         if self.0 & Modifier::Shift as u8 == Modifier::Shift as u8 {
@@ -190,10 +185,10 @@ pub enum Args {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum RequestResponse {
-    Window { window: WindowProperties },
-    GetAllWindows { windows: Vec<WindowProperties> },
-    Outputs { names: Vec<String> },
-    Tags { tags: Vec<TagProperties> },
+    Window { window_id: Option<WindowId> },
+    Windows { window_ids: Vec<WindowId> },
+    Outputs { output_names: Vec<String> },
+    Tags { tag_ids: Vec<TagId> },
     TagActive { active: bool },
     TagName { name: String },
 }

@@ -23,7 +23,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{Float, WindowId};
+use self::window_state::Float;
 
 pub mod window_state;
 
@@ -114,18 +114,6 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
             dt.state.space.raise_element(&clone, true);
         });
     });
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct WindowProperties {
-    pub id: WindowId,
-    pub app_id: Option<String>,
-    pub title: Option<String>,
-    /// Width and height
-    pub size: (i32, i32),
-    /// x and y
-    pub location: (i32, i32),
-    pub floating: bool,
 }
 
 pub struct WindowBlocker;

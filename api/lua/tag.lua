@@ -68,7 +68,7 @@ end
 ---
 ---If you need to add the names as a table, use `tag.add_table` instead.
 ---
----# Example
+---### Example
 ---
 ---```lua
 ---local output = output.get_by_name("DP-1")
@@ -79,20 +79,20 @@ end
 ---@param output Output The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
 function tag.add(output, ...)
-    local tags = table.pack(...)
-    tags["n"] = nil
+    local tag_names = table.pack(...)
+    tag_names["n"] = nil -- remove the length to make it a true array for serializing
 
     SendMsg({
         AddTags = {
             output_name = output.name,
-            tags = tags,
+            tag_names = tag_names,
         },
     })
 end
 
 ---Like `tag.add`, but with a table of strings instead.
 ---
----# Example
+---### Example
 ---
 ---```lua
 ---local tags = { "Terminal", "Browser", "Mail", "Gaming", "Potato" }
@@ -107,14 +107,14 @@ function tag.add_table(output, names)
     SendMsg({
         AddTags = {
             output_name = output.name,
-            tags = names,
+            tag_names = names,
         },
     })
 end
 
 ---Toggle a tag on the specified output. If `output` isn't specified, toggle it on the currently focused output instead.
 ---
----# Example
+---### Example
 ---
 ---```lua
 ----- Assuming all tags are toggled off...
@@ -151,7 +151,7 @@ end
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
----# Example
+---### Example
 ---
 ---```lua
 ---tag.switch_to("3") -- Switches to and displays *only* windows on tag 3
@@ -219,19 +219,19 @@ end
 function tag.get_on_output(output)
     SendRequest({
         GetTagsByOutput = {
-            output = output.name,
+            output_name = output.name,
         },
     })
 
     local response = ReadMsg()
 
-    local tag_props = response.RequestResponse.response.Tags.tags
+    local tag_ids = response.RequestResponse.response.Tags.tag_ids
 
     ---@type Tag[]
     local tags = {}
 
-    for _, prop in pairs(tag_props) do
-        table.insert(tags, new_tag({ id = prop.id }))
+    for _, tag_id in pairs(tag_ids) do
+        table.insert(tags, new_tag({ id = tag_id }))
     end
 
     return tags

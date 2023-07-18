@@ -61,6 +61,24 @@ function win:toggle_tag(name)
     })
 end
 
+---Close this window.
+function win:close()
+    SendMsg({
+        CloseWindow = {
+            window_id = self.id,
+        },
+    })
+end
+
+---Toggle this window's floating status.
+function win:toggle_floating()
+    SendMsg({
+        ToggleFloating = {
+            window_id = self.id,
+        },
+    })
+end
+
 ---Get a window's size.
 ---@return { w: integer, h: integer }
 function win:get_size()
@@ -71,31 +89,11 @@ end
 
 local window = {}
 
----Close a window.
----@param client_id integer? The id of the window you want closed, or nil to close the currently focused window, if any.
-function window.close_window(client_id)
-    SendMsg({
-        CloseWindow = {
-            client_id = client_id,
-        },
-    })
-end
-
----Toggle a window's floating status.
----@param client_id integer? The id of the window you want to toggle, or nil to toggle the currently focused window, if any.
-function window.toggle_floating(client_id)
-    SendMsg({
-        ToggleFloating = {
-            client_id = client_id,
-        },
-    })
-end
-
 ---TODO: This function is not implemented yet.
 ---
 ---Get a window by its app id (aka its X11 class).
 ---@param app_id string The window's app id. For example, Alacritty's app id is "Alacritty".
----@return Window window -- TODO: nil
+---@return Window|nil
 function window.get_by_app_id(app_id)
     SendRequest({
         GetWindowByAppId = {
@@ -105,22 +103,15 @@ function window.get_by_app_id(app_id)
 
     local response = ReadMsg()
 
-    local props = response.RequestResponse.response.Window.window
+    local window_id = response.RequestResponse.response.Window.window_id
+
+    if window_id == nil then
+        return nil
+    end
 
     ---@type Window
     local wind = {
-        id = props.id,
-        app_id = props.app_id or "",
-        title = props.title or "",
-        size = {
-            w = props.size[1],
-            h = props.size[2],
-        },
-        location = {
-            x = props.location[1],
-            y = props.location[2],
-        },
-        floating = props.floating,
+        id = window_id,
     }
 
     return new_window(wind)
@@ -130,7 +121,7 @@ end
 ---
 ---Get a window by its title.
 ---@param title string The window's title.
----@return Window
+---@return Window|nil
 function window.get_by_title(title)
     SendRequest({
         GetWindowByTitle = {
@@ -140,50 +131,36 @@ function window.get_by_title(title)
 
     local response = ReadMsg()
 
-    local props = response.RequestResponse.response.Window.window
+    local window_id = response.RequestResponse.response.Window.window_id
+
+    if window_id == nil then
+        return nil
+    end
 
     ---@type Window
     local wind = {
-        id = props.id,
-        app_id = props.app_id or "",
-        title = props.title or "",
-        size = {
-            w = props.size[1],
-            h = props.size[2],
-        },
-        location = {
-            x = props.location[1],
-            y = props.location[2],
-        },
-        floating = props.floating,
+        id = window_id,
     }
 
     return new_window(wind)
 end
 
 ---Get the currently focused window.
----@return Window
+---@return Window|nil
 function window.get_focused()
     SendRequest("GetWindowByFocus")
 
     local response = ReadMsg()
 
-    local props = response.RequestResponse.response.Window.window
+    local window_id = response.RequestResponse.response.Window.window_id
+
+    if window_id == nil then
+        return nil
+    end
 
     ---@type Window
     local wind = {
-        id = props.id,
-        app_id = props.app_id or "",
-        title = props.title or "",
-        size = {
-            w = props.size[1],
-            h = props.size[2],
-        },
-        location = {
-            x = props.location[1],
-            y = props.location[2],
-        },
-        floating = props.floating,
+        id = window_id,
     }
 
     return new_window(wind)
@@ -194,26 +171,11 @@ end
 function window.get_all()
     SendRequest("GetAllWindows")
 
-    -- INFO: these read synchronously so this should always work IF the server works correctly
-
-    local window_props = ReadMsg().RequestResponse.response.GetAllWindows.windows
+    local window_ids = ReadMsg().RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
-    for i, v in ipairs(window_props) do
-        windows[i] = {
-            id = v.id,
-            app_id = v.app_id or "",
-            title = v.title or "",
-            size = {
-                w = v.size[1],
-                h = v.size[2],
-            },
-            location = {
-                x = v.location[1],
-                y = v.location[2],
-            },
-            floating = v.floating,
-        }
+    for i, window_id in ipairs(window_ids) do
+        windows[i] = new_window({ id = window_id })
     end
     return windows
 end
