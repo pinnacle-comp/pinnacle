@@ -364,7 +364,10 @@ impl Layout {
                     }
                 }
             }
-            Layout::CornerTopLeft => match windows.len() {
+            layout @ (Layout::CornerTopLeft
+            | Layout::CornerTopRight
+            | Layout::CornerBottomLeft
+            | Layout::CornerBottomRight) => match windows.len() {
                 0 => (),
                 1 => {
                     windows[0].toplevel().with_pending_state(|state| {
@@ -410,20 +413,135 @@ impl Layout {
                             }
                         });
 
+                    let div_factor = 2;
+
                     corner.toplevel().with_pending_state(|state| {
-                        state.size = Some((output_geo.size.w / 2, output_geo.size.h / 2).into());
+                        state.size = Some(
+                            (
+                                output_geo.size.w / div_factor,
+                                output_geo.size.h / div_factor,
+                            )
+                                .into(),
+                        );
                     });
                     corner.with_state(|state| {
                         state.resize_state = WindowResizeState::Requested(
                             corner.toplevel().send_configure(),
-                            (output_loc.x, output_loc.y).into(),
+                            match layout {
+                                Layout::CornerTopLeft => (output_loc.x, output_loc.y),
+                                Layout::CornerTopRight => (
+                                    output_loc.x + output_geo.size.w
+                                        - output_geo.size.w / div_factor,
+                                    output_loc.y,
+                                ),
+                                Layout::CornerBottomLeft => (
+                                    output_loc.x,
+                                    output_loc.y + output_geo.size.h
+                                        - output_geo.size.h / div_factor,
+                                ),
+                                Layout::CornerBottomRight => (
+                                    output_loc.x + output_geo.size.w
+                                        - output_geo.size.w / div_factor,
+                                    output_loc.y + output_geo.size.h
+                                        - output_geo.size.h / div_factor,
+                                ),
+                                _ => unreachable!(),
+                            }
+                            .into(),
                         );
                     });
+
+                    let vert_stack_count = vert_stack.len();
+
+                    let height = output_geo.size.h as f32 / vert_stack_count as f32;
+                    let mut y_s = vec![];
+                    for i in 0..vert_stack_count {
+                        y_s.push((i as f32 * height).round() as i32);
+                    }
+                    let heights = y_s
+                        .windows(2)
+                        .map(|pair| pair[1] - pair[0])
+                        .chain(vec![output_geo.size.h - y_s.last().expect("vec was empty")])
+                        .collect::<Vec<_>>();
+
+                    for (i, win) in vert_stack.iter().enumerate() {
+                        win.toplevel().with_pending_state(|state| {
+                            // INFO: Some windows crash the compositor if they become too short in height,
+                            // |     so they're limited to a minimum of 40 pixels as a workaround.
+                            state.size =
+                                Some((output_geo.size.w / 2, i32::max(heights[i], 40)).into());
+                        });
+
+                        win.with_state(|state| {
+                            state.resize_state = WindowResizeState::Requested(
+                                win.toplevel().send_configure(),
+                                (
+                                    match layout {
+                                        Layout::CornerTopLeft | Layout::CornerBottomLeft => {
+                                            output_geo.size.w / 2 + output_loc.x
+                                        }
+                                        Layout::CornerTopRight | Layout::CornerBottomRight => {
+                                            output_loc.x
+                                        }
+                                        _ => unreachable!(),
+                                    },
+                                    y_s[i] + output_loc.y,
+                                )
+                                    .into(),
+                            );
+                        });
+                    }
+
+                    let horiz_stack_count = horiz_stack.len();
+
+                    let width = output_geo.size.w as f32 / 2.0 / horiz_stack_count as f32;
+                    let mut x_s = vec![];
+                    for i in 0..horiz_stack_count {
+                        x_s.push((i as f32 * width).round() as i32);
+                    }
+                    let widths = x_s
+                        .windows(2)
+                        .map(|pair| pair[1] - pair[0])
+                        .chain(vec![
+                            output_geo.size.w / 2 - x_s.last().expect("vec was empty"),
+                        ])
+                        .collect::<Vec<_>>();
+
+                    for (i, win) in horiz_stack.iter().enumerate() {
+                        win.toplevel().with_pending_state(|state| {
+                            // INFO: Some windows crash the compositor if they become too short in height,
+                            // |     so they're limited to a minimum of 40 pixels as a workaround.
+                            state.size =
+                                Some((i32::max(widths[i], 1), output_geo.size.h / 2).into());
+                        });
+
+                        win.with_state(|state| {
+                            state.resize_state = WindowResizeState::Requested(
+                                win.toplevel().send_configure(),
+                                match layout {
+                                    Layout::CornerTopLeft => (
+                                        x_s[i] + output_loc.x,
+                                        output_loc.y + output_geo.size.h / 2,
+                                    ),
+                                    Layout::CornerTopRight => (
+                                        x_s[i] + output_loc.x + output_geo.size.w / 2,
+                                        output_loc.y + output_geo.size.h / 2,
+                                    ),
+                                    Layout::CornerBottomLeft => {
+                                        (x_s[i] + output_loc.x, output_loc.y)
+                                    }
+                                    Layout::CornerBottomRight => (
+                                        x_s[i] + output_loc.x + output_geo.size.w / 2,
+                                        output_loc.y,
+                                    ),
+                                    _ => unreachable!(),
+                                }
+                                .into(),
+                            );
+                        });
+                    }
                 }
             },
-            Layout::CornerTopRight => todo!(),
-            Layout::CornerBottomLeft => todo!(),
-            Layout::CornerBottomRight => todo!(),
         }
     }
 }

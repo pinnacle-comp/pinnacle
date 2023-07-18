@@ -66,7 +66,15 @@ require("pinnacle").setup(function(pinnacle)
     end)
 
     ---@type Layout[]
-    local layouts = { "MasterStack", "Dwindle", "Spiral" }
+    local layouts = {
+        "MasterStack",
+        "Dwindle",
+        "Spiral",
+        "CornerTopLeft",
+        "CornerTopRight",
+        "CornerBottomLeft",
+        "CornerBottomRight",
+    }
     local index = 1
 
     input.keybind({ mod_key }, keys.space, function()
