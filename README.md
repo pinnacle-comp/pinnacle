@@ -1,5 +1,3 @@
-Cool stuff happens on the dev branch sometimes, check it out!
-
 # <div align="center">Pinnacle</div>
 <div align="center">
     <picture>
@@ -18,13 +16,16 @@ Cool stuff happens on the dev branch sometimes, check it out!
 - [x] Udev backend
     - This is currently just a copy of Anvil's udev backend.
 - [x] Basic tags
-- [ ] Widget system
 - [ ] Layout system
-- [ ] Server-side decorations
-- [ ] Animations and blur and all that pizazz
-- [ ] The other stuff Awesome has
+    - [x] Left master stack, corner, dwindle, spiral layouts
+    - [ ] Other three master stack directions, floating, magnifier, maximized, and fullscreen layouts
+    - [ ] Resizable layouts
 - [ ] XWayland support
 - [ ] Layer-shell support
+- [ ] Server-side decorations
+- [ ] Animations and blur and all that pizazz
+- [ ] Widget system
+- [ ] The other stuff Awesome has
 - [x] Is very cool :thumbsup:
 
 ## Info
