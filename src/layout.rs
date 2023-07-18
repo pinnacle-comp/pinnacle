@@ -585,30 +585,6 @@ fn filter_windows(windows: &[Window], tags: Vec<Tag>) -> Vec<Window> {
 
 impl<B: Backend> State<B> {
     pub fn swap_window_positions(&mut self, win1: &Window, win2: &Window) {
-        // FIXME: moving the mouse quickly will break swapping
-
-        let win1_loc = self.space.element_location(win1).unwrap(); // TODO: handle unwraps
-        let win2_loc = self.space.element_location(win2).unwrap();
-        let win1_geo = win1.geometry();
-        let win2_geo = win2.geometry();
-
-        win1.toplevel().with_pending_state(|state| {
-            state.size = Some(win2_geo.size);
-        });
-        win2.toplevel().with_pending_state(|state| {
-            state.size = Some(win1_geo.size);
-        });
-
-        let serial = win1.toplevel().send_configure();
-        win1.with_state(|state| {
-            state.resize_state = WindowResizeState::Requested(serial, win2_loc);
-        });
-
-        let serial = win2.toplevel().send_configure();
-        win2.with_state(|state| {
-            state.resize_state = WindowResizeState::Requested(serial, win1_loc);
-        });
-
         let mut elems = self
             .windows
             .iter_mut()
@@ -621,5 +597,8 @@ impl<B: Backend> State<B> {
                 std::mem::swap(first, second);
             }
         }
+
+        let output = self.focus_state.focused_output.clone().unwrap(); // FIXME: unwrap
+        self.re_layout(&output);
     }
 }
