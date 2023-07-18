@@ -40,6 +40,8 @@
 ---@field GetOutputsByModel { model: string }
 ---@field GetOutputsByRes { res: integer[] }
 ---@field GetTagsByOutput { output: string }
+---@field GetTagActive { tag_id: integer }
+---@field GetTagName { tag_id: integer }
 
 ---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputByFocus"
 
@@ -56,6 +58,8 @@
 ---@field GetAllWindows { windows: WindowProperties[] }
 ---@field Outputs { names: string[] }
 ---@field Tags { tags: TagProperties[] }
+---@field TagActive { active: boolean }
+---@field TagName { name: string }
 
 ---@class WindowProperties
 ---@field id integer

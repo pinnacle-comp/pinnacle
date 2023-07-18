@@ -4,6 +4,8 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
+local tag = {}
+
 ---@alias Layout
 ---| "MasterStack" # One master window on the left with all other windows stacked to the right.
 ---| "Dwindle" # Windows split in half towards the bottom right corner.
@@ -28,7 +30,39 @@ local function new_tag(props)
     return props
 end
 
-local tag = {}
+---Get this tag's active status.
+---@return boolean active True if the tag is active, otherwise false.
+function tg:active()
+    SendRequest({
+        GetTagActive = {
+            tag_id = self.id,
+        },
+    })
+
+    local response = ReadMsg()
+    local active = response.RequestResponse.response.TagActive.active
+    return active
+end
+
+function tg:name()
+    SendRequest({
+        GetTagName = {
+            tag_id = self.id,
+        },
+    })
+
+    local response = ReadMsg()
+    local name = response.RequestResponse.response.TagName.name
+    return name
+end
+
+---Set this tag's layout.
+---@param layout Layout
+function tg:set_layout(layout) -- TODO: output param
+    tag.set_layout(self:name(), layout)
+end
+
+-----------------------------------------------------------
 
 ---Add tags.
 ---
@@ -183,11 +217,9 @@ end
 ---@param output Output
 ---@return Tag[]
 function tag.get_on_output(output)
-    SendMsg({
-        Request = {
-            GetTagsByOutput = {
-                output = output.name,
-            },
+    SendRequest({
+        GetTagsByOutput = {
+            output = output.name,
         },
     })
 

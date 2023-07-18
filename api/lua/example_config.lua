@@ -69,22 +69,46 @@ require("pinnacle").setup(function(pinnacle)
         "CornerBottomLeft",
         "CornerBottomRight",
     }
-    local index = 1
+    local indices = {}
 
+    -- Layout cycling
+    -- Yes, this is very complicated and yes, I'll cook up a way to make it less complicated.
     input.keybind({ mod_key }, keys.space, function()
-        tag.set_layout("1", layouts[index])
-        if index + 1 > #layouts then
-            index = 1
-        else
-            index = index + 1
+        local tags = output.get_focused():tags()
+        for _, tg in pairs(tags) do
+            if tg:active() then
+                local name = tg:name()
+                tg:set_layout(layouts[indices[name] or 1])
+                if indices[name] == nil then
+                    indices[name] = 2
+                else
+                    if indices[name] + 1 > #layouts then
+                        indices[name] = 1
+                    else
+                        indices[name] = indices[name] + 1
+                    end
+                end
+                break
+            end
         end
     end)
     input.keybind({ mod_key, "Shift" }, keys.space, function()
-        tag.set_layout("1", layouts[index])
-        if index - 1 < 1 then
-            index = #layouts
-        else
-            index = index - 1
+        local tags = output.get_focused():tags()
+        for _, tg in pairs(tags) do
+            if tg:active() then
+                local name = tg:name()
+                tg:set_layout(layouts[indices[name] or #layouts])
+                if indices[name] == nil then
+                    indices[name] = #layouts - 1
+                else
+                    if indices[name] - 1 < 1 then
+                        indices[name] = #layouts
+                    else
+                        indices[name] = indices[name] - 1
+                    end
+                end
+                break
+            end
         end
     end)
 

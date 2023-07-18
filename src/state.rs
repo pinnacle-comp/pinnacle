@@ -105,6 +105,7 @@ pub struct State<B: Backend> {
 
 impl<B: Backend> State<B> {
     pub fn handle_msg(&mut self, msg: Msg) {
+        // tracing::debug!("Got {msg:?}");
         match msg {
             Msg::SetKeybind {
                 key,
@@ -489,6 +490,44 @@ impl<B: Backend> State<B> {
                                 &OutgoingMsg::RequestResponse { 
                                     response: RequestResponse::Tags { tags: tag_props }
                                 }).unwrap();
+                        }
+                    }
+                    Request::GetTagActive { tag_id } => {
+                        let tag = self
+                            .space
+                            .outputs()
+                            .flat_map(|op| {
+                                op.with_state(|state| state.tags.clone())
+                            })
+                            .find(|tag| tag.id() == tag_id);
+                        if let Some(tag) = tag {
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::TagActive { 
+                                        active: tag.active() 
+                                    } 
+                                })
+                                .unwrap();
+                        }
+                    }
+                    Request::GetTagName { tag_id } => {
+                        let tag = self
+                            .space
+                            .outputs()
+                            .flat_map(|op| {
+                                op.with_state(|state| state.tags.clone())
+                            })
+                            .find(|tag| tag.id() == tag_id);
+                        if let Some(tag) = tag {
+                            crate::api::send_to_client(
+                                &mut stream, 
+                                &OutgoingMsg::RequestResponse { 
+                                    response: RequestResponse::TagName { 
+                                        name: tag.name() 
+                                    } 
+                                })
+                                .unwrap();
                         }
                     }
                 }

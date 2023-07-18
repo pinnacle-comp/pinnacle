@@ -56,11 +56,9 @@ local output = {}
 ---@param name string The name of the output.
 ---@return Output|nil
 function output.get_by_name(name)
-    SendMsg({
-        Request = {
-            GetOutputByName = {
-                name = name,
-            },
+    SendRequest({
+        GetOutputByName = {
+            name = name,
         },
     })
 
@@ -82,11 +80,9 @@ end
 ---@param model string The model of the output(s).
 ---@return Output[] outputs All outputs with this model. If there are none, the returned table will be empty.
 function output.get_by_model(model)
-    SendMsg({
-        Request = {
-            GetOutputsByModel = {
-                model = model,
-            },
+    SendRequest({
+        GetOutputsByModel = {
+            model = model,
         },
     })
 
@@ -109,11 +105,9 @@ end
 ---@param height integer The height of the outputs, in pixels.
 ---@return Output[] outputs All outputs with this resolution. If there are none, the returned table will be empty.
 function output.get_by_res(width, height)
-    SendMsg({
-        Request = {
-            GetOutputsByRes = {
-                res = { width, height },
-            },
+    SendRequest({
+        GetOutputsByRes = {
+            res = { width, height },
         },
     })
 

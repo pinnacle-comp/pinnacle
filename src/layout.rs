@@ -167,8 +167,10 @@ impl Layout {
                             Slice::Right => {
                                 let width_partition = win1_size.w / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                    state.size = Some(
+                                        (win1_size.w - width_partition, i32::max(win1_size.h, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -177,7 +179,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((width_partition, win1_size.h).into());
+                                    state.size =
+                                        Some((width_partition, i32::max(win1_size.h, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -190,8 +193,10 @@ impl Layout {
                             Slice::Below => {
                                 let height_partition = win1_size.h / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                    state.size = Some(
+                                        (win1_size.w, i32::max(win1_size.h - height_partition, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -200,7 +205,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((win1_size.w, height_partition).into());
+                                    state.size =
+                                        Some((win1_size.w, i32::max(height_partition, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -273,8 +279,10 @@ impl Layout {
                             Slice::Above => {
                                 let height_partition = win1_size.h / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                    state.size = Some(
+                                        (win1_size.w, i32::max(win1_size.h - height_partition, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -283,7 +291,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((win1_size.w, height_partition).into());
+                                    state.size =
+                                        Some((win1_size.w, i32::max(height_partition, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -295,8 +304,10 @@ impl Layout {
                             Slice::Below => {
                                 let height_partition = win1_size.h / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w, win1_size.h - height_partition).into());
+                                    state.size = Some(
+                                        (win1_size.w, win1_size.h - i32::max(height_partition, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -305,7 +316,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((win1_size.w, height_partition).into());
+                                    state.size =
+                                        Some((win1_size.w, i32::max(height_partition, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -318,8 +330,10 @@ impl Layout {
                             Slice::Left => {
                                 let width_partition = win1_size.w / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                    state.size = Some(
+                                        (win1_size.w - width_partition, i32::max(win1_size.h, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -328,7 +342,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((width_partition, win1_size.h).into());
+                                    state.size =
+                                        Some((width_partition, i32::max(win1_size.h, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -340,8 +355,10 @@ impl Layout {
                             Slice::Right => {
                                 let width_partition = win1_size.w / 2;
                                 win1.toplevel().with_pending_state(|state| {
-                                    state.size =
-                                        Some((win1_size.w - width_partition, win1_size.h).into());
+                                    state.size = Some(
+                                        (win1_size.w - width_partition, i32::max(win1_size.h, 40))
+                                            .into(),
+                                    );
                                 });
                                 win1.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(
@@ -350,7 +367,8 @@ impl Layout {
                                     );
                                 });
                                 win2.toplevel().with_pending_state(|state| {
-                                    state.size = Some((width_partition, win1_size.h).into());
+                                    state.size =
+                                        Some((width_partition, i32::max(win1_size.h, 40)).into());
                                 });
                                 win2.with_state(|state| {
                                     state.resize_state = WindowResizeState::Requested(

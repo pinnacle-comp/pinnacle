@@ -19,6 +19,7 @@ local function read_exact(socket_fd, count)
     local len_to_read = count
     local data = ""
     while len_to_read > 0 do
+        -- print("need to read " .. tostring(len_to_read) .. " bytes")
         local bytes, err_msg, errnum = socket.recv(socket_fd, len_to_read)
 
         if bytes == nil then
@@ -105,9 +106,11 @@ function pinnacle.setup(config_func)
 
         ---@type integer
         local msg_len = string.unpack("=I4", msg_len_bytes)
+        -- print(msg_len)
 
         local msg_bytes, err_msg2, err_num2 = read_exact(socket_fd, msg_len)
         assert(msg_bytes)
+        -- print(msg_bytes)
 
         ---@type IncomingMsg
         local tb = msgpack.decode(msg_bytes)
