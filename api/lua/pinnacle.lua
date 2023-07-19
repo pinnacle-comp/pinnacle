@@ -82,6 +82,7 @@ function pinnacle.setup(config_func)
     ---@type fun(args: table?)[]
     CallbackTable = {}
 
+    ---This is an internal global function used to send serialized messages to the Pinnacle server.
     ---@param data Msg
     function SendMsg(data)
         local encoded = msgpack.encode(data)
@@ -92,6 +93,7 @@ function pinnacle.setup(config_func)
         socket.send(socket_fd, encoded)
     end
 
+    ---This is an internal global function used to send requests to the Pinnacle server for information.
     ---@param data Request
     function SendRequest(data)
         SendMsg({
@@ -99,6 +101,8 @@ function pinnacle.setup(config_func)
         })
     end
 
+    ---This is an internal global function used to read messages sent from the server.
+    ---These are used to call user-defined functions and provide requested information.
     function ReadMsg()
         local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
         assert(msg_len_bytes)

@@ -471,74 +471,63 @@ impl<B: Backend> State<B> {
                 )
                 .expect("failed to send to client");
             }
-            Request::GetOutputByName { output_name } => {
-                // TODO: name better
-                let name = self
+            Request::GetOutputs => {
+                let output_names = self
                     .space
                     .outputs()
-                    .find(|output| output.name() == output_name)
-                    .map(|output| output.name());
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::Output { output_name: name },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetOutputsByModel { model } => {
-                let names = self
-                    .space
-                    .outputs()
-                    .filter(|output| output.physical_properties().model == model)
                     .map(|output| output.name())
                     .collect::<Vec<_>>();
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::Outputs {
-                            output_names: names,
-                        },
+                        response: RequestResponse::Outputs { output_names },
                     },
                 )
                 .expect("failed to send to client");
             }
-            Request::GetOutputsByRes { res } => {
-                let names = self
+            Request::GetOutputProps { output_name } => {
+                let output = self
                     .space
                     .outputs()
-                    .filter_map(|output| {
-                        if let Some(mode) = output.current_mode() {
-                            if mode.size == (res.0 as i32, res.1 as i32).into() {
-                                Some(output.name())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::Outputs {
-                            output_names: names,
-                        },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetOutputByFocus => {
-                let name = self
+                    .find(|output| output.name() == output_name);
+                let res = output.as_ref().and_then(|output| {
+                    output.current_mode().map(|mode| (mode.size.w, mode.size.h))
+                });
+                let refresh_rate = output
+                    .as_ref()
+                    .and_then(|output| output.current_mode().map(|mode| mode.refresh));
+                let model = output
+                    .as_ref()
+                    .map(|output| output.physical_properties().model);
+                let physical_size = output.as_ref().map(|output| {
+                    (
+                        output.physical_properties().size.w,
+                        output.physical_properties().size.h,
+                    )
+                });
+                let make = output
+                    .as_ref()
+                    .map(|output| output.physical_properties().make);
+                let loc = output
+                    .as_ref()
+                    .map(|output| (output.current_location().x, output.current_location().y));
+                let focused = self
                     .focus_state
                     .focused_output
                     .as_ref()
-                    .map(|output| output.name());
+                    .and_then(|foc_op| output.map(|op| op == foc_op));
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::Output { output_name: name },
+                        response: RequestResponse::OutputProps {
+                            make,
+                            model,
+                            loc,
+                            res,
+                            refresh_rate,
+                            physical_size,
+                            focused,
+                        },
                     },
                 )
                 .expect("failed to send to client");
@@ -558,39 +547,54 @@ impl<B: Backend> State<B> {
                     .expect("failed to send to client");
                 }
             }
-            Request::GetTagActive { tag_id } => {
-                let tag = self
+            Request::GetTagsByName { tag_name } => {
+                let tag_ids = self
                     .space
                     .outputs()
                     .flat_map(|op| op.with_state(|state| state.tags.clone()))
-                    .find(|tag| tag.id() == tag_id);
-                if let Some(tag) = tag {
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::TagActive {
-                                active: tag.active(),
-                            },
-                        },
-                    )
-                    .expect("failed to send to client");
-                }
+                    .filter(|tag| tag.name() == tag_name)
+                    .map(|tag| tag.id())
+                    .collect::<Vec<_>>();
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        response: RequestResponse::Tags { tag_ids },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetTagOutput { tag_id } => {
+                let output_name = tag_id
+                    .tag(self)
+                    .and_then(|tag| tag.output(self))
+                    .map(|output| output.name());
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        response: RequestResponse::Output { output_name },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetTagActive { tag_id } => {
+                let active = tag_id.tag(self).map(|tag| tag.active());
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        response: RequestResponse::TagActive { active },
+                    },
+                )
+                .expect("failed to send to client");
             }
             Request::GetTagName { tag_id } => {
-                let tag = self
-                    .space
-                    .outputs()
-                    .flat_map(|op| op.with_state(|state| state.tags.clone()))
-                    .find(|tag| tag.id() == tag_id);
-                if let Some(tag) = tag {
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::TagName { name: tag.name() },
-                        },
-                    )
-                    .expect("failed to send to client");
-                }
+                let name = tag_id.tag(self).map(|tag| tag.name());
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        response: RequestResponse::TagName { name },
+                    },
+                )
+                .expect("failed to send to client");
             }
         }
     }
@@ -752,7 +756,7 @@ impl<B: Backend> State<B> {
                     state
                         .tags
                         .iter()
-                        .any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output))
+                        .any(|tag| tag.output(self).is_some_and(|op| &op == output))
                 })
             })
             .cloned()

@@ -110,12 +110,12 @@ pub enum Request {
     GetWindowClass { window_id: WindowId },
     GetWindowTitle { window_id: WindowId },
     // Outputs
-    GetOutputByName { output_name: String },
-    GetOutputsByModel { model: String },
-    GetOutputsByRes { res: (u32, u32) },
-    GetOutputByFocus,
+    GetOutputs,
+    GetOutputProps { output_name: String },
     // Tags
     GetTagsByOutput { output_name: String },
+    GetTagsByName { tag_name: String },
+    GetTagOutput { tag_id: TagId },
     GetTagActive { tag_id: TagId },
     GetTagName { tag_id: TagId },
 }
@@ -196,16 +196,56 @@ pub enum Args {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum RequestResponse {
-    Window { window_id: Option<WindowId> },
-    Windows { window_ids: Vec<WindowId> },
-    WindowSize { size: Option<(i32, i32)> },
-    WindowLocation { loc: Option<(i32, i32)> },
-    WindowClass { class: Option<String> },
-    WindowTitle { title: Option<String> },
-    WindowFloating { floating: Option<bool> },
-    Output { output_name: Option<String> },
-    Outputs { output_names: Vec<String> },
-    Tags { tag_ids: Vec<TagId> },
-    TagActive { active: bool },
-    TagName { name: String },
+    Window {
+        window_id: Option<WindowId>,
+    },
+    Windows {
+        window_ids: Vec<WindowId>,
+    },
+    WindowSize {
+        size: Option<(i32, i32)>,
+    },
+    WindowLocation {
+        loc: Option<(i32, i32)>,
+    },
+    WindowClass {
+        class: Option<String>,
+    },
+    WindowTitle {
+        title: Option<String>,
+    },
+    WindowFloating {
+        floating: Option<bool>,
+    },
+    Output {
+        output_name: Option<String>,
+    },
+    Outputs {
+        output_names: Vec<String>,
+    },
+    OutputProps {
+        /// The make of the output.
+        make: Option<String>,
+        /// The model of the output.
+        model: Option<String>,
+        /// The location of the output in the space.
+        loc: Option<(i32, i32)>,
+        /// The resolution of the output.
+        res: Option<(i32, i32)>,
+        /// The refresh rate of the output.
+        refresh_rate: Option<i32>,
+        /// The size of the output, in millimeters.
+        physical_size: Option<(i32, i32)>,
+        /// Whether the output is focused or not.
+        focused: Option<bool>,
+    },
+    Tags {
+        tag_ids: Vec<TagId>,
+    },
+    TagActive {
+        active: Option<bool>,
+    },
+    TagName {
+        name: Option<String>,
+    },
 }

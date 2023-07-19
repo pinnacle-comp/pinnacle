@@ -31,7 +31,7 @@ local function new_tag(props)
 end
 
 ---Get this tag's active status.
----@return boolean active True if the tag is active, otherwise false.
+---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
 function tg:active()
     SendRequest({
         GetTagActive = {
@@ -44,6 +44,8 @@ function tg:active()
     return active
 end
 
+---Get this tag's name.
+---@return string|nil name The name of this tag, or nil if it doesn't exist.
 function tg:name()
     SendRequest({
         GetTagName = {
@@ -56,10 +58,32 @@ function tg:name()
     return name
 end
 
+---Get this tag's output.
+---@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
+function tg:output()
+    SendRequest({
+        GetTagOutput = {
+            tag_id = self.id,
+        },
+    })
+
+    local response = ReadMsg()
+    local output_name = response.RequestResponse.response.Output.output_name
+
+    if output_name == nil then
+        return nil
+    else
+        return NewOutput({ name = output_name })
+    end
+end
+
 ---Set this tag's layout.
 ---@param layout Layout
 function tg:set_layout(layout) -- TODO: output param
-    tag.set_layout(self:name(), layout)
+    local name = self:name()
+    if name ~= nil then
+        tag.set_layout(name, layout)
+    end
 end
 
 -----------------------------------------------------------
@@ -68,12 +92,14 @@ end
 ---
 ---If you need to add the names as a table, use `tag.add_table` instead.
 ---
+---You can also do `op:add_tags(...)`.
+---
 ---### Example
 ---
 ---```lua
----local output = output.get_by_name("DP-1")
----if output ~= nil then
----    tag.add(output, "1", "2", "3", "4", "5") -- Add tags with names 1-5
+---local op = output.get_by_name("DP-1")
+---if op ~= nil then
+---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
 ---end
 ---```
 ---@param output Output The output you want these tags to be added to.
@@ -220,6 +246,30 @@ function tag.get_on_output(output)
     SendRequest({
         GetTagsByOutput = {
             output_name = output.name,
+        },
+    })
+
+    local response = ReadMsg()
+
+    local tag_ids = response.RequestResponse.response.Tags.tag_ids
+
+    ---@type Tag[]
+    local tags = {}
+
+    for _, tag_id in pairs(tag_ids) do
+        table.insert(tags, new_tag({ id = tag_id }))
+    end
+
+    return tags
+end
+
+---Get all tags with this name across all outputs.
+---@param name string The name of the tags you want.
+---@return Tag[]
+function tag.get_by_name(name)
+    SendRequest({
+        GetTagsByName = {
+            tag_name = name,
         },
     })
 

@@ -28,6 +28,14 @@ impl TagId {
     fn next() -> Self {
         Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
+
+    pub fn tag<B: Backend>(&self, state: &State<B>) -> Option<Tag> {
+        state
+            .space
+            .outputs()
+            .flat_map(|op| op.with_state(|state| state.tags.clone()))
+            .find(|tag| &tag.id() == self)
+    }
 }
 
 #[derive(Debug)]
@@ -88,13 +96,11 @@ impl Tag {
             layout: Layout::MasterStack, // TODO: get from config
         })))
     }
-}
-
-impl<B: Backend> State<B> {
-    pub fn output_for_tag(&self, tag: &Tag) -> Option<Output> {
-        self.space
+    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+        state
+            .space
             .outputs()
-            .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == tag)))
+            .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == self)))
             .cloned()
     }
 }

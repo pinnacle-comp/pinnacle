@@ -66,14 +66,28 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Just testing stuff
     input.keybind({ mod_key }, keys.h, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-            print("class: " .. (win:class() or "nil"))
-            print("title: " .. (win:title() or "nil"))
-            print("float: " .. tostring(win:floating()))
-        end
+        -- local win = window.get_focused()
+        -- if win ~= nil then
+        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+        --     print("class: " .. (win:class() or "nil"))
+        --     print("title: " .. (win:title() or "nil"))
+        --     print("float: " .. tostring(win:floating()))
+        -- end
+
+        local op = output.get_focused() --[[@as Output]]
+        print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))
+        print("loc: " .. (op:loc() and (op:loc().x .. ", " .. op:loc().y) or "nil"))
+        print("rr: " .. (op:refresh_rate() or "nil"))
+        print("make: " .. (op:make() or "nil"))
+        print("model: " .. (op:model() or "nil"))
+        print("focused: " .. (tostring(op:focused())))
+
+        -- local tags = tag.get_on_output(output.get_focused())
+        -- for _, tg in pairs(tags) do
+        --     print(tg:name())
+        --     print(tg:output() and tg:output().name or "nil output")
+        -- end
     end)
 
     -- Tags ---------------------------------------------------------------------------
@@ -103,6 +117,9 @@ require("pinnacle").setup(function(pinnacle)
         for _, tg in pairs(tags) do
             if tg:active() then
                 local name = tg:name()
+                if name == nil then
+                    return
+                end
                 tg:set_layout(layouts[indices[name] or 1])
                 if indices[name] == nil then
                     indices[name] = 2
@@ -122,6 +139,9 @@ require("pinnacle").setup(function(pinnacle)
         for _, tg in pairs(tags) do
             if tg:active() then
                 local name = tg:name()
+                if name == nil then
+                    return
+                end
                 tg:set_layout(layouts[indices[name] or #layouts])
                 if indices[name] == nil then
                     indices[name] = #layouts - 1

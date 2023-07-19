@@ -41,14 +41,15 @@
 ---@field GetWindowClass { window_id: WindowId }
 ---@field GetWindowTitle { window_id: WindowId }
 --Outputs
----@field GetOutputByName { output_name: OutputName }
----@field GetOutputsByModel { model: string }
----@field GetOutputsByRes { res: integer[] }
+---@field GetOutputProps { output_name: string }
+--Tags
 ---@field GetTagsByOutput { output_name: string }
+---@field GetTagsByName { tag_name: string }
+---@field GetTagOutput { tag_id: TagId }
 ---@field GetTagActive { tag_id: TagId }
 ---@field GetTagName { tag_id: TagId }
 
----@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputByFocus"
+---@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputs"
 
 ---@class IncomingMsg
 ---@field CallCallback { callback_id: integer, args: Args }
@@ -66,15 +67,16 @@
 --Windows
 ---@field Window { window_id: WindowId|nil }
 ---@field Windows { window_ids: WindowId[] }
----@field WindowSize { size: (integer[])? }
----@field WindowLocation { loc: (integer[])? }
+---@field WindowSize { size: integer[]? }
+---@field WindowLocation { loc: integer[]? }
 ---@field WindowClass { class: string? }
 ---@field WindowTitle { title: string? }
 ---@field WindowFloating { floating: boolean? }
 --Outputs
 ---@field Output { output_name: OutputName? }
 ---@field Outputs { output_names: OutputName[] }
+---@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean? }
 --Tags
 ---@field Tags { tag_ids: TagId[] }
----@field TagActive { active: boolean }
----@field TagName { name: string }
+---@field TagActive { active: boolean? }
+---@field TagName { name: string? }

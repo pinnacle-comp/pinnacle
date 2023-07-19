@@ -26,10 +26,121 @@ function op:add_tags_table(names)
     require("tag").add_table(self, names)
 end
 
----Add methods to this output.
+---Get this output's make.
+---@return string|nil
+function op:make()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    return props.make
+end
+
+---Get this output's model.
+---@return string|nil
+function op:model()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    return props.model
+end
+
+---Get this output's location in the global space.
+---@return { x: integer, y: integer }|nil
+function op:loc()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    if props.loc == nil then
+        return nil
+    else
+        return { x = props.loc[1], y = props.loc[2] }
+    end
+end
+
+---Get this output's resolution in pixels.
+---@return { w: integer, h: integer }|nil
+function op:res()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    if props.res == nil then
+        return nil
+    else
+        return { w = props.res[1], h = props.res[2] }
+    end
+end
+
+---Get this output's refresh rate in millihertz.
+---For example, 60Hz will be returned as 60000.
+---@return integer|nil
+function op:refresh_rate()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    return props.refresh_rate
+end
+
+---Get this output's physical size in millimeters.
+---@return { w: integer, h: integer }|nil
+function op:physical_size()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    if props.physical_size == nil then
+        return nil
+    else
+        return { w = props.physical_size[1], h = props.physical_size[2] }
+    end
+end
+
+---Get whether or not this output is focused. This is currently defined as having the cursor on it.
+---@return boolean|nil
+function op:focused()
+    SendRequest({
+        GetOutputProps = {
+            output_name = self.name,
+        },
+    })
+
+    local response = ReadMsg()
+    local props = response.RequestResponse.response.OutputProps
+    return props.focused
+end
+
+---This is an internal global function used to create an output object from an output name.
 ---@param props Output
 ---@return Output
-local function new_output(props)
+function NewOutput(props)
     -- Copy functions over
     for k, v in pairs(op) do
         props[k] = v
@@ -40,6 +151,7 @@ end
 
 ------------------------------------------------------
 
+---@class OutputGlobal
 local output = {}
 
 ---Get an output by its name.
@@ -56,21 +168,17 @@ local output = {}
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
 function output.get_by_name(name)
-    SendRequest({
-        GetOutputByName = {
-            output_name = name,
-        },
-    })
-
+    SendRequest("GetOutputs")
     local response = ReadMsg()
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
-    local output_name = response.RequestResponse.response.Output.output_name
-
-    if output_name ~= nil then
-        return new_output({ name = output_name })
-    else
-        return nil
+    for _, output_name in pairs(output_names) do
+        if output_name == name then
+            return NewOutput({ name = output_name })
+        end
     end
+
+    return nil
 end
 
 ---Note: This may or may not be what is reported by other monitor listing utilities. Pinnacle currently fails to pick up one of my monitors' models when it is correctly picked up by tools like wlr-randr. I'll fix this in the future.
@@ -80,20 +188,17 @@ end
 ---@param model string The model of the output(s).
 ---@return Output[] outputs All outputs with this model.
 function output.get_by_model(model)
-    SendRequest({
-        GetOutputsByModel = {
-            model = model,
-        },
-    })
-
+    SendRequest("GetOutputs")
     local response = ReadMsg()
-
     local output_names = response.RequestResponse.response.Outputs.output_names
 
-    ---@type Output
+    ---@type Output[]
     local outputs = {}
-    for _, v in pairs(output_names) do
-        table.insert(outputs, new_output({ name = v }))
+    for _, output_name in pairs(output_names) do
+        local o = NewOutput({ name = output_name })
+        if o:model() == model then
+            table.insert(outputs, o)
+        end
     end
 
     return outputs
@@ -105,11 +210,7 @@ end
 ---@param height integer The height of the outputs, in pixels.
 ---@return Output[] outputs All outputs with this resolution.
 function output.get_by_res(width, height)
-    SendRequest({
-        GetOutputsByRes = {
-            res = { width, height },
-        },
-    })
+    SendRequest("GetOutputs")
 
     local response = ReadMsg()
 
@@ -118,7 +219,10 @@ function output.get_by_res(width, height)
     ---@type Output
     local outputs = {}
     for _, output_name in pairs(output_names) do
-        table.insert(outputs, new_output({ name = output_name }))
+        local o = NewOutput({ name = output_name })
+        if o:res() and o:res().w == width and o:res().h == height then
+            table.insert(outputs, o)
+        end
     end
 
     return outputs
@@ -145,17 +249,18 @@ end
 ---```
 ---@return Output|nil output The output, or nil if none are focused.
 function output.get_focused()
-    SendRequest("GetOutputByFocus")
-
+    SendRequest("GetOutputs")
     local response = ReadMsg()
+    local output_names = response.RequestResponse.response.Outputs.output_names
 
-    local output_name = response.RequestResponse.response.Output.output_name
-
-    if output_name ~= nil then
-        return new_output({ name = output_name })
-    else
-        return nil
+    for _, output_name in pairs(output_names) do
+        local o = NewOutput({ name = output_name })
+        if o:focused() then
+            return o
+        end
     end
+
+    return nil
 end
 
 ---Connect a function to be run on all current and future outputs.
@@ -170,7 +275,7 @@ function output.connect_for_all(func)
     ---@param args Args
     table.insert(CallbackTable, function(args)
         local args = args.ConnectForAllOutputs
-        func(new_output({ name = args.output_name }))
+        func(NewOutput({ name = args.output_name }))
     end)
     SendMsg({
         ConnectForAllOutputs = {
