@@ -12,7 +12,7 @@
 --Windows
 ---@field CloseWindow { window_id: integer }
 ---@field ToggleFloating { window_id: integer }
----@field SetWindowSize { window_id: integer, size: integer[] }
+---@field SetWindowSize { window_id: integer, width: integer?, height: integer? }
 ---@field MoveWindowToTag { window_id: integer, tag_id: string }
 ---@field ToggleTagOnWindow { window_id: integer, tag_id: string }
 --
@@ -35,6 +35,11 @@
 --Windows
 ---@field GetWindowByAppId { app_id: string }
 ---@field GetWindowByTitle { title: string }
+---@field GetWindowSize { window_id: WindowId }
+---@field GetWindowLocation { window_id: WindowId }
+---@field GetWindowFLoating { window_id: WindowId }
+---@field GetWindowClass { window_id: WindowId }
+---@field GetWindowTitle { window_id: WindowId }
 --Outputs
 ---@field GetOutputByName { output_name: OutputName }
 ---@field GetOutputsByModel { model: string }
@@ -58,9 +63,18 @@
 ---@alias OutputName string
 
 ---@class RequestResponse
+--Windows
 ---@field Window { window_id: WindowId|nil }
 ---@field Windows { window_ids: WindowId[] }
+---@field WindowSize { size: (integer[])? }
+---@field WindowLocation { loc: (integer[])? }
+---@field WindowClass { class: string? }
+---@field WindowTitle { title: string? }
+---@field WindowFloating { floating: boolean? }
+--Outputs
+---@field Output { output_name: OutputName? }
 ---@field Outputs { output_names: OutputName[] }
+--Tags
 ---@field Tags { tag_ids: TagId[] }
 ---@field TagActive { active: boolean }
 ---@field TagName { name: string }

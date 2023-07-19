@@ -54,7 +54,7 @@ local output = {}
 ---print(monitor.name) -- should print `DP-1`
 ---```
 ---@param name string The name of the output.
----@return Output|nil
+---@return Output|nil output The output, or nil if none have the provided name.
 function output.get_by_name(name)
     SendRequest({
         GetOutputByName = {
@@ -64,10 +64,10 @@ function output.get_by_name(name)
 
     local response = ReadMsg()
 
-    local output_names = response.RequestResponse.response.Outputs.output_names
+    local output_name = response.RequestResponse.response.Output.output_name
 
-    if output_names[1] ~= nil then
-        return new_output({ name = output_names[1] })
+    if output_name ~= nil then
+        return new_output({ name = output_name })
     else
         return nil
     end
@@ -78,7 +78,7 @@ end
 ---Get outputs by their model.
 ---This is something like "DELL E2416H" or whatever gibberish monitor manufacturers call their displays.
 ---@param model string The model of the output(s).
----@return Output[] outputs All outputs with this model. If there are none, the returned table will be empty.
+---@return Output[] outputs All outputs with this model.
 function output.get_by_model(model)
     SendRequest({
         GetOutputsByModel = {
@@ -103,7 +103,7 @@ end
 ---
 ---@param width integer The width of the outputs, in pixels.
 ---@param height integer The height of the outputs, in pixels.
----@return Output[] outputs All outputs with this resolution. If there are none, the returned table will be empty.
+---@return Output[] outputs All outputs with this resolution.
 function output.get_by_res(width, height)
     SendRequest({
         GetOutputsByRes = {
@@ -149,10 +149,10 @@ function output.get_focused()
 
     local response = ReadMsg()
 
-    local output_names = response.RequestResponse.response.Outputs.output_names
+    local output_name = response.RequestResponse.response.Output.output_name
 
-    if output_names[1] ~= nil then
-        return new_output({ name = output_names[1] })
+    if output_name ~= nil then
+        return new_output({ name = output_name })
     else
         return nil
     end

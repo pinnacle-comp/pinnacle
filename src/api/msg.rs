@@ -33,7 +33,10 @@ pub enum Msg {
     },
     SetWindowSize {
         window_id: WindowId,
-        size: (i32, i32),
+        #[serde(default)]
+        width: Option<i32>,
+        #[serde(default)]
+        height: Option<i32>,
     },
     MoveWindowToTag {
         window_id: WindowId,
@@ -96,14 +99,22 @@ pub struct RequestId(pub u32);
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 /// Messages that require a server response, usually to provide some data.
 pub enum Request {
+    // Windows
     GetWindowByAppId { app_id: String },
     GetWindowByTitle { title: String },
     GetWindowByFocus,
     GetAllWindows,
+    GetWindowSize { window_id: WindowId },
+    GetWindowLocation { window_id: WindowId },
+    GetWindowFloating { window_id: WindowId },
+    GetWindowClass { window_id: WindowId },
+    GetWindowTitle { window_id: WindowId },
+    // Outputs
     GetOutputByName { output_name: String },
     GetOutputsByModel { model: String },
     GetOutputsByRes { res: (u32, u32) },
     GetOutputByFocus,
+    // Tags
     GetTagsByOutput { output_name: String },
     GetTagActive { tag_id: TagId },
     GetTagName { tag_id: TagId },
@@ -187,6 +198,12 @@ pub enum Args {
 pub enum RequestResponse {
     Window { window_id: Option<WindowId> },
     Windows { window_ids: Vec<WindowId> },
+    WindowSize { size: Option<(i32, i32)> },
+    WindowLocation { loc: Option<(i32, i32)> },
+    WindowClass { class: Option<String> },
+    WindowTitle { title: Option<String> },
+    WindowFloating { floating: Option<bool> },
+    Output { output_name: Option<String> },
     Outputs { output_names: Vec<String> },
     Tags { tag_ids: Vec<TagId> },
     TagActive { active: bool },

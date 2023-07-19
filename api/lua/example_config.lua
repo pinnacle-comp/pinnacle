@@ -41,7 +41,12 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
-    input.keybind({ mod_key, "Alt" }, keys.space, window.toggle_floating)
+    input.keybind({ mod_key, "Alt" }, keys.space, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:toggle_floating()
+        end
+    end)
 
     input.keybind({ mod_key }, keys.Return, function()
         process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
@@ -57,6 +62,18 @@ require("pinnacle").setup(function(pinnacle)
     end)
     input.keybind({ mod_key }, keys.j, function()
         process.spawn("nautilus")
+    end)
+
+    -- Just testing stuff
+    input.keybind({ mod_key }, keys.h, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+            print("class: " .. (win:class() or "nil"))
+            print("title: " .. (win:title() or "nil"))
+            print("float: " .. tostring(win:floating()))
+        end
     end)
 
     -- Tags ---------------------------------------------------------------------------
