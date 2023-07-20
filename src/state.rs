@@ -353,32 +353,7 @@ impl<B: Backend> State<B> {
             .expect("Stream doesn't exist");
         let mut stream = stream.lock().expect("Couldn't lock stream");
         match request {
-            Request::GetWindowByAppId { app_id: _ } => todo!(),
-            Request::GetWindowByTitle { title: _ } => todo!(),
-            Request::GetWindowByFocus => match self.focus_state.current_focus() {
-                Some(current_focus) => {
-                    let window_id = current_focus.with_state(|state| state.id);
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Window {
-                                window_id: Some(window_id),
-                            },
-                        },
-                    )
-                    .expect("Send to client failed");
-                }
-                None => {
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Window { window_id: None },
-                        },
-                    )
-                    .expect("Send to client failed");
-                }
-            },
-            Request::GetAllWindows => {
+            Request::GetWindows => {
                 let window_ids = self
                     .windows
                     .iter()
@@ -394,33 +369,16 @@ impl<B: Backend> State<B> {
                 )
                 .expect("Couldn't send to client");
             }
-            Request::GetWindowSize { window_id } => {
-                let size = window_id
-                    .window(self)
+            Request::GetWindowProps { window_id } => {
+                let window = window_id.window(self);
+                let size = window
+                    .as_ref()
                     .map(|win| (win.geometry().size.w, win.geometry().size.h));
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::WindowSize { size },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetWindowLocation { window_id } => {
-                let loc = window_id
-                    .window(self)
-                    .and_then(|win| self.space.element_location(&win))
+                let loc = window
+                    .as_ref()
+                    .and_then(|win| self.space.element_location(win))
                     .map(|loc| (loc.x, loc.y));
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::WindowLocation { loc },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetWindowClass { window_id } => {
-                let class = window_id.window(self).and_then(|win| {
+                let (class, title) = window.as_ref().map_or((None, None), |win| {
                     compositor::with_states(win.toplevel().wl_surface(), |states| {
                         let lock = states
                             .data_map
@@ -428,45 +386,28 @@ impl<B: Backend> State<B> {
                             .expect("XdgToplevelSurfaceData wasn't in surface's data map")
                             .lock()
                             .expect("failed to acquire lock");
-                        lock.app_id.clone()
+                        (lock.app_id.clone(), lock.title.clone())
                     })
                 });
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::WindowClass { class },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetWindowTitle { window_id } => {
-                let title = window_id.window(self).and_then(|win| {
-                    compositor::with_states(win.toplevel().wl_surface(), |states| {
-                        let lock = states
-                            .data_map
-                            .get::<XdgToplevelSurfaceData>()
-                            .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                            .lock()
-                            .expect("failed to acquire lock");
-                        lock.title.clone()
-                    })
-                });
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::WindowTitle { title },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetWindowFloating { window_id } => {
-                let floating = window_id
-                    .window(self)
+                let floating = window
+                    .as_ref()
                     .map(|win| win.with_state(|state| state.floating.is_floating()));
+                let focused = window.as_ref().and_then(|win| {
+                    self.focus_state
+                        .current_focus() // TODO: actual focus
+                        .map(|foc_win| win == &foc_win)
+                });
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::WindowFloating { floating },
+                        response: RequestResponse::WindowProps {
+                            size,
+                            loc,
+                            class,
+                            title,
+                            floating,
+                            focused,
+                        },
                     },
                 )
                 .expect("failed to send to client");

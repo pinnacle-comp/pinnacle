@@ -33,13 +33,7 @@
 
 ---@class _Request
 --Windows
----@field GetWindowByAppId { app_id: string }
----@field GetWindowByTitle { title: string }
----@field GetWindowSize { window_id: WindowId }
----@field GetWindowLocation { window_id: WindowId }
----@field GetWindowFLoating { window_id: WindowId }
----@field GetWindowClass { window_id: WindowId }
----@field GetWindowTitle { window_id: WindowId }
+---@field GetWindowProps { window_id: WindowId }
 --Outputs
 ---@field GetOutputProps { output_name: string }
 --Tags
@@ -49,7 +43,7 @@
 ---@field GetTagActive { tag_id: TagId }
 ---@field GetTagName { tag_id: TagId }
 
----@alias Request _Request | "GetWindowByFocus" | "GetAllWindows" | "GetOutputs"
+---@alias Request _Request | "GetWindows" | "GetOutputs"
 
 ---@class IncomingMsg
 ---@field CallCallback { callback_id: integer, args: Args }
@@ -67,11 +61,7 @@
 --Windows
 ---@field Window { window_id: WindowId|nil }
 ---@field Windows { window_ids: WindowId[] }
----@field WindowSize { size: integer[]? }
----@field WindowLocation { loc: integer[]? }
----@field WindowClass { class: string? }
----@field WindowTitle { title: string? }
----@field WindowFloating { floating: boolean? }
+---@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, floating: boolean?, focused: boolean? }
 --Outputs
 ---@field Output { output_name: OutputName? }
 ---@field Outputs { output_names: OutputName[] }

@@ -118,13 +118,13 @@ end
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
 function win:size()
     SendRequest({
-        GetWindowSize = {
+        GetWindowProps = {
             window_id = self.id,
         },
     })
 
     local response = ReadMsg()
-    local size = response.RequestResponse.response.WindowSize.size
+    local size = response.RequestResponse.response.WindowProps.size
     if size == nil then
         return nil
     else
@@ -151,13 +151,13 @@ end
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
 function win:loc()
     SendRequest({
-        GetWindowLocation = {
+        GetWindowProps = {
             window_id = self.id,
         },
     })
 
     local response = ReadMsg()
-    local loc = response.RequestResponse.response.WindowLocation.loc
+    local loc = response.RequestResponse.response.WindowProps.loc
     if loc == nil then
         return nil
     else
@@ -179,13 +179,13 @@ end
 ---@return string|nil class This window's class, or nil if it doesn't exist.
 function win:class()
     SendRequest({
-        GetWindowClass = {
+        GetWindowProps = {
             window_id = self.id,
         },
     })
 
     local response = ReadMsg()
-    local class = response.RequestResponse.response.WindowClass.class
+    local class = response.RequestResponse.response.WindowProps.class
     return class
 end
 
@@ -200,13 +200,13 @@ end
 ---@return string|nil title This window's title, or nil if it doesn't exist.
 function win:title()
     SendRequest({
-        GetWindowTitle = {
+        GetWindowProps = {
             window_id = self.id,
         },
     })
 
     local response = ReadMsg()
-    local title = response.RequestResponse.response.WindowTitle.title
+    local title = response.RequestResponse.response.WindowProps.title
     return title
 end
 
@@ -214,114 +214,120 @@ end
 ---
 ---### Example
 ---```lua
------ With Alacritty focused and floating...
----print(tostring(window.get_focused():floating()))
------ ...should print "true".
+----- With the focused window floating...
+---print(window.get_focused():floating())
+----- ...should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
 function win:floating()
     SendRequest({
-        GetWindowFloating = {
+        GetWindowProps = {
             window_id = self.id,
         },
     })
 
     local response = ReadMsg()
-    local floating = response.RequestResponse.response.WindowFloating.floating
+    local floating = response.RequestResponse.response.WindowProps.floating
     return floating
+end
+
+---Get whether or not this window is focused.
+---
+---### Example
+---```lua
+---print(window.get_focused():focused()) -- should print `true`.
+---```
+---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+function win:focused()
+    SendRequest({
+        GetWindowProps = {
+            window_id = self.id,
+        },
+    })
+
+    local response = ReadMsg()
+    local focused = response.RequestResponse.response.WindowProps.focused
+    return focused
 end
 
 -------------------------------------------------------------------
 
+---@class WindowGlobal
 local window = {}
 
----TODO: This function is not implemented yet.
----
----Get a window by its app id (aka its X11 class).
----@param app_id string The window's app id. For example, Alacritty's app id is "Alacritty".
----@return Window|nil
-function window.get_by_app_id(app_id)
-    SendRequest({
-        GetWindowByAppId = {
-            app_id = app_id,
-        },
-    })
+---Get all windows with the specified class (usually the name of the application).
+---@param class string The class. For example, Alacritty's class is "Alacritty".
+---@return Window[]
+function window.get_by_class(class)
+    SendRequest("GetWindows")
 
     local response = ReadMsg()
 
-    local window_id = response.RequestResponse.response.Window.window_id
+    local window_ids = response.RequestResponse.response.Windows.window_ids
 
-    if window_id == nil then
-        return nil
+    ---@type Window[]
+    local windows = {}
+    for _, window_id in pairs(window_ids) do
+        local w = new_window({ id = window_id })
+        if w:class() == class then
+            table.insert(windows, w)
+        end
     end
 
-    ---@type Window
-    local wind = {
-        id = window_id,
-    }
-
-    return new_window(wind)
+    return windows
 end
 
----TODO: This function is not implemented yet.
----
----Get a window by its title.
----@param title string The window's title.
----@return Window|nil
+---Get all windows with the specified title.
+---@param title string The title.
+---@return Window[]
 function window.get_by_title(title)
-    SendRequest({
-        GetWindowByTitle = {
-            title = title,
-        },
-    })
+    SendRequest("GetWindows")
 
     local response = ReadMsg()
 
-    local window_id = response.RequestResponse.response.Window.window_id
+    local window_ids = response.RequestResponse.response.Windows.window_ids
 
-    if window_id == nil then
-        return nil
+    ---@type Window[]
+    local windows = {}
+    for _, window_id in pairs(window_ids) do
+        local w = new_window({ id = window_id })
+        if w:title() == title then
+            table.insert(windows, w)
+        end
     end
 
-    ---@type Window
-    local wind = {
-        id = window_id,
-    }
-
-    return new_window(wind)
+    return windows
 end
 
 ---Get the currently focused window.
 ---@return Window|nil
 function window.get_focused()
-    SendRequest("GetWindowByFocus")
+    SendRequest("GetWindows")
 
     local response = ReadMsg()
 
-    local window_id = response.RequestResponse.response.Window.window_id
+    local window_ids = response.RequestResponse.response.Windows.window_ids
 
-    if window_id == nil then
-        return nil
+    for _, window_id in pairs(window_ids) do
+        local w = new_window({ id = window_id })
+        if w:focused() then
+            return w
+        end
     end
 
-    ---@type Window
-    local wind = {
-        id = window_id,
-    }
-
-    return new_window(wind)
+    return nil
 end
 
 ---Get all windows.
 ---@return Window[]
 function window.get_all()
-    SendRequest("GetAllWindows")
+    SendRequest("GetWindows")
 
     local window_ids = ReadMsg().RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
-    for i, window_id in ipairs(window_ids) do
-        windows[i] = new_window({ id = window_id })
+    for _, window_id in pairs(window_ids) do
+        table.insert(windows, new_window({ id = window_id }))
     end
     return windows
 end

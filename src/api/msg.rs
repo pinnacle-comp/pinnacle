@@ -100,20 +100,13 @@ pub struct RequestId(pub u32);
 /// Messages that require a server response, usually to provide some data.
 pub enum Request {
     // Windows
-    GetWindowByAppId { app_id: String },
-    GetWindowByTitle { title: String },
-    GetWindowByFocus,
-    GetAllWindows,
-    GetWindowSize { window_id: WindowId },
-    GetWindowLocation { window_id: WindowId },
-    GetWindowFloating { window_id: WindowId },
-    GetWindowClass { window_id: WindowId },
-    GetWindowTitle { window_id: WindowId },
+    GetWindows,
+    GetWindowProps { window_id: WindowId },
     // Outputs
     GetOutputs,
     GetOutputProps { output_name: String },
     // Tags
-    GetTagsByOutput { output_name: String },
+    GetTagsByOutput { output_name: String }, // TODO: move into props
     GetTagsByName { tag_name: String },
     GetTagOutput { tag_id: TagId },
     GetTagActive { tag_id: TagId },
@@ -202,20 +195,13 @@ pub enum RequestResponse {
     Windows {
         window_ids: Vec<WindowId>,
     },
-    WindowSize {
+    WindowProps {
         size: Option<(i32, i32)>,
-    },
-    WindowLocation {
         loc: Option<(i32, i32)>,
-    },
-    WindowClass {
         class: Option<String>,
-    },
-    WindowTitle {
         title: Option<String>,
-    },
-    WindowFloating {
         floating: Option<bool>,
+        focused: Option<bool>,
     },
     Output {
         output_name: Option<String>,
