@@ -83,13 +83,11 @@ end
 
 -----------------------------------------------------------
 
----Add tags.
+---Add tags to the specified output.
 ---
----If you need to add the names as a table, use `tag.add_table` instead.
+---You can also do `output_object:add_tags(...)`.
 ---
----You can also do `op:add_tags(...)`.
----
----### Example
+---### Examples
 ---
 ---```lua
 ---local op = output.get_by_name("DP-1")
@@ -97,40 +95,36 @@ end
 ---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
 ---end
 ---```
----@param output Output The output you want these tags to be added to.
----@param ... string The names of the new tags you want to add.
-function tag.add(output, ...)
-    local tag_names = table.pack(...)
-    tag_names["n"] = nil -- remove the length to make it a true array for serializing
-
-    SendMsg({
-        AddTags = {
-            output_name = output:name(),
-            tag_names = tag_names,
-        },
-    })
-end
-
----Like `tag.add`, but with a table of strings instead.
----
----### Example
----
+---You can also pass in a table.
 ---```lua
----local tags = { "Terminal", "Browser", "Mail", "Gaming", "Potato" }
----local output = output.get_by_name("DP-1")
----if output ~= nil then
----    tag.add(output, tags) -- Add tags with the names above
----end
+---local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
+---tag.add(op, tags) -- Add tags with those names
 ---```
 ---@param output Output The output you want these tags to be added to.
----@param names string[] The names of the new tags you want to add, as a table.
-function tag.add_table(output, names)
-    SendMsg({
-        AddTags = {
-            output_name = output:name(),
-            tag_names = names,
-        },
-    })
+---@param ... string The names of the new tags you want to add.
+---@overload fun(output: Output, tag_names: string[])
+function tag.add(output, ...)
+    local varargs = { ... }
+    if type(varargs[1]) == "string" then
+        local tag_names = varargs
+        tag_names["n"] = nil -- remove the length to make it a true array for serializing
+
+        SendMsg({
+            AddTags = {
+                output_name = output:name(),
+                tag_names = tag_names,
+            },
+        })
+    else
+        local tag_names = varargs[1] --[=[@as string[]]=]
+
+        SendMsg({
+            AddTags = {
+                output_name = output:name(),
+                tag_names = tag_names,
+            },
+        })
+    end
 end
 
 ---Toggle a tag on the specified output. If `output` isn't specified, toggle it on the currently focused output instead.

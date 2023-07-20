@@ -22,14 +22,9 @@ end
 
 ---Add tags to this output. See `tag.add`.
 ---@param ... string The names of the tags you want to add.
+---@overload fun(self: self, tag_names: string[])
 function op:add_tags(...)
     require("tag").add(self, ...)
-end
-
----Add tags to this output as a table. See `tag.add_table`.
----@param names string[] The names of the tags you want to add, as a table.
-function op:add_tags_table(names)
-    require("tag").add_table(self, names)
 end
 
 ---Get this output's make.

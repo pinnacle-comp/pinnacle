@@ -138,9 +138,11 @@ require("pinnacle").setup(function(pinnacle)
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)
-        op:add_tags("1", "2", "3", "4", "5")
+        -- op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-        tag.toggle("1", op)
+
+        local tags_table = { "Terminal", "Browser", "Code", "Email", "Potato" }
+        op:add_tags(tags_table)
     end)
 
     ---@type Layout[]
