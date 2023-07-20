@@ -64,6 +64,58 @@ require("pinnacle").setup(function(pinnacle)
         process.spawn("nautilus")
     end)
 
+    -- Just testing stuff
+    input.keybind({ mod_key }, keys.h, function()
+        local wins = window.get_all()
+        for _, win in pairs(wins) do
+            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+            print("class: " .. (win:class() or "nil"))
+            print("title: " .. (win:title() or "nil"))
+            print("float: " .. tostring(win:floating()))
+        end
+
+        print("----------------------")
+
+        local op = output.get_focused() --[[@as Output]]
+        print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))
+        print("loc: " .. (op:loc() and (op:loc().x .. ", " .. op:loc().y) or "nil"))
+        print("rr: " .. (op:refresh_rate() or "nil"))
+        print("make: " .. (op:make() or "nil"))
+        print("model: " .. (op:model() or "nil"))
+        print("focused: " .. (tostring(op:focused())))
+
+        print("----------------------")
+
+        local wins = window.get_by_class("Alacritty")
+        for _, win in pairs(wins) do
+            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+            print("class: " .. (win:class() or "nil"))
+            print("title: " .. (win:title() or "nil"))
+            print("float: " .. tostring(win:floating()))
+        end
+
+        print("----------------------")
+
+        local wins = window.get_by_title("~/p/pinnacle")
+        for _, win in pairs(wins) do
+            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+            print("class: " .. (win:class() or "nil"))
+            print("title: " .. (win:title() or "nil"))
+            print("float: " .. tostring(win:floating()))
+        end
+
+        print("----------------------")
+
+        -- local tags = tag.get_on_output(output.get_focused())
+        -- for _, tg in pairs(tags) do
+        --     print(tg:name())
+        --     print(tg:output() and tg:output().name or "nil output")
+        -- end
+    end)
+
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)

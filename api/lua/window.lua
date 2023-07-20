@@ -259,57 +259,42 @@ local window = {}
 ---@param class string The class. For example, Alacritty's class is "Alacritty".
 ---@return Window[]
 function window.get_by_class(class)
-    SendRequest("GetWindows")
-
-    local response = ReadMsg()
-
-    local window_ids = response.RequestResponse.response.Windows.window_ids
+    local windows = window.get_all()
 
     ---@type Window[]
-    local windows = {}
-    for _, window_id in pairs(window_ids) do
-        local w = new_window({ id = window_id })
+    local windows_ret = {}
+    for _, w in pairs(windows) do
         if w:class() == class then
-            table.insert(windows, w)
+            table.insert(windows_ret, w)
         end
     end
 
-    return windows
+    return windows_ret
 end
 
 ---Get all windows with the specified title.
 ---@param title string The title.
 ---@return Window[]
 function window.get_by_title(title)
-    SendRequest("GetWindows")
-
-    local response = ReadMsg()
-
-    local window_ids = response.RequestResponse.response.Windows.window_ids
+    local windows = window.get_all()
 
     ---@type Window[]
-    local windows = {}
-    for _, window_id in pairs(window_ids) do
-        local w = new_window({ id = window_id })
+    local windows_ret = {}
+    for _, w in pairs(windows) do
         if w:title() == title then
-            table.insert(windows, w)
+            table.insert(windows_ret, w)
         end
     end
 
-    return windows
+    return windows_ret
 end
 
 ---Get the currently focused window.
 ---@return Window|nil
 function window.get_focused()
-    SendRequest("GetWindows")
+    local windows = window.get_all()
 
-    local response = ReadMsg()
-
-    local window_ids = response.RequestResponse.response.Windows.window_ids
-
-    for _, window_id in pairs(window_ids) do
-        local w = new_window({ id = window_id })
+    for _, w in pairs(windows) do
         if w:focused() then
             return w
         end
