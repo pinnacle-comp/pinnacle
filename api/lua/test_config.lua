@@ -109,11 +109,11 @@ require("pinnacle").setup(function(pinnacle)
 
         print("----------------------")
 
-        -- local tags = tag.get_on_output(output.get_focused())
-        -- for _, tg in pairs(tags) do
-        --     print(tg:name())
-        --     print(tg:output() and tg:output().name or "nil output")
-        -- end
+        local tags = tag.get_on_output(output.get_focused() --[[@as Output]])
+        for _, tg in pairs(tags) do
+            print(tg:name())
+            print((tg:output() and tg:output():name()) or "nil output")
+        end
     end)
 
     -- Tags ---------------------------------------------------------------------------

@@ -106,7 +106,6 @@ pub enum Request {
     GetOutputs,
     GetOutputProps { output_name: String },
     // Tags
-    GetTagsByOutput { output_name: String }, // TODO: move into props
     GetTagsByName { tag_name: String },
     GetTagOutput { tag_id: TagId },
     GetTagActive { tag_id: TagId },
@@ -224,6 +223,7 @@ pub enum RequestResponse {
         physical_size: Option<(i32, i32)>,
         /// Whether the output is focused or not.
         focused: Option<bool>,
+        tag_ids: Option<Vec<TagId>>,
     },
     Tags {
         tag_ids: Vec<TagId>,

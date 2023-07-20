@@ -16,18 +16,26 @@ local tag = {}
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
 ---@class Tag
----@field private id integer The internal id of this tag.
+---@field private _id integer The internal id of this tag.
 local tg = {}
 
----@param props Tag
+---@param tag_id integer
 ---@return Tag
-local function new_tag(props)
+local function new_tag(tag_id)
+    ---@type Tag
+    local t = { _id = tag_id }
     -- Copy functions over
     for k, v in pairs(tg) do
-        props[k] = v
+        t[k] = v
     end
 
-    return props
+    return t
+end
+
+---Get this tag's internal id.
+---@return integer
+function tg:id()
+    return self._id
 end
 
 ---Get this tag's active status.
@@ -35,7 +43,7 @@ end
 function tg:active()
     SendRequest({
         GetTagActive = {
-            tag_id = self.id,
+            tag_id = self._id,
         },
     })
 
@@ -49,7 +57,7 @@ end
 function tg:name()
     SendRequest({
         GetTagName = {
-            tag_id = self.id,
+            tag_id = self._id,
         },
     })
 
@@ -61,20 +69,7 @@ end
 ---Get this tag's output.
 ---@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
 function tg:output()
-    SendRequest({
-        GetTagOutput = {
-            tag_id = self.id,
-        },
-    })
-
-    local response = ReadMsg()
-    local output_name = response.RequestResponse.response.Output.output_name
-
-    if output_name == nil then
-        return nil
-    else
-        return NewOutput({ name = output_name })
-    end
+    return require("output").get_for_tag(self)
 end
 
 ---Set this tag's layout.
@@ -110,7 +105,7 @@ function tag.add(output, ...)
 
     SendMsg({
         AddTags = {
-            output_name = output.name,
+            output_name = output:name(),
             tag_names = tag_names,
         },
     })
@@ -132,7 +127,7 @@ end
 function tag.add_table(output, names)
     SendMsg({
         AddTags = {
-            output_name = output.name,
+            output_name = output:name(),
             tag_names = names,
         },
     })
@@ -155,7 +150,7 @@ function tag.toggle(name, output)
     if output ~= nil then
         SendMsg({
             ToggleTag = {
-                output_name = output.name,
+                output_name = output:name(),
                 tag_name = name,
             },
         })
@@ -164,7 +159,7 @@ function tag.toggle(name, output)
         if op ~= nil then
             SendMsg({
                 ToggleTag = {
-                    output_name = op.name,
+                    output_name = op:name(),
                     tag_name = name,
                 },
             })
@@ -188,7 +183,7 @@ function tag.switch_to(name, output)
     if output ~= nil then
         SendMsg({
             SwitchToTag = {
-                output_name = output.name,
+                output_name = output:name(),
                 tag_name = name,
             },
         })
@@ -197,7 +192,7 @@ function tag.switch_to(name, output)
         if op ~= nil then
             SendMsg({
                 SwitchToTag = {
-                    output_name = op.name,
+                    output_name = op:name(),
                     tag_name = name,
                 },
             })
@@ -213,7 +208,7 @@ function tag.set_layout(name, layout, output)
     if output ~= nil then
         SendMsg({
             SetLayout = {
-                output_name = output.name,
+                output_name = output:name(),
                 tag_name = name,
                 layout = layout,
             },
@@ -223,7 +218,7 @@ function tag.set_layout(name, layout, output)
         if op ~= nil then
             SendMsg({
                 SetLayout = {
-                    output_name = op.name,
+                    output_name = op:name(),
                     tag_name = name,
                     layout = layout,
                 },
@@ -244,20 +239,24 @@ end
 ---@return Tag[]
 function tag.get_on_output(output)
     SendRequest({
-        GetTagsByOutput = {
-            output_name = output.name,
+        GetOutputProps = {
+            output_name = output:name(),
         },
     })
 
     local response = ReadMsg()
 
-    local tag_ids = response.RequestResponse.response.Tags.tag_ids
+    local tag_ids = response.RequestResponse.response.OutputProps.tag_ids
 
     ---@type Tag[]
     local tags = {}
 
+    if tag_ids == nil then
+        return tags
+    end
+
     for _, tag_id in pairs(tag_ids) do
-        table.insert(tags, new_tag({ id = tag_id }))
+        table.insert(tags, new_tag(tag_id))
     end
 
     return tags
@@ -281,7 +280,7 @@ function tag.get_by_name(name)
     local tags = {}
 
     for _, tag_id in pairs(tag_ids) do
-        table.insert(tags, new_tag({ id = tag_id }))
+        table.insert(tags, new_tag(tag_id))
     end
 
     return tags

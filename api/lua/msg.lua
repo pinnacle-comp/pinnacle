@@ -37,7 +37,6 @@
 --Outputs
 ---@field GetOutputProps { output_name: string }
 --Tags
----@field GetTagsByOutput { output_name: string }
 ---@field GetTagsByName { tag_name: string }
 ---@field GetTagOutput { tag_id: TagId }
 ---@field GetTagActive { tag_id: TagId }
@@ -65,7 +64,7 @@
 --Outputs
 ---@field Output { output_name: OutputName? }
 ---@field Outputs { output_names: OutputName[] }
----@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean? }
+---@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean?, tag_ids: integer[]? }
 --Tags
 ---@field Tags { tag_ids: TagId[] }
 ---@field TagActive { active: boolean? }

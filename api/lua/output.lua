@@ -5,8 +5,14 @@
 -- SPDX-License-Identifier: MPL-2.0
 
 ---@class Output A display.
----@field name string The name of this output (or rather, of its connector).
+---@field private _name string The name of this output (or rather, of its connector).
 local op = {}
+
+---Get this output's name. This is something like "eDP-1" or "HDMI-A-0".
+---@return string
+function op:name()
+    return self._name
+end
 
 ---Get all tags on this output. See `tag.get_on_output`.
 ---@return Tag[]
@@ -31,7 +37,7 @@ end
 function op:make()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -45,7 +51,7 @@ end
 function op:model()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -59,7 +65,7 @@ end
 function op:loc()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -77,7 +83,7 @@ end
 function op:res()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -96,7 +102,7 @@ end
 function op:refresh_rate()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -110,7 +116,7 @@ end
 function op:physical_size()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -128,7 +134,7 @@ end
 function op:focused()
     SendRequest({
         GetOutputProps = {
-            output_name = self.name,
+            output_name = self._name,
         },
     })
 
@@ -138,15 +144,17 @@ function op:focused()
 end
 
 ---This is an internal global function used to create an output object from an output name.
----@param props Output
+---@param output_name string The name of the output.
 ---@return Output
-function NewOutput(props)
+local function new_output(output_name)
+    ---@type Output
+    local o = { _name = output_name }
     -- Copy functions over
     for k, v in pairs(op) do
-        props[k] = v
+        o[k] = v
     end
 
-    return props
+    return o
 end
 
 ------------------------------------------------------
@@ -174,7 +182,7 @@ function output.get_by_name(name)
 
     for _, output_name in pairs(output_names) do
         if output_name == name then
-            return NewOutput({ name = output_name })
+            return new_output(output_name)
         end
     end
 
@@ -195,7 +203,7 @@ function output.get_by_model(model)
     ---@type Output[]
     local outputs = {}
     for _, output_name in pairs(output_names) do
-        local o = NewOutput({ name = output_name })
+        local o = new_output(output_name)
         if o:model() == model then
             table.insert(outputs, o)
         end
@@ -219,7 +227,7 @@ function output.get_by_res(width, height)
     ---@type Output
     local outputs = {}
     for _, output_name in pairs(output_names) do
-        local o = NewOutput({ name = output_name })
+        local o = new_output(output_name)
         if o:res() and o:res().w == width and o:res().h == height then
             table.insert(outputs, o)
         end
@@ -254,7 +262,7 @@ function output.get_focused()
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
-        local o = NewOutput({ name = output_name })
+        local o = new_output(output_name)
         if o:focused() then
             return o
         end
@@ -275,13 +283,33 @@ function output.connect_for_all(func)
     ---@param args Args
     table.insert(CallbackTable, function(args)
         local args = args.ConnectForAllOutputs
-        func(NewOutput({ name = args.output_name }))
+        func(new_output(args.output_name))
     end)
     SendMsg({
         ConnectForAllOutputs = {
             callback_id = #CallbackTable,
         },
     })
+end
+
+---Get the output the specified tag is on.
+---@param tag Tag
+---@return Output|nil
+function output.get_for_tag(tag)
+    SendRequest({
+        GetTagOutput = {
+            tag_id = tag:id(),
+        },
+    })
+
+    local response = ReadMsg()
+    local output_name = response.RequestResponse.response.Output.output_name
+
+    if output_name == nil then
+        return nil
+    else
+        return new_output(output_name)
+    end
 end
 
 return output

@@ -457,6 +457,11 @@ impl<B: Backend> State<B> {
                     .focused_output
                     .as_ref()
                     .and_then(|foc_op| output.map(|op| op == foc_op));
+                let tag_ids = output.as_ref().map(|output| {
+                    output.with_state(|state| {
+                        state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
+                    })
+                });
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
@@ -468,25 +473,11 @@ impl<B: Backend> State<B> {
                             refresh_rate,
                             physical_size,
                             focused,
+                            tag_ids,
                         },
                     },
                 )
                 .expect("failed to send to client");
-            }
-            Request::GetTagsByOutput { output_name } => {
-                let output = self.space.outputs().find(|op| op.name() == output_name);
-                if let Some(output) = output {
-                    let tag_ids = output.with_state(|state| {
-                        state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
-                    });
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::RequestResponse {
-                            response: RequestResponse::Tags { tag_ids },
-                        },
-                    )
-                    .expect("failed to send to client");
-                }
             }
             Request::GetTagsByName { tag_name } => {
                 let tag_ids = self
