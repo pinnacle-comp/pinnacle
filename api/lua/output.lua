@@ -297,13 +297,13 @@ end
 ---@return Output|nil
 function output.get_for_tag(tag)
     SendRequest({
-        GetTagOutput = {
+        GetTagProps = {
             tag_id = tag:id(),
         },
     })
 
     local response = ReadMsg()
-    local output_name = response.RequestResponse.response.Output.output_name
+    local output_name = response.RequestResponse.response.TagProps.output_name
 
     if output_name == nil then
         return nil

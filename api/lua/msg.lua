@@ -37,12 +37,9 @@
 --Outputs
 ---@field GetOutputProps { output_name: string }
 --Tags
----@field GetTagsByName { tag_name: string }
----@field GetTagOutput { tag_id: TagId }
----@field GetTagActive { tag_id: TagId }
----@field GetTagName { tag_id: TagId }
+---@field GetTagProps { tag_id: TagId }
 
----@alias Request _Request | "GetWindows" | "GetOutputs"
+---@alias Request _Request | "GetWindows" | "GetOutputs" | "GetTags"
 
 ---@class IncomingMsg
 ---@field CallCallback { callback_id: integer, args: Args }
@@ -67,5 +64,4 @@
 ---@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean?, tag_ids: integer[]? }
 --Tags
 ---@field Tags { tag_ids: TagId[] }
----@field TagActive { active: boolean? }
----@field TagName { name: string? }
+---@field TagProps { active: boolean?, name: string?, output_name: string? }

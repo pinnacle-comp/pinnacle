@@ -113,6 +113,25 @@ require("pinnacle").setup(function(pinnacle)
         for _, tg in pairs(tags) do
             print(tg:name())
             print((tg:output() and tg:output():name()) or "nil output")
+            print(tg:active())
+        end
+
+        print("----------------------")
+
+        local tags = tag.get_by_name("2")
+        for _, tg in pairs(tags) do
+            print(tg:name())
+            print((tg:output() and tg:output():name()) or "nil output")
+            print(tg:active())
+        end
+
+        print("----------------------")
+
+        local tags = tag.get_all()
+        for _, tg in pairs(tags) do
+            print(tg:name())
+            print((tg:output() and tg:output():name()) or "nil output")
+            print(tg:active())
         end
     end)
 

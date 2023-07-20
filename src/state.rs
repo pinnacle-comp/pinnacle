@@ -479,12 +479,11 @@ impl<B: Backend> State<B> {
                 )
                 .expect("failed to send to client");
             }
-            Request::GetTagsByName { tag_name } => {
+            Request::GetTags => {
                 let tag_ids = self
                     .space
                     .outputs()
                     .flat_map(|op| op.with_state(|state| state.tags.clone()))
-                    .filter(|tag| tag.name() == tag_name)
                     .map(|tag| tag.id())
                     .collect::<Vec<_>>();
                 crate::api::send_to_client(
@@ -495,35 +494,22 @@ impl<B: Backend> State<B> {
                 )
                 .expect("failed to send to client");
             }
-            Request::GetTagOutput { tag_id } => {
-                let output_name = tag_id
-                    .tag(self)
+            Request::GetTagProps { tag_id } => {
+                let tag = tag_id.tag(self);
+                let output_name = tag
+                    .as_ref()
                     .and_then(|tag| tag.output(self))
                     .map(|output| output.name());
+                let active = tag.as_ref().map(|tag| tag.active());
+                let name = tag.as_ref().map(|tag| tag.name());
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::Output { output_name },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetTagActive { tag_id } => {
-                let active = tag_id.tag(self).map(|tag| tag.active());
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::TagActive { active },
-                    },
-                )
-                .expect("failed to send to client");
-            }
-            Request::GetTagName { tag_id } => {
-                let name = tag_id.tag(self).map(|tag| tag.name());
-                crate::api::send_to_client(
-                    &mut stream,
-                    &OutgoingMsg::RequestResponse {
-                        response: RequestResponse::TagName { name },
+                        response: RequestResponse::TagProps {
+                            active,
+                            name,
+                            output_name,
+                        },
                     },
                 )
                 .expect("failed to send to client");

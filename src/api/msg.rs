@@ -106,10 +106,8 @@ pub enum Request {
     GetOutputs,
     GetOutputProps { output_name: String },
     // Tags
-    GetTagsByName { tag_name: String },
-    GetTagOutput { tag_id: TagId },
-    GetTagActive { tag_id: TagId },
-    GetTagName { tag_id: TagId },
+    GetTags,
+    GetTagProps { tag_id: TagId },
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
@@ -228,10 +226,9 @@ pub enum RequestResponse {
     Tags {
         tag_ids: Vec<TagId>,
     },
-    TagActive {
+    TagProps {
         active: Option<bool>,
-    },
-    TagName {
         name: Option<String>,
+        output_name: Option<String>,
     },
 }

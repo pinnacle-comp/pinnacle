@@ -42,13 +42,13 @@ end
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
 function tg:active()
     SendRequest({
-        GetTagActive = {
+        GetTagProps = {
             tag_id = self._id,
         },
     })
 
     local response = ReadMsg()
-    local active = response.RequestResponse.response.TagActive.active
+    local active = response.RequestResponse.response.TagProps.active
     return active
 end
 
@@ -56,13 +56,13 @@ end
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
 function tg:name()
     SendRequest({
-        GetTagName = {
+        GetTagProps = {
             tag_id = self._id,
         },
     })
 
     local response = ReadMsg()
-    local name = response.RequestResponse.response.TagName.name
+    local name = response.RequestResponse.response.TagProps.name
     return name
 end
 
@@ -74,7 +74,7 @@ end
 
 ---Set this tag's layout.
 ---@param layout Layout
-function tg:set_layout(layout) -- TODO: output param
+function tg:set_layout(layout)
     local name = self:name()
     if name ~= nil then
         tag.set_layout(name, layout)
@@ -266,11 +266,29 @@ end
 ---@param name string The name of the tags you want.
 ---@return Tag[]
 function tag.get_by_name(name)
-    SendRequest({
-        GetTagsByName = {
-            tag_name = name,
-        },
-    })
+    SendRequest("GetTags")
+
+    local response = ReadMsg()
+
+    local tag_ids = response.RequestResponse.response.Tags.tag_ids
+
+    ---@type Tag[]
+    local tags = {}
+
+    for _, tag_id in pairs(tag_ids) do
+        local t = new_tag(tag_id)
+        if t:name() == name then
+            table.insert(tags, t)
+        end
+    end
+
+    return tags
+end
+
+---Get all tags across all ouptuts.
+---@return Tag[]
+function tag.get_all()
+    SendRequest("GetTags")
 
     local response = ReadMsg()
 
