@@ -9,11 +9,15 @@ local msgpack = require("msgpack")
 
 local SOCKET_PATH = "/tmp/pinnacle_socket"
 
---[[ rPrint(struct, [limit], [indent])   Recursively print arbitrary data. 
-	Set limit (default 100) to stanch infinite loops.
-	Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
-	Set indent ("") to prefix each line:    Mytable [KEY] [KEY]...[KEY] VALUE
---]]
+---From https://gist.github.com/stuby/5445834#file-rprint-lua
+---rPrint(struct, [limit], [indent])   Recursively print arbitrary data.
+---	Set limit (default 100) to stanch infinite loops.
+---	Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
+---	Set indent ("") to prefix each line:    Mytable [KEY] [KEY]...[KEY] VALUE
+---@param s table The table
+---@param l integer? Recursion limit
+---@param i string? The indent string
+---@return integer l The remaining depth limit
 function RPrint(s, l, i) -- recursive Print (structure, limit, indent)
     l = l or 100
     i = i or "" -- default item limit, indent string
@@ -121,7 +125,7 @@ function pinnacle.setup(config_func)
         socket.send(socket_fd, encoded)
     end
 
-    local request_id = 0
+    local request_id = 1
     ---Get the next request id.
     ---@return integer
     local function next_request_id()
@@ -137,8 +141,8 @@ function pinnacle.setup(config_func)
 
     ---This is an internal global function used to send requests to the Pinnacle server for information.
     ---@param data _Request
-    ---@return RequestId
-    function SendRequest(data)
+    ---@return IncomingMsg
+    function Request(data)
         local req_id = next_request_id()
         SendMsg({
             Request = {
@@ -146,7 +150,7 @@ function pinnacle.setup(config_func)
                 request = data,
             },
         })
-        return req_id
+        return ReadMsg(req_id)
     end
 
     ---This is an internal global function used to read messages sent from the server.

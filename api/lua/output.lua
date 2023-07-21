@@ -33,11 +33,11 @@ end
 ---Get this output's make.
 ---@return string|nil
 function output:make()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     return props.make
 end
@@ -45,11 +45,11 @@ end
 ---Get this output's model.
 ---@return string|nil
 function output:model()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     return props.model
 end
@@ -57,11 +57,11 @@ end
 ---Get this output's location in the global space.
 ---@return { x: integer, y: integer }|nil
 function output:loc()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     if props.loc == nil then
         return nil
@@ -73,11 +73,11 @@ end
 ---Get this output's resolution in pixels.
 ---@return { w: integer, h: integer }|nil
 function output:res()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     if props.res == nil then
         return nil
@@ -90,11 +90,11 @@ end
 ---For example, 60Hz will be returned as 60000.
 ---@return integer|nil
 function output:refresh_rate()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     return props.refresh_rate
 end
@@ -102,11 +102,11 @@ end
 ---Get this output's physical size in millimeters.
 ---@return { w: integer, h: integer }|nil
 function output:physical_size()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     if props.physical_size == nil then
         return nil
@@ -118,11 +118,11 @@ end
 ---Get whether or not this output is focused. This is currently defined as having the cursor on it.
 ---@return boolean|nil
 function output:focused()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = self._name,
         },
-    }))
+    })
     local props = response.RequestResponse.response.OutputProps
     return props.focused
 end
@@ -157,7 +157,7 @@ end
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
 function output_global.get_by_name(name)
-    local response = ReadMsg(SendRequest("GetOutputs"))
+    local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
@@ -176,7 +176,7 @@ end
 ---@param model string The model of the output(s).
 ---@return Output[] outputs All outputs with this model.
 function output_global.get_by_model(model)
-    local response = ReadMsg(SendRequest("GetOutputs"))
+    local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     ---@type Output[]
@@ -197,7 +197,7 @@ end
 ---@param height integer The height of the outputs, in pixels.
 ---@return Output[] outputs All outputs with this resolution.
 function output_global.get_by_res(width, height)
-    local response = ReadMsg(SendRequest("GetOutputs"))
+    local response = Request("GetOutputs")
 
     local output_names = response.RequestResponse.response.Outputs.output_names
 
@@ -234,7 +234,7 @@ end
 ---```
 ---@return Output|nil output The output, or nil if none are focused.
 function output_global.get_focused()
-    local response = ReadMsg(SendRequest("GetOutputs"))
+    local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
@@ -272,11 +272,11 @@ end
 ---@param tag Tag
 ---@return Output|nil
 function output_global.get_for_tag(tag)
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetTagProps = {
             tag_id = tag:id(),
         },
-    }))
+    })
     local output_name = response.RequestResponse.response.TagProps.output_name
 
     if output_name == nil then

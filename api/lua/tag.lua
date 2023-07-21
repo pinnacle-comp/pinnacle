@@ -42,11 +42,11 @@ end
 ---Get this tag's active status.
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
 function tag:active()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetTagProps = {
             tag_id = self._id,
         },
-    }))
+    })
     local active = response.RequestResponse.response.TagProps.active
     return active
 end
@@ -54,11 +54,11 @@ end
 ---Get this tag's name.
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
 function tag:name()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetTagProps = {
             tag_id = self._id,
         },
-    }))
+    })
     local name = response.RequestResponse.response.TagProps.name
     return name
 end
@@ -270,11 +270,11 @@ end
 ---@param output Output
 ---@return Tag[]
 function tag_global.get_on_output(output)
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetOutputProps = {
             output_name = output:name(),
         },
-    }))
+    })
 
     local tag_ids = response.RequestResponse.response.OutputProps.tag_ids
 
@@ -313,7 +313,7 @@ end
 ---Get all tags across all ouptuts.
 ---@return Tag[]
 function tag_global.get_all()
-    local response = ReadMsg(SendRequest("GetTags"))
+    local response = Request("GetTags")
     RPrint(response)
 
     local tag_ids = response.RequestResponse.response.Tags.tag_ids

@@ -116,11 +116,11 @@ end
 ---```
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
 function window:size()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local size = response.RequestResponse.response.WindowProps.size
     if size == nil then
         return nil
@@ -147,11 +147,11 @@ end
 ---```
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
 function window:loc()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local loc = response.RequestResponse.response.WindowProps.loc
     if loc == nil then
         return nil
@@ -173,11 +173,11 @@ end
 ---```
 ---@return string|nil class This window's class, or nil if it doesn't exist.
 function window:class()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local class = response.RequestResponse.response.WindowProps.class
     return class
 end
@@ -192,11 +192,11 @@ end
 ---```
 ---@return string|nil title This window's title, or nil if it doesn't exist.
 function window:title()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local title = response.RequestResponse.response.WindowProps.title
     return title
 end
@@ -211,11 +211,11 @@ end
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
 function window:floating()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local floating = response.RequestResponse.response.WindowProps.floating
     return floating
 end
@@ -228,11 +228,11 @@ end
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
 function window:focused()
-    local response = ReadMsg(SendRequest({
+    local response = Request({
         GetWindowProps = {
             window_id = self._id,
         },
-    }))
+    })
     local focused = response.RequestResponse.response.WindowProps.focused
     return focused
 end
@@ -295,7 +295,7 @@ end
 ---Get all windows.
 ---@return Window[]
 function window_global.get_all()
-    local window_ids = ReadMsg(SendRequest("GetWindows")).RequestResponse.response.Windows.window_ids
+    local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
     for _, window_id in pairs(window_ids) do
