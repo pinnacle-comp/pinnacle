@@ -10,20 +10,20 @@
 ---@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }
 ---@field SetMousebind { button: integer }
 --Windows
----@field CloseWindow { window_id: integer }
----@field ToggleFloating { window_id: integer }
----@field SetWindowSize { window_id: integer, width: integer?, height: integer? }
----@field MoveWindowToTag { window_id: integer, tag_id: string }
----@field ToggleTagOnWindow { window_id: integer, tag_id: string }
+---@field CloseWindow { window_id: WindowId }
+---@field ToggleFloating { window_id: WindowId }
+---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }
+---@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }
+---@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }
 --
 ---@field Spawn { command: string[], callback_id: integer? }
 ---@field Request Request
 --Tags
----@field ToggleTag { output_name: string, tag_name: string }
----@field SwitchToTag { output_name: string, tag_name: string }
+---@field ToggleTag { tag_id: TagId }
+---@field SwitchToTag { tag_id: TagId }
 ---@field AddTags { output_name: string, tag_names: string[] }
----@field RemoveTags { output_name: string, tag_names: string[] }
----@field SetLayout { output_name: string, tag_name: string, layout: Layout }
+---@field RemoveTags { tag_ids: TagId[] }
+---@field SetLayout { tag_id: TagId, layout: Layout }
 --Outputs
 ---@field ConnectForAllOutputs { callback_id: integer }
 

@@ -40,21 +40,19 @@ pub enum Msg {
     },
     MoveWindowToTag {
         window_id: WindowId,
-        tag_id: String,
+        tag_id: TagId,
     },
     ToggleTagOnWindow {
         window_id: WindowId,
-        tag_id: String,
+        tag_id: TagId,
     },
 
     // Tag management
     ToggleTag {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
     },
     SwitchToTag {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
     },
     AddTags {
         /// The name of the output you want these tags on.
@@ -63,12 +61,10 @@ pub enum Msg {
     },
     RemoveTags {
         /// The name of the output you want these tags removed from.
-        output_name: String,
-        tag_names: Vec<String>,
+        tag_ids: Vec<TagId>,
     },
     SetLayout {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
         layout: Layout,
     },
 

@@ -138,11 +138,17 @@ require("pinnacle").setup(function(pinnacle)
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)
-        -- op:add_tags("1", "2", "3", "4", "5")
+        op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
 
-        local tags_table = { "Terminal", "Browser", "Code", "Email", "Potato" }
-        op:add_tags(tags_table)
+        -- local tags_table = { "Terminal", "Browser", "Code", "Email", "Potato" }
+        -- op:add_tags(tags_table)
+
+        for _, t in pairs(tag.get_by_name("1")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
 
     ---@type Layout[]
@@ -205,66 +211,146 @@ require("pinnacle").setup(function(pinnacle)
     end)
 
     input.keybind({ mod_key }, keys.KEY_1, function()
-        tag.switch_to("1")
+        for _, t in pairs(tag.get_by_name("1")) do
+            if t:output() and t:output():focused() then
+                t:switch_to()
+            end
+        end
     end)
     input.keybind({ mod_key }, keys.KEY_2, function()
-        tag.switch_to("2")
+        for _, t in pairs(tag.get_by_name("2")) do
+            if t:output() and t:output():focused() then
+                t:switch_to()
+            end
+        end
     end)
     input.keybind({ mod_key }, keys.KEY_3, function()
-        tag.switch_to("3")
+        for _, t in pairs(tag.get_by_name("3")) do
+            if t:output() and t:output():focused() then
+                t:switch_to()
+            end
+        end
     end)
     input.keybind({ mod_key }, keys.KEY_4, function()
-        tag.switch_to("4")
+        for _, t in pairs(tag.get_by_name("4")) do
+            if t:output() and t:output():focused() then
+                t:switch_to()
+            end
+        end
     end)
     input.keybind({ mod_key }, keys.KEY_5, function()
-        tag.switch_to("5")
+        for _, t in pairs(tag.get_by_name("5")) do
+            if t:output() and t:output():focused() then
+                t:switch_to()
+            end
+        end
     end)
 
     input.keybind({ mod_key, "Shift" }, keys.KEY_1, function()
-        tag.toggle("1")
+        for _, t in pairs(tag.get_by_name("1")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_2, function()
-        tag.toggle("2")
+        for _, t in pairs(tag.get_by_name("2")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_3, function()
-        tag.toggle("3")
+        for _, t in pairs(tag.get_by_name("3")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_4, function()
-        tag.toggle("4")
+        for _, t in pairs(tag.get_by_name("4")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_5, function()
-        tag.toggle("5")
+        for _, t in pairs(tag.get_by_name("5")) do
+            if t:output() and t:output():focused() then
+                t:toggle()
+            end
+        end
     end)
 
     input.keybind({ mod_key, "Alt" }, keys.KEY_1, function()
-        window.get_focused():move_to_tag("1")
+        for _, t in pairs(tag.get_by_name("1")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():move_to_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_2, function()
-        window.get_focused():move_to_tag("2")
+        for _, t in pairs(tag.get_by_name("2")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():move_to_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_3, function()
-        window.get_focused():move_to_tag("3")
+        for _, t in pairs(tag.get_by_name("3")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():move_to_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_4, function()
-        window.get_focused():move_to_tag("4")
+        for _, t in pairs(tag.get_by_name("4")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():move_to_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_5, function()
-        window.get_focused():move_to_tag("5")
+        for _, t in pairs(tag.get_by_name("5")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():move_to_tag(t)
+            end
+        end
     end)
 
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_1, function()
-        window.get_focused():toggle_tag("1")
+        for _, t in pairs(tag.get_by_name("1")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():toggle_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_2, function()
-        window.get_focused():toggle_tag("2")
+        for _, t in pairs(tag.get_by_name("2")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():toggle_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_3, function()
-        window.get_focused():toggle_tag("3")
+        for _, t in pairs(tag.get_by_name("3")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():toggle_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_4, function()
-        window.get_focused():toggle_tag("4")
+        for _, t in pairs(tag.get_by_name("4")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():toggle_tag(t)
+            end
+        end
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_5, function()
-        window.get_focused():toggle_tag("5")
+        for _, t in pairs(tag.get_by_name("5")) do
+            if t:output() and t:output():focused() then
+                window.get_focused():toggle_tag(t)
+            end
+        end
     end)
 end)

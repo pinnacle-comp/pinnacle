@@ -159,110 +159,49 @@ impl<B: Backend> State<B> {
                 window.toplevel().send_pending_configure();
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
-                if let Some(window) = window_id.window(self) {
-                    window.with_state(|state| {
-                        self.focus_state
-                            .focused_output
-                            .as_ref()
-                            .unwrap()
-                            .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
-                                if let Some(tag) = tag {
-                                    state.tags = vec![tag.clone()];
-                                }
-                            });
-                    });
-                    let output = self.focus_state.focused_output.clone().unwrap();
-                    self.re_layout(&output);
-                }
+                let Some(window) = window_id.window(self) else { return };
+                let Some(tag) = tag_id.tag(self) else { return };
+                window.with_state(|state| {
+                    state.tags = vec![tag.clone()];
+                });
+                let Some(output) = tag.output(self) else { return };
+                self.re_layout(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
-                if let Some(window) = window_id.window(self) {
-                    window.with_state(|state| {
-                        self.focus_state
-                            .focused_output
-                            .as_ref()
-                            .unwrap()
-                            .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
-                                if let Some(tag) = tag {
-                                    if state.tags.contains(tag) {
-                                        state.tags.retain(|tg| tg != tag);
-                                    } else {
-                                        state.tags.push(tag.clone());
-                                    }
-                                }
-                            });
-                    });
+                let Some(window) = window_id.window(self) else { return };
+                let Some(tag) = tag_id.tag(self) else { return };
 
-                    let output = self.focus_state.focused_output.clone().unwrap();
-                    self.re_layout(&output);
-                }
+                window.with_state(|state| {
+                    if state.tags.contains(&tag) {
+                        state.tags.retain(|tg| tg != &tag);
+                    } else {
+                        state.tags.push(tag.clone());
+                    }
+                });
+
+                let Some(output) = tag.output(self) else { return };
+                self.re_layout(&output);
             }
-            Msg::ToggleTag {
-                output_name,
-                tag_name,
-            } => {
+            Msg::ToggleTag { tag_id } => {
                 tracing::debug!("ToggleTag");
-
-                let output = self
-                    .space
-                    .outputs()
-                    .find(|op| op.name() == output_name)
-                    .cloned();
-                if let Some(output) = output {
-                    output.with_state(|state| {
-                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name)
-                        {
-                            tracing::debug!("Setting tag {tag:?} to {}", !tag.active());
-                            tag.set_active(!tag.active());
-                        }
-                    });
-                    self.re_layout(&output);
+                if let Some(tag) = tag_id.tag(self) {
+                    tag.set_active(!tag.active());
+                    if let Some(output) = tag.output(self) {
+                        self.re_layout(&output);
+                    }
                 }
             }
-            Msg::SwitchToTag {
-                output_name,
-                tag_name,
-            } => {
-                let output = self
-                    .space
-                    .outputs()
-                    .find(|op| op.name() == output_name)
-                    .cloned();
-                if let Some(output) = output {
-                    output.with_state(|state| {
-                        if !state.tags.iter().any(|tag| tag.name() == tag_name) {
-                            // TODO: notify error
-                            return;
-                        }
-                        for tag in state.tags.iter_mut() {
-                            tag.set_active(false);
-                        }
-
-                        let Some(tag) = state
-                            .tags
-                            .iter_mut()
-                            .find(|tag| tag.name() == tag_name)
-                        else {
-                            unreachable!()
-                        };
-                        tag.set_active(true);
-
-                        tracing::debug!(
-                            "focused tags: {:?}",
-                            state
-                                .tags
-                                .iter()
-                                .filter(|tag| tag.active())
-                                .map(|tag| tag.name())
-                                .collect::<Vec<_>>()
-                        );
-                    });
-                    self.re_layout(&output);
-                }
+            Msg::SwitchToTag { tag_id } => {
+                let Some(tag) = tag_id.tag(self) else { return };
+                let Some(output) = tag.output(self) else { return };
+                output.with_state(|state| {
+                    for op_tag in state.tags.iter_mut() {
+                        op_tag.set_active(false);
+                    }
+                    tag.set_active(true);
+                });
+                self.re_layout(&output);
             }
-            // TODO: add output
             Msg::AddTags {
                 output_name,
                 tag_names,
@@ -278,39 +217,20 @@ impl<B: Backend> State<B> {
                     });
                 }
             }
-            Msg::RemoveTags {
-                output_name,
-                tag_names,
-            } => {
-                if let Some(output) = self
-                    .space
-                    .outputs()
-                    .find(|output| output.name() == output_name)
-                {
+            Msg::RemoveTags { tag_ids } => {
+                let tags = tag_ids.into_iter().filter_map(|tag_id| tag_id.tag(self));
+                for tag in tags {
+                    let Some(output) = tag.output(self) else { continue };
                     output.with_state(|state| {
-                        state.tags.retain(|tag| !tag_names.contains(&tag.name()));
+                        state.tags.retain(|tg| tg != &tag);
                     });
                 }
             }
-            Msg::SetLayout {
-                output_name,
-                tag_name,
-                layout,
-            } => {
-                let output = self
-                    .space
-                    .outputs()
-                    .find(|op| op.name() == output_name)
-                    .cloned();
-                if let Some(output) = output {
-                    output.with_state(|state| {
-                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name)
-                        {
-                            tag.set_layout(layout);
-                        }
-                    });
-                    self.re_layout(&output);
-                }
+            Msg::SetLayout { tag_id, layout } => {
+                let Some(tag) = tag_id.tag(self) else { return };
+                tag.set_layout(layout);
+                let Some(output) = tag.output(self) else { return };
+                self.re_layout(&output);
             }
 
             Msg::ConnectForAllOutputs { callback_id } => {

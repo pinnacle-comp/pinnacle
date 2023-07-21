@@ -32,6 +32,16 @@ local function new_tag(tag_id)
     return t
 end
 
+---Switch to this tag.
+function tg:switch_to()
+    tag.switch_to(self)
+end
+
+---Toggle this tag.
+function tg:toggle()
+    tag.toggle(self)
+end
+
 ---Get this tag's internal id.
 ---@return integer
 function tg:id()
@@ -75,10 +85,7 @@ end
 ---Set this tag's layout.
 ---@param layout Layout
 function tg:set_layout(layout)
-    local name = self:name()
-    if name ~= nil then
-        tag.set_layout(name, layout)
-    end
+    tag.set_layout(self, layout)
 end
 
 -----------------------------------------------------------
@@ -138,27 +145,13 @@ end
 ---tag.toggle("2", op)
 ----- will cause windows on both tags 1 and 2 to be displayed at the same time.
 ---```
----@param name string The name of the tag.
----@param output Output? The output.
-function tag.toggle(name, output)
-    if output ~= nil then
-        SendMsg({
-            ToggleTag = {
-                output_name = output:name(),
-                tag_name = name,
-            },
-        })
-    else
-        local op = require("output").get_focused()
-        if op ~= nil then
-            SendMsg({
-                ToggleTag = {
-                    output_name = op:name(),
-                    tag_name = name,
-                },
-            })
-        end
-    end
+---@param t Tag
+function tag.toggle(t)
+    SendMsg({
+        ToggleTag = {
+            tag_id = t:id(),
+        },
+    })
 end
 
 ---Switch to a tag on the specified output, deactivating any other active tags on it.
@@ -171,54 +164,25 @@ end
 ---```lua
 ---tag.switch_to("3") -- Switches to and displays *only* windows on tag 3
 ---```
----@param name string The name of the tag.
----@param output Output? The output.
-function tag.switch_to(name, output)
-    if output ~= nil then
-        SendMsg({
-            SwitchToTag = {
-                output_name = output:name(),
-                tag_name = name,
-            },
-        })
-    else
-        local op = require("output").get_focused()
-        if op ~= nil then
-            SendMsg({
-                SwitchToTag = {
-                    output_name = op:name(),
-                    tag_name = name,
-                },
-            })
-        end
-    end
+---@param t Tag
+function tag.switch_to(t)
+    SendMsg({
+        SwitchToTag = {
+            tag_id = t:id(),
+        },
+    })
 end
 
----Set a layout for the tag on the specified output. If there is none, set it for the tag on the currently focused one.
----@param name string The name of the tag.
----@param layout Layout The layout.
----@param output Output? The output.
-function tag.set_layout(name, layout, output)
-    if output ~= nil then
-        SendMsg({
-            SetLayout = {
-                output_name = output:name(),
-                tag_name = name,
-                layout = layout,
-            },
-        })
-    else
-        local op = require("output").get_focused()
-        if op ~= nil then
-            SendMsg({
-                SetLayout = {
-                    output_name = op:name(),
-                    tag_name = name,
-                    layout = layout,
-                },
-            })
-        end
-    end
+---Set a layout for the specified tag.
+---@param t Tag
+---@param layout Layout
+function tag.set_layout(t, layout)
+    SendMsg({
+        SetLayout = {
+            tag_id = t:id(),
+            layout = layout,
+        },
+    })
 end
 
 ---Get all tags on the specified output.

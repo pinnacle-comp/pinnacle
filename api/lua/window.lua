@@ -46,12 +46,12 @@ end
 ---window.get_focused():move_to_tag("5")
 ----- ...will make the window only appear on tag 5.
 ---```
----@param name string The name of the tag.
-function win:move_to_tag(name)
+---@param t Tag
+function win:move_to_tag(t)
     SendMsg({
         MoveWindowToTag = {
             window_id = self.id,
-            tag_id = name,
+            tag_id = t:id(),
         },
     })
 end
@@ -66,12 +66,12 @@ end
 ---window.get_focused():toggle_tag("2")
 ----- ...will also make the window appear on tag 2.
 ---```
----@param name string The name of the tag.
-function win:toggle_tag(name)
+---@param t Tag
+function win:toggle_tag(t)
     SendMsg({
         ToggleTagOnWindow = {
             window_id = self.id,
-            tag_id = name,
+            tag_id = t:id(),
         },
     })
 end
