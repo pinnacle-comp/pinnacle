@@ -85,11 +85,14 @@ pub enum Msg {
     /// Quit the compositor.
     Quit,
 
-    Request(Request),
+    Request {
+        request_id: RequestId,
+        request: Request,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct RequestId(pub u32);
+pub struct RequestId(u32);
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -158,6 +161,7 @@ pub enum OutgoingMsg {
         args: Option<Args>,
     },
     RequestResponse {
+        request_id: RequestId,
         response: RequestResponse,
     },
 }

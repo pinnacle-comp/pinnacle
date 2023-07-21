@@ -4,19 +4,24 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@class Window
----@field private id integer The internal id of this window
-local win = {}
+---@class WindowGlobal
+local window_global = {}
 
----@param props Window
+---@class Window
+---@field private _id integer The internal id of this window
+local window = {}
+
+---@param window_id WindowId
 ---@return Window
-local function new_window(props)
+local function new_window(window_id)
+    ---@type Window
+    local w = { _id = window_id }
     -- Copy functions over
-    for k, v in pairs(win) do
-        props[k] = v
+    for k, v in pairs(window) do
+        w[k] = v
     end
 
-    return props
+    return w
 end
 
 ---Set a window's size.
@@ -28,10 +33,10 @@ end
 ---window.get_focused():set_size({})                   -- do absolutely nothing useful
 ---```
 ---@param size { w: integer?, h: integer? }
-function win:set_size(size)
+function window:set_size(size)
     SendMsg({
         SetWindowSize = {
-            window_id = self.id,
+            window_id = self._id,
             width = size.w,
             height = size.h,
         },
@@ -46,14 +51,11 @@ end
 ---window.get_focused():move_to_tag("5")
 ----- ...will make the window only appear on tag 5.
 ---```
----@param t Tag
-function win:move_to_tag(t)
-    SendMsg({
-        MoveWindowToTag = {
-            window_id = self.id,
-            tag_id = t:id(),
-        },
-    })
+---@param name string
+---@param output Output?
+---@overload fun(self: self, t: Tag)
+function window:move_to_tag(name, output)
+    window_global.move_to_tag(self, name, output)
 end
 
 ---Toggle the specified tag for this window.
@@ -66,14 +68,11 @@ end
 ---window.get_focused():toggle_tag("2")
 ----- ...will also make the window appear on tag 2.
 ---```
----@param t Tag
-function win:toggle_tag(t)
-    SendMsg({
-        ToggleTagOnWindow = {
-            window_id = self.id,
-            tag_id = t:id(),
-        },
-    })
+---@param name string
+---@param output Output?
+---@overload fun(self: self, t: Tag)
+function window:toggle_tag(name, output)
+    window_global.toggle_tag(self, name, output)
 end
 
 ---Close this window.
@@ -85,10 +84,10 @@ end
 ---```lua
 ---window.get_focused():close() -- close the currently focused window
 ---```
-function win:close()
+function window:close()
     SendMsg({
         CloseWindow = {
-            window_id = self.id,
+            window_id = self._id,
         },
     })
 end
@@ -99,10 +98,10 @@ end
 ---```lua
 ---window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
 ---```
-function win:toggle_floating()
+function window:toggle_floating()
     SendMsg({
         ToggleFloating = {
-            window_id = self.id,
+            window_id = self._id,
         },
     })
 end
@@ -116,14 +115,12 @@ end
 ----- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
-function win:size()
-    SendRequest({
+function window:size()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local size = response.RequestResponse.response.WindowProps.size
     if size == nil then
         return nil
@@ -149,14 +146,12 @@ end
 ----- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
-function win:loc()
-    SendRequest({
+function window:loc()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local loc = response.RequestResponse.response.WindowProps.loc
     if loc == nil then
         return nil
@@ -177,14 +172,12 @@ end
 ----- ...should print "Alacritty".
 ---```
 ---@return string|nil class This window's class, or nil if it doesn't exist.
-function win:class()
-    SendRequest({
+function window:class()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local class = response.RequestResponse.response.WindowProps.class
     return class
 end
@@ -198,14 +191,12 @@ end
 ----- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
 ---@return string|nil title This window's title, or nil if it doesn't exist.
-function win:title()
-    SendRequest({
+function window:title()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local title = response.RequestResponse.response.WindowProps.title
     return title
 end
@@ -219,14 +210,12 @@ end
 ----- ...should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
-function win:floating()
-    SendRequest({
+function window:floating()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local floating = response.RequestResponse.response.WindowProps.floating
     return floating
 end
@@ -238,28 +227,28 @@ end
 ---print(window.get_focused():focused()) -- should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
-function win:focused()
-    SendRequest({
+function window:focused()
+    local response = ReadMsg(SendRequest({
         GetWindowProps = {
-            window_id = self.id,
+            window_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local focused = response.RequestResponse.response.WindowProps.focused
     return focused
 end
 
--------------------------------------------------------------------
+---@return WindowId
+function window:id()
+    return self._id
+end
 
----@class WindowGlobal
-local window = {}
+-------------------------------------------------------------------
 
 ---Get all windows with the specified class (usually the name of the application).
 ---@param class string The class. For example, Alacritty's class is "Alacritty".
 ---@return Window[]
-function window.get_by_class(class)
-    local windows = window.get_all()
+function window_global.get_by_class(class)
+    local windows = window_global.get_all()
 
     ---@type Window[]
     local windows_ret = {}
@@ -275,8 +264,8 @@ end
 ---Get all windows with the specified title.
 ---@param title string The title.
 ---@return Window[]
-function window.get_by_title(title)
-    local windows = window.get_all()
+function window_global.get_by_title(title)
+    local windows = window_global.get_all()
 
     ---@type Window[]
     local windows_ret = {}
@@ -291,8 +280,8 @@ end
 
 ---Get the currently focused window.
 ---@return Window|nil
-function window.get_focused()
-    local windows = window.get_all()
+function window_global.get_focused()
+    local windows = window_global.get_all()
 
     for _, w in pairs(windows) do
         if w:focused() then
@@ -305,16 +294,85 @@ end
 
 ---Get all windows.
 ---@return Window[]
-function window.get_all()
-    SendRequest("GetWindows")
-
-    local window_ids = ReadMsg().RequestResponse.response.Windows.window_ids
+function window_global.get_all()
+    local window_ids = ReadMsg(SendRequest("GetWindows")).RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
     for _, window_id in pairs(window_ids) do
-        table.insert(windows, new_window({ id = window_id }))
+        table.insert(windows, new_window(window_id))
     end
     return windows
 end
 
-return window
+---comment
+---@param w Window
+---@param name string
+---@param output Output?
+function window_global.toggle_tag(w, name, output)
+    if type(name) == "table" then
+        SendMsg({
+            ToggleTagOnWindow = {
+                window_id = w:id(),
+                tag_id = name--[[@as Tag]]:id(),
+            },
+        })
+        return
+    end
+
+    local output = output or require("output").get_focused()
+
+    if output == nil then
+        return
+    end
+
+    local tags = require("tag").get_by_name(name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == output:name() then
+            SendMsg({
+                ToggleTagOnWindow = {
+                    window_id = w:id(),
+                    tag_id = t:id(),
+                },
+            })
+            return
+        end
+    end
+end
+
+---comment
+---@param w Window
+---@param name string
+---@param output Output?
+---@overload fun(w: Window, t: Tag)
+function window_global.move_to_tag(w, name, output)
+    if type(name) == "table" then
+        SendMsg({
+            MoveWindowToTag = {
+                window_id = w:id(),
+                tag_id = name--[[@as Tag]]:id(),
+            },
+        })
+        return
+    end
+
+    local output = output or require("output").get_focused()
+
+    if output == nil then
+        return
+    end
+
+    local tags = require("tag").get_by_name(name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == output:name() then
+            SendMsg({
+                MoveWindowToTag = {
+                    window_id = w:id(),
+                    tag_id = t:id(),
+                },
+            })
+            return
+        end
+    end
+end
+
+return window_global

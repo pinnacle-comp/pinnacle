@@ -31,7 +31,7 @@
 
 --------------------------------------------------------------------------------------------
 
----@class _Request
+---@class __Request
 --Windows
 ---@field GetWindowProps { window_id: WindowId }
 --Outputs
@@ -39,11 +39,12 @@
 --Tags
 ---@field GetTagProps { tag_id: TagId }
 
----@alias Request _Request | "GetWindows" | "GetOutputs" | "GetTags"
+---@alias _Request __Request | "GetWindows" | "GetOutputs" | "GetTags"
+---@alias Request { request_id: integer, request: _Request }
 
 ---@class IncomingMsg
----@field CallCallback { callback_id: integer, args: Args }
----@field RequestResponse { response: RequestResponse }
+---@field CallCallback { callback_id: integer, args: Args? }
+---@field RequestResponse { request_id: integer, response: RequestResponse }
 
 ---@class Args
 ---@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }
@@ -51,6 +52,7 @@
 
 ---@alias WindowId integer
 ---@alias TagId integer
+---@alias RequestId integer
 ---@alias OutputName string
 
 ---@class RequestResponse

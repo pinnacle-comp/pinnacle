@@ -9,6 +9,33 @@ local msgpack = require("msgpack")
 
 local SOCKET_PATH = "/tmp/pinnacle_socket"
 
+--[[ rPrint(struct, [limit], [indent])   Recursively print arbitrary data. 
+	Set limit (default 100) to stanch infinite loops.
+	Indents tables as [KEY] VALUE, nested tables as [KEY] [KEY]...[KEY] VALUE
+	Set indent ("") to prefix each line:    Mytable [KEY] [KEY]...[KEY] VALUE
+--]]
+function RPrint(s, l, i) -- recursive Print (structure, limit, indent)
+    l = l or 100
+    i = i or "" -- default item limit, indent string
+    if l < 1 then
+        print("ERROR: Item limit reached.")
+        return l - 1
+    end
+    local ts = type(s)
+    if ts ~= "table" then
+        print(i, ts, s)
+        return l - 1
+    end
+    print(i, ts) -- print "table"
+    for k, v in pairs(s) do -- print "[KEY] VALUE"
+        l = RPrint(v, l, i .. "\t[" .. tostring(k) .. "]")
+        if l < 0 then
+            break
+        end
+    end
+    return l
+end
+
 ---Read the specified number of bytes.
 ---@param socket_fd integer The socket file descriptor
 ---@param count integer The amount of bytes to read
@@ -85,6 +112,7 @@ function pinnacle.setup(config_func)
     ---This is an internal global function used to send serialized messages to the Pinnacle server.
     ---@param data Msg
     function SendMsg(data)
+        -- RPrint(data)
         local encoded = msgpack.encode(data)
         assert(encoded)
         -- print(encoded)
@@ -93,54 +121,98 @@ function pinnacle.setup(config_func)
         socket.send(socket_fd, encoded)
     end
 
+    local request_id = 0
+    ---Get the next request id.
+    ---@return integer
+    local function next_request_id()
+        local ret = request_id
+        request_id = request_id + 1
+        return ret
+    end
+
+    ---@type table<integer, IncomingMsg>
+    local unread_req_msgs = {}
+    ---@type table<integer, IncomingMsg>
+    local unread_cb_msgs = {}
+
     ---This is an internal global function used to send requests to the Pinnacle server for information.
-    ---@param data Request
+    ---@param data _Request
+    ---@return RequestId
     function SendRequest(data)
+        local req_id = next_request_id()
         SendMsg({
-            Request = data,
+            Request = {
+                request_id = req_id,
+                request = data,
+            },
         })
+        return req_id
     end
 
     ---This is an internal global function used to read messages sent from the server.
     ---These are used to call user-defined functions and provide requested information.
-    function ReadMsg()
-        local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
-        assert(msg_len_bytes)
+    ---@return IncomingMsg
+    ---@param req_id integer? A request id if you're looking for that specific message.
+    function ReadMsg(req_id)
+        while true do
+            if req_id then
+                if unread_req_msgs[req_id] then
+                    local msg = unread_req_msgs[req_id]
+                    unread_req_msgs[req_id] = nil -- INFO: is this a reference?
+                    return msg
+                end
+            end
 
-        -- TODO: break here if error in read_exact
+            local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
+            assert(msg_len_bytes)
 
-        ---@type integer
-        local msg_len = string.unpack("=I4", msg_len_bytes)
-        -- print(msg_len)
+            -- TODO: break here if error in read_exact
 
-        local msg_bytes, err_msg2, err_num2 = read_exact(socket_fd, msg_len)
-        assert(msg_bytes)
-        -- print(msg_bytes)
+            ---@type integer
+            local msg_len = string.unpack("=I4", msg_len_bytes)
+            -- print(msg_len)
 
-        ---@type IncomingMsg
-        local tb = msgpack.decode(msg_bytes)
-        -- print(msg_bytes)
+            local msg_bytes, err_msg2, err_num2 = read_exact(socket_fd, msg_len)
+            assert(msg_bytes)
+            -- print(msg_bytes)
 
-        return tb
+            ---@type IncomingMsg
+            local inc_msg = msgpack.decode(msg_bytes)
+            -- print(msg_bytes)
+
+            if req_id then
+                if inc_msg.CallCallback then
+                    unread_cb_msgs[inc_msg.CallCallback.callback_id] = inc_msg
+                elseif inc_msg.RequestResponse.request_id ~= req_id then
+                    unread_req_msgs[inc_msg.RequestResponse.request_id] = inc_msg
+                else
+                    return inc_msg
+                end
+            else
+                return inc_msg
+            end
+        end
     end
 
     config_func(pinnacle)
 
     while true do
-        local tb = ReadMsg()
-
-        if tb.CallCallback and tb.CallCallback.callback_id then
-            if tb.CallCallback.args then -- TODO: can just inline
-                CallbackTable[tb.CallCallback.callback_id](tb.CallCallback.args)
-            else
-                CallbackTable[tb.CallCallback.callback_id](nil)
-            end
+        for cb_id, inc_msg in pairs(unread_cb_msgs) do
+            CallbackTable[inc_msg.CallCallback.callback_id](inc_msg.CallCallback.args)
+            unread_cb_msgs[cb_id] = nil -- INFO: does this shift the table and frick everything up?
         end
 
-        -- if tb.RequestResponse then
-        --     local req_id = tb.RequestResponse.request_id
-        --     Requests[req_id] = tb.RequestResponse.response
-        -- end
+        local inc_msg = ReadMsg()
+
+        assert(inc_msg.CallCallback) -- INFO: is this gucci or no
+
+        if inc_msg.CallCallback and inc_msg.CallCallback.callback_id then
+            if inc_msg.CallCallback.args then -- TODO: can just inline
+                CallbackTable[inc_msg.CallCallback.callback_id](inc_msg.CallCallback.args)
+            else
+                CallbackTable[inc_msg.CallCallback.callback_id](nil)
+            end
+        end
     end
 end
 

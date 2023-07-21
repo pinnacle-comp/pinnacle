@@ -16,7 +16,7 @@ use std::{
 
 use crate::{
     api::{
-        msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestResponse},
+        msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestId, RequestResponse},
         PinnacleSocketSource,
     },
     focus::FocusState,
@@ -259,13 +259,16 @@ impl<B: Backend> State<B> {
                 self.loop_signal.stop();
             }
 
-            Msg::Request(request) => {
-                self.handle_request(request);
+            Msg::Request {
+                request_id,
+                request,
+            } => {
+                self.handle_request(request_id, request);
             }
         }
     }
 
-    fn handle_request(&mut self, request: Request) {
+    fn handle_request(&mut self, request_id: RequestId, request: Request) {
         let stream = self
             .api_state
             .stream
@@ -284,6 +287,7 @@ impl<B: Backend> State<B> {
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::Windows { window_ids },
                     },
                 )
@@ -320,6 +324,7 @@ impl<B: Backend> State<B> {
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::WindowProps {
                             size,
                             loc,
@@ -341,6 +346,7 @@ impl<B: Backend> State<B> {
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::Outputs { output_names },
                     },
                 )
@@ -385,6 +391,7 @@ impl<B: Backend> State<B> {
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::OutputProps {
                             make,
                             model,
@@ -406,9 +413,11 @@ impl<B: Backend> State<B> {
                     .flat_map(|op| op.with_state(|state| state.tags.clone()))
                     .map(|tag| tag.id())
                     .collect::<Vec<_>>();
+                tracing::debug!("GetTags: {:?}", tag_ids);
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::Tags { tag_ids },
                     },
                 )
@@ -425,6 +434,7 @@ impl<B: Backend> State<B> {
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
+                        request_id,
                         response: RequestResponse::TagProps {
                             active,
                             name,

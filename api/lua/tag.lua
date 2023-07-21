@@ -4,7 +4,8 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
-local tag = {}
+---@class TagGlobal
+local tag_global = {}
 
 ---@alias Layout
 ---| "MasterStack" # One master window on the left with all other windows stacked to the right.
@@ -17,7 +18,7 @@ local tag = {}
 
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
-local tg = {}
+local tag = {}
 
 ---@param tag_id integer
 ---@return Tag
@@ -25,67 +26,66 @@ local function new_tag(tag_id)
     ---@type Tag
     local t = { _id = tag_id }
     -- Copy functions over
-    for k, v in pairs(tg) do
+    for k, v in pairs(tag) do
         t[k] = v
     end
 
     return t
 end
 
----Switch to this tag.
-function tg:switch_to()
-    tag.switch_to(self)
-end
-
----Toggle this tag.
-function tg:toggle()
-    tag.toggle(self)
-end
-
 ---Get this tag's internal id.
 ---@return integer
-function tg:id()
+function tag:id()
     return self._id
 end
 
 ---Get this tag's active status.
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
-function tg:active()
-    SendRequest({
+function tag:active()
+    local response = ReadMsg(SendRequest({
         GetTagProps = {
             tag_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local active = response.RequestResponse.response.TagProps.active
     return active
 end
 
 ---Get this tag's name.
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
-function tg:name()
-    SendRequest({
+function tag:name()
+    local response = ReadMsg(SendRequest({
         GetTagProps = {
             tag_id = self._id,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local name = response.RequestResponse.response.TagProps.name
     return name
 end
 
 ---Get this tag's output.
 ---@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
-function tg:output()
+function tag:output()
     return require("output").get_for_tag(self)
+end
+
+---Switch to this tag.
+function tag:switch_to()
+    tag_global.switch_to(self)
+end
+
+---Toggle this tag.
+function tag:toggle()
+    tag_global.toggle(self)
 end
 
 ---Set this tag's layout.
 ---@param layout Layout
-function tg:set_layout(layout)
-    tag.set_layout(self, layout)
+function tag:set_layout(layout)
+    local name = self:name()
+    if name ~= nil then
+        tag_global.set_layout(name, layout)
+    end
 end
 
 -----------------------------------------------------------
@@ -110,7 +110,7 @@ end
 ---@param output Output The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
 ---@overload fun(output: Output, tag_names: string[])
-function tag.add(output, ...)
+function tag_global.add(output, ...)
     local varargs = { ... }
     if type(varargs[1]) == "string" then
         local tag_names = varargs
@@ -145,17 +145,43 @@ end
 ---tag.toggle("2", op)
 ----- will cause windows on both tags 1 and 2 to be displayed at the same time.
 ---```
----@param t Tag
-function tag.toggle(t)
-    SendMsg({
-        ToggleTag = {
-            tag_id = t:id(),
-        },
-    })
+---@param name string The name of the tag.
+---@param output Output? The output.
+---@overload fun(t: Tag)
+function tag_global.toggle(name, output)
+    if type(name) == "table" then
+        SendMsg({
+            ToggleTag = {
+                tag_id = name--[[@as Tag]]:id(),
+            },
+        })
+        return
+    end
+
+    local output = output or require("output").get_focused()
+
+    if output == nil then
+        return
+    end
+
+    print("before tag_global.get_by_name")
+    local tags = tag_global.get_by_name(name)
+    print("after tag_global.get_by_name")
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == output:name() then
+            SendMsg({
+                ToggleTag = {
+                    tag_id = t:id(),
+                },
+            })
+            return
+        end
+    end
 end
 
 ---Switch to a tag on the specified output, deactivating any other active tags on it.
 ---If `output` is not specified, this uses the currently focused output instead.
+---Alternatively, provide a tag object instead of a name and output.
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
@@ -164,25 +190,73 @@ end
 ---```lua
 ---tag.switch_to("3") -- Switches to and displays *only* windows on tag 3
 ---```
----@param t Tag
-function tag.switch_to(t)
-    SendMsg({
-        SwitchToTag = {
-            tag_id = t:id(),
-        },
-    })
+---@param name string The name of the tag.
+---@param output Output? The output.
+---@overload fun(t: Tag)
+function tag_global.switch_to(name, output)
+    if type(name) == "table" then
+        SendMsg({
+            SwitchToTag = {
+                tag_id = name--[[@as Tag]]:id(),
+            },
+        })
+        return
+    end
+
+    local output = output or require("output").get_focused()
+
+    if output == nil then
+        return
+    end
+
+    local tags = tag_global.get_by_name(name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == output:name() then
+            SendMsg({
+                SwitchToTag = {
+                    tag_id = t:id(),
+                },
+            })
+            return
+        end
+    end
 end
 
----Set a layout for the specified tag.
----@param t Tag
----@param layout Layout
-function tag.set_layout(t, layout)
-    SendMsg({
-        SetLayout = {
-            tag_id = t:id(),
-            layout = layout,
-        },
-    })
+---Set a layout for the tag on the specified output. If no output is provided, set it for the tag on the currently focused one.
+---Alternatively, provide a tag object instead of a name and output.
+---@param name string The name of the tag.
+---@param layout Layout The layout.
+---@param output Output? The output.
+---@overload fun(t: Tag, layout: Layout)
+function tag_global.set_layout(name, layout, output)
+    if type(name) == "table" then
+        SendMsg({
+            SetLayout = {
+                tag_id = name--[[@as Tag]]:id(),
+                layout = layout,
+            },
+        })
+        return
+    end
+
+    local output = output or require("output").get_focused()
+
+    if output == nil then
+        return
+    end
+
+    local tags = tag_global.get_by_name(name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == output:name() then
+            SendMsg({
+                SetLayout = {
+                    tag_id = t:id(),
+                    layout = layout,
+                },
+            })
+            return
+        end
+    end
 end
 
 ---Get all tags on the specified output.
@@ -195,14 +269,12 @@ end
 ---```
 ---@param output Output
 ---@return Tag[]
-function tag.get_on_output(output)
-    SendRequest({
+function tag_global.get_on_output(output)
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = output:name(),
         },
-    })
-
-    local response = ReadMsg()
+    }))
 
     local tag_ids = response.RequestResponse.response.OutputProps.tag_ids
 
@@ -223,18 +295,13 @@ end
 ---Get all tags with this name across all outputs.
 ---@param name string The name of the tags you want.
 ---@return Tag[]
-function tag.get_by_name(name)
-    SendRequest("GetTags")
-
-    local response = ReadMsg()
-
-    local tag_ids = response.RequestResponse.response.Tags.tag_ids
+function tag_global.get_by_name(name)
+    local t_s = tag_global.get_all()
 
     ---@type Tag[]
     local tags = {}
 
-    for _, tag_id in pairs(tag_ids) do
-        local t = new_tag(tag_id)
+    for _, t in pairs(t_s) do
         if t:name() == name then
             table.insert(tags, t)
         end
@@ -245,10 +312,9 @@ end
 
 ---Get all tags across all ouptuts.
 ---@return Tag[]
-function tag.get_all()
-    SendRequest("GetTags")
-
-    local response = ReadMsg()
+function tag_global.get_all()
+    local response = ReadMsg(SendRequest("GetTags"))
+    RPrint(response)
 
     local tag_ids = response.RequestResponse.response.Tags.tag_ids
 
@@ -262,4 +328,4 @@ function tag.get_all()
     return tags
 end
 
-return tag
+return tag_global

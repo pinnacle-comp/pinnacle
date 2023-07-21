@@ -4,67 +4,64 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
+---@class OutputGlobal
+local output_global = {}
+
 ---@class Output A display.
 ---@field private _name string The name of this output (or rather, of its connector).
-local op = {}
+local output = {}
 
 ---Get this output's name. This is something like "eDP-1" or "HDMI-A-0".
 ---@return string
-function op:name()
+function output:name()
     return self._name
 end
 
 ---Get all tags on this output. See `tag.get_on_output`.
 ---@return Tag[]
-function op:tags()
+function output:tags()
     return require("tag").get_on_output(self)
 end
 
 ---Add tags to this output. See `tag.add`.
 ---@param ... string The names of the tags you want to add.
 ---@overload fun(self: self, tag_names: string[])
-function op:add_tags(...)
+function output:add_tags(...)
     require("tag").add(self, ...)
 end
 
 ---Get this output's make.
 ---@return string|nil
-function op:make()
-    SendRequest({
+function output:make()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     return props.make
 end
 
 ---Get this output's model.
 ---@return string|nil
-function op:model()
-    SendRequest({
+function output:model()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     return props.model
 end
 
 ---Get this output's location in the global space.
 ---@return { x: integer, y: integer }|nil
-function op:loc()
-    SendRequest({
+function output:loc()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     if props.loc == nil then
         return nil
@@ -75,14 +72,12 @@ end
 
 ---Get this output's resolution in pixels.
 ---@return { w: integer, h: integer }|nil
-function op:res()
-    SendRequest({
+function output:res()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     if props.res == nil then
         return nil
@@ -94,28 +89,24 @@ end
 ---Get this output's refresh rate in millihertz.
 ---For example, 60Hz will be returned as 60000.
 ---@return integer|nil
-function op:refresh_rate()
-    SendRequest({
+function output:refresh_rate()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     return props.refresh_rate
 end
 
 ---Get this output's physical size in millimeters.
 ---@return { w: integer, h: integer }|nil
-function op:physical_size()
-    SendRequest({
+function output:physical_size()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     if props.physical_size == nil then
         return nil
@@ -126,14 +117,12 @@ end
 
 ---Get whether or not this output is focused. This is currently defined as having the cursor on it.
 ---@return boolean|nil
-function op:focused()
-    SendRequest({
+function output:focused()
+    local response = ReadMsg(SendRequest({
         GetOutputProps = {
             output_name = self._name,
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local props = response.RequestResponse.response.OutputProps
     return props.focused
 end
@@ -145,7 +134,7 @@ local function new_output(output_name)
     ---@type Output
     local o = { _name = output_name }
     -- Copy functions over
-    for k, v in pairs(op) do
+    for k, v in pairs(output) do
         o[k] = v
     end
 
@@ -153,9 +142,6 @@ local function new_output(output_name)
 end
 
 ------------------------------------------------------
-
----@class OutputGlobal
-local output = {}
 
 ---Get an output by its name.
 ---
@@ -170,9 +156,8 @@ local output = {}
 ---```
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
-function output.get_by_name(name)
-    SendRequest("GetOutputs")
-    local response = ReadMsg()
+function output_global.get_by_name(name)
+    local response = ReadMsg(SendRequest("GetOutputs"))
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
@@ -190,9 +175,8 @@ end
 ---This is something like "DELL E2416H" or whatever gibberish monitor manufacturers call their displays.
 ---@param model string The model of the output(s).
 ---@return Output[] outputs All outputs with this model.
-function output.get_by_model(model)
-    SendRequest("GetOutputs")
-    local response = ReadMsg()
+function output_global.get_by_model(model)
+    local response = ReadMsg(SendRequest("GetOutputs"))
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     ---@type Output[]
@@ -212,10 +196,8 @@ end
 ---@param width integer The width of the outputs, in pixels.
 ---@param height integer The height of the outputs, in pixels.
 ---@return Output[] outputs All outputs with this resolution.
-function output.get_by_res(width, height)
-    SendRequest("GetOutputs")
-
-    local response = ReadMsg()
+function output_global.get_by_res(width, height)
+    local response = ReadMsg(SendRequest("GetOutputs"))
 
     local output_names = response.RequestResponse.response.Outputs.output_names
 
@@ -251,9 +233,8 @@ end
 ---local tags = output.get_focused():tags() -- will NOT warn for nil
 ---```
 ---@return Output|nil output The output, or nil if none are focused.
-function output.get_focused()
-    SendRequest("GetOutputs")
-    local response = ReadMsg()
+function output_global.get_focused()
+    local response = ReadMsg(SendRequest("GetOutputs"))
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
@@ -274,7 +255,7 @@ end
 ---Please note: this function will be run *after* Pinnacle processes your entire config.
 ---For example, if you define tags in `func` but toggle them directly after `connect_for_all`, nothing will happen as the tags haven't been added yet.
 ---@param func fun(output: Output) The function that will be run.
-function output.connect_for_all(func)
+function output_global.connect_for_all(func)
     ---@param args Args
     table.insert(CallbackTable, function(args)
         local args = args.ConnectForAllOutputs
@@ -290,14 +271,12 @@ end
 ---Get the output the specified tag is on.
 ---@param tag Tag
 ---@return Output|nil
-function output.get_for_tag(tag)
-    SendRequest({
+function output_global.get_for_tag(tag)
+    local response = ReadMsg(SendRequest({
         GetTagProps = {
             tag_id = tag:id(),
         },
-    })
-
-    local response = ReadMsg()
+    }))
     local output_name = response.RequestResponse.response.TagProps.output_name
 
     if output_name == nil then
@@ -307,4 +286,4 @@ function output.get_for_tag(tag)
     end
 end
 
-return output
+return output_global
