@@ -159,7 +159,8 @@ impl Layout {
                             state.size.expect("size should have been set")
                         });
                         let win1_loc = win1.with_state(|state| {
-                            let WindowResizeState::Requested(_, loc) = state.resize_state else { unreachable!() };
+                            let WindowResizeState::Requested(_, loc) = 
+                                state.resize_state else { unreachable!() };
                             loc
                         });
 
@@ -271,7 +272,8 @@ impl Layout {
                             state.size.expect("size should have been set")
                         });
                         let win1_loc = win1.with_state(|state| {
-                            let WindowResizeState::Requested(_, loc) = state.resize_state else { unreachable!() };
+                            let WindowResizeState::Requested(_, loc) = 
+                                state.resize_state else { unreachable!() };
                             loc
                         });
 

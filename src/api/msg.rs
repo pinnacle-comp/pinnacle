@@ -33,25 +33,26 @@ pub enum Msg {
     },
     SetWindowSize {
         window_id: WindowId,
-        size: (i32, i32),
+        #[serde(default)]
+        width: Option<i32>,
+        #[serde(default)]
+        height: Option<i32>,
     },
     MoveWindowToTag {
         window_id: WindowId,
-        tag_id: String,
+        tag_id: TagId,
     },
     ToggleTagOnWindow {
         window_id: WindowId,
-        tag_id: String,
+        tag_id: TagId,
     },
 
     // Tag management
     ToggleTag {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
     },
     SwitchToTag {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
     },
     AddTags {
         /// The name of the output you want these tags on.
@@ -60,12 +61,10 @@ pub enum Msg {
     },
     RemoveTags {
         /// The name of the output you want these tags removed from.
-        output_name: String,
-        tag_names: Vec<String>,
+        tag_ids: Vec<TagId>,
     },
     SetLayout {
-        output_name: String,
-        tag_name: String,
+        tag_id: TagId,
         layout: Layout,
     },
 
@@ -86,27 +85,28 @@ pub enum Msg {
     /// Quit the compositor.
     Quit,
 
-    Request(Request),
+    Request {
+        request_id: RequestId,
+        request: Request,
+    },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct RequestId(pub u32);
+pub struct RequestId(u32);
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 /// Messages that require a server response, usually to provide some data.
 pub enum Request {
-    GetWindowByAppId { app_id: String },
-    GetWindowByTitle { title: String },
-    GetWindowByFocus,
-    GetAllWindows,
-    GetOutputByName { output_name: String },
-    GetOutputsByModel { model: String },
-    GetOutputsByRes { res: (u32, u32) },
-    GetOutputByFocus,
-    GetTagsByOutput { output_name: String },
-    GetTagActive { tag_id: TagId },
-    GetTagName { tag_id: TagId },
+    // Windows
+    GetWindows,
+    GetWindowProps { window_id: WindowId },
+    // Outputs
+    GetOutputs,
+    GetOutputProps { output_name: String },
+    // Tags
+    GetTags,
+    GetTagProps { tag_id: TagId },
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
@@ -161,6 +161,7 @@ pub enum OutgoingMsg {
         args: Option<Args>,
     },
     RequestResponse {
+        request_id: RequestId,
         response: RequestResponse,
     },
 }
@@ -185,10 +186,49 @@ pub enum Args {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum RequestResponse {
-    Window { window_id: Option<WindowId> },
-    Windows { window_ids: Vec<WindowId> },
-    Outputs { output_names: Vec<String> },
-    Tags { tag_ids: Vec<TagId> },
-    TagActive { active: bool },
-    TagName { name: String },
+    Window {
+        window_id: Option<WindowId>,
+    },
+    Windows {
+        window_ids: Vec<WindowId>,
+    },
+    WindowProps {
+        size: Option<(i32, i32)>,
+        loc: Option<(i32, i32)>,
+        class: Option<String>,
+        title: Option<String>,
+        floating: Option<bool>,
+        focused: Option<bool>,
+    },
+    Output {
+        output_name: Option<String>,
+    },
+    Outputs {
+        output_names: Vec<String>,
+    },
+    OutputProps {
+        /// The make of the output.
+        make: Option<String>,
+        /// The model of the output.
+        model: Option<String>,
+        /// The location of the output in the space.
+        loc: Option<(i32, i32)>,
+        /// The resolution of the output.
+        res: Option<(i32, i32)>,
+        /// The refresh rate of the output.
+        refresh_rate: Option<i32>,
+        /// The size of the output, in millimeters.
+        physical_size: Option<(i32, i32)>,
+        /// Whether the output is focused or not.
+        focused: Option<bool>,
+        tag_ids: Option<Vec<TagId>>,
+    },
+    Tags {
+        tag_ids: Vec<TagId>,
+    },
+    TagProps {
+        active: Option<bool>,
+        name: Option<String>,
+        output_name: Option<String>,
+    },
 }

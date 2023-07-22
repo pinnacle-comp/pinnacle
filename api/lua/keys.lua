@@ -4,7 +4,11 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@alias Modifier "Alt" | "Ctrl" | "Shift" | "Super"
+---@alias Modifier
+---| "Alt" # The "Alt" key
+---| "Ctrl" # The "Control" key
+---| "Shift" # The "Shift" key
+---| "Super" # The "Super" key, aka "Meta", "Mod4" in X11, the Windows key, etc.
 
 ---@enum Keys
 local keys = {

@@ -41,7 +41,12 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
-    input.keybind({ mod_key, "Alt" }, keys.space, window.toggle_floating)
+    input.keybind({ mod_key, "Alt" }, keys.space, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:toggle_floating()
+        end
+    end)
 
     input.keybind({ mod_key }, keys.Return, function()
         process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
@@ -86,6 +91,9 @@ require("pinnacle").setup(function(pinnacle)
         for _, tg in pairs(tags) do
             if tg:active() then
                 local name = tg:name()
+                if name == nil then
+                    return
+                end
                 tg:set_layout(layouts[indices[name] or 1])
                 if indices[name] == nil then
                     indices[name] = 2
@@ -105,6 +113,9 @@ require("pinnacle").setup(function(pinnacle)
         for _, tg in pairs(tags) do
             if tg:active() then
                 local name = tg:name()
+                if name == nil then
+                    return
+                end
                 tg:set_layout(layouts[indices[name] or #layouts])
                 if indices[name] == nil then
                     indices[name] = #layouts - 1

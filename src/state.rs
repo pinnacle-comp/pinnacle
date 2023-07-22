@@ -16,7 +16,7 @@ use std::{
 
 use crate::{
     api::{
-        msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestResponse},
+        msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestId, RequestResponse},
         PinnacleSocketSource,
     },
     focus::FocusState,
@@ -55,7 +55,7 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
-        shell::xdg::XdgShellState,
+        shell::xdg::{XdgShellState, XdgToplevelSurfaceData},
         shm::ShmState,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
@@ -119,20 +119,12 @@ impl<B: Backend> State<B> {
             }
             Msg::SetMousebind { button: _ } => todo!(),
             Msg::CloseWindow { window_id } => {
-                if let Some(window) = self
-                    .windows
-                    .iter()
-                    .find(|win| win.with_state(|state| state.id == window_id)) 
-                {
+                if let Some(window) = window_id.window(self) {
                     window.toplevel().send_close();
                 }
             }
             Msg::ToggleFloating { window_id } => {
-                if let Some(window) = self
-                    .windows
-                    .iter()
-                    .find(|win| win.with_state(|state| state.id == window_id)).cloned()
-                {
+                if let Some(window) = window_id.window(self) {
                     crate::window::toggle_floating(self, &window);
                 }
             }
@@ -144,150 +136,101 @@ impl<B: Backend> State<B> {
                 self.handle_spawn(command, callback_id);
             }
 
-            Msg::SetWindowSize { window_id, size } => {
-                let Some(window) = self.space.elements().find(|&win| {
-                    win.with_state( |state| state.id == window_id)
-                }) else { return; };
+            Msg::SetWindowSize {
+                window_id,
+                width,
+                height,
+            } => {
+                let Some(window) = window_id.window(self) else { return };
 
                 // TODO: tiled vs floating
+                let window_size = window.geometry().size;
                 window.toplevel().with_pending_state(|state| {
-                    state.size = Some(size.into());
+                    // INFO: calling window.geometry() in with_pending_state
+                    // |     will hang the compositor
+                    state.size = Some(
+                        (
+                            width.unwrap_or(window_size.w),
+                            height.unwrap_or(window_size.h),
+                        )
+                            .into(),
+                    );
                 });
                 window.toplevel().send_pending_configure();
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
-                if let Some(window) = self
-                    .windows
-                    .iter()
-                    .find(|&win| win.with_state(|state| state.id == window_id))
-                {
-                    window.with_state(|state| {
-                        self.focus_state
-                            .focused_output
-                            .as_ref()
-                            .unwrap()
-                            .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
-                                if let Some(tag) = tag {
-                                    state.tags = vec![tag.clone()];
-                                }
-                            });
-                    });
-                }
-
-                let output = self.focus_state.focused_output.clone().unwrap();
+                let Some(window) = window_id.window(self) else { return };
+                let Some(tag) = tag_id.tag(self) else { return };
+                window.with_state(|state| {
+                    state.tags = vec![tag.clone()];
+                });
+                let Some(output) = tag.output(self) else { return };
                 self.re_layout(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
-                if let Some(window) = self
-                    .windows
-                    .iter()
-                    .find(|&win| win.with_state(|state| state.id == window_id))
-                {
-                    window.with_state(|state| {
-                        self.focus_state
-                            .focused_output
-                            .as_ref()
-                            .unwrap()
-                            .with_state(|op_state| {
-                                let tag = op_state.tags.iter().find(|tag| tag.name() == tag_id);
-                                if let Some(tag) = tag {
-                                    if state.tags.contains(tag) {
-                                        state.tags.retain(|tg| tg != tag);
-                                    } else {
-                                        state.tags.push(tag.clone());
-                                    }
-                                }
-                            });
-                    });
+                let Some(window) = window_id.window(self) else { return };
+                let Some(tag) = tag_id.tag(self) else { return };
 
-                    let output = self.focus_state.focused_output.clone().unwrap();
-                    self.re_layout(&output);
-                }
+                window.with_state(|state| {
+                    if state.tags.contains(&tag) {
+                        state.tags.retain(|tg| tg != &tag);
+                    } else {
+                        state.tags.push(tag.clone());
+                    }
+                });
+
+                let Some(output) = tag.output(self) else { return };
+                self.re_layout(&output);
             }
-            Msg::ToggleTag { output_name, tag_name } => {
+            Msg::ToggleTag { tag_id } => {
                 tracing::debug!("ToggleTag");
-
-                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
-                if let Some(output) = output {
-
-                    output.with_state(|state| {
-                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
-                            tracing::debug!("Setting tag {tag:?} to {}", !tag.active());
-                            tag.set_active(!tag.active());
-                        }
-                    });
-                    self.re_layout(&output);
+                if let Some(tag) = tag_id.tag(self) {
+                    tag.set_active(!tag.active());
+                    if let Some(output) = tag.output(self) {
+                        self.re_layout(&output);
+                    }
                 }
             }
-            Msg::SwitchToTag { output_name, tag_name } => {
-                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
-                if let Some(output) = output {
-
-                    output.with_state(|state| {
-                        if !state.tags.iter().any(|tag| tag.name() == tag_name) {
-                            // TODO: notify error
-                            return;
-                        }
-                        for tag in state.tags.iter_mut() {
-                            tag.set_active(false);
-                        }
-
-                        let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) else {
-                            unreachable!()
-                        };
-                        tag.set_active(true);
-
-                        tracing::debug!(
-                            "focused tags: {:?}",
-                            state
-                                .tags
-                                .iter()
-                                .filter(|tag| tag.active())
-                                .map(|tag| tag.name())
-                                .collect::<Vec<_>>()
-                        );
-                    });
-                    self.re_layout(&output);
-                }
+            Msg::SwitchToTag { tag_id } => {
+                let Some(tag) = tag_id.tag(self) else { return };
+                let Some(output) = tag.output(self) else { return };
+                output.with_state(|state| {
+                    for op_tag in state.tags.iter_mut() {
+                        op_tag.set_active(false);
+                    }
+                    tag.set_active(true);
+                });
+                self.re_layout(&output);
             }
-            // TODO: add output
-            Msg::AddTags { output_name, tag_names } => {
+            Msg::AddTags {
+                output_name,
+                tag_names,
+            } => {
                 if let Some(output) = self
                     .space
                     .outputs()
                     .find(|output| output.name() == output_name)
                 {
                     output.with_state(|state| {
-                        state
-                            .tags
-                            .extend(tag_names.iter().cloned().map(Tag::new));
+                        state.tags.extend(tag_names.iter().cloned().map(Tag::new));
                         tracing::debug!("tags added, are now {:?}", state.tags);
                     });
                 }
             }
-            Msg::RemoveTags { output_name, tag_names } => {
-                if let Some(output) = self
-                    .space
-                    .outputs()
-                    .find(|output| output.name() == output_name)
-                {
+            Msg::RemoveTags { tag_ids } => {
+                let tags = tag_ids.into_iter().filter_map(|tag_id| tag_id.tag(self));
+                for tag in tags {
+                    let Some(output) = tag.output(self) else { continue };
                     output.with_state(|state| {
-                        state.tags.retain(|tag| !tag_names.contains(&tag.name()));
+                        state.tags.retain(|tg| tg != &tag);
                     });
                 }
             }
-            Msg::SetLayout { output_name, tag_name, layout } => {
-                let output = self.space.outputs().find(|op| op.name() == output_name).cloned();
-                if let Some(output) = output {
-
-                    output.with_state(|state| {
-                        if let Some(tag) = state.tags.iter_mut().find(|tag| tag.name() == tag_name) {
-                            tag.set_layout(layout);
-                        }
-                    });
-                    self.re_layout(&output);
-                }
+            Msg::SetLayout { tag_id, layout } => {
+                let Some(tag) = tag_id.tag(self) else { return };
+                tag.set_layout(layout);
+                let Some(output) = tag.output(self) else { return };
+                self.re_layout(&output);
             }
 
             Msg::ConnectForAllOutputs { callback_id } => {
@@ -316,195 +259,191 @@ impl<B: Backend> State<B> {
                 self.loop_signal.stop();
             }
 
-            Msg::Request(request) => {
-                let stream = self
-                    .api_state
-                    .stream
-                    .as_ref()
-                    .expect("Stream doesn't exist");
-                let mut stream = stream.lock().expect("Couldn't lock stream");
-                match request {
-                    Request::GetWindowByAppId { app_id: _ } => todo!(),
-                    Request::GetWindowByTitle { title: _ } => todo!(),
-                    Request::GetWindowByFocus => {
-                        match self.focus_state.current_focus() {
-                            Some(current_focus) => {
-                                let window_id =
-                                current_focus.with_state(|state| state.id);
-                                crate::api::send_to_client(
-                                    &mut stream,
-                                    &OutgoingMsg::RequestResponse {
-                                        response: RequestResponse::Window { window_id: Some(window_id) },
-                                    },
-                                )
-                                    .expect("Send to client failed");
-                            },
-                            None => {
-                                crate::api::send_to_client(
-                                    &mut stream,
-                                    &OutgoingMsg::RequestResponse {
-                                        response: RequestResponse::Window { window_id: None },
-                                    },
-                                )
-                                    .expect("Send to client failed");
-                            },
-                        }
-                    }
-                    Request::GetAllWindows => {
-                        let window_ids = self
-                            .windows
-                            .iter()
-                            .map(|win| {
-                                win.with_state(|state| state.id)
-                            })
-                            .collect::<Vec<_>>();
+            Msg::Request {
+                request_id,
+                request,
+            } => {
+                self.handle_request(request_id, request);
+            }
+        }
+    }
 
-                        // FIXME: figure out what to do if error
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::RequestResponse {
-                                response: RequestResponse::Windows {
-                                    window_ids,
-                                },
-                            },
-                        )
-                            .expect("Couldn't send to client");
-                    }
-                    Request::GetOutputByName { output_name } => {
-                        // TODO: name better
-                        let names = self
-                            .space
-                            .outputs()
-                            .find(|output| output.name() == output_name)
-                            .map(|output| output.name());
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::RequestResponse {
-                                response: RequestResponse::Outputs { 
-                                    output_names: if let Some(name) = names {
-                                        vec![name] 
-                                    } else { 
-                                        vec![] 
-                                    }
-                                },
-                            },
-                        )
-                            .unwrap();
-                    }
-                    Request::GetOutputsByModel { model } => {
-                        let names = self
-                            .space
-                            .outputs()
-                            .filter(|output| output.physical_properties().model == model)
-                            .map(|output| output.name())
-                            .collect::<Vec<_>>();
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::RequestResponse {
-                                response: RequestResponse::Outputs { output_names: names },
-                            },
-                        )
-                            .unwrap();
-                    }
-                    Request::GetOutputsByRes { res } => {
-                        let names = self
-                            .space
-                            .outputs()
-                            .filter_map(|output| {
-                                if let Some(mode) = output.current_mode() {
-                                    if mode.size == (res.0 as i32, res.1 as i32).into() {
-                                        Some(output.name())
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>();
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::RequestResponse {
-                                response: RequestResponse::Outputs { output_names: names },
-                            },
-                        )
-                            .unwrap();
-                    }
-                    Request::GetOutputByFocus => {
-                        let names = self
-                            .focus_state
-                            .focused_output
-                            .as_ref()
-                            .map(|output| output.name())
-                            .into_iter()
-                            .collect::<Vec<_>>();
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::RequestResponse {
-                                response: RequestResponse::Outputs { output_names: names },
-                            },
-                        )
-                            .unwrap();
-                    }
-                    Request::GetTagsByOutput { output_name } => {
-                        let output = self
-                            .space
-                            .outputs()
-                            .find(|op| op.name() == output_name);
-                        if let Some(output) = output {
-                            let tag_ids = output.with_state(|state| {
-                                state.tags
-                                    .iter()
-                                    .map(|tag| tag.id())
-                                    .collect::<Vec<_>>()
-                            });
-                            crate::api::send_to_client(
-                                &mut stream, 
-                                &OutgoingMsg::RequestResponse { 
-                                    response: RequestResponse::Tags { tag_ids }
-                                }).unwrap();
-                        }
-                    }
-                    Request::GetTagActive { tag_id } => {
-                        let tag = self
-                            .space
-                            .outputs()
-                            .flat_map(|op| {
-                                op.with_state(|state| state.tags.clone())
-                            })
-                            .find(|tag| tag.id() == tag_id);
-                        if let Some(tag) = tag {
-                            crate::api::send_to_client(
-                                &mut stream, 
-                                &OutgoingMsg::RequestResponse { 
-                                    response: RequestResponse::TagActive { 
-                                        active: tag.active() 
-                                    } 
-                                })
-                                .unwrap();
-                        }
-                    }
-                    Request::GetTagName { tag_id } => {
-                        let tag = self
-                            .space
-                            .outputs()
-                            .flat_map(|op| {
-                                op.with_state(|state| state.tags.clone())
-                            })
-                            .find(|tag| tag.id() == tag_id);
-                        if let Some(tag) = tag {
-                            crate::api::send_to_client(
-                                &mut stream, 
-                                &OutgoingMsg::RequestResponse { 
-                                    response: RequestResponse::TagName { 
-                                        name: tag.name() 
-                                    } 
-                                })
-                                .unwrap();
-                        }
-                    }
-                }
-            },
+    fn handle_request(&mut self, request_id: RequestId, request: Request) {
+        let stream = self
+            .api_state
+            .stream
+            .as_ref()
+            .expect("Stream doesn't exist");
+        let mut stream = stream.lock().expect("Couldn't lock stream");
+        match request {
+            Request::GetWindows => {
+                let window_ids = self
+                    .windows
+                    .iter()
+                    .map(|win| win.with_state(|state| state.id))
+                    .collect::<Vec<_>>();
+
+                // FIXME: figure out what to do if error
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::Windows { window_ids },
+                    },
+                )
+                .expect("Couldn't send to client");
+            }
+            Request::GetWindowProps { window_id } => {
+                let window = window_id.window(self);
+                let size = window
+                    .as_ref()
+                    .map(|win| (win.geometry().size.w, win.geometry().size.h));
+                let loc = window
+                    .as_ref()
+                    .and_then(|win| self.space.element_location(win))
+                    .map(|loc| (loc.x, loc.y));
+                let (class, title) = window.as_ref().map_or((None, None), |win| {
+                    compositor::with_states(win.toplevel().wl_surface(), |states| {
+                        let lock = states
+                            .data_map
+                            .get::<XdgToplevelSurfaceData>()
+                            .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                            .lock()
+                            .expect("failed to acquire lock");
+                        (lock.app_id.clone(), lock.title.clone())
+                    })
+                });
+                let floating = window
+                    .as_ref()
+                    .map(|win| win.with_state(|state| state.floating.is_floating()));
+                let focused = window.as_ref().and_then(|win| {
+                    self.focus_state
+                        .current_focus() // TODO: actual focus
+                        .map(|foc_win| win == &foc_win)
+                });
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::WindowProps {
+                            size,
+                            loc,
+                            class,
+                            title,
+                            floating,
+                            focused,
+                        },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetOutputs => {
+                let output_names = self
+                    .space
+                    .outputs()
+                    .map(|output| output.name())
+                    .collect::<Vec<_>>();
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::Outputs { output_names },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetOutputProps { output_name } => {
+                let output = self
+                    .space
+                    .outputs()
+                    .find(|output| output.name() == output_name);
+                let res = output.as_ref().and_then(|output| {
+                    output.current_mode().map(|mode| (mode.size.w, mode.size.h))
+                });
+                let refresh_rate = output
+                    .as_ref()
+                    .and_then(|output| output.current_mode().map(|mode| mode.refresh));
+                let model = output
+                    .as_ref()
+                    .map(|output| output.physical_properties().model);
+                let physical_size = output.as_ref().map(|output| {
+                    (
+                        output.physical_properties().size.w,
+                        output.physical_properties().size.h,
+                    )
+                });
+                let make = output
+                    .as_ref()
+                    .map(|output| output.physical_properties().make);
+                let loc = output
+                    .as_ref()
+                    .map(|output| (output.current_location().x, output.current_location().y));
+                let focused = self
+                    .focus_state
+                    .focused_output
+                    .as_ref()
+                    .and_then(|foc_op| output.map(|op| op == foc_op));
+                let tag_ids = output.as_ref().map(|output| {
+                    output.with_state(|state| {
+                        state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
+                    })
+                });
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::OutputProps {
+                            make,
+                            model,
+                            loc,
+                            res,
+                            refresh_rate,
+                            physical_size,
+                            focused,
+                            tag_ids,
+                        },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetTags => {
+                let tag_ids = self
+                    .space
+                    .outputs()
+                    .flat_map(|op| op.with_state(|state| state.tags.clone()))
+                    .map(|tag| tag.id())
+                    .collect::<Vec<_>>();
+                tracing::debug!("GetTags: {:?}", tag_ids);
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::Tags { tag_ids },
+                    },
+                )
+                .expect("failed to send to client");
+            }
+            Request::GetTagProps { tag_id } => {
+                let tag = tag_id.tag(self);
+                let output_name = tag
+                    .as_ref()
+                    .and_then(|tag| tag.output(self))
+                    .map(|output| output.name());
+                let active = tag.as_ref().map(|tag| tag.active());
+                let name = tag.as_ref().map(|tag| tag.name());
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::RequestResponse {
+                        request_id,
+                        response: RequestResponse::TagProps {
+                            active,
+                            name,
+                            output_name,
+                        },
+                    },
+                )
+                .expect("failed to send to client");
+            }
         }
     }
 
@@ -657,9 +596,19 @@ impl<B: Backend> State<B> {
     }
 
     pub fn re_layout(&mut self, output: &Output) {
-        let windows = self.windows.iter().filter(|win| {
-            win.with_state(|state| state.tags.iter().any(|tag| self.output_for_tag(tag).is_some_and(|op| &op == output)))
-        }).cloned().collect::<Vec<_>>();
+        let windows = self
+            .windows
+            .iter()
+            .filter(|win| {
+                win.with_state(|state| {
+                    state
+                        .tags
+                        .iter()
+                        .any(|tag| tag.output(self).is_some_and(|op| &op == output))
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         let (render, do_not_render) = output.with_state(|state| {
             let first_tag = state.focused_tags().next();
             if let Some(first_tag) = first_tag {
@@ -716,13 +665,15 @@ impl<B: Backend> State<B> {
 }
 /// Schedule something to be done when windows have finished committing and have become
 /// idle.
-pub fn schedule_on_commit<F, B: Backend>(data: &mut CalloopData<B>, windows: Vec<Window>, on_commit: F)
-    where
+pub fn schedule_on_commit<F, B: Backend>(
+    data: &mut CalloopData<B>,
+    windows: Vec<Window>,
+    on_commit: F,
+) where
     F: FnOnce(&mut CalloopData<B>) + 'static,
 {
     for window in windows.iter() {
-        if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle))
-        {
+        if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle)) {
             data.state.loop_handle.insert_idle(|data| {
                 schedule_on_commit(data, windows, on_commit);
             });

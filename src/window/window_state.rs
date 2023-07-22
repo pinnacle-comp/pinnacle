@@ -15,17 +15,29 @@ use smithay::{
     utils::{Logical, Point, Serial, Size},
 };
 
-use crate::{state::WithState, tag::Tag};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+    tag::Tag,
+};
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
 
-// TODO: this probably doesn't need to be atomic
 static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WindowId {
     pub fn next() -> Self {
         Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Get the window that has this WindowId.
+    pub fn window<B: Backend>(&self, state: &State<B>) -> Option<Window> {
+        state
+            .windows
+            .iter()
+            .find(|win| win.with_state(|state| &state.id == self))
+            .cloned()
     }
 }
 

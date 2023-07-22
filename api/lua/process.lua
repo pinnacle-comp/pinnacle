@@ -6,7 +6,8 @@
 
 ---@diagnostic disable: redefined-local
 
-local process = {}
+---@class ProcessModule
+local process_module = {}
 
 ---Spawn a process with an optional callback for its stdout, stderr, and exit information.
 ---
@@ -17,7 +18,7 @@ local process = {}
 --- - `exit_msg`: The process exited with this message.
 ---@param command string|string[] The command as one whole string or a table of each of its arguments
 ---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
-function process.spawn(command, callback)
+function process_module.spawn(command, callback)
     ---@type integer|nil
     local callback_id = nil
 
@@ -58,7 +59,7 @@ end
 ---`spawn_once` checks for the process using `pgrep`. If your system doesn't have `pgrep`, this won't work properly.
 ---@param command string|string[] The command as one whole string or a table of each of its arguments
 ---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
-function process.spawn_once(command, callback)
+function process_module.spawn_once(command, callback)
     local proc = ""
     if type(command) == "string" then
         proc = command:match("%S+")
@@ -71,7 +72,7 @@ function process.spawn_once(command, callback)
     if procs:len() ~= 0 then -- if process exists, return
         return
     end
-    process.spawn(command, callback)
+    process_module.spawn(command, callback)
 end
 
-return process
+return process_module
