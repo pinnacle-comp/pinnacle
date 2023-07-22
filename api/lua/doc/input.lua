@@ -15,7 +15,7 @@ local input_module = {}
 ---    input.keybind({ "Super" }, input.keys.Return, function()
 ---        process.spawn("Alacritty")
 ---    end)
----@tparam Keys key The key for the keybind.
 ---@tparam Modifier[] modifiers Which modifiers need to be pressed for the keybind to trigger.
+---@tparam Keys key The key for the keybind.
 ---@tparam function action What to do.
 function input_module.keybind(modifiers, key, action) end
