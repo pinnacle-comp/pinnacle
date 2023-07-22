@@ -182,8 +182,6 @@ end
 ---```lua
 ----- Switches to and displays *only* windows on tag `3` on the focused output.
 ---tag.switch_to("3")
----
----local
 ---```
 ---@param name string The name of the tag.
 ---@param output Output? The output.

@@ -12,10 +12,10 @@ local process_module = {}
 ---Spawn a process with an optional callback for its stdout, stderr, and exit information.
 ---
 ---`callback` has the following parameters:
---- - `stdout`: The process's stdout printed this line.
---- - `stderr`: The process's stderr printed this line.
---- - `exit_code`: The process exited with this code.
---- - `exit_msg`: The process exited with this message.
+--- - `stdout` - The process's stdout printed this line.
+--- - `stderr` - The process's stderr printed this line.
+--- - `exit_code` - The process exited with this code.
+--- - `exit_msg` - The process exited with this message.
 ---@param command string|string[] The command as one whole string or a table of each of its arguments
 ---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
 function process_module.spawn(command, callback)

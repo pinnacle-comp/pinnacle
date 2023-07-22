@@ -7,25 +7,24 @@
 ---@meta _
 
 ---@class _Msg
----@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }
----@field SetMousebind { button: integer }
+---@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }?
+---@field SetMousebind { button: integer }?
 --Windows
----@field CloseWindow { window_id: WindowId }
----@field ToggleFloating { window_id: WindowId }
----@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }
----@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }
----@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }
---
----@field Spawn { command: string[], callback_id: integer? }
----@field Request Request
+---@field CloseWindow { window_id: WindowId }?
+---@field ToggleFloating { window_id: WindowId }?
+---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }?
+---@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }?
+---@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }?
+---@field Spawn { command: string[], callback_id: integer? }?
+---@field Request Request?
 --Tags
----@field ToggleTag { tag_id: TagId }
----@field SwitchToTag { tag_id: TagId }
----@field AddTags { output_name: string, tag_names: string[] }
----@field RemoveTags { tag_ids: TagId[] }
----@field SetLayout { tag_id: TagId, layout: Layout }
+---@field ToggleTag { tag_id: TagId }?
+---@field SwitchToTag { tag_id: TagId }?
+---@field AddTags { output_name: string, tag_names: string[] }?
+---@field RemoveTags { tag_ids: TagId[] }?
+---@field SetLayout { tag_id: TagId, layout: Layout }?
 --Outputs
----@field ConnectForAllOutputs { callback_id: integer }
+---@field ConnectForAllOutputs { callback_id: integer }?
 
 ---@alias Msg _Msg | "Quit"
 
@@ -33,22 +32,22 @@
 
 ---@class __Request
 --Windows
----@field GetWindowProps { window_id: WindowId }
+---@field GetWindowProps { window_id: WindowId }?
 --Outputs
----@field GetOutputProps { output_name: string }
+---@field GetOutputProps { output_name: string }?
 --Tags
----@field GetTagProps { tag_id: TagId }
+---@field GetTagProps { tag_id: TagId }?
 
 ---@alias _Request __Request | "GetWindows" | "GetOutputs" | "GetTags"
 ---@alias Request { request_id: integer, request: _Request }
 
 ---@class IncomingMsg
----@field CallCallback { callback_id: integer, args: Args? }
----@field RequestResponse { request_id: integer, response: RequestResponse }
+---@field CallCallback { callback_id: integer, args: Args? }?
+---@field RequestResponse { request_id: integer, response: RequestResponse }?
 
 ---@class Args
----@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }
----@field ConnectForAllOutputs { output_name: string }
+---@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }?
+---@field ConnectForAllOutputs { output_name: string }?
 
 ---@alias WindowId integer
 ---@alias TagId integer
@@ -57,13 +56,13 @@
 
 ---@class RequestResponse
 --Windows
----@field Window { window_id: WindowId|nil }
----@field Windows { window_ids: WindowId[] }
----@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, floating: boolean?, focused: boolean? }
+---@field Window { window_id: WindowId|nil }?
+---@field Windows { window_ids: WindowId[] }?
+---@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, floating: boolean?, focused: boolean? }?
 --Outputs
----@field Output { output_name: OutputName? }
----@field Outputs { output_names: OutputName[] }
----@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean?, tag_ids: integer[]? }
+---@field Output { output_name: OutputName? }?
+---@field Outputs { output_names: OutputName[] }?
+---@field OutputProps { make: string?, model: string?, loc: integer[]?, res: integer[]?, refresh_rate: integer?, physical_size: integer[]?, focused: boolean?, tag_ids: integer[]? }?
 --Tags
----@field Tags { tag_ids: TagId[] }
----@field TagProps { active: boolean?, name: string?, output_name: string? }
+---@field Tags { tag_ids: TagId[] }?
+---@field TagProps { active: boolean?, name: string?, output_name: string? }?
