@@ -157,7 +157,7 @@ function output_module.get_by_res(width, height)
 
     local output_names = response.RequestResponse.response.Outputs.output_names
 
-    ---@type Output
+    ---@type Output[]
     local outputs = {}
     for _, output_name in pairs(output_names) do
         local o = create_output(output_name)
