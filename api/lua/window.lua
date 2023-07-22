@@ -41,7 +41,7 @@ end
 ---window.get_focused():set_size({})                   -- do absolutely nothing useful
 ---```
 ---@param size { w: integer?, h: integer? }
----@see WindowGlobal.set_size — The corresponding module function
+---@see WindowModule.set_size — The corresponding module function
 function window:set_size(size)
     window_module.set_size(self, size)
 end
@@ -57,7 +57,7 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(self: self, t: Tag)
----@see WindowGlobal.move_to_tag — The corresponding module function
+---@see WindowModule.move_to_tag — The corresponding module function
 function window:move_to_tag(name, output)
     window_module.move_to_tag(self, name, output)
 end
@@ -75,7 +75,7 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(self: self, t: Tag)
----@see WindowGlobal.toggle_tag — The corresponding module function
+---@see WindowModule.toggle_tag — The corresponding module function
 function window:toggle_tag(name, output)
     window_module.toggle_tag(self, name, output)
 end
@@ -89,7 +89,7 @@ end
 ---```lua
 ---window.get_focused():close() -- close the currently focused window
 ---```
----@see WindowGlobal.close — The corresponding module function
+---@see WindowModule.close — The corresponding module function
 function window:close()
     window_module.close(self)
 end
@@ -100,7 +100,7 @@ end
 ---```lua
 ---window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
 ---```
----@see WindowGlobal.toggle_floating — The corresponding module function
+---@see WindowModule.toggle_floating — The corresponding module function
 function window:toggle_floating()
     window_module.toggle_floating(self)
 end
@@ -114,7 +114,7 @@ end
 ----- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
----@see WindowGlobal.size — The corresponding module function
+---@see WindowModule.size — The corresponding module function
 function window:size()
     return window_module.size(self)
 end
@@ -133,7 +133,7 @@ end
 ----- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
----@see WindowGlobal.loc — The corresponding module function
+---@see WindowModule.loc — The corresponding module function
 function window:loc()
     return window_module.loc(self)
 end
@@ -147,7 +147,7 @@ end
 ----- ...should print "Alacritty".
 ---```
 ---@return string|nil class This window's class, or nil if it doesn't exist.
----@see WindowGlobal.class — The corresponding module function
+---@see WindowModule.class — The corresponding module function
 function window:class()
     return window_module.class(self)
 end
@@ -161,7 +161,7 @@ end
 ----- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
 ---@return string|nil title This window's title, or nil if it doesn't exist.
----@see WindowGlobal.title — The corresponding module function
+---@see WindowModule.title — The corresponding module function
 function window:title()
     return window_module.title(self)
 end
@@ -175,7 +175,7 @@ end
 ----- ...should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowGlobal.floating — The corresponding module function
+---@see WindowModule.floating — The corresponding module function
 function window:floating()
     return window_module.floating(self)
 end
@@ -187,7 +187,7 @@ end
 ---print(window.get_focused():focused()) -- should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowGlobal.focused — The corresponding module function
+---@see WindowModule.focused — The corresponding module function
 function window:focused()
     return window_module.focused(self)
 end
@@ -260,7 +260,7 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(w: Window, t: Tag)
----@see WindowGlobal.toggle_tag — The corresponding object method
+---@see Window.toggle_tag — The corresponding object method
 function window_module.toggle_tag(w, name, output)
     if type(name) == "table" then
         SendMsg({
@@ -298,7 +298,7 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(w: Window, t: Tag)
----@see WindowGlobal.move_to_tag — The corresponding object method
+---@see Window.move_to_tag — The corresponding object method
 function window_module.move_to_tag(w, name, output)
     if type(name) == "table" then
         SendMsg({
@@ -343,7 +343,7 @@ end
 ---```
 ---@param win Window
 ---@param size { w: integer?, h: integer? }
----@see WindowGlobal.set_size — The corresponding object method
+---@see Window.set_size — The corresponding object method
 function window_module.set_size(win, size)
     SendMsg({
         SetWindowSize = {
@@ -367,7 +367,7 @@ end
 ---end
 ---```
 ---@param win Window
----@see WindowGlobal.close — The corresponding object method
+---@see Window.close — The corresponding object method
 function window_module.close(win)
     SendMsg({
         CloseWindow = {
@@ -378,7 +378,7 @@ end
 
 ---Toggle the specified window between tiled and floating.
 ---@param win Window
----@see WindowGlobal.toggle_floating — The corresponding object method
+---@see Window.toggle_floating — The corresponding object method
 function window_module.toggle_floating(win)
     SendMsg({
         ToggleFloating = {
@@ -397,7 +397,7 @@ end
 ---```
 ---@param win Window
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
----@see WindowGlobal.size — The corresponding object method
+---@see Window.size — The corresponding object method
 function window_module.size(win)
     local response = Request({
         GetWindowProps = {
@@ -430,7 +430,7 @@ end
 ---```
 ---@param win Window
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
----@see WindowGlobal.loc — The corresponding object method
+---@see Window.loc — The corresponding object method
 function window_module.loc(win)
     local response = Request({
         GetWindowProps = {
@@ -461,7 +461,7 @@ end
 ---```
 ---@param win Window
 ---@return string|nil class This window's class, or nil if it doesn't exist.
----@see WindowGlobal.class — The corresponding object method
+---@see Window.class — The corresponding object method
 function window_module.class(win)
     local response = Request({
         GetWindowProps = {
@@ -485,7 +485,7 @@ end
 ---```
 ---@param win Window
 ---@return string|nil title This window's title, or nil if it doesn't exist.
----@see WindowGlobal.title — The corresponding object method
+---@see Window.title — The corresponding object method
 function window_module.title(win)
     local response = Request({
         GetWindowProps = {
@@ -509,7 +509,7 @@ end
 ---```
 ---@param win Window
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowGlobal.floating — The corresponding object method
+---@see Window.floating — The corresponding object method
 function window_module.floating(win)
     local response = Request({
         GetWindowProps = {
@@ -531,7 +531,7 @@ end
 ---```
 ---@param win Window
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowGlobal.focused — The corresponding object method
+---@see Window.focused — The corresponding object method
 function window_module.focused(win)
     local response = Request({
         GetWindowProps = {

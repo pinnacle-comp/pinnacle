@@ -34,7 +34,7 @@ end
 
 ---Get all tags on this output.
 ---@return Tag[]
----@see OutputGlobal.tags — The corresponding module function
+---@see OutputModule.tags — The corresponding module function
 function output:tags()
     return output_module.tags(self)
 end
@@ -42,35 +42,35 @@ end
 ---Add tags to this output.
 ---@param ... string The names of the tags you want to add. You can also pass in a table.
 ---@overload fun(self: self, tag_names: string[])
----@see OutputGlobal.add_tags — The corresponding module function
+---@see OutputModule.add_tags — The corresponding module function
 function output:add_tags(...)
     output_module.add_tags(self, ...)
 end
 
 ---Get this output's make.
 ---@return string|nil
----@see OutputGlobal.make — The corresponding module function
+---@see OutputModule.make — The corresponding module function
 function output:make()
     return output_module.make(self)
 end
 
 ---Get this output's model.
 ---@return string|nil
----@see OutputGlobal.model — The corresponding module function
+---@see OutputModule.model — The corresponding module function
 function output:model()
     return output_module.model(self)
 end
 
 ---Get this output's location in the global space, in pixels.
 ---@return { x: integer, y: integer }|nil
----@see OutputGlobal.loc — The corresponding module function
+---@see OutputModule.loc — The corresponding module function
 function output:loc()
     return output_module.loc(self)
 end
 
 ---Get this output's resolution in pixels.
 ---@return { w: integer, h: integer }|nil
----@see OutputGlobal.res — The corresponding module function
+---@see OutputModule.res — The corresponding module function
 function output:res()
     return output_module.res(self)
 end
@@ -78,21 +78,21 @@ end
 ---Get this output's refresh rate in millihertz.
 ---For example, 60Hz will be returned as 60000.
 ---@return integer|nil
----@see OutputGlobal.refresh_rate — The corresponding module function
+---@see OutputModule.refresh_rate — The corresponding module function
 function output:refresh_rate()
     return output_module.refresh_rate(self)
 end
 
 ---Get this output's physical size in millimeters.
 ---@return { w: integer, h: integer }|nil
----@see OutputGlobal.physical_size — The corresponding module function
+---@see OutputModule.physical_size — The corresponding module function
 function output:physical_size()
     return output_module.physical_size(self)
 end
 
 ---Get whether or not this output is focused. This is currently defined as having the cursor on it.
 ---@return boolean|nil
----@see OutputGlobal.focused — The corresponding module function
+---@see OutputModule.focused — The corresponding module function
 function output:focused()
     return output_module.focused(self)
 end
@@ -227,7 +227,7 @@ end
 ---Get the output the specified tag is on.
 ---@param tag Tag
 ---@return Output|nil
----@see TagGlobal.output — A global method for fully qualified syntax (for you Rustaceans out there)
+---@see TagModule.output — A global method for fully qualified syntax (for you Rustaceans out there)
 ---@see Tag.output — The corresponding object method
 function output_module.get_for_tag(tag)
     local response = Request({
@@ -357,7 +357,7 @@ end
 
 ---Get the specified output's tags.
 ---@param op Output
----@see TagGlobal.get_on_output — The called function
+---@see TagModule.get_on_output — The called function
 ---@see Output.tags — The corresponding object method
 function output_module.tags(op)
     return require("tag").get_on_output(op)
@@ -367,7 +367,7 @@ end
 ---@param op Output
 ---@param ... string The names of the tags you want to add. You can also pass in a table.
 ---@overload fun(op: Output, tag_names: string[])
----@see TagGlobal.add — The called function
+---@see TagModule.add — The called function
 ---@see Output.add_tags — The corresponding object method
 function output_module.add_tags(op, ...)
     require("tag").add(op, ...)

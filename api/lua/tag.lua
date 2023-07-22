@@ -44,40 +44,40 @@ end
 
 ---Get this tag's active status.
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
----@see TagGlobal.active — The corresponding module function
+---@see TagModule.active — The corresponding module function
 function tag:active()
     return tag_module.active(self)
 end
 
 ---Get this tag's name.
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
----@see TagGlobal.name — The corresponding module function
+---@see TagModule.name — The corresponding module function
 function tag:name()
     return tag_module.name(self)
 end
 
 ---Get this tag's output.
 ---@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
----@see TagGlobal.output — The corresponding module function
+---@see TagModule.output — The corresponding module function
 function tag:output()
     return tag_module.output(self)
 end
 
 ---Switch to this tag.
----@see TagGlobal.switch_to — The corresponding module function
+---@see TagModule.switch_to — The corresponding module function
 function tag:switch_to()
     tag_module.switch_to(self)
 end
 
 ---Toggle this tag.
----@see TagGlobal.toggle — The corresponding module function
+---@see TagModule.toggle — The corresponding module function
 function tag:toggle()
     tag_module.toggle(self)
 end
 
 ---Set this tag's layout.
 ---@param layout Layout
----@see TagGlobal.set_layout — The corresponding module function
+---@see TagModule.set_layout — The corresponding module function
 function tag:set_layout(layout)
     tag_module.set_layout(self, layout)
 end
@@ -391,7 +391,7 @@ end
 ---Get the output the specified tag is on.
 ---@param t Tag
 ---@return Output|nil
----@see OutputGlobal.get_for_tag — The called function
+---@see OutputModule.get_for_tag — The called function
 ---@see Tag.output — The corresponding object method
 function tag_module.output(t)
     return require("output").get_for_tag(t)
