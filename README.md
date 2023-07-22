@@ -11,6 +11,9 @@
     A very, VERY WIP Smithay-based wayland compositor
 </div>
 
+## API Documentation
+There is now *finally* [some form of documentation](https://github.com/Ottatop/pinnacle/wiki/API-Documentation) so you don't have to dig around in the code. It isn't great and automating it seems like a pain, but hey it's something!This may become out of date real quick though, and I'm probably going to need to move to LDoc in the future.
+
 ## Features
 - [x] Winit backend
 - [x] Udev backend
