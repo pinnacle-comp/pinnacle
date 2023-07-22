@@ -121,7 +121,6 @@ function output_module.tags(op) end
 ---Add tags to the specified output.
 ---@tparam Output op
 ---@tparam string ... The names of the tags you want to add. You can also pass in a table.
----@overload fun(op: Output, tag_names: string[])
 ---@see TagModule.add
 ---@see Output.add_tags
 function output_module.add_tags(op, ...) end
@@ -143,7 +142,6 @@ function output:tags() end
 
 ---Add tags to this output.
 ---@tparam string ... The names of the tags you want to add. You can also pass in a table.
----@overload fun(self: self, tag_names: string[])
 ---@see OutputModule.add_tags
 function output:add_tags(...) end
 

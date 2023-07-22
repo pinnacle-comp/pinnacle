@@ -31,7 +31,6 @@ function window_module.get_all() end
 ---@tparam Window w
 ---@tparam string name
 ---@tparam ?Output output
----@overload fun(w: Window, t: Tag) -----
 ---@see Window.toggle_tag
 function window_module.toggle_tag(w, name, output) end
 
@@ -40,7 +39,6 @@ function window_module.toggle_tag(w, name, output) end
 ---@tparam Window w
 ---@tparam string name
 ---@tparam ?Output output
----@overload fun(w: Window, t: Tag) ---
 ---@see Window.move_to_tag
 function window_module.move_to_tag(w, name, output) end
 
@@ -182,7 +180,6 @@ function window:set_size(size) end
 ---    -- ...will make the window only appear on tag 5.
 ---@tparam string name
 ---@tparam ?Output output
----@overload fun(self: self, t: Tag) ---
 ---@see WindowModule.move_to_tag
 function window:move_to_tag(name, output) end
 
@@ -196,7 +193,6 @@ function window:move_to_tag(name, output) end
 ---    -- ...will also make the window appear on tag 2.
 ---@tparam string name
 ---@tparam ?Output output
----@overload fun(self: self, t: Tag) ---
 ---@see WindowModule.toggle_tag
 function window:toggle_tag(name, output) end
 

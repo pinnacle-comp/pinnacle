@@ -29,7 +29,6 @@ local tag_module = {}
 ---    tag.add(op, tags) -- Add tags with those names
 ---@tparam Output output The output you want these tags to be added to.
 ---@tparam string ... The names of the new tags you want to add.
----@overload fun(output: Output, tag_names: string[])
 ---@see Output.add_tags
 function tag_module.add(output, ...) end
 
@@ -43,7 +42,6 @@ function tag_module.add(output, ...) end
 ---    -- will cause windows on both tags 1 and 2 to be displayed at the same time.
 ---@tparam string name The name of the tag.
 ---@tparam ?Output output The output.
----@overload fun(t: Tag)
 ---@see Tag.toggle
 function tag_module.toggle(name, output) end
 
@@ -58,7 +56,6 @@ function tag_module.toggle(name, output) end
 ---    tag.switch_to("3")
 ---@tparam string name The name of the tag.
 ---@tparam ?Output output The output.
----@overload fun(t: Tag)
 ---@see Tag.switch_to
 function tag_module.switch_to(name, output) end
 
@@ -75,7 +72,6 @@ function tag_module.switch_to(name, output) end
 ---@tparam string name The name of the tag.
 ---@tparam Layout layout The layout.
 ---@tparam ?Output output The output.
----@overload fun(t: Tag, layout: Layout)
 ---@see Tag.set_layout
 function tag_module.set_layout(name, layout, output) end
 
