@@ -4,8 +4,8 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@class WindowGlobal
-local window_global = {}
+---@class WindowModule
+local window_module = {}
 
 ---@class Window
 ---@field private _id integer The internal id of this window
@@ -13,7 +13,7 @@ local window = {}
 
 ---@param window_id WindowId
 ---@return Window
-local function new_window(window_id)
+local function create_window(window_id)
     ---@type Window
     local w = { _id = window_id }
     -- Copy functions over
@@ -24,7 +24,15 @@ local function new_window(window_id)
     return w
 end
 
----Set a window's size.
+---Get this window's unique id.
+---
+---***You will probably not need to use this.***
+---@return WindowId
+function window:id()
+    return self._id
+end
+
+---Set this window's size.
 ---
 ---### Examples
 ---```lua
@@ -33,17 +41,12 @@ end
 ---window.get_focused():set_size({})                   -- do absolutely nothing useful
 ---```
 ---@param size { w: integer?, h: integer? }
+---@see WindowGlobal.set_size — The corresponding module function
 function window:set_size(size)
-    SendMsg({
-        SetWindowSize = {
-            window_id = self._id,
-            width = size.w,
-            height = size.h,
-        },
-    })
+    window_module.set_size(self, size)
 end
 
----Move a window to a tag, removing all other ones.
+---Move this window to a tag, removing all other ones.
 ---
 ---### Example
 ---```lua
@@ -54,8 +57,9 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(self: self, t: Tag)
+---@see WindowGlobal.move_to_tag — The corresponding module function
 function window:move_to_tag(name, output)
-    window_global.move_to_tag(self, name, output)
+    window_module.move_to_tag(self, name, output)
 end
 
 ---Toggle the specified tag for this window.
@@ -71,8 +75,9 @@ end
 ---@param name string
 ---@param output Output?
 ---@overload fun(self: self, t: Tag)
+---@see WindowGlobal.toggle_tag — The corresponding module function
 function window:toggle_tag(name, output)
-    window_global.toggle_tag(self, name, output)
+    window_module.toggle_tag(self, name, output)
 end
 
 ---Close this window.
@@ -84,12 +89,9 @@ end
 ---```lua
 ---window.get_focused():close() -- close the currently focused window
 ---```
+---@see WindowGlobal.close — The corresponding module function
 function window:close()
-    SendMsg({
-        CloseWindow = {
-            window_id = self._id,
-        },
-    })
+    window_module.close(self)
 end
 
 ---Toggle this window's floating status.
@@ -98,15 +100,12 @@ end
 ---```lua
 ---window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
 ---```
+---@see WindowGlobal.toggle_floating — The corresponding module function
 function window:toggle_floating()
-    SendMsg({
-        ToggleFloating = {
-            window_id = self._id,
-        },
-    })
+    window_module.toggle_floating(self)
 end
 
----Get a window's size.
+---Get this window's size.
 ---
 ---### Example
 ---```lua
@@ -115,21 +114,9 @@ end
 ----- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
+---@see WindowGlobal.size — The corresponding module function
 function window:size()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local size = response.RequestResponse.response.WindowProps.size
-    if size == nil then
-        return nil
-    else
-        return {
-            w = size[1],
-            h = size[2],
-        }
-    end
+    return window_module.size(self)
 end
 
 ---Get this window's location in the global space.
@@ -146,21 +133,9 @@ end
 ----- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
+---@see WindowGlobal.loc — The corresponding module function
 function window:loc()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local loc = response.RequestResponse.response.WindowProps.loc
-    if loc == nil then
-        return nil
-    else
-        return {
-            x = loc[1],
-            y = loc[2],
-        }
-    end
+    return window_module.loc(self)
 end
 
 ---Get this window's class. This is usually the name of the application.
@@ -172,14 +147,9 @@ end
 ----- ...should print "Alacritty".
 ---```
 ---@return string|nil class This window's class, or nil if it doesn't exist.
+---@see WindowGlobal.class — The corresponding module function
 function window:class()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local class = response.RequestResponse.response.WindowProps.class
-    return class
+    return window_module.class(self)
 end
 
 ---Get this window's title.
@@ -191,14 +161,9 @@ end
 ----- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
 ---@return string|nil title This window's title, or nil if it doesn't exist.
+---@see WindowGlobal.title — The corresponding module function
 function window:title()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local title = response.RequestResponse.response.WindowProps.title
-    return title
+    return window_module.title(self)
 end
 
 ---Get this window's floating status.
@@ -210,14 +175,9 @@ end
 ----- ...should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@see WindowGlobal.floating — The corresponding module function
 function window:floating()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local floating = response.RequestResponse.response.WindowProps.floating
-    return floating
+    return window_module.floating(self)
 end
 
 ---Get whether or not this window is focused.
@@ -227,19 +187,9 @@ end
 ---print(window.get_focused():focused()) -- should print `true`.
 ---```
 ---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@see WindowGlobal.focused — The corresponding module function
 function window:focused()
-    local response = Request({
-        GetWindowProps = {
-            window_id = self._id,
-        },
-    })
-    local focused = response.RequestResponse.response.WindowProps.focused
-    return focused
-end
-
----@return WindowId
-function window:id()
-    return self._id
+    return window_module.focused(self)
 end
 
 -------------------------------------------------------------------
@@ -247,8 +197,8 @@ end
 ---Get all windows with the specified class (usually the name of the application).
 ---@param class string The class. For example, Alacritty's class is "Alacritty".
 ---@return Window[]
-function window_global.get_by_class(class)
-    local windows = window_global.get_all()
+function window_module.get_by_class(class)
+    local windows = window_module.get_all()
 
     ---@type Window[]
     local windows_ret = {}
@@ -264,8 +214,8 @@ end
 ---Get all windows with the specified title.
 ---@param title string The title.
 ---@return Window[]
-function window_global.get_by_title(title)
-    local windows = window_global.get_all()
+function window_module.get_by_title(title)
+    local windows = window_module.get_all()
 
     ---@type Window[]
     local windows_ret = {}
@@ -280,8 +230,8 @@ end
 
 ---Get the currently focused window.
 ---@return Window|nil
-function window_global.get_focused()
-    local windows = window_global.get_all()
+function window_module.get_focused()
+    local windows = window_module.get_all()
 
     for _, w in pairs(windows) do
         if w:focused() then
@@ -294,21 +244,24 @@ end
 
 ---Get all windows.
 ---@return Window[]
-function window_global.get_all()
+function window_module.get_all()
     local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
     for _, window_id in pairs(window_ids) do
-        table.insert(windows, new_window(window_id))
+        table.insert(windows, create_window(window_id))
     end
     return windows
 end
 
----comment
+---Toggle the tag with the given name and (optional) output for the specified window.
+---You can also provide a tag object instead of a name and output.
 ---@param w Window
 ---@param name string
 ---@param output Output?
-function window_global.toggle_tag(w, name, output)
+---@overload fun(w: Window, t: Tag)
+---@see WindowGlobal.toggle_tag — The corresponding object method
+function window_module.toggle_tag(w, name, output)
     if type(name) == "table" then
         SendMsg({
             ToggleTagOnWindow = {
@@ -339,12 +292,14 @@ function window_global.toggle_tag(w, name, output)
     end
 end
 
----comment
+---Move the specified window to the tag with the given name and (optional) output.
+---You can also provide a tag object instead of a name and output.
 ---@param w Window
 ---@param name string
 ---@param output Output?
 ---@overload fun(w: Window, t: Tag)
-function window_global.move_to_tag(w, name, output)
+---@see WindowGlobal.move_to_tag — The corresponding object method
+function window_module.move_to_tag(w, name, output)
     if type(name) == "table" then
         SendMsg({
             MoveWindowToTag = {
@@ -375,4 +330,215 @@ function window_global.move_to_tag(w, name, output)
     end
 end
 
-return window_global
+---Set the specified window's size.
+---
+---### Examples
+---```lua
+---local win = window.get_focused()
+---if win ~= nil then
+---    window.set_size(win, { w = 500, h = 500 }) -- make the window square and 500 pixels wide/tall
+---    window.set_size(win, { h = 300 })          -- keep the window's width but make it 300 pixels tall
+---    window.set_size(win, {})                   -- do absolutely nothing useful
+---end
+---```
+---@param win Window
+---@param size { w: integer?, h: integer? }
+---@see WindowGlobal.set_size — The corresponding object method
+function window_module.set_size(win, size)
+    SendMsg({
+        SetWindowSize = {
+            window_id = win:id(),
+            width = size.w,
+            height = size.h,
+        },
+    })
+end
+
+---Close the specified window.
+---
+---This only sends a close *event* to the window and is the same as just clicking the X button in the titlebar.
+---This will trigger save prompts in applications like GIMP.
+---
+---### Example
+---```lua
+---local win = window.get_focused()
+---if win ~= nil then
+---    window.close(win) -- close the currently focused window
+---end
+---```
+---@param win Window
+---@see WindowGlobal.close — The corresponding object method
+function window_module.close(win)
+    SendMsg({
+        CloseWindow = {
+            window_id = win:id(),
+        },
+    })
+end
+
+---Toggle the specified window between tiled and floating.
+---@param win Window
+---@see WindowGlobal.toggle_floating — The corresponding object method
+function window_module.toggle_floating(win)
+    SendMsg({
+        ToggleFloating = {
+            window_id = win:id(),
+        },
+    })
+end
+
+---Get the specified window's size.
+---
+---### Example
+---```lua
+----- With a 4K monitor, given a focused fullscreen window `win`...
+---local size = window.size(win)
+----- ...should have size equal to `{ w = 3840, h = 2160 }`.
+---```
+---@param win Window
+---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
+---@see WindowGlobal.size — The corresponding object method
+function window_module.size(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local size = response.RequestResponse.response.WindowProps.size
+    if size == nil then
+        return nil
+    else
+        return {
+            w = size[1],
+            h = size[2],
+        }
+    end
+end
+
+---Get the specified window's location in the global space.
+---
+---Think of your monitors as being laid out on a big sheet.
+---The top left of the sheet if you trim it down is (0, 0).
+---The location of this window is relative to that point.
+---
+---### Example
+---```lua
+----- With two 1080p monitors side by side and set up as such,
+----- if a window `win` is fullscreen on the right one...
+---local loc = window.loc(win)
+----- ...should have loc equal to `{ x = 1920, y = 0 }`.
+---```
+---@param win Window
+---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
+---@see WindowGlobal.loc — The corresponding object method
+function window_module.loc(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local loc = response.RequestResponse.response.WindowProps.loc
+    if loc == nil then
+        return nil
+    else
+        return {
+            x = loc[1],
+            y = loc[2],
+        }
+    end
+end
+
+---Get the specified window's class. This is usually the name of the application.
+---
+---### Example
+---```lua
+----- With Alacritty focused...
+---local win = window.get_focused()
+---if win ~= nil then
+---    print(window.class(win))
+---end
+----- ...should print "Alacritty".
+---```
+---@param win Window
+---@return string|nil class This window's class, or nil if it doesn't exist.
+---@see WindowGlobal.class — The corresponding object method
+function window_module.class(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local class = response.RequestResponse.response.WindowProps.class
+    return class
+end
+
+---Get the specified window's title.
+---
+---### Example
+---```lua
+----- With Alacritty focused...
+---local win = window.get_focused()
+---if win ~= nil then
+---    print(window.title(win))
+---end
+----- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
+---```
+---@param win Window
+---@return string|nil title This window's title, or nil if it doesn't exist.
+---@see WindowGlobal.title — The corresponding object method
+function window_module.title(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local title = response.RequestResponse.response.WindowProps.title
+    return title
+end
+
+---Get this window's floating status.
+---
+---### Example
+---```lua
+----- With the focused window floating...
+---local win = window.get_focused()
+---if win ~= nil then
+---    print(window.floating(win))
+---end
+----- ...should print `true`.
+---```
+---@param win Window
+---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@see WindowGlobal.floating — The corresponding object method
+function window_module.floating(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local floating = response.RequestResponse.response.WindowProps.floating
+    return floating
+end
+
+---Get whether or not this window is focused.
+---
+---### Example
+---```lua
+---local win = window.get_focused()
+---if win ~= nil then
+---    print(window.focused(win)) -- Should print `true`
+---end
+---```
+---@param win Window
+---@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@see WindowGlobal.focused — The corresponding object method
+function window_module.focused(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local focused = response.RequestResponse.response.WindowProps.focused
+    return focused
+end
+return window_module

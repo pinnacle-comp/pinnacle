@@ -4,12 +4,27 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@class OutputGlobal
-local output_global = {}
+---@class OutputModule
+local output_module = {}
 
 ---@class Output A display.
 ---@field private _name string The name of this output (or rather, of its connector).
 local output = {}
+
+---Create a new output object from a name.
+---The name is the unique identifier for each output.
+---@param name string
+---@return Output
+local function create_output(name)
+    ---@type Output
+    local o = { _name = name }
+    -- Copy functions over
+    for k, v in pairs(output) do
+        o[k] = v
+    end
+
+    return o
+end
 
 ---Get this output's name. This is something like "eDP-1" or "HDMI-A-0".
 ---@return string
@@ -17,128 +32,69 @@ function output:name()
     return self._name
 end
 
----Get all tags on this output. See `tag.get_on_output`.
+---Get all tags on this output.
 ---@return Tag[]
+---@see OutputGlobal.tags — The corresponding module function
 function output:tags()
-    return require("tag").get_on_output(self)
+    return output_module.tags(self)
 end
 
----Add tags to this output. See `tag.add`.
----@param ... string The names of the tags you want to add.
+---Add tags to this output.
+---@param ... string The names of the tags you want to add. You can also pass in a table.
 ---@overload fun(self: self, tag_names: string[])
+---@see OutputGlobal.add_tags — The corresponding module function
 function output:add_tags(...)
-    require("tag").add(self, ...)
+    output_module.add_tags(self, ...)
 end
 
 ---Get this output's make.
 ---@return string|nil
+---@see OutputGlobal.make — The corresponding module function
 function output:make()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    return props.make
+    return output_module.make(self)
 end
 
 ---Get this output's model.
 ---@return string|nil
+---@see OutputGlobal.model — The corresponding module function
 function output:model()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    return props.model
+    return output_module.model(self)
 end
 
----Get this output's location in the global space.
+---Get this output's location in the global space, in pixels.
 ---@return { x: integer, y: integer }|nil
+---@see OutputGlobal.loc — The corresponding module function
 function output:loc()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    if props.loc == nil then
-        return nil
-    else
-        return { x = props.loc[1], y = props.loc[2] }
-    end
+    return output_module.loc(self)
 end
 
 ---Get this output's resolution in pixels.
 ---@return { w: integer, h: integer }|nil
+---@see OutputGlobal.res — The corresponding module function
 function output:res()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    if props.res == nil then
-        return nil
-    else
-        return { w = props.res[1], h = props.res[2] }
-    end
+    return output_module.res(self)
 end
 
 ---Get this output's refresh rate in millihertz.
 ---For example, 60Hz will be returned as 60000.
 ---@return integer|nil
+---@see OutputGlobal.refresh_rate — The corresponding module function
 function output:refresh_rate()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    return props.refresh_rate
+    return output_module.refresh_rate(self)
 end
 
 ---Get this output's physical size in millimeters.
 ---@return { w: integer, h: integer }|nil
+---@see OutputGlobal.physical_size — The corresponding module function
 function output:physical_size()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    if props.physical_size == nil then
-        return nil
-    else
-        return { w = props.physical_size[1], h = props.physical_size[2] }
-    end
+    return output_module.physical_size(self)
 end
 
 ---Get whether or not this output is focused. This is currently defined as having the cursor on it.
 ---@return boolean|nil
+---@see OutputGlobal.focused — The corresponding module function
 function output:focused()
-    local response = Request({
-        GetOutputProps = {
-            output_name = self._name,
-        },
-    })
-    local props = response.RequestResponse.response.OutputProps
-    return props.focused
-end
-
----This is an internal global function used to create an output object from an output name.
----@param output_name string The name of the output.
----@return Output
-local function new_output(output_name)
-    ---@type Output
-    local o = { _name = output_name }
-    -- Copy functions over
-    for k, v in pairs(output) do
-        o[k] = v
-    end
-
-    return o
+    return output_module.focused(self)
 end
 
 ------------------------------------------------------
@@ -156,13 +112,13 @@ end
 ---```
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
-function output_global.get_by_name(name)
+function output_module.get_by_name(name)
     local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
         if output_name == name then
-            return new_output(output_name)
+            return create_output(output_name)
         end
     end
 
@@ -175,14 +131,14 @@ end
 ---This is something like "DELL E2416H" or whatever gibberish monitor manufacturers call their displays.
 ---@param model string The model of the output(s).
 ---@return Output[] outputs All outputs with this model.
-function output_global.get_by_model(model)
+function output_module.get_by_model(model)
     local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     ---@type Output[]
     local outputs = {}
     for _, output_name in pairs(output_names) do
-        local o = new_output(output_name)
+        local o = create_output(output_name)
         if o:model() == model then
             table.insert(outputs, o)
         end
@@ -196,7 +152,7 @@ end
 ---@param width integer The width of the outputs, in pixels.
 ---@param height integer The height of the outputs, in pixels.
 ---@return Output[] outputs All outputs with this resolution.
-function output_global.get_by_res(width, height)
+function output_module.get_by_res(width, height)
     local response = Request("GetOutputs")
 
     local output_names = response.RequestResponse.response.Outputs.output_names
@@ -204,7 +160,7 @@ function output_global.get_by_res(width, height)
     ---@type Output
     local outputs = {}
     for _, output_name in pairs(output_names) do
-        local o = new_output(output_name)
+        local o = create_output(output_name)
         if o:res() and o:res().w == width and o:res().h == height then
             table.insert(outputs, o)
         end
@@ -233,12 +189,12 @@ end
 ---local tags = output.get_focused():tags() -- will NOT warn for nil
 ---```
 ---@return Output|nil output The output, or nil if none are focused.
-function output_global.get_focused()
+function output_module.get_focused()
     local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
 
     for _, output_name in pairs(output_names) do
-        local o = new_output(output_name)
+        local o = create_output(output_name)
         if o:focused() then
             return o
         end
@@ -255,11 +211,11 @@ end
 ---Please note: this function will be run *after* Pinnacle processes your entire config.
 ---For example, if you define tags in `func` but toggle them directly after `connect_for_all`, nothing will happen as the tags haven't been added yet.
 ---@param func fun(output: Output) The function that will be run.
-function output_global.connect_for_all(func)
+function output_module.connect_for_all(func)
     ---@param args Args
     table.insert(CallbackTable, function(args)
         local args = args.ConnectForAllOutputs
-        func(new_output(args.output_name))
+        func(create_output(args.output_name))
     end)
     SendMsg({
         ConnectForAllOutputs = {
@@ -271,7 +227,9 @@ end
 ---Get the output the specified tag is on.
 ---@param tag Tag
 ---@return Output|nil
-function output_global.get_for_tag(tag)
+---@see TagGlobal.output — A global method for fully qualified syntax (for you Rustaceans out there)
+---@see Tag.output — The corresponding object method
+function output_module.get_for_tag(tag)
     local response = Request({
         GetTagProps = {
             tag_id = tag:id(),
@@ -282,8 +240,137 @@ function output_global.get_for_tag(tag)
     if output_name == nil then
         return nil
     else
-        return new_output(output_name)
+        return create_output(output_name)
     end
 end
 
-return output_global
+---Get the specified output's make.
+---@param op Output
+---@return string|nil
+---@see Output.make — The corresponding object method
+function output_module.make(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    return props.make
+end
+
+---Get the specified output's model.
+---@param op Output
+---@return string|nil
+---@see Output.model — The corresponding object method
+function output_module.model(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    return props.model
+end
+
+---Get the specified output's location in the global space, in pixels.
+---@param op Output
+---@return { x: integer, y: integer }|nil
+---@see Output.loc — The corresponding object method
+function output_module.loc(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    if props.loc == nil then
+        return nil
+    else
+        return { x = props.loc[1], y = props.loc[2] }
+    end
+end
+
+---Get the specified output's resolution in pixels.
+---@param op Output
+---@return { w: integer, h: integer }|nil
+---@see Output.res — The corresponding object method
+function output_module.res(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    if props.res == nil then
+        return nil
+    else
+        return { w = props.res[1], h = props.res[2] }
+    end
+end
+
+---Get the specified output's refresh rate in millihertz.
+---For example, 60Hz will be returned as 60000.
+---@param op Output
+---@return integer|nil
+---@see Output.refresh_rate — The corresponding object method
+function output_module.refresh_rate(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    return props.refresh_rate
+end
+
+---Get the specified output's physical size in millimeters.
+---@param op Output
+---@return { w: integer, h: integer }|nil
+---@see Output.physical_size — The corresponding object method
+function output_module.physical_size(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    if props.physical_size == nil then
+        return nil
+    else
+        return { w = props.physical_size[1], h = props.physical_size[2] }
+    end
+end
+
+---Get whether or not the specified output is focused. This is currently defined as having the cursor on it.
+---@param op Output
+---@return boolean|nil
+---@see Output.focused — The corresponding object method
+function output_module.focused(op)
+    local response = Request({
+        GetOutputProps = {
+            output_name = op:name(),
+        },
+    })
+    local props = response.RequestResponse.response.OutputProps
+    return props.focused
+end
+
+---Get the specified output's tags.
+---@param op Output
+---@see TagGlobal.get_on_output — The called function
+---@see Output.tags — The corresponding object method
+function output_module.tags(op)
+    return require("tag").get_on_output(op)
+end
+
+---Add tags to the specified output.
+---@param op Output
+---@param ... string The names of the tags you want to add. You can also pass in a table.
+---@overload fun(op: Output, tag_names: string[])
+---@see TagGlobal.add — The called function
+---@see Output.add_tags — The corresponding object method
+function output_module.add_tags(op, ...)
+    require("tag").add(op, ...)
+end
+
+return output_module

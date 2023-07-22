@@ -4,7 +4,8 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
-local input = {
+---@class InputModule
+local input_module = {
     keys = require("keys"),
 }
 
@@ -13,8 +14,7 @@ local input = {
 ---### Example
 ---
 ---```lua
------ The following sets Super + Return to open Alacritty
----
+----- Set `Super + Return` to open Alacritty
 ---input.keybind({ "Super" }, input.keys.Return, function()
 ---    process.spawn("Alacritty")
 ---end)
@@ -22,7 +22,7 @@ local input = {
 ---@param key Keys The key for the keybind.
 ---@param modifiers (Modifier)[] Which modifiers need to be pressed for the keybind to trigger.
 ---@param action fun() What to do.
-function input.keybind(modifiers, key, action)
+function input_module.keybind(modifiers, key, action)
     table.insert(CallbackTable, action)
     SendMsg({
         SetKeybind = {
@@ -33,4 +33,4 @@ function input.keybind(modifiers, key, action)
     })
 end
 
-return input
+return input_module

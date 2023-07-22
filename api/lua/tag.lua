@@ -4,8 +4,8 @@
 --
 -- SPDX-License-Identifier: MPL-2.0
 
----@class TagGlobal
-local tag_global = {}
+---@class TagModule
+local tag_module = {}
 
 ---@alias Layout
 ---| "MasterStack" # One master window on the left with all other windows stacked to the right.
@@ -20,11 +20,13 @@ local tag_global = {}
 ---@field private _id integer The internal id of this tag.
 local tag = {}
 
----@param tag_id integer
+---Create a tag from an id.
+---The id is the unique identifier for each tag.
+---@param id TagId
 ---@return Tag
-local function new_tag(tag_id)
+local function create_tag(id)
     ---@type Tag
-    local t = { _id = tag_id }
+    local t = { _id = id }
     -- Copy functions over
     for k, v in pairs(tag) do
         t[k] = v
@@ -34,6 +36,7 @@ local function new_tag(tag_id)
 end
 
 ---Get this tag's internal id.
+---***You probably won't need to use this.***
 ---@return integer
 function tag:id()
     return self._id
@@ -41,61 +44,49 @@ end
 
 ---Get this tag's active status.
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
+---@see TagGlobal.active — The corresponding module function
 function tag:active()
-    local response = Request({
-        GetTagProps = {
-            tag_id = self._id,
-        },
-    })
-    local active = response.RequestResponse.response.TagProps.active
-    return active
+    return tag_module.active(self)
 end
 
 ---Get this tag's name.
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
+---@see TagGlobal.name — The corresponding module function
 function tag:name()
-    local response = Request({
-        GetTagProps = {
-            tag_id = self._id,
-        },
-    })
-    local name = response.RequestResponse.response.TagProps.name
-    return name
+    return tag_module.name(self)
 end
 
 ---Get this tag's output.
 ---@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
+---@see TagGlobal.output — The corresponding module function
 function tag:output()
-    return require("output").get_for_tag(self)
+    return tag_module.output(self)
 end
 
 ---Switch to this tag.
+---@see TagGlobal.switch_to — The corresponding module function
 function tag:switch_to()
-    tag_global.switch_to(self)
+    tag_module.switch_to(self)
 end
 
 ---Toggle this tag.
+---@see TagGlobal.toggle — The corresponding module function
 function tag:toggle()
-    tag_global.toggle(self)
+    tag_module.toggle(self)
 end
 
 ---Set this tag's layout.
 ---@param layout Layout
+---@see TagGlobal.set_layout — The corresponding module function
 function tag:set_layout(layout)
-    local name = self:name()
-    if name ~= nil then
-        tag_global.set_layout(name, layout)
-    end
+    tag_module.set_layout(self, layout)
 end
 
 -----------------------------------------------------------
 
 ---Add tags to the specified output.
 ---
----You can also do `output_object:add_tags(...)`.
----
 ---### Examples
----
 ---```lua
 ---local op = output.get_by_name("DP-1")
 ---if op ~= nil then
@@ -110,7 +101,8 @@ end
 ---@param output Output The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
 ---@overload fun(output: Output, tag_names: string[])
-function tag_global.add(output, ...)
+---@see Output.add_tags — The corresponding object method
+function tag_module.add(output, ...)
     local varargs = { ... }
     if type(varargs[1]) == "string" then
         local tag_names = varargs
@@ -148,7 +140,8 @@ end
 ---@param name string The name of the tag.
 ---@param output Output? The output.
 ---@overload fun(t: Tag)
-function tag_global.toggle(name, output)
+---@see Tag.toggle — The corresponding object method
+function tag_module.toggle(name, output)
     if type(name) == "table" then
         SendMsg({
             ToggleTag = {
@@ -165,7 +158,7 @@ function tag_global.toggle(name, output)
     end
 
     print("before tag_global.get_by_name")
-    local tags = tag_global.get_by_name(name)
+    local tags = tag_module.get_by_name(name)
     print("after tag_global.get_by_name")
     for _, t in pairs(tags) do
         if t:output() and t:output():name() == output:name() then
@@ -185,15 +178,18 @@ end
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
----### Example
----
+---### Examples
 ---```lua
----tag.switch_to("3") -- Switches to and displays *only* windows on tag 3
+----- Switches to and displays *only* windows on tag `3` on the focused output.
+---tag.switch_to("3")
+---
+---local
 ---```
 ---@param name string The name of the tag.
 ---@param output Output? The output.
 ---@overload fun(t: Tag)
-function tag_global.switch_to(name, output)
+---@see Tag.switch_to — The corresponding object method
+function tag_module.switch_to(name, output)
     if type(name) == "table" then
         SendMsg({
             SwitchToTag = {
@@ -209,7 +205,7 @@ function tag_global.switch_to(name, output)
         return
     end
 
-    local tags = tag_global.get_by_name(name)
+    local tags = tag_module.get_by_name(name)
     for _, t in pairs(tags) do
         if t:output() and t:output():name() == output:name() then
             SendMsg({
@@ -224,11 +220,22 @@ end
 
 ---Set a layout for the tag on the specified output. If no output is provided, set it for the tag on the currently focused one.
 ---Alternatively, provide a tag object instead of a name and output.
+---
+---### Examples
+---```lua
+----- Set tag `1` on `DP-1` to the `Dwindle` layout
+---tag.set_layout("1", "Dwindle", output.get_by_name("DP-1"))
+---
+----- Do the same as above. Note: if you have more than one tag named `1` then this picks the first one.
+---local t = tag.get_by_name("1")[1]
+---tag.set_layout(t, "Dwindle")
+---```
 ---@param name string The name of the tag.
 ---@param layout Layout The layout.
 ---@param output Output? The output.
 ---@overload fun(t: Tag, layout: Layout)
-function tag_global.set_layout(name, layout, output)
+---@see Tag.set_layout — The corresponding object method
+function tag_module.set_layout(name, layout, output)
     if type(name) == "table" then
         SendMsg({
             SetLayout = {
@@ -245,7 +252,7 @@ function tag_global.set_layout(name, layout, output)
         return
     end
 
-    local tags = tag_global.get_by_name(name)
+    local tags = tag_module.get_by_name(name)
     for _, t in pairs(tags) do
         if t:output() and t:output():name() == output:name() then
             SendMsg({
@@ -261,15 +268,18 @@ end
 
 ---Get all tags on the specified output.
 ---
----You can also use `output_obj:tags()`, which delegates to this function:
+---### Example
 ---```lua
----local tags_on_output = output.get_focused():tags()
------ This is the same as
------ local tags_on_output = tag.get_on_output(output.get_focused())
+---local op = output.get_focused()
+---if op ~= nil then
+---    local tags = tag.get_on_output(op) -- All tags on the focused output
+---end
 ---```
 ---@param output Output
 ---@return Tag[]
-function tag_global.get_on_output(output)
+---
+---@see Output.tags — The corresponding object method
+function tag_module.get_on_output(output)
     local response = Request({
         GetOutputProps = {
             output_name = output:name(),
@@ -286,17 +296,26 @@ function tag_global.get_on_output(output)
     end
 
     for _, tag_id in pairs(tag_ids) do
-        table.insert(tags, new_tag(tag_id))
+        table.insert(tags, create_tag(tag_id))
     end
 
     return tags
 end
 
 ---Get all tags with this name across all outputs.
----@param name string The name of the tags you want.
+---
+---### Example
+---```lua
+----- Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
+---local tags = tag.get_by_name("OBS")
+----- ...will have 2 tags in `tags`, while...
+---local no_tags = tag.get_by_name("Firefox")
+----- ...will have `no_tags` be empty.
+---```
+---@param name string The name of the tag(s) you want.
 ---@return Tag[]
-function tag_global.get_by_name(name)
-    local t_s = tag_global.get_all()
+function tag_module.get_by_name(name)
+    local t_s = tag_module.get_all()
 
     ---@type Tag[]
     local tags = {}
@@ -310,11 +329,17 @@ function tag_global.get_by_name(name)
     return tags
 end
 
----Get all tags across all ouptuts.
+---Get all tags across all outputs.
+---
+---### Example
+---```lua
+----- With two monitors with the same tags: "1", "2", "3", "4", and "5"...
+---local tags = tag.get_all()
+----- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
+---```
 ---@return Tag[]
-function tag_global.get_all()
+function tag_module.get_all()
     local response = Request("GetTags")
-    RPrint(response)
 
     local tag_ids = response.RequestResponse.response.Tags.tag_ids
 
@@ -322,10 +347,54 @@ function tag_global.get_all()
     local tags = {}
 
     for _, tag_id in pairs(tag_ids) do
-        table.insert(tags, new_tag(tag_id))
+        table.insert(tags, create_tag(tag_id))
     end
 
     return tags
 end
 
-return tag_global
+---Get the specified tag's name.
+---
+---### Example
+---```lua
+----- Assuming the tag `Terminal` exists...
+---print(tag.name(tag.get_by_name("Terminal")[1]))
+----- ...should print `Terminal`.
+---```
+---@param t Tag
+---@return string|nil
+---@see Tag.name — The corresponding object method
+function tag_module.name(t)
+    local response = Request({
+        GetTagProps = {
+            tag_id = t:id(),
+        },
+    })
+    local name = response.RequestResponse.response.TagProps.name
+    return name
+end
+
+---Get whether or not the specified tag is active.
+---@param t Tag
+---@return boolean|nil
+---@see Tag.active — The corresponding object method
+function tag_module.active(t)
+    local response = Request({
+        GetTagProps = {
+            tag_id = t:id(),
+        },
+    })
+    local active = response.RequestResponse.response.TagProps.active
+    return active
+end
+
+---Get the output the specified tag is on.
+---@param t Tag
+---@return Output|nil
+---@see OutputGlobal.get_for_tag — The called function
+---@see Tag.output — The corresponding object method
+function tag_module.output(t)
+    return require("output").get_for_tag(t)
+end
+
+return tag_module
