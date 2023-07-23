@@ -12,9 +12,9 @@
 </div>
 
 ## API Documentation
-~~There is now *finally* [some form of documentation](https://github.com/Ottatop/pinnacle/wiki/API-Documentation) so you don't have to dig around in the code. It isn't great and automating it seems like a pain, but hey it's something! This may become out of date real quick though, and I'm probably going to need to move to LDoc in the future.~~
+There is a preliminary [doc website](https://ottatop.github.io/pinnacle/main) generated with LDoc. Do note that there are some missing things like the `Keys` table and `Layout` enum as well as any function overloads, but these should be autocompleted through the language server.
 
-Alrighty there's now a preliminary [doc website](https://ottatop.github.io/pinnacle/) generated with LDoc! There are some missing things like the `Keys` and `Layout` tables as well as any function overloads, but you can now click through @see annotations!
+Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
 
 ## Features
 - [x] Winit backend
