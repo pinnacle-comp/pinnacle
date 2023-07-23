@@ -19,14 +19,14 @@ local tag_module = {}
 
 ---Add tags to the specified output.
 ---
----### Examples
----    local op = output.get_by_name("DP-1")
----    if op ~= nil then
----        tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
----    end
----You can also pass in a table.
----    local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
----    tag.add(op, tags) -- Add tags with those names
+---@usage
+---local op = output.get_by_name("DP-1")
+---if op ~= nil then
+---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
+---end
+--- -- You can also pass in a table.
+---local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
+---tag.add(op, tags) -- Add tags with those names
 ---@tparam Output output The output you want these tags to be added to.
 ---@tparam string ... The names of the new tags you want to add.
 ---@see Output.add_tags
@@ -34,12 +34,12 @@ function tag_module.add(output, ...) end
 
 ---Toggle a tag on the specified output. If `output` isn't specified, toggle it on the currently focused output instead.
 ---
----### Example
----    -- Assuming all tags are toggled off...
----    local op = output.get_by_name("DP-1")
----    tag.toggle("1", op)
----    tag.toggle("2", op)
----    -- will cause windows on both tags 1 and 2 to be displayed at the same time.
+---@usage
+--- -- Assuming all tags are toggled off...
+---local op = output.get_by_name("DP-1")
+---tag.toggle("1", op)
+---tag.toggle("2", op)
+--- -- will cause windows on both tags 1 and 2 to be displayed at the same time.
 ---@tparam string name The name of the tag.
 ---@tparam ?Output output The output.
 ---@see Tag.toggle
@@ -51,9 +51,9 @@ function tag_module.toggle(name, output) end
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
----### Examples
----    -- Switches to and displays *only* windows on tag `3` on the focused output.
----    tag.switch_to("3")
+---@usage
+--- -- Switches to and displays *only* windows on tag `3` on the focused output.
+---tag.switch_to("3")
 ---@tparam string name The name of the tag.
 ---@tparam ?Output output The output.
 ---@see Tag.switch_to
@@ -62,13 +62,13 @@ function tag_module.switch_to(name, output) end
 ---Set a layout for the tag on the specified output. If no output is provided, set it for the tag on the currently focused one.
 ---Alternatively, provide a tag object instead of a name and output.
 ---
----### Examples
----    -- Set tag `1` on `DP-1` to the `Dwindle` layout
----    tag.set_layout("1", "Dwindle", output.get_by_name("DP-1"))
+---@usage
+--- -- Set tag `1` on `DP-1` to the `Dwindle` layout
+--- tag.set_layout("1", "Dwindle", output.get_by_name("DP-1"))
 ---
----    -- Do the same as above. Note: if you have more than one tag named `1` then this picks the first one.
----    local t = tag.get_by_name("1")[1]
----    tag.set_layout(t, "Dwindle")
+--- -- Do the same as above. Note: if you have more than one tag named `1` then this picks the first one.
+---local t = tag.get_by_name("1")[1]
+---tag.set_layout(t, "Dwindle")
 ---@tparam string name The name of the tag.
 ---@tparam Layout layout The layout.
 ---@tparam ?Output output The output.
@@ -77,11 +77,11 @@ function tag_module.set_layout(name, layout, output) end
 
 ---Get all tags on the specified output.
 ---
----### Example
----    local op = output.get_focused()
----    if op ~= nil then
----        local tags = tag.get_on_output(op) -- All tags on the focused output
----    end
+---@usage
+---local op = output.get_focused()
+---if op ~= nil then
+---    local tags = tag.get_on_output(op) -- All tags on the focused output
+---end
 ---@tparam Output output
 ---@treturn Tag[]
 ---@see Output.tags
@@ -89,31 +89,31 @@ function tag_module.get_on_output(output) end
 
 ---Get all tags with this name across all outputs.
 ---
----### Example
----    -- Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
----    local tags = tag.get_by_name("OBS")
----    -- ...will have 2 tags in `tags`, while...
----    local no_tags = tag.get_by_name("Firefox")
----    -- ...will have `no_tags` be empty.
+---@usage
+--- -- Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
+---local tags = tag.get_by_name("OBS")
+--- -- ...will have 2 tags in `tags`, while...
+---local no_tags = tag.get_by_name("Firefox")
+--- -- ...will have `no_tags` be empty.
 ---@tparam string name The name of the tag(s) you want.
 ---@treturn Tag[]
 function tag_module.get_by_name(name) end
 
 ---Get all tags across all outputs.
 ---
----### Example
----    -- With two monitors with the same tags: "1", "2", "3", "4", and "5"...
----    local tags = tag.get_all()
----    -- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
+---@usage
+--- -- With two monitors with the same tags: "1", "2", "3", "4", and "5"...
+---local tags = tag.get_all()
+--- -- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
 ---@treturn Tag[]
 function tag_module.get_all() end
 
 ---Get the specified tag's name.
 ---
----### Example
----    -- Assuming the tag `Terminal` exists...
----    print(tag.name(tag.get_by_name("Terminal")[1]))
----    -- ...should print `Terminal`.
+---@usage
+--- -- Assuming the tag `Terminal` exists...
+---print(tag.name(tag.get_by_name("Terminal")[1]))
+--- -- ...should print `Terminal`.
 ---@tparam Tag t
 ---@treturn string|nil
 ---@see Tag.name

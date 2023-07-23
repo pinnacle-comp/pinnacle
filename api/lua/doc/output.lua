@@ -14,9 +14,9 @@ local output_module = {}
 ---rather, "name" is the name of the connector the output is connected to.
 ---This should be something like "HDMI-A-0", "eDP-1", or similar.
 ---
----### Example
----    local monitor = output.get_by_name("DP-1")
----    print(monitor.name) -- should print `DP-1`
+---@usage
+---local monitor = output.get_by_name("DP-1")
+---print(monitor.name) -- should print `DP-1`
 ---@tparam string name The name of the output.
 ---@treturn Output|nil output The output, or nil if none have the provided name.
 function output_module.get_by_name(name) end

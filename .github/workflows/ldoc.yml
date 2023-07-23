@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - main
+
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   build:
     name: Build docs
@@ -32,3 +36,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./api/lua/doc/doc
+          destination_dir: ${{ env.BRANCH_NAME }}

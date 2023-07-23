@@ -70,8 +70,8 @@ body { /* Body of window (makes it look like sidebars) */
     background-color: #202020; margin: 0px;
 }
 
-code, tt { font-family: "JetBrains Mono", monospace; font-size: 1em; }
-span.parameter { font-family: "JetBrains Mono", monospace; }
+code, tt { font-family: "JetBrains Mono", "Consolas", monospace; font-size: 1em; }
+span.parameter { font-family: "JetBrains Mono", "Consolas", monospace; }
 span.parameter:after { content:":"; }
 span.types:before { content:"("; }
 span.types:after { content:")"; }
@@ -122,8 +122,8 @@ pre {
     font-family: "JetBrains Mono", "Andale Mono", monospace;
 }
 
-pre.example {
-    font-size: .85em;
+pre.example { /* Usage blocks */
+    font-size: 1em;
 }
 
 table.index { border: 1px #00007f; }
@@ -297,24 +297,23 @@ ul ol { margin-top: 0px; }
 
 /* make the target distinct; helps when we're navigating to a function */
 a:target + * {
-  background-color: #FF9;
+    background-color: #535353;
 }
 
-
 /* styles for prettification of source */
-pre .comment { color: #558817; }
-pre .constant { color: #a8660d; }
-pre .escape { color: #844631; }
-pre .keyword { color: #aa5050; font-weight: bold; }
-pre .library { color: #0e7c6b; }
+pre .comment { color: #9e9fa0; }
+pre .constant { color: #5ae0df; }
+pre .escape { color: #2dc7c4; }
+pre .keyword { color: #be95ff; font-weight: bold; }
+pre .library { color: #ee5396; }
 pre .marker { color: #512b1e; background: #fedc56; font-weight: bold; }
-pre .string { color: #8080ff; }
-pre .number { color: #f8660d; }
-pre .function-name { color: #60447f; }
-pre .operator { color: #2239a8; font-weight: bold; }
-pre .preprocessor, pre .prepro { color: #a33243; }
-pre .global { color: #800080; }
-pre .user-keyword { color: #800080; }
+pre .string { color: #25be6a; }
+pre .number { color: #3ddbd9; }
+pre .function-name { color: #8cb6ff; }
+pre .operator { color: #b6b8bb; font-weight: bold; }
+pre .preprocessor, pre .prepro { color: #ff91c1; }
+pre .global { color: #ee5396; }
+pre .user-keyword { color: #ee5396; }
 pre .prompt { color: #558817; }
-pre .url { color: #272fc2; text-decoration: underline; }
+pre .url { color: #5ae0df; text-decoration: underline; }
 
