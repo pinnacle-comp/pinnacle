@@ -3,13 +3,20 @@
 use std::{cell::RefCell, sync::atomic::AtomicU32, time::Duration};
 
 use smithay::{
+    backend::input::KeyState,
     desktop::{
+        space::SpaceElement,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
             take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
             OutputPresentationFeedback,
         },
         Window, WindowSurfaceType,
+    },
+    input::{
+        keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
+        pointer::{AxisFrame, MotionEvent, PointerTarget},
+        Seat,
     },
     output::Output,
     reexports::{
@@ -19,7 +26,7 @@ use smithay::{
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{user_data::UserDataMap, IsAlive, Logical, Point},
+    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor::{Blocker, BlockerState, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -174,6 +181,193 @@ impl IsAlive for WindowElement {
         match self {
             WindowElement::Wayland(window) => window.alive(),
             WindowElement::X11(surface) => surface.alive(),
+        }
+    }
+}
+
+impl<B: Backend> PointerTarget<State<B>> for WindowElement {
+    fn enter(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, data, event),
+            WindowElement::X11(surface) => PointerTarget::enter(surface, seat, data, event),
+        }
+    }
+
+    fn motion(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, data, event),
+            WindowElement::X11(surface) => PointerTarget::motion(surface, seat, data, event),
+        }
+    }
+
+    fn relative_motion(
+        &self,
+        seat: &Seat<State<B>>,
+        data: &mut State<B>,
+        event: &smithay::input::pointer::RelativeMotionEvent,
+    ) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => {
+                PointerTarget::relative_motion(window, seat, data, event);
+            }
+            WindowElement::X11(surface) => {
+                PointerTarget::relative_motion(surface, seat, data, event);
+            }
+        }
+    }
+
+    fn button(
+        &self,
+        seat: &Seat<State<B>>,
+        data: &mut State<B>,
+        event: &smithay::input::pointer::ButtonEvent,
+    ) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => PointerTarget::button(window, seat, data, event),
+            WindowElement::X11(surface) => PointerTarget::button(surface, seat, data, event),
+        }
+    }
+
+    fn axis(&self, seat: &Seat<State<B>>, data: &mut State<B>, frame: AxisFrame) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, data, frame),
+            WindowElement::X11(surface) => PointerTarget::axis(surface, seat, data, frame),
+        }
+    }
+
+    fn leave(&self, seat: &Seat<State<B>>, data: &mut State<B>, serial: Serial, time: u32) {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => {
+                PointerTarget::leave(window, seat, data, serial, time);
+            }
+            WindowElement::X11(surface) => PointerTarget::leave(surface, seat, data, serial, time),
+        }
+    }
+}
+
+impl<B: Backend> KeyboardTarget<State<B>> for WindowElement {
+    fn enter(
+        &self,
+        seat: &Seat<State<B>>,
+        data: &mut State<B>,
+        keys: Vec<KeysymHandle<'_>>,
+        serial: Serial,
+    ) {
+        match self {
+            WindowElement::Wayland(window) => {
+                KeyboardTarget::enter(window, seat, data, keys, serial);
+            }
+            WindowElement::X11(surface) => KeyboardTarget::enter(surface, seat, data, keys, serial),
+        }
+    }
+
+    fn leave(&self, seat: &Seat<State<B>>, data: &mut State<B>, serial: Serial) {
+        match self {
+            WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, data, serial),
+            WindowElement::X11(surface) => KeyboardTarget::leave(surface, seat, data, serial),
+        }
+    }
+
+    fn key(
+        &self,
+        seat: &Seat<State<B>>,
+        data: &mut State<B>,
+        key: KeysymHandle<'_>,
+        state: KeyState,
+        serial: Serial,
+        time: u32,
+    ) {
+        match self {
+            WindowElement::Wayland(window) => {
+                KeyboardTarget::key(window, seat, data, key, state, serial, time);
+            }
+            WindowElement::X11(surface) => {
+                KeyboardTarget::key(surface, seat, data, key, state, serial, time);
+            }
+        }
+    }
+
+    fn modifiers(
+        &self,
+        seat: &Seat<State<B>>,
+        data: &mut State<B>,
+        modifiers: ModifiersState,
+        serial: Serial,
+    ) {
+        match self {
+            WindowElement::Wayland(window) => {
+                KeyboardTarget::modifiers(window, seat, data, modifiers, serial);
+            }
+            WindowElement::X11(surface) => {
+                KeyboardTarget::modifiers(surface, seat, data, modifiers, serial);
+            }
+        }
+    }
+}
+
+impl SpaceElement for WindowElement {
+    fn geometry(&self) -> Rectangle<i32, Logical> {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::geometry(window),
+            WindowElement::X11(surface) => SpaceElement::geometry(surface),
+        }
+    }
+
+    fn bbox(&self) -> Rectangle<i32, Logical> {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::bbox(window),
+            WindowElement::X11(surface) => SpaceElement::bbox(surface),
+        }
+    }
+
+    fn is_in_input_region(&self, point: &Point<f64, Logical>) -> bool {
+        // TODO: ssd
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::is_in_input_region(window, point),
+            WindowElement::X11(surface) => SpaceElement::is_in_input_region(surface, point),
+        }
+    }
+
+    fn z_index(&self) -> u8 {
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::z_index(window),
+            WindowElement::X11(surface) => SpaceElement::z_index(surface),
+        }
+    }
+
+    fn set_activate(&self, activated: bool) {
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::set_activate(window, activated),
+            WindowElement::X11(surface) => SpaceElement::set_activate(surface, activated),
+        }
+    }
+
+    fn output_enter(&self, output: &Output, overlap: Rectangle<i32, Logical>) {
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::output_enter(window, output, overlap),
+            WindowElement::X11(surface) => SpaceElement::output_enter(surface, output, overlap),
+        }
+    }
+
+    fn output_leave(&self, output: &Output) {
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::output_leave(window, output),
+            WindowElement::X11(surface) => SpaceElement::output_leave(surface, output),
+        }
+    }
+
+    fn refresh(&self) {
+        match self {
+            WindowElement::Wayland(window) => SpaceElement::refresh(window),
+            WindowElement::X11(surface) => SpaceElement::refresh(surface),
         }
     }
 }
