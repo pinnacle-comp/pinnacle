@@ -315,9 +315,9 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             });
 
             match render_res {
-                Ok((damage, states)) => {
-                    let has_rendered = damage.is_some();
-                    if let Some(damage) = damage {
+                Ok(render_output_result) => {
+                    let has_rendered = render_output_result.damage.is_some();
+                    if let Some(damage) = render_output_result.damage {
                         if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
                             tracing::warn!("{}", err);
                         }
@@ -337,7 +337,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                                 surface,
                                 &output,
                                 states_inner,
-                                &states,
+                                &render_output_result.states,
                                 default_primary_scanout_output_compare,
                             );
 
