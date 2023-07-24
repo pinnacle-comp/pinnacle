@@ -158,7 +158,7 @@ function window_module.focused(win) end
 
 --------------------------------------------------------
 
----Window objects
+---The window object.
 ---@classmod Window
 local window = {}
 

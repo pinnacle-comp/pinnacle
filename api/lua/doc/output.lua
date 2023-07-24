@@ -127,7 +127,7 @@ function output_module.add_tags(op, ...) end
 
 ----------------------------------------------------------
 
----Output objects
+---The output object.
 ---@classmod Output
 local output = {}
 

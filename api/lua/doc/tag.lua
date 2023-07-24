@@ -134,7 +134,7 @@ function tag_module.output(t) end
 
 -----------------------------------------------------
 
----Tag objects
+---The tag object.
 ---@classmod Tag
 local tag = {}
 
