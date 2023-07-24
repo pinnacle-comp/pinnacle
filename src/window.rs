@@ -1,17 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::atomic::AtomicU32;
+use std::{cell::RefCell, sync::atomic::AtomicU32, time::Duration};
 
 use smithay::{
-    desktop::Window,
+    desktop::{
+        utils::{
+            send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
+            take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
+            OutputPresentationFeedback,
+        },
+        Window, WindowSurfaceType,
+    },
+    output::Output,
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_protocols::{
+            wp::presentation_time::server::wp_presentation_feedback,
+            xdg::shell::server::xdg_toplevel,
+        },
         wayland_server::protocol::wl_surface::WlSurface,
     },
+    utils::{user_data::UserDataMap, IsAlive, Logical, Point},
     wayland::{
-        compositor::{Blocker, BlockerState},
+        compositor::{Blocker, BlockerState, SurfaceData},
+        dmabuf::DmabufFeedback,
         seat::WaylandFocus,
     },
+    xwayland::X11Surface,
 };
 
 use crate::{
@@ -19,9 +33,169 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::Float;
+use self::window_state::{Float, WindowState};
 
 pub mod window_state;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WindowElement {
+    Wayland(Window),
+    X11(X11Surface),
+}
+
+impl WindowElement {
+    pub fn surface_under(
+        &self,
+        location: Point<i32, Logical>,
+        window_type: WindowSurfaceType,
+    ) -> Option<(WlSurface, Point<i32, Logical>)> {
+        todo!()
+    }
+
+    pub fn with_surfaces<F>(&self, processor: F)
+    where
+        F: FnMut(&WlSurface, &SurfaceData) + Copy,
+    {
+        match self {
+            WindowElement::Wayland(window) => window.with_surfaces(processor),
+            WindowElement::X11(surface) => {
+                if let Some(surface) = surface.wl_surface() {
+                    with_surfaces_surface_tree(&surface, processor);
+                }
+            }
+        }
+    }
+
+    pub fn send_frame<T, F>(
+        &self,
+        output: &Output,
+        time: T,
+        throttle: Option<Duration>,
+        primary_scan_out_output: F,
+    ) where
+        T: Into<Duration>,
+        F: FnMut(&WlSurface, &SurfaceData) -> Option<Output> + Copy,
+    {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.send_frame(output, time, throttle, primary_scan_out_output)
+            }
+            WindowElement::X11(surface) => {
+                if let Some(surface) = surface.wl_surface() {
+                    send_frames_surface_tree(
+                        &surface,
+                        output,
+                        time,
+                        throttle,
+                        primary_scan_out_output,
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn send_dmabuf_feedback<'a, P, F>(
+        &self,
+        output: &Output,
+        primary_scan_out_output: P,
+        select_dmabuf_feedback: F,
+    ) where
+        P: FnMut(&WlSurface, &SurfaceData) -> Option<Output> + Copy,
+        F: Fn(&WlSurface, &SurfaceData) -> &'a DmabufFeedback + Copy,
+    {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.send_dmabuf_feedback(
+                    output,
+                    primary_scan_out_output,
+                    select_dmabuf_feedback,
+                );
+            }
+            WindowElement::X11(surface) => {
+                if let Some(surface) = surface.wl_surface() {
+                    send_dmabuf_feedback_surface_tree(
+                        &surface,
+                        output,
+                        primary_scan_out_output,
+                        select_dmabuf_feedback,
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn take_presentation_feedback<F1, F2>(
+        &self,
+        output_feedback: &mut OutputPresentationFeedback,
+        primary_scan_out_output: F1,
+        presentation_feedback_flags: F2,
+    ) where
+        F1: FnMut(&WlSurface, &SurfaceData) -> Option<Output> + Copy,
+        F2: FnMut(&WlSurface, &SurfaceData) -> wp_presentation_feedback::Kind + Copy,
+    {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.take_presentation_feedback(
+                    output_feedback,
+                    primary_scan_out_output,
+                    presentation_feedback_flags,
+                );
+            }
+            WindowElement::X11(surface) => {
+                if let Some(surface) = surface.wl_surface() {
+                    take_presentation_feedback_surface_tree(
+                        &surface,
+                        output_feedback,
+                        primary_scan_out_output,
+                        presentation_feedback_flags,
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn wl_surface(&self) -> Option<WlSurface> {
+        match self {
+            WindowElement::Wayland(window) => window.wl_surface(),
+            WindowElement::X11(surface) => surface.wl_surface(),
+        }
+    }
+
+    pub fn user_data(&self) -> &UserDataMap {
+        match self {
+            WindowElement::Wayland(window) => window.user_data(),
+            WindowElement::X11(surface) => surface.user_data(),
+        }
+    }
+}
+
+impl IsAlive for WindowElement {
+    fn alive(&self) -> bool {
+        match self {
+            WindowElement::Wayland(window) => window.alive(),
+            WindowElement::X11(surface) => surface.alive(),
+        }
+    }
+}
+
+impl WithState for WindowElement {
+    type State = WindowState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T,
+    {
+        self.user_data()
+            .insert_if_missing(RefCell::<Self::State>::default);
+
+        let state = self
+            .user_data()
+            .get::<RefCell<Self::State>>()
+            .expect("RefCell not in data map");
+
+        func(&mut state.borrow_mut())
+    }
+}
 
 impl<B: Backend> State<B> {
     /// Returns the [Window] associated with a given [WlSurface].

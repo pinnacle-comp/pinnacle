@@ -8,6 +8,7 @@ use std::{
     path::Path,
     process::Stdio,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use crate::{
@@ -15,6 +16,7 @@ use crate::{
         msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestId, RequestResponse},
         PinnacleSocketSource,
     },
+    cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
@@ -44,7 +46,7 @@ use smithay::{
             Display,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point},
+    utils::{Clock, Logical, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -56,6 +58,7 @@ use smithay::{
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
     },
+    xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
 
 use crate::{backend::Backend, input::InputState};
@@ -97,6 +100,10 @@ pub struct State<B: Backend> {
     // TODO: move into own struct
     // |     basically just clean this mess up
     pub output_callback_ids: Vec<CallbackId>,
+
+    pub xwayland: XWayland,
+    pub xwm: Option<X11Wm>,
+    pub xdisplay: Option<u32>,
 }
 
 impl<B: Backend> State<B> {
@@ -794,8 +801,47 @@ impl<B: Backend> State<B> {
                     Event::Msg(msg) => data.state.handle_msg(msg),
                     Event::Closed => todo!(),
                 })
-                .unwrap(); // TODO: unwrap
+                .expect("failed to insert rx_channel into loop");
         });
+
+        let xwayland = {
+            let (xwayland, channel) = XWayland::new(&display_handle);
+            let clone = display_handle.clone();
+            let res =
+                loop_handle.insert_source(channel, move |event, _metadata, data| match event {
+                    XWaylandEvent::Ready {
+                        connection,
+                        client,
+                        client_fd: _,
+                        display,
+                    } => {
+                        let mut wm = X11Wm::start_wm(
+                            data.state.loop_handle.clone(),
+                            clone.clone(),
+                            connection,
+                            client,
+                        )
+                        .expect("failed to attach x11wm");
+                        let cursor = Cursor::load();
+                        let image = cursor.get_image(1, Duration::ZERO);
+                        wm.set_cursor(
+                            &image.pixels_rgba,
+                            Size::from((image.width as u16, image.height as u16)),
+                            Point::from((image.xhot as u16, image.yhot as u16)),
+                        )
+                        .expect("failed to set xwayland default cursor");
+                        data.state.xwm = Some(wm);
+                        data.state.xdisplay = Some(display);
+                    }
+                    XWaylandEvent::Exited => {
+                        data.state.xwm.take();
+                    }
+                });
+            if let Err(err) = res {
+                tracing::error!("Failed to insert XWayland source into loop: {err}");
+            }
+            xwayland
+        };
 
         Ok(Self {
             backend_data,
@@ -830,6 +876,10 @@ impl<B: Backend> State<B> {
 
             windows: vec![],
             output_callback_ids: vec![],
+
+            xwayland,
+            xwm: None,
+            xdisplay: None,
         })
     }
 }
