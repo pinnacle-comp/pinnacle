@@ -26,8 +26,9 @@ use smithay::{
             Allocator, Fourcc,
         },
         drm::{
-            compositor::DrmCompositor, CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError,
-            DrmEvent, DrmEventMetadata, DrmNode, DrmSurface, GbmBufferedSurface, NodeType,
+            compositor::{DrmCompositor, PrimaryPlaneElement},
+            CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata,
+            DrmNode, DrmSurface, GbmBufferedSurface, NodeType,
         },
         egl::{self, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
@@ -39,6 +40,7 @@ use smithay::{
             },
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
+            sync::SyncPoint,
             Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
         },
         session::{
@@ -80,7 +82,9 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Scale, Transform},
+    utils::{
+        Clock, DeviceFd, IsAlive, Logical, Monotonic, Physical, Point, Rectangle, Scale, Transform,
+    },
     wayland::{
         compositor,
         dmabuf::{
@@ -592,6 +596,13 @@ enum SurfaceComposition {
     Compositor(GbmDrmCompositor),
 }
 
+struct SurfaceCompositorRenderResult {
+    rendered: bool,
+    states: RenderElementStates,
+    sync: Option<SyncPoint>,
+    damage: Option<Vec<Rectangle<i32, Physical>>>,
+}
+
 impl SurfaceComposition {
     fn frame_submitted(&mut self) -> Result<Option<OutputPresentationFeedback>, SwapBuffersError> {
         match self {
@@ -629,11 +640,13 @@ impl SurfaceComposition {
 
     fn queue_frame(
         &mut self,
+        sync: Option<SyncPoint>,
+        damage: Option<Vec<Rectangle<i32, Physical>>>,
         user_data: Option<OutputPresentationFeedback>,
     ) -> Result<(), SwapBuffersError> {
         match self {
             SurfaceComposition::Surface { surface, .. } => surface
-                .queue_buffer(None, user_data)
+                .queue_buffer(sync, damage, user_data)
                 .map_err(Into::<SwapBuffersError>::into),
             SurfaceComposition::Compositor(c) => c
                 .queue_frame(user_data)
@@ -646,7 +659,7 @@ impl SurfaceComposition {
         renderer: &mut R,
         elements: &[E],
         clear_color: [f32; 4],
-    ) -> Result<(bool, RenderElementStates), SwapBuffersError>
+    ) -> Result<SurfaceCompositorRenderResult, SwapBuffersError>
     where
         R: Renderer + Bind<Dmabuf> + Bind<Target> + Offscreen<Target> + ExportMem,
         <R as Renderer>::TextureId: 'static,
@@ -670,7 +683,16 @@ impl SurfaceComposition {
 
                 let res = damage_tracker
                     .render_output(renderer, age.into(), elements, clear_color)
-                    .map(|(damage, states)| (damage.is_some(), states))
+                    .map(|res| {
+                        res.sync.wait(); // feature flag here
+                        let rendered = res.damage.is_some();
+                        SurfaceCompositorRenderResult {
+                            rendered,
+                            damage: res.damage,
+                            states: res.states,
+                            sync: rendered.then_some(res.sync),
+                        }
+                    })
                     .map_err(|err| match err {
                         damage::Error::Rendering(err) => err.into(),
                         _ => unreachable!(),
@@ -681,10 +703,18 @@ impl SurfaceComposition {
             SurfaceComposition::Compositor(compositor) => compositor
                 .render_frame(renderer, elements, clear_color)
                 .map(|render_frame_result| {
-                    (
-                        render_frame_result.damage.is_some(),
-                        render_frame_result.states,
-                    )
+                    // feature flag here
+                    if let PrimaryPlaneElement::Swapchain(element) =
+                        render_frame_result.primary_element
+                    {
+                        element.sync.wait();
+                    }
+                    SurfaceCompositorRenderResult {
+                        rendered: render_frame_result.damage.is_some(),
+                        states: render_frame_result.states,
+                        sync: None,
+                        damage: None,
+                    }
                 })
                 .map_err(|err| match err {
                     smithay::backend::drm::compositor::RenderFrameError::PrepareFrame(err) => {
@@ -1518,7 +1548,7 @@ fn render_surface<'a>(
             .map(OutputRenderElements::Space),
     );
 
-    let (rendered, states) = surface.compositor.render_frame::<_, _, GlesTexture>(
+    let res = surface.compositor.render_frame::<_, _, GlesTexture>(
         renderer,
         &output_render_elements,
         [0.6, 0.6, 0.6, 1.0],
@@ -1533,7 +1563,7 @@ fn render_surface<'a>(
                     surface,
                     output,
                     states_inner,
-                    &states,
+                    &res.states,
                     element::default_primary_scanout_output_compare,
                 );
 
@@ -1568,7 +1598,7 @@ fn render_surface<'a>(
                         |surface, _| {
                             select_dmabuf_feedback(
                                 surface,
-                                &states,
+                                &res.states,
                                 dmabuf_feedback.render_feedback,
                                 dmabuf_feedback.scanout_feedback,
                             )
@@ -1579,15 +1609,15 @@ fn render_surface<'a>(
         });
     }
 
-    if rendered {
-        let output_presentation_feedback = take_presentation_feedback(output, space, &states);
+    if res.rendered {
+        let output_presentation_feedback = take_presentation_feedback(output, space, &res.states);
         surface
             .compositor
-            .queue_frame(Some(output_presentation_feedback))
+            .queue_frame(res.sync, res.damage, Some(output_presentation_feedback))
             .map_err(Into::<SwapBuffersError>::into)?;
     }
 
-    Ok(rendered)
+    Ok(res.rendered)
 }
 
 fn initial_render(
@@ -1601,7 +1631,7 @@ fn initial_render(
             &[],
             [0.6, 0.6, 0.6, 1.0],
         )?;
-    surface.compositor.queue_frame(None)?;
+    surface.compositor.queue_frame(None, None, None)?;
     surface.compositor.reset_buffers();
 
     Ok(())
