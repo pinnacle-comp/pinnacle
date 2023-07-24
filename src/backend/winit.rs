@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{error::Error, sync::Mutex, time::Duration};
+use std::{error::Error, ffi::OsString, sync::Mutex, time::Duration};
 
 use smithay::{
     backend::{
@@ -191,6 +191,16 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         .update_formats(state.backend_data.backend.renderer().shm_formats());
 
     state.space.map_output(&output, (0, 0));
+
+    if let Err(err) = state.xwayland.start(
+        state.loop_handle.clone(),
+        None,
+        std::iter::empty::<(OsString, OsString)>(),
+        true,
+        |_| {},
+    ) {
+        tracing::error!("Failed to start XWayland: {err}");
+    }
 
     let mut pointer_element = PointerElement::<GlesTexture>::new();
 

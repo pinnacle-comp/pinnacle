@@ -43,12 +43,13 @@ use smithay::{
         },
         shm::{ShmHandler, ShmState},
     },
+    xwayland::{X11Wm, XWaylandClientData},
 };
 
 use crate::{
     backend::Backend,
-    state::{ClientState, State, WithState},
-    window::{window_state::WindowResizeState, WindowBlocker, BLOCKER_COUNTER},
+    state::{CalloopData, ClientState, State, WithState},
+    window::{window_state::WindowResizeState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -96,6 +97,8 @@ impl<B: Backend> CompositorHandler for State<B> {
     fn commit(&mut self, surface: &WlSurface) {
         // tracing::debug!("commit");
 
+        X11Wm::commit_hook::<CalloopData<B>>(surface);
+
         utils::on_commit_buffer_handler::<Self>(surface);
 
         if !compositor::is_sync_subsurface(surface) {
@@ -103,7 +106,7 @@ impl<B: Backend> CompositorHandler for State<B> {
             while let Some(parent) = compositor::get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self.window_for_surface(surface) {
+            if let Some(WindowElement::Wayland(window)) = self.window_for_surface(surface) {
                 window.on_commit();
             }
         };
@@ -131,30 +134,34 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        &client
-            .get_data::<ClientState>()
-            .expect("ClientState wasn't in client's data map")
-            .compositor_state
+        if let Some(state) = client.get_data::<XWaylandClientData>() {
+            return &state.compositor_state;
+        }
+        if let Some(state) = client.get_data::<ClientState>() {
+            return &state.compositor_state;
+        }
+        panic!("Unknown client data type");
     }
 }
 delegate_compositor!(@<B: Backend> State<B>);
 
 fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B>) {
     if let Some(window) = state.window_for_surface(surface) {
-        let initial_configure_sent = compositor::with_states(surface, |states| {
-            states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                .lock()
-                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                .initial_configure_sent
-        });
-        // println!("initial_configure_sent is {}", initial_configure_sent);
+        if let WindowElement::Wayland(window) = &window {
+            let initial_configure_sent = compositor::with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                    .lock()
+                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                    .initial_configure_sent
+            });
 
-        if !initial_configure_sent {
-            tracing::debug!("Initial configure");
-            window.toplevel().send_configure();
+            if !initial_configure_sent {
+                tracing::debug!("Initial configure");
+                window.toplevel().send_configure();
+            }
         }
         return;
     }
@@ -227,14 +234,18 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new(surface);
+        let window = WindowElement::Wayland(Window::new(surface));
 
-        window.toplevel().with_pending_state(|tl_state| {
-            tl_state.states.set(xdg_toplevel::State::TiledTop);
-            tl_state.states.set(xdg_toplevel::State::TiledBottom);
-            tl_state.states.set(xdg_toplevel::State::TiledLeft);
-            tl_state.states.set(xdg_toplevel::State::TiledRight);
-        });
+        {
+            let WindowElement::Wayland(window) = &window else { unreachable!() };
+            window.toplevel().with_pending_state(|tl_state| {
+                tl_state.states.set(xdg_toplevel::State::TiledTop);
+                tl_state.states.set(xdg_toplevel::State::TiledBottom);
+                tl_state.states.set(xdg_toplevel::State::TiledLeft);
+                tl_state.states.set(xdg_toplevel::State::TiledRight);
+            });
+        }
+
         window.with_state(|state| {
             state.tags = match (
                 &self.focus_state.focused_output,
@@ -296,7 +307,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
             );
             for win in windows_on_output.iter() {
-                compositor::add_blocker(win.toplevel().wl_surface(), WindowBlocker);
+                if let Some(surf) = win.wl_surface() {
+                    compositor::add_blocker(&surf, WindowBlocker);
+                }
             }
             let clone = window.clone();
             self.loop_handle.insert_idle(|data| {
@@ -308,7 +321,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     );
                     for client in windows_on_output
                         .iter()
-                        .filter_map(|win| win.toplevel().wl_surface().client())
+                        .filter_map(|win| win.wl_surface()?.client())
                     {
                         data.state
                             .client_compositor_state(&client)
@@ -324,7 +337,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     &mut data.state,
-                    Some(window.toplevel().wl_surface().clone()),
+                    window.wl_surface(),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
@@ -332,7 +345,11 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
-        self.windows.retain(|window| window.toplevel() != &surface);
+        self.windows.retain(|window| {
+            window
+                .wl_surface()
+                .is_some_and(|surf| &surf != surface.wl_surface())
+        });
         if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
             focused_output.with_state(|state| {
                 let first_tag = state.focused_tags().next();
@@ -353,7 +370,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         let focus = self
             .focus_state
             .current_focus()
-            .map(|win| win.toplevel().wl_surface().clone());
+            .and_then(|win| win.wl_surface());
         self.seat
             .get_keyboard()
             .expect("Seat had no keyboard")
@@ -385,7 +402,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         const BUTTON_LEFT: u32 = 0x110;
         crate::xdg::request::resize_request(
             self,
-            &surface,
+            surface.wl_surface(),
             &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
             serial,
             edges,
@@ -413,12 +430,11 @@ impl<B: Backend> XdgShellHandler for State<B> {
             .ok()
             .and_then(|root| self.window_for_surface(&root))
         {
-            if let Ok(mut grab) = self.popup_manager.grab_popup(
-                root.toplevel().wl_surface().clone(),
-                popup_kind,
-                &seat,
-                serial,
-            ) {
+            let Some(wl_surface) = root.wl_surface() else { return };
+            if let Ok(mut grab) = self
+                .popup_manager
+                .grab_popup(wl_surface, popup_kind, &seat, serial)
+            {
                 if let Some(keyboard) = seat.get_keyboard() {
                     if keyboard.is_grabbed()
                         && !(keyboard.has_grab(serial)

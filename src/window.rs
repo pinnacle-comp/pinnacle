@@ -8,8 +8,8 @@ use smithay::{
         space::SpaceElement,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
-            take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
-            OutputPresentationFeedback,
+            take_presentation_feedback_surface_tree, under_from_surface_tree,
+            with_surfaces_surface_tree, OutputPresentationFeedback,
         },
         Window, WindowSurfaceType,
     },
@@ -26,7 +26,7 @@ use smithay::{
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
+    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{
         compositor::{Blocker, BlockerState, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -40,7 +40,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{Float, WindowState};
+use self::window_state::{Float, WindowResizeState, WindowState};
 
 pub mod window_state;
 
@@ -53,10 +53,15 @@ pub enum WindowElement {
 impl WindowElement {
     pub fn surface_under(
         &self,
-        location: Point<i32, Logical>,
+        location: Point<f64, Logical>,
         window_type: WindowSurfaceType,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
-        todo!()
+        match self {
+            WindowElement::Wayland(window) => window.surface_under(location, window_type),
+            WindowElement::X11(surface) => surface.wl_surface().and_then(|wl_surf| {
+                under_from_surface_tree(&wl_surf, location, (0, 0), window_type)
+            }),
+        }
     }
 
     pub fn with_surfaces<F>(&self, processor: F)
@@ -172,6 +177,29 @@ impl WindowElement {
         match self {
             WindowElement::Wayland(window) => window.user_data(),
             WindowElement::X11(surface) => surface.user_data(),
+        }
+    }
+
+    /// Request a size and loc change.
+    pub fn request_size_change(&self, new_loc: Point<i32, Logical>, new_size: Size<i32, Logical>) {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.toplevel().with_pending_state(|state| {
+                    state.size = Some(new_size);
+                });
+                self.with_state(|state| {
+                    state.resize_state =
+                        WindowResizeState::Requested(window.toplevel().send_configure(), new_loc)
+                });
+            }
+            WindowElement::X11(surface) => {
+                surface
+                    .configure(Rectangle::from_loc_and_size(new_loc, new_size))
+                    .expect("failed to configure x11 win");
+                self.with_state(|state| {
+                    state.resize_state = WindowResizeState::Acknowledged(new_loc);
+                });
+            }
         }
     }
 }
@@ -393,7 +421,7 @@ impl WithState for WindowElement {
 
 impl<B: Backend> State<B> {
     /// Returns the [Window] associated with a given [WlSurface].
-    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<Window> {
+    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.space
             .elements()
             .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
@@ -401,35 +429,31 @@ impl<B: Backend> State<B> {
             .or_else(|| {
                 self.windows
                     .iter()
-                    .find(|&win| win.toplevel().wl_surface() == surface)
+                    .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
                     .cloned()
             })
     }
 }
 
 /// Toggle a window's floating status.
-pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
+pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement) {
+    let mut resize: Option<_> = None;
     window.with_state(|window_state| {
         match window_state.floating {
             Float::Tiled(prev_loc_and_size) => {
                 if let Some((prev_loc, prev_size)) = prev_loc_and_size {
-                    window.toplevel().with_pending_state(|state| {
-                        state.size = Some(prev_size);
-                    });
-
-                    window.toplevel().send_pending_configure();
-
-                    state.space.map_element(window.clone(), prev_loc, false);
-                    // TODO: should it activate?
+                    resize = Some((prev_loc, prev_size));
                 }
 
                 window_state.floating = Float::Floating;
-                window.toplevel().with_pending_state(|tl_state| {
-                    tl_state.states.unset(xdg_toplevel::State::TiledTop);
-                    tl_state.states.unset(xdg_toplevel::State::TiledBottom);
-                    tl_state.states.unset(xdg_toplevel::State::TiledLeft);
-                    tl_state.states.unset(xdg_toplevel::State::TiledRight);
-                });
+                if let WindowElement::Wayland(window) = window {
+                    window.toplevel().with_pending_state(|tl_state| {
+                        tl_state.states.unset(xdg_toplevel::State::TiledTop);
+                        tl_state.states.unset(xdg_toplevel::State::TiledBottom);
+                        tl_state.states.unset(xdg_toplevel::State::TiledLeft);
+                        tl_state.states.unset(xdg_toplevel::State::TiledRight);
+                    });
+                } // TODO: tiled states for x11
             }
             Float::Floating => {
                 window_state.floating = Float::Tiled(Some((
@@ -438,15 +462,22 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
                     state.space.element_location(window).unwrap(),
                     window.geometry().size,
                 )));
-                window.toplevel().with_pending_state(|tl_state| {
-                    tl_state.states.set(xdg_toplevel::State::TiledTop);
-                    tl_state.states.set(xdg_toplevel::State::TiledBottom);
-                    tl_state.states.set(xdg_toplevel::State::TiledLeft);
-                    tl_state.states.set(xdg_toplevel::State::TiledRight);
-                });
+
+                if let WindowElement::Wayland(window) = window {
+                    window.toplevel().with_pending_state(|tl_state| {
+                        tl_state.states.set(xdg_toplevel::State::TiledTop);
+                        tl_state.states.set(xdg_toplevel::State::TiledBottom);
+                        tl_state.states.set(xdg_toplevel::State::TiledLeft);
+                        tl_state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
             }
         }
     });
+
+    if let Some((prev_loc, prev_size)) = resize {
+        window.request_size_change(prev_loc, prev_size);
+    }
 
     let output = state.focus_state.focused_output.clone().unwrap();
     state.re_layout(&output);
@@ -476,6 +507,14 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &Window) {
     state.loop_handle.insert_idle(move |data| {
         crate::state::schedule_on_commit(data, render, move |dt| {
             dt.state.space.raise_element(&clone, true);
+            if let WindowElement::X11(surface) = clone {
+                dt.state
+                    .xwm
+                    .as_mut()
+                    .expect("no xwm")
+                    .raise_window(&surface)
+                    .expect("failed to raise x11 win");
+            }
         });
     });
 }

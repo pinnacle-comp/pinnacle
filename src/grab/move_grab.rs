@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::Window,
+    desktop::space::SpaceElement,
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
@@ -18,12 +18,12 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::window_state::WindowResizeState,
+    window::{window_state::WindowResizeState, WindowElement},
 };
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
-    pub window: Window,
+    pub window: WindowElement,
     pub initial_window_loc: Point<i32, Logical>,
 }
 
@@ -43,6 +43,13 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         }
 
         data.space.raise_element(&self.window, false);
+        if let WindowElement::X11(surface) = &self.window {
+            data.xwm
+                .as_mut()
+                .expect("no xwm")
+                .raise_window(surface)
+                .expect("failed to raise x11 win");
+        }
 
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));

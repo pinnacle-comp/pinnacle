@@ -1,27 +1,47 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::Window,
+    desktop::space::SpaceElement,
     input::{
         pointer::{AxisFrame, ButtonEvent, GrabStartData, PointerGrab, PointerInnerHandle},
         SeatHandler,
     },
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
+        wayland_protocols::xdg::shell::server::xdg_toplevel::{self},
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
+    wayland::{compositor, shell::xdg::SurfaceCachedState},
+    xwayland,
 };
 
 use crate::{
     backend::Backend,
     state::{State, WithState},
+    window::WindowElement,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResizeEdge(pub xdg_toplevel::ResizeEdge);
+
+impl From<xwayland::xwm::ResizeEdge> for ResizeEdge {
+    fn from(value: xwayland::xwm::ResizeEdge) -> Self {
+        match value {
+            xwayland::xwm::ResizeEdge::Bottom => Self(xdg_toplevel::ResizeEdge::Bottom),
+            xwayland::xwm::ResizeEdge::BottomLeft => Self(xdg_toplevel::ResizeEdge::BottomLeft),
+            xwayland::xwm::ResizeEdge::BottomRight => Self(xdg_toplevel::ResizeEdge::BottomRight),
+            xwayland::xwm::ResizeEdge::Left => Self(xdg_toplevel::ResizeEdge::Left),
+            xwayland::xwm::ResizeEdge::Right => Self(xdg_toplevel::ResizeEdge::Right),
+            xwayland::xwm::ResizeEdge::Top => Self(xdg_toplevel::ResizeEdge::Top),
+            xwayland::xwm::ResizeEdge::TopLeft => Self(xdg_toplevel::ResizeEdge::TopLeft),
+            xwayland::xwm::ResizeEdge::TopRight => Self(xdg_toplevel::ResizeEdge::TopRight),
+        }
+    }
+}
 
 pub struct ResizeSurfaceGrab<S: SeatHandler> {
     start_data: GrabStartData<S>,
-    window: Window,
+    window: WindowElement,
 
     edges: ResizeEdge,
 
@@ -34,26 +54,26 @@ pub struct ResizeSurfaceGrab<S: SeatHandler> {
 impl<S: SeatHandler> ResizeSurfaceGrab<S> {
     pub fn start(
         start_data: GrabStartData<S>,
-        window: Window,
+        window: WindowElement,
         edges: ResizeEdge,
         initial_window_rect: Rectangle<i32, Logical>,
         button_used: u32,
-    ) -> Self {
-        window.toplevel().wl_surface().with_state(|state| {
+    ) -> Option<Self> {
+        window.wl_surface()?.with_state(|state| {
             state.resize_state = ResizeSurfaceState::Resizing {
                 edges,
                 initial_window_rect,
             };
         });
 
-        Self {
+        Some(Self {
             start_data,
             window,
             edges,
             initial_window_rect,
             last_window_size: initial_window_rect.size,
             button_used,
-        }
+        })
     }
 }
 
@@ -77,16 +97,28 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
         let mut new_window_width = self.initial_window_rect.size.w;
         let mut new_window_height = self.initial_window_rect.size.h;
 
-        if let ResizeEdge::Left | ResizeEdge::TopLeft | ResizeEdge::BottomLeft = self.edges {
+        if let xdg_toplevel::ResizeEdge::Left
+        | xdg_toplevel::ResizeEdge::TopLeft
+        | xdg_toplevel::ResizeEdge::BottomLeft = self.edges.0
+        {
             new_window_width = self.initial_window_rect.size.w - delta.x;
         }
-        if let ResizeEdge::Right | ResizeEdge::TopRight | ResizeEdge::BottomRight = self.edges {
+        if let xdg_toplevel::ResizeEdge::Right
+        | xdg_toplevel::ResizeEdge::TopRight
+        | xdg_toplevel::ResizeEdge::BottomRight = self.edges.0
+        {
             new_window_width = self.initial_window_rect.size.w + delta.x;
         }
-        if let ResizeEdge::Top | ResizeEdge::TopRight | ResizeEdge::TopLeft = self.edges {
+        if let xdg_toplevel::ResizeEdge::Top
+        | xdg_toplevel::ResizeEdge::TopRight
+        | xdg_toplevel::ResizeEdge::TopLeft = self.edges.0
+        {
             new_window_height = self.initial_window_rect.size.h - delta.y;
         }
-        if let ResizeEdge::Bottom | ResizeEdge::BottomRight | ResizeEdge::BottomLeft = self.edges {
+        if let xdg_toplevel::ResizeEdge::Bottom
+        | xdg_toplevel::ResizeEdge::BottomRight
+        | xdg_toplevel::ResizeEdge::BottomLeft = self.edges.0
+        {
             new_window_height = self.initial_window_rect.size.h + delta.y;
         }
 
@@ -129,14 +161,27 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
             new_window_height.clamp(min_height, max_height),
         ));
 
-        let toplevel_surface = self.window.toplevel();
+        match &self.window {
+            WindowElement::Wayland(window) => {
+                let toplevel_surface = window.toplevel();
 
-        toplevel_surface.with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Resizing);
-            state.size = Some(self.last_window_size);
-        });
+                toplevel_surface.with_pending_state(|state| {
+                    state.states.set(xdg_toplevel::State::Resizing);
+                    state.size = Some(self.last_window_size);
+                });
 
-        toplevel_surface.send_pending_configure();
+                toplevel_surface.send_pending_configure();
+            }
+            WindowElement::X11(surface) => {
+                let loc = data
+                    .space
+                    .element_location(&self.window)
+                    .expect("failed to get x11 win loc");
+                surface
+                    .configure(Rectangle::from_loc_and_size(loc, self.last_window_size))
+                    .expect("failed to configure x11 win");
+            }
+        }
     }
 
     fn relative_motion(
@@ -160,20 +205,38 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
         if !handle.current_pressed().contains(&self.button_used) {
             handle.unset_grab(data, event.serial, event.time);
 
-            let toplevel_surface = self.window.toplevel();
-            toplevel_surface.with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Resizing);
-                state.size = Some(self.last_window_size);
-            });
+            if !self.window.alive() {
+                return;
+            }
 
-            toplevel_surface.send_pending_configure();
+            match &self.window {
+                WindowElement::Wayland(window) => {
+                    let toplevel_surface = window.toplevel();
+                    toplevel_surface.with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Resizing);
+                        state.size = Some(self.last_window_size);
+                    });
 
-            toplevel_surface.wl_surface().with_state(|state| {
-                state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
-                    edges: self.edges,
-                    initial_window_rect: self.initial_window_rect,
-                };
-            });
+                    toplevel_surface.send_pending_configure();
+
+                    toplevel_surface.wl_surface().with_state(|state| {
+                        // TODO: validate resize state
+                        state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
+                            edges: self.edges,
+                            initial_window_rect: self.initial_window_rect,
+                        };
+                    });
+                }
+                WindowElement::X11(surface) => {
+                    let Some(surface) = surface.wl_surface() else { return };
+                    surface.with_state(|state| {
+                        state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
+                            edges: self.edges,
+                            initial_window_rect: self.initial_window_rect,
+                        };
+                    });
+                }
+            }
         }
     }
 
@@ -236,12 +299,18 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
             .map(|(edges, initial_window_rect)| {
                 let mut new_x: Option<i32> = None;
                 let mut new_y: Option<i32> = None;
-                if let ResizeEdge::Left | ResizeEdge::TopLeft | ResizeEdge::BottomLeft = edges {
+                if let xdg_toplevel::ResizeEdge::Left
+                | xdg_toplevel::ResizeEdge::TopLeft
+                | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
+                {
                     new_x = Some(
                         initial_window_rect.loc.x + (initial_window_rect.size.w - geometry.size.w),
                     );
                 }
-                if let ResizeEdge::Top | ResizeEdge::TopLeft | ResizeEdge::TopRight = edges {
+                if let xdg_toplevel::ResizeEdge::Top
+                | xdg_toplevel::ResizeEdge::TopLeft
+                | xdg_toplevel::ResizeEdge::TopRight = edges.0
+                {
                     new_y = Some(
                         initial_window_rect.loc.y + (initial_window_rect.size.h - geometry.size.h),
                     );

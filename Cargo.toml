@@ -21,9 +21,10 @@ calloop = { version = "0.10.1", features = ["executor", "futures-io"] }
 futures-lite = { version = "1.13.0" }
 async-process = { version = "1.7.0" }
 itertools = { version = "0.11.0" }
+x11rb = { version = "0.11.1", default-features = false, features = ["composite"], optional = true }
 
 [features]
-default = ["egl", "winit", "udev"]
+default = ["egl", "winit", "udev", "xwayland"]
 egl = ["smithay/use_system_lib", "smithay/backend_egl"]
 udev = [
   "smithay-drm-extras",
@@ -40,3 +41,4 @@ udev = [
   "xcursor",
 ]
 winit = ["smithay/backend_winit", "smithay/backend_drm"]
+xwayland = ["smithay/backend_x11", "x11rb", "smithay/x11rb_event_source", "xcursor"]

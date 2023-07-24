@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    cell::RefCell,
     fmt,
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use smithay::{
-    desktop::Window,
-    utils::{Logical, Point, Serial, Size},
-};
+use smithay::utils::{Logical, Point, Serial, Size};
 
 use crate::{
     backend::Backend,
     state::{State, WithState},
     tag::Tag,
 };
+
+use super::WindowElement;
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowId(u32);
@@ -28,7 +26,7 @@ impl WindowId {
     }
 
     /// Get the window that has this WindowId.
-    pub fn window<B: Backend>(&self, state: &State<B>) -> Option<Window> {
+    pub fn window<B: Backend>(&self, state: &State<B>) -> Option<WindowElement> {
         state
             .windows
             .iter()
@@ -125,25 +123,6 @@ impl WindowState {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Default::default()
-    }
-}
-
-impl WithState for Window {
-    type State = WindowState;
-
-    fn with_state<F, T>(&self, mut func: F) -> T
-    where
-        F: FnMut(&mut Self::State) -> T,
-    {
-        self.user_data()
-            .insert_if_missing(RefCell::<Self::State>::default);
-
-        let state = self
-            .user_data()
-            .get::<RefCell<Self::State>>()
-            .expect("RefCell not in data map");
-
-        func(&mut state.borrow_mut())
     }
 }
 

@@ -20,18 +20,19 @@ use crate::{
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
-    window::window_state::WindowResizeState,
+    window::{window_state::WindowResizeState, WindowElement},
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
 use smithay::{
     backend::renderer::element::RenderElementStates,
     desktop::{
+        space::SpaceElement,
         utils::{
             surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
             OutputPresentationFeedback,
         },
-        PopupManager, Space, Window,
+        PopupManager, Space,
     },
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
@@ -71,7 +72,7 @@ pub struct State<B: Backend> {
     pub loop_handle: LoopHandle<'static, CalloopData<B>>,
     pub clock: Clock<Monotonic>,
 
-    pub space: Space<Window>,
+    pub space: Space<WindowElement>,
     pub move_mode: bool,
     pub socket_name: String,
 
@@ -93,7 +94,7 @@ pub struct State<B: Backend> {
 
     pub cursor_status: CursorImageStatus,
     pub pointer_location: Point<f64, Logical>,
-    pub windows: Vec<Window>,
+    pub windows: Vec<WindowElement>,
 
     pub async_scheduler: Scheduler<()>,
 
@@ -123,7 +124,12 @@ impl<B: Backend> State<B> {
             Msg::SetMousebind { button: _ } => todo!(),
             Msg::CloseWindow { window_id } => {
                 if let Some(window) = window_id.window(self) {
-                    window.toplevel().send_close();
+                    match window {
+                        WindowElement::Wayland(window) => window.toplevel().send_close(),
+                        WindowElement::X11(surface) => {
+                            surface.close().expect("failed to close x11 win");
+                        }
+                    }
                 }
             }
             Msg::ToggleFloating { window_id } => {
@@ -147,19 +153,13 @@ impl<B: Backend> State<B> {
                 let Some(window) = window_id.window(self) else { return };
 
                 // TODO: tiled vs floating
+                // FIXME: this will map unmapped windows at 0,0
+                let window_loc = self
+                    .space
+                    .element_location(&window)
+                    .unwrap_or((0, 0).into());
                 let window_size = window.geometry().size;
-                window.toplevel().with_pending_state(|state| {
-                    // INFO: calling window.geometry() in with_pending_state
-                    // |     will hang the compositor
-                    state.size = Some(
-                        (
-                            width.unwrap_or(window_size.w),
-                            height.unwrap_or(window_size.h),
-                        )
-                            .into(),
-                    );
-                });
-                window.toplevel().send_pending_configure();
+                window.request_size_change(window_loc, window_size);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -305,17 +305,20 @@ impl<B: Backend> State<B> {
                     .as_ref()
                     .and_then(|win| self.space.element_location(win))
                     .map(|loc| (loc.x, loc.y));
-                let (class, title) = window.as_ref().map_or((None, None), |win| {
-                    compositor::with_states(win.toplevel().wl_surface(), |states| {
-                        let lock = states
-                            .data_map
-                            .get::<XdgToplevelSurfaceData>()
-                            .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                            .lock()
-                            .expect("failed to acquire lock");
-                        (lock.app_id.clone(), lock.title.clone())
-                    })
-                });
+                let (class, title) = window.as_ref().and_then(|win| win.wl_surface()).map_or(
+                    (None, None),
+                    |wl_surf| {
+                        compositor::with_states(&wl_surf, |states| {
+                            let lock = states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                .lock()
+                                .expect("failed to acquire lock");
+                            (lock.app_id.clone(), lock.title.clone())
+                        })
+                    },
+                );
                 let floating = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.floating.is_floating()));
@@ -459,7 +462,13 @@ impl<B: Backend> State<B> {
 
         let program = OsString::from(program);
         let Ok(mut child) = async_process::Command::new(&program)
-            .env("WAYLAND_DISPLAY", self.socket_name.clone())
+            .envs(
+                [("WAYLAND_DISPLAY", self.socket_name.clone())]
+                    .into_iter()
+                    .chain(
+                        self.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))
+                    )
+            )
             .stdin(if callback_id.is_some() {
                 Stdio::piped()
             } else {
@@ -670,7 +679,7 @@ impl<B: Backend> State<B> {
 /// idle.
 pub fn schedule_on_commit<F, B: Backend>(
     data: &mut CalloopData<B>,
-    windows: Vec<Window>,
+    windows: Vec<WindowElement>,
     on_commit: F,
 ) where
     F: FnOnce(&mut CalloopData<B>) + 'static,
@@ -804,44 +813,48 @@ impl<B: Backend> State<B> {
                 .expect("failed to insert rx_channel into loop");
         });
 
+        tracing::debug!("before xwayland");
         let xwayland = {
             let (xwayland, channel) = XWayland::new(&display_handle);
             let clone = display_handle.clone();
-            let res =
-                loop_handle.insert_source(channel, move |event, _metadata, data| match event {
-                    XWaylandEvent::Ready {
+            tracing::debug!("inserting into loop");
+            let res = loop_handle.insert_source(channel, move |event, _, data| match event {
+                XWaylandEvent::Ready {
+                    connection,
+                    client,
+                    client_fd: _,
+                    display,
+                } => {
+                    tracing::debug!("XWaylandEvent ready");
+                    let mut wm = X11Wm::start_wm(
+                        data.state.loop_handle.clone(),
+                        clone.clone(),
                         connection,
                         client,
-                        client_fd: _,
-                        display,
-                    } => {
-                        let mut wm = X11Wm::start_wm(
-                            data.state.loop_handle.clone(),
-                            clone.clone(),
-                            connection,
-                            client,
-                        )
-                        .expect("failed to attach x11wm");
-                        let cursor = Cursor::load();
-                        let image = cursor.get_image(1, Duration::ZERO);
-                        wm.set_cursor(
-                            &image.pixels_rgba,
-                            Size::from((image.width as u16, image.height as u16)),
-                            Point::from((image.xhot as u16, image.yhot as u16)),
-                        )
-                        .expect("failed to set xwayland default cursor");
-                        data.state.xwm = Some(wm);
-                        data.state.xdisplay = Some(display);
-                    }
-                    XWaylandEvent::Exited => {
-                        data.state.xwm.take();
-                    }
-                });
+                    )
+                    .expect("failed to attach x11wm");
+                    let cursor = Cursor::load();
+                    let image = cursor.get_image(1, Duration::ZERO);
+                    wm.set_cursor(
+                        &image.pixels_rgba,
+                        Size::from((image.width as u16, image.height as u16)),
+                        Point::from((image.xhot as u16, image.yhot as u16)),
+                    )
+                    .expect("failed to set xwayland default cursor");
+                    tracing::debug!("setting xwm and xdisplay");
+                    data.state.xwm = Some(wm);
+                    data.state.xdisplay = Some(display);
+                }
+                XWaylandEvent::Exited => {
+                    data.state.xwm.take();
+                }
+            });
             if let Err(err) = res {
                 tracing::error!("Failed to insert XWayland source into loop: {err}");
             }
             xwayland
         };
+        tracing::debug!("after xwayland");
 
         Ok(Self {
             backend_data,
@@ -853,7 +866,7 @@ impl<B: Backend> State<B> {
             seat_state,
             pointer_location: (0.0, 0.0).into(),
             shm_state: ShmState::new::<Self>(&display_handle, vec![]),
-            space: Space::<Window>::default(),
+            space: Space::<WindowElement>::default(),
             cursor_status: CursorImageStatus::Default,
             output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
             xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
@@ -908,7 +921,7 @@ pub struct SurfaceDmabufFeedback<'a> {
 // TODO: docs
 pub fn take_presentation_feedback(
     output: &Output,
-    space: &Space<Window>,
+    space: &Space<WindowElement>,
     render_element_states: &RenderElementStates,
 ) -> OutputPresentationFeedback {
     let mut output_presentation_feedback = OutputPresentationFeedback::new(output);

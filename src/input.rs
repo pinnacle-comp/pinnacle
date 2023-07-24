@@ -2,20 +2,22 @@
 
 use std::collections::HashMap;
 
-use crate::api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg};
+use crate::{
+    api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
+    window::WindowElement,
+};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
         KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
-    desktop::{Window, WindowSurfaceType},
+    desktop::{space::SpaceElement, WindowSurfaceType},
     input::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::seat::WaylandFocus,
 };
 
 use crate::{
@@ -38,7 +40,7 @@ impl InputState {
 }
 
 impl<B: Backend> State<B> {
-    pub fn surface_under<P>(&self, point: P) -> Option<(Window, Point<i32, Logical>)>
+    pub fn surface_under<P>(&self, point: P) -> Option<(WindowElement, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
     {
@@ -74,12 +76,14 @@ impl<B: Backend> State<B> {
                 const BUTTON_RIGHT: u32 = 0x111;
                 if self.move_mode {
                     if event.button_code() == BUTTON_LEFT {
-                        crate::xdg::request::move_request_force(
-                            self,
-                            window.toplevel(),
-                            &self.seat.clone(),
-                            serial,
-                        );
+                        if let Some(wl_surf) = window.wl_surface() {
+                            crate::xdg::request::move_request_force(
+                                self,
+                                &wl_surf,
+                                &self.seat.clone(),
+                                serial,
+                            );
+                        }
                         return; // TODO: kinda ugly return here
                     } else if event.button_code() == BUTTON_RIGHT {
                         let window_geometry = window.geometry();
@@ -120,29 +124,48 @@ impl<B: Backend> State<B> {
                             _ => ResizeEdge::None,
                         };
 
-                        crate::xdg::request::resize_request_force(
-                            self,
-                            window.toplevel(),
-                            &self.seat.clone(),
-                            serial,
-                            edges,
-                            BUTTON_RIGHT,
-                        );
+                        if let Some(wl_surf) = window.wl_surface() {
+                            crate::xdg::request::resize_request_force(
+                                self,
+                                &wl_surf,
+                                &self.seat.clone(),
+                                serial,
+                                edges,
+                                BUTTON_RIGHT,
+                            );
+                        }
                     }
                 } else {
                     // Move window to top of stack.
                     self.space.raise_element(&window, true);
+                    if let WindowElement::X11(surface) = &window {
+                        self.xwm
+                            .as_mut()
+                            .expect("no xwm")
+                            .raise_window(surface)
+                            .expect("failed to raise x11 win");
+                    }
 
-                    keyboard.set_focus(self, Some(window.toplevel().wl_surface().clone()), serial);
+                    keyboard.set_focus(self, window.wl_surface(), serial);
 
                     self.space.elements().for_each(|window| {
-                        window.toplevel().send_configure();
+                        if let WindowElement::Wayland(window) = window {
+                            window.toplevel().send_configure();
+                        }
                     });
                 }
             } else {
-                self.space.elements().for_each(|window| {
-                    window.set_activated(false);
-                    window.toplevel().send_configure();
+                self.space.elements().for_each(|window| match window {
+                    WindowElement::Wayland(window) => {
+                        window.set_activated(false);
+                        window.toplevel().send_configure();
+                    }
+                    WindowElement::X11(surface) => {
+                        surface
+                            .set_activated(false)
+                            .expect("failed to deactivate x11 win");
+                        // INFO: do i need to configure this?
+                    }
                 });
                 keyboard.set_focus(self, None, serial);
             }

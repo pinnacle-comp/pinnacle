@@ -7,6 +7,7 @@
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+    ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
     sync::Mutex,
@@ -52,7 +53,7 @@ use smithay::{
     desktop::{
         space::{self, SurfaceTree},
         utils::{self, surface_primary_scanout_output, OutputPresentationFeedback},
-        Space, Window,
+        Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, PhysicalProperties, Subpixel},
@@ -100,6 +101,7 @@ use crate::{
     api::msg::{Args, OutgoingMsg},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
     state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback},
+    window::WindowElement,
 };
 
 use super::Backend;
@@ -448,6 +450,16 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                 });
             });
         });
+
+    if let Err(err) = state.xwayland.start(
+        state.loop_handle.clone(),
+        None,
+        std::iter::empty::<(OsString, OsString)>(),
+        true,
+        |_| {},
+    ) {
+        tracing::error!("Failed to start XWayland: {err}");
+    }
 
     event_loop.run(
         Some(Duration::from_millis(6)),
@@ -1457,7 +1469,7 @@ impl State<UdevData> {
 fn render_surface<'a>(
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
-    space: &Space<Window>,
+    space: &Space<WindowElement>,
     output: &Output,
     input_method: &InputMethodHandle,
     pointer_location: Point<f64, Logical>,
