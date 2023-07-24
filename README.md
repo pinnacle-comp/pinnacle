@@ -25,7 +25,7 @@ Documentation for other branches can be reached at `https://ottatop.github.io/pi
     - [x] Left master stack, corner, dwindle, spiral layouts
     - [ ] Other three master stack directions, floating, magnifier, maximized, and fullscreen layouts
     - [ ] Resizable layouts
-- [ ] XWayland support #34
+- [ ] XWayland support [(#34)](https://github.com/Ottatop/pinnacle/pull/34)
 - [ ] Layer-shell support
 - [ ] Server-side decorations
 - [ ] Animations and blur and all that pizazz
