@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
+    cell::RefCell,
     fmt,
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use smithay::utils::{Logical, Point, Serial, Size};
+use smithay::{
+    desktop::Window,
+    utils::{Logical, Point, Serial, Size},
+};
 
 use crate::{
     backend::Backend,
@@ -35,7 +39,32 @@ impl WindowId {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct WindowState {
+    pub minimized: bool,
+}
+
+impl WithState for Window {
+    type State = WindowState;
+
+    fn with_state<F, T>(&self, mut func: F) -> T
+    where
+        F: FnMut(&mut Self::State) -> T,
+    {
+        self.user_data()
+            .insert_if_missing(RefCell::<Self::State>::default);
+
+        let state = self
+            .user_data()
+            .get::<RefCell<Self::State>>()
+            .expect("RefCell not in data map");
+
+        func(&mut state.borrow_mut())
+    }
+}
+
+#[derive(Debug)]
+pub struct WindowElementState {
     /// The id of this window.
     pub id: WindowId,
     /// Whether the window is floating or tiled.
@@ -95,6 +124,7 @@ impl fmt::Debug for WindowResizeState {
     }
 }
 
+#[derive(Debug)]
 pub enum Float {
     /// The previous location and size of the window when it was floating, if any.
     Tiled(Option<(Point<i32, Logical>, Size<i32, Logical>)>),
@@ -119,14 +149,14 @@ impl Float {
     }
 }
 
-impl WindowState {
+impl WindowElementState {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl Default for WindowState {
+impl Default for WindowElementState {
     fn default() -> Self {
         Self {
             // INFO: I think this will assign the id on use of the state, not on window spawn.

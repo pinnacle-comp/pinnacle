@@ -47,7 +47,7 @@ use smithay::{
             Display,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point, Size},
+    utils::{Clock, IsAlive, Logical, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -305,20 +305,24 @@ impl<B: Backend> State<B> {
                     .as_ref()
                     .and_then(|win| self.space.element_location(win))
                     .map(|loc| (loc.x, loc.y));
-                let (class, title) = window.as_ref().and_then(|win| win.wl_surface()).map_or(
-                    (None, None),
-                    |wl_surf| {
-                        compositor::with_states(&wl_surf, |states| {
-                            let lock = states
-                                .data_map
-                                .get::<XdgToplevelSurfaceData>()
-                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                .lock()
-                                .expect("failed to acquire lock");
-                            (lock.app_id.clone(), lock.title.clone())
-                        })
-                    },
-                );
+                let (class, title) = window.as_ref().map_or((None, None), |win| match &win {
+                    WindowElement::Wayland(_) => {
+                        if let Some(wl_surf) = win.wl_surface() {
+                            compositor::with_states(&wl_surf, |states| {
+                                let lock = states
+                                    .data_map
+                                    .get::<XdgToplevelSurfaceData>()
+                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                    .lock()
+                                    .expect("failed to acquire lock");
+                                (lock.app_id.clone(), lock.title.clone())
+                            })
+                        } else {
+                            (None, None)
+                        }
+                    }
+                    WindowElement::X11(surface) => (Some(surface.class()), Some(surface.title())),
+                });
                 let floating = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.floating.is_floating()));
@@ -619,6 +623,11 @@ impl<B: Backend> State<B> {
                         .any(|tag| tag.output(self).is_some_and(|op| &op == output))
                 })
             })
+            .filter(|win| match win {
+                WindowElement::Wayland(win) => !win.with_state(|state| state.minimized),
+                WindowElement::X11(surf) => !surf.is_minimized(),
+            })
+            .filter(|win| win.alive())
             .cloned()
             .collect::<Vec<_>>();
         let (render, do_not_render) = output.with_state(|state| {

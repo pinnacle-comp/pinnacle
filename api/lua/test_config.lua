@@ -76,63 +76,63 @@ require("pinnacle").setup(function(pinnacle)
         end
 
         print("----------------------")
-
-        local op = output.get_focused() --[[@as Output]]
-        print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))
-        print("loc: " .. (op:loc() and (op:loc().x .. ", " .. op:loc().y) or "nil"))
-        print("rr: " .. (op:refresh_rate() or "nil"))
-        print("make: " .. (op:make() or "nil"))
-        print("model: " .. (op:model() or "nil"))
-        print("focused: " .. (tostring(op:focused())))
-
-        print("----------------------")
-
-        local wins = window.get_by_class("Alacritty")
-        for _, win in pairs(wins) do
-            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-            print("class: " .. (win:class() or "nil"))
-            print("title: " .. (win:title() or "nil"))
-            print("float: " .. tostring(win:floating()))
-        end
-
-        print("----------------------")
-
-        local wins = window.get_by_title("~/p/pinnacle")
-        for _, win in pairs(wins) do
-            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-            print("class: " .. (win:class() or "nil"))
-            print("title: " .. (win:title() or "nil"))
-            print("float: " .. tostring(win:floating()))
-        end
-
-        print("----------------------")
-
-        local tags = tag.get_on_output(output.get_focused() --[[@as Output]])
-        for _, tg in pairs(tags) do
-            print(tg:name())
-            print((tg:output() and tg:output():name()) or "nil output")
-            print(tg:active())
-        end
-
-        print("----------------------")
-
-        local tags = tag.get_by_name("2")
-        for _, tg in pairs(tags) do
-            print(tg:name())
-            print((tg:output() and tg:output():name()) or "nil output")
-            print(tg:active())
-        end
-
-        print("----------------------")
-
-        local tags = tag.get_all()
-        for _, tg in pairs(tags) do
-            print(tg:name())
-            print((tg:output() and tg:output():name()) or "nil output")
-            print(tg:active())
-        end
+        --
+        -- local op = output.get_focused() --[[@as Output]]
+        -- print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))
+        -- print("loc: " .. (op:loc() and (op:loc().x .. ", " .. op:loc().y) or "nil"))
+        -- print("rr: " .. (op:refresh_rate() or "nil"))
+        -- print("make: " .. (op:make() or "nil"))
+        -- print("model: " .. (op:model() or "nil"))
+        -- print("focused: " .. (tostring(op:focused())))
+        --
+        -- print("----------------------")
+        --
+        -- local wins = window.get_by_class("Alacritty")
+        -- for _, win in pairs(wins) do
+        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+        --     print("class: " .. (win:class() or "nil"))
+        --     print("title: " .. (win:title() or "nil"))
+        --     print("float: " .. tostring(win:floating()))
+        -- end
+        --
+        -- print("----------------------")
+        --
+        -- local wins = window.get_by_title("~/p/pinnacle")
+        -- for _, win in pairs(wins) do
+        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+        --     print("class: " .. (win:class() or "nil"))
+        --     print("title: " .. (win:title() or "nil"))
+        --     print("float: " .. tostring(win:floating()))
+        -- end
+        --
+        -- print("----------------------")
+        --
+        -- local tags = tag.get_on_output(output.get_focused() --[[@as Output]])
+        -- for _, tg in pairs(tags) do
+        --     print(tg:name())
+        --     print((tg:output() and tg:output():name()) or "nil output")
+        --     print(tg:active())
+        -- end
+        --
+        -- print("----------------------")
+        --
+        -- local tags = tag.get_by_name("2")
+        -- for _, tg in pairs(tags) do
+        --     print(tg:name())
+        --     print((tg:output() and tg:output():name()) or "nil output")
+        --     print(tg:active())
+        -- end
+        --
+        -- print("----------------------")
+        --
+        -- local tags = tag.get_all()
+        -- for _, tg in pairs(tags) do
+        --     print(tg:name())
+        --     print((tg:output() and tg:output():name()) or "nil output")
+        --     print(tg:active())
+        -- end
     end)
 
     -- Tags ---------------------------------------------------------------------------
@@ -211,146 +211,67 @@ require("pinnacle").setup(function(pinnacle)
     end)
 
     input.keybind({ mod_key }, keys.KEY_1, function()
-        for _, t in pairs(tag.get_by_name("1")) do
-            if t:output() and t:output():focused() then
-                t:switch_to()
-            end
-        end
+        tag.switch_to("1")
     end)
     input.keybind({ mod_key }, keys.KEY_2, function()
-        for _, t in pairs(tag.get_by_name("2")) do
-            if t:output() and t:output():focused() then
-                t:switch_to()
-            end
-        end
+        tag.switch_to("2")
     end)
     input.keybind({ mod_key }, keys.KEY_3, function()
-        for _, t in pairs(tag.get_by_name("3")) do
-            if t:output() and t:output():focused() then
-                t:switch_to()
-            end
-        end
+        tag.switch_to("3")
     end)
     input.keybind({ mod_key }, keys.KEY_4, function()
-        for _, t in pairs(tag.get_by_name("4")) do
-            if t:output() and t:output():focused() then
-                t:switch_to()
-            end
-        end
+        tag.switch_to("4")
     end)
     input.keybind({ mod_key }, keys.KEY_5, function()
-        for _, t in pairs(tag.get_by_name("5")) do
-            if t:output() and t:output():focused() then
-                t:switch_to()
-            end
-        end
+        tag.switch_to("5")
     end)
 
     input.keybind({ mod_key, "Shift" }, keys.KEY_1, function()
-        for _, t in pairs(tag.get_by_name("1")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        tag.toggle("1")
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_2, function()
-        for _, t in pairs(tag.get_by_name("2")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        tag.toggle("2")
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_3, function()
-        for _, t in pairs(tag.get_by_name("3")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        tag.toggle("3")
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_4, function()
-        for _, t in pairs(tag.get_by_name("4")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        tag.toggle("4")
     end)
     input.keybind({ mod_key, "Shift" }, keys.KEY_5, function()
-        for _, t in pairs(tag.get_by_name("5")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        tag.toggle("5")
     end)
 
+    -- I check for nil this way because I don't want stylua to take up like 80 lines on `if win ~= nil`
     input.keybind({ mod_key, "Alt" }, keys.KEY_1, function()
-        for _, t in pairs(tag.get_by_name("1")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():move_to_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window:get_focused():move_to_tag("1")
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_2, function()
-        for _, t in pairs(tag.get_by_name("2")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():move_to_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window:get_focused():move_to_tag("2")
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_3, function()
-        for _, t in pairs(tag.get_by_name("3")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():move_to_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window:get_focused():move_to_tag("3")
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_4, function()
-        for _, t in pairs(tag.get_by_name("4")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():move_to_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window:get_focused():move_to_tag("4")
     end)
     input.keybind({ mod_key, "Alt" }, keys.KEY_5, function()
-        for _, t in pairs(tag.get_by_name("5")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():move_to_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window:get_focused():move_to_tag("5")
     end)
 
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_1, function()
-        for _, t in pairs(tag.get_by_name("1")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():toggle_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window.get_focused():toggle_tag("1")
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_2, function()
-        for _, t in pairs(tag.get_by_name("2")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():toggle_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window.get_focused():toggle_tag("2")
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_3, function()
-        for _, t in pairs(tag.get_by_name("3")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():toggle_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window.get_focused():toggle_tag("3")
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_4, function()
-        for _, t in pairs(tag.get_by_name("4")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():toggle_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window.get_focused():toggle_tag("4")
     end)
     input.keybind({ mod_key, "Shift", "Alt" }, keys.KEY_5, function()
-        for _, t in pairs(tag.get_by_name("5")) do
-            if t:output() and t:output():focused() then
-                window.get_focused():toggle_tag(t)
-            end
-        end
+        local _ = window.get_focused() and window.get_focused():toggle_tag("5")
     end)
 end)

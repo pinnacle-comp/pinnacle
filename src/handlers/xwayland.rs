@@ -8,9 +8,12 @@ use smithay::{
     desktop::space::SpaceElement,
     input::pointer::Focus,
     reexports::wayland_server::Resource,
-    utils::{Rectangle, SERIAL_COUNTER},
+    utils::{Logical, Rectangle, SERIAL_COUNTER},
     wayland::compositor::{self, CompositorHandler},
-    xwayland::{xwm::XwmId, X11Wm, XwmHandler},
+    xwayland::{
+        xwm::{Reorder, XwmId},
+        X11Surface, X11Wm, XwmHandler,
+    },
 };
 
 use crate::{
@@ -25,11 +28,11 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         self.state.xwm.as_mut().expect("xwm not in state")
     }
 
-    fn new_window(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface) {}
+    fn new_window(&mut self, xwm: XwmId, window: X11Surface) {}
 
-    fn new_override_redirect_window(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface) {}
+    fn new_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
 
-    fn map_window_request(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface) {
+    fn map_window_request(&mut self, xwm: XwmId, window: X11Surface) {
         tracing::debug!("new x11 window from map_window_request");
         window.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::X11(window);
@@ -149,17 +152,14 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn mapped_override_redirect_window(
-        &mut self,
-        xwm: XwmId,
-        window: smithay::xwayland::X11Surface,
-    ) {
+    fn mapped_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {
         let loc = window.geometry().loc;
         let window = WindowElement::X11(window);
         self.state.space.map_element(window, loc, true);
     }
 
-    fn unmapped_window(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface) {
+    fn unmapped_window(&mut self, xwm: XwmId, window: X11Surface) {
+        tracing::debug!("unmapped x11 window");
         let win = self
             .state
             .space
@@ -168,23 +168,50 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
+            // self.state.windows.retain(|elem| &win != elem);
+            if win.with_state(|state| state.floating.is_tiled()) {
+                if let Some(output) = win.output(&self.state) {
+                    self.state.re_layout(&output);
+                }
+            }
         }
         if !window.is_override_redirect() {
             window.set_mapped(false).expect("failed to unmap x11 win");
         }
     }
 
-    fn destroyed_window(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface) {}
+    fn destroyed_window(&mut self, xwm: XwmId, window: X11Surface) {
+        let win = self
+            .state
+            .windows
+            .iter()
+            .find(|elem| {
+                matches!(elem, 
+                    WindowElement::X11(surface) if surface.wl_surface() == window.wl_surface())
+            })
+            .cloned();
+        tracing::debug!("{win:?}");
+        if let Some(win) = win {
+            tracing::debug!("removing x11 window from windows");
+            self.state.windows.retain(|elem| win.wl_surface() != elem.wl_surface());
+            if win.with_state(|state| state.floating.is_tiled()) {
+                if let Some(output) = win.output(&self.state) {
+                    self.state.re_layout(&output);
+                }
+            }
+        }
+        tracing::debug!("destroyed x11 window");
+    }
 
     fn configure_request(
         &mut self,
         xwm: XwmId,
-        window: smithay::xwayland::X11Surface,
+        window: X11Surface,
         x: Option<i32>,
         y: Option<i32>,
         w: Option<u32>,
         h: Option<u32>,
-        reorder: Option<smithay::xwayland::xwm::Reorder>,
+        reorder: Option<Reorder>,
     ) {
         let mut geo = window.geometry();
         if let Some(w) = w {
@@ -201,8 +228,8 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     fn configure_notify(
         &mut self,
         xwm: XwmId,
-        window: smithay::xwayland::X11Surface,
-        geometry: smithay::utils::Rectangle<i32, smithay::utils::Logical>,
+        window: X11Surface,
+        geometry: Rectangle<i32, Logical>,
         above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
         let Some(win) = self
@@ -229,7 +256,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     fn resize_request(
         &mut self,
         xwm: XwmId,
-        window: smithay::xwayland::X11Surface,
+        window: X11Surface,
         button: u32,
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
@@ -283,8 +310,8 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn move_request(&mut self, xwm: XwmId, window: smithay::xwayland::X11Surface, button: u32) {
-        todo!()
+    fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
+        // TODO:
     }
 
     // TODO: allow_selection_access

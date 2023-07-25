@@ -40,7 +40,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{Float, WindowResizeState, WindowState};
+use self::window_state::{Float, WindowElementState, WindowResizeState};
 
 pub mod window_state;
 
@@ -201,6 +201,13 @@ impl WindowElement {
                 });
             }
         }
+    }
+
+    /// Get the output this window is on.
+    ///
+    /// This method gets the first tag the window has and returns its output.
+    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+        self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
     }
 }
 
@@ -401,7 +408,7 @@ impl SpaceElement for WindowElement {
 }
 
 impl WithState for WindowElement {
-    type State = WindowState;
+    type State = WindowElementState;
 
     fn with_state<F, T>(&self, mut func: F) -> T
     where
