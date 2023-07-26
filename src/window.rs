@@ -181,7 +181,12 @@ impl WindowElement {
     }
 
     /// Request a size and loc change.
-    pub fn request_size_change(&self, new_loc: Point<i32, Logical>, new_size: Size<i32, Logical>) {
+    pub fn request_size_change<B: Backend>(
+        &self,
+        state: &mut State<B>,
+        new_loc: Point<i32, Logical>,
+        new_size: Size<i32, Logical>,
+    ) {
         match self {
             WindowElement::Wayland(window) => {
                 window.toplevel().with_pending_state(|state| {
@@ -193,12 +198,25 @@ impl WindowElement {
                 });
             }
             WindowElement::X11(surface) => {
+                tracing::debug!("sending size change to x11 win");
                 surface
                     .configure(Rectangle::from_loc_and_size(new_loc, new_size))
                     .expect("failed to configure x11 win");
-                self.with_state(|state| {
-                    state.resize_state = WindowResizeState::Acknowledged(new_loc);
-                });
+                // self.with_state(|state| {
+                //     state.resize_state = WindowResizeState::Acknowledged(new_loc);
+                // });
+                if !surface.is_override_redirect() {
+                    surface.set_mapped(true).unwrap();
+                }
+                state.space.map_element(self.clone(), new_loc, false);
+                // if let Some(focused_output) = state.focus_state.focused_output.clone() {
+                //     self.send_frame(
+                //         &focused_output,
+                //         state.clock.now(),
+                //         Some(Duration::ZERO),
+                //         surface_primary_scanout_output,
+                //     );
+                // }
             }
         }
     }
@@ -208,6 +226,22 @@ impl WindowElement {
     /// This method gets the first tag the window has and returns its output.
     pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
+    }
+
+    /// Returns `true` if the window element is [`Wayland`].
+    ///
+    /// [`Wayland`]: WindowElement::Wayland
+    #[must_use]
+    pub fn is_wayland(&self) -> bool {
+        matches!(self, Self::Wayland(..))
+    }
+
+    /// Returns `true` if the window element is [`X11`].
+    ///
+    /// [`X11`]: WindowElement::X11
+    #[must_use]
+    pub fn is_x11(&self) -> bool {
+        matches!(self, Self::X11(..))
     }
 }
 
@@ -483,7 +517,7 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
     });
 
     if let Some((prev_loc, prev_size)) = resize {
-        window.request_size_change(prev_loc, prev_size);
+        window.request_size_change(state, prev_loc, prev_size);
     }
 
     let output = state.focus_state.focused_output.clone().unwrap();

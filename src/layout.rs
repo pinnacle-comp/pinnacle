@@ -2,7 +2,6 @@
 
 use itertools::{Either, Itertools};
 use smithay::{
-    desktop::Space,
     output::Output,
     utils::{Logical, Size},
 };
@@ -27,35 +26,30 @@ pub enum Layout {
 }
 
 impl Layout {
-    pub fn layout(
+    pub fn layout<B: Backend>(
         &self,
         windows: Vec<WindowElement>,
         tags: Vec<Tag>,
-        space: &Space<WindowElement>,
+        state: &mut State<B>,
         output: &Output,
     ) {
         let windows = filter_windows(&windows, tags);
 
-        let Some(output_geo) = space.output_geometry(output) else {
-            tracing::error!("could not get output geometry");
-            return;
-        };
-
-        let output_loc = output.current_location();
-
         match self {
-            Layout::MasterStack => master_stack(windows, space, output),
-            Layout::Dwindle => dwindle(windows, space, output),
-            Layout::Spiral => spiral(windows, space, output),
+            Layout::MasterStack => master_stack(windows, state, output),
+            Layout::Dwindle => dwindle(windows, state, output),
+            Layout::Spiral => spiral(windows, state, output),
             layout @ (Layout::CornerTopLeft
             | Layout::CornerTopRight
             | Layout::CornerBottomLeft
-            | Layout::CornerBottomRight) => corner(layout, windows, space, output),
+            | Layout::CornerBottomRight) => corner(layout, windows, state, output),
         }
     }
 }
 
-fn master_stack(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &Output) {
+fn master_stack<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
+    let space = &mut state.space;
+
     let Some(output_geo) = space.output_geometry(output) else {
         tracing::error!("could not get output geometry");
         return;
@@ -72,11 +66,11 @@ fn master_stack(windows: Vec<WindowElement>, space: &Space<WindowElement>, outpu
 
     if stack_count == 0 {
         // one window
-        master.request_size_change(output_loc, output_geo.size);
+        master.request_size_change(state, output_loc, output_geo.size);
     } else {
         let loc = (output_loc.x, output_loc.y).into();
         let new_master_size: Size<i32, Logical> = (output_geo.size.w / 2, output_geo.size.h).into();
-        master.request_size_change(loc, new_master_size);
+        master.request_size_change(state, loc, new_master_size);
 
         let stack_count = stack_count;
 
@@ -93,6 +87,7 @@ fn master_stack(windows: Vec<WindowElement>, space: &Space<WindowElement>, outpu
 
         for (i, win) in stack.enumerate() {
             win.request_size_change(
+                state,
                 (output_geo.size.w / 2 + output_loc.x, y_s[i] + output_loc.y).into(),
                 (output_geo.size.w / 2, i32::max(heights[i], 40)).into(),
             );
@@ -100,7 +95,9 @@ fn master_stack(windows: Vec<WindowElement>, space: &Space<WindowElement>, outpu
     }
 }
 
-fn dwindle(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &Output) {
+fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
+    let space = &state.space;
+
     let Some(output_geo) = space.output_geometry(output) else {
         tracing::error!("could not get output geometry");
         return;
@@ -112,7 +109,7 @@ fn dwindle(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &O
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(output_loc, output_geo.size);
+            window.request_size_change(state, output_loc, output_geo.size);
         }
     } else {
         let mut win1_size = output_geo.size;
@@ -137,6 +134,7 @@ fn dwindle(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &O
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
+                        state,
                         win1_loc,
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
@@ -144,12 +142,13 @@ fn dwindle(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &O
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
 
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
+                        state,
                         win1_loc,
                         (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
                     );
@@ -157,14 +156,15 @@ fn dwindle(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &O
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
 
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
             }
         }
     }
 }
 
-fn spiral(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &Output) {
+fn spiral<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
+    let space = &state.space;
     let Some(output_geo) = space.output_geometry(output) else {
         tracing::error!("could not get output geometry");
         return;
@@ -176,7 +176,7 @@ fn spiral(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &Ou
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(output_loc, output_geo.size);
+            window.request_size_change(state, output_loc, output_geo.size);
         }
     } else {
         let mut win1_loc = output_loc;
@@ -206,59 +206,64 @@ fn spiral(windows: Vec<WindowElement>, space: &Space<WindowElement>, output: &Ou
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
+                        state,
                         (win1_loc.x, win1_loc.y + height_partition).into(),
                         (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
                     );
 
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
+                        state,
                         win1_loc,
                         (win1_size.w, win1_size.h - i32::max(height_partition, 40)).into(),
                     );
 
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
                 Slice::Left => {
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
+                        state,
                         (win1_loc.x + width_partition, win1_loc.y).into(),
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
 
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
                 Slice::Right => {
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
+                        state,
                         win1_loc,
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
 
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(win1_loc, win1_size);
+                    win2.request_size_change(state, win1_loc, win1_size);
                 }
             }
         }
     }
 }
 
-fn corner(
+fn corner<B: Backend>(
     layout: &Layout,
     windows: Vec<WindowElement>,
-    space: &Space<WindowElement>,
+    state: &mut State<B>,
     output: &Output,
 ) {
+    let space = &state.space;
     let Some(output_geo) = space.output_geometry(output) else {
         tracing::error!("could not get output geometry");
         return;
@@ -268,15 +273,17 @@ fn corner(
     match windows.len() {
         0 => (),
         1 => {
-            windows[0].request_size_change(output_loc, output_geo.size);
+            windows[0].request_size_change(state, output_loc, output_geo.size);
         }
         2 => {
             windows[0].request_size_change(
+                state,
                 output_loc,
                 (output_geo.size.w / 2, output_geo.size.h).into(),
             );
 
             windows[1].request_size_change(
+                state,
                 (output_loc.x + output_geo.size.w / 2, output_loc.y).into(),
                 (output_geo.size.w / 2, output_geo.size.h).into(),
             );
@@ -296,6 +303,7 @@ fn corner(
             let div_factor = 2;
 
             corner.request_size_change(
+                state,
                 match layout {
                     Layout::CornerTopLeft => (output_loc.x, output_loc.y),
                     Layout::CornerTopRight => (
@@ -335,6 +343,7 @@ fn corner(
 
             for (i, win) in vert_stack.iter().enumerate() {
                 win.request_size_change(
+                    state,
                     (
                         match layout {
                             Layout::CornerTopLeft | Layout::CornerBottomLeft => {
@@ -367,6 +376,7 @@ fn corner(
 
             for (i, win) in horiz_stack.iter().enumerate() {
                 win.request_size_change(
+                    state,
                     match layout {
                         Layout::CornerTopLeft => {
                             (x_s[i] + output_loc.x, output_loc.y + output_geo.size.h / 2)
@@ -392,16 +402,15 @@ fn corner(
 fn filter_windows(windows: &[WindowElement], tags: Vec<Tag>) -> Vec<WindowElement> {
     windows
         .iter()
+        .filter(|window| window.with_state(|state| state.floating.is_tiled()))
         .filter(|window| {
             window.with_state(|state| {
-                state.floating.is_tiled() && {
-                    for tag in state.tags.iter() {
-                        if tags.iter().any(|tg| tg == tag) {
-                            return true;
-                        }
+                for tag in state.tags.iter() {
+                    if tags.iter().any(|tg| tg == tag) {
+                        return true;
                     }
-                    false
                 }
+                false
             })
         })
         .cloned()

@@ -121,6 +121,12 @@ impl<B: Backend> CompositorHandler for State<B> {
             window.with_state(|state| {
                 if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
+                    if let WindowElement::X11(surface) = &window {
+                        tracing::debug!("setting x11 win to mapped");
+                        if !surface.is_override_redirect() {
+                            surface.set_mapped(true).expect("failed to map x11 win");
+                        }
+                    }
                     self.space.map_element(window.clone(), new_pos, false);
                 }
             });
@@ -296,7 +302,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     first_tag.layout().layout(
                         self.windows.clone(),
                         state.focused_tags().cloned().collect(),
-                        &self.space,
+                        self,
                         &focused_output,
                     );
                 }
@@ -350,15 +356,15 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
-        if let Some(focused_output) = self.focus_state.focused_output.as_ref() {
+        if let Some(focused_output) = self.focus_state.focused_output.as_ref().cloned() {
             focused_output.with_state(|state| {
                 let first_tag = state.focused_tags().next();
                 if let Some(first_tag) = first_tag {
                     first_tag.layout().layout(
                         self.windows.clone(),
                         state.focused_tags().cloned().collect(),
-                        &self.space,
-                        focused_output,
+                        self,
+                        &focused_output,
                     );
                 }
             });

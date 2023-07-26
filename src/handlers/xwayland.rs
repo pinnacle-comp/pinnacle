@@ -4,8 +4,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::time::Duration;
+
 use smithay::{
-    desktop::space::SpaceElement,
+    desktop::{space::SpaceElement, utils::surface_primary_scanout_output},
     input::pointer::Focus,
     reexports::wayland_server::Resource,
     utils::{Logical, Rectangle, SERIAL_COUNTER},
@@ -20,7 +22,7 @@ use crate::{
     backend::Backend,
     grab::resize_grab::{ResizeSurfaceGrab, ResizeSurfaceState},
     state::{CalloopData, WithState},
-    window::{WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{WindowBlocker, WindowElement, BLOCKER_COUNTER, window_state::Float},
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -34,16 +36,15 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
     fn map_window_request(&mut self, xwm: XwmId, window: X11Surface) {
         tracing::debug!("new x11 window from map_window_request");
+        tracing::debug!("window popup is {}", window.is_popup());
+
         window.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::X11(window);
-        // TODO: place the window in the space
         self.state.space.map_element(window.clone(), (0, 0), true);
-        let bbox = self
-            .state
-            .space
-            .element_bbox(&window)
-            .expect("failed to get x11 bbox");
+        // let geo = window.geometry();
         let WindowElement::X11(surface) = &window else { unreachable!() };
+        let bbox = self.state.space.element_bbox(&window).unwrap();
+        tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
             .configure(Some(bbox))
             .expect("failed to configure x11 window");
@@ -73,6 +74,21 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                 tracing::debug!("new window, tags are {:?}", state.tags);
             });
 
+            window.with_state(|state| {
+                let WindowElement::X11(surface) = &window else { unreachable!() };
+                let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
+                if surface.is_popup() || is_popup || surface.min_size() == surface.max_size() {
+                    state.floating = Float::Floating;
+                }
+            });
+
+
+            // self.state.space.map_element(window.clone(), (0, 0), true);
+            // self.state.space.raise_element(&window, true);
+            // let WindowElement::X11(surface) = &window else { unreachable!() };
+            // self.state.xwm.as_mut().unwrap().raise_window(surface).unwrap();
+
+
             let windows_on_output = self
                 .state
                 .windows
@@ -96,7 +112,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                 .collect::<Vec<_>>();
 
             self.state.windows.push(window.clone());
-            // self.space.map_element(window.clone(), (0, 0), true);
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
                 focused_output.with_state(|state| {
                     let first_tag = state.focused_tags().next();
@@ -104,7 +119,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                         first_tag.layout().layout(
                             self.state.windows.clone(),
                             state.focused_tags().cloned().collect(),
-                            &self.state.space,
+                            &mut self.state,
                             &focused_output,
                         );
                     }
@@ -120,8 +135,8 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                     }
                 }
                 let clone = window.clone();
-                self.state.loop_handle.insert_idle(|data| {
-                    crate::state::schedule_on_commit(data, vec![clone], move |data| {
+                self.state.loop_handle.insert_idle(move |data| {
+                    crate::state::schedule_on_commit(data, vec![clone.clone()], move |data| {
                         BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
                         tracing::debug!(
                             "blocker {}",
@@ -135,6 +150,20 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                                 .client_compositor_state(&client)
                                 .blocker_cleared(&mut data.state, &data.display.handle())
                         }
+
+
+                        // data.state.loop_handle.insert_idle(move |dt| {
+                        //
+                        //     let WindowElement::X11(surface) = &clone else { unreachable!() };
+                        //     let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
+                        //     if surface.is_popup() || is_popup || surface.min_size() == surface.max_size() {
+                        //         if let Some(xwm) = dt.state.xwm.as_mut() {
+                        //             tracing::debug!("raising x11 modal");
+                        //             xwm.raise_window(surface).expect("failed to raise x11 win");
+                        //             dt.state.space.raise_element(&clone, true);
+                        //         }
+                        //     }
+                        // });
                     })
                 });
             }
@@ -152,28 +181,36 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn mapped_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {
+    // fn map_window_notify(&mut self, xwm: XwmId, window: X11Surface) {
+    //     //
+    // }
+
+    fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
         let loc = window.geometry().loc;
         let window = WindowElement::X11(window);
+        tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window, loc, true);
     }
 
-    fn unmapped_window(&mut self, xwm: XwmId, window: X11Surface) {
+    fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
         tracing::debug!("unmapped x11 window");
         let win = self
             .state
             .space
             .elements()
-            .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
+            .find(|elem| {
+                matches!(elem, 
+                    WindowElement::X11(surface) if surface == &window)
+            })
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
             // self.state.windows.retain(|elem| &win != elem);
-            if win.with_state(|state| state.floating.is_tiled()) {
-                if let Some(output) = win.output(&self.state) {
-                    self.state.re_layout(&output);
-                }
-            }
+            // if win.with_state(|state| state.floating.is_tiled()) {
+            //     if let Some(output) = win.output(&self.state) {
+            //         self.state.re_layout(&output);
+            //     }
+            // }
         }
         if !window.is_override_redirect() {
             window.set_mapped(false).expect("failed to unmap x11 win");
@@ -232,6 +269,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         geometry: Rectangle<i32, Logical>,
         above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
+        tracing::debug!("x11 configure_notify");
         let Some(win) = self
             .state
             .space
@@ -241,7 +279,11 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         else {
             return;
         };
+        tracing::debug!("geo: {geometry:?}");
         self.state.space.map_element(win, geometry.loc, false);
+        // for output in self.state.space.outputs_for_element(&win) {
+        //     win.send_frame(&output, self.state.clock.now(), Some(Duration::ZERO), surface_primary_scanout_output);
+        // }
         // TODO: anvil has a TODO here
     }
 
@@ -249,13 +291,16 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
     // TODO: unmaximize request
 
-    // TODO: fullscreen request
+    fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+        // TODO:
+        window.set_fullscreen(true).unwrap();
+    }
 
     // TODO: unfullscreen request
 
     fn resize_request(
         &mut self,
-        xwm: XwmId,
+        _xwm: XwmId,
         window: X11Surface,
         button: u32,
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
@@ -296,7 +341,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                 win.clone(),
                 resize_edge.into(),
                 Rectangle::from_loc_and_size(initial_window_location, initial_window_size),
-                0x110, // BUTTON_LEFT
+                button, // BUTTON_LEFT
             );
 
             if let Some(grab) = grab {

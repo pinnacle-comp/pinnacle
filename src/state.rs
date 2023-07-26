@@ -159,7 +159,7 @@ impl<B: Backend> State<B> {
                     .element_location(&window)
                     .unwrap_or((0, 0).into());
                 let window_size = window.geometry().size;
-                window.request_size_change(window_loc, window_size);
+                window.request_size_change(self, window_loc, window_size);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -623,11 +623,6 @@ impl<B: Backend> State<B> {
                         .any(|tag| tag.output(self).is_some_and(|op| &op == output))
                 })
             })
-            .filter(|win| match win {
-                WindowElement::Wayland(win) => !win.with_state(|state| state.minimized),
-                WindowElement::X11(surf) => !surf.is_minimized(),
-            })
-            .filter(|win| win.alive())
             .cloned()
             .collect::<Vec<_>>();
         let (render, do_not_render) = output.with_state(|state| {
@@ -636,7 +631,7 @@ impl<B: Backend> State<B> {
                 first_tag.layout().layout(
                     self.windows.clone(),
                     state.focused_tags().cloned().collect(),
-                    &self.space,
+                    self,
                     output,
                 );
             }
@@ -656,11 +651,22 @@ impl<B: Backend> State<B> {
             })
         });
 
+        tracing::debug!(
+            "{} to render, {} to not render",
+            render.len(),
+            do_not_render.len()
+        );
+
         let clone = render.clone();
         self.loop_handle.insert_idle(|data| {
             schedule_on_commit(data, clone, |dt| {
                 for win in do_not_render {
                     dt.state.space.unmap_elem(&win);
+                    if let WindowElement::X11(surface) = win {
+                        if !surface.is_override_redirect() {
+                            surface.set_mapped(false).expect("failed to unmap x11 win");
+                        }
+                    }
                 }
             })
         });
