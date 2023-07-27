@@ -44,7 +44,7 @@ use smithay::{
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
-            Display,
+            Display, DisplayHandle,
         },
     },
     utils::{Clock, IsAlive, Logical, Monotonic, Point, Size},
@@ -70,6 +70,7 @@ pub struct State<B: Backend> {
 
     pub loop_signal: LoopSignal,
     pub loop_handle: LoopHandle<'static, CalloopData<B>>,
+    pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
     pub space: Space<WindowElement>,
@@ -875,6 +876,7 @@ impl<B: Backend> State<B> {
             backend_data,
             loop_signal,
             loop_handle,
+            display_handle: display_handle.clone(),
             clock: Clock::<Monotonic>::new()?,
             compositor_state: CompositorState::new::<Self>(&display_handle),
             data_device_state: DataDeviceState::new::<Self>(&display_handle),

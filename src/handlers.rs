@@ -33,7 +33,8 @@ use smithay::{
             SurfaceAttributes,
         },
         data_device::{
-            ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
+            set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+            ServerDndGrabHandler,
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
@@ -62,7 +63,6 @@ impl<B: Backend> CompositorHandler for State<B> {
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
-        // yanked straight from anvil
         compositor::add_pre_commit_hook::<Self, _>(surface, |state, _display_handle, surface| {
             let maybe_dmabuf = compositor::with_states(surface, |surface_data| {
                 surface_data
@@ -100,6 +100,7 @@ impl<B: Backend> CompositorHandler for State<B> {
         X11Wm::commit_hook::<CalloopData<B>>(surface);
 
         utils::on_commit_buffer_handler::<Self>(surface);
+        self.backend_data.early_import(surface);
 
         if !compositor::is_sync_subsurface(surface) {
             let mut root = surface.clone();
@@ -121,11 +122,11 @@ impl<B: Backend> CompositorHandler for State<B> {
             window.with_state(|state| {
                 if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
-                    if let WindowElement::X11(surface) = &window {
-                        tracing::debug!("setting x11 win to mapped");
-                        if !surface.is_override_redirect() {
-                            surface.set_mapped(true).expect("failed to map x11 win");
-                        }
+                    if window.is_x11() {
+                        tracing::error!("DID SOMETHING WITH x11 WINDOW HERE");
+                        // if !surface.is_override_redirect() {
+                        //     surface.set_mapped(true).expect("failed to map x11 win");
+                        // }
                     }
                     self.space.map_element(window.clone(), new_pos, false);
                 }
@@ -217,12 +218,15 @@ impl<B: Backend> SeatHandler for State<B> {
         self.cursor_status = image;
     }
 
-    fn focus_changed(&mut self, _seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
+    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
         if let Some(wl_surface) = focused {
             if let Some(window) = self.window_for_surface(wl_surface) {
                 self.focus_state.set_focus(window);
             }
         }
+
+        let focus = focused.and_then(|surf| self.display_handle.get_client(surf.id()).ok());
+        set_data_device_focus(&self.display_handle, seat, focus);
     }
 }
 delegate_seat!(@<B: Backend> State<B>);

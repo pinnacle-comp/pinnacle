@@ -9,7 +9,7 @@ license = "MPL-2.0"
 [dependencies]
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-smithay = { git = "https://github.com/Smithay/smithay", rev = "ae7fb22" }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "ae7fb22", features = ["desktop", "wayland_frontend"] }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", optional = true }
 thiserror = "1.0.44"
 xcursor = {version = "0.3.4", optional = true }
@@ -21,7 +21,7 @@ calloop = { version = "0.10.1", features = ["executor", "futures-io"] }
 futures-lite = { version = "1.13.0" }
 async-process = { version = "1.7.0" }
 itertools = { version = "0.11.0" }
-x11rb = { version = "0.11.1", default-features = false, features = ["composite"], optional = true }
+x11rb = { version = "0.12.0", default-features = false, features = ["composite"], optional = true }
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]
@@ -41,4 +41,4 @@ udev = [
   "xcursor",
 ]
 winit = ["smithay/backend_winit", "smithay/backend_drm"]
-xwayland = ["smithay/backend_x11", "x11rb", "smithay/x11rb_event_source", "xcursor"]
+xwayland = ["smithay/xwayland", "x11rb", "smithay/x11rb_event_source", "xcursor"]

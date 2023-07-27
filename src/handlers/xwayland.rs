@@ -26,27 +26,27 @@ use crate::{
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
-    fn xwm_state(&mut self, xwm: XwmId) -> &mut X11Wm {
+    fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
         self.state.xwm.as_mut().expect("xwm not in state")
     }
 
-    fn new_window(&mut self, xwm: XwmId, window: X11Surface) {}
+    fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
-    fn new_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
+    fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
-    fn map_window_request(&mut self, xwm: XwmId, window: X11Surface) {
-        tracing::debug!("new x11 window from map_window_request");
-        tracing::debug!("window popup is {}", window.is_popup());
+    fn map_window_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        tracing::debug!("-----MAP WINDOW REQUEST");
+        // tracing::debug!("new x11 window from map_window_request");
+        // tracing::debug!("window popup is {}", window.is_popup());
 
         window.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
-        // let geo = window.geometry();
-        let WindowElement::X11(surface) = &window else { unreachable!() };
         let bbox = self.state.space.element_bbox(&window).unwrap();
+        let WindowElement::X11(surface) = &window else { unreachable!() };
         tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
-            .configure(Some(bbox))
+            .configure(bbox)
             .expect("failed to configure x11 window");
         // TODO: ssd
 
@@ -188,12 +188,12 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
         let loc = window.geometry().loc;
         let window = WindowElement::X11(window);
-        tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
+        // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window, loc, true);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::debug!("unmapped x11 window");
+        tracing::debug!("UNMAPPED WINDOW");
         let win = self
             .state
             .space
@@ -213,6 +213,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             // }
         }
         if !window.is_override_redirect() {
+            tracing::debug!("set mapped to false");
             window.set_mapped(false).expect("failed to unmap x11 win");
         }
     }
@@ -257,6 +258,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         if let Some(h) = h {
             geo.size.h = h as i32;
         }
+        tracing::debug!("configure_request with geo {geo:?}");
         if let Err(err) = window.configure(geo) {
             tracing::error!("Failed to configure x11 win: {err}");
         }
@@ -269,7 +271,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         geometry: Rectangle<i32, Logical>,
         above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
-        tracing::debug!("x11 configure_notify");
+        // tracing::debug!("x11 configure_notify");
         let Some(win) = self
             .state
             .space
@@ -279,24 +281,30 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         else {
             return;
         };
-        tracing::debug!("geo: {geometry:?}");
-        self.state.space.map_element(win, geometry.loc, false);
+        tracing::debug!("configure notify with geo: {geometry:?}");
+        self.state.space.map_element(win, geometry.loc, true);
         // for output in self.state.space.outputs_for_element(&win) {
         //     win.send_frame(&output, self.state.clock.now(), Some(Duration::ZERO), surface_primary_scanout_output);
         // }
         // TODO: anvil has a TODO here
     }
 
-    // TODO: maximize request
+    fn maximize_request(&mut self, xwm: XwmId, window: X11Surface) {
+        // TODO:
+    }
 
-    // TODO: unmaximize request
+    fn unmaximize_request(&mut self, xwm: XwmId, window: X11Surface) {
+        // TODO:
+    }
 
     fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
         // TODO:
-        window.set_fullscreen(true).unwrap();
+        // window.set_fullscreen(true).unwrap();
     }
 
-    // TODO: unfullscreen request
+    fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+        // TODO:
+    }
 
     fn resize_request(
         &mut self,
@@ -305,54 +313,54 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         button: u32,
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
-        let seat = &self.state.seat;
-        let pointer = seat.get_pointer().expect("failed to get pointer");
-        let start_data = pointer.grab_start_data().expect("no grab start data");
-
-        let Some(win) = self
-            .state
-            .space
-            .elements()
-            .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
-        else {
-            return;
-        };
-
-        let initial_window_location = self
-            .state
-            .space
-            .element_location(win)
-            .expect("failed to get x11 loc");
-        let initial_window_size = win.geometry().size;
-
-        if let Some(wl_surface) = win.wl_surface() {
-            wl_surface.with_state(|state| {
-                state.resize_state = ResizeSurfaceState::Resizing {
-                    edges: resize_edge.into(),
-                    initial_window_rect: Rectangle::from_loc_and_size(
-                        initial_window_location,
-                        initial_window_size,
-                    ),
-                };
-            });
-
-            let grab = ResizeSurfaceGrab::start(
-                start_data,
-                win.clone(),
-                resize_edge.into(),
-                Rectangle::from_loc_and_size(initial_window_location, initial_window_size),
-                button, // BUTTON_LEFT
-            );
-
-            if let Some(grab) = grab {
-                pointer.set_grab(
-                    &mut self.state,
-                    grab,
-                    SERIAL_COUNTER.next_serial(),
-                    Focus::Clear,
-                );
-            }
-        }
+        // let seat = &self.state.seat;
+        // let pointer = seat.get_pointer().expect("failed to get pointer");
+        // let start_data = pointer.grab_start_data().expect("no grab start data");
+        //
+        // let Some(win) = self
+        //     .state
+        //     .space
+        //     .elements()
+        //     .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
+        // else {
+        //     return;
+        // };
+        //
+        // let initial_window_location = self
+        //     .state
+        //     .space
+        //     .element_location(win)
+        //     .expect("failed to get x11 loc");
+        // let initial_window_size = win.geometry().size;
+        //
+        // if let Some(wl_surface) = win.wl_surface() {
+        //     wl_surface.with_state(|state| {
+        //         state.resize_state = ResizeSurfaceState::Resizing {
+        //             edges: resize_edge.into(),
+        //             initial_window_rect: Rectangle::from_loc_and_size(
+        //                 initial_window_location,
+        //                 initial_window_size,
+        //             ),
+        //         };
+        //     });
+        //
+        //     let grab = ResizeSurfaceGrab::start(
+        //         start_data,
+        //         win.clone(),
+        //         resize_edge.into(),
+        //         Rectangle::from_loc_and_size(initial_window_location, initial_window_size),
+        //         button, // BUTTON_LEFT
+        //     );
+        //
+        //     if let Some(grab) = grab {
+        //         pointer.set_grab(
+        //             &mut self.state,
+        //             grab,
+        //             SERIAL_COUNTER.next_serial(),
+        //             Focus::Clear,
+        //         );
+        //     }
+        // }
     }
 
     fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
