@@ -61,9 +61,11 @@ impl IsAlive for FocusTarget {
     }
 }
 
-impl From<FocusTarget> for WlSurface {
-    fn from(value: FocusTarget) -> Self {
-        value.wl_surface().expect("no wl_surface")
+impl TryFrom<FocusTarget> for WlSurface {
+    type Error = ();
+
+    fn try_from(value: FocusTarget) -> Result<Self, Self::Error> {
+        value.wl_surface().ok_or(())
     }
 }
 

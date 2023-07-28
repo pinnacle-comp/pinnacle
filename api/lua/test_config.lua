@@ -66,16 +66,21 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Just testing stuff
     input.keybind({ mod_key }, keys.h, function()
-        local wins = window.get_all()
-        for _, win in pairs(wins) do
-            print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-            print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-            print("class: " .. (win:class() or "nil"))
-            print("title: " .. (win:title() or "nil"))
-            print("float: " .. tostring(win:floating()))
+        local win = window.get_focused()
+        if win ~= nil then
+            win:set_size({ w = 500, h = 500 })
         end
 
-        print("----------------------")
+        -- local wins = window.get_all()
+        -- for _, win in pairs(wins) do
+        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
+        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
+        --     print("class: " .. (win:class() or "nil"))
+        --     print("title: " .. (win:title() or "nil"))
+        --     print("float: " .. tostring(win:floating()))
+        -- end
+        --
+        -- print("----------------------")
         --
         -- local op = output.get_focused() --[[@as Output]]
         -- print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))

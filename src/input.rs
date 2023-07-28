@@ -12,14 +12,14 @@ use smithay::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
         KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
-    desktop::{space::SpaceElement, WindowSurfaceType},
+    desktop::space::SpaceElement,
     input::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::compositor,
+    wayland::{compositor, seat::WaylandFocus},
 };
 
 use crate::{
@@ -42,14 +42,14 @@ impl InputState {
 }
 
 impl<B: Backend> State<B> {
-    pub fn surface_under<P>(&self, point: P) -> Option<(WindowElement, Point<i32, Logical>)>
+    pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
     {
         // TODO: layer map, popups, fullscreen
         self.space
             .element_under(point)
-            .map(|(window, loc)| (window.clone(), loc))
+            .map(|(window, loc)| (window.clone().into(), loc))
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
@@ -88,6 +88,7 @@ impl<B: Backend> State<B> {
                         }
                         return; // TODO: kinda ugly return here
                     } else if event.button_code() == BUTTON_RIGHT {
+                        let FocusTarget::Window(window) = window else { return };
                         let window_geometry = window.geometry();
                         let window_x = window_loc.x as f64;
                         let window_y = window_loc.y as f64;
@@ -139,6 +140,7 @@ impl<B: Backend> State<B> {
                     }
                 } else {
                     // Move window to top of stack.
+                    let FocusTarget::Window(window) = window else { return };
                     self.space.raise_element(&window, true);
                     if let WindowElement::X11(surface) = &window {
                         self.xwm
@@ -380,15 +382,17 @@ impl State<WinitData> {
             }
         }
 
-        let surface_under_pointer =
-            self.space
-                .element_under(pointer_loc)
-                .and_then(|(window, location)| {
-                    window
-                        .surface_under(pointer_loc - location.to_f64(), WindowSurfaceType::ALL)
-                        .map(|(_s, p)| (FocusTarget::Window(window.clone()), p + location))
-                });
+        let surface_under_pointer = self
+            .space
+            .element_under(pointer_loc)
+            .map(|(window, loc)| (FocusTarget::Window(window.clone()), loc));
+        // .and_then(|(window, location)| {
+        //     window
+        //         .surface_under(pointer_loc - location.to_f64(), WindowSurfaceType::ALL)
+        //         .map(|(_s, p)| (FocusTarget::Window(window.clone()), p + location))
+        // });
 
+        tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
         pointer.motion(
             self,
             surface_under_pointer,
@@ -441,9 +445,7 @@ impl State<UdevData> {
             }
         }
 
-        let surface_under = self
-            .surface_under(self.pointer_location)
-            .map(|(window, loc)| (FocusTarget::Window(window), loc));
+        let surface_under = self.surface_under(self.pointer_location);
 
         // tracing::info!("{:?}", self.pointer_location);
         if let Some(ptr) = self.seat.get_pointer() {
@@ -508,9 +510,7 @@ impl State<UdevData> {
 
         self.pointer_location = self.clamp_coords(self.pointer_location);
 
-        let surface_under = self
-            .surface_under(self.pointer_location)
-            .map(|(window, loc)| (FocusTarget::Window(window), loc));
+        let surface_under = self.surface_under(self.pointer_location);
 
         if let Some(ptr) = self.seat.get_pointer() {
             ptr.motion(

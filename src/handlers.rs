@@ -393,6 +393,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
+        tracing::debug!("move_request_client");
         crate::grab::move_grab::move_request_client(
             self,
             surface.wl_surface(),
