@@ -38,6 +38,7 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
+        seat::WaylandFocus,
         shell::xdg::{
             Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
             XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
@@ -49,6 +50,7 @@ use smithay::{
 
 use crate::{
     backend::Backend,
+    focus::FocusTarget,
     state::{CalloopData, ClientState, State, WithState},
     window::{window_state::WindowResizeState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
@@ -206,8 +208,8 @@ impl<B: Backend> DataDeviceHandler for State<B> {
 delegate_data_device!(@<B: Backend> State<B>);
 
 impl<B: Backend> SeatHandler for State<B> {
-    type KeyboardFocus = WlSurface;
-    type PointerFocus = WlSurface;
+    type KeyboardFocus = FocusTarget;
+    type PointerFocus = FocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<Self> {
         &mut self.seat_state
@@ -219,14 +221,13 @@ impl<B: Backend> SeatHandler for State<B> {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
-        if let Some(wl_surface) = focused {
-            if let Some(window) = self.window_for_surface(wl_surface) {
+        if let Some(focus) = focused.and_then(|focus| focus.wl_surface()) {
+            if let Some(window) = self.window_for_surface(&focus) {
                 self.focus_state.set_focus(window);
+                // let focus = focused.and_then(|surf| self.display_handle.get_client(surf.id()).ok());
+                // set_data_device_focus(&self.display_handle, seat, focus);
             }
         }
-
-        let focus = focused.and_then(|surf| self.display_handle.get_client(surf.id()).ok());
-        set_data_device_focus(&self.display_handle, seat, focus);
     }
 }
 delegate_seat!(@<B: Backend> State<B>);
@@ -347,7 +348,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     &mut data.state,
-                    window.wl_surface(),
+                    Some(FocusTarget::Window(window)),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
@@ -377,10 +378,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
         // windows.retain(|window| window.toplevel() != &surface);
         // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
-        let focus = self
-            .focus_state
-            .current_focus()
-            .and_then(|win| win.wl_surface());
+        let focus = self.focus_state.current_focus().map(FocusTarget::Window);
         self.seat
             .get_keyboard()
             .expect("Seat had no keyboard")
@@ -440,10 +438,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
             .ok()
             .and_then(|root| self.window_for_surface(&root))
         {
-            let Some(wl_surface) = root.wl_surface() else { return };
-            if let Ok(mut grab) = self
-                .popup_manager
-                .grab_popup(wl_surface, popup_kind, &seat, serial)
+            if let Ok(mut grab) =
+                self.popup_manager
+                    .grab_popup(FocusTarget::Window(root), popup_kind, &seat, serial)
             {
                 if let Some(keyboard) = seat.get_keyboard() {
                     if keyboard.is_grabbed()

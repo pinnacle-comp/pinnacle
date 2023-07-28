@@ -22,7 +22,7 @@ use crate::{
     backend::Backend,
     grab::resize_grab::{ResizeSurfaceGrab, ResizeSurfaceState},
     state::{CalloopData, WithState},
-    window::{WindowBlocker, WindowElement, BLOCKER_COUNTER, window_state::Float},
+    window::{WindowBlocker, WindowElement, BLOCKER_COUNTER, window_state::Float}, focus::FocusTarget,
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -38,7 +38,17 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         tracing::debug!("-----MAP WINDOW REQUEST");
         // tracing::debug!("new x11 window from map_window_request");
         // tracing::debug!("window popup is {}", window.is_popup());
+        //
+        // TODO: TOMORROW: figure out why keyboard input isn't going to games (prolly you never
+        // |     change keyboard focus)
 
+        if window.is_override_redirect() {
+            let loc = window.geometry().loc;
+            let window = WindowElement::X11(window);
+            // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
+            self.state.space.map_element(window, loc, true);
+            return;
+        }
         window.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
@@ -174,7 +184,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                     .expect("Seat had no keyboard") // FIXME: actually handle error
                     .set_focus(
                         &mut data.state,
-                        window.wl_surface(),
+                        Some(FocusTarget::Window(window)),
                         SERIAL_COUNTER.next_serial(),
                     );
             });

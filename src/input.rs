@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
+    focus::FocusTarget,
     window::WindowElement,
 };
 use smithay::{
@@ -18,6 +19,7 @@ use smithay::{
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
+    wayland::compositor,
 };
 
 use crate::{
@@ -144,15 +146,36 @@ impl<B: Backend> State<B> {
                             .expect("no xwm")
                             .raise_window(surface)
                             .expect("failed to raise x11 win");
+                        surface.set_activated(true).unwrap();
                     }
 
-                    keyboard.set_focus(self, window.wl_surface(), serial);
+                    tracing::debug!(
+                        "wl_surface focus is some? {}",
+                        window.wl_surface().is_some()
+                    );
+                    keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);
 
                     self.space.elements().for_each(|window| {
                         if let WindowElement::Wayland(window) = window {
                             window.toplevel().send_configure();
                         }
                     });
+
+                    let focused_name = match &window {
+                        WindowElement::Wayland(win) => {
+                            compositor::with_states(win.toplevel().wl_surface(), |states| {
+                                let lock = states
+                                    .data_map
+                                    .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                    .lock()
+                                    .expect("failed to acquire lock");
+                                lock.app_id.clone().unwrap_or_default()
+                            })
+                        }
+                        WindowElement::X11(surf) => surf.class(),
+                    };
+                    tracing::debug!("setting keyboard focus to {focused_name}");
                 }
             } else {
                 self.space.elements().for_each(|window| match window {
@@ -361,7 +384,7 @@ impl State<WinitData> {
                 .and_then(|(window, location)| {
                     window
                         .surface_under(pointer_loc - location.to_f64(), WindowSurfaceType::ALL)
-                        .map(|(s, p)| (s, p + location))
+                        .map(|(_s, p)| (FocusTarget::Window(window.clone()), p + location))
                 });
 
         pointer.motion(
@@ -418,7 +441,7 @@ impl State<UdevData> {
 
         let surface_under = self
             .surface_under(self.pointer_location)
-            .and_then(|(window, loc)| window.wl_surface().map(|surface| (surface, loc)));
+            .map(|(window, loc)| (FocusTarget::Window(window), loc));
 
         // tracing::info!("{:?}", self.pointer_location);
         if let Some(ptr) = self.seat.get_pointer() {
@@ -485,7 +508,7 @@ impl State<UdevData> {
 
         let surface_under = self
             .surface_under(self.pointer_location)
-            .and_then(|(window, loc)| window.wl_surface().map(|surface| (surface, loc)));
+            .map(|(window, loc)| (FocusTarget::Window(window), loc));
 
         if let Some(ptr) = self.seat.get_pointer() {
             ptr.motion(
