@@ -3,8 +3,8 @@
 use smithay::{
     desktop::space::SpaceElement,
     input::{
-        pointer::{AxisFrame, ButtonEvent, GrabStartData, PointerGrab, PointerInnerHandle},
-        SeatHandler,
+        pointer::{AxisFrame, ButtonEvent, Focus, GrabStartData, PointerGrab, PointerInnerHandle},
+        Seat, SeatHandler,
     },
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel::{self},
@@ -334,4 +334,106 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
     }
 
     Some(())
+}
+
+pub fn resize_request_client<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+    edges: xdg_toplevel::ResizeEdge,
+    button_used: u32,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+
+    if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, surface, serial) {
+        let Some(window) = state.window_for_surface(surface) else {
+            tracing::error!("Surface had no window, cancelling resize request");
+            return;
+        };
+
+        if window.with_state(|state| state.floating.is_tiled()) {
+            return;
+        }
+
+        let initial_window_loc = state
+            .space
+            .element_location(&window)
+            .expect("resize request called on unmapped window");
+        let initial_window_size = window.geometry().size;
+
+        if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
+            window.toplevel().with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Resizing);
+            });
+
+            window.toplevel().send_pending_configure();
+        }
+
+        let grab = ResizeSurfaceGrab::start(
+            start_data,
+            window,
+            ResizeEdge(edges),
+            Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
+            button_used,
+        );
+
+        if let Some(grab) = grab {
+            pointer.set_grab(state, grab, serial, Focus::Clear);
+        }
+    }
+}
+
+pub fn resize_request_server<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+    edges: xdg_toplevel::ResizeEdge,
+    button_used: u32,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+
+    let Some(window) = state.window_for_surface(surface) else {
+        tracing::error!("Surface had no window, cancelling resize request");
+        return;
+    };
+
+    if window.with_state(|state| state.floating.is_tiled()) {
+        return;
+    }
+
+    let initial_window_loc = state
+        .space
+        .element_location(&window)
+        .expect("resize request called on unmapped window");
+    let initial_window_size = window.geometry().size;
+
+    if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
+        window.toplevel().with_pending_state(|state| {
+            state.states.set(xdg_toplevel::State::Resizing);
+        });
+
+        window.toplevel().send_pending_configure();
+    }
+
+    let start_data = smithay::input::pointer::GrabStartData {
+        focus: pointer
+            .current_focus()
+            .map(|focus| (focus, initial_window_loc)),
+        button: button_used,
+        location: pointer.current_location(),
+    };
+
+    let grab = ResizeSurfaceGrab::start(
+        start_data,
+        window,
+        ResizeEdge(edges),
+        Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
+        button_used,
+    );
+
+    if let Some(grab) = grab {
+        pointer.set_grab(state, grab, serial, Focus::Clear);
+    }
 }

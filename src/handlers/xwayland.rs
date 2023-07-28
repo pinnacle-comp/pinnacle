@@ -4,11 +4,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::time::Duration;
 
 use smithay::{
-    desktop::{space::SpaceElement, utils::surface_primary_scanout_output},
-    input::pointer::Focus,
     reexports::wayland_server::Resource,
     utils::{Logical, Rectangle, SERIAL_COUNTER},
     wayland::compositor::{self, CompositorHandler},
@@ -20,7 +17,6 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    grab::resize_grab::{ResizeSurfaceGrab, ResizeSurfaceState},
     state::{CalloopData, WithState},
     window::{WindowBlocker, WindowElement, BLOCKER_COUNTER, window_state::Float}, focus::FocusTarget,
 };
@@ -52,7 +48,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         window.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
-        let bbox = self.state.space.element_bbox(&window).unwrap();
+        let bbox = self.state.space.element_bbox(&window).expect("called element_bbox on an unmapped window");
         let WindowElement::X11(surface) = &window else { unreachable!() };
         tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
@@ -109,7 +105,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                             .focus_state
                             .focused_output
                             .as_ref()
-                            .unwrap()
+                            .expect("no focused output")
                             .with_state(|op_state| {
                                 op_state
                                     .tags
@@ -228,7 +224,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn destroyed_window(&mut self, xwm: XwmId, window: X11Surface) {
+    fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
         let win = self
             .state
             .windows
@@ -253,13 +249,13 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
     fn configure_request(
         &mut self,
-        xwm: XwmId,
+        _xwm: XwmId,
         window: X11Surface,
-        x: Option<i32>,
-        y: Option<i32>,
+        _x: Option<i32>,
+        _y: Option<i32>,
         w: Option<u32>,
         h: Option<u32>,
-        reorder: Option<Reorder>,
+        _reorder: Option<Reorder>,
     ) {
         let mut geo = window.geometry();
         if let Some(w) = w {
@@ -276,10 +272,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
     fn configure_notify(
         &mut self,
-        xwm: XwmId,
+        _xwm: XwmId,
         window: X11Surface,
         geometry: Rectangle<i32, Logical>,
-        above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
+        _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
         // tracing::debug!("x11 configure_notify");
         let Some(win) = self
@@ -299,81 +295,34 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // TODO: anvil has a TODO here
     }
 
-    fn maximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-        // TODO:
-    }
-
-    fn unmaximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-        // TODO:
-    }
-
-    fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-        // TODO:
-        // window.set_fullscreen(true).unwrap();
-    }
-
-    fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-        // TODO:
-    }
+    // fn maximize_request(&mut self, xwm: XwmId, window: X11Surface) {
+    //     // TODO:
+    // }
+    //
+    // fn unmaximize_request(&mut self, xwm: XwmId, window: X11Surface) {
+    //     // TODO:
+    // }
+    //
+    // fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+    //     // TODO:
+    //     // window.set_fullscreen(true).unwrap();
+    // }
+    //
+    // fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+    //     // TODO:
+    // }
 
     fn resize_request(
         &mut self,
         _xwm: XwmId,
-        window: X11Surface,
-        button: u32,
-        resize_edge: smithay::xwayland::xwm::ResizeEdge,
+        _window: X11Surface,
+        _button: u32,
+        _resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
-        // let seat = &self.state.seat;
-        // let pointer = seat.get_pointer().expect("failed to get pointer");
-        // let start_data = pointer.grab_start_data().expect("no grab start data");
-        //
-        // let Some(win) = self
-        //     .state
-        //     .space
-        //     .elements()
-        //     .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
-        // else {
-        //     return;
-        // };
-        //
-        // let initial_window_location = self
-        //     .state
-        //     .space
-        //     .element_location(win)
-        //     .expect("failed to get x11 loc");
-        // let initial_window_size = win.geometry().size;
-        //
-        // if let Some(wl_surface) = win.wl_surface() {
-        //     wl_surface.with_state(|state| {
-        //         state.resize_state = ResizeSurfaceState::Resizing {
-        //             edges: resize_edge.into(),
-        //             initial_window_rect: Rectangle::from_loc_and_size(
-        //                 initial_window_location,
-        //                 initial_window_size,
-        //             ),
-        //         };
-        //     });
-        //
-        //     let grab = ResizeSurfaceGrab::start(
-        //         start_data,
-        //         win.clone(),
-        //         resize_edge.into(),
-        //         Rectangle::from_loc_and_size(initial_window_location, initial_window_size),
-        //         button, // BUTTON_LEFT
-        //     );
-        //
-        //     if let Some(grab) = grab {
-        //         pointer.set_grab(
-        //             &mut self.state,
-        //             grab,
-        //             SERIAL_COUNTER.next_serial(),
-        //             Focus::Clear,
-        //         );
-        //     }
-        // }
+        // TODO:
     }
 
-    fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
+    fn move_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32) {
         // TODO:
     }
 

@@ -221,13 +221,14 @@ impl<B: Backend> SeatHandler for State<B> {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
-        if let Some(focus) = focused.and_then(|focus| focus.wl_surface()) {
-            if let Some(window) = self.window_for_surface(&focus) {
-                self.focus_state.set_focus(window);
-                // let focus = focused.and_then(|surf| self.display_handle.get_client(surf.id()).ok());
-                // set_data_device_focus(&self.display_handle, seat, focus);
-            }
+        if let Some(focus) =
+            focused.and_then(|focused| self.window_for_surface(&focused.wl_surface()?))
+        {
+            self.focus_state.set_focus(focus);
         }
+        let focus_client =
+            focused.and_then(|surf| self.display_handle.get_client(surf.wl_surface()?.id()).ok());
+        set_data_device_focus(&self.display_handle, seat, focus_client);
     }
 }
 delegate_seat!(@<B: Backend> State<B>);
@@ -286,7 +287,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     self.focus_state
                         .focused_output
                         .as_ref()
-                        .unwrap()
+                        .expect("no focused output")
                         .with_state(|op_state| {
                             op_state
                                 .tags
@@ -392,9 +393,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
-        crate::xdg::request::move_request(
+        crate::grab::move_grab::move_request_client(
             self,
-            &surface,
+            surface.wl_surface(),
             &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
             serial,
         );
@@ -408,7 +409,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         edges: ResizeEdge,
     ) {
         const BUTTON_LEFT: u32 = 0x110;
-        crate::xdg::request::resize_request(
+        crate::grab::resize_grab::resize_request_client(
             self,
             surface.wl_surface(),
             &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),

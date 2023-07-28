@@ -79,7 +79,7 @@ impl<B: Backend> State<B> {
                 if self.move_mode {
                     if event.button_code() == BUTTON_LEFT {
                         if let Some(wl_surf) = window.wl_surface() {
-                            crate::xdg::request::move_request_force(
+                            crate::grab::move_grab::move_request_server(
                                 self,
                                 &wl_surf,
                                 &self.seat.clone(),
@@ -127,7 +127,7 @@ impl<B: Backend> State<B> {
                         };
 
                         if let Some(wl_surf) = window.wl_surface() {
-                            crate::xdg::request::resize_request_force(
+                            crate::grab::resize_grab::resize_request_server(
                                 self,
                                 &wl_surf,
                                 &self.seat.clone(),
@@ -146,7 +146,9 @@ impl<B: Backend> State<B> {
                             .expect("no xwm")
                             .raise_window(surface)
                             .expect("failed to raise x11 win");
-                        surface.set_activated(true).unwrap();
+                        surface
+                            .set_activated(true)
+                            .expect("failed to set x11 win to activated");
                     }
 
                     tracing::debug!(

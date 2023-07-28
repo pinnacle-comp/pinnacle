@@ -206,7 +206,9 @@ impl WindowElement {
                 //     state.resize_state = WindowResizeState::Acknowledged(new_loc);
                 // });
                 if !surface.is_override_redirect() {
-                    surface.set_mapped(true).unwrap();
+                    surface
+                        .set_mapped(true)
+                        .expect("failed to set x11 win to mapped");
                 }
                 state.space.map_element(self.clone(), new_loc, false);
                 // if let Some(focused_output) = state.focus_state.focused_output.clone() {
@@ -500,7 +502,12 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
                 window_state.floating = Float::Tiled(Some((
                     // We get the location this way because window.geometry().loc
                     // doesn't seem to be the actual location
-                    state.space.element_location(window).unwrap(),
+
+                    // TODO: remove the expect, maybe store the location in state
+                    state
+                        .space
+                        .element_location(window)
+                        .expect("toggled float on an unmapped floating window"),
                     window.geometry().size,
                 )));
 
@@ -520,7 +527,12 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
         window.request_size_change(state, prev_loc, prev_size);
     }
 
-    let output = state.focus_state.focused_output.clone().unwrap();
+    // TODO: don't use the focused output, use the one the window is on
+    let output = state
+        .focus_state
+        .focused_output
+        .clone()
+        .expect("no focused output");
     state.re_layout(&output);
 
     let render = output.with_state(|op_state| {

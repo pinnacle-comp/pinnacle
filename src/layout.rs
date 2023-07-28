@@ -432,7 +432,12 @@ impl<B: Backend> State<B> {
             }
         }
 
-        let output = self.focus_state.focused_output.clone().unwrap(); // FIXME: unwrap
+        // TODO: don't use the focused output, use the outputs the two windows are on
+        let output = self
+            .focus_state
+            .focused_output
+            .clone()
+            .expect("no focused output");
         self.re_layout(&output);
     }
 }

@@ -47,7 +47,7 @@ use smithay::{
             Display, DisplayHandle,
         },
     },
-    utils::{Clock, IsAlive, Logical, Monotonic, Point, Size},
+    utils::{Clock, Logical, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -159,7 +159,13 @@ impl<B: Backend> State<B> {
                     .space
                     .element_location(&window)
                     .unwrap_or((0, 0).into());
-                let window_size = window.geometry().size;
+                let mut window_size = window.geometry().size;
+                if let Some(width) = width {
+                    window_size.w = width;
+                }
+                if let Some(height) = height {
+                    window_size.h = height;
+                }
                 window.request_size_change(self, window_loc, window_size);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {

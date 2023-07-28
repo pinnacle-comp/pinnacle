@@ -5,7 +5,7 @@ use smithay::{
         element::{surface::WaylandSurfaceRenderElement, AsRenderElements, Wrap},
         ImportAll, ImportMem, Renderer, Texture,
     },
-    desktop::space::{SpaceElement, SpaceRenderElements},
+    desktop::space::SpaceRenderElements,
     render_elements,
     utils::{Physical, Point, Scale},
 };
@@ -44,7 +44,7 @@ where
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<C> {
-        let window_bbox = self.bbox();
+        // let window_bbox = self.bbox();
         match self {
             WindowElement::Wayland(window) => {
                 AsRenderElements::<R>::render_elements::<WaylandSurfaceRenderElement<R>>(

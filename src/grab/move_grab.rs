@@ -5,13 +5,14 @@ use smithay::{
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
-        pointer::PointerGrab,
         pointer::{
             AxisFrame, ButtonEvent, GrabStartData, MotionEvent, PointerInnerHandle,
             RelativeMotionEvent,
         },
-        SeatHandler,
+        pointer::{Focus, PointerGrab},
+        Seat, SeatHandler,
     },
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle},
 };
 
@@ -139,4 +140,70 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     fn start_data(&self) -> &GrabStartData<State<B>> {
         &self.start_data
     }
+}
+
+pub fn move_request_client<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+    if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, surface, serial) {
+        let Some(window) = state.window_for_surface(surface) else {
+            tracing::error!("Surface had no window, cancelling move request");
+            return;
+        };
+
+        let initial_window_loc = state
+            .space
+            .element_location(&window)
+            .expect("move request was called on an unmapped window");
+
+        let grab = MoveSurfaceGrab {
+            start_data,
+            window,
+            initial_window_loc,
+        };
+
+        pointer.set_grab(state, grab, serial, Focus::Clear);
+    } else {
+        tracing::warn!("no grab start data");
+    }
+}
+
+pub fn move_request_server<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+    let Some(window) = state.window_for_surface(surface) else {
+        tracing::error!("Surface had no window, cancelling move request");
+        return;
+    };
+
+    let initial_window_loc = state
+        .space
+        .element_location(&window)
+        .expect("move request was called on an unmapped window");
+
+    const BUTTON_LEFT: u32 = 0x110;
+
+    let start_data = smithay::input::pointer::GrabStartData {
+        focus: pointer
+            .current_focus()
+            .map(|focus| (focus, initial_window_loc)),
+        button: BUTTON_LEFT,
+        location: pointer.current_location(),
+    };
+
+    let grab = MoveSurfaceGrab {
+        start_data,
+        window,
+        initial_window_loc,
+    };
+
+    pointer.set_grab(state, grab, serial, Focus::Clear);
 }

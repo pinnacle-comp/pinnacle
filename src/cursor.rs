@@ -51,7 +51,7 @@ fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
     let nearest_image = images
         .iter()
         .min_by_key(|image| (size as i32 - image.size as i32).abs())
-        .unwrap();
+        .expect("no nearest image");
 
     images.iter().filter(move |image| {
         image.width == nearest_image.width && image.height == nearest_image.height
