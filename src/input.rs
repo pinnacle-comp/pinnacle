@@ -74,6 +74,7 @@ impl<B: Backend> State<B> {
         // unfocus on windows.
         if ButtonState::Pressed == button_state {
             if let Some((window, window_loc)) = self.surface_under(pointer_loc) {
+                // tracing::debug!("button click on {window:?}");
                 const BUTTON_LEFT: u32 = 0x110;
                 const BUTTON_RIGHT: u32 = 0x111;
                 if self.move_mode {
@@ -143,21 +144,29 @@ impl<B: Backend> State<B> {
                     let FocusTarget::Window(window) = window else { return };
                     self.space.raise_element(&window, true);
                     if let WindowElement::X11(surface) = &window {
-                        self.xwm
-                            .as_mut()
-                            .expect("no xwm")
-                            .raise_window(surface)
-                            .expect("failed to raise x11 win");
-                        surface
-                            .set_activated(true)
-                            .expect("failed to set x11 win to activated");
+                        if !surface.is_override_redirect() {
+                            self.xwm
+                                .as_mut()
+                                .expect("no xwm")
+                                .raise_window(surface)
+                                .expect("failed to raise x11 win");
+                            surface
+                                .set_activated(true)
+                                .expect("failed to set x11 win to activated");
+                        }
                     }
 
                     tracing::debug!(
                         "wl_surface focus is some? {}",
                         window.wl_surface().is_some()
                     );
-                    keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);
+
+                    // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
+                    // |     to wonky things like right-click menus not correctly getting pointer
+                    // |     clicks or showing up at all.
+                    if !matches!(&window, WindowElement::X11(surf) if surf.is_override_redirect()) {
+                        keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);
+                    }
 
                     self.space.elements().for_each(|window| {
                         if let WindowElement::Wayland(window) = window {
@@ -244,10 +253,15 @@ impl<B: Backend> State<B> {
             frame = frame.stop(Axis::Vertical);
         }
 
+        // tracing::debug!(
+        //     "axis on current focus: {:?}",
+        //     self.seat.get_pointer().unwrap().current_focus()
+        // );
+
         self.seat
             .get_pointer()
             .expect("Seat has no pointer")
-            .axis(self, frame); // FIXME: handle err
+            .axis(self, frame);
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
@@ -392,7 +406,8 @@ impl State<WinitData> {
         //         .map(|(_s, p)| (FocusTarget::Window(window.clone()), p + location))
         // });
 
-        tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
+        // tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
+        // tracing::debug!("pointer focus: {:?}", pointer.current_focus());
         pointer.motion(
             self,
             surface_under_pointer,

@@ -330,7 +330,15 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
     }
 
     if new_loc.x.is_some() || new_loc.y.is_some() {
-        state.space.map_element(window, window_loc, false);
+        state.space.map_element(window.clone(), window_loc, false);
+
+        if let WindowElement::X11(surface) = window {
+            let geo = surface.geometry();
+            let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
+            surface
+                .configure(new_geo)
+                .expect("failed to configure x11 win");
+        }
     }
 
     Some(())

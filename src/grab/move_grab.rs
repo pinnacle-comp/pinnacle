@@ -100,6 +100,13 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             let new_loc = self.initial_window_loc.to_f64() + delta;
             data.space
                 .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+            if let WindowElement::X11(surface) = &self.window {
+                let geo = surface.geometry();
+                let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
+                surface
+                    .configure(new_geo)
+                    .expect("failed to configure x11 win");
+            }
         }
     }
 
