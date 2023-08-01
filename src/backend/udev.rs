@@ -241,6 +241,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
      */
     let udev_backend = UdevBackend::new(state.seat.name())?;
 
+    // Create DrmNodes from already connected GPUs
     for (device_id, path) in udev_backend.device_list() {
         if let Err(err) = DrmNode::from_dev_id(device_id)
             .map_err(DeviceAddError::DrmNode)
@@ -252,6 +253,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
+            // GPU connected
             UdevEvent::Added { device_id, path } => {
                 if let Err(err) = DrmNode::from_dev_id(device_id)
                     .map_err(DeviceAddError::DrmNode)
@@ -265,6 +267,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                     data.state.device_changed(node)
                 }
             }
+            // GPU disconnected
             UdevEvent::Removed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.state.device_removed(node)
@@ -462,7 +465,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
     }
 
     event_loop.run(
-        Some(Duration::from_millis(6)),
+        Some(Duration::from_millis(1)),
         &mut CalloopData { state, display },
         |data| {
             data.state.space.refresh();

@@ -20,7 +20,10 @@ use smithay::{
     delegate_dmabuf,
     desktop::{
         space,
-        utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
+        utils::{
+            send_frames_surface_tree, surface_primary_scanout_output,
+            update_surface_primary_scanout_output,
+        },
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, Subpixel},
@@ -345,8 +348,21 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         .set_cursor_visible(cursor_visible);
 
                     let throttle = Some(Duration::from_secs(1));
+                    // let throttle = Some(Duration::ZERO);
 
                     let time = state.clock.now();
+
+                    if let CursorImageStatus::Surface(surf) = &state.cursor_status {
+                        if let Some(op) = state.focus_state.focused_output.as_ref() {
+                            send_frames_surface_tree(
+                                surf,
+                                op,
+                                time,
+                                Some(Duration::ZERO),
+                                |_, _| None,
+                            );
+                        }
+                    }
 
                     state.space.elements().for_each(|window| {
                         window.with_surfaces(|surface, states_inner| {

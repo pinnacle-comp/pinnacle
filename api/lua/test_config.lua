@@ -149,11 +149,11 @@ require("pinnacle").setup(function(pinnacle)
         -- local tags_table = { "Terminal", "Browser", "Code", "Email", "Potato" }
         -- op:add_tags(tags_table)
 
-        for _, t in pairs(tag.get_by_name("1")) do
-            if t:output() and t:output():focused() then
-                t:toggle()
-            end
-        end
+        -- for _, t in pairs(tag.get_by_name("1")) do
+        --     t:toggle()
+        -- end
+
+        tag.toggle("1", op)
     end)
 
     ---@type Layout[]

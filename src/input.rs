@@ -15,7 +15,7 @@ use smithay::{
     desktop::space::SpaceElement,
     input::{
         keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, MotionEvent},
+        pointer::{AxisFrame, ButtonEvent, MotionEvent, PointerTarget},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
@@ -164,6 +164,10 @@ impl<B: Backend> State<B> {
                     // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
                     // |     to wonky things like right-click menus not correctly getting pointer
                     // |     clicks or showing up at all.
+
+                    // TODO: TOMORROW: Firefox needs 2 clicks to open up right-click menu, first
+                    // |     one immediately dissapears
+
                     if !matches!(&window, WindowElement::X11(surf) if surf.is_override_redirect()) {
                         keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);
                     }
@@ -400,14 +404,20 @@ impl State<WinitData> {
             .space
             .element_under(pointer_loc)
             .map(|(window, loc)| (FocusTarget::Window(window.clone()), loc));
-        // .and_then(|(window, location)| {
-        //     window
-        //         .surface_under(pointer_loc - location.to_f64(), WindowSurfaceType::ALL)
-        //         .map(|(_s, p)| (FocusTarget::Window(window.clone()), p + location))
-        // });
 
         // tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
         // tracing::debug!("pointer focus: {:?}", pointer.current_focus());
+        if let Some((focus, _point)) = &surface_under_pointer {
+            focus.motion(
+                &self.seat.clone(),
+                self,
+                &MotionEvent {
+                    location: pointer_loc,
+                    serial,
+                    time: event.time_msec(),
+                },
+            );
+        }
         pointer.motion(
             self,
             surface_under_pointer,

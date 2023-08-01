@@ -36,9 +36,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         tracing::debug!("window type is {win_type:?}");
         // tracing::debug!("new x11 window from map_window_request");
         // tracing::debug!("window popup is {}", window.is_popup());
-        //
-        // TODO: TOMORROW: figure out why keyboard input isn't going to games (prolly you never
-        // |     change keyboard focus)
 
         if window.is_override_redirect() {
             let loc = window.geometry().loc;
