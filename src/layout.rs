@@ -13,7 +13,6 @@ use crate::{
     window::WindowElement,
 };
 
-// TODO: couple this with the layouts
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     MasterStack,

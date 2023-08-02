@@ -115,7 +115,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             if should_float(surface) {
                 window.with_state(|state| {
                     state.floating = Float::Floating(loc);
-                    // TODO: this doesn't correctly tile intellij idea
                 });
             }
 
@@ -215,7 +214,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     // }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::info!("MAPPED OVERRIDE REDIRECT WINDOW");
+        tracing::debug!("MAPPED OVERRIDE REDIRECT WINDOW");
         let win_type = window.window_type();
         tracing::debug!("window type is {win_type:?}");
         let loc = window.geometry().loc;
@@ -303,10 +302,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         geometry: Rectangle<i32, Logical>,
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
-        if window.is_override_redirect() {
-            let keyboard = self.state.seat.get_keyboard().unwrap();
-            keyboard.set_focus(&mut self.state, Some(FocusTarget::Window(WindowElement::X11(window.clone()))), SERIAL_COUNTER.next_serial());
-        }
         // tracing::debug!("x11 configure_notify");
         let Some(win) = self
             .state
