@@ -39,6 +39,12 @@ impl From<xwayland::xwm::ResizeEdge> for ResizeEdge {
     }
 }
 
+impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
+    fn from(value: xdg_toplevel::ResizeEdge) -> Self {
+        Self(value)
+    }
+}
+
 pub struct ResizeSurfaceGrab<S: SeatHandler> {
     start_data: GrabStartData<S>,
     window: WindowElement,
@@ -129,10 +135,6 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
             }),
             None => ((0, 0).into(), (0, 0).into()),
         };
-
-        tracing::info!("min and max size: {min_size:?}, {max_size:?}");
-        let geo = self.window.geometry().loc;
-        tracing::info!("geo loc: {}, {}", geo.x, geo.y);
 
         // HACK: Here I set the min height to be self.window.geometry().loc.y.abs() because if it's
         // |     lower then the compositor crashes trying to create a size with height -1 if you make the
@@ -355,7 +357,7 @@ pub fn resize_request_client<B: Backend>(
     surface: &WlSurface,
     seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
-    edges: xdg_toplevel::ResizeEdge,
+    edges: self::ResizeEdge,
     button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
@@ -387,7 +389,7 @@ pub fn resize_request_client<B: Backend>(
         let grab = ResizeSurfaceGrab::start(
             start_data,
             window,
-            ResizeEdge(edges),
+            edges,
             Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
             button_used,
         );
@@ -403,7 +405,7 @@ pub fn resize_request_server<B: Backend>(
     surface: &WlSurface,
     seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
-    edges: xdg_toplevel::ResizeEdge,
+    edges: self::ResizeEdge,
     button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
@@ -442,7 +444,7 @@ pub fn resize_request_server<B: Backend>(
     let grab = ResizeSurfaceGrab::start(
         start_data,
         window,
-        ResizeEdge(edges),
+        edges,
         Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
         button_used,
     );

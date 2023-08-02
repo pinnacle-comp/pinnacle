@@ -85,6 +85,7 @@ impl<B: Backend> State<B> {
                                 &wl_surf,
                                 &self.seat.clone(),
                                 serial,
+                                BUTTON_LEFT,
                             );
                         }
                         return; // TODO: kinda ugly return here
@@ -134,7 +135,7 @@ impl<B: Backend> State<B> {
                                 &wl_surf,
                                 &self.seat.clone(),
                                 serial,
-                                edges,
+                                edges.into(),
                                 BUTTON_RIGHT,
                             );
                         }

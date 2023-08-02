@@ -29,6 +29,7 @@ pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
     pub window: WindowElement,
     pub initial_window_loc: Point<i32, Logical>,
+    pub button_used: u32,
 }
 
 impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
@@ -135,9 +136,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     ) {
         handle.button(data, event);
 
-        const BUTTON_LEFT: u32 = 0x110;
-
-        if !handle.current_pressed().contains(&BUTTON_LEFT) {
+        if !handle.current_pressed().contains(&self.button_used) {
             handle.unset_grab(data, event.serial, event.time);
         }
     }
@@ -161,6 +160,7 @@ pub fn move_request_client<B: Backend>(
     surface: &WlSurface,
     seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
+    button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
     if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, surface, serial) {
@@ -178,6 +178,7 @@ pub fn move_request_client<B: Backend>(
             start_data,
             window,
             initial_window_loc,
+            button_used,
         };
 
         pointer.set_grab(state, grab, serial, Focus::Clear);
@@ -191,6 +192,7 @@ pub fn move_request_server<B: Backend>(
     surface: &WlSurface,
     seat: &Seat<State<B>>,
     serial: smithay::utils::Serial,
+    button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
     let Some(window) = state.window_for_surface(surface) else {
@@ -203,13 +205,11 @@ pub fn move_request_server<B: Backend>(
         .element_location(&window)
         .expect("move request was called on an unmapped window");
 
-    const BUTTON_LEFT: u32 = 0x110;
-
     let start_data = smithay::input::pointer::GrabStartData {
         focus: pointer
             .current_focus()
             .map(|focus| (focus, initial_window_loc)),
-        button: BUTTON_LEFT,
+        button: button_used,
         location: pointer.current_location(),
     };
 
@@ -217,6 +217,7 @@ pub fn move_request_server<B: Backend>(
         start_data,
         window,
         initial_window_loc,
+        button_used,
     };
 
     pointer.set_grab(state, grab, serial, Focus::Clear);

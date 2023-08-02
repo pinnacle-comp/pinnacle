@@ -4,21 +4,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-
 use smithay::{
     reexports::wayland_server::Resource,
-    utils::{Logical, Rectangle, SERIAL_COUNTER, Point},
+    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::compositor::{self, CompositorHandler},
     xwayland::{
-        xwm::{Reorder, XwmId, WmWindowType},
+        xwm::{Reorder, WmWindowType, XwmId},
         X11Surface, X11Wm, XwmHandler,
     },
 };
 
 use crate::{
     backend::Backend,
+    focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{WindowBlocker, WindowElement, BLOCKER_COUNTER, window_state::Float}, focus::FocusTarget,
+    window::{window_state::Float, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -38,7 +38,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // tracing::debug!("window popup is {}", window.is_popup());
 
         // INFO: This check is here because it happened while launching Ori and the Will of the Wisps
-        if window.is_override_redirect() { 
+        if window.is_override_redirect() {
             let loc = window.geometry().loc;
             let window = WindowElement::X11(window);
             // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
@@ -48,9 +48,14 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
-        let bbox = self.state.space.element_bbox(&window).expect("called element_bbox on an unmapped window");
+        let bbox = self
+            .state
+            .space
+            .element_bbox(&window)
+            .expect("called element_bbox on an unmapped window");
 
-        let output_size = self.state
+        let output_size = self
+            .state
             .focus_state
             .focused_output
             .as_ref()
@@ -58,7 +63,8 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
-        let output_loc = self.state
+        let output_loc = self
+            .state
             .focus_state
             .focused_output
             .as_ref()
@@ -70,8 +76,9 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // applicable.
         let loc: Point<i32, Logical> = (
             output_loc.x + output_size.w / 2 - bbox.size.w / 2,
-            output_loc.y + output_size.h / 2 - bbox.size.h / 2
-        ).into();
+            output_loc.y + output_size.h / 2 - bbox.size.h / 2,
+        )
+            .into();
 
         let WindowElement::X11(surface) = &window else { unreachable!() };
         surface.set_mapped(true).expect("failed to map x11 window");
@@ -84,7 +91,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .configure(bbox)
             .expect("failed to configure x11 window");
         // TODO: ssd
-
 
         // TODO: this is a duplicate of the code in new_toplevel,
         // |     move into its own function
@@ -229,10 +235,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .state
             .space
             .elements()
-            .find(|elem| {
-                matches!(elem, 
-                    WindowElement::X11(surface) if surface == &window)
-            })
+            .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
@@ -255,14 +258,15 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .windows
             .iter()
             .find(|elem| {
-                matches!(elem, 
-                    WindowElement::X11(surface) if surface.wl_surface() == window.wl_surface())
+                matches!(elem, WindowElement::X11(surface) if surface.wl_surface() == window.wl_surface())
             })
             .cloned();
         tracing::debug!("{win:?}");
         if let Some(win) = win {
             tracing::debug!("removing x11 window from windows");
-            self.state.windows.retain(|elem| win.wl_surface() != elem.wl_surface());
+            self.state
+                .windows
+                .retain(|elem| win.wl_surface() != elem.wl_surface());
             if win.with_state(|state| state.floating.is_tiled()) {
                 if let Some(output) = win.output(&self.state) {
                     self.state.re_layout(&output);
@@ -314,9 +318,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         };
         tracing::debug!("configure notify with geo: {geometry:?}");
         self.state.space.map_element(win, geometry.loc, true);
-        // for output in self.state.space.outputs_for_element(&win) {
-        //     win.send_frame(&output, self.state.clock.now(), Some(Duration::ZERO), surface_primary_scanout_output);
-        // }
         // TODO: anvil has a TODO here
     }
 
@@ -340,15 +341,38 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     fn resize_request(
         &mut self,
         _xwm: XwmId,
-        _window: X11Surface,
-        _button: u32,
-        _resize_edge: smithay::xwayland::xwm::ResizeEdge,
+        window: X11Surface,
+        button: u32,
+        resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
-        // TODO:
+        let Some(wl_surf) = window.wl_surface() else { return };
+        let seat = self.state.seat.clone();
+
+        // We use the server one and not the client because windows like Steam don't provide
+        // GrabStartData, so we need to create it ourselves.
+        crate::grab::resize_grab::resize_request_server(
+            &mut self.state,
+            &wl_surf,
+            &seat,
+            SERIAL_COUNTER.next_serial(),
+            resize_edge.into(),
+            button,
+        );
     }
 
-    fn move_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32) {
-        // TODO:
+    fn move_request(&mut self, _xwm: XwmId, window: X11Surface, button: u32) {
+        let Some(wl_surf) = window.wl_surface() else { return };
+        let seat = self.state.seat.clone();
+
+        // We use the server one and not the client because windows like Steam don't provide
+        // GrabStartData, so we need to create it ourselves.
+        crate::grab::move_grab::move_request_server(
+            &mut self.state,
+            &wl_surf,
+            &seat,
+            SERIAL_COUNTER.next_serial(),
+            button,
+        );
     }
 
     // TODO: allow_selection_access
@@ -365,11 +389,13 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 /// This logic is taken from the Sway function `wants_floating` in sway/desktop/xwayland.c.
 fn should_float(surface: &X11Surface) -> bool {
     let is_popup_by_type = surface.window_type().is_some_and(|typ| {
-        matches!(typ, 
-            WmWindowType::Dialog 
-            | WmWindowType::Utility 
-            | WmWindowType::Toolbar 
-            | WmWindowType::Splash)
+        matches!(
+            typ,
+            WmWindowType::Dialog
+                | WmWindowType::Utility
+                | WmWindowType::Toolbar
+                | WmWindowType::Splash
+        )
     });
     let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
         let Some((min_w, min_h)) = size_hints.min_size else { return false };

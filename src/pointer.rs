@@ -21,9 +21,9 @@ pub fn pointer_grab_start_data<S>(
 where
     S: SeatHandler<PointerFocus = FocusTarget> + 'static,
 {
-    println!("start of pointer_grab_start_data");
+    tracing::debug!("start of pointer_grab_start_data");
     if !pointer.has_grab(serial) {
-        println!("pointer doesn't have grab");
+        tracing::debug!("pointer doesn't have grab");
         return None;
     }
 
@@ -32,7 +32,7 @@ where
     let (focus_surface, _point) = start_data.focus.as_ref()?;
 
     if !focus_surface.same_client_as(&surface.id()) {
-        println!("surface isn't the same");
+        tracing::debug!("surface isn't the same");
         return None;
     }
 
