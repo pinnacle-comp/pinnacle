@@ -114,7 +114,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             if should_float(surface) {
                 window.with_state(|state| {
-                    state.floating = Float::Floating;
+                    state.floating = Float::Floating(loc);
                     // TODO: this doesn't correctly tile intellij idea
                 });
             }

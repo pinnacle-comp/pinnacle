@@ -19,7 +19,10 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::{window_state::WindowResizeState, WindowElement},
+    window::{
+        window_state::{Float, WindowResizeState},
+        WindowElement,
+    },
 };
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
@@ -97,12 +100,16 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             }
         } else {
             let delta = event.location - self.start_data.location;
-            let new_loc = self.initial_window_loc.to_f64() + delta;
-            data.space
-                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+            let new_loc = (self.initial_window_loc.to_f64() + delta).to_i32_round();
+            data.space.map_element(self.window.clone(), new_loc, true);
+            self.window.with_state(|state| {
+                if state.floating.is_floating() {
+                    state.floating = Float::Floating(new_loc);
+                }
+            });
             if let WindowElement::X11(surface) = &self.window {
                 let geo = surface.geometry();
-                let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
+                let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
                 surface
                     .configure(new_geo)
                     .expect("failed to configure x11 win");

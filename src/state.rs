@@ -20,7 +20,10 @@ use crate::{
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
-    window::{window_state::WindowResizeState, WindowElement},
+    window::{
+        window_state::{Float, WindowResizeState},
+        WindowElement,
+    },
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -645,15 +648,10 @@ impl<B: Backend> State<B> {
 
             windows.iter().cloned().partition::<Vec<_>, _>(|win| {
                 win.with_state(|win_state| {
-                    if win_state.floating.is_floating() {
-                        return true;
-                    }
-                    for tag in win_state.tags.iter() {
-                        if state.focused_tags().any(|tg| tg == tag) {
-                            return true;
-                        }
-                    }
-                    false
+                    win_state
+                        .tags
+                        .iter()
+                        .any(|tag| state.focused_tags().any(|tg| tag == tg))
                 })
             })
         });
@@ -666,7 +664,7 @@ impl<B: Backend> State<B> {
 
         let clone = render.clone();
         self.loop_handle.insert_idle(|data| {
-            schedule_on_commit(data, clone, |dt| {
+            schedule_on_commit(data, clone.clone(), |dt| {
                 for win in do_not_render {
                     dt.state.space.unmap_elem(&win);
                     if let WindowElement::X11(surface) = win {
@@ -675,28 +673,22 @@ impl<B: Backend> State<B> {
                         }
                     }
                 }
-            })
+
+                for (win, loc) in clone.into_iter().filter_map(|win| {
+                    match win.with_state(|state| state.floating.clone()) {
+                        Float::Tiled(_) => None,
+                        Float::Floating(loc) => Some((win, loc)),
+                    }
+                }) {
+                    // TODO: store location in state
+                    tracing::debug!("------MAPPING FLOATING TO {loc:?}");
+                    dt.state.space.map_element(win, loc, false);
+                }
+            });
         });
-
-        // let blocker = WindowBlockerAll::new(render.clone());
-        // blocker.insert_into_loop(self);
-        // for win in render.iter() {
-        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
-        // }
-
-        // let (blocker, source) = WindowBlocker::block_all::<B>(render.clone());
-        // for win in render.iter() {
-        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
-        // }
-        // self.loop_handle.insert_idle(move |data| source(render.clone(), data));
-
-        // let (blocker, source) = WindowBlocker::new::<B>(render.clone());
-        // for win in render.iter() {
-        //     compositor::add_blocker(win.toplevel().wl_surface(), blocker.clone());
-        // }
-        // self.loop_handle.insert_idle(move |data| source(render.clone(), render.clone(), data));
     }
 }
+
 /// Schedule something to be done when windows have finished committing and have become
 /// idle.
 pub fn schedule_on_commit<F, B: Backend>(

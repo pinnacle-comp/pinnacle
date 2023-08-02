@@ -18,7 +18,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::WindowElement,
+    window::{window_state::Float, WindowElement},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -331,6 +331,12 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
 
     if new_loc.x.is_some() || new_loc.y.is_some() {
         state.space.map_element(window.clone(), window_loc, false);
+
+        window.with_state(|state| {
+            if state.floating.is_floating() {
+                state.floating = Float::Floating(window_loc);
+            }
+        });
 
         if let WindowElement::X11(surface) = window {
             let geo = surface.geometry();

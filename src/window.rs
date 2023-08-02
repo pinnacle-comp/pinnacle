@@ -488,7 +488,14 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
                     resize = Some((prev_loc, prev_size));
                 }
 
-                window_state.floating = Float::Floating;
+                window_state.floating =
+                    Float::Floating(resize.map(|(point, _)| point).unwrap_or_else(|| {
+                        state
+                            .space
+                            .element_location(window)
+                            .unwrap_or((0, 0).into())
+                    }));
+                // TODO: TOMORROW: come up with a better way to keep window location
                 if let WindowElement::Wayland(window) = window {
                     window.toplevel().with_pending_state(|tl_state| {
                         tl_state.states.unset(xdg_toplevel::State::TiledTop);
@@ -498,16 +505,13 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
                     });
                 } // TODO: tiled states for x11
             }
-            Float::Floating => {
+            Float::Floating(current_loc) => {
                 window_state.floating = Float::Tiled(Some((
                     // We get the location this way because window.geometry().loc
                     // doesn't seem to be the actual location
 
-                    // TODO: remove the expect, maybe store the location in state
-                    state
-                        .space
-                        .element_location(window)
-                        .expect("toggled float on an unmapped floating window"),
+                    // TODO: maybe store the location in state
+                    current_loc,
                     window.geometry().size,
                 )));
 

@@ -124,11 +124,11 @@ impl fmt::Debug for WindowResizeState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Float {
     /// The previous location and size of the window when it was floating, if any.
     Tiled(Option<(Point<i32, Logical>, Size<i32, Logical>)>),
-    Floating,
+    Floating(Point<i32, Logical>),
 }
 
 impl Float {
@@ -145,7 +145,7 @@ impl Float {
     /// [`Floating`]: Float::Floating
     #[must_use]
     pub fn is_floating(&self) -> bool {
-        matches!(self, Self::Floating)
+        matches!(self, Self::Floating(_))
     }
 }
 
