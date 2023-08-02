@@ -52,7 +52,10 @@ use smithay::{
     delegate_dmabuf,
     desktop::{
         space::{self, SurfaceTree},
-        utils::{self, surface_primary_scanout_output, OutputPresentationFeedback},
+        utils::{
+            self, send_frames_surface_tree, surface_primary_scanout_output,
+            OutputPresentationFeedback,
+        },
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -1568,6 +1571,15 @@ fn render_surface<'a>(
     // post_repaint
     {
         let throttle = Some(Duration::from_secs(1));
+
+        let time = clock.now();
+
+        // We need to send frames to the cursor surface so that xwayland windows will properly
+        // update on motion.
+        if let CursorImageStatus::Surface(surf) = cursor_status {
+            send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
+        }
+
         space.elements().for_each(|window| {
             window.with_surfaces(|surface, states_inner| {
                 let primary_scanout_output = utils::update_surface_primary_scanout_output(
@@ -1589,7 +1601,7 @@ fn render_surface<'a>(
             if space.outputs_for_element(window).contains(output) {
                 window.send_frame(
                     output,
-                    clock.now(),
+                    time,
                     throttle,
                     utils::surface_primary_scanout_output,
                 );

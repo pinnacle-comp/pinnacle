@@ -7,7 +7,7 @@
 
 use smithay::{
     reexports::wayland_server::Resource,
-    utils::{Logical, Rectangle, SERIAL_COUNTER},
+    utils::{Logical, Rectangle, SERIAL_COUNTER, Point},
     wayland::compositor::{self, CompositorHandler},
     xwayland::{
         xwm::{Reorder, XwmId},
@@ -37,23 +37,51 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // tracing::debug!("new x11 window from map_window_request");
         // tracing::debug!("window popup is {}", window.is_popup());
 
-        if window.is_override_redirect() {
+        // INFO: This check is here because it happened while launching Ori and the Will of the Wisps
+        if window.is_override_redirect() { 
             let loc = window.geometry().loc;
             let window = WindowElement::X11(window);
             // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
             self.state.space.map_element(window, loc, true);
             return;
         }
-        window.set_mapped(true).expect("failed to map x11 window");
+
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
         let bbox = self.state.space.element_bbox(&window).expect("called element_bbox on an unmapped window");
+
+        let output_size = self.state
+            .focus_state
+            .focused_output
+            .as_ref()
+            .and_then(|op| self.state.space.output_geometry(op))
+            .map(|geo| geo.size)
+            .unwrap_or((2, 2).into());
+
+        let output_loc = self.state
+            .focus_state
+            .focused_output
+            .as_ref()
+            .map(|op| op.current_location())
+            .unwrap_or((0, 0).into());
+
+        let loc: Point<i32, Logical> = (
+            output_loc.x + output_size.w / 2 - bbox.size.w / 2,
+            output_loc.y + output_size.h / 2 - bbox.size.h / 2
+        ).into();
+
         let WindowElement::X11(surface) = &window else { unreachable!() };
+        surface.set_mapped(true).expect("failed to map x11 window");
+
+        self.state.space.map_element(window.clone(), loc, true);
+        let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
+
         tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
             .configure(bbox)
             .expect("failed to configure x11 window");
         // TODO: ssd
+
 
         // TODO: this is a duplicate of the code in new_toplevel,
         // |     move into its own function
@@ -79,20 +107,14 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                 tracing::debug!("new window, tags are {:?}", state.tags);
             });
 
-            window.with_state(|state| {
-                let WindowElement::X11(surface) = &window else { unreachable!() };
-                let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
-                if surface.is_popup() || is_popup || surface.min_size() == surface.max_size() {
+            let WindowElement::X11(surface) = &window else { unreachable!() };
+
+            if is_popup(surface) {
+                window.with_state(|state| {
                     state.floating = Float::Floating;
-                }
-            });
-
-
-            // self.state.space.map_element(window.clone(), (0, 0), true);
-            // self.state.space.raise_element(&window, true);
-            // let WindowElement::X11(surface) = &window else { unreachable!() };
-            // self.state.xwm.as_mut().unwrap().raise_window(surface).unwrap();
-
+                    // TODO: this doesn't correctly tile intellij idea
+                });
+            }
 
             let windows_on_output = self
                 .state
@@ -156,20 +178,19 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                                 .blocker_cleared(&mut data.state, &data.display.handle())
                         }
 
-
-                        // data.state.loop_handle.insert_idle(move |dt| {
-                        //
-                        //     let WindowElement::X11(surface) = &clone else { unreachable!() };
-                        //     let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
-                        //     if surface.is_popup() || is_popup || surface.min_size() == surface.max_size() {
-                        //         if let Some(xwm) = dt.state.xwm.as_mut() {
-                        //             tracing::debug!("raising x11 modal");
-                        //             xwm.raise_window(surface).expect("failed to raise x11 win");
-                        //             dt.state.space.raise_element(&clone, true);
-                        //         }
-                        //     }
-                        // });
-                    })
+                        // Schedule the popup to raise when all windows have committed after having
+                        // their blockers cleared
+                        crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
+                            let WindowElement::X11(surface) = &clone else { unreachable!() };
+                            if is_popup(surface) {
+                                if let Some(xwm) = dt.state.xwm.as_mut() {
+                                    tracing::debug!("raising x11 popup");
+                                    xwm.raise_window(surface).expect("failed to raise x11 win");
+                                    dt.state.space.raise_element(&clone, true);
+                                }
+                            }
+                        });
+                    });
                 });
             }
             self.state.loop_handle.insert_idle(move |data| {
@@ -339,4 +360,9 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     // TODO: new_selection
 
     // TODO: cleared_selection
+}
+
+fn is_popup(surface: &X11Surface) -> bool {
+    let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
+    surface.is_popup() || is_popup || surface.min_size() == surface.max_size()
 }
