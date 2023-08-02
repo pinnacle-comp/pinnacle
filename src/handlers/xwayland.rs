@@ -10,7 +10,7 @@ use smithay::{
     utils::{Logical, Rectangle, SERIAL_COUNTER, Point},
     wayland::compositor::{self, CompositorHandler},
     xwayland::{
-        xwm::{Reorder, XwmId},
+        xwm::{Reorder, XwmId, WmWindowType},
         X11Surface, X11Wm, XwmHandler,
     },
 };
@@ -31,7 +31,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
     fn map_window_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::debug!("-----MAP WINDOW REQUEST");
+        tracing::trace!("map_window_request");
         let win_type = window.window_type();
         tracing::debug!("window type is {win_type:?}");
         // tracing::debug!("new x11 window from map_window_request");
@@ -65,6 +65,9 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             .map(|op| op.current_location())
             .unwrap_or((0, 0).into());
 
+        // Center the popup in the middle of the output.
+        // Once I find a way to get an X11Surface's parent it will be centered on the parent if
+        // applicable.
         let loc: Point<i32, Logical> = (
             output_loc.x + output_size.w / 2 - bbox.size.w / 2,
             output_loc.y + output_size.h / 2 - bbox.size.h / 2
@@ -109,7 +112,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             let WindowElement::X11(surface) = &window else { unreachable!() };
 
-            if is_popup(surface) {
+            if should_float(surface) {
                 window.with_state(|state| {
                     state.floating = Float::Floating;
                     // TODO: this doesn't correctly tile intellij idea
@@ -182,7 +185,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                         // their blockers cleared
                         crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
                             let WindowElement::X11(surface) = &clone else { unreachable!() };
-                            if is_popup(surface) {
+                            if should_float(surface) {
                                 if let Some(xwm) = dt.state.xwm.as_mut() {
                                     tracing::debug!("raising x11 popup");
                                     xwm.raise_window(surface).expect("failed to raise x11 win");
@@ -362,7 +365,21 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
     // TODO: cleared_selection
 }
 
-fn is_popup(surface: &X11Surface) -> bool {
-    let is_popup = surface.window_type().is_some_and(|typ| !matches!(typ, smithay::xwayland::xwm::WmWindowType::Normal));
-    surface.is_popup() || is_popup || surface.min_size() == surface.max_size()
+/// Make assumptions on whether or not the surface should be floating.
+///
+/// This logic is taken from the Sway function `wants_floating` in sway/desktop/xwayland.c.
+fn should_float(surface: &X11Surface) -> bool {
+    let is_popup_by_type = surface.window_type().is_some_and(|typ| {
+        matches!(typ, 
+            WmWindowType::Dialog 
+            | WmWindowType::Utility 
+            | WmWindowType::Toolbar 
+            | WmWindowType::Splash)
+    });
+    let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
+        let Some((min_w, min_h)) = size_hints.min_size else { return false };
+        let Some((max_w, max_h)) = size_hints.max_size else { return false };
+        min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
+    });
+    surface.is_popup() || is_popup_by_type || is_popup_by_size
 }
