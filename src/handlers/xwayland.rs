@@ -7,9 +7,19 @@
 use smithay::{
     reexports::wayland_server::Resource,
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
-    wayland::compositor::{self, CompositorHandler},
+    wayland::{
+        compositor::{self, CompositorHandler},
+        data_device::{
+            clear_data_device_selection, current_data_device_selection_userdata,
+            request_data_device_client_selection, set_data_device_selection,
+        },
+        primary_selection::{
+            clear_primary_selection, current_primary_selection_userdata,
+            request_primary_client_selection, set_primary_selection,
+        },
+    },
     xwayland::{
-        xwm::{Reorder, WmWindowType, XwmId},
+        xwm::{Reorder, SelectionType, WmWindowType, XwmId},
         X11Surface, X11Wm, XwmHandler,
     },
 };
@@ -375,13 +385,80 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         );
     }
 
-    // TODO: allow_selection_access
+    fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionType) -> bool {
+        self.state
+            .seat
+            .get_keyboard()
+            .and_then(|kb| kb.current_focus())
+            .is_some_and(|focus| {
+                if let FocusTarget::Window(WindowElement::X11(surface)) = focus {
+                    surface.xwm_id().expect("x11surface had no xwm id") == xwm
+                } else {
+                    false
+                }
+            })
+    }
 
-    // TODO: send_selection
+    fn send_selection(
+        &mut self,
+        xwm: XwmId,
+        selection: SelectionType,
+        mime_type: String,
+        fd: std::os::fd::OwnedFd,
+    ) {
+        match selection {
+            SelectionType::Clipboard => {
+                if let Err(err) =
+                    request_data_device_client_selection(&self.state.seat, mime_type, fd)
+                {
+                    tracing::error!(
+                        ?err,
+                        "Failed to request current wayland clipboard for XWayland"
+                    );
+                }
+            }
+            SelectionType::Primary => {
+                if let Err(err) = request_primary_client_selection(&self.state.seat, mime_type, fd)
+                {
+                    tracing::error!(
+                        ?err,
+                        "Failed to request current wayland primary selection for XWayland"
+                    );
+                }
+            }
+        }
+    }
 
-    // TODO: new_selection
+    fn new_selection(&mut self, xwm: XwmId, selection: SelectionType, mime_types: Vec<String>) {
+        match selection {
+            SelectionType::Clipboard => {
+                set_data_device_selection(
+                    &self.state.display_handle,
+                    &self.state.seat,
+                    mime_types,
+                    (),
+                );
+            }
+            SelectionType::Primary => {
+                set_primary_selection(&self.state.display_handle, &self.state.seat, mime_types, ());
+            }
+        }
+    }
 
-    // TODO: cleared_selection
+    fn cleared_selection(&mut self, xwm: XwmId, selection: SelectionType) {
+        match selection {
+            SelectionType::Clipboard => {
+                if current_data_device_selection_userdata(&self.state.seat).is_some() {
+                    clear_data_device_selection(&self.state.display_handle, &self.state.seat);
+                }
+            }
+            SelectionType::Primary => {
+                if current_primary_selection_userdata(&self.state.seat).is_some() {
+                    clear_primary_selection(&self.state.display_handle, &self.state.seat);
+                }
+            }
+        }
+    }
 }
 
 /// Make assumptions on whether or not the surface should be floating.

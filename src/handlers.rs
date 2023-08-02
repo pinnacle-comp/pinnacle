@@ -7,8 +7,8 @@ use std::time::Duration;
 use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_output,
-    delegate_presentation, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_viewporter, delegate_xdg_shell,
+    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_shm, delegate_viewporter, delegate_xdg_shell,
     desktop::{
         find_popup_root_surface, utils::surface_primary_scanout_output, PopupKeyboardGrab,
         PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
@@ -38,6 +38,7 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
+        primary_selection::{PrimarySelectionHandler, PrimarySelectionState},
         seat::WaylandFocus,
         shell::xdg::{
             Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
@@ -206,6 +207,15 @@ impl<B: Backend> DataDeviceHandler for State<B> {
     }
 }
 delegate_data_device!(@<B: Backend> State<B>);
+
+impl<B: Backend> PrimarySelectionHandler for State<B> {
+    type SelectionUserData = ();
+
+    fn primary_selection_state(&self) -> &PrimarySelectionState {
+        &self.primary_selection_state
+    }
+}
+delegate_primary_selection!(@<B: Backend> State<B>);
 
 impl<B: Backend> SeatHandler for State<B> {
     type KeyboardFocus = FocusTarget;

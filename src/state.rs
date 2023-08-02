@@ -57,6 +57,7 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
+        primary_selection::PrimarySelectionState,
         shell::xdg::{XdgShellState, XdgToplevelSurfaceData},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -90,6 +91,8 @@ pub struct State<B: Backend> {
     pub xdg_shell_state: XdgShellState,
     pub viewporter_state: ViewporterState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
+    pub primary_selection_state: PrimarySelectionState,
+
     pub input_state: InputState,
     pub api_state: ApiState,
     pub focus_state: FocusState,
@@ -889,6 +892,8 @@ impl<B: Backend> State<B> {
             fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
                 &display_handle,
             ),
+            primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
+
             input_state: InputState::new(),
             api_state: ApiState::new(),
             focus_state: FocusState::new(),
