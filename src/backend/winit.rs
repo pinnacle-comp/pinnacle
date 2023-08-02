@@ -293,6 +293,16 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 1.0,
             ));
 
+            if let Some(dnd_icon) = state.dnd_icon.as_ref() {
+                custom_render_elements.extend(AsRenderElements::<GlesRenderer>::render_elements(
+                    &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
+                    state.backend_data.backend.renderer(),
+                    cursor_pos_scaled,
+                    scale,
+                    1.0,
+                ));
+            }
+
             let render_res = state.backend_data.backend.bind().and_then(|_| {
                 let age = if *full_redraw > 0 {
                     0

@@ -21,7 +21,10 @@ use smithay::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
-            protocol::{wl_buffer::WlBuffer, wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{
+                wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
             Client, Resource,
         },
     },
@@ -33,12 +36,14 @@ use smithay::{
             SurfaceAttributes,
         },
         data_device::{
-            set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+            self, set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
             ServerDndGrabHandler,
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
-        primary_selection::{PrimarySelectionHandler, PrimarySelectionState},
+        primary_selection::{
+            self, set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
+        },
         seat::WaylandFocus,
         shell::xdg::{
             Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
@@ -46,7 +51,7 @@ use smithay::{
         },
         shm::{ShmHandler, ShmState},
     },
-    xwayland::{X11Wm, XWaylandClientData},
+    xwayland::{xwm::SelectionType, X11Wm, XWaylandClientData},
 };
 
 use crate::{
@@ -196,7 +201,21 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
     // TODO: layer map thingys
 }
 
-impl<B: Backend> ClientDndGrabHandler for State<B> {}
+impl<B: Backend> ClientDndGrabHandler for State<B> {
+    fn started(
+        &mut self,
+        _source: Option<WlDataSource>,
+        icon: Option<WlSurface>,
+        _seat: Seat<Self>,
+    ) {
+        self.dnd_icon = icon;
+    }
+
+    fn dropped(&mut self, _seat: Seat<Self>) {
+        self.dnd_icon = None;
+    }
+}
+
 impl<B: Backend> ServerDndGrabHandler for State<B> {}
 
 impl<B: Backend> DataDeviceHandler for State<B> {
@@ -204,6 +223,39 @@ impl<B: Backend> DataDeviceHandler for State<B> {
 
     fn data_device_state(&self) -> &DataDeviceState {
         &self.data_device_state
+    }
+
+    fn new_selection(&mut self, source: Option<WlDataSource>, _seat: Seat<Self>) {
+        if let Some(xwm) = self.xwm.as_mut() {
+            if let Some(source) = source {
+                if let Ok(Err(err)) = data_device::with_source_metadata(&source, |metadata| {
+                    xwm.new_selection(SelectionType::Clipboard, Some(metadata.mime_types.clone()))
+                }) {
+                    tracing::warn!(?err, "Failed to set Xwayland clipboard selection");
+                }
+            } else if let Err(err) = xwm.new_selection(SelectionType::Clipboard, None) {
+                tracing::warn!(?err, "Failed to clear Xwayland clipboard selection");
+            }
+        }
+    }
+
+    fn send_selection(
+        &mut self,
+        mime_type: String,
+        fd: std::os::fd::OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &Self::SelectionUserData,
+    ) {
+        if let Some(xwm) = self.xwm.as_mut() {
+            if let Err(err) = xwm.send_selection(
+                SelectionType::Clipboard,
+                mime_type,
+                fd,
+                self.loop_handle.clone(),
+            ) {
+                tracing::warn!(?err, "Failed to send clipboard (X11 -> Wayland)");
+            }
+        }
     }
 }
 delegate_data_device!(@<B: Backend> State<B>);
@@ -213,6 +265,43 @@ impl<B: Backend> PrimarySelectionHandler for State<B> {
 
     fn primary_selection_state(&self) -> &PrimarySelectionState {
         &self.primary_selection_state
+    }
+
+    fn new_selection(
+        &mut self,
+        source: Option<smithay::reexports::wayland_protocols::wp::primary_selection::zv1::server::zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1>,
+        _seat: Seat<Self>,
+    ) {
+        if let Some(xwm) = self.xwm.as_mut() {
+            if let Some(source) = source {
+                if let Ok(Err(err)) = primary_selection::with_source_metadata(&source, |metadata| {
+                    xwm.new_selection(SelectionType::Primary, Some(metadata.mime_types.clone()))
+                }) {
+                    tracing::warn!(?err, "Failed to set Xwayland primary selection");
+                }
+            } else if let Err(err) = xwm.new_selection(SelectionType::Primary, None) {
+                tracing::warn!(?err, "Failed to clear Xwayland primary selection");
+            }
+        }
+    }
+
+    fn send_selection(
+        &mut self,
+        mime_type: String,
+        fd: std::os::fd::OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &Self::SelectionUserData,
+    ) {
+        if let Some(xwm) = self.xwm.as_mut() {
+            if let Err(err) = xwm.send_selection(
+                SelectionType::Primary,
+                mime_type,
+                fd,
+                self.loop_handle.clone(),
+            ) {
+                tracing::warn!(?err, "Failed to send primary (X11 -> Wayland)");
+            }
+        }
     }
 }
 delegate_primary_selection!(@<B: Backend> State<B>);
@@ -236,9 +325,13 @@ impl<B: Backend> SeatHandler for State<B> {
         {
             self.focus_state.set_focus(focus);
         }
-        let focus_client =
-            focused.and_then(|surf| self.display_handle.get_client(surf.wl_surface()?.id()).ok());
-        set_data_device_focus(&self.display_handle, seat, focus_client);
+        let focus_client = focused.and_then(|foc_target| {
+            self.display_handle
+                .get_client(foc_target.wl_surface()?.id())
+                .ok()
+        });
+        set_data_device_focus(&self.display_handle, seat, focus_client.clone());
+        set_primary_focus(&self.display_handle, seat, focus_client);
     }
 }
 delegate_seat!(@<B: Backend> State<B>);

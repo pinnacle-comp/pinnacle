@@ -1378,6 +1378,7 @@ impl State<UdevData> {
             &pointer_image,
             &mut self.backend_data.pointer_element,
             &mut self.cursor_status,
+            self.dnd_icon.as_ref(),
             &self.clock,
         );
         let reschedule = match &result {
@@ -1482,6 +1483,7 @@ fn render_surface<'a>(
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
     cursor_status: &mut CursorImageStatus,
+    dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
     let output_geometry = space.output_geometry(output).unwrap();
@@ -1545,7 +1547,15 @@ fn render_surface<'a>(
             1.0,
         ));
 
-        // TODO: dnd icon
+        if let Some(dnd_icon) = dnd_icon {
+            custom_elements.extend(AsRenderElements::render_elements(
+                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
+                renderer,
+                cursor_pos_scaled,
+                scale,
+                1.0,
+            ));
+        }
     }
 
     let mut output_render_elements = custom_elements

@@ -101,6 +101,8 @@ pub struct State<B: Backend> {
 
     pub cursor_status: CursorImageStatus,
     pub pointer_location: Point<f64, Logical>,
+    pub dnd_icon: Option<WlSurface>,
+
     pub windows: Vec<WindowElement>,
 
     pub async_scheduler: Scheduler<()>,
@@ -899,6 +901,8 @@ impl<B: Backend> State<B> {
             focus_state: FocusState::new(),
 
             seat,
+
+            dnd_icon: None,
 
             move_mode: false,
             socket_name: socket_name.to_string_lossy().to_string(),

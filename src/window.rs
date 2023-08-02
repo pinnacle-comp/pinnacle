@@ -495,7 +495,6 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
                             .element_location(window)
                             .unwrap_or((0, 0).into())
                     }));
-                // TODO: TOMORROW: come up with a better way to keep window location
                 if let WindowElement::Wayland(window) = window {
                     window.toplevel().with_pending_state(|tl_state| {
                         tl_state.states.unset(xdg_toplevel::State::TiledTop);
