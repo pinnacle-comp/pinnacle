@@ -11,10 +11,8 @@
     A very, VERY WIP Smithay-based wayland compositor
 </div>
 
-## API Documentation
-There is a preliminary [doc website](https://ottatop.github.io/pinnacle/main) generated with LDoc. Do note that there are some missing things like the `Keys` table and `Layout` enum as well as any function overloads, but these should be autocompleted through the language server.
-
-Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
+## News
+- We now have XWayland support as of [#34](https://github.com/Ottatop/pinnacle/pull/34)! It's currently not that polished right now because I got bored of working on it and I want to work on other aspects of Pinnacle, but it should be at least *usable*.
 
 ## Features
 - [x] Winit backend
@@ -25,7 +23,8 @@ Documentation for other branches can be reached at `https://ottatop.github.io/pi
     - [x] Left master stack, corner, dwindle, spiral layouts
     - [ ] Other three master stack directions, floating, magnifier, maximized, and fullscreen layouts
     - [ ] Resizable layouts
-- [ ] XWayland support [(#34)](https://github.com/Ottatop/pinnacle/pull/34)
+- [x] XWayland support
+    - This is currently somewhat buggy. If you find a problem that's not already listed in GitHub issues, feel free to submit it!
 - [ ] Layer-shell support
 - [ ] Server-side decorations
 - [ ] Animations and blur and all that pizazz
@@ -96,6 +95,11 @@ The following will use the example config file in [`api/lua`](api/lua):
 ```
 PINNACLE_CONFIG="./api/lua/example_config.lua" cargo run -- --<backend>
 ```
+
+### API Documentation
+There is a preliminary [doc website](https://ottatop.github.io/pinnacle/main) generated with LDoc. Do note that there are some missing things like the `Keys` table and `Layout` enum as well as any function overloads, but these should be autocompleted through the language server.
+
+Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
 
 ### Autocomplete and that cool stuff
 It is *highly* recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server) and set it up to have the [`api/lua`](api/lua) directory as a library, as I'll be using its doc comments to provide autocomplete and error checking.

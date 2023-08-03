@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{error::Error, sync::Mutex, time::Duration};
+use std::{error::Error, ffi::OsString, sync::Mutex, time::Duration};
 
 use smithay::{
     backend::{
@@ -13,14 +13,17 @@ use smithay::{
                 AsRenderElements,
             },
             gles::{GlesRenderer, GlesTexture},
-            ImportDma, ImportMemWl,
+            ImportDma, ImportEgl, ImportMemWl,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
     delegate_dmabuf,
     desktop::{
         space,
-        utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
+        utils::{
+            send_frames_surface_tree, surface_primary_scanout_output,
+            update_surface_primary_scanout_output,
+        },
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, Subpixel},
@@ -29,6 +32,7 @@ use smithay::{
             timer::{TimeoutAction, Timer},
             EventLoop,
         },
+        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
     utils::{IsAlive, Scale, Transform},
@@ -44,7 +48,7 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
-    state::{CalloopData, State},
+    state::{take_presentation_feedback, CalloopData, State},
 };
 
 use super::Backend;
@@ -172,6 +176,14 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         }
     };
 
+    if winit_backend
+        .renderer()
+        .bind_wl_display(&display_handle)
+        .is_ok()
+    {
+        tracing::info!("EGL hardware-acceleration enabled");
+    }
+
     let mut state = State::<WinitData>::init(
         WinitData {
             backend: winit_backend,
@@ -191,6 +203,16 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
         .update_formats(state.backend_data.backend.renderer().shm_formats());
 
     state.space.map_output(&output, (0, 0));
+
+    if let Err(err) = state.xwayland.start(
+        state.loop_handle.clone(),
+        None,
+        std::iter::empty::<(OsString, OsString)>(),
+        true,
+        |_| {},
+    ) {
+        tracing::error!("Failed to start XWayland: {err}");
+    }
 
     let mut pointer_element = PointerElement::<GlesTexture>::new();
 
@@ -231,7 +253,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 }
             };
 
-            if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
+            if let CursorImageStatus::Surface(surface) = &state.cursor_status {
                 if !surface.alive() {
                     state.cursor_status = CursorImageStatus::Default;
                 }
@@ -270,6 +292,16 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 scale,
                 1.0,
             ));
+
+            if let Some(dnd_icon) = state.dnd_icon.as_ref() {
+                custom_render_elements.extend(AsRenderElements::<GlesRenderer>::render_elements(
+                    &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
+                    state.backend_data.backend.renderer(),
+                    cursor_pos_scaled,
+                    scale,
+                    1.0,
+                ));
+            }
 
             let render_res = state.backend_data.backend.bind().and_then(|_| {
                 let age = if *full_redraw > 0 {
@@ -326,6 +358,21 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         .set_cursor_visible(cursor_visible);
 
                     let throttle = Some(Duration::from_secs(1));
+                    // let throttle = Some(Duration::ZERO);
+
+                    let time = state.clock.now();
+
+                    if let CursorImageStatus::Surface(surf) = &state.cursor_status {
+                        if let Some(op) = state.focus_state.focused_output.as_ref() {
+                            send_frames_surface_tree(
+                                surf,
+                                op,
+                                time,
+                                Some(Duration::ZERO),
+                                |_, _| None,
+                            );
+                        }
+                    }
 
                     state.space.elements().for_each(|window| {
                         window.with_surfaces(|surface, states_inner| {
@@ -349,7 +396,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         if state.space.outputs_for_element(window).contains(&output) {
                             window.send_frame(
                                 &output,
-                                state.clock.now(),
+                                time,
                                 throttle,
                                 surface_primary_scanout_output,
                             );
@@ -358,7 +405,20 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                     });
 
                     if has_rendered {
-                        // TODO:
+                        let mut output_presentation_feedback = take_presentation_feedback(
+                            &output,
+                            &state.space,
+                            &render_output_result.states,
+                        );
+                        output_presentation_feedback.presented(
+                            time,
+                            output
+                                .current_mode()
+                                .map(|mode| mode.refresh as u32)
+                                .unwrap_or_default(),
+                            0,
+                            wp_presentation_feedback::Kind::Vsync,
+                        );
                     }
                 }
                 Err(err) => {

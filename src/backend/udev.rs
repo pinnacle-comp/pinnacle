@@ -7,6 +7,7 @@
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+    ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
     sync::Mutex,
@@ -51,8 +52,11 @@ use smithay::{
     delegate_dmabuf,
     desktop::{
         space::{self, SurfaceTree},
-        utils::{self, surface_primary_scanout_output, OutputPresentationFeedback},
-        Space, Window,
+        utils::{
+            self, send_frames_surface_tree, surface_primary_scanout_output,
+            OutputPresentationFeedback,
+        },
+        Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, PhysicalProperties, Subpixel},
@@ -100,6 +104,7 @@ use crate::{
     api::msg::{Args, OutgoingMsg},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
     state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback},
+    window::WindowElement,
 };
 
 use super::Backend;
@@ -239,6 +244,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
      */
     let udev_backend = UdevBackend::new(state.seat.name())?;
 
+    // Create DrmNodes from already connected GPUs
     for (device_id, path) in udev_backend.device_list() {
         if let Err(err) = DrmNode::from_dev_id(device_id)
             .map_err(DeviceAddError::DrmNode)
@@ -250,6 +256,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
+            // GPU connected
             UdevEvent::Added { device_id, path } => {
                 if let Err(err) = DrmNode::from_dev_id(device_id)
                     .map_err(DeviceAddError::DrmNode)
@@ -263,6 +270,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                     data.state.device_changed(node)
                 }
             }
+            // GPU disconnected
             UdevEvent::Removed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.state.device_removed(node)
@@ -449,8 +457,18 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
             });
         });
 
+    if let Err(err) = state.xwayland.start(
+        state.loop_handle.clone(),
+        None,
+        std::iter::empty::<(OsString, OsString)>(),
+        true,
+        |_| {},
+    ) {
+        tracing::error!("Failed to start XWayland: {err}");
+    }
+
     event_loop.run(
-        Some(Duration::from_millis(6)),
+        Some(Duration::from_millis(1)),
         &mut CalloopData { state, display },
         |data| {
             data.state.space.refresh();
@@ -1360,6 +1378,7 @@ impl State<UdevData> {
             &pointer_image,
             &mut self.backend_data.pointer_element,
             &mut self.cursor_status,
+            self.dnd_icon.as_ref(),
             &self.clock,
         );
         let reschedule = match &result {
@@ -1457,13 +1476,14 @@ impl State<UdevData> {
 fn render_surface<'a>(
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
-    space: &Space<Window>,
+    space: &Space<WindowElement>,
     output: &Output,
     input_method: &InputMethodHandle,
     pointer_location: Point<f64, Logical>,
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
     cursor_status: &mut CursorImageStatus,
+    dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
     let output_geometry = space.output_geometry(output).unwrap();
@@ -1527,7 +1547,15 @@ fn render_surface<'a>(
             1.0,
         ));
 
-        // TODO: dnd icon
+        if let Some(dnd_icon) = dnd_icon {
+            custom_elements.extend(AsRenderElements::render_elements(
+                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
+                renderer,
+                cursor_pos_scaled,
+                scale,
+                1.0,
+            ));
+        }
     }
 
     let mut output_render_elements = custom_elements
@@ -1553,6 +1581,15 @@ fn render_surface<'a>(
     // post_repaint
     {
         let throttle = Some(Duration::from_secs(1));
+
+        let time = clock.now();
+
+        // We need to send frames to the cursor surface so that xwayland windows will properly
+        // update on motion.
+        if let CursorImageStatus::Surface(surf) = cursor_status {
+            send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
+        }
+
         space.elements().for_each(|window| {
             window.with_surfaces(|surface, states_inner| {
                 let primary_scanout_output = utils::update_surface_primary_scanout_output(
@@ -1574,7 +1611,7 @@ fn render_surface<'a>(
             if space.outputs_for_element(window).contains(output) {
                 window.send_frame(
                     output,
-                    clock.now(),
+                    time,
                     throttle,
                     utils::surface_primary_scanout_output,
                 );

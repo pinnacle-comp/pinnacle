@@ -7,7 +7,10 @@ use smithay::{
     },
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::Serial,
+    wayland::seat::WaylandFocus,
 };
+
+use crate::focus::FocusTarget;
 
 /// Returns the [GrabStartData] from a pointer grab, if any.
 pub fn pointer_grab_start_data<S>(
@@ -16,11 +19,11 @@ pub fn pointer_grab_start_data<S>(
     serial: Serial,
 ) -> Option<GrabStartData<S>>
 where
-    S: SeatHandler<PointerFocus = WlSurface> + 'static,
+    S: SeatHandler<PointerFocus = FocusTarget> + 'static,
 {
-    println!("start of pointer_grab_start_data");
+    tracing::debug!("start of pointer_grab_start_data");
     if !pointer.has_grab(serial) {
-        println!("pointer doesn't have grab");
+        tracing::debug!("pointer doesn't have grab");
         return None;
     }
 
@@ -28,8 +31,8 @@ where
 
     let (focus_surface, _point) = start_data.focus.as_ref()?;
 
-    if !focus_surface.id().same_client_as(&surface.id()) {
-        println!("surface isn't the same");
+    if !focus_surface.same_client_as(&surface.id()) {
+        tracing::debug!("surface isn't the same");
         return None;
     }
 

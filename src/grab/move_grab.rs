@@ -1,30 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::Window,
+    desktop::space::SpaceElement,
     // NOTE: maybe alias this to PointerGrabStartData because there's another GrabStartData in
     // |     input::keyboard
     input::{
-        pointer::PointerGrab,
         pointer::{
             AxisFrame, ButtonEvent, GrabStartData, MotionEvent, PointerInnerHandle,
             RelativeMotionEvent,
         },
-        SeatHandler,
+        pointer::{Focus, PointerGrab},
+        Seat, SeatHandler,
     },
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle},
 };
 
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::window_state::WindowResizeState,
+    window::{
+        window_state::{Float, WindowResizeState},
+        WindowElement,
+    },
 };
 
 pub struct MoveSurfaceGrab<S: SeatHandler> {
     pub start_data: GrabStartData<S>,
-    pub window: Window,
+    pub window: WindowElement,
     pub initial_window_loc: Point<i32, Logical>,
+    pub button_used: u32,
 }
 
 impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
@@ -43,6 +48,13 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         }
 
         data.space.raise_element(&self.window, false);
+        if let WindowElement::X11(surface) = &self.window {
+            data.xwm
+                .as_mut()
+                .expect("no xwm")
+                .raise_window(surface)
+                .expect("failed to raise x11 win");
+        }
 
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
@@ -89,9 +101,20 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
             }
         } else {
             let delta = event.location - self.start_data.location;
-            let new_loc = self.initial_window_loc.to_f64() + delta;
-            data.space
-                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+            let new_loc = (self.initial_window_loc.to_f64() + delta).to_i32_round();
+            data.space.map_element(self.window.clone(), new_loc, true);
+            self.window.with_state(|state| {
+                if state.floating.is_floating() {
+                    state.floating = Float::Floating(new_loc);
+                }
+            });
+            if let WindowElement::X11(surface) = &self.window {
+                let geo = surface.geometry();
+                let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
+                surface
+                    .configure(new_geo)
+                    .expect("failed to configure x11 win");
+            }
         }
     }
 
@@ -113,9 +136,7 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     ) {
         handle.button(data, event);
 
-        const BUTTON_LEFT: u32 = 0x110;
-
-        if !handle.current_pressed().contains(&BUTTON_LEFT) {
+        if !handle.current_pressed().contains(&self.button_used) {
             handle.unset_grab(data, event.serial, event.time);
         }
     }
@@ -132,4 +153,72 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     fn start_data(&self) -> &GrabStartData<State<B>> {
         &self.start_data
     }
+}
+
+pub fn move_request_client<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+    button_used: u32,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+    if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, surface, serial) {
+        let Some(window) = state.window_for_surface(surface) else {
+            tracing::error!("Surface had no window, cancelling move request");
+            return;
+        };
+
+        let initial_window_loc = state
+            .space
+            .element_location(&window)
+            .expect("move request was called on an unmapped window");
+
+        let grab = MoveSurfaceGrab {
+            start_data,
+            window,
+            initial_window_loc,
+            button_used,
+        };
+
+        pointer.set_grab(state, grab, serial, Focus::Clear);
+    } else {
+        tracing::warn!("no grab start data");
+    }
+}
+
+pub fn move_request_server<B: Backend>(
+    state: &mut State<B>,
+    surface: &WlSurface,
+    seat: &Seat<State<B>>,
+    serial: smithay::utils::Serial,
+    button_used: u32,
+) {
+    let pointer = seat.get_pointer().expect("seat had no pointer");
+    let Some(window) = state.window_for_surface(surface) else {
+        tracing::error!("Surface had no window, cancelling move request");
+        return;
+    };
+
+    let initial_window_loc = state
+        .space
+        .element_location(&window)
+        .expect("move request was called on an unmapped window");
+
+    let start_data = smithay::input::pointer::GrabStartData {
+        focus: pointer
+            .current_focus()
+            .map(|focus| (focus, initial_window_loc)),
+        button: button_used,
+        location: pointer.current_location(),
+    };
+
+    let grab = MoveSurfaceGrab {
+        start_data,
+        window,
+        initial_window_loc,
+        button_used,
+    };
+
+    pointer.set_grab(state, grab, serial, Focus::Clear);
 }

@@ -25,7 +25,6 @@ mod render;
 mod state;
 mod tag;
 mod window;
-mod xdg;
 
 use std::error::Error;
 
