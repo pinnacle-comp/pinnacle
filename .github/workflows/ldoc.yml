@@ -6,9 +6,13 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - "api/lua/doc/**"
   push:
     branches:
       - main
+    paths:
+      - "api/lua/doc/**"
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
