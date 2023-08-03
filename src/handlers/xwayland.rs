@@ -44,14 +44,12 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         tracing::trace!("map_window_request");
         let win_type = window.window_type();
         tracing::debug!("window type is {win_type:?}");
-        // tracing::debug!("new x11 window from map_window_request");
-        // tracing::debug!("window popup is {}", window.is_popup());
 
         // INFO: This check is here because it happened while launching Ori and the Will of the Wisps
         if window.is_override_redirect() {
+            tracing::warn!("Dealt with override redirect window in map_window_request");
             let loc = window.geometry().loc;
             let window = WindowElement::X11(window);
-            // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
             self.state.space.map_element(window, loc, true);
             return;
         }
@@ -198,6 +196,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
                         // Schedule the popup to raise when all windows have committed after having
                         // their blockers cleared
+                        // FIXME: I've seen one instance where this didn't work, figure that out
                         crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
                             let WindowElement::X11(surface) = &clone else { unreachable!() };
                             if should_float(surface) {
@@ -401,7 +400,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
     fn send_selection(
         &mut self,
-        xwm: XwmId,
+        _xwm: XwmId,
         selection: SelectionType,
         mime_type: String,
         fd: std::os::fd::OwnedFd,
@@ -429,7 +428,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn new_selection(&mut self, xwm: XwmId, selection: SelectionType, mime_types: Vec<String>) {
+    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionType, mime_types: Vec<String>) {
         match selection {
             SelectionType::Clipboard => {
                 set_data_device_selection(
@@ -445,7 +444,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         }
     }
 
-    fn cleared_selection(&mut self, xwm: XwmId, selection: SelectionType) {
+    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionType) {
         match selection {
             SelectionType::Clipboard => {
                 if current_data_device_selection_userdata(&self.state.seat).is_some() {

@@ -627,6 +627,14 @@ impl<B: Backend> State<B> {
     }
 
     pub fn re_layout(&mut self, output: &Output) {
+        for win in self.windows.iter() {
+            if win.is_wayland() {
+                win.with_state(|state| {
+                    tracing::debug!("{:?}", state.resize_state);
+                })
+            }
+        }
+
         let windows = self
             .windows
             .iter()
@@ -685,8 +693,9 @@ impl<B: Backend> State<B> {
                         Float::Floating(loc) => Some((win, loc)),
                     }
                 }) {
-                    // TODO: store location in state
-                    tracing::debug!("------MAPPING FLOATING TO {loc:?}");
+                    if let WindowElement::X11(surface) = &win {
+                        surface.set_mapped(true).expect("failed to map x11 win");
+                    }
                     dt.state.space.map_element(win, loc, false);
                 }
             });
