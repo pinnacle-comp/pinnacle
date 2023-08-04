@@ -93,6 +93,31 @@ function output:focused()
     return output_module.focused(self)
 end
 
+---Set this output's location.
+---
+---### Examples
+---```lua
+----- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+----- Place DP-2 to the left of DP-1, top borders aligned
+---dp1:set_loc({ x = 1920, y = 0 })
+---dp2:set_loc({ x = 0, y = 0 })
+---
+----- Do the same as above, with a different origin
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = -1920, y = 0 })
+---
+----- Place DP-2 to the right of DP-1, bottom borders aligned
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = 2560, y = 1440 - 1080 })
+---```
+---@param loc { x: integer?, y: integer? }
+function output:set_loc(loc)
+    return output_module.set_loc(self, loc)
+end
+
 ------------------------------------------------------
 
 ---Get an output by its name.
@@ -104,7 +129,7 @@ end
 ---### Example
 ---```lua
 ---local monitor = output.get_by_name("DP-1")
----print(monitor.name) -- should print `DP-1`
+---print(monitor:name()) -- should print `DP-1`
 ---```
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
@@ -240,6 +265,8 @@ function output_module.get_for_tag(tag)
     end
 end
 
+---------Fully-qualified functions
+
 ---Get the specified output's make.
 ---@param op Output
 ---@return string|nil
@@ -367,6 +394,38 @@ end
 ---@see Output.add_tags — The corresponding object method
 function output_module.add_tags(op, ...)
     require("tag").add(op, ...)
+end
+
+---Set the specified output's location.
+---
+---### Examples
+---```lua
+----- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+----- Place DP-2 to the left of DP-1, top borders aligned
+---output.set_loc(dp1, { x = 1920, y = 0 })
+---output.set_loc(dp2, { x = 0, y = 0 })
+---
+----- Do the same as above, with a different origin
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = -1920, y = 0 })
+---
+----- Place DP-2 to the right of DP-1, bottom borders aligned
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = 2560, y = 1440 - 1080 })
+---```
+---@param op Output
+---@param loc { x: integer?, y: integer? }
+function output_module.set_loc(op, loc)
+    SendMsg({
+        SetOutputLocation = {
+            output_name = op:name(),
+            x = loc.x,
+            y = loc.y,
+        },
+    })
 end
 
 return output_module

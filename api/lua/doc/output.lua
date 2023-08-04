@@ -121,6 +121,28 @@ function output_module.tags(op) end
 ---@see Output.add_tags
 function output_module.add_tags(op, ...) end
 
+---Set the specified output's location.
+---
+---@usage
+----- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+----- Place DP-2 to the left of DP-1, top borders aligned
+---output.set_loc(dp1, { x = 1920, y = 0 })
+---output.set_loc(dp2, { x = 0, y = 0 })
+---
+----- Do the same as above, with a different origin
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = -1920, y = 0 })
+---
+----- Place DP-2 to the right of DP-1, bottom borders aligned
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = 2560, y = 1440 - 1080 })
+---@tparam Output op
+---@tparam table loc A table of the form `{ x: integer?, y: integer? }`
+function output_module.set_loc(op, loc) end
+
 ----------------------------------------------------------
 
 ---The output object.
@@ -176,3 +198,24 @@ function output:physical_size() end
 ---@treturn boolean|nil
 ---@see OutputModule.focused
 function output:focused() end
+
+---Set this output's location.
+---
+---@usage
+--- -- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+--- -- Place DP-2 to the left of DP-1, top borders aligned
+---dp1:set_loc({ x = 1920, y = 0 })
+---dp2:set_loc({ x = 0, y = 0 })
+---
+--- -- Do the same as above, with a different origin
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = -1920, y = 0 })
+---
+--- -- Place DP-2 to the right of DP-1, bottom borders aligned
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = 2560, y = 1440 - 1080 })
+---@tparam table loc A table of the form `{ x: integer?, y: integer? }`
+function output:set_loc(loc) end

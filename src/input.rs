@@ -440,6 +440,7 @@ impl State<UdevData> {
             // InputEvent::DeviceRemoved { device } => todo!(),
             InputEvent::Keyboard { event } => self.keyboard::<B>(event),
             InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
+            // currently does not seem to use absolute
             InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
             InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
             InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
@@ -557,38 +558,26 @@ impl State<UdevData> {
         }
 
         let (pos_x, pos_y) = pos.into();
-        let max_x = self.space.outputs().fold(0, |acc, o| {
-            acc + self
-                .space
-                .output_geometry(o)
-                .expect("Output geometry doesn't exist")
-                .size
-                .w
-        });
-        let clamped_x = pos_x.clamp(0.0, max_x as f64);
-        let max_y = self
-            .space
-            .outputs()
-            .find(|o| {
-                let geo = self
-                    .space
-                    .output_geometry(o)
-                    .expect("Output geometry doesn't exist");
-                geo.contains((clamped_x as i32, 0))
-            })
-            .map(|o| {
-                self.space
-                    .output_geometry(o)
-                    .expect("Output geometry doesn't exist")
-                    .size
-                    .h
-            });
 
-        if let Some(max_y) = max_y {
-            let clamped_y = pos_y.clamp(0.0, max_y as f64);
-            (clamped_x, clamped_y).into()
-        } else {
-            (clamped_x, pos_y).into()
-        }
+        let nearest_points = self.space.outputs().map(|op| {
+            let size = self
+                .space
+                .output_geometry(op)
+                .expect("called output_geometry on unmapped output")
+                .size;
+            let loc = op.current_location();
+            let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
+            let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
+            (pos_x, pos_y)
+        });
+
+        let nearest_point = nearest_points.min_by(|(x1, y1), (x2, y2)| {
+            f64::total_cmp(
+                &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
+                &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
+            )
+        });
+
+        nearest_point.map(|point| point.into()).unwrap_or(pos)
     }
 }
