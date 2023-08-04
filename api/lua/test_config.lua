@@ -68,13 +68,8 @@ require("pinnacle").setup(function(pinnacle)
     input.keybind({ mod_key }, keys.h, function()
         local dp2 = output.get_by_name("DP-2")
         local dp3 = output.get_by_name("DP-3")
-        output.set_loc(dp2, { x = 1920, y = 0 })
-        output.set_loc(dp3, { x = 0, y = 1440 - 1080 })
-        local dp2loc = dp2:loc()
-        local dp3loc = dp3:loc()
 
-        print("dp2: " .. dp2loc.x .. ", " .. dp2loc.y)
-        print("dp3: " .. dp3loc.x .. ", " .. dp3loc.y)
+        dp2:set_loc_bottom_of(dp3, "right")
 
         -- local win = window.get_focused()
         -- if win ~= nil then

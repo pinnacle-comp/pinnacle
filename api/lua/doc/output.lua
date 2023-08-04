@@ -219,3 +219,35 @@ function output:focused() end
 ---dp2:set_loc({ x = 2560, y = 1440 - 1080 })
 ---@tparam table loc A table of the form `{ x: integer?, y: integer? }`
 function output:set_loc(loc) end
+
+---Set this output's location to the right of `op`.
+---
+---This will fail if `op` is an invalid output.
+---@tparam Output op
+---@tparam[opt="top"] string alignment One of `top`, `center`, or `bottom`. This is how you want to align the `self` output.
+---@see Output.set_loc
+function output:set_loc_right_of(op, alignment) end
+
+---Set this output's location to the left of `op`.
+---
+---This will fail if `op` is an invalid output.
+---@tparam Output op
+---@tparam[opt="top"] string alignment One of `top`, `center`, or `bottom`. This is how you want to align the `self` output.
+---@see Output.set_loc
+function output:set_loc_left_of(op, alignment) end
+
+---Set this output's location to the top of `op`.
+---
+---This will fail if `op` is an invalid output.
+---@tparam Output op
+---@tparam[opt="left"] string alignment One of `left`, `center`, or `right`. This is how you want to align the `self` output.
+---@see Output.set_loc
+function output:set_loc_top_of(op, alignment) end
+
+---Set this output's location to the bottom of `op`.
+---
+---This will fail if `op` is an invalid output.
+---@tparam Output op
+---@tparam[opt="left"] string alignment One of `left`, `center`, or `right`. This is how you want to align the `self` output.
+---@see Output.set_loc
+function output:set_loc_bottom_of(op, alignment) end

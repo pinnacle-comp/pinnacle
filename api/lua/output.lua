@@ -115,8 +115,148 @@ end
 ---```
 ---@param loc { x: integer?, y: integer? }
 function output:set_loc(loc)
-    return output_module.set_loc(self, loc)
+    output_module.set_loc(self, loc)
 end
+
+-- TODO: move this into own file or something ---------------------------------------------
+
+---@alias AlignmentVertical
+---| "top" Align the tops of the outputs
+---| "center" Center the outputs vertically
+---| "bottom" Align the bottoms of the outputs
+
+---@alias AlignmentHorizontal
+---| "left" Align the left edges of the outputs
+---| "center" Center the outputs vertically
+---| "right" Align the right edges of the outputs
+
+---@param op1 Output
+---@param op2 Output
+---@param left_or_right "left" | "right"
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+local function set_loc_horizontal(op1, op2, left_or_right, alignment)
+    local alignment = alignment or "top"
+    local self_loc = op1:loc()
+    local self_res = op1:res()
+    local other_loc = op2:loc()
+    local other_res = op2:res()
+
+    if
+        self_loc == nil
+        or self_res == nil
+        or other_loc == nil
+        or other_res == nil
+    then
+        return
+    end
+
+    ---@type integer
+    local x
+    if left_or_right == "left" then
+        x = other_loc.x - self_res.w
+    else
+        x = other_loc.x + other_res.w
+    end
+
+    if alignment == "top" then
+        output_module.set_loc(op1, { x = x, y = other_loc.y })
+    elseif alignment == "center" then
+        output_module.set_loc(
+            op1,
+            { x = x, y = other_loc.y + (other_res.h - self_res.h) // 2 }
+        )
+    elseif alignment == "bottom" then
+        output_module.set_loc(
+            op1,
+            { x = x, y = other_loc.y + (other_res.h - self_res.h) }
+        )
+    end
+end
+
+---Set this output's location to the right of the specified output.
+---
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_right_of(op, alignment)
+    set_loc_horizontal(self, op, "right", alignment)
+end
+
+---Set this output's location to the left of the specified output.
+---
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_left_of(op, alignment)
+    set_loc_horizontal(self, op, "left", alignment)
+end
+
+---@param op1 Output
+---@param op2 Output
+---@param top_or_bottom "top" | "bottom"
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `top`.
+local function set_loc_vertical(op1, op2, top_or_bottom, alignment)
+    local alignment = alignment or "left"
+    local self_loc = op1:loc()
+    local self_res = op1:res()
+    local other_loc = op2:loc()
+    local other_res = op2:res()
+
+    if
+        self_loc == nil
+        or self_res == nil
+        or other_loc == nil
+        or other_res == nil
+    then
+        return
+    end
+
+    ---@type integer
+    local y
+    if top_or_bottom == "top" then
+        y = other_loc.y - self_res.h
+    else
+        y = other_loc.y + other_res.h
+    end
+
+    if alignment == "left" then
+        output_module.set_loc(op1, { x = other_loc.x, y = y })
+    elseif alignment == "center" then
+        output_module.set_loc(
+            op1,
+            { x = other_loc.x + (other_res.w - self_res.w) // 2, y = y }
+        )
+    elseif alignment == "right" then
+        output_module.set_loc(
+            op1,
+            { x = other_loc.x + (other_res.w - self_res.w), y = y }
+        )
+    end
+end
+
+---Set this output's location to the top of the specified output.
+---
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_top_of(op, alignment)
+    set_loc_vertical(self, op, "top", alignment)
+end
+
+---Set this output's location to the bottom of the specified output.
+---
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_bottom_of(op, alignment)
+    set_loc_vertical(self, op, "bottom", alignment)
+end
+
+-- TODO: ----------------------------------------------------------------------------------
 
 ------------------------------------------------------
 
