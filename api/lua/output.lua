@@ -175,6 +175,14 @@ end
 
 ---Set this output's location to the right of the specified output.
 ---
+---```
+---            top              center            bottom
+--- ┌────────┬──────┐ ┌────────┐        ┌────────┐
+--- │op      │self  │ │op      ├──────┐ │op      │
+--- │        ├──────┘ │        │self  │ │        ├──────┐
+--- │        │        │        ├──────┘ │        │self  │
+--- └────────┘        └────────┘        └────────┴──────┘
+---```
 ---This will fail if `op` is an invalid output.
 ---@param op Output
 ---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
@@ -185,6 +193,14 @@ end
 
 ---Set this output's location to the left of the specified output.
 ---
+---```
+---   top              center            bottom
+--- ┌──────┬────────┐        ┌────────┐        ┌────────┐
+--- │self  │op      │ ┌──────┤op      │        │op      │
+--- └──────┤        │ │self  │        │ ┌──────┤        │
+---        │        │ └──────┤        │ │self  │        │
+---        └────────┘        └────────┘ └──────┴────────┘
+---```
 ---This will fail if `op` is an invalid output.
 ---@param op Output
 ---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
@@ -238,6 +254,15 @@ end
 
 ---Set this output's location to the top of the specified output.
 ---
+---```
+---  left        center      right
+--- ┌──────┐    ┌──────┐    ┌──────┐
+--- │self  │    │self  │    │self  │
+--- ├──────┴─┐ ┌┴──────┴┐ ┌─┴──────┤
+--- │op      │ │op      │ │op      │
+--- │        │ │        │ │        │
+--- └────────┘ └────────┘ └────────┘
+---```
 ---This will fail if `op` is an invalid output.
 ---@param op Output
 ---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
@@ -248,6 +273,15 @@ end
 
 ---Set this output's location to the bottom of the specified output.
 ---
+---```
+--- ┌────────┐ ┌────────┐ ┌────────┐
+--- │op      │ │op      │ │op      │
+--- │        │ │        │ │        │
+--- ├──────┬─┘ └┬──────┬┘ └─┬──────┤
+--- │self  │    │self  │    │self  │
+--- └──────┘    └──────┘    └──────┘
+---  left        center      right
+---```
 ---This will fail if `op` is an invalid output.
 ---@param op Output
 ---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
@@ -255,8 +289,6 @@ end
 function output:set_loc_bottom_of(op, alignment)
     set_loc_vertical(self, op, "bottom", alignment)
 end
-
--- TODO: ----------------------------------------------------------------------------------
 
 ------------------------------------------------------
 

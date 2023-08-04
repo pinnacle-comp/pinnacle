@@ -222,6 +222,13 @@ function output:set_loc(loc) end
 
 ---Set this output's location to the right of `op`.
 ---
+---               top              center            bottom
+---    ┌────────┬──────┐ ┌────────┐        ┌────────┐
+---    │op      │self  │ │op      ├──────┐ │op      │
+---    │        ├──────┘ │        │self  │ │        ├──────┐
+---    │        │        │        ├──────┘ │        │self  │
+---    └────────┘        └────────┘        └────────┴──────┘
+---
 ---This will fail if `op` is an invalid output.
 ---@tparam Output op
 ---@tparam[opt="top"] string alignment One of `top`, `center`, or `bottom`. This is how you want to align the `self` output.
@@ -229,6 +236,13 @@ function output:set_loc(loc) end
 function output:set_loc_right_of(op, alignment) end
 
 ---Set this output's location to the left of `op`.
+---
+---       top              center            bottom
+---     ┌──────┬────────┐        ┌────────┐        ┌────────┐
+---     │self  │op      │ ┌──────┤op      │        │op      │
+---     └──────┤        │ │self  │        │ ┌──────┤        │
+---            │        │ └──────┤        │ │self  │        │
+---            └────────┘        └────────┘ └──────┴────────┘
 ---
 ---This will fail if `op` is an invalid output.
 ---@tparam Output op
@@ -238,6 +252,14 @@ function output:set_loc_left_of(op, alignment) end
 
 ---Set this output's location to the top of `op`.
 ---
+---     left        center      right
+---    ┌──────┐    ┌──────┐    ┌──────┐
+---    │self  │    │self  │    │self  │
+---    ├──────┴─┐ ┌┴──────┴┐ ┌─┴──────┤
+---    │op      │ │op      │ │op      │
+---    │        │ │        │ │        │
+---    └────────┘ └────────┘ └────────┘
+---
 ---This will fail if `op` is an invalid output.
 ---@tparam Output op
 ---@tparam[opt="left"] string alignment One of `left`, `center`, or `right`. This is how you want to align the `self` output.
@@ -245,6 +267,14 @@ function output:set_loc_left_of(op, alignment) end
 function output:set_loc_top_of(op, alignment) end
 
 ---Set this output's location to the bottom of `op`.
+---
+---    ┌────────┐ ┌────────┐ ┌────────┐
+---    │op      │ │op      │ │op      │
+---    │        │ │        │ │        │
+---    ├──────┬─┘ └┬──────┬┘ └─┬──────┤
+---    │self  │    │self  │    │self  │
+---    └──────┘    └──────┘    └──────┘
+---     left        center      right
 ---
 ---This will fail if `op` is an invalid output.
 ---@tparam Output op

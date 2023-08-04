@@ -27,6 +27,15 @@ require("pinnacle").setup(function(pinnacle)
 
     local terminal = "alacritty"
 
+    -- Outputs -----------------------------------------------------------------------
+
+    -- You can set your own monitor layout as I have done below for my monitors.
+
+    -- local lg = output.get_by_name("DP-2") --[[@as Output]]
+    -- local dell = output.get_by_name("DP-3") --[[@as Output]]
+    --
+    -- dell:set_loc_left_of(lg, "bottom")
+
     -- Keybinds ----------------------------------------------------------------------
 
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
