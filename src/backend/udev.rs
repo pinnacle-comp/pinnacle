@@ -32,8 +32,7 @@ use smithay::{
         renderer::{
             damage::{self, OutputDamageTracker},
             element::{
-                self, texture::TextureBuffer, utils::select_dmabuf_feedback, AsRenderElements,
-                RenderElement, RenderElementStates,
+                texture::TextureBuffer, AsRenderElements, RenderElement, RenderElementStates,
             },
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
@@ -52,10 +51,7 @@ use smithay::{
     delegate_dmabuf,
     desktop::{
         space::{self, SurfaceTree},
-        utils::{
-            self, send_frames_surface_tree, surface_primary_scanout_output,
-            OutputPresentationFeedback,
-        },
+        utils::{send_frames_surface_tree, OutputPresentationFeedback},
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -91,7 +87,6 @@ use smithay::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
-        fractional_scale,
         input_method::{InputMethodHandle, InputMethodSeat},
     },
 };
@@ -1582,8 +1577,6 @@ fn render_surface<'a>(
 
     // post_repaint
     {
-        let throttle = Some(Duration::from_secs(1));
-
         let time = clock.now();
 
         // We need to send frames to the cursor surface so that xwayland windows will properly
@@ -1592,56 +1585,19 @@ fn render_surface<'a>(
             send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
         }
 
-        space.elements().for_each(|window| {
-            window.with_surfaces(|surface, states_inner| {
-                let primary_scanout_output = utils::update_surface_primary_scanout_output(
-                    surface,
-                    output,
-                    states_inner,
-                    &res.states,
-                    element::default_primary_scanout_output_compare,
-                );
-
-                if let Some(output) = primary_scanout_output {
-                    fractional_scale::with_fractional_scale(states_inner, |fraction_scale| {
-                        fraction_scale
-                            .set_preferred_scale(output.current_scale().fractional_scale());
-                    });
-                }
-            });
-
-            if space.outputs_for_element(window).contains(output) {
-                window.send_frame(
-                    output,
-                    time,
-                    throttle,
-                    utils::surface_primary_scanout_output,
-                );
-
-                if let Some(dmabuf_feedback) =
-                    surface
-                        .dmabuf_feedback
-                        .as_ref()
-                        .map(|feedback| SurfaceDmabufFeedback {
-                            render_feedback: &feedback.render_feedback,
-                            scanout_feedback: &feedback.scanout_feedback,
-                        })
-                {
-                    window.send_dmabuf_feedback(
-                        output,
-                        surface_primary_scanout_output,
-                        |surface, _| {
-                            select_dmabuf_feedback(
-                                surface,
-                                &res.states,
-                                dmabuf_feedback.render_feedback,
-                                dmabuf_feedback.scanout_feedback,
-                            )
-                        },
-                    );
-                }
-            }
-        });
+        super::post_repaint(
+            output,
+            &res.states,
+            space,
+            surface
+                .dmabuf_feedback
+                .as_ref()
+                .map(|feedback| SurfaceDmabufFeedback {
+                    render_feedback: &feedback.render_feedback,
+                    scanout_feedback: &feedback.scanout_feedback,
+                }),
+            time.into(),
+        )
     }
 
     if res.rendered {

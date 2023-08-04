@@ -58,7 +58,10 @@ use smithay::{
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
         primary_selection::PrimarySelectionState,
-        shell::xdg::{XdgShellState, XdgToplevelSurfaceData},
+        shell::{
+            wlr_layer::WlrLayerShellState,
+            xdg::{XdgShellState, XdgToplevelSurfaceData},
+        },
         shm::ShmState,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
@@ -92,6 +95,7 @@ pub struct State<B: Backend> {
     pub viewporter_state: ViewporterState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub primary_selection_state: PrimarySelectionState,
+    pub layer_shell_state: WlrLayerShellState,
 
     pub input_state: InputState,
     pub api_state: ApiState,
@@ -918,6 +922,7 @@ impl<B: Backend> State<B> {
                 &display_handle,
             ),
             primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
+            layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
             input_state: InputState::new(),
             api_state: ApiState::new(),

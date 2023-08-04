@@ -6,24 +6,25 @@ use std::time::Duration;
 
 use smithay::{
     backend::renderer::utils,
-    delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_output,
-    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
-    delegate_shm, delegate_viewporter, delegate_xdg_shell,
+    delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
+    delegate_output, delegate_presentation, delegate_primary_selection, delegate_relative_pointer,
+    delegate_seat, delegate_shm, delegate_viewporter, delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, utils::surface_primary_scanout_output, PopupKeyboardGrab,
-        PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
+        self, find_popup_root_surface, layer_map_for_output, utils::surface_primary_scanout_output,
+        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
     },
     input::{
         pointer::{CursorImageStatus, Focus},
         Seat, SeatHandler, SeatState,
     },
+    output::Output,
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
             protocol::{
-                wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_seat::WlSeat,
-                wl_surface::WlSurface,
+                wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
+                wl_seat::WlSeat, wl_surface::WlSurface,
             },
             Client, Resource,
         },
@@ -45,9 +46,12 @@ use smithay::{
             self, set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
         },
         seat::WaylandFocus,
-        shell::xdg::{
-            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
-            XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+        shell::{
+            wlr_layer::{self, Layer, WlrLayerShellHandler, WlrLayerShellState},
+            xdg::{
+                Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
+                XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+            },
         },
         shm::{ShmHandler, ShmState},
     },
@@ -640,18 +644,16 @@ impl<B: Backend> FractionalScaleHandler for State<B> {
 
         compositor::with_states(&surface, |states| {
             let primary_scanout_output =
-                smithay::desktop::utils::surface_primary_scanout_output(&surface, states)
+                desktop::utils::surface_primary_scanout_output(&surface, states)
                     .or_else(|| {
                         if root != surface {
                             compositor::with_states(&root, |states| {
-                                smithay::desktop::utils::surface_primary_scanout_output(
-                                    &root, states,
-                                )
-                                .or_else(|| {
-                                    self.window_for_surface(&root).and_then(|window| {
-                                        self.space.outputs_for_element(&window).first().cloned()
+                                desktop::utils::surface_primary_scanout_output(&root, states)
+                                    .or_else(|| {
+                                        self.window_for_surface(&root).and_then(|window| {
+                                            self.space.outputs_for_element(&window).first().cloned()
+                                        })
                                     })
-                                })
                             })
                         } else {
                             self.window_for_surface(&root).and_then(|window| {
@@ -674,3 +676,45 @@ delegate_fractional_scale!(@<B: Backend> State<B>);
 delegate_relative_pointer!(@<B: Backend> State<B>);
 
 delegate_presentation!(@<B: Backend> State<B>);
+
+impl<B: Backend> WlrLayerShellHandler for State<B> {
+    fn shell_state(&mut self) -> &mut WlrLayerShellState {
+        &mut self.layer_shell_state
+    }
+
+    fn new_layer_surface(
+        &mut self,
+        surface: wlr_layer::LayerSurface,
+        output: Option<WlOutput>,
+        _layer: Layer,
+        namespace: String,
+    ) {
+        let output = output
+            .as_ref()
+            .and_then(Output::from_resource)
+            .or_else(|| self.space.outputs().next().cloned());
+
+        let Some(output) = output else {
+            tracing::error!("New layer surface, but there was no output to map it on");
+            return;
+        };
+
+        let mut map = layer_map_for_output(&output);
+        map.map_layer(&desktop::LayerSurface::new(surface, namespace))
+            .expect("failed to map layer surface");
+    }
+
+    fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
+        if let Some((mut map, layer)) = self.space.outputs().find_map(|o| {
+            let map = layer_map_for_output(o);
+            let layer = map
+                .layers()
+                .find(|&layer| layer.layer_surface() == &surface)
+                .cloned();
+            layer.map(|layer| (map, layer))
+        }) {
+            map.unmap_layer(&layer);
+        }
+    }
+}
+delegate_layer_shell!(@<B: Backend> State<B>);
