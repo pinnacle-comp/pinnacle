@@ -4,10 +4,25 @@ use std::cell::RefCell;
 
 use smithay::output::Output;
 
-use crate::{state::WithState, tag::Tag};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+    tag::Tag,
+};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct OutputName(pub String);
+
+impl OutputName {
+    /// Get the output with this name.
+    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+        state
+            .space
+            .outputs()
+            .find(|output| output.name() == self.0)
+            .cloned()
+    }
+}
 
 #[derive(Default)]
 pub struct OutputState {

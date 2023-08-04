@@ -21,6 +21,7 @@
 ---@field SetLayout { tag_id: TagId, layout: Layout }?
 --Outputs
 ---@field ConnectForAllOutputs { callback_id: integer }?
+---@field SetOutputLocation { output_name: OutputName, x: integer?, y: integer? }?
 
 ---@alias Msg _Msg | "Quit"
 

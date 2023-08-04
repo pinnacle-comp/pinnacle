@@ -4,15 +4,6 @@
 ---@module TagModule
 local tag_module = {}
 
----@alias Layout
----| "MasterStack" # One master window on the left with all other windows stacked to the right.
----| "Dwindle" # Windows split in half towards the bottom right corner.
----| "Spiral" # Windows split in half in a spiral.
----| "CornerTopLeft" # One main corner window in the top left with a column of windows on the right and a row on the bottom.
----| "CornerTopRight" # One main corner window in the top right with a column of windows on the left and a row on the bottom.
----| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
----| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
-
 ---Add tags to the specified output.
 ---
 ---@usage

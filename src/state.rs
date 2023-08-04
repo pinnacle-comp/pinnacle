@@ -272,6 +272,20 @@ impl<B: Backend> State<B> {
                 }
                 self.output_callback_ids.push(callback_id);
             }
+            Msg::SetOutputLocation { output_name, x, y } => {
+                let Some(output) = output_name.output(self) else { return };
+                let mut loc = output.current_location();
+                if let Some(x) = x {
+                    loc.x = x;
+                }
+                if let Some(y) = y {
+                    loc.y = y;
+                }
+                output.change_current_state(None, None, None, Some(loc));
+                self.space.map_output(&output, loc);
+                tracing::debug!("mapping output {} to {loc:?}", output.name());
+                self.re_layout(&output);
+            }
 
             Msg::Quit => {
                 self.loop_signal.stop();

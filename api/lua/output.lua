@@ -93,6 +93,203 @@ function output:focused()
     return output_module.focused(self)
 end
 
+---Set this output's location.
+---
+---### Examples
+---```lua
+----- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+----- Place DP-2 to the left of DP-1, top borders aligned
+---dp1:set_loc({ x = 1920, y = 0 })
+---dp2:set_loc({ x = 0, y = 0 })
+---
+----- Do the same as above, with a different origin
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = -1920, y = 0 })
+---
+----- Place DP-2 to the right of DP-1, bottom borders aligned
+---dp1:set_loc({ x = 0, y = 0 })
+---dp2:set_loc({ x = 2560, y = 1440 - 1080 })
+---```
+---@param loc { x: integer?, y: integer? }
+function output:set_loc(loc)
+    output_module.set_loc(self, loc)
+end
+
+-- TODO: move this into own file or something ---------------------------------------------
+
+---@alias AlignmentVertical
+---| "top" Align the tops of the outputs
+---| "center" Center the outputs vertically
+---| "bottom" Align the bottoms of the outputs
+
+---@alias AlignmentHorizontal
+---| "left" Align the left edges of the outputs
+---| "center" Center the outputs vertically
+---| "right" Align the right edges of the outputs
+
+---@param op1 Output
+---@param op2 Output
+---@param left_or_right "left" | "right"
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+local function set_loc_horizontal(op1, op2, left_or_right, alignment)
+    local alignment = alignment or "top"
+    local self_loc = op1:loc()
+    local self_res = op1:res()
+    local other_loc = op2:loc()
+    local other_res = op2:res()
+
+    if
+        self_loc == nil
+        or self_res == nil
+        or other_loc == nil
+        or other_res == nil
+    then
+        return
+    end
+
+    ---@type integer
+    local x
+    if left_or_right == "left" then
+        x = other_loc.x - self_res.w
+    else
+        x = other_loc.x + other_res.w
+    end
+
+    if alignment == "top" then
+        output_module.set_loc(op1, { x = x, y = other_loc.y })
+    elseif alignment == "center" then
+        output_module.set_loc(
+            op1,
+            { x = x, y = other_loc.y + (other_res.h - self_res.h) // 2 }
+        )
+    elseif alignment == "bottom" then
+        output_module.set_loc(
+            op1,
+            { x = x, y = other_loc.y + (other_res.h - self_res.h) }
+        )
+    end
+end
+
+---Set this output's location to the right of the specified output.
+---
+---```
+---            top              center            bottom
+--- ┌────────┬──────┐ ┌────────┐        ┌────────┐
+--- │op      │self  │ │op      ├──────┐ │op      │
+--- │        ├──────┘ │        │self  │ │        ├──────┐
+--- │        │        │        ├──────┘ │        │self  │
+--- └────────┘        └────────┘        └────────┴──────┘
+---```
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_right_of(op, alignment)
+    set_loc_horizontal(self, op, "right", alignment)
+end
+
+---Set this output's location to the left of the specified output.
+---
+---```
+---   top              center            bottom
+--- ┌──────┬────────┐        ┌────────┐        ┌────────┐
+--- │self  │op      │ ┌──────┤op      │        │op      │
+--- └──────┤        │ │self  │        │ ┌──────┤        │
+---        │        │ └──────┤        │ │self  │        │
+---        └────────┘        └────────┘ └──────┴────────┘
+---```
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentVertical? How you want to align the `self` output. Defaults to `top`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_left_of(op, alignment)
+    set_loc_horizontal(self, op, "left", alignment)
+end
+
+---@param op1 Output
+---@param op2 Output
+---@param top_or_bottom "top" | "bottom"
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `top`.
+local function set_loc_vertical(op1, op2, top_or_bottom, alignment)
+    local alignment = alignment or "left"
+    local self_loc = op1:loc()
+    local self_res = op1:res()
+    local other_loc = op2:loc()
+    local other_res = op2:res()
+
+    if
+        self_loc == nil
+        or self_res == nil
+        or other_loc == nil
+        or other_res == nil
+    then
+        return
+    end
+
+    ---@type integer
+    local y
+    if top_or_bottom == "top" then
+        y = other_loc.y - self_res.h
+    else
+        y = other_loc.y + other_res.h
+    end
+
+    if alignment == "left" then
+        output_module.set_loc(op1, { x = other_loc.x, y = y })
+    elseif alignment == "center" then
+        output_module.set_loc(
+            op1,
+            { x = other_loc.x + (other_res.w - self_res.w) // 2, y = y }
+        )
+    elseif alignment == "right" then
+        output_module.set_loc(
+            op1,
+            { x = other_loc.x + (other_res.w - self_res.w), y = y }
+        )
+    end
+end
+
+---Set this output's location to the top of the specified output.
+---
+---```
+---  left        center      right
+--- ┌──────┐    ┌──────┐    ┌──────┐
+--- │self  │    │self  │    │self  │
+--- ├──────┴─┐ ┌┴──────┴┐ ┌─┴──────┤
+--- │op      │ │op      │ │op      │
+--- │        │ │        │ │        │
+--- └────────┘ └────────┘ └────────┘
+---```
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_top_of(op, alignment)
+    set_loc_vertical(self, op, "top", alignment)
+end
+
+---Set this output's location to the bottom of the specified output.
+---
+---```
+--- ┌────────┐ ┌────────┐ ┌────────┐
+--- │op      │ │op      │ │op      │
+--- │        │ │        │ │        │
+--- ├──────┬─┘ └┬──────┬┘ └─┬──────┤
+--- │self  │    │self  │    │self  │
+--- └──────┘    └──────┘    └──────┘
+---  left        center      right
+---```
+---This will fail if `op` is an invalid output.
+---@param op Output
+---@param alignment AlignmentHorizontal? How you want to align the `self` output. Defaults to `left`.
+---@see Output.set_loc if you need more granular control
+function output:set_loc_bottom_of(op, alignment)
+    set_loc_vertical(self, op, "bottom", alignment)
+end
+
 ------------------------------------------------------
 
 ---Get an output by its name.
@@ -104,7 +301,7 @@ end
 ---### Example
 ---```lua
 ---local monitor = output.get_by_name("DP-1")
----print(monitor.name) -- should print `DP-1`
+---print(monitor:name()) -- should print `DP-1`
 ---```
 ---@param name string The name of the output.
 ---@return Output|nil output The output, or nil if none have the provided name.
@@ -240,6 +437,8 @@ function output_module.get_for_tag(tag)
     end
 end
 
+---------Fully-qualified functions
+
 ---Get the specified output's make.
 ---@param op Output
 ---@return string|nil
@@ -367,6 +566,38 @@ end
 ---@see Output.add_tags — The corresponding object method
 function output_module.add_tags(op, ...)
     require("tag").add(op, ...)
+end
+
+---Set the specified output's location.
+---
+---### Examples
+---```lua
+----- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+---local dp1 = output.get_by_name("DP-1")
+---local dp2 = output.get_by_name("DP-2")
+---
+----- Place DP-2 to the left of DP-1, top borders aligned
+---output.set_loc(dp1, { x = 1920, y = 0 })
+---output.set_loc(dp2, { x = 0, y = 0 })
+---
+----- Do the same as above, with a different origin
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = -1920, y = 0 })
+---
+----- Place DP-2 to the right of DP-1, bottom borders aligned
+---output.set_loc(dp1, { x = 0, y = 0 })
+---output.set_loc(dp2, { x = 2560, y = 1440 - 1080 })
+---```
+---@param op Output
+---@param loc { x: integer?, y: integer? }
+function output_module.set_loc(op, loc)
+    SendMsg({
+        SetOutputLocation = {
+            output_name = op:name(),
+            x = loc.x,
+            y = loc.y,
+        },
+    })
 end
 
 return output_module

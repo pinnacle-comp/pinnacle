@@ -3,7 +3,7 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::{layout::Layout, tag::TagId, window::window_state::WindowId};
+use crate::{layout::Layout, output::OutputName, tag::TagId, window::window_state::WindowId};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -67,6 +67,13 @@ pub enum Msg {
     // Output management
     ConnectForAllOutputs {
         callback_id: CallbackId,
+    },
+    SetOutputLocation {
+        output_name: OutputName,
+        #[serde(default)]
+        x: Option<i32>,
+        #[serde(default)]
+        y: Option<i32>,
     },
 
     // Process management
