@@ -1332,13 +1332,15 @@ impl State<UdevData> {
         let pointer_images = &mut self.backend_data.pointer_images;
         let pointer_image = pointer_images
             .iter()
-            .find_map(|(image, texture)| {
-                if image == &frame {
-                    Some(texture.clone())
-                } else {
-                    None
-                }
-            })
+            .find_map(
+                |(image, texture)| {
+                    if image == &frame {
+                        Some(texture.clone())
+                    } else {
+                        None
+                    }
+                },
+            )
             .unwrap_or_else(|| {
                 let texture = TextureBuffer::from_memory(
                     &mut renderer,

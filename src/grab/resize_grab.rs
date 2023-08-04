@@ -147,16 +147,8 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
             min_size.h,
         );
 
-        let max_width = if max_size.w != 0 {
-            max_size.w
-        } else {
-            i32::MAX
-        };
-        let max_height = if max_size.h != 0 {
-            max_size.h
-        } else {
-            i32::MAX
-        };
+        let max_width = if max_size.w != 0 { max_size.w } else { i32::MAX };
+        let max_height = if max_size.h != 0 { max_size.h } else { i32::MAX };
 
         self.last_window_size = Size::from((
             new_window_width.clamp(min_width, max_width),

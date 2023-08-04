@@ -122,11 +122,7 @@ fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output
                 Below,
             }
 
-            let slice = if i % 2 == 0 {
-                Slice::Right
-            } else {
-                Slice::Below
-            };
+            let slice = if i % 2 == 0 { Slice::Right } else { Slice::Below };
 
             match slice {
                 Slice::Right => {
