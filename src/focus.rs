@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::PopupKind,
+    desktop::{LayerSurface, PopupKind},
     input::{
         keyboard::KeyboardTarget,
         pointer::{MotionEvent, PointerTarget},
@@ -49,7 +49,7 @@ impl FocusState {
 pub enum FocusTarget {
     Window(WindowElement),
     Popup(PopupKind),
-    // TODO: LayerSurface
+    LayerSurface(LayerSurface),
 }
 
 impl IsAlive for FocusTarget {
@@ -57,6 +57,7 @@ impl IsAlive for FocusTarget {
         match self {
             FocusTarget::Window(window) => window.alive(),
             FocusTarget::Popup(popup) => popup.alive(),
+            FocusTarget::LayerSurface(surf) => surf.alive(),
         }
     }
 }
@@ -77,6 +78,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::enter(popup.wl_surface(), seat, data, event);
             }
+            FocusTarget::LayerSurface(surf) => PointerTarget::enter(surf, seat, data, event),
         }
     }
 
@@ -86,6 +88,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::motion(popup.wl_surface(), seat, data, event);
             }
+            FocusTarget::LayerSurface(surf) => PointerTarget::motion(surf, seat, data, event),
         }
     }
 
@@ -102,6 +105,9 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::relative_motion(popup.wl_surface(), seat, data, event);
             }
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::relative_motion(surf, seat, data, event);
+            }
         }
     }
 
@@ -116,6 +122,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::button(popup.wl_surface(), seat, data, event);
             }
+            FocusTarget::LayerSurface(surf) => PointerTarget::button(surf, seat, data, event),
         }
     }
 
@@ -128,6 +135,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
         match self {
             FocusTarget::Window(window) => PointerTarget::axis(window, seat, data, frame),
             FocusTarget::Popup(popup) => PointerTarget::axis(popup.wl_surface(), seat, data, frame),
+            FocusTarget::LayerSurface(surf) => PointerTarget::axis(surf, seat, data, frame),
         }
     }
 
@@ -144,6 +152,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::leave(popup.wl_surface(), seat, data, serial, time);
             }
+            FocusTarget::LayerSurface(surf) => PointerTarget::leave(surf, seat, data, serial, time),
         }
     }
 }
@@ -161,6 +170,9 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 KeyboardTarget::enter(popup.wl_surface(), seat, data, keys, serial);
             }
+            FocusTarget::LayerSurface(surf) => {
+                KeyboardTarget::enter(surf, seat, data, keys, serial);
+            }
         }
     }
 
@@ -170,6 +182,7 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 KeyboardTarget::leave(popup.wl_surface(), seat, data, serial);
             }
+            FocusTarget::LayerSurface(surf) => KeyboardTarget::leave(surf, seat, data, serial),
         }
     }
 
@@ -189,6 +202,9 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 KeyboardTarget::key(popup.wl_surface(), seat, data, key, state, serial, time);
             }
+            FocusTarget::LayerSurface(surf) => {
+                KeyboardTarget::key(surf, seat, data, key, state, serial, time);
+            }
         }
     }
 
@@ -206,6 +222,9 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 KeyboardTarget::modifiers(popup.wl_surface(), seat, data, modifiers, serial);
             }
+            FocusTarget::LayerSurface(surf) => {
+                KeyboardTarget::modifiers(surf, seat, data, modifiers, serial);
+            }
         }
     }
 }
@@ -215,6 +234,7 @@ impl WaylandFocus for FocusTarget {
         match self {
             FocusTarget::Window(window) => window.wl_surface(),
             FocusTarget::Popup(popup) => Some(popup.wl_surface().clone()),
+            FocusTarget::LayerSurface(surf) => Some(surf.wl_surface().clone()),
         }
     }
 
@@ -226,6 +246,7 @@ impl WaylandFocus for FocusTarget {
             FocusTarget::Window(WindowElement::Wayland(window)) => window.same_client_as(object_id),
             FocusTarget::Window(WindowElement::X11(surface)) => surface.same_client_as(object_id),
             FocusTarget::Popup(popup) => popup.wl_surface().id().same_client_as(object_id),
+            FocusTarget::LayerSurface(surf) => surf.wl_surface().id().same_client_as(object_id),
         }
     }
 }
@@ -239,5 +260,11 @@ impl From<WindowElement> for FocusTarget {
 impl From<PopupKind> for FocusTarget {
     fn from(value: PopupKind) -> Self {
         FocusTarget::Popup(value)
+    }
+}
+
+impl From<LayerSurface> for FocusTarget {
+    fn from(value: LayerSurface) -> Self {
+        FocusTarget::LayerSurface(value)
     }
 }

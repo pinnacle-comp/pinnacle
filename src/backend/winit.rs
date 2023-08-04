@@ -8,23 +8,14 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{
-                default_primary_scanout_output_compare, surface::WaylandSurfaceRenderElement,
-                AsRenderElements,
-            },
+            element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
             gles::{GlesRenderer, GlesTexture},
             ImportDma, ImportEgl, ImportMemWl,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
     delegate_dmabuf,
-    desktop::{
-        space,
-        utils::{
-            send_frames_surface_tree, surface_primary_scanout_output,
-            update_surface_primary_scanout_output,
-        },
-    },
+    desktop::{space, utils::send_frames_surface_tree},
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, Subpixel},
     reexports::{
@@ -42,7 +33,6 @@ use smithay::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
-        fractional_scale::with_fractional_scale,
     },
 };
 
@@ -357,11 +347,9 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         .window()
                         .set_cursor_visible(cursor_visible);
 
-                    let throttle = Some(Duration::from_secs(1));
-                    // let throttle = Some(Duration::ZERO);
-
                     let time = state.clock.now();
 
+                    // Send frames to the cursor surface so it updates in xwayland
                     if let CursorImageStatus::Surface(surf) = &state.cursor_status {
                         if let Some(op) = state.focus_state.focused_output.as_ref() {
                             send_frames_surface_tree(
@@ -374,35 +362,13 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         }
                     }
 
-                    state.space.elements().for_each(|window| {
-                        window.with_surfaces(|surface, states_inner| {
-                            let primary_scanout_output = update_surface_primary_scanout_output(
-                                surface,
-                                &output,
-                                states_inner,
-                                &render_output_result.states,
-                                default_primary_scanout_output_compare,
-                            );
-
-                            if let Some(output) = primary_scanout_output {
-                                with_fractional_scale(states_inner, |fraction_scale| {
-                                    fraction_scale.set_preferred_scale(
-                                        output.current_scale().fractional_scale(),
-                                    );
-                                });
-                            }
-                        });
-
-                        if state.space.outputs_for_element(window).contains(&output) {
-                            window.send_frame(
-                                &output,
-                                time,
-                                throttle,
-                                surface_primary_scanout_output,
-                            );
-                            // TODO: dmabuf_feedback
-                        }
-                    });
+                    super::post_repaint(
+                        &output,
+                        &render_output_result.states,
+                        &state.space,
+                        None,
+                        time.into(),
+                    );
 
                     if has_rendered {
                         let mut output_presentation_feedback = take_presentation_feedback(
@@ -432,11 +398,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 .flush_clients()
                 .expect("failed to flush client buffers");
 
-            TimeoutAction::ToDuration(Duration::from_millis(6))
+            TimeoutAction::ToDuration(Duration::from_millis(1))
         })?;
 
     event_loop.run(
-        Some(Duration::from_millis(6)),
+        Some(Duration::from_millis(1)),
         &mut CalloopData { display, state },
         |_data| {
             // println!("{}", _data.state.space.elements().count());
