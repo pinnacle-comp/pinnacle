@@ -129,3 +129,6 @@ The following controls are currently hardcoded:
 - `Ctrl + Alt + Shift + Esc`: Kill Pinnacle. This is for when the compositor inevitably locks up because I did a dumb thing :thumbsup:
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
+
+## Feature Requests, Bug Reports, Contributions, and Questions
+See [CONTRIBUTING.md](CONTRIBUTING.md).
