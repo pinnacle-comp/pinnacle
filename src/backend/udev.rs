@@ -1581,30 +1581,27 @@ fn render_surface<'a>(
         [0.6, 0.6, 0.6, 1.0],
     )?;
 
-    // post_repaint
-    {
-        let time = clock.now();
+    let time = clock.now();
 
-        // We need to send frames to the cursor surface so that xwayland windows will properly
-        // update on motion.
-        if let CursorImageStatus::Surface(surf) = cursor_status {
-            send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
-        }
-
-        super::post_repaint(
-            output,
-            &res.states,
-            space,
-            surface
-                .dmabuf_feedback
-                .as_ref()
-                .map(|feedback| SurfaceDmabufFeedback {
-                    render_feedback: &feedback.render_feedback,
-                    scanout_feedback: &feedback.scanout_feedback,
-                }),
-            time.into(),
-        )
+    // We need to send frames to the cursor surface so that xwayland windows will properly
+    // update on motion.
+    if let CursorImageStatus::Surface(surf) = cursor_status {
+        send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
+
+    super::post_repaint(
+        output,
+        &res.states,
+        space,
+        surface
+            .dmabuf_feedback
+            .as_ref()
+            .map(|feedback| SurfaceDmabufFeedback {
+                render_feedback: &feedback.render_feedback,
+                scanout_feedback: &feedback.scanout_feedback,
+            }),
+        time.into(),
+    );
 
     if res.rendered {
         let output_presentation_feedback = take_presentation_feedback(output, space, &res.states);

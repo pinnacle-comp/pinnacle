@@ -12,14 +12,14 @@ use smithay::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
         KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
-    desktop::space::SpaceElement,
+    desktop::{layer_map_for_output, space::SpaceElement},
     input::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, PointerTarget},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::{compositor, seat::WaylandFocus},
+    wayland::{compositor, seat::WaylandFocus, shell::wlr_layer},
 };
 
 use crate::{
@@ -46,10 +46,45 @@ impl<B: Backend> State<B> {
     where
         P: Into<Point<f64, Logical>>,
     {
-        // TODO: layer map, popups, fullscreen
-        self.space
-            .element_under(point)
-            .map(|(window, loc)| (window.clone().into(), loc))
+        // TODO: fullscreen
+        let point: Point<f64, Logical> = point.into();
+
+        let output = self.space.outputs().find(|op| {
+            self.space
+                .output_geometry(op)
+                .expect("called output_geometry on unmapped output (this shouldn't happen here)")
+                .contains(point.to_i32_round())
+        })?;
+
+        let output_geo = self
+            .space
+            .output_geometry(output)
+            .expect("called output_geometry on unmapped output");
+
+        let layers = layer_map_for_output(output);
+
+        // I think I'm going a bit too far with the functional stuff
+        layers
+            .layer_under(wlr_layer::Layer::Overlay, point)
+            .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
+            .map(|layer| {
+                let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+                (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+            })
+            .or_else(|| {
+                self.space
+                    .element_under(point)
+                    .map(|(window, loc)| (window.clone().into(), loc))
+            })
+            .or_else(|| {
+                layers
+                    .layer_under(wlr_layer::Layer::Bottom, point)
+                    .or_else(|| layers.layer_under(wlr_layer::Layer::Background, point))
+                    .map(|layer| {
+                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+                    })
+            })
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
@@ -166,8 +201,7 @@ impl<B: Backend> State<B> {
                     // |     to wonky things like right-click menus not correctly getting pointer
                     // |     clicks or showing up at all.
 
-                    // TODO: TOMORROW: Firefox needs 2 clicks to open up right-click menu, first
-                    // |     one immediately dissapears
+                    // TODO: use update_keyboard_focus from anvil
 
                     if !matches!(&window, WindowElement::X11(surf) if surf.is_override_redirect()) {
                         keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);

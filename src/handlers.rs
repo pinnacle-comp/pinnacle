@@ -12,6 +12,7 @@ use smithay::{
     desktop::{
         self, find_popup_root_surface, layer_map_for_output, utils::surface_primary_scanout_output,
         PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
+        WindowSurfaceType,
     },
     input::{
         pointer::{CursorImageStatus, Focus},
@@ -47,7 +48,7 @@ use smithay::{
         },
         seat::WaylandFocus,
         shell::{
-            wlr_layer::{self, Layer, WlrLayerShellHandler, WlrLayerShellState},
+            wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
             xdg::{
                 Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
                 XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
@@ -202,7 +203,33 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
                 .expect("popup initial configure failed");
         }
     }
-    // TODO: layer map thingys
+
+    if let Some(output) = state.space.outputs().find(|op| {
+        let map = layer_map_for_output(op);
+        map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+            .is_some()
+    }) {
+        let initial_configure_sent = compositor::with_states(surface, |states| {
+            states
+                .data_map
+                .get::<LayerSurfaceData>()
+                .expect("no LayerSurfaceData")
+                .lock()
+                .expect("failed to lock data")
+                .initial_configure_sent
+        });
+
+        let mut map = layer_map_for_output(output);
+
+        map.arrange();
+
+        if !initial_configure_sent {
+            map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                .expect("no layer for surface")
+                .layer_surface()
+                .send_configure();
+        }
+    }
 }
 
 impl<B: Backend> ClientDndGrabHandler for State<B> {
@@ -545,13 +572,21 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
         let seat: Seat<Self> = Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
-        if let Some(root) = find_popup_root_surface(&popup_kind)
-            .ok()
-            .and_then(|root| self.window_for_surface(&root))
-        {
-            if let Ok(mut grab) =
-                self.popup_manager
-                    .grab_popup(FocusTarget::Window(root), popup_kind, &seat, serial)
+        if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
+            self.window_for_surface(&root)
+                .map(FocusTarget::Window)
+                .or_else(|| {
+                    self.space.outputs().find_map(|op| {
+                        layer_map_for_output(op)
+                            .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
+                            .cloned()
+                            .map(FocusTarget::LayerSurface)
+                    })
+                })
+        }) {
+            if let Ok(mut grab) = self
+                .popup_manager
+                .grab_popup(root, popup_kind, &seat, serial)
             {
                 if let Some(keyboard) = seat.get_keyboard() {
                     if keyboard.is_grabbed()
