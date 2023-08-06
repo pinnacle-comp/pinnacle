@@ -829,7 +829,7 @@ impl<B: Backend> State<B> {
             let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
             let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
 
-            std::process::Command::new("lua5.4")
+            std::process::Command::new("lua")
                 .arg(config_path)
                 .env("LUA_PATH", new_lua_path)
                 .env("LUA_CPATH", new_lua_cpath)
