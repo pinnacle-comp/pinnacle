@@ -89,14 +89,28 @@ impl PinnacleSocketSource {
     pub fn new(sender: Sender<Msg>) -> Result<Self, io::Error> {
         let socket_path = Path::new(SOCKET_PATH);
 
+        // TODO: use anyhow
+
         if let Ok(exists) = socket_path.try_exists() {
             if exists {
-                std::fs::remove_file(socket_path)?;
+                if let Err(err) = std::fs::remove_file(socket_path) {
+                    tracing::error!("Failed to remove old socket: {err}");
+                    return Err(err);
+                }
             }
         }
 
-        let listener = UnixListener::bind(socket_path)?;
-        listener.set_nonblocking(true)?;
+        let listener = match UnixListener::bind(socket_path) {
+            Ok(listener) => listener,
+            Err(err) => {
+                tracing::error!("Failed to bind to socket: {err}");
+                return Err(err);
+            }
+        };
+        if let Err(err) = listener.set_nonblocking(true) {
+            tracing::error!("Failed to set socket to nonblocking: {err}");
+            return Err(err);
+        }
 
         let socket = Generic::new(listener, Interest::READ, Mode::Level);
 

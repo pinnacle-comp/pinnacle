@@ -17,6 +17,7 @@ pkgs.mkShell {
         pkgs.libGL
         pkgs.libGL.dev
         pkgs.egl-wayland
+        pkgs.xwayland
     ];
     shellHook = ''
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:${pkgs.libGL}/lib

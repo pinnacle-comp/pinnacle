@@ -749,6 +749,10 @@ impl<B: Backend> State<B> {
         let socket_name = socket.socket_name().to_os_string();
 
         std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
+        tracing::info!(
+            "Set WAYLAND_DISPLAY to {}",
+            socket_name.clone().to_string_lossy()
+        );
 
         // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
         // example. Because of this, opening up only around 100 processes would exhaust the file
@@ -756,12 +760,15 @@ impl<B: Backend> State<B> {
         //
         // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
         // environment, I *think* this is ok.
+        tracing::info!("Trying to raise file descriptor limit...");
         if let Err(err) = smithay::reexports::nix::sys::resource::setrlimit(
             smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
             65536,
             65536 * 2,
         ) {
             tracing::error!("Could not raise fd limit: errno {err}");
+        } else {
+            tracing::info!("Fd raise success!");
         }
 
         loop_handle.insert_source(socket, |stream, _metadata, data| {
@@ -789,7 +796,17 @@ impl<B: Backend> State<B> {
         // TODO: there should only ever be one client working at a time, and creating a new client
         // |     when one is already running should be impossible.
         // INFO: this source try_clone()s the stream
-        loop_handle.insert_source(PinnacleSocketSource::new(tx_channel)?, |stream, _, data| {
+
+        // TODO: probably use anyhow or something
+        let socket_source = match PinnacleSocketSource::new(tx_channel) {
+            Ok(source) => source,
+            Err(err) => {
+                tracing::error!("Failed to create the socket source: {err}");
+                Err(err)?
+            }
+        };
+
+        loop_handle.insert_source(socket_source, |stream, _, data| {
             if let Some(old_stream) = data
                 .state
                 .api_state
@@ -817,7 +834,10 @@ impl<B: Backend> State<B> {
         });
 
         if Path::new(&config_path).exists() {
-            let lua_path = std::env::var("LUA_PATH").expect("Lua is not installed!");
+            let lua_path = std::env::var("LUA_PATH").unwrap_or_else(|_| {
+                tracing::info!("LUA_PATH was not set, using empty string");
+                "".to_string()
+            });
             let mut local_lua_path = std::env::current_dir()
                 .expect("Couldn't get current dir")
                 .to_string_lossy()
@@ -826,15 +846,21 @@ impl<B: Backend> State<B> {
             let new_lua_path =
             format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
 
-            let lua_cpath = std::env::var("LUA_CPATH").expect("Lua is not installed!");
+            let lua_cpath = std::env::var("LUA_CPATH").unwrap_or_else(|_| {
+                tracing::info!("LUA_CPATH was not set, using empty string");
+                "".to_string()
+            });
             let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
 
-            std::process::Command::new("lua")
+            if let Err(err) = std::process::Command::new("lua")
                 .arg(config_path)
                 .env("LUA_PATH", new_lua_path)
                 .env("LUA_CPATH", new_lua_cpath)
                 .spawn()
-                .expect("Could not start config process");
+            {
+                tracing::error!("Failed to start Lua: {err}");
+                return Err(err)?;
+            }
         } else {
             tracing::error!("Could not find {}", config_path);
         }
