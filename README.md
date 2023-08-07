@@ -138,7 +138,7 @@ The following will use the example config file in [`api/lua`](api/lua):
 PINNACLE_CONFIG="./api/lua/example_config.lua" cargo run -- --<backend>
 ```
 
-> ##### :information_source: The config is an external process.
+> #### :information_source: The config is an external process.
 > If it crashes for whatever reason, all of your keybinds will stop working.
 > Again, you can exit the compositor with `Ctrl + Alt + Shift + Escape`.
 >
