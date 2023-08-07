@@ -48,7 +48,7 @@ use smithay::reexports::calloop::{
 
 use self::msg::{Msg, OutgoingMsg};
 
-const SOCKET_PATH: &str = "/tmp/pinnacle_socket";
+const DEFAULT_SOCKET_DIR: &str = "/tmp";
 
 fn handle_client(
     mut stream: UnixStream,
@@ -87,21 +87,34 @@ pub struct PinnacleSocketSource {
 
 impl PinnacleSocketSource {
     pub fn new(sender: Sender<Msg>) -> Result<Self, io::Error> {
-        let socket_path = Path::new(SOCKET_PATH);
+        let socket_path = std::env::var("SOCKET_DIR").unwrap_or(DEFAULT_SOCKET_DIR.to_string());
+        let socket_path = Path::new(&socket_path);
+        if !socket_path.is_dir() {
+            tracing::error!("SOCKET_DIR must be a directory");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "SOCKET_DIR must be a directory",
+            ));
+        }
+
+        let socket_path = socket_path.join("pinnacle_socket");
 
         // TODO: use anyhow
 
         if let Ok(exists) = socket_path.try_exists() {
             if exists {
-                if let Err(err) = std::fs::remove_file(socket_path) {
+                if let Err(err) = std::fs::remove_file(&socket_path) {
                     tracing::error!("Failed to remove old socket: {err}");
                     return Err(err);
                 }
             }
         }
 
-        let listener = match UnixListener::bind(socket_path) {
-            Ok(listener) => listener,
+        let listener = match UnixListener::bind(&socket_path) {
+            Ok(listener) => {
+                tracing::info!("Bound to socket at {socket_path:?}");
+                listener
+            }
             Err(err) => {
                 tracing::error!("Failed to bind to socket: {err}");
                 return Err(err);
