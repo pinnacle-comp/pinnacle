@@ -102,7 +102,7 @@ cargo run [--release] -- --<backend>
 > :information_source: When running in debug mode, the compositor will drastically slow down
 > if there are too many windows on screen. If you don't want this to happen, use release mode.
 
-> ##### :exclamation: IMPORTANT: Read the following before you launch the `udev` backend:
+> #### :exclamation: IMPORTANT: Read the following before you launch the `udev` backend:
 > If you successfully enter the `udev` backend but none of the controls work, this means either Pinnacle
 failed to find your config, or the config process crashed.
 > 
@@ -112,14 +112,14 @@ failed to find your config, or the config process crashed.
 > ```
 > has been hardcoded in to kill the compositor.
 
-> ##### :information_source: Pinnacle will open a socket in the `/tmp` directory.
+> #### :information_source: Pinnacle will open a socket in the `/tmp` directory.
 > If for whatever reason you need the socket to be in a different place, run Pinnacle with
 > the `SOCKET_DIR` environment variable:
 > ```sh
 > SOCKET_DIR=/path/to/new/dir/ cargo run -- --<backend>
 > ```
 
-> ##### :warning: Don't run Pinnacle as root.
+> #### :warning: Don't run Pinnacle as root.
 > This will open the socket with root-only permissions, and future non-root invocations
 of Pinnacle will fail when trying to remove the socket until it is removed manually.
 
