@@ -2,8 +2,9 @@
 
 use itertools::{Either, Itertools};
 use smithay::{
+    desktop::{layer_map_for_output, Space},
     output::Output,
-    utils::{Logical, Size},
+    utils::{Logical, Rectangle, Size},
 };
 
 use crate::{
@@ -25,36 +26,55 @@ pub enum Layout {
 }
 
 impl Layout {
-    pub fn layout<B: Backend>(
+    pub fn layout(
         &self,
         windows: Vec<WindowElement>,
         tags: Vec<Tag>,
-        state: &mut State<B>,
+        space: &mut Space<WindowElement>,
         output: &Output,
     ) {
         let windows = filter_windows(&windows, tags);
 
+        let Some(rect) = space.output_geometry(output).map(|op_geo| {
+            let map = layer_map_for_output(output);
+            if map.layers().peekable().peek().is_none() {
+                // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
+                // |     output res, even when there are no layer surfaces mapped. In this case, we
+                // |     just return the output geometry.
+                op_geo
+            } else {
+                let zone = map.non_exclusive_zone();
+                tracing::debug!("non_exclusive_zone is {zone:?}");
+                Rectangle::from_loc_and_size(op_geo.loc + zone.loc, zone.size)
+            }
+        }) else {
+            // TODO: maybe default to something like 800x800 like in anvil so people still see
+            // |     windows open
+            tracing::error!("Failed to get output geometry");
+            return;
+        };
+
+        tracing::debug!("Laying out with rect {rect:?}");
+
         match self {
-            Layout::MasterStack => master_stack(windows, state, output),
-            Layout::Dwindle => dwindle(windows, state, output),
-            Layout::Spiral => spiral(windows, state, output),
+            Layout::MasterStack => master_stack(windows, space, rect),
+            Layout::Dwindle => dwindle(windows, space, rect),
+            Layout::Spiral => spiral(windows, space, rect),
             layout @ (Layout::CornerTopLeft
             | Layout::CornerTopRight
             | Layout::CornerBottomLeft
-            | Layout::CornerBottomRight) => corner(layout, windows, state, output),
+            | Layout::CornerBottomRight) => corner(layout, windows, space, rect),
         }
     }
 }
 
-fn master_stack<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
-    let space = &mut state.space;
-
-    let Some(output_geo) = space.output_geometry(output) else {
-        tracing::error!("could not get output geometry");
-        return;
-    };
-
-    let output_loc = output.current_location();
+fn master_stack(
+    windows: Vec<WindowElement>,
+    space: &mut Space<WindowElement>,
+    rect: Rectangle<i32, Logical>,
+) {
+    let size = rect.size;
+    let loc = rect.loc;
 
     let master = windows.first();
     let stack = windows.iter().skip(1);
@@ -65,15 +85,15 @@ fn master_stack<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, o
 
     if stack_count == 0 {
         // one window
-        master.request_size_change(state, output_loc, output_geo.size);
+        master.request_size_change(space, loc, size);
     } else {
-        let loc = (output_loc.x, output_loc.y).into();
-        let new_master_size: Size<i32, Logical> = (output_geo.size.w / 2, output_geo.size.h).into();
-        master.request_size_change(state, loc, new_master_size);
+        let loc = (loc.x, loc.y).into();
+        let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();
+        master.request_size_change(space, loc, new_master_size);
 
         let stack_count = stack_count;
 
-        let height = output_geo.size.h as f32 / stack_count as f32;
+        let height = size.h as f32 / stack_count as f32;
         let mut y_s = vec![];
         for i in 0..stack_count {
             y_s.push((i as f32 * height).round() as i32);
@@ -81,38 +101,36 @@ fn master_stack<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, o
         let heights = y_s
             .windows(2)
             .map(|pair| pair[1] - pair[0])
-            .chain(vec![output_geo.size.h - y_s.last().expect("vec was empty")])
+            .chain(vec![size.h - y_s.last().expect("vec was empty")])
             .collect::<Vec<_>>();
 
         for (i, win) in stack.enumerate() {
             win.request_size_change(
-                state,
-                (output_geo.size.w / 2 + output_loc.x, y_s[i] + output_loc.y).into(),
-                (output_geo.size.w / 2, i32::max(heights[i], 40)).into(),
+                space,
+                (size.w / 2 + loc.x, y_s[i] + loc.y).into(),
+                (size.w / 2, i32::max(heights[i], 40)).into(),
             );
         }
     }
 }
 
-fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
-    let space = &state.space;
-
-    let Some(output_geo) = space.output_geometry(output) else {
-        tracing::error!("could not get output geometry");
-        return;
-    };
-
-    let output_loc = output.current_location();
+fn dwindle(
+    windows: Vec<WindowElement>,
+    space: &mut Space<WindowElement>,
+    rect: Rectangle<i32, Logical>,
+) {
+    let size = rect.size;
+    let loc = rect.loc;
 
     let mut iter = windows.windows(2).peekable();
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(state, output_loc, output_geo.size);
+            window.request_size_change(space, loc, size);
         }
     } else {
-        let mut win1_size = output_geo.size;
-        let mut win1_loc = output_loc;
+        let mut win1_size = size;
+        let mut win1_loc = loc;
         for (i, wins) in iter.enumerate() {
             let win1 = &wins[0];
             let win2 = &wins[1];
@@ -129,7 +147,7 @@ fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         win1_loc,
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
@@ -137,13 +155,13 @@ fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
 
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         win1_loc,
                         (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
                     );
@@ -151,31 +169,30 @@ fn dwindle<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
 
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
             }
         }
     }
 }
 
-fn spiral<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output: &Output) {
-    let space = &state.space;
-    let Some(output_geo) = space.output_geometry(output) else {
-        tracing::error!("could not get output geometry");
-        return;
-    };
-
-    let output_loc = output.current_location();
+fn spiral(
+    windows: Vec<WindowElement>,
+    space: &mut Space<WindowElement>,
+    rect: Rectangle<i32, Logical>,
+) {
+    let size = rect.size;
+    let loc = rect.loc;
 
     let mut iter = windows.windows(2).peekable();
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(state, output_loc, output_geo.size);
+            window.request_size_change(space, loc, size);
         }
     } else {
-        let mut win1_loc = output_loc;
-        let mut win1_size = output_geo.size;
+        let mut win1_loc = loc;
+        let mut win1_size = size;
 
         for (i, wins) in iter.enumerate() {
             let win1 = &wins[0];
@@ -201,86 +218,78 @@ fn spiral<B: Backend>(windows: Vec<WindowElement>, state: &mut State<B>, output:
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         (win1_loc.x, win1_loc.y + height_partition).into(),
                         (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
                     );
 
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         win1_loc,
                         (win1_size.w, win1_size.h - i32::max(height_partition, 40)).into(),
                     );
 
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
                 Slice::Left => {
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         (win1_loc.x + width_partition, win1_loc.y).into(),
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
 
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
                 Slice::Right => {
                     let width_partition = win1_size.w / 2;
 
                     win1.request_size_change(
-                        state,
+                        space,
                         win1_loc,
                         (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
                     );
 
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(state, win1_loc, win1_size);
+                    win2.request_size_change(space, win1_loc, win1_size);
                 }
             }
         }
     }
 }
 
-fn corner<B: Backend>(
+fn corner(
     layout: &Layout,
     windows: Vec<WindowElement>,
-    state: &mut State<B>,
-    output: &Output,
+    space: &mut Space<WindowElement>,
+    rect: Rectangle<i32, Logical>,
 ) {
-    let space = &state.space;
-    let Some(output_geo) = space.output_geometry(output) else {
-        tracing::error!("could not get output geometry");
-        return;
-    };
+    let size = rect.size;
+    let loc = rect.loc;
 
-    let output_loc = output.current_location();
     match windows.len() {
         0 => (),
         1 => {
-            windows[0].request_size_change(state, output_loc, output_geo.size);
+            windows[0].request_size_change(space, loc, size);
         }
         2 => {
-            windows[0].request_size_change(
-                state,
-                output_loc,
-                (output_geo.size.w / 2, output_geo.size.h).into(),
-            );
+            windows[0].request_size_change(space, loc, (size.w / 2, size.h).into());
 
             windows[1].request_size_change(
-                state,
-                (output_loc.x + output_geo.size.w / 2, output_loc.y).into(),
-                (output_geo.size.w / 2, output_geo.size.h).into(),
+                space,
+                (loc.x + size.w / 2, loc.y).into(),
+                (size.w / 2, size.h).into(),
             );
         }
         _ => {
@@ -298,34 +307,24 @@ fn corner<B: Backend>(
             let div_factor = 2;
 
             corner.request_size_change(
-                state,
+                space,
                 match layout {
-                    Layout::CornerTopLeft => (output_loc.x, output_loc.y),
-                    Layout::CornerTopRight => (
-                        output_loc.x + output_geo.size.w - output_geo.size.w / div_factor,
-                        output_loc.y,
-                    ),
-                    Layout::CornerBottomLeft => (
-                        output_loc.x,
-                        output_loc.y + output_geo.size.h - output_geo.size.h / div_factor,
-                    ),
+                    Layout::CornerTopLeft => (loc.x, loc.y),
+                    Layout::CornerTopRight => (loc.x + size.w - size.w / div_factor, loc.y),
+                    Layout::CornerBottomLeft => (loc.x, loc.y + size.h - size.h / div_factor),
                     Layout::CornerBottomRight => (
-                        output_loc.x + output_geo.size.w - output_geo.size.w / div_factor,
-                        output_loc.y + output_geo.size.h - output_geo.size.h / div_factor,
+                        loc.x + size.w - size.w / div_factor,
+                        loc.y + size.h - size.h / div_factor,
                     ),
                     _ => unreachable!(),
                 }
                 .into(),
-                (
-                    output_geo.size.w / div_factor,
-                    output_geo.size.h / div_factor,
-                )
-                    .into(),
+                (size.w / div_factor, size.h / div_factor).into(),
             );
 
             let vert_stack_count = vert_stack.len();
 
-            let height = output_geo.size.h as f32 / vert_stack_count as f32;
+            let height = size.h as f32 / vert_stack_count as f32;
             let mut y_s = vec![];
             for i in 0..vert_stack_count {
                 y_s.push((i as f32 * height).round() as i32);
@@ -333,30 +332,28 @@ fn corner<B: Backend>(
             let heights = y_s
                 .windows(2)
                 .map(|pair| pair[1] - pair[0])
-                .chain(vec![output_geo.size.h - y_s.last().expect("vec was empty")])
+                .chain(vec![size.h - y_s.last().expect("vec was empty")])
                 .collect::<Vec<_>>();
 
             for (i, win) in vert_stack.iter().enumerate() {
                 win.request_size_change(
-                    state,
+                    space,
                     (
                         match layout {
-                            Layout::CornerTopLeft | Layout::CornerBottomLeft => {
-                                output_geo.size.w / 2 + output_loc.x
-                            }
-                            Layout::CornerTopRight | Layout::CornerBottomRight => output_loc.x,
+                            Layout::CornerTopLeft | Layout::CornerBottomLeft => size.w / 2 + loc.x,
+                            Layout::CornerTopRight | Layout::CornerBottomRight => loc.x,
                             _ => unreachable!(),
                         },
-                        y_s[i] + output_loc.y,
+                        y_s[i] + loc.y,
                     )
                         .into(),
-                    (output_geo.size.w / 2, i32::max(heights[i], 40)).into(),
+                    (size.w / 2, i32::max(heights[i], 40)).into(),
                 );
             }
 
             let horiz_stack_count = horiz_stack.len();
 
-            let width = output_geo.size.w as f32 / 2.0 / horiz_stack_count as f32;
+            let width = size.w as f32 / 2.0 / horiz_stack_count as f32;
             let mut x_s = vec![];
             for i in 0..horiz_stack_count {
                 x_s.push((i as f32 * width).round() as i32);
@@ -364,30 +361,21 @@ fn corner<B: Backend>(
             let widths = x_s
                 .windows(2)
                 .map(|pair| pair[1] - pair[0])
-                .chain(vec![
-                    output_geo.size.w / 2 - x_s.last().expect("vec was empty"),
-                ])
+                .chain(vec![size.w / 2 - x_s.last().expect("vec was empty")])
                 .collect::<Vec<_>>();
 
             for (i, win) in horiz_stack.iter().enumerate() {
                 win.request_size_change(
-                    state,
+                    space,
                     match layout {
-                        Layout::CornerTopLeft => {
-                            (x_s[i] + output_loc.x, output_loc.y + output_geo.size.h / 2)
-                        }
-                        Layout::CornerTopRight => (
-                            x_s[i] + output_loc.x + output_geo.size.w / 2,
-                            output_loc.y + output_geo.size.h / 2,
-                        ),
-                        Layout::CornerBottomLeft => (x_s[i] + output_loc.x, output_loc.y),
-                        Layout::CornerBottomRight => {
-                            (x_s[i] + output_loc.x + output_geo.size.w / 2, output_loc.y)
-                        }
+                        Layout::CornerTopLeft => (x_s[i] + loc.x, loc.y + size.h / 2),
+                        Layout::CornerTopRight => (x_s[i] + loc.x + size.w / 2, loc.y + size.h / 2),
+                        Layout::CornerBottomLeft => (x_s[i] + loc.x, loc.y),
+                        Layout::CornerBottomRight => (x_s[i] + loc.x + size.w / 2, loc.y),
                         _ => unreachable!(),
                     }
                     .into(),
-                    (i32::max(widths[i], 1), output_geo.size.h / 2).into(),
+                    (i32::max(widths[i], 1), size.h / 2).into(),
                 );
             }
         }

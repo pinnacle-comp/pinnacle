@@ -178,7 +178,7 @@ impl<B: Backend> State<B> {
                 if let Some(height) = height {
                     window_size.h = height;
                 }
-                window.request_size_change(self, window_loc, window_size);
+                window.request_size_change(&mut self.space, window_loc, window_size);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -672,7 +672,7 @@ impl<B: Backend> State<B> {
                 first_tag.layout().layout(
                     self.windows.clone(),
                     state.focused_tags().cloned().collect(),
-                    self,
+                    &mut self.space,
                     output,
                 );
             }

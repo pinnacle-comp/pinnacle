@@ -11,7 +11,7 @@ use smithay::{
             take_presentation_feedback_surface_tree, under_from_surface_tree,
             with_surfaces_surface_tree, OutputPresentationFeedback,
         },
-        Window, WindowSurfaceType,
+        Space, Window, WindowSurfaceType,
     },
     input::{
         keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
@@ -181,9 +181,9 @@ impl WindowElement {
     }
 
     /// Request a size and loc change.
-    pub fn request_size_change<B: Backend>(
+    pub fn request_size_change(
         &self,
-        state: &mut State<B>,
+        space: &mut Space<WindowElement>,
         new_loc: Point<i32, Logical>,
         new_size: Size<i32, Logical>,
     ) {
@@ -210,7 +210,7 @@ impl WindowElement {
                         .set_mapped(true)
                         .expect("failed to set x11 win to mapped");
                 }
-                state.space.map_element(self.clone(), new_loc, false);
+                space.map_element(self.clone(), new_loc, false);
                 // if let Some(focused_output) = state.focus_state.focused_output.clone() {
                 //     self.send_frame(
                 //         &focused_output,
@@ -527,7 +527,7 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
     });
 
     if let Some((prev_loc, prev_size)) = resize {
-        window.request_size_change(state, prev_loc, prev_size);
+        window.request_size_change(&mut state.space, prev_loc, prev_size);
     }
 
     // TODO: don't use the focused output, use the one the window is on

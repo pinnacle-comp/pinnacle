@@ -442,7 +442,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     first_tag.layout().layout(
                         self.windows.clone(),
                         state.focused_tags().cloned().collect(),
-                        self,
+                        &mut self.space,
                         &focused_output,
                     );
                 }
@@ -503,7 +503,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                     first_tag.layout().layout(
                         self.windows.clone(),
                         state.focused_tags().cloned().collect(),
-                        self,
+                        &mut self.space,
                         &focused_output,
                     );
                 }
@@ -724,6 +724,7 @@ impl<B: Backend> WlrLayerShellHandler for State<B> {
         _layer: Layer,
         namespace: String,
     ) {
+        tracing::debug!("-------------NEW LAYER SURFACE");
         let output = output
             .as_ref()
             .and_then(Output::from_resource)
@@ -737,18 +738,36 @@ impl<B: Backend> WlrLayerShellHandler for State<B> {
         let mut map = layer_map_for_output(&output);
         map.map_layer(&desktop::LayerSurface::new(surface, namespace))
             .expect("failed to map layer surface");
+        drop(map); // wow i really love refcells haha
+
+        // TODO: instead of deferring by 1 cycle, actually check if the surface has committed
+        // |     before re-layouting
+        self.loop_handle.insert_idle(move |data| {
+            data.state.re_layout(&output);
+        });
     }
 
     fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
-        if let Some((mut map, layer)) = self.space.outputs().find_map(|o| {
+        // WOO love having to deal with the borrow checker haha
+        let mut output: Option<Output> = None;
+        if let Some((mut map, layer, op)) = self.space.outputs().find_map(|o| {
             let map = layer_map_for_output(o);
             let layer = map
                 .layers()
                 .find(|&layer| layer.layer_surface() == &surface)
                 .cloned();
-            layer.map(|layer| (map, layer))
+            layer.map(|layer| (map, layer, o))
         }) {
             map.unmap_layer(&layer);
+            output = Some(op.clone());
+        }
+
+        // TODO: instead of deferring by 1 cycle, actually check if the surface has committed
+        // |     before re-layouting
+        if let Some(output) = output {
+            self.loop_handle.insert_idle(move |data| {
+                data.state.re_layout(&output);
+            });
         }
     }
 }

@@ -162,7 +162,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                         first_tag.layout().layout(
                             self.state.windows.clone(),
                             state.focused_tags().cloned().collect(),
-                            &mut self.state,
+                            &mut self.state.space,
                             &focused_output,
                         );
                     }
