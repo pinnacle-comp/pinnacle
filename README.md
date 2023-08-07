@@ -94,12 +94,13 @@ Or, run the project directly with
 cargo run [--release] -- --<backend>
 ```
 
-When running in debug mode, the compositor will drastically slow down if there are too many windows on screen. If you don't want this to happen, use release mode.
-
 `backend` can be one of two values:
 
 - `winit`: run Pinnacle as a window in your graphical environment
 - `udev`: run Pinnacle in a tty. NOTE: I tried running udev in Awesome and some things broke so uh, don't do that
+
+> :information_source: When running in debug mode, the compositor will drastically slow down
+> if there are too many windows on screen. If you don't want this to happen, use release mode.
 
 > ##### :exclamation: IMPORTANT: Read the following before you launch the `udev` backend:
 > If you successfully enter the `udev` backend but none of the controls work, this means either Pinnacle
