@@ -15,7 +15,7 @@ use smithay::{
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
     delegate_dmabuf,
-    desktop::{space, utils::send_frames_surface_tree},
+    desktop::{layer_map_for_output, space, utils::send_frames_surface_tree},
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::{Output, Subpixel},
     reexports::{
@@ -227,6 +227,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                         None,
                     );
+                    layer_map_for_output(&output).arrange();
                     state.re_layout(&output);
                 }
                 WinitEvent::Focus(_) => {}
