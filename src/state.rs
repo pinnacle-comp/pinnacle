@@ -738,6 +738,22 @@ pub fn schedule_on_commit<F, B: Backend>(
     on_commit(data);
 }
 
+// Schedule something to be done when `condition` returns true.
+pub fn schedule<F1, F2, B: Backend>(data: &mut CalloopData<B>, condition: F1, run: F2)
+where
+    F1: Fn(&mut CalloopData<B>) -> bool + 'static,
+    F2: FnOnce(&mut CalloopData<B>) + 'static,
+{
+    if !condition(data) {
+        data.state.loop_handle.insert_idle(|data| {
+            schedule(data, condition, run);
+        });
+        return;
+    }
+
+    run(data);
+}
+
 impl<B: Backend> State<B> {
     pub fn init(
         backend_data: B,

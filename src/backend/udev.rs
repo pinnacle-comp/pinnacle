@@ -895,26 +895,32 @@ impl State<UdevData> {
         // Run any connected callbacks
         {
             let clone = output.clone();
-            self.loop_handle.insert_idle(move |data| {
-                let stream = data
-                    .state
-                    .api_state
-                    .stream
-                    .as_ref()
-                    .expect("Stream doesn't exist");
-                let mut stream = stream.lock().expect("Couldn't lock stream");
-                for callback_id in data.state.output_callback_ids.iter() {
-                    crate::api::send_to_client(
-                        &mut stream,
-                        &OutgoingMsg::CallCallback {
-                            callback_id: *callback_id,
-                            args: Some(Args::ConnectForAllOutputs {
-                                output_name: clone.name(),
-                            }),
-                        },
-                    )
-                    .expect("Send to client failed");
-                }
+            self.loop_handle.insert_idle(|data| {
+                crate::state::schedule(
+                    data,
+                    |dt| dt.state.api_state.stream.is_some(),
+                    move |dt| {
+                        let stream = dt
+                            .state
+                            .api_state
+                            .stream
+                            .as_ref()
+                            .expect("Stream doesn't exist");
+                        let mut stream = stream.lock().expect("Couldn't lock stream");
+                        for callback_id in dt.state.output_callback_ids.iter() {
+                            crate::api::send_to_client(
+                                &mut stream,
+                                &OutgoingMsg::CallCallback {
+                                    callback_id: *callback_id,
+                                    args: Some(Args::ConnectForAllOutputs {
+                                        output_name: clone.name(),
+                                    }),
+                                },
+                            )
+                            .expect("Send to client failed");
+                        }
+                    },
+                )
             });
         }
 
