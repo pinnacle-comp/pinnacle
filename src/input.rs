@@ -15,7 +15,7 @@ use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{
         keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, MotionEvent, PointerTarget},
+        pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
@@ -108,13 +108,13 @@ impl<B: Backend> State<B> {
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
         if ButtonState::Pressed == button_state {
-            if let Some((window, window_loc)) = self.surface_under(pointer_loc) {
+            if let Some((focus, window_loc)) = self.surface_under(pointer_loc) {
                 // tracing::debug!("button click on {window:?}");
                 const BUTTON_LEFT: u32 = 0x110;
                 const BUTTON_RIGHT: u32 = 0x111;
                 if self.move_mode {
                     if event.button_code() == BUTTON_LEFT {
-                        if let Some(wl_surf) = window.wl_surface() {
+                        if let Some(wl_surf) = focus.wl_surface() {
                             crate::grab::move_grab::move_request_server(
                                 self,
                                 &wl_surf,
@@ -125,7 +125,7 @@ impl<B: Backend> State<B> {
                         }
                         return; // TODO: kinda ugly return here
                     } else if event.button_code() == BUTTON_RIGHT {
-                        let FocusTarget::Window(window) = window else { return };
+                        let FocusTarget::Window(window) = focus else { return };
                         let window_geometry = window.geometry();
                         let window_x = window_loc.x as f64;
                         let window_y = window_loc.y as f64;
@@ -177,25 +177,23 @@ impl<B: Backend> State<B> {
                     }
                 } else {
                     // Move window to top of stack.
-                    let FocusTarget::Window(window) = window else { return };
-                    self.space.raise_element(&window, true);
-                    if let WindowElement::X11(surface) = &window {
-                        if !surface.is_override_redirect() {
-                            self.xwm
-                                .as_mut()
-                                .expect("no xwm")
-                                .raise_window(surface)
-                                .expect("failed to raise x11 win");
-                            surface
-                                .set_activated(true)
-                                .expect("failed to set x11 win to activated");
+                    if let FocusTarget::Window(window) = &focus {
+                        self.space.raise_element(window, true);
+                        if let WindowElement::X11(surface) = &window {
+                            if !surface.is_override_redirect() {
+                                self.xwm
+                                    .as_mut()
+                                    .expect("no xwm")
+                                    .raise_window(surface)
+                                    .expect("failed to raise x11 win");
+                                surface
+                                    .set_activated(true)
+                                    .expect("failed to set x11 win to activated");
+                            }
                         }
                     }
 
-                    tracing::debug!(
-                        "wl_surface focus is some? {}",
-                        window.wl_surface().is_some()
-                    );
+                    tracing::debug!("wl_surface focus is some? {}", focus.wl_surface().is_some());
 
                     // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
                     // |     to wonky things like right-click menus not correctly getting pointer
@@ -203,8 +201,9 @@ impl<B: Backend> State<B> {
 
                     // TODO: use update_keyboard_focus from anvil
 
-                    if !matches!(&window, WindowElement::X11(surf) if surf.is_override_redirect()) {
-                        keyboard.set_focus(self, Some(FocusTarget::Window(window.clone())), serial);
+                    if !matches!(&focus, FocusTarget::Window(WindowElement::X11(surf)) if surf.is_override_redirect())
+                    {
+                        keyboard.set_focus(self, Some(focus.clone()), serial);
                     }
 
                     self.space.elements().for_each(|window| {
@@ -213,21 +212,23 @@ impl<B: Backend> State<B> {
                         }
                     });
 
-                    let focused_name = match &window {
-                        WindowElement::Wayland(win) => {
-                            compositor::with_states(win.toplevel().wl_surface(), |states| {
-                                let lock = states
-                                    .data_map
-                                    .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
-                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                    .lock()
-                                    .expect("failed to acquire lock");
-                                lock.app_id.clone().unwrap_or_default()
-                            })
-                        }
-                        WindowElement::X11(surf) => surf.class(),
-                    };
-                    tracing::debug!("setting keyboard focus to {focused_name}");
+                    if let FocusTarget::Window(window) = &focus {
+                        let focused_name = match &window {
+                            WindowElement::Wayland(win) => {
+                                compositor::with_states(win.toplevel().wl_surface(), |states| {
+                                    let lock = states
+                                        .data_map
+                                        .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+                                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                        .lock()
+                                        .expect("failed to acquire lock");
+                                    lock.app_id.clone().unwrap_or_default()
+                                })
+                            }
+                            WindowElement::X11(surf) => surf.class(),
+                        };
+                        tracing::debug!("setting keyboard focus to {focused_name}");
+                    }
                 }
             } else {
                 self.space.elements().for_each(|window| match window {
@@ -435,24 +436,10 @@ impl State<WinitData> {
             }
         }
 
-        let surface_under_pointer = self
-            .space
-            .element_under(pointer_loc)
-            .map(|(window, loc)| (FocusTarget::Window(window.clone()), loc));
+        let surface_under_pointer = self.surface_under(pointer_loc);
 
         // tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
         // tracing::debug!("pointer focus: {:?}", pointer.current_focus());
-        if let Some((focus, _point)) = &surface_under_pointer {
-            focus.motion(
-                &self.seat.clone(),
-                self,
-                &MotionEvent {
-                    location: pointer_loc,
-                    serial,
-                    time: event.time_msec(),
-                },
-            );
-        }
         pointer.motion(
             self,
             surface_under_pointer,
