@@ -122,7 +122,7 @@ struct UdevOutputId {
 }
 
 pub struct UdevData {
-    session: LibSeatSession,
+    pub session: LibSeatSession,
     display_handle: DisplayHandle,
     dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     primary_gpu: DrmNode,
