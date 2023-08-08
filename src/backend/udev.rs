@@ -303,8 +303,18 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                 libinput_context.suspend();
                 tracing::info!("pausing session");
 
-                for backend in data.state.backend_data.backends.values() {
+                for backend in data.state.backend_data.backends.values_mut() {
                     backend.drm.pause();
+                    for surface in backend.surfaces.values_mut() {
+                        if let Err(err) = surface.compositor.surface().reset_state() {
+                            tracing::warn!("Failed to reset drm surface state: {}", err);
+                        }
+                        // reset the buffers after resume to trigger a full redraw
+                        // this is important after a vt switch as the primary plane
+                        // has no content and damage tracking may prevent a redraw
+                        // otherwise
+                        surface.compositor.reset_buffers();
+                    }
                 }
             }
             session::Event::ActivateSession => {
@@ -1076,9 +1086,7 @@ impl State<UdevData> {
     }
 
     fn device_removed(&mut self, node: DrmNode) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backend_data.backends.get_mut(&node) else {
             return;
         };
 
@@ -1291,15 +1299,11 @@ impl State<UdevData> {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backend_data.backends.get_mut(&node) else {
             return;
         };
 
-        let surface = if let Some(surface) = device.surfaces.get_mut(&crtc) {
-            surface
-        } else {
+        let Some(surface) = device.surfaces.get_mut(&crtc) else {
             return;
         };
 
@@ -1584,7 +1588,7 @@ fn render_surface<'a>(
     let time = clock.now();
 
     // We need to send frames to the cursor surface so that xwayland windows will properly
-    // update on motion.
+    // update the cursor on motion.
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
