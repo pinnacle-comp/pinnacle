@@ -59,14 +59,14 @@ So, this is my attempt at making an Awesome-esque Wayland compositor.
 
 ## Dependencies
 You'll need the following packages, as specified by [Smithay](https://github.com/Smithay/smithay):
-`libwayland libxkbcommon libudev libinput libgdm libseat`
+`libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`.
 - Arch:
     ```
-    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd
+    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatda xwayland
     ```
 - Debian:
     ```
-    sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev
+    sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
     ```
 - NixOS: Use the provided [`shell.nix`](shell.nix).
 - TODO: other distros.
