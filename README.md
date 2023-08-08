@@ -85,19 +85,24 @@ It *should* work, but if it doesn't, please raise an issue. <sup>flake soon:tm:<
 ## Running
 After building, run the executable located in either:
 ```sh
-./target/debug/pinnacle --<backend>     # without --release
-./target/release/pinnacle --<backend>   # with --release
+./target/debug/pinnacle     # without --release
+./target/release/pinnacle   # with --release
 ```
 
 Or, run the project directly with 
 ```sh
-cargo run [--release] -- --<backend>
+cargo run [--release]
 ```
+
+There is an additional flag you can pass in: `--<backend>`. You most likely do not need to use it.
 
 `backend` can be one of two values:
 
 - `winit`: run Pinnacle as a window in your graphical environment
 - `udev`: run Pinnacle in a tty. NOTE: I tried running udev in Awesome and some things broke so uh, don't do that
+
+If you try to run either in environments where you shouldn't be, you will get a warning requiring you to
+pass in the `--force` flag to continue. *You probably shouldn't be doing that.*
 
 > :information_source: When running in debug mode, the compositor will drastically slow down
 > if there are too many windows on screen. If you don't want this to happen, use release mode.
@@ -106,11 +111,9 @@ cargo run [--release] -- --<backend>
 > If you successfully enter the `udev` backend but none of the controls work, this means either Pinnacle
 failed to find your config, or the config process crashed.
 > 
-> I have not yet implemented VT switching, so to enable you to exit the compositor if this happens,
-> ```
-> Ctrl + Alt + Shift + Escape
-> ```
-> has been hardcoded in to kill the compositor.
+> You can either switch ttys or press
+> `Ctrl + Alt + Shift + Escape`,
+> which has been hardcoded in to kill the compositor.
 
 > #### :information_source: Pinnacle will open a socket in the `/tmp` directory.
 > If for whatever reason you need the socket to be in a different place, run Pinnacle with
