@@ -1,36 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod xwayland;
-
-use std::time::Duration;
+mod xdg_shell;
+mod xwayland;
 
 use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
     delegate_output, delegate_presentation, delegate_primary_selection, delegate_relative_pointer,
-    delegate_seat, delegate_shm, delegate_viewporter, delegate_xdg_shell,
-    desktop::{
-        self, find_popup_root_surface, layer_map_for_output, utils::surface_primary_scanout_output,
-        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
-        WindowSurfaceType,
-    },
-    input::{
-        pointer::{CursorImageStatus, Focus},
-        Seat, SeatHandler, SeatState,
-    },
+    delegate_seat, delegate_shm, delegate_viewporter,
+    desktop::{self, layer_map_for_output, PopupKind, WindowSurfaceType},
+    input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
         calloop::Interest,
-        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
             protocol::{
                 wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
-                wl_seat::WlSeat, wl_surface::WlSurface,
+                wl_surface::WlSurface,
             },
             Client, Resource,
         },
     },
-    utils::{Serial, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -49,10 +39,7 @@ use smithay::{
         seat::WaylandFocus,
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
-            xdg::{
-                Configure, PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
-                XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
-            },
+            xdg::{XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
     },
@@ -63,7 +50,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, ClientState, State, WithState},
-    window::{window_state::WindowResizeState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::WindowResizeState, WindowElement},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -136,21 +123,12 @@ impl<B: Backend> CompositorHandler for State<B> {
                 if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
                     state.resize_state = WindowResizeState::Idle;
                     if window.is_x11() {
-                        tracing::error!("DID SOMETHING WITH x11 WINDOW HERE");
-                        // if !surface.is_override_redirect() {
-                        //     surface.set_mapped(true).expect("failed to map x11 win");
-                        // }
+                        tracing::warn!("did something with X11 window here");
                     }
                     self.space.map_element(window.clone(), new_pos, false);
                 }
             });
         }
-        // let states = self
-        //     .windows
-        //     .iter()
-        //     .map(|win| win.with_state(|state| state.resize_state.clone()))
-        //     .collect::<Vec<_>>();
-        // tracing::debug!("states: {states:?}");
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -202,6 +180,7 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
                 .send_configure()
                 .expect("popup initial configure failed");
         }
+        return;
     }
 
     if let Some(output) = state.space.outputs().find(|op| {
@@ -373,285 +352,6 @@ impl<B: Backend> ShmHandler for State<B> {
     }
 }
 delegate_shm!(@<B: Backend> State<B>);
-
-impl<B: Backend> XdgShellHandler for State<B> {
-    fn xdg_shell_state(&mut self) -> &mut XdgShellState {
-        &mut self.xdg_shell_state
-    }
-
-    fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = WindowElement::Wayland(Window::new(surface));
-
-        {
-            let WindowElement::Wayland(window) = &window else { unreachable!() };
-            window.toplevel().with_pending_state(|tl_state| {
-                tl_state.states.set(xdg_toplevel::State::TiledTop);
-                tl_state.states.set(xdg_toplevel::State::TiledBottom);
-                tl_state.states.set(xdg_toplevel::State::TiledLeft);
-                tl_state.states.set(xdg_toplevel::State::TiledRight);
-            });
-        }
-
-        window.with_state(|state| {
-            state.tags = match (
-                &self.focus_state.focused_output,
-                self.space.outputs().next(),
-            ) {
-                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-                    if !output_tags.is_empty() {
-                        output_tags
-                    } else if let Some(first_tag) = state.tags.first() {
-                        vec![first_tag.clone()]
-                    } else {
-                        vec![]
-                    }
-                }),
-                (None, None) => vec![],
-            };
-
-            tracing::debug!("new window, tags are {:?}", state.tags);
-        });
-
-        let windows_on_output = self
-            .windows
-            .iter()
-            .filter(|win| {
-                win.with_state(|state| {
-                    self.focus_state
-                        .focused_output
-                        .as_ref()
-                        .expect("no focused output")
-                        .with_state(|op_state| {
-                            op_state
-                                .tags
-                                .iter()
-                                .any(|tag| state.tags.iter().any(|tg| tg == tag))
-                        })
-                })
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        self.windows.push(window.clone());
-        // self.space.map_element(window.clone(), (0, 0), true);
-        if let Some(focused_output) = self.focus_state.focused_output.clone() {
-            focused_output.with_state(|state| {
-                let first_tag = state.focused_tags().next();
-                if let Some(first_tag) = first_tag {
-                    first_tag.layout().layout(
-                        self.windows.clone(),
-                        state.focused_tags().cloned().collect(),
-                        &mut self.space,
-                        &focused_output,
-                    );
-                }
-            });
-            BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-            tracing::debug!(
-                "blocker {}",
-                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-            );
-            for win in windows_on_output.iter() {
-                if let Some(surf) = win.wl_surface() {
-                    compositor::add_blocker(&surf, WindowBlocker);
-                }
-            }
-            let clone = window.clone();
-            self.loop_handle.insert_idle(|data| {
-                crate::state::schedule_on_commit(data, vec![clone], move |data| {
-                    BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
-                    tracing::debug!(
-                        "blocker {}",
-                        BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                    );
-                    for client in windows_on_output
-                        .iter()
-                        .filter_map(|win| win.wl_surface()?.client())
-                    {
-                        data.state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(&mut data.state, &data.display.handle())
-                    }
-                })
-            });
-        }
-        self.loop_handle.insert_idle(move |data| {
-            data.state
-                .seat
-                .get_keyboard()
-                .expect("Seat had no keyboard") // FIXME: actually handle error
-                .set_focus(
-                    &mut data.state,
-                    Some(FocusTarget::Window(window)),
-                    SERIAL_COUNTER.next_serial(),
-                );
-        });
-    }
-
-    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        tracing::debug!("toplevel destroyed");
-        self.windows.retain(|window| {
-            window
-                .wl_surface()
-                .is_some_and(|surf| &surf != surface.wl_surface())
-        });
-        if let Some(focused_output) = self.focus_state.focused_output.as_ref().cloned() {
-            focused_output.with_state(|state| {
-                let first_tag = state.focused_tags().next();
-                if let Some(first_tag) = first_tag {
-                    first_tag.layout().layout(
-                        self.windows.clone(),
-                        state.focused_tags().cloned().collect(),
-                        &mut self.space,
-                        &focused_output,
-                    );
-                }
-            });
-        }
-
-        // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
-        // windows.retain(|window| window.toplevel() != &surface);
-        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
-        let focus = self.focus_state.current_focus().map(FocusTarget::Window);
-        self.seat
-            .get_keyboard()
-            .expect("Seat had no keyboard")
-            .set_focus(self, focus, SERIAL_COUNTER.next_serial());
-    }
-
-    fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
-        if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
-            tracing::warn!("failed to track popup: {}", err);
-        }
-    }
-
-    fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
-        tracing::debug!("move_request_client");
-        const BUTTON_LEFT: u32 = 0x110; // We assume the left mouse button is used
-        crate::grab::move_grab::move_request_client(
-            self,
-            surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
-            serial,
-            BUTTON_LEFT,
-        );
-    }
-
-    fn resize_request(
-        &mut self,
-        surface: ToplevelSurface,
-        seat: WlSeat,
-        serial: Serial,
-        edges: ResizeEdge,
-    ) {
-        const BUTTON_LEFT: u32 = 0x110;
-        crate::grab::resize_grab::resize_request_client(
-            self,
-            surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
-            serial,
-            edges.into(),
-            BUTTON_LEFT,
-        );
-    }
-
-    fn reposition_request(
-        &mut self,
-        surface: PopupSurface,
-        positioner: PositionerState,
-        token: u32,
-    ) {
-        surface.with_pending_state(|state| {
-            state.geometry = positioner.get_geometry();
-            state.positioner = positioner;
-        });
-        surface.send_repositioned(token);
-    }
-
-    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
-        let seat: Seat<Self> = Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat");
-        let popup_kind = PopupKind::Xdg(surface);
-        if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
-            self.window_for_surface(&root)
-                .map(FocusTarget::Window)
-                .or_else(|| {
-                    self.space.outputs().find_map(|op| {
-                        layer_map_for_output(op)
-                            .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
-                            .cloned()
-                            .map(FocusTarget::LayerSurface)
-                    })
-                })
-        }) {
-            if let Ok(mut grab) = self
-                .popup_manager
-                .grab_popup(root, popup_kind, &seat, serial)
-            {
-                if let Some(keyboard) = seat.get_keyboard() {
-                    if keyboard.is_grabbed()
-                        && !(keyboard.has_grab(serial)
-                            || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
-                    {
-                        grab.ungrab(PopupUngrabStrategy::All);
-                        return;
-                    }
-
-                    keyboard.set_focus(self, grab.current_grab(), serial);
-                    keyboard.set_grab(PopupKeyboardGrab::new(&grab), serial);
-                }
-                if let Some(pointer) = seat.get_pointer() {
-                    if pointer.is_grabbed()
-                        && !(pointer.has_grab(serial)
-                            || pointer
-                                .has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
-                    {
-                        grab.ungrab(PopupUngrabStrategy::All);
-                        return;
-                    }
-                    pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
-                }
-            }
-        }
-    }
-
-    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        if let Some(window) = self.window_for_surface(&surface) {
-            window.with_state(|state| {
-                if let WindowResizeState::Requested(serial, new_loc) = state.resize_state {
-                    match &configure {
-                        Configure::Toplevel(configure) => {
-                            if configure.serial >= serial {
-                                // tracing::debug!("acked configure, new loc is {:?}", new_loc);
-                                state.resize_state = WindowResizeState::Acknowledged(new_loc);
-                                if let Some(focused_output) =
-                                    self.focus_state.focused_output.clone()
-                                {
-                                    window.send_frame(
-                                        &focused_output,
-                                        self.clock.now(),
-                                        Some(Duration::ZERO),
-                                        surface_primary_scanout_output,
-                                    );
-                                }
-                            }
-                        }
-                        Configure::Popup(_) => todo!(),
-                    }
-                }
-            });
-        }
-    }
-
-    // fn minimize_request(&mut self, surface: ToplevelSurface) {
-    //     if let Some(window) = self.window_for_surface(surface.wl_surface()) {
-    //         self.space.unmap_elem(&window);
-    //     }
-    // }
-
-    // TODO: impl the rest of the fns in XdgShellHandler
-}
-delegate_xdg_shell!(@<B: Backend> State<B>);
 
 delegate_output!(@<B: Backend> State<B>);
 
