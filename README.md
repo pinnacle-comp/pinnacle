@@ -119,7 +119,7 @@ failed to find your config, or the config process crashed.
 > If for whatever reason you need the socket to be in a different place, run Pinnacle with
 > the `SOCKET_DIR` environment variable:
 > ```sh
-> SOCKET_DIR=/path/to/new/dir/ cargo run -- --<backend>
+> SOCKET_DIR=/path/to/new/dir/ cargo run
 > ```
 
 > #### :warning: Don't run Pinnacle as root.
@@ -138,12 +138,12 @@ $XDG_CONFIG_HOME/pinnacle/init.lua
 ```
 The following will use the example config file in [`api/lua`](api/lua):
 ```sh
-PINNACLE_CONFIG="./api/lua/example_config.lua" cargo run -- --<backend>
+PINNACLE_CONFIG="./api/lua/example_config.lua" cargo run
 ```
 
 > #### :information_source: The config is an external process.
 > If it crashes for whatever reason, all of your keybinds will stop working.
-> Again, you can exit the compositor with `Ctrl + Alt + Shift + Escape`.
+> Again, you can switch ttys or exit the compositor with `Ctrl + Alt + Shift + Escape`.
 >
 > Config reloading soon:tm:
 
@@ -154,7 +154,7 @@ as well as any function overloads, but these should be autocompleted through the
 
 Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
 
-### Autocomplete and that cool stuff
+### :information_source: Using the Lua Language Server :information_source:
 It is *highly* recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server)
 and set it up to have the [`api/lua`](api/lua) directory as a library, as I'll be using
 its doc comments to provide documentation, autocomplete, and error checking.
