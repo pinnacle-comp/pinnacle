@@ -8,10 +8,11 @@ use smithay::{
         WindowSurfaceType,
     },
     input::{pointer::Focus, Seat},
+    output::Output,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
-            protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
             Resource,
         },
     },
@@ -299,6 +300,86 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 }
             });
         }
+    }
+
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, mut wl_output: Option<WlOutput>) {
+        if !surface
+            .current_state()
+            .capabilities
+            .contains(xdg_toplevel::WmCapabilities::Fullscreen)
+        {
+            return;
+        }
+
+        let wl_surface = surface.wl_surface();
+        let output = wl_output
+            .as_ref()
+            .and_then(Output::from_resource)
+            .or_else(|| {
+                self.window_for_surface(wl_surface)
+                    .and_then(|window| self.space.outputs_for_element(&window).get(0).cloned())
+            });
+
+        if let Some(output) = output {
+            let Some(geometry) = self.space.output_geometry(&output) else {
+                surface.send_configure();
+                return;
+            };
+
+            let client = self
+                .display_handle
+                .get_client(wl_surface.id())
+                .expect("wl_surface had no client");
+            for output in output.client_outputs(&client) {
+                wl_output = Some(output);
+            }
+
+            surface.with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Fullscreen);
+                state.size = Some(geometry.size);
+                state.fullscreen_output = wl_output;
+            });
+
+            let Some(window) = self.window_for_surface(wl_surface) else {
+                tracing::error!("wl_surface had no window");
+                return;
+            };
+
+            window.with_state(|state| {
+                let tags = state.tags.iter();
+                for tag in tags {
+                    tag.set_fullscreen_window(window.clone());
+                }
+            });
+        }
+
+        surface.send_configure();
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        if !surface
+            .current_state()
+            .states
+            .contains(xdg_toplevel::State::Fullscreen)
+        {
+            return;
+        }
+
+        surface.with_pending_state(|state| {
+            state.states.unset(xdg_toplevel::State::Fullscreen);
+            state.size = None;
+            state.fullscreen_output.take();
+        });
+
+        if let Some(window) = self.window_for_surface(surface.wl_surface()) {
+            window.with_state(|state| {
+                for tag in state.tags.iter() {
+                    tag.set_fullscreen_window(None);
+                }
+            });
+        }
+
+        surface.send_pending_configure();
     }
 
     // fn minimize_request(&mut self, surface: ToplevelSurface) {

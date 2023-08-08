@@ -8,7 +8,7 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
+            element::{self, surface::WaylandSurfaceRenderElement, AsRenderElements},
             gles::{GlesRenderer, GlesTexture},
             ImportDma, ImportEgl, ImportMemWl,
         },
@@ -38,7 +38,7 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
-    state::{take_presentation_feedback, CalloopData, State},
+    state::{take_presentation_feedback, CalloopData, State, WithState},
 };
 
 use super::Backend;
@@ -294,6 +294,70 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 ));
             }
 
+            let active_tag_with_fullscreen = {
+                output.with_state(|state| {
+                    state
+                        .tags
+                        .iter()
+                        .find(|tag| tag.fullscreen_window().is_some())
+                        .cloned()
+                })
+            };
+
+            let output_render_elements = {
+                let renderer = state.backend_data.backend.renderer();
+
+                if let Some(tag) = active_tag_with_fullscreen {
+                    let mut output_render_elements = Vec::<
+                        OutputRenderElements<
+                            GlesRenderer,
+                            WaylandSurfaceRenderElement<GlesRenderer>,
+                        >,
+                    >::new();
+
+                    let Some(window) = tag.fullscreen_window() else { unreachable!() };
+                    let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
+                        window.render_elements(renderer, (0, 0).into(), scale, 1.0);
+
+                    output_render_elements.extend(
+                        custom_render_elements
+                            .into_iter()
+                            .map(OutputRenderElements::from),
+                    );
+
+                    output_render_elements.extend(
+                        window_render_elements
+                            .into_iter()
+                            .map(|elem| OutputRenderElements::Window(element::Wrap::from(elem))),
+                    );
+
+                    output_render_elements
+                } else {
+                    let space_render_elements =
+                        space::space_render_elements(renderer, [&state.space], &output, 1.0)
+                            .expect("Failed to get render elements");
+
+                    let mut output_render_elements = Vec::<
+                        OutputRenderElements<
+                            GlesRenderer,
+                            WaylandSurfaceRenderElement<GlesRenderer>,
+                        >,
+                    >::new();
+
+                    output_render_elements.extend(
+                        custom_render_elements
+                            .into_iter()
+                            .map(OutputRenderElements::from),
+                    );
+                    output_render_elements.extend(
+                        space_render_elements
+                            .into_iter()
+                            .map(OutputRenderElements::from),
+                    );
+                    output_render_elements
+                }
+            };
+
             let render_res = state.backend_data.backend.bind().and_then(|_| {
                 let age = if *full_redraw > 0 {
                     0
@@ -304,24 +368,6 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 let renderer = state.backend_data.backend.renderer();
 
                 // render_output()
-                let space_render_elements =
-                    space::space_render_elements(renderer, [&state.space], &output, 1.0)
-                        .expect("Failed to get render elements");
-
-                let mut output_render_elements = Vec::<
-                    OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
-                >::new();
-
-                output_render_elements.extend(
-                    custom_render_elements
-                        .into_iter()
-                        .map(OutputRenderElements::from),
-                );
-                output_render_elements.extend(
-                    space_render_elements
-                        .into_iter()
-                        .map(OutputRenderElements::from),
-                );
 
                 state
                     .backend_data
