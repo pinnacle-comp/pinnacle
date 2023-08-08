@@ -131,7 +131,8 @@ Please note: this is WIP and has few options.
 
 Pinnacle supports configuration through Lua (and hopefully more languages if it's not too unwieldy :crab:).
 
-Run Pinnacle with the `PINNACLE_CONFIG` environment variable set to the path of your config file. If not specified, Pinnacle will look for the following: 
+Run Pinnacle with the `PINNACLE_CONFIG` environment variable set to the path of your config file.
+If not specified, Pinnacle will look for the following: 
 ```sh
 $XDG_CONFIG_HOME/pinnacle/init.lua
 ~/.config/pinnacle/init.lua         # if XDG_CONFIG_HOME isn't set
