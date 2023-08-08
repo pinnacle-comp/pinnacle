@@ -41,21 +41,53 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    let in_graphical_env =
+        std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
+
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
         Some("--winit") => {
-            tracing::info!("Starting winit backend");
-            crate::backend::winit::run_winit()?;
+            if !in_graphical_env {
+                if let Some("--force") = args.next().as_deref() {
+                    tracing::info!("Starting winit backend with no detected graphical environment");
+                    crate::backend::winit::run_winit()?;
+                } else {
+                    println!("Both WAYLAND_DISPLAY and DISPLAY were not set.");
+                    println!("If you are trying to run the winit backend in a tty, it won't work.");
+                    println!("If you really want to, additionally pass in the --force flag.");
+                }
+            } else {
+                tracing::info!("Starting winit backend");
+                crate::backend::winit::run_winit()?;
+            }
         }
         Some("--udev") => {
-            tracing::info!("Starting udev backend");
-            crate::backend::udev::run_udev()?;
+            if in_graphical_env {
+                if let Some("--force") = args.next().as_deref() {
+                    tracing::info!("Starting udev backend with a detected graphical environment");
+                    crate::backend::udev::run_udev()?;
+                } else {
+                    println!("WAYLAND_DISPLAY and/or DISPLAY were set.");
+                    println!(
+                        "If you are trying to run the udev backend in a graphical environment,"
+                    );
+                    println!("it won't work and may mess some things up.");
+                    println!("If you really want to, additionally pass in the --force flag.");
+                }
+            } else {
+                tracing::info!("Starting udev backend");
+                crate::backend::udev::run_udev()?;
+            }
         }
         Some(arg) => tracing::error!("Unknown argument {}", arg),
         None => {
-            println!(
-                "Specify a backend:\n\t--udev to launch Pinnacle in a tty, or\n\t--winit to launch Pinnacle as a window in your graphical environment."
-            );
+            if in_graphical_env {
+                tracing::info!("Starting winit backend");
+                crate::backend::winit::run_winit()?;
+            } else {
+                tracing::info!("Starting udev backend");
+                crate::backend::udev::run_udev()?;
+            }
         }
     }
 
