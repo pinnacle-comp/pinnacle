@@ -305,16 +305,6 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
 
                 for backend in data.state.backend_data.backends.values_mut() {
                     backend.drm.pause();
-                    for surface in backend.surfaces.values_mut() {
-                        if let Err(err) = surface.compositor.surface().reset_state() {
-                            tracing::warn!("Failed to reset drm surface state: {}", err);
-                        }
-                        // reset the buffers after resume to trigger a full redraw
-                        // this is important after a vt switch as the primary plane
-                        // has no content and damage tracking may prevent a redraw
-                        // otherwise
-                        surface.compositor.reset_buffers();
-                    }
                 }
             }
             session::Event::ActivateSession => {

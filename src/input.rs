@@ -44,6 +44,13 @@ impl InputState {
     }
 }
 
+#[derive(Debug)]
+enum KeyAction {
+    CallCallback(CallbackId),
+    Quit,
+    SwitchVt(i32),
+}
+
 impl<B: Backend> State<B> {
     pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
@@ -130,18 +137,18 @@ impl<B: Backend> State<B> {
                             .keybinds
                             .get(&(modifier_mask.into(), raw_sym))
                         {
-                            return FilterResult::Intercept(*callback_id);
+                            return FilterResult::Intercept(KeyAction::CallCallback(*callback_id));
                         } else if modifiers.ctrl
                             && modifiers.shift
                             && modifiers.alt
                             && keysym.modified_sym() == keysyms::KEY_Escape
                         {
-                            return FilterResult::Intercept(CallbackId(999999));
+                            return FilterResult::Intercept(KeyAction::Quit);
                         } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                             keysym.modified_sym() {
                             vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
                             tracing::info!("Switching to vt {vt}");
-                            return FilterResult::Intercept(CallbackId(1000000 + vt));
+                            return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
                         }
 
                     }
@@ -162,32 +169,32 @@ impl<B: Backend> State<B> {
 
         self.move_mode = move_mode;
 
-        if let Some(callback_id) = action {
-            if callback_id.0 == 999999 {
-                self.loop_signal.stop();
-                return;
+        match action {
+            Some(KeyAction::CallCallback(callback_id)) => {
+                if let Some(stream) = self.api_state.stream.as_ref() {
+                    if let Err(err) = crate::api::send_to_client(
+                        &mut stream.lock().expect("Could not lock stream mutex"),
+                        &OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: None,
+                        },
+                    ) {
+                        tracing::error!("error sending msg to client: {err}");
+                    }
+                }
             }
-            if callback_id.0 > 1000000 {
-                let vt = callback_id.0 - 1000000;
+            Some(KeyAction::SwitchVt(vt)) => {
                 if let Some(st) = (self as &mut dyn std::any::Any).downcast_mut::<State<UdevData>>()
                 {
-                    if let Err(err) = st.backend_data.session.change_vt(vt as i32) {
+                    if let Err(err) = st.backend_data.session.change_vt(vt) {
                         tracing::error!("Failed to switch to vt {vt}: {err}");
                     }
                 }
-                return;
             }
-            if let Some(stream) = self.api_state.stream.as_ref() {
-                if let Err(err) = crate::api::send_to_client(
-                    &mut stream.lock().expect("Could not lock stream mutex"),
-                    &OutgoingMsg::CallCallback {
-                        callback_id,
-                        args: None,
-                    },
-                ) {
-                    tracing::warn!("error sending msg to client: {err}");
-                }
+            Some(KeyAction::Quit) => {
+                self.loop_signal.stop();
             }
+            _ => {}
         }
     }
 
