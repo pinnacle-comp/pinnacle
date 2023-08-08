@@ -5,7 +5,7 @@ use std::{
     error::Error,
     ffi::OsString,
     os::{fd::AsRawFd, unix::net::UnixStream},
-    path::Path,
+    path::PathBuf,
     process::Stdio,
     sync::{Arc, Mutex},
     time::Duration,
@@ -845,45 +845,7 @@ impl<B: Backend> State<B> {
             calloop::futures::executor::<()>().expect("Couldn't create executor");
         loop_handle.insert_source(executor, |_, _, _| {})?;
 
-        // TODO: move all this into the lua api
-        let config_path = std::env::var("PINNACLE_CONFIG").unwrap_or_else(|_| {
-            let mut default_path =
-                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
-            default_path.push_str("/pinnacle/init.lua");
-            default_path
-        });
-
-        if Path::new(&config_path).exists() {
-            let lua_path = std::env::var("LUA_PATH").unwrap_or_else(|_| {
-                tracing::info!("LUA_PATH was not set, using empty string");
-                "".to_string()
-            });
-            let mut local_lua_path = std::env::current_dir()
-                .expect("Couldn't get current dir")
-                .to_string_lossy()
-                .to_string();
-            local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
-            let new_lua_path =
-            format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
-
-            let lua_cpath = std::env::var("LUA_CPATH").unwrap_or_else(|_| {
-                tracing::info!("LUA_CPATH was not set, using empty string");
-                "".to_string()
-            });
-            let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
-
-            if let Err(err) = std::process::Command::new("lua")
-                .arg(config_path)
-                .env("LUA_PATH", new_lua_path)
-                .env("LUA_CPATH", new_lua_cpath)
-                .spawn()
-            {
-                tracing::error!("Failed to start Lua: {err}");
-                return Err(err)?;
-            }
-        } else {
-            tracing::error!("Could not find {}", config_path);
-        }
+        start_lua_config()?;
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -988,6 +950,63 @@ impl<B: Backend> State<B> {
             xwm: None,
             xdisplay: None,
         })
+    }
+}
+
+fn start_lua_config() -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: move all this into the lua api
+    let config_path = std::env::var("PINNACLE_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let default_path = std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+            let mut default_path = PathBuf::from(default_path);
+            default_path.push("pinnacle/init.lua");
+            default_path
+        });
+
+    let config_path = {
+        let path = shellexpand::tilde(&config_path.to_string_lossy().to_string()).to_string();
+        PathBuf::from(path)
+    };
+
+    if config_path.exists() {
+        let lua_path = std::env::var("LUA_PATH").unwrap_or_else(|_| {
+            tracing::info!("LUA_PATH was not set, using empty string");
+            "".to_string()
+        });
+        let mut local_lua_path = std::env::current_dir()
+            .expect("Couldn't get current dir")
+            .to_string_lossy()
+            .to_string();
+        local_lua_path.push_str("/api/lua"); // TODO: get from crate root and do dynamically
+        let new_lua_path =
+            format!("{local_lua_path}/?.lua;{local_lua_path}/?/init.lua;{local_lua_path}/lib/?.lua;{local_lua_path}/lib/?/init.lua;{lua_path}");
+
+        let lua_cpath = std::env::var("LUA_CPATH").unwrap_or_else(|_| {
+            tracing::info!("LUA_CPATH was not set, using empty string");
+            "".to_string()
+        });
+        let new_lua_cpath = format!("{local_lua_path}/lib/?.so;{lua_cpath}");
+
+        if let Err(err) = std::process::Command::new("lua")
+            .arg(config_path)
+            .env("LUA_PATH", new_lua_path)
+            .env("LUA_CPATH", new_lua_cpath)
+            .spawn()
+        {
+            tracing::error!("Failed to start Lua: {err}");
+            return Err(err)?;
+        }
+        Ok(())
+    } else {
+        tracing::error!("Could not find config {:?}", config_path);
+        if std::env::var("PINNACLE_CONFIG").is_err() {
+            tracing::error!("Help: Run Pinnacle with PINNACLE_CONFIG set to a valid config file, or copy the provided example_config.lua to the path mentioned above.");
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "No config found",
+        ))?
     }
 }
 
