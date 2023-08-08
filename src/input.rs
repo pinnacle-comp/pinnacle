@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::{
     api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
     focus::FocusTarget,
+    state::WithState,
     window::WindowElement,
 };
 use smithay::{
@@ -74,12 +75,20 @@ impl<B: Backend> State<B> {
         let layers = layer_map_for_output(output);
 
         // I think I'm going a bit too far with the functional stuff
-        layers
-            .layer_under(wlr_layer::Layer::Overlay, point)
-            .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
-            .map(|layer| {
-                let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+        [output]
+            .into_iter()
+            .flat_map(|op| op.with_state(|state| state.tags.clone()))
+            .find(|tag| tag.fullscreen_window().is_some())
+            .and_then(|tag| tag.fullscreen_window())
+            .map(|window| (FocusTarget::from(window), output_geo.loc))
+            .or_else(|| {
+                layers
+                    .layer_under(wlr_layer::Layer::Overlay, point)
+                    .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
+                    .map(|layer| {
+                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+                    })
             })
             .or_else(|| {
                 self.space
