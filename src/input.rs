@@ -8,9 +8,12 @@ use crate::{
     window::WindowElement,
 };
 use smithay::{
-    backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-        KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+    backend::{
+        input::{
+            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+            KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+        },
+        session::Session,
     },
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{
@@ -39,6 +42,13 @@ impl InputState {
     pub fn new() -> Self {
         Default::default()
     }
+}
+
+#[derive(Debug)]
+enum KeyAction {
+    CallCallback(CallbackId),
+    Quit,
+    SwitchVt(i32),
 }
 
 impl<B: Backend> State<B> {
@@ -85,6 +95,107 @@ impl<B: Backend> State<B> {
                         (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
                     })
             })
+    }
+
+    fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
+        let serial = SERIAL_COUNTER.next_serial();
+        let time = event.time_msec();
+        let press_state = event.state();
+        let mut move_mode = false;
+        let action = self
+            .seat
+            .get_keyboard()
+            .expect("Seat has no keyboard") // FIXME: handle err
+            .input(
+                self,
+                event.key_code(),
+                press_state,
+                serial,
+                time,
+                |state, modifiers, keysym| {
+                    if press_state == KeyState::Pressed {
+                        let mut modifier_mask = Vec::<Modifier>::new();
+                        if modifiers.alt {
+                            modifier_mask.push(Modifier::Alt);
+                        }
+                        if modifiers.shift {
+                            modifier_mask.push(Modifier::Shift);
+                        }
+                        if modifiers.ctrl {
+                            modifier_mask.push(Modifier::Ctrl);
+                        }
+                        if modifiers.logo {
+                            modifier_mask.push(Modifier::Super);
+                        }
+                        let raw_sym = if keysym.raw_syms().len() == 1 {
+                            keysym.raw_syms()[0]
+                        } else {
+                            keysyms::KEY_NoSymbol
+                        };
+                        if let Some(callback_id) = state
+                            .input_state
+                            .keybinds
+                            .get(&(modifier_mask.into(), raw_sym))
+                        {
+                            return FilterResult::Intercept(KeyAction::CallCallback(*callback_id));
+                        } else if modifiers.ctrl
+                            && modifiers.shift
+                            && modifiers.alt
+                            && keysym.modified_sym() == keysyms::KEY_Escape
+                        {
+                            return FilterResult::Intercept(KeyAction::Quit);
+                        } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
+                            keysym.modified_sym() {
+                            vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
+                            tracing::info!("Switching to vt {vt}");
+                            return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
+                        }
+
+                    }
+
+                    if keysym.modified_sym() == keysyms::KEY_Control_L {
+                        match press_state {
+                            KeyState::Pressed => {
+                                move_mode = true;
+                            }
+                            KeyState::Released => {
+                                move_mode = false;
+                            }
+                        }
+                    }
+                    FilterResult::Forward
+                },
+            );
+
+        self.move_mode = move_mode;
+
+        match action {
+            Some(KeyAction::CallCallback(callback_id)) => {
+                if let Some(stream) = self.api_state.stream.as_ref() {
+                    if let Err(err) = crate::api::send_to_client(
+                        &mut stream.lock().expect("Could not lock stream mutex"),
+                        &OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: None,
+                        },
+                    ) {
+                        tracing::error!("error sending msg to client: {err}");
+                    }
+                }
+            }
+            Some(KeyAction::SwitchVt(vt)) => {
+                if let Some(st) = (self as &mut dyn std::any::Any).downcast_mut::<State<UdevData>>()
+                {
+                    if let Err(err) = st.backend_data.session.change_vt(vt) {
+                        tracing::error!("Failed to switch to vt {vt}: {err}");
+                    }
+                }
+            }
+            Some(KeyAction::Quit) => {
+                self.loop_signal.stop();
+            }
+            _ => {}
+        }
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
@@ -302,90 +413,6 @@ impl<B: Backend> State<B> {
             .get_pointer()
             .expect("Seat has no pointer")
             .axis(self, frame);
-    }
-
-    fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
-        let serial = SERIAL_COUNTER.next_serial();
-        let time = event.time_msec();
-        let press_state = event.state();
-        let mut move_mode = false;
-        let action = self
-            .seat
-            .get_keyboard()
-            .expect("Seat has no keyboard") // FIXME: handle err
-            .input(
-                self,
-                event.key_code(),
-                press_state,
-                serial,
-                time,
-                |state, modifiers, keysym| {
-                    if press_state == KeyState::Pressed {
-                        let mut modifier_mask = Vec::<Modifier>::new();
-                        if modifiers.alt {
-                            modifier_mask.push(Modifier::Alt);
-                        }
-                        if modifiers.shift {
-                            modifier_mask.push(Modifier::Shift);
-                        }
-                        if modifiers.ctrl {
-                            modifier_mask.push(Modifier::Ctrl);
-                        }
-                        if modifiers.logo {
-                            modifier_mask.push(Modifier::Super);
-                        }
-                        let raw_sym = if keysym.raw_syms().len() == 1 {
-                            keysym.raw_syms()[0]
-                        } else {
-                            keysyms::KEY_NoSymbol
-                        };
-                        if let Some(callback_id) = state
-                            .input_state
-                            .keybinds
-                            .get(&(modifier_mask.into(), raw_sym))
-                        {
-                            return FilterResult::Intercept(*callback_id);
-                        } else if modifiers.ctrl
-                            && modifiers.shift
-                            && modifiers.alt
-                            && keysym.modified_sym() == keysyms::KEY_Escape
-                        {
-                            return FilterResult::Intercept(CallbackId(999999));
-                        }
-                    }
-
-                    if keysym.modified_sym() == keysyms::KEY_Control_L {
-                        match press_state {
-                            KeyState::Pressed => {
-                                move_mode = true;
-                            }
-                            KeyState::Released => {
-                                move_mode = false;
-                            }
-                        }
-                    }
-                    FilterResult::Forward
-                },
-            );
-
-        self.move_mode = move_mode;
-
-        if let Some(callback_id) = action {
-            if callback_id.0 == 999999 {
-                self.loop_signal.stop();
-            }
-            if let Some(stream) = self.api_state.stream.as_ref() {
-                if let Err(err) = crate::api::send_to_client(
-                    &mut stream.lock().expect("Could not lock stream mutex"),
-                    &OutgoingMsg::CallCallback {
-                        callback_id,
-                        args: None,
-                    },
-                ) {
-                    tracing::warn!("error sending msg to client: {err}");
-                }
-            }
-        }
     }
 }
 

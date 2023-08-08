@@ -122,7 +122,7 @@ struct UdevOutputId {
 }
 
 pub struct UdevData {
-    session: LibSeatSession,
+    pub session: LibSeatSession,
     display_handle: DisplayHandle,
     dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     primary_gpu: DrmNode,
@@ -303,7 +303,7 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
                 libinput_context.suspend();
                 tracing::info!("pausing session");
 
-                for backend in data.state.backend_data.backends.values() {
+                for backend in data.state.backend_data.backends.values_mut() {
                     backend.drm.pause();
                 }
             }
@@ -1076,9 +1076,7 @@ impl State<UdevData> {
     }
 
     fn device_removed(&mut self, node: DrmNode) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backend_data.backends.get_mut(&node) else {
             return;
         };
 
@@ -1291,15 +1289,11 @@ impl State<UdevData> {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backend_data.backends.get_mut(&node) else {
             return;
         };
 
-        let surface = if let Some(surface) = device.surfaces.get_mut(&crtc) {
-            surface
-        } else {
+        let Some(surface) = device.surfaces.get_mut(&crtc) else {
             return;
         };
 
@@ -1584,7 +1578,7 @@ fn render_surface<'a>(
     let time = clock.now();
 
     // We need to send frames to the cursor surface so that xwayland windows will properly
-    // update on motion.
+    // update the cursor on motion.
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
