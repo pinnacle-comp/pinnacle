@@ -97,20 +97,30 @@ impl PinnacleSocketSource {
             ));
         }
 
-        let socket_path = socket_path.join("pinnacle_socket");
+        let Some(socket_path) = socket_path
+            .join("pinnacle_socket")
+            .to_str()
+            .map(|st| st.to_string())
+        else {
+            tracing::error!("Socket path {socket_path:?} had invalid Unicode");
+            return Err(io::Error::new(io::ErrorKind::Other, "socket path had invalid unicode"));
+        };
+
+        let socket_path = shellexpand::tilde(&socket_path).to_string();
+        let socket_path = Path::new(&socket_path);
 
         // TODO: use anyhow
 
         if let Ok(exists) = socket_path.try_exists() {
             if exists {
-                if let Err(err) = std::fs::remove_file(&socket_path) {
+                if let Err(err) = std::fs::remove_file(socket_path) {
                     tracing::error!("Failed to remove old socket: {err}");
                     return Err(err);
                 }
             }
         }
 
-        let listener = match UnixListener::bind(&socket_path) {
+        let listener = match UnixListener::bind(socket_path) {
             Ok(listener) => {
                 tracing::info!("Bound to socket at {socket_path:?}");
                 listener
