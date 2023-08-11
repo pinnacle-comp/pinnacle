@@ -78,6 +78,7 @@ impl<B: Backend> State<B> {
         [output]
             .into_iter()
             .flat_map(|op| op.with_state(|state| state.tags.clone()))
+            .filter(|tag| tag.active())
             .find(|tag| tag.fullscreen_window().is_some())
             .and_then(|tag| tag.fullscreen_window())
             .map(|window| (FocusTarget::from(window), output_geo.loc))

@@ -30,7 +30,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{State, WithState},
-    window::{window_state::WindowResizeState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::LocationRequestState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XdgShellHandler for State<B> {
@@ -95,17 +95,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         self.windows.push(window.clone());
         // self.space.map_element(window.clone(), (0, 0), true);
         if let Some(focused_output) = self.focus_state.focused_output.clone() {
-            focused_output.with_state(|state| {
-                let first_tag = state.focused_tags().next();
-                if let Some(first_tag) = first_tag {
-                    first_tag.layout().layout(
-                        self.windows.clone(),
-                        state.focused_tags().cloned().collect(),
-                        &mut self.space,
-                        &focused_output,
-                    );
-                }
-            });
+            self.update_windows(&focused_output);
             BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
             tracing::debug!(
                 "blocker {}",
@@ -277,12 +267,13 @@ impl<B: Backend> XdgShellHandler for State<B> {
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
         if let Some(window) = self.window_for_surface(&surface) {
             window.with_state(|state| {
-                if let WindowResizeState::Requested(serial, new_loc) = state.resize_state {
+                if let LocationRequestState::Requested(serial, new_loc) = state.loc_request_state {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
                                 // tracing::debug!("acked configure, new loc is {:?}", new_loc);
-                                state.resize_state = WindowResizeState::Acknowledged(new_loc);
+                                state.loc_request_state =
+                                    LocationRequestState::Acknowledged(new_loc);
                                 if let Some(focused_output) =
                                     self.focus_state.focused_output.clone()
                                 {

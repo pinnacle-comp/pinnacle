@@ -228,7 +228,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                     );
                     layer_map_for_output(&output).arrange();
-                    state.re_layout(&output);
+                    state.update_windows(&output);
+                    // state.re_layout(&output);
                 }
                 WinitEvent::Focus(_) => {}
                 WinitEvent::Input(input_evt) => {
@@ -299,6 +300,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                     state
                         .tags
                         .iter()
+                        .filter(|tag| tag.active())
                         .find(|tag| tag.fullscreen_window().is_some())
                         .cloned()
                 })

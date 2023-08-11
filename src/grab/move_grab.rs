@@ -20,7 +20,7 @@ use crate::{
     backend::Backend,
     state::{State, WithState},
     window::{
-        window_state::{Float, WindowResizeState},
+        window_state::{LocationRequestState, Status},
         WindowElement,
     },
 };
@@ -35,21 +35,22 @@ pub struct MoveSurfaceGrab<S: SeatHandler> {
 impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
     fn motion(
         &mut self,
-        data: &mut State<B>,
+        state: &mut State<B>,
         handle: &mut PointerInnerHandle<'_, State<B>>,
         _focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &MotionEvent,
     ) {
-        handle.motion(data, None, event);
+        handle.motion(state, None, event);
 
         if !self.window.alive() {
-            handle.unset_grab(data, event.serial, event.time);
+            handle.unset_grab(state, event.serial, event.time);
             return;
         }
 
-        data.space.raise_element(&self.window, false);
+        state.space.raise_element(&self.window, false);
         if let WindowElement::X11(surface) = &self.window {
-            data.xwm
+            state
+                .xwm
                 .as_mut()
                 .expect("no xwm")
                 .raise_window(surface)
@@ -59,17 +60,17 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
 
-        let tiled = self.window.with_state(|state| state.floating.is_tiled());
+        let tiled = self.window.with_state(|state| state.status.is_tiled());
 
         if tiled {
             // INFO: this is being used instead of space.element_under(event.location) because that
             // |     uses the bounding box, which is different from the actual geometry
-            let window_under = data
+            let window_under = state
                 .space
                 .elements()
                 .rev()
                 .find(|&win| {
-                    if let Some(loc) = data.space.element_location(win) {
+                    if let Some(loc) = state.space.element_location(win) {
                         let size = win.geometry().size;
                         let rect = Rectangle { size, loc };
                         rect.contains(event.location.to_i32_round())
@@ -84,28 +85,36 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                let is_floating = window_under.with_state(|state| state.floating.is_floating());
+                let is_floating = window_under.with_state(|state| state.status.is_floating());
 
                 if is_floating {
                     return;
                 }
 
-                let has_pending_resize = window_under
-                    .with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle));
+                let has_pending_resize = window_under.with_state(|state| {
+                    !matches!(state.loc_request_state, LocationRequestState::Idle)
+                });
 
                 if has_pending_resize {
                     return;
                 }
 
-                data.swap_window_positions(&self.window, &window_under);
+                state.swap_window_positions(&self.window, &window_under);
             }
         } else {
             let delta = event.location - self.start_data.location;
             let new_loc = (self.initial_window_loc.to_f64() + delta).to_i32_round();
-            data.space.map_element(self.window.clone(), new_loc, true);
+            state.space.map_element(self.window.clone(), new_loc, true);
+
+            let size = state
+                .space
+                .element_geometry(&self.window)
+                .expect("window wasn't mapped")
+                .size;
+
             self.window.with_state(|state| {
-                if state.floating.is_floating() {
-                    state.floating = Float::Floating(new_loc);
+                if state.status.is_floating() {
+                    state.status = Status::Floating(Rectangle::from_loc_and_size(new_loc, size));
                 }
             });
             if let WindowElement::X11(surface) = &self.window {

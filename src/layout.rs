@@ -4,15 +4,132 @@ use itertools::{Either, Itertools};
 use smithay::{
     desktop::{layer_map_for_output, Space},
     output::Output,
-    utils::{Logical, Rectangle, Size},
+    utils::{Logical, Point, Rectangle, Size},
 };
 
 use crate::{
     backend::Backend,
     state::{State, WithState},
     tag::Tag,
-    window::WindowElement,
+    window::{
+        window_state::{LocationRequestState, Status},
+        WindowElement,
+    },
 };
+
+// -------------------------------------------
+
+impl<B: Backend> State<B> {
+    /// Compute the positions and sizes of tiled windows on
+    /// `output` according to the provided [`Layout`].
+    ///
+    /// This will call `request_size_change` on tiled windows.
+    fn tile_windows(&self, output: &Output, windows: Vec<WindowElement>, layout: Layout) {
+        let Some(rect) = self.space.output_geometry(output).map(|op_geo| {
+            let map = layer_map_for_output(output);
+            if map.layers().peekable().peek().is_none() {
+                // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
+                // |     output res, even when there are no layer surfaces mapped. In this case, we
+                // |     just return the output geometry.
+                op_geo
+            } else {
+                let zone = map.non_exclusive_zone();
+                tracing::debug!("non_exclusive_zone is {zone:?}");
+                Rectangle::from_loc_and_size(op_geo.loc + zone.loc, zone.size)
+            }
+        }) else {
+            // TODO: maybe default to something like 800x800 like in anvil so people still see
+            // |     windows open
+            tracing::error!("Failed to get output geometry");
+            return;
+        };
+
+        match layout {
+            Layout::MasterStack => master_stack(windows, rect),
+            Layout::Dwindle => dwindle(windows, rect),
+            Layout::Spiral => spiral(windows, rect),
+            layout @ (Layout::CornerTopLeft
+            | Layout::CornerTopRight
+            | Layout::CornerBottomLeft
+            | Layout::CornerBottomRight) => corner(&layout, windows, rect),
+        }
+    }
+
+    pub fn update_windows(&mut self, output: &Output) {
+        let Some(layout) = output.with_state(|state| {
+            state.focused_tags().next().cloned().map(|tag| tag.layout())
+        }) else { return };
+
+        let (windows_on_foc_tags, windows_not_on_foc_tags): (Vec<_>, _) =
+            output.with_state(|state| {
+                let focused_tags = state.focused_tags().collect::<Vec<_>>();
+                self.windows.iter().cloned().partition(|win| {
+                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
+                })
+            });
+
+        let tiled_windows = windows_on_foc_tags
+            .iter()
+            .filter(|win| win.with_state(|state| state.status.is_tiled()))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        self.tile_windows(output, tiled_windows, layout);
+
+        let output_geo = self.space.output_geometry(output).expect("no output geo");
+        for window in windows_on_foc_tags.iter() {
+            match window.with_state(|state| state.status) {
+                Status::Fullscreen(_) => {
+                    window.change_geometry(output_geo);
+                }
+                Status::Maximized(_) => {
+                    let map = layer_map_for_output(output);
+                    let geo = if map.layers().peekable().peek().is_none() {
+                        // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
+                        // |     output res, even when there are no layer surfaces mapped. In this case, we
+                        // |     just return the output geometry.
+                        output_geo
+                    } else {
+                        let zone = map.non_exclusive_zone();
+                        tracing::debug!("non_exclusive_zone is {zone:?}");
+                        Rectangle::from_loc_and_size(output_geo.loc + zone.loc, zone.size)
+                    };
+                    window.change_geometry(geo);
+                }
+                _ => (),
+            }
+        }
+
+        for window in windows_on_foc_tags.iter() {
+            window.with_state(|state| {
+                if let LocationRequestState::Sent(loc) = state.loc_request_state {
+                    match &window {
+                        WindowElement::Wayland(window) => {
+                            let serial = window.toplevel().send_configure();
+                            state.loc_request_state = LocationRequestState::Requested(serial, loc);
+                        }
+                        WindowElement::X11(_) => {
+                            // already configured, just need to map
+                            // maybe wait for all wayland windows to commit before mapping
+                            self.space.map_element(window.clone(), loc, false);
+                            state.loc_request_state = LocationRequestState::Idle;
+                        }
+                    }
+                }
+            });
+        }
+
+        self.loop_handle.insert_idle(|data| {
+            crate::state::schedule_on_commit(data, windows_on_foc_tags, |dt| {
+                for win in windows_not_on_foc_tags {
+                    dt.state.space.unmap_elem(&win);
+                }
+            })
+        });
+    }
+}
+
+// -------------------------------------------
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
@@ -57,22 +174,18 @@ impl Layout {
         tracing::debug!("Laying out with rect {rect:?}");
 
         match self {
-            Layout::MasterStack => master_stack(windows, space, rect),
-            Layout::Dwindle => dwindle(windows, space, rect),
-            Layout::Spiral => spiral(windows, space, rect),
+            Layout::MasterStack => master_stack(windows, rect),
+            Layout::Dwindle => dwindle(windows, rect),
+            Layout::Spiral => spiral(windows, rect),
             layout @ (Layout::CornerTopLeft
             | Layout::CornerTopRight
             | Layout::CornerBottomLeft
-            | Layout::CornerBottomRight) => corner(layout, windows, space, rect),
+            | Layout::CornerBottomRight) => corner(layout, windows, rect),
         }
     }
 }
 
-fn master_stack(
-    windows: Vec<WindowElement>,
-    space: &mut Space<WindowElement>,
-    rect: Rectangle<i32, Logical>,
-) {
+fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
     let size = rect.size;
     let loc = rect.loc;
 
@@ -85,11 +198,11 @@ fn master_stack(
 
     if stack_count == 0 {
         // one window
-        master.request_size_change(space, loc, size);
+        master.change_geometry(Rectangle::from_loc_and_size(loc, size));
     } else {
-        let loc = (loc.x, loc.y).into();
+        let loc: Point<i32, Logical> = (loc.x, loc.y).into();
         let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();
-        master.request_size_change(space, loc, new_master_size);
+        master.change_geometry(Rectangle::from_loc_and_size(loc, new_master_size));
 
         let stack_count = stack_count;
 
@@ -105,20 +218,15 @@ fn master_stack(
             .collect::<Vec<_>>();
 
         for (i, win) in stack.enumerate() {
-            win.request_size_change(
-                space,
-                (size.w / 2 + loc.x, y_s[i] + loc.y).into(),
-                (size.w / 2, i32::max(heights[i], 40)).into(),
-            );
+            win.change_geometry(Rectangle::from_loc_and_size(
+                Point::from((size.w / 2 + loc.x, y_s[i] + loc.y)),
+                Size::from((size.w / 2, i32::max(heights[i], 40))),
+            ));
         }
     }
 }
 
-fn dwindle(
-    windows: Vec<WindowElement>,
-    space: &mut Space<WindowElement>,
-    rect: Rectangle<i32, Logical>,
-) {
+fn dwindle(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
     let size = rect.size;
     let loc = rect.loc;
 
@@ -126,7 +234,7 @@ fn dwindle(
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(space, loc, size);
+            window.change_geometry(Rectangle::from_loc_and_size(loc, size));
         }
     } else {
         let mut win1_size = size;
@@ -146,41 +254,35 @@ fn dwindle(
                 Slice::Right => {
                     let width_partition = win1_size.w / 2;
 
-                    win1.request_size_change(
-                        space,
+                    win1.change_geometry(Rectangle::from_loc_and_size(
                         win1_loc,
-                        (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
-                    );
+                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
+                    ));
 
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
 
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
-                    win1.request_size_change(
-                        space,
+                    win1.change_geometry(Rectangle::from_loc_and_size(
                         win1_loc,
-                        (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
-                    );
+                        Size::from((win1_size.w, i32::max(win1_size.h - height_partition, 40))),
+                    ));
 
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
 
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
             }
         }
     }
 }
 
-fn spiral(
-    windows: Vec<WindowElement>,
-    space: &mut Space<WindowElement>,
-    rect: Rectangle<i32, Logical>,
-) {
+fn spiral(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
     let size = rect.size;
     let loc = rect.loc;
 
@@ -188,7 +290,7 @@ fn spiral(
 
     if iter.peek().is_none() {
         if let Some(window) = windows.first() {
-            window.request_size_change(space, loc, size);
+            window.change_geometry(Rectangle::from_loc_and_size(loc, size));
         }
     } else {
         let mut win1_loc = loc;
@@ -217,80 +319,73 @@ fn spiral(
                 Slice::Above => {
                     let height_partition = win1_size.h / 2;
 
-                    win1.request_size_change(
-                        space,
-                        (win1_loc.x, win1_loc.y + height_partition).into(),
-                        (win1_size.w, i32::max(win1_size.h - height_partition, 40)).into(),
-                    );
+                    win1.change_geometry(Rectangle::from_loc_and_size(
+                        Point::from((win1_loc.x, win1_loc.y + height_partition)),
+                        Size::from((win1_size.w, i32::max(win1_size.h - height_partition, 40))),
+                    ));
 
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
                 Slice::Below => {
                     let height_partition = win1_size.h / 2;
 
-                    win1.request_size_change(
-                        space,
+                    win1.change_geometry(Rectangle::from_loc_and_size(
                         win1_loc,
-                        (win1_size.w, win1_size.h - i32::max(height_partition, 40)).into(),
-                    );
+                        Size::from((win1_size.w, win1_size.h - i32::max(height_partition, 40))),
+                    ));
 
                     win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
                     win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
                 Slice::Left => {
                     let width_partition = win1_size.w / 2;
 
-                    win1.request_size_change(
-                        space,
-                        (win1_loc.x + width_partition, win1_loc.y).into(),
-                        (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
-                    );
+                    win1.change_geometry(Rectangle::from_loc_and_size(
+                        Point::from((win1_loc.x + width_partition, win1_loc.y)),
+                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
+                    ));
 
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
                 Slice::Right => {
                     let width_partition = win1_size.w / 2;
 
-                    win1.request_size_change(
-                        space,
+                    win1.change_geometry(Rectangle::from_loc_and_size(
                         win1_loc,
-                        (win1_size.w - width_partition, i32::max(win1_size.h, 40)).into(),
-                    );
+                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
+                    ));
 
                     win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
                     win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.request_size_change(space, win1_loc, win1_size);
+                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
                 }
             }
         }
     }
 }
 
-fn corner(
-    layout: &Layout,
-    windows: Vec<WindowElement>,
-    space: &mut Space<WindowElement>,
-    rect: Rectangle<i32, Logical>,
-) {
+fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
     let size = rect.size;
     let loc = rect.loc;
 
     match windows.len() {
         0 => (),
         1 => {
-            windows[0].request_size_change(space, loc, size);
+            windows[0].change_geometry(rect);
         }
         2 => {
-            windows[0].request_size_change(space, loc, (size.w / 2, size.h).into());
+            windows[0].change_geometry(Rectangle::from_loc_and_size(
+                loc,
+                Size::from((size.w / 2, size.h)),
+            ));
 
-            windows[1].request_size_change(
-                space,
-                (loc.x + size.w / 2, loc.y).into(),
-                (size.w / 2, size.h).into(),
-            );
+            windows[1].change_geometry(Rectangle::from_loc_and_size(
+                Point::from((loc.x + size.w / 2, loc.y)),
+                Size::from((size.w / 2, size.h)),
+            ));
         }
         _ => {
             let mut windows = windows.into_iter();
@@ -306,9 +401,8 @@ fn corner(
 
             let div_factor = 2;
 
-            corner.request_size_change(
-                space,
-                match layout {
+            corner.change_geometry(Rectangle::from_loc_and_size(
+                Point::from(match layout {
                     Layout::CornerTopLeft => (loc.x, loc.y),
                     Layout::CornerTopRight => (loc.x + size.w - size.w / div_factor, loc.y),
                     Layout::CornerBottomLeft => (loc.x, loc.y + size.h - size.h / div_factor),
@@ -317,10 +411,9 @@ fn corner(
                         loc.y + size.h - size.h / div_factor,
                     ),
                     _ => unreachable!(),
-                }
-                .into(),
-                (size.w / div_factor, size.h / div_factor).into(),
-            );
+                }),
+                Size::from((size.w / div_factor, size.h / div_factor)),
+            ));
 
             let vert_stack_count = vert_stack.len();
 
@@ -336,19 +429,17 @@ fn corner(
                 .collect::<Vec<_>>();
 
             for (i, win) in vert_stack.iter().enumerate() {
-                win.request_size_change(
-                    space,
-                    (
+                win.change_geometry(Rectangle::from_loc_and_size(
+                    Point::from((
                         match layout {
                             Layout::CornerTopLeft | Layout::CornerBottomLeft => size.w / 2 + loc.x,
                             Layout::CornerTopRight | Layout::CornerBottomRight => loc.x,
                             _ => unreachable!(),
                         },
                         y_s[i] + loc.y,
-                    )
-                        .into(),
-                    (size.w / 2, i32::max(heights[i], 40)).into(),
-                );
+                    )),
+                    Size::from((size.w / 2, i32::max(heights[i], 40))),
+                ));
             }
 
             let horiz_stack_count = horiz_stack.len();
@@ -365,18 +456,16 @@ fn corner(
                 .collect::<Vec<_>>();
 
             for (i, win) in horiz_stack.iter().enumerate() {
-                win.request_size_change(
-                    space,
-                    match layout {
+                win.change_geometry(Rectangle::from_loc_and_size(
+                    Point::from(match layout {
                         Layout::CornerTopLeft => (x_s[i] + loc.x, loc.y + size.h / 2),
                         Layout::CornerTopRight => (x_s[i] + loc.x + size.w / 2, loc.y + size.h / 2),
                         Layout::CornerBottomLeft => (x_s[i] + loc.x, loc.y),
                         Layout::CornerBottomRight => (x_s[i] + loc.x + size.w / 2, loc.y),
                         _ => unreachable!(),
-                    }
-                    .into(),
-                    (i32::max(widths[i], 1), size.h / 2).into(),
-                );
+                    }),
+                    Size::from((i32::max(widths[i], 1), size.h / 2)),
+                ));
             }
         }
     }
@@ -385,7 +474,7 @@ fn corner(
 fn filter_windows(windows: &[WindowElement], tags: Vec<Tag>) -> Vec<WindowElement> {
     windows
         .iter()
-        .filter(|window| window.with_state(|state| state.floating.is_tiled()))
+        .filter(|window| window.with_state(|state| state.status.is_tiled()))
         .filter(|window| {
             window.with_state(|state| {
                 for tag in state.tags.iter() {
@@ -421,6 +510,7 @@ impl<B: Backend> State<B> {
             .focused_output
             .clone()
             .expect("no focused output");
-        self.re_layout(&output);
+        self.update_windows(&output);
+        // self.re_layout(&output);
     }
 }

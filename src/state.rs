@@ -21,7 +21,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
     window::{
-        window_state::{Float, WindowResizeState},
+        window_state::{LocationRequestState, Status},
         WindowElement,
     },
 };
@@ -187,7 +187,8 @@ impl<B: Backend> State<B> {
                     state.tags = vec![tag.clone()];
                 });
                 let Some(output) = tag.output(self) else { return };
-                self.re_layout(&output);
+                self.update_windows(&output);
+                // self.re_layout(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -202,14 +203,16 @@ impl<B: Backend> State<B> {
                 });
 
                 let Some(output) = tag.output(self) else { return };
-                self.re_layout(&output);
+                self.update_windows(&output);
+                // self.re_layout(&output);
             }
             Msg::ToggleTag { tag_id } => {
                 tracing::debug!("ToggleTag");
                 if let Some(tag) = tag_id.tag(self) {
                     tag.set_active(!tag.active());
                     if let Some(output) = tag.output(self) {
-                        self.re_layout(&output);
+                        self.update_windows(&output);
+                        // self.re_layout(&output);
                     }
                 }
             }
@@ -222,7 +225,8 @@ impl<B: Backend> State<B> {
                     }
                     tag.set_active(true);
                 });
-                self.re_layout(&output);
+                self.update_windows(&output);
+                // self.re_layout(&output);
             }
             Msg::AddTags {
                 output_name,
@@ -252,7 +256,8 @@ impl<B: Backend> State<B> {
                 let Some(tag) = tag_id.tag(self) else { return };
                 tag.set_layout(layout);
                 let Some(output) = tag.output(self) else { return };
-                self.re_layout(&output);
+                self.update_windows(&output);
+                // self.re_layout(&output);
             }
 
             Msg::ConnectForAllOutputs { callback_id } => {
@@ -288,7 +293,8 @@ impl<B: Backend> State<B> {
                 output.change_current_state(None, None, None, Some(loc));
                 self.space.map_output(&output, loc);
                 tracing::debug!("mapping output {} to {loc:?}", output.name());
-                self.re_layout(&output);
+                self.update_windows(&output);
+                // self.re_layout(&output);
             }
 
             Msg::Quit => {
@@ -358,7 +364,7 @@ impl<B: Backend> State<B> {
                 });
                 let floating = window
                     .as_ref()
-                    .map(|win| win.with_state(|state| state.floating.is_floating()));
+                    .map(|win| win.with_state(|state| state.status.is_floating()));
                 let focused = window.as_ref().and_then(|win| {
                     self.focus_state
                         .current_focus() // TODO: actual focus
@@ -645,14 +651,6 @@ impl<B: Backend> State<B> {
     }
 
     pub fn re_layout(&mut self, output: &Output) {
-        for win in self.windows.iter() {
-            if win.is_wayland() {
-                win.with_state(|state| {
-                    tracing::debug!("{:?}", state.resize_state);
-                })
-            }
-        }
-
         let windows = self
             .windows
             .iter()
@@ -705,16 +703,20 @@ impl<B: Backend> State<B> {
                     }
                 }
 
-                for (win, loc) in clone.into_iter().filter_map(|win| {
-                    match win.with_state(|state| state.floating.clone()) {
-                        Float::Tiled(_) => None,
-                        Float::Floating(loc) => Some((win, loc)),
-                    }
-                }) {
+                for (win, rect) in
+                    clone
+                        .into_iter()
+                        .filter_map(|win| match win.with_state(|state| state.status) {
+                            Status::Floating(loc) => Some((win, loc)),
+                            _ => None,
+                        })
+                {
                     if let WindowElement::X11(surface) = &win {
-                        surface.set_mapped(true).expect("failed to map x11 win");
+                        if !surface.is_override_redirect() {
+                            surface.set_mapped(true).expect("failed to map x11 win");
+                        }
                     }
-                    dt.state.space.map_element(win, loc, false);
+                    dt.state.space.map_element(win, rect.loc, false);
                 }
             });
         });
@@ -731,7 +733,8 @@ pub fn schedule_on_commit<F, B: Backend>(
     F: FnOnce(&mut CalloopData<B>) + 'static,
 {
     for window in windows.iter().filter(|win| win.alive()) {
-        if window.with_state(|state| !matches!(state.resize_state, WindowResizeState::Idle)) {
+        if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
+        {
             data.state.loop_handle.insert_idle(|data| {
                 schedule_on_commit(data, windows, on_commit);
             });

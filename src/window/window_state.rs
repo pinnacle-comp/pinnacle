@@ -2,13 +2,12 @@
 
 use std::{
     cell::RefCell,
-    fmt,
     sync::atomic::{AtomicU32, Ordering},
 };
 
 use smithay::{
     desktop::Window,
-    utils::{Logical, Point, Serial, Size},
+    utils::{Logical, Point, Rectangle, Serial},
 };
 
 use crate::{
@@ -67,10 +66,10 @@ impl WithState for Window {
 pub struct WindowElementState {
     /// The id of this window.
     pub id: WindowId,
-    /// Whether the window is floating or tiled.
-    pub floating: Float,
+    /// Whether the window is floating, tiled, fullscreen, or maximized.
+    pub status: Status,
     /// The window's resize state. See [WindowResizeState] for more.
-    pub resize_state: WindowResizeState,
+    pub loc_request_state: LocationRequestState,
     /// What tags the window is currently on.
     pub tags: Vec<Tag>,
 }
@@ -99,11 +98,12 @@ pub struct WindowElementState {
 /// [`resize_state`]: WindowState#structfield.resize_state
 /// [`XdgShellHandler.ack_configure()`]: smithay::wayland::shell::xdg::XdgShellHandler#method.ack_configure
 /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
-#[derive(Default, Clone)]
-pub enum WindowResizeState {
+#[derive(Debug, Default, Clone)]
+pub enum LocationRequestState {
     /// The window doesn't need to be moved.
     #[default]
     Idle,
+    Sent(Point<i32, Logical>),
     /// The window has received a configure request with a new size. The desired location and the
     /// configure request's serial should be provided here.
     Requested(Serial, Point<i32, Logical>),
@@ -114,24 +114,16 @@ pub enum WindowResizeState {
     Acknowledged(Point<i32, Logical>),
 }
 
-impl fmt::Debug for WindowResizeState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Idle => write!(f, "Idle"),
-            Self::Requested(_arg0, _arg1) => write!(f, "Requested"),
-            Self::Acknowledged(_arg0) => write!(f, "Acknowledged"),
-        }
-    }
+/// Whether the window is floating, tiled, fullscreen, or maximized.
+#[derive(Debug, Clone, Copy)]
+pub enum Status {
+    Floating(Rectangle<i32, Logical>),
+    Tiled(Option<Rectangle<i32, Logical>>),
+    Fullscreen(Option<Rectangle<i32, Logical>>),
+    Maximized(Option<Rectangle<i32, Logical>>),
 }
 
-#[derive(Debug, Clone)]
-pub enum Float {
-    /// The previous location and size of the window when it was floating, if any.
-    Tiled(Option<(Point<i32, Logical>, Size<i32, Logical>)>),
-    Floating(Point<i32, Logical>),
-}
-
-impl Float {
+impl Status {
     /// Returns `true` if the float is [`Tiled`].
     ///
     /// [`Tiled`]: Float::Tiled
@@ -147,6 +139,22 @@ impl Float {
     pub fn is_floating(&self) -> bool {
         matches!(self, Self::Floating(_))
     }
+
+    /// Returns `true` if the status is [`Fullscreen`].
+    ///
+    /// [`Fullscreen`]: Status::Fullscreen
+    #[must_use]
+    pub fn is_fullscreen(&self) -> bool {
+        matches!(self, Self::Fullscreen(..))
+    }
+
+    /// Returns `true` if the status is [`Maximized`].
+    ///
+    /// [`Maximized`]: Status::Maximized
+    #[must_use]
+    pub fn is_maximized(&self) -> bool {
+        matches!(self, Self::Maximized(..))
+    }
 }
 
 impl WindowElementState {
@@ -161,8 +169,8 @@ impl Default for WindowElementState {
         Self {
             // INFO: I think this will assign the id on use of the state, not on window spawn.
             id: WindowId::next(),
-            floating: Float::Tiled(None),
-            resize_state: WindowResizeState::Idle,
+            status: Status::Tiled(None),
+            loc_request_state: LocationRequestState::Idle,
             tags: vec![],
         }
     }

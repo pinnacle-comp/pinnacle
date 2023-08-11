@@ -50,7 +50,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, ClientState, State, WithState},
-    window::{window_state::WindowResizeState, WindowElement},
+    window::{window_state::LocationRequestState, WindowElement},
 };
 
 impl<B: Backend> BufferHandler for State<B> {
@@ -120,8 +120,8 @@ impl<B: Backend> CompositorHandler for State<B> {
 
         if let Some(window) = self.window_for_surface(surface) {
             window.with_state(|state| {
-                if let WindowResizeState::Acknowledged(new_pos) = state.resize_state {
-                    state.resize_state = WindowResizeState::Idle;
+                if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
+                    state.loc_request_state = LocationRequestState::Idle;
                     if window.is_x11() {
                         tracing::warn!("did something with X11 window here");
                     }
@@ -443,7 +443,8 @@ impl<B: Backend> WlrLayerShellHandler for State<B> {
         // TODO: instead of deferring by 1 cycle, actually check if the surface has committed
         // |     before re-layouting
         self.loop_handle.insert_idle(move |data| {
-            data.state.re_layout(&output);
+            data.state.update_windows(&output);
+            // data.state.re_layout(&output);
         });
     }
 
@@ -466,7 +467,8 @@ impl<B: Backend> WlrLayerShellHandler for State<B> {
         // |     before re-layouting
         if let Some(output) = output {
             self.loop_handle.insert_idle(move |data| {
-                data.state.re_layout(&output);
+                data.state.update_windows(&output);
+                // data.state.re_layout(&output);
             });
         }
     }

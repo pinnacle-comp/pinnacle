@@ -18,7 +18,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::{window_state::Float, WindowElement},
+    window::{window_state::Status, WindowElement},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -325,10 +325,15 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
 
     if new_loc.x.is_some() || new_loc.y.is_some() {
         state.space.map_element(window.clone(), window_loc, false);
+        let size = state
+            .space
+            .element_geometry(&window)
+            .expect("called element_geometry on unmapped window")
+            .size;
 
         window.with_state(|state| {
-            if state.floating.is_floating() {
-                state.floating = Float::Floating(window_loc);
+            if state.status.is_floating() {
+                state.status = Status::Floating(Rectangle::from_loc_and_size(window_loc, size));
             }
         });
 
@@ -360,7 +365,7 @@ pub fn resize_request_client<B: Backend>(
             return;
         };
 
-        if window.with_state(|state| state.floating.is_tiled()) {
+        if window.with_state(|state| state.status.is_tiled()) {
             return;
         }
 
@@ -407,7 +412,7 @@ pub fn resize_request_server<B: Backend>(
         return;
     };
 
-    if window.with_state(|state| state.floating.is_tiled()) {
+    if window.with_state(|state| state.status.is_tiled()) {
         return;
     }
 

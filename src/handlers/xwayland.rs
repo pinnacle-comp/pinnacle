@@ -28,7 +28,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{window_state::Float, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::Status, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -128,7 +128,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             if should_float(surface) {
                 window.with_state(|state| {
-                    state.floating = Float::Floating(loc);
+                    state.status = Status::Floating(bbox);
                 });
             }
 
@@ -276,9 +276,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             self.state
                 .windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
-            if win.with_state(|state| state.floating.is_tiled()) {
+            if win.with_state(|state| state.status.is_tiled()) {
                 if let Some(output) = win.output(&self.state) {
-                    self.state.re_layout(&output);
+                    self.state.update_windows(&output);
+                    // self.state.re_layout(&output);
                 }
             }
         }
