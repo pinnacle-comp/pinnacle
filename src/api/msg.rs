@@ -3,7 +3,12 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::{layout::Layout, output::OutputName, tag::TagId, window::window_state::WindowId};
+use crate::{
+    layout::Layout,
+    output::OutputName,
+    tag::TagId,
+    window::window_state::{StatusName, WindowId},
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -41,6 +46,10 @@ pub enum Msg {
     ToggleTagOnWindow {
         window_id: WindowId,
         tag_id: TagId,
+    },
+    SetStatus {
+        window_id: WindowId,
+        status: StatusName,
     },
 
     // Tag management

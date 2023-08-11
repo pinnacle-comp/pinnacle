@@ -11,6 +11,8 @@
 ---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }?
 ---@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }?
 ---@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }?
+---@field SetStatus { window_id: WindowId, status: StatusName }?
+--
 ---@field Spawn { command: string[], callback_id: integer? }?
 ---@field Request Request?
 --Tags
@@ -24,6 +26,12 @@
 ---@field SetOutputLocation { output_name: OutputName, x: integer?, y: integer? }?
 
 ---@alias Msg _Msg | "Quit"
+
+---@alias StatusName
+---| "Floating"
+---| "Tiled"
+---| "Fullscreen"
+---| "Maximized"
 
 --------------------------------------------------------------------------------------------
 

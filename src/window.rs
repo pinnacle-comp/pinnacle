@@ -40,7 +40,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{LocationRequestState, Status, WindowElementState};
+use self::window_state::{LocationRequestState, Status, StatusName, WindowElementState};
 
 pub mod window_state;
 
@@ -269,104 +269,73 @@ impl WindowElement {
         matches!(self, Self::X11(..))
     }
 
-    /// Set this window to floating.
-    ///
-    /// This will change the size of the window only.
-    /// Call `State.update_windows` to perform mapping.
-    pub fn set_floating(&self) {
-        let status = self.with_state(|state| state.status);
+    pub fn set_status(&self, status: StatusName) {
+        let prev_status = self.with_state(|state| state.status);
+        let geo = match prev_status {
+            Status::Floating(rect)
+            | Status::Tiled(Some(rect))
+            | Status::Fullscreen(Some(rect))
+            | Status::Maximized(Some(rect)) => rect,
+            _ => self.geometry(),
+        };
+
         match status {
-            Status::Floating(_) => (),
-            Status::Tiled(rect) | Status::Fullscreen(rect) | Status::Maximized(rect) => {
-                if let Some(rect) = rect {
-                    self.change_geometry(rect);
-                    self.with_state(|state| state.status = Status::Floating(rect));
-                } else {
-                    // TODO: is this the same as from the space? prolly not
-                    let geo = self.geometry();
-                    self.with_state(|state| state.status = Status::Floating(geo));
+            StatusName::Floating => {
+                self.with_state(|state| state.status = Status::Floating(geo));
+
+                if let WindowElement::Wayland(window) = self {
+                    window.toplevel().with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.unset(xdg_toplevel::State::TiledTop);
+                        state.states.unset(xdg_toplevel::State::TiledBottom);
+                        state.states.unset(xdg_toplevel::State::TiledLeft);
+                        state.states.unset(xdg_toplevel::State::TiledRight);
+                    });
                 }
             }
-        }
+            StatusName::Tiled => {
+                self.with_state(|state| state.status = Status::Tiled(Some(geo)));
 
-        if let WindowElement::Wayland(window) = self {
-            window.toplevel().with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Maximized);
-                state.states.unset(xdg_toplevel::State::Fullscreen);
-                state.states.unset(xdg_toplevel::State::TiledTop);
-                state.states.unset(xdg_toplevel::State::TiledBottom);
-                state.states.unset(xdg_toplevel::State::TiledLeft);
-                state.states.unset(xdg_toplevel::State::TiledRight);
-            });
-        }
-    }
+                if let WindowElement::Wayland(window) = self {
+                    window.toplevel().with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
+            }
+            StatusName::Fullscreen => {
+                self.with_state(|state| state.status = Status::Fullscreen(Some(geo)));
 
-    /// Call compute_tiled_windows after this
-    pub fn set_tiled(&self) {
-        let geo = match self.with_state(|state| state.status) {
-            Status::Floating(rect)
-            | Status::Tiled(Some(rect))
-            | Status::Fullscreen(Some(rect))
-            | Status::Maximized(Some(rect)) => rect,
-            _ => self.geometry(),
-        };
-        self.with_state(|state| state.status = Status::Tiled(Some(geo)));
+                if let WindowElement::Wayland(window) = self {
+                    window.toplevel().with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.set(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
+            }
+            StatusName::Maximized => {
+                self.with_state(|state| state.status = Status::Maximized(Some(geo)));
 
-        if let WindowElement::Wayland(window) = self {
-            window.toplevel().with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Maximized);
-                state.states.unset(xdg_toplevel::State::Fullscreen);
-                state.states.set(xdg_toplevel::State::TiledTop);
-                state.states.set(xdg_toplevel::State::TiledBottom);
-                state.states.set(xdg_toplevel::State::TiledLeft);
-                state.states.set(xdg_toplevel::State::TiledRight);
-            });
-        }
-    }
-
-    pub fn set_fullscreen(&self) {
-        let geo = match self.with_state(|state| state.status) {
-            Status::Floating(rect)
-            | Status::Tiled(Some(rect))
-            | Status::Fullscreen(Some(rect))
-            | Status::Maximized(Some(rect)) => rect,
-            _ => self.geometry(),
-        };
-
-        self.with_state(|state| state.status = Status::Fullscreen(Some(geo)));
-
-        if let WindowElement::Wayland(window) = self {
-            window.toplevel().with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Maximized);
-                state.states.set(xdg_toplevel::State::Fullscreen);
-                state.states.set(xdg_toplevel::State::TiledTop);
-                state.states.set(xdg_toplevel::State::TiledBottom);
-                state.states.set(xdg_toplevel::State::TiledLeft);
-                state.states.set(xdg_toplevel::State::TiledRight);
-            });
-        }
-    }
-
-    pub fn set_maximized(&self) {
-        let geo = match self.with_state(|state| state.status) {
-            Status::Floating(rect)
-            | Status::Tiled(Some(rect))
-            | Status::Fullscreen(Some(rect))
-            | Status::Maximized(Some(rect)) => rect,
-            _ => self.geometry(),
-        };
-
-        self.with_state(|state| state.status = Status::Maximized(Some(geo)));
-
-        if let WindowElement::Wayland(window) = self {
-            window.toplevel().with_pending_state(|state| {
-                state.states.unset(xdg_toplevel::State::Fullscreen);
-                state.states.set(xdg_toplevel::State::Maximized);
-                state.states.set(xdg_toplevel::State::TiledTop);
-                state.states.set(xdg_toplevel::State::TiledBottom);
-                state.states.set(xdg_toplevel::State::TiledLeft);
-                state.states.set(xdg_toplevel::State::TiledRight);
-            });
+                if let WindowElement::Wayland(window) = self {
+                    window.toplevel().with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::Maximized);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
+            }
         }
     }
 }
@@ -604,10 +573,11 @@ impl<B: Backend> State<B> {
 
 /// Toggle a window's floating status.
 pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement) {
-    if window.with_state(|state| state.status.is_floating()) {
-        window.set_tiled();
-    } else {
-        window.set_floating();
+    match window.with_state(|state| state.status) {
+        Status::Floating(_) => window.set_status(StatusName::Tiled),
+        Status::Tiled(_) => window.set_status(StatusName::Fullscreen),
+        Status::Fullscreen(_) => window.set_status(StatusName::Maximized),
+        Status::Maximized(_) => window.set_status(StatusName::Floating),
     }
 
     // TODO: don't use the focused output, use the one the window is on
@@ -637,6 +607,7 @@ pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement)
                     false
                 })
             })
+            .filter(|win| win != window)
             .collect::<Vec<_>>()
     });
 

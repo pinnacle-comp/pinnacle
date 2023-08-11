@@ -206,6 +206,18 @@ impl<B: Backend> State<B> {
                 self.update_windows(&output);
                 // self.re_layout(&output);
             }
+            Msg::SetStatus { window_id, status } => {
+                let Some(window) = window_id.window(self) else { return };
+                window.set_status(status);
+                let outputs = self.space.outputs_for_element(&window);
+                self.focus_state.set_focus(window);
+
+                if let Some(output) = outputs.into_iter().next() {
+                    self.update_windows(&output);
+                }
+            }
+
+            // Tags ----------------------------------------
             Msg::ToggleTag { tag_id } => {
                 tracing::debug!("ToggleTag");
                 if let Some(tag) = tag_id.tag(self) {
@@ -735,6 +747,10 @@ pub fn schedule_on_commit<F, B: Backend>(
     for window in windows.iter().filter(|win| win.alive()) {
         if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
         {
+            tracing::debug!(
+                "window state is {:?}",
+                window.with_state(|state| state.loc_request_state.clone())
+            );
             data.state.loop_handle.insert_idle(|data| {
                 schedule_on_commit(data, windows, on_commit);
             });

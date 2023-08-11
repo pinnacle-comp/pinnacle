@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{LayerSurface, PopupKind},
+    desktop::{LayerSurface, PopupKind, Space},
     input::{
         keyboard::KeyboardTarget,
         pointer::{MotionEvent, PointerTarget},
@@ -17,7 +17,7 @@ use crate::{backend::Backend, state::State, window::WindowElement};
 
 #[derive(Default)]
 pub struct FocusState {
-    focus_stack: Vec<WindowElement>,
+    pub focus_stack: Vec<WindowElement>,
     pub focused_output: Option<Output>,
 }
 
@@ -42,6 +42,18 @@ impl FocusState {
     pub fn set_focus(&mut self, window: WindowElement) {
         self.focus_stack.retain(|win| win != &window);
         self.focus_stack.push(window);
+    }
+
+    /// Fix focus layering for all windows in the `focus_stack`.
+    ///
+    /// This will call `space.map_element` on all windows from front
+    /// to back to correct their z locations.
+    pub fn fix_up_focus(&self, space: &mut Space<WindowElement>) {
+        for win in self.focus_stack.iter() {
+            if let Some(loc) = space.element_location(win) {
+                space.map_element(win.clone(), loc, false);
+            }
+        }
     }
 }
 

@@ -101,6 +101,12 @@ function window:toggle_floating()
     window_module.toggle_floating(self)
 end
 
+---Set this window's status. Yes, this isn't a great name.
+---@param status StatusName
+function window:set_status(status)
+    window_module.set_status(self, status)
+end
+
 ---Get this window's size.
 ---
 ---### Example
@@ -241,7 +247,8 @@ end
 ---Get all windows.
 ---@return Window[]
 function window_module.get_all()
-    local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
+    local window_ids =
+        Request("GetWindows").RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
     for _, window_id in pairs(window_ids) do
@@ -379,6 +386,18 @@ function window_module.toggle_floating(win)
     SendMsg({
         ToggleFloating = {
             window_id = win:id(),
+        },
+    })
+end
+
+---Set `win`'s status. Yes, this is not a great name for the function.
+---@param win Window
+---@param status StatusName
+function window_module.set_status(win, status)
+    SendMsg({
+        SetStatus = {
+            window_id = win:id(),
+            status = status,
         },
     })
 end

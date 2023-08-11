@@ -122,13 +122,13 @@ impl<B: Backend> CompositorHandler for State<B> {
             window.with_state(|state| {
                 if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
                     state.loc_request_state = LocationRequestState::Idle;
-                    if window.is_x11() {
-                        tracing::warn!("did something with X11 window here");
-                    }
                     self.space.map_element(window.clone(), new_pos, false);
                 }
             });
         }
+
+        // correct focus layering
+        self.focus_state.fix_up_focus(&mut self.space);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

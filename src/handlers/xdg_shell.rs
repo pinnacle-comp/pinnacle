@@ -30,7 +30,10 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{State, WithState},
-    window::{window_state::LocationRequestState, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{
+        window_state::{LocationRequestState, StatusName},
+        WindowElement, BLOCKER_COUNTER,
+    },
 };
 
 impl<B: Backend> XdgShellHandler for State<B> {
@@ -39,17 +42,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = WindowElement::Wayland(Window::new(surface));
+        let window = WindowElement::Wayland(Window::new(surface.clone()));
 
-        {
-            let WindowElement::Wayland(window) = &window else { unreachable!() };
-            window.toplevel().with_pending_state(|tl_state| {
-                tl_state.states.set(xdg_toplevel::State::TiledTop);
-                tl_state.states.set(xdg_toplevel::State::TiledBottom);
-                tl_state.states.set(xdg_toplevel::State::TiledLeft);
-                tl_state.states.set(xdg_toplevel::State::TiledRight);
-            });
-        }
+        window.set_status(StatusName::Tiled);
 
         window.with_state(|state| {
             state.tags = match (
@@ -92,6 +87,8 @@ impl<B: Backend> XdgShellHandler for State<B> {
             .cloned()
             .collect::<Vec<_>>();
 
+        // note to self: don't reorder this
+        // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
         // self.space.map_element(window.clone(), (0, 0), true);
         if let Some(focused_output) = self.focus_state.focused_output.clone() {
@@ -103,7 +100,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
             );
             for win in windows_on_output.iter() {
                 if let Some(surf) = win.wl_surface() {
-                    compositor::add_blocker(&surf, WindowBlocker);
+                    compositor::add_blocker(&surf, crate::window::WindowBlocker);
                 }
             }
             let clone = window.clone();
@@ -146,17 +143,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
         if let Some(focused_output) = self.focus_state.focused_output.as_ref().cloned() {
-            focused_output.with_state(|state| {
-                let first_tag = state.focused_tags().next();
-                if let Some(first_tag) = first_tag {
-                    first_tag.layout().layout(
-                        self.windows.clone(),
-                        state.focused_tags().cloned().collect(),
-                        &mut self.space,
-                        &focused_output,
-                    );
-                }
-            });
+            self.update_windows(&focused_output);
         }
 
         // let mut windows: Vec<Window> = self.space.elements().cloned().collect();

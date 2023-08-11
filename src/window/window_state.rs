@@ -122,6 +122,15 @@ pub enum Status {
     Fullscreen(Option<Rectangle<i32, Logical>>),
     Maximized(Option<Rectangle<i32, Logical>>),
 }
+// TODO: couple these somehow
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum StatusName {
+    Floating,
+    Tiled,
+    Fullscreen,
+    Maximized,
+}
 
 impl Status {
     /// Returns `true` if the float is [`Tiled`].
