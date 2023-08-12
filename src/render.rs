@@ -16,7 +16,10 @@ use smithay::{
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
     wayland::{compositor, input_method::InputMethodHandle},
@@ -166,7 +169,21 @@ where
     let output_render_elements = {
         let top_fullscreen_window = focus_stack.iter().rev().find(|win| {
             win.with_state(|state| {
-                state.status.is_fullscreen() && state.tags.iter().any(|tag| tag.active())
+                // TODO: for wayland windows, check if current state has xdg_toplevel fullscreen
+                let is_wayland_actually_fullscreen = {
+                    if let WindowElement::Wayland(window) = win {
+                        window
+                            .toplevel()
+                            .current_state()
+                            .states
+                            .contains(xdg_toplevel::State::Fullscreen)
+                    } else {
+                        true
+                    }
+                };
+                state.status.is_fullscreen()
+                    && state.tags.iter().any(|tag| tag.active())
+                    && is_wayland_actually_fullscreen
             })
         });
 
