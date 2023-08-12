@@ -10,7 +10,6 @@ use std::{
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
-    sync::Mutex,
     time::Duration,
 };
 
@@ -31,10 +30,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{
-                self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer,
-                AsRenderElements, RenderElement, RenderElementStates,
-            },
+            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             sync::SyncPoint,
@@ -51,11 +47,10 @@ use smithay::{
     },
     delegate_dmabuf,
     desktop::{
-        space::{self, SurfaceTree},
         utils::{send_frames_surface_tree, OutputPresentationFeedback},
         Space,
     },
-    input::pointer::{CursorImageAttributes, CursorImageStatus},
+    input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
@@ -79,11 +74,8 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{
-        Clock, DeviceFd, IsAlive, Logical, Monotonic, Physical, Point, Rectangle, Scale, Transform,
-    },
+    utils::{Clock, DeviceFd, Logical, Monotonic, Physical, Point, Rectangle, Transform},
     wayland::{
-        compositor,
         dmabuf::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
@@ -98,8 +90,8 @@ use smithay_drm_extras::{
 
 use crate::{
     api::msg::{Args, OutgoingMsg},
-    render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
-    state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback, WithState},
+    render::{pointer::PointerElement, CustomRenderElements},
+    state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback},
     window::WindowElement,
 };
 
@@ -1486,129 +1478,18 @@ fn render_surface<'a>(
     clock: &Clock<Monotonic>,
     focus_stack: &[WindowElement],
 ) -> Result<bool, SwapBuffersError> {
-    let output_geometry = space.output_geometry(output).unwrap();
-    let scale = Scale::from(output.current_scale().fractional_scale());
-
-    let mut custom_render_elements: Vec<CustomRenderElements<_>> = Vec::new();
-    // draw input method surface if any
-    let rectangle = input_method.coordinates();
-    let position = Point::from((
-        rectangle.loc.x + rectangle.size.w,
-        rectangle.loc.y + rectangle.size.h,
-    ));
-    input_method.with_surface(|surface| {
-        custom_render_elements.extend(AsRenderElements::<UdevRenderer<'a, '_>>::render_elements(
-            &SurfaceTree::from_surface(surface),
-            renderer,
-            position.to_physical_precise_round(scale),
-            scale,
-            1.0,
-        ));
-    });
-
-    if output_geometry.to_f64().contains(pointer_location) {
-        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = cursor_status {
-            compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<Mutex<CursorImageAttributes>>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .hotspot
-            })
-        } else {
-            (0, 0).into()
-        };
-        let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
-        let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round();
-
-        // set cursor
-        pointer_element.set_texture(pointer_image.clone());
-
-        // draw the cursor as relevant
-        {
-            // reset the cursor if the surface is no longer alive
-            let mut reset = false;
-            if let CursorImageStatus::Surface(ref surface) = *cursor_status {
-                reset = !surface.alive();
-            }
-            if reset {
-                *cursor_status = CursorImageStatus::Default;
-            }
-
-            pointer_element.set_status(cursor_status.clone());
-        }
-
-        custom_render_elements.extend(pointer_element.render_elements(
-            renderer,
-            cursor_pos_scaled,
-            scale,
-            1.0,
-        ));
-
-        if let Some(dnd_icon) = dnd_icon {
-            custom_render_elements.extend(AsRenderElements::render_elements(
-                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
-                renderer,
-                cursor_pos_scaled,
-                scale,
-                1.0,
-            ));
-        }
-    }
-
-    let output_render_elements = {
-        let top_fullscreen_window = focus_stack.iter().rev().find(|win| {
-            win.with_state(|state| {
-                state.status.is_fullscreen() && state.tags.iter().any(|tag| tag.active())
-            })
-        });
-
-        // If fullscreen windows exist, render only the topmost one
-        // TODO: wait until the fullscreen window has committed, this will stop flickering
-        if let Some(window) = top_fullscreen_window {
-            let mut output_render_elements =
-                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
-
-            let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
-                window.render_elements(renderer, (0, 0).into(), scale, 1.0);
-
-            output_render_elements.extend(
-                custom_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-
-            output_render_elements.extend(
-                window_render_elements
-                    .into_iter()
-                    .map(|elem| OutputRenderElements::Window(element::Wrap::from(elem))),
-            );
-
-            output_render_elements
-        } else {
-            // render everything
-            let space_render_elements =
-                space::space_render_elements(renderer, [space], output, 1.0)
-                    .expect("Failed to get render elements");
-
-            let mut output_render_elements =
-                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
-
-            output_render_elements.extend(
-                custom_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-            output_render_elements.extend(
-                space_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-            output_render_elements
-        }
-    };
+    let output_render_elements = crate::render::generate_render_elements(
+        renderer,
+        space,
+        output,
+        input_method,
+        pointer_location,
+        pointer_element,
+        Some(pointer_image),
+        cursor_status,
+        dnd_icon,
+        focus_stack,
+    );
 
     let res = surface.compositor.render_frame::<_, _, GlesTexture>(
         renderer,
