@@ -295,21 +295,20 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 ));
             }
 
-            let active_tag_with_fullscreen = {
-                output.with_state(|state| {
-                    state
-                        .tags
-                        .iter()
-                        .filter(|tag| tag.active())
-                        .find(|tag| tag.fullscreen_window().is_some())
-                        .cloned()
-                })
-            };
-
             let output_render_elements = {
                 let renderer = state.backend_data.backend.renderer();
 
-                if let Some(tag) = active_tag_with_fullscreen {
+                let top_fullscreen_window =
+                    state.focus_state.focus_stack.iter().rev().find(|win| {
+                        win.with_state(|state| {
+                            state.status.is_fullscreen()
+                                && state.tags.iter().any(|tag| tag.active())
+                        })
+                    });
+
+                // If fullscreen windows exist, render only the topmost one
+                // TODO: wait until the fullscreen window has committed, this will stop flickering
+                if let Some(window) = top_fullscreen_window {
                     let mut output_render_elements = Vec::<
                         OutputRenderElements<
                             GlesRenderer,
@@ -317,7 +316,6 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         >,
                     >::new();
 
-                    let Some(window) = tag.fullscreen_window() else { unreachable!() };
                     let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
                         window.render_elements(renderer, (0, 0).into(), scale, 1.0);
 
@@ -335,6 +333,7 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
                     output_render_elements
                 } else {
+                    // render everything
                     let space_render_elements =
                         space::space_render_elements(renderer, [&state.space], &output, 1.0)
                             .expect("Failed to get render elements");

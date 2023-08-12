@@ -326,7 +326,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
             window.with_state(|state| {
                 let tags = state.tags.iter();
                 for tag in tags {
-                    tag.set_fullscreen_window(window.clone());
+                    // tag.set_fullscreen_window(window.clone());
                 }
             });
         }
@@ -352,7 +352,7 @@ impl<B: Backend> XdgShellHandler for State<B> {
         if let Some(window) = self.window_for_surface(surface.wl_surface()) {
             window.with_state(|state| {
                 for tag in state.tags.iter() {
-                    tag.set_fullscreen_window(None);
+                    // tag.set_fullscreen_window(None);
                 }
             });
         }

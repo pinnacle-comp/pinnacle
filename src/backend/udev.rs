@@ -32,7 +32,8 @@ use smithay::{
         renderer::{
             damage::{self, OutputDamageTracker},
             element::{
-                texture::TextureBuffer, AsRenderElements, RenderElement, RenderElementStates,
+                self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer,
+                AsRenderElements, RenderElement, RenderElementStates,
             },
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
@@ -98,7 +99,7 @@ use smithay_drm_extras::{
 use crate::{
     api::msg::{Args, OutgoingMsg},
     render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
-    state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback},
+    state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
 
@@ -1377,6 +1378,7 @@ impl State<UdevData> {
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
             &self.clock,
+            &self.focus_state.focus_stack,
         );
         let reschedule = match &result {
             Ok(has_rendered) => !has_rendered,
@@ -1482,11 +1484,12 @@ fn render_surface<'a>(
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
+    focus_stack: &[WindowElement],
 ) -> Result<bool, SwapBuffersError> {
     let output_geometry = space.output_geometry(output).unwrap();
     let scale = Scale::from(output.current_scale().fractional_scale());
 
-    let mut custom_elements: Vec<CustomRenderElements<_>> = Vec::new();
+    let mut custom_render_elements: Vec<CustomRenderElements<_>> = Vec::new();
     // draw input method surface if any
     let rectangle = input_method.coordinates();
     let position = Point::from((
@@ -1494,7 +1497,7 @@ fn render_surface<'a>(
         rectangle.loc.y + rectangle.size.h,
     ));
     input_method.with_surface(|surface| {
-        custom_elements.extend(AsRenderElements::<UdevRenderer<'a, '_>>::render_elements(
+        custom_render_elements.extend(AsRenderElements::<UdevRenderer<'a, '_>>::render_elements(
             &SurfaceTree::from_surface(surface),
             renderer,
             position.to_physical_precise_round(scale),
@@ -1537,7 +1540,7 @@ fn render_surface<'a>(
             pointer_element.set_status(cursor_status.clone());
         }
 
-        custom_elements.extend(pointer_element.render_elements(
+        custom_render_elements.extend(pointer_element.render_elements(
             renderer,
             cursor_pos_scaled,
             scale,
@@ -1545,7 +1548,7 @@ fn render_surface<'a>(
         ));
 
         if let Some(dnd_icon) = dnd_icon {
-            custom_elements.extend(AsRenderElements::render_elements(
+            custom_render_elements.extend(AsRenderElements::render_elements(
                 &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
                 renderer,
                 cursor_pos_scaled,
@@ -1555,19 +1558,57 @@ fn render_surface<'a>(
         }
     }
 
-    let mut output_render_elements = custom_elements
-        .into_iter()
-        .map(OutputRenderElements::from)
-        .collect::<Vec<_>>();
+    let output_render_elements = {
+        let top_fullscreen_window = focus_stack.iter().rev().find(|win| {
+            win.with_state(|state| {
+                state.status.is_fullscreen() && state.tags.iter().any(|tag| tag.active())
+            })
+        });
 
-    let space_render_elements =
-        space::space_render_elements(renderer, [space], output, 1.0).unwrap();
+        // If fullscreen windows exist, render only the topmost one
+        // TODO: wait until the fullscreen window has committed, this will stop flickering
+        if let Some(window) = top_fullscreen_window {
+            let mut output_render_elements =
+                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
 
-    output_render_elements.extend(
-        space_render_elements
-            .into_iter()
-            .map(OutputRenderElements::Space),
-    );
+            let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
+                window.render_elements(renderer, (0, 0).into(), scale, 1.0);
+
+            output_render_elements.extend(
+                custom_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
+
+            output_render_elements.extend(
+                window_render_elements
+                    .into_iter()
+                    .map(|elem| OutputRenderElements::Window(element::Wrap::from(elem))),
+            );
+
+            output_render_elements
+        } else {
+            // render everything
+            let space_render_elements =
+                space::space_render_elements(renderer, [space], output, 1.0)
+                    .expect("Failed to get render elements");
+
+            let mut output_render_elements =
+                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
+
+            output_render_elements.extend(
+                custom_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
+            output_render_elements.extend(
+                space_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
+            output_render_elements
+        }
+    };
 
     let res = surface.compositor.render_frame::<_, _, GlesTexture>(
         renderer,

@@ -57,7 +57,6 @@ impl<B: Backend> State<B> {
     where
         P: Into<Point<f64, Logical>>,
     {
-        // TODO: fullscreen
         let point: Point<f64, Logical> = point.into();
 
         let output = self.space.outputs().find(|op| {
@@ -74,14 +73,15 @@ impl<B: Backend> State<B> {
 
         let layers = layer_map_for_output(output);
 
+        let top_fullscreen_window = self.focus_state.focus_stack.iter().rev().find(|win| {
+            win.with_state(|state| {
+                state.status.is_fullscreen() && state.tags.iter().any(|tag| tag.active())
+            })
+        });
+
         // I think I'm going a bit too far with the functional stuff
-        [output]
-            .into_iter()
-            .flat_map(|op| op.with_state(|state| state.tags.clone()))
-            .filter(|tag| tag.active())
-            .find(|tag| tag.fullscreen_window().is_some())
-            .and_then(|tag| tag.fullscreen_window())
-            .map(|window| (FocusTarget::from(window), output_geo.loc))
+        top_fullscreen_window
+            .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
             .or_else(|| {
                 layers
                     .layer_under(wlr_layer::Layer::Overlay, point)

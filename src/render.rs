@@ -12,7 +12,7 @@ use smithay::{
 
 use crate::window::WindowElement;
 
-use self::pointer::PointerRenderElement;
+use self::pointer::{PointerElement, PointerRenderElement};
 
 pub mod pointer;
 
@@ -59,4 +59,16 @@ where
         .map(C::from)
         .collect()
     }
+}
+
+pub fn render_elements<R, T>(
+    renderer: &mut R,
+    pointer_element: &mut PointerElement<T>,
+) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
+where
+    R: Renderer + ImportAll,
+    <R as Renderer>::TextureId: 'static,
+    T: Texture,
+{
+    vec![]
 }

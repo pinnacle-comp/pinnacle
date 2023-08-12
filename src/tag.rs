@@ -13,7 +13,6 @@ use crate::{
     backend::Backend,
     layout::Layout,
     state::{State, WithState},
-    window::WindowElement,
 };
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -45,8 +44,6 @@ struct TagInner {
     active: bool,
     /// What layout this tag has.
     layout: Layout,
-    /// The fullscreen window, if any.
-    fullscreen_window: Option<WindowElement>,
 }
 
 impl PartialEq for TagInner {
@@ -84,14 +81,6 @@ impl Tag {
     pub fn set_layout(&self, layout: Layout) {
         self.0.borrow_mut().layout = layout;
     }
-
-    pub fn fullscreen_window(&self) -> Option<WindowElement> {
-        self.0.borrow().fullscreen_window.clone()
-    }
-
-    pub fn set_fullscreen_window(&self, window: impl Into<Option<WindowElement>>) {
-        self.0.borrow_mut().fullscreen_window = window.into();
-    }
 }
 
 impl Tag {
@@ -101,7 +90,6 @@ impl Tag {
             name,
             active: false,
             layout: Layout::MasterStack, // TODO: get from config
-            fullscreen_window: None,
         })))
     }
 
