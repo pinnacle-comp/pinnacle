@@ -209,8 +209,8 @@ pub enum RequestResponse {
         loc: Option<(i32, i32)>,
         class: Option<String>,
         title: Option<String>,
-        floating: Option<bool>,
         focused: Option<bool>,
+        status: Option<StatusName>,
     },
     Output {
         output_name: Option<String>,

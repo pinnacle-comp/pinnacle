@@ -63,7 +63,7 @@
 --Windows
 ---@field Window { window_id: WindowId|nil }?
 ---@field Windows { window_ids: WindowId[] }?
----@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, floating: boolean?, focused: boolean? }?
+---@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, status: StatusName?, focused: boolean? }?
 --Outputs
 ---@field Output { output_name: OutputName? }?
 ---@field Outputs { output_names: OutputName[] }?

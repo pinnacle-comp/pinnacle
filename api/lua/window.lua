@@ -90,17 +90,6 @@ function window:close()
     window_module.close(self)
 end
 
----Toggle this window's floating status.
----
----### Example
----```lua
----window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
----```
----@see WindowModule.toggle_floating — The corresponding module function
-function window:toggle_floating()
-    window_module.toggle_floating(self)
-end
-
 ---Set this window's status. Yes, this isn't a great name.
 ---@param status StatusName
 function window:set_status(status)
@@ -168,18 +157,11 @@ function window:title()
     return window_module.title(self)
 end
 
----Get this window's floating status.
----
----### Example
----```lua
------ With the focused window floating...
----print(window.get_focused():floating())
------ ...should print `true`.
----```
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowModule.floating — The corresponding module function
-function window:floating()
-    return window_module.floating(self)
+---Get this window's status.
+---@return StatusName|nil
+---@see WindowModule.status — The corresponding module function
+function window:status()
+    return window_module.status(self)
 end
 
 ---Get whether or not this window is focused.
@@ -379,17 +361,6 @@ function window_module.close(win)
     })
 end
 
----Toggle the specified window between tiled and floating.
----@param win Window
----@see Window.toggle_floating — The corresponding object method
-function window_module.toggle_floating(win)
-    SendMsg({
-        ToggleFloating = {
-            window_id = win:id(),
-        },
-    })
-end
-
 ---Set `win`'s status. Yes, this is not a great name for the function.
 ---@param win Window
 ---@param status StatusName
@@ -511,28 +482,18 @@ function window_module.title(win)
     return title
 end
 
----Get this window's floating status.
----
----### Example
----```lua
------ With the focused window floating...
----local win = window.get_focused()
----if win ~= nil then
----    print(window.floating(win))
----end
------ ...should print `true`.
----```
+---Get this window's status.
 ---@param win Window
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see Window.floating — The corresponding object method
-function window_module.floating(win)
+---@return StatusName|nil
+---@see Window.status — The corresponding object method
+function window_module.status(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
         },
     })
-    local floating = response.RequestResponse.response.WindowProps.floating
-    return floating
+    local status = response.RequestResponse.response.WindowProps.status
+    return status
 end
 
 ---Get whether or not this window is focused.

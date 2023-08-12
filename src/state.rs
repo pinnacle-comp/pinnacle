@@ -21,7 +21,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
     window::{
-        window_state::{LocationRequestState, Status},
+        window_state::{LocationRequestState, Status, StatusName},
         WindowElement,
     },
 };
@@ -374,9 +374,14 @@ impl<B: Backend> State<B> {
                     }
                     WindowElement::X11(surface) => (Some(surface.class()), Some(surface.title())),
                 });
-                let floating = window
-                    .as_ref()
-                    .map(|win| win.with_state(|state| state.status.is_floating()));
+                let status = window.as_ref().map(|win| {
+                    win.with_state(|state| match state.status {
+                        Status::Floating(_) => StatusName::Floating,
+                        Status::Tiled(_) => StatusName::Tiled,
+                        Status::Fullscreen(_) => StatusName::Fullscreen,
+                        Status::Maximized(_) => StatusName::Maximized,
+                    })
+                });
                 let focused = window.as_ref().and_then(|win| {
                     self.focus_state
                         .current_focus() // TODO: actual focus
@@ -391,8 +396,8 @@ impl<B: Backend> State<B> {
                             loc,
                             class,
                             title,
-                            floating,
                             focused,
+                            status,
                         },
                     },
                 )
@@ -747,10 +752,10 @@ pub fn schedule_on_commit<F, B: Backend>(
     for window in windows.iter().filter(|win| win.alive()) {
         if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
         {
-            tracing::debug!(
-                "window state is {:?}",
-                window.with_state(|state| state.loc_request_state.clone())
-            );
+            // tracing::debug!(
+            //     "window state is {:?}",
+            //     window.with_state(|state| state.loc_request_state.clone())
+            // );
             data.state.loop_handle.insert_idle(|data| {
                 schedule_on_commit(data, windows, on_commit);
             });

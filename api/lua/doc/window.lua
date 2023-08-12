@@ -66,11 +66,6 @@ function window_module.set_size(win, size) end
 ---@see Window.close
 function window_module.close(win) end
 
----Toggle the specified window between tiled and floating.
----@tparam Window win
----@see Window.toggle_floating
-function window_module.toggle_floating(win) end
-
 ---Get the specified window's size.
 ---
 ---@usage
@@ -126,19 +121,17 @@ function window_module.class(win) end
 ---@see Window.title
 function window_module.title(win) end
 
----Get this window's floating status.
----
----@usage
---- -- With the focused window floating...
----local win = window.get_focused()
----if win ~= nil then
----    print(window.floating(win))
----end
---- -- ...should print `true`.
+---Get `win`'s status.
 ---@tparam Window win
----@treturn boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see Window.floating
-function window_module.floating(win) end
+---@treturn string|nil One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, `"Maximized"`, or `nil`.
+---@see Window.status
+function window_module.status(win) end
+
+---Set `win`'s status.
+---@tparam Window win
+---@tparam string status One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, or `"Maximized"`.
+---@see Window.set_status
+function window_module.set_status(win, status) end
 
 ---Get whether or not this window is focused.
 ---
@@ -202,13 +195,6 @@ function window:toggle_tag(name, output) end
 ---@see WindowModule.close
 function window:close() end
 
----Toggle this window's floating status.
----
----@usage
----window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
----@see WindowModule.toggle_floating
-function window:toggle_floating() end
-
 ---Get this window's size.
 ---
 ---@usage
@@ -254,15 +240,16 @@ function window:class() end
 ---@see WindowModule.title
 function window:title() end
 
----Get this window's floating status.
----
----@usage
---- -- With the focused window floating...
----print(window.get_focused():floating())
---- -- ...should print `true`.
----@treturn boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
----@see WindowModule.floating
-function window:floating() end
+---Get this window's status.
+---@treturn string|nil One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, `"Maximized"`, or `nil`.
+---@see WindowModule.status
+function window:status() end
+
+---Get `win`'s status.
+---@tparam Window win
+---@tparam string status One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, or `"Maximized"`.
+---@see WindowModule.set_status
+function window:set_status(win, status) end
 
 ---Get whether or not this window is focused.
 ---
