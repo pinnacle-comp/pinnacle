@@ -322,13 +322,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 tracing::error!("wl_surface had no window");
                 return;
             };
-
-            window.with_state(|state| {
-                let tags = state.tags.iter();
-                for tag in tags {
-                    // tag.set_fullscreen_window(window.clone());
-                }
-            });
         }
 
         surface.send_configure();
@@ -348,14 +341,6 @@ impl<B: Backend> XdgShellHandler for State<B> {
             state.size = None;
             state.fullscreen_output.take();
         });
-
-        if let Some(window) = self.window_for_surface(surface.wl_surface()) {
-            window.with_state(|state| {
-                for tag in state.tags.iter() {
-                    // tag.set_fullscreen_window(None);
-                }
-            });
-        }
 
         surface.send_pending_configure();
     }

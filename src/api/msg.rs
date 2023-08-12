@@ -29,9 +29,6 @@ pub enum Msg {
     CloseWindow {
         window_id: WindowId,
     },
-    ToggleFloating {
-        window_id: WindowId,
-    },
     SetWindowSize {
         window_id: WindowId,
         #[serde(default)]

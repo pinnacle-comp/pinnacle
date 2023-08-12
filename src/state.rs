@@ -145,11 +145,6 @@ impl<B: Backend> State<B> {
                     }
                 }
             }
-            Msg::ToggleFloating { window_id } => {
-                if let Some(window) = window_id.window(self) {
-                    crate::window::toggle_floating(self, &window);
-                }
-            }
 
             Msg::Spawn {
                 command,

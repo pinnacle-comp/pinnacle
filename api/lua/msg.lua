@@ -7,7 +7,6 @@
 ---@field SetMousebind { button: integer }?
 --Windows
 ---@field CloseWindow { window_id: WindowId }?
----@field ToggleFloating { window_id: WindowId }?
 ---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }?
 ---@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }?
 ---@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }?
