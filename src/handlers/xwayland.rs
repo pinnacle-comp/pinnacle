@@ -28,7 +28,10 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{window_state::Status, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{
+        window_state::{Status, StatusName},
+        WindowBlocker, WindowElement, BLOCKER_COUNTER,
+    },
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -331,22 +334,50 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // TODO: anvil has a TODO here
     }
 
-    // fn maximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
-    //
-    // fn unmaximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
-    //
-    // fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    //     // window.set_fullscreen(true).unwrap();
-    // }
-    //
-    // fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
+    fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_maximized(true)
+            .expect("failed to set x11 win to maximized");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+        window.set_status(StatusName::Maximized);
+    }
+
+    fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_maximized(false)
+            .expect("failed to set x11 win to maximized");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+        // TODO: remember previous status
+        window.set_status(StatusName::Tiled);
+    }
+
+    fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_fullscreen(true)
+            .expect("failed to set x11 win to fullscreen");
+        // TODO: fix this mess
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+        window.set_status(StatusName::Fullscreen);
+
+        // TODO: do i need to update_windows here?
+    }
+
+    fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_fullscreen(false)
+            .expect("failed to set x11 win to unfullscreen");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+        // TODO: remember previous status
+        window.set_status(StatusName::Tiled);
+    }
 
     fn resize_request(
         &mut self,

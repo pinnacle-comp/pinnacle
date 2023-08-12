@@ -322,6 +322,8 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 tracing::error!("wl_surface had no window");
                 return;
             };
+
+            window.set_status(StatusName::Fullscreen);
         }
 
         surface.send_configure();
@@ -343,6 +345,33 @@ impl<B: Backend> XdgShellHandler for State<B> {
         });
 
         surface.send_pending_configure();
+
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+            tracing::error!("wl_surface had no window");
+            return;
+        };
+
+        // TODO: remember the last status instead of tiled
+        window.set_status(StatusName::Tiled);
+    }
+
+    fn maximize_request(&mut self, surface: ToplevelSurface) {
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+            return;
+        };
+
+        window.set_status(StatusName::Maximized);
+
+        // TODO: might need to update_windows here
+    }
+
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+            return;
+        };
+
+        // TODO: remember last status
+        window.set_status(StatusName::Tiled);
     }
 
     // fn minimize_request(&mut self, surface: ToplevelSurface) {
