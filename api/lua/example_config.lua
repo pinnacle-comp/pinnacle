@@ -38,8 +38,10 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Keybinds ----------------------------------------------------------------------
 
+    -- mod_key + Alt + q quits the compositor
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
+    -- mod_key + Alt + c closes the focused window
     input.keybind({ mod_key, "Alt" }, keys.c, function()
         -- The commented out line may crash the config process if you have no windows open.
         -- There is no nil warning here due to limitations in Lua LS type checking, so check for nil as shown below.
@@ -50,6 +52,14 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
+    -- mod_key + return spawns a terminal
+    input.keybind({ mod_key }, keys.Return, function()
+        process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
+            -- do something with the output here
+        end)
+    end)
+
+    -- mod_key + Alt + Space toggle floating on the focused window
     input.keybind({ mod_key, "Alt" }, keys.space, function()
         local win = window.get_focused()
         if win ~= nil then
@@ -57,12 +67,7 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
-    input.keybind({ mod_key }, keys.Return, function()
-        process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
-            -- do something with the output here
-        end)
-    end)
-
+    -- mod_key + f toggles fullscreen on the focused window
     input.keybind({ mod_key }, keys.f, function()
         local win = window.get_focused()
         if win ~= nil then
@@ -70,6 +75,7 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
+    -- mod_key + m toggles maximized on the focused window
     input.keybind({ mod_key }, keys.m, function()
         local win = window.get_focused()
         if win ~= nil then
@@ -80,6 +86,8 @@ require("pinnacle").setup(function(pinnacle)
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)
+        -- Add tags 1, 2, 3, 4 and 5 on all monitors, and toggle tag 1 active by default
+
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
         tag.toggle("1", op)
