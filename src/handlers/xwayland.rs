@@ -186,7 +186,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
                         // Schedule the popup to raise when all windows have committed after having
                         // their blockers cleared
-                        // FIXME: I've seen one instance where this didn't work, figure that out
                         crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
                             let WindowElement::X11(surface) = &clone else { unreachable!() };
                             if should_float(surface) {
@@ -194,6 +193,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                                     tracing::debug!("raising x11 popup");
                                     xwm.raise_window(surface).expect("failed to raise x11 win");
                                     dt.state.space.raise_element(&clone, true);
+                                    dt.state.focus_state.set_focus(clone);
                                 }
                             }
                         });
