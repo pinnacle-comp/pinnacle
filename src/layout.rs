@@ -2,7 +2,7 @@
 
 use itertools::{Either, Itertools};
 use smithay::{
-    desktop::{layer_map_for_output, Space},
+    desktop::layer_map_for_output,
     output::Output,
     utils::{Logical, Point, Rectangle, Size},
 };
@@ -10,7 +10,6 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    tag::Tag,
     window::{
         window_state::{FullscreenOrMaximized, LocationRequestState},
         WindowElement,
@@ -144,49 +143,6 @@ pub enum Layout {
     CornerTopRight,
     CornerBottomLeft,
     CornerBottomRight,
-}
-
-impl Layout {
-    pub fn layout(
-        &self,
-        windows: Vec<WindowElement>,
-        tags: Vec<Tag>,
-        space: &mut Space<WindowElement>,
-        output: &Output,
-    ) {
-        let windows = filter_windows(&windows, tags);
-
-        let Some(rect) = space.output_geometry(output).map(|op_geo| {
-            let map = layer_map_for_output(output);
-            if map.layers().peekable().peek().is_none() {
-                // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
-                // |     output res, even when there are no layer surfaces mapped. In this case, we
-                // |     just return the output geometry.
-                op_geo
-            } else {
-                let zone = map.non_exclusive_zone();
-                tracing::debug!("non_exclusive_zone is {zone:?}");
-                Rectangle::from_loc_and_size(op_geo.loc + zone.loc, zone.size)
-            }
-        }) else {
-            // TODO: maybe default to something like 800x800 like in anvil so people still see
-            // |     windows open
-            tracing::error!("Failed to get output geometry");
-            return;
-        };
-
-        tracing::debug!("Laying out with rect {rect:?}");
-
-        match self {
-            Layout::MasterStack => master_stack(windows, rect),
-            Layout::Dwindle => dwindle(windows, rect),
-            Layout::Spiral => spiral(windows, rect),
-            layout @ (Layout::CornerTopLeft
-            | Layout::CornerTopRight
-            | Layout::CornerBottomLeft
-            | Layout::CornerBottomRight) => corner(layout, windows, rect),
-        }
-    }
 }
 
 fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
@@ -473,24 +429,6 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
             }
         }
     }
-}
-
-fn filter_windows(windows: &[WindowElement], tags: Vec<Tag>) -> Vec<WindowElement> {
-    windows
-        .iter()
-        .filter(|window| window.with_state(|state| state.floating_or_tiled.is_tiled()))
-        .filter(|window| {
-            window.with_state(|state| {
-                for tag in state.tags.iter() {
-                    if tags.iter().any(|tg| tg == tag) {
-                        return true;
-                    }
-                }
-                false
-            })
-        })
-        .cloned()
-        .collect()
 }
 
 impl<B: Backend> State<B> {

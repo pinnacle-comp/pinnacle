@@ -156,17 +156,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             self.state.windows.push(window.clone());
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
-                focused_output.with_state(|state| {
-                    let first_tag = state.focused_tags().next();
-                    if let Some(first_tag) = first_tag {
-                        first_tag.layout().layout(
-                            self.state.windows.clone(),
-                            state.focused_tags().cloned().collect(),
-                            &mut self.state.space,
-                            &focused_output,
-                        );
-                    }
-                });
+                self.state.update_windows(&focused_output);
                 BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
                 tracing::debug!(
                     "blocker {}",
