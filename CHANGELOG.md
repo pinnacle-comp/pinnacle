@@ -1,17 +1,15 @@
 # Changelog
 
-- [Wlr-layer-shell support](https://github.com/Ottatop/pinnacle/pull/45) is now here!
-Now you can use stuff like [swaybg](https://github.com/swaywm/swaybg) so you don't have
-to look at an ugly gray background and [eww](https://github.com/elkowar/eww)
-for widgets (until I implement a widget system, that is). As always, if you find any
-issues, submit a bug report!
+## 3cc462de2c0b34ec593e87bd5c9377dba19a0cc9 (#53)
+- Added fullscreen and maximized window support
 
-<details>
+#### Known bugs
+- There is slight flickering then changing a window to and from floating
+- Xwayland client fullscreen requests are currently really buggy
+    - Fullscreen window sizing won't update unless the tag is changed
 
-<summary>Older stuff</summary>
+## 4261b6e60fc17219f76bf1dc835e0abc9baceaeb (#45)
+- Wlr-layer-shell support
 
-- We now have XWayland support as of [#34](https://github.com/Ottatop/pinnacle/pull/34)!
-It's currently not that polished right now because I got bored of working on it and I want
-to work on other aspects of Pinnacle, but it should be at least *usable*.
-
-</details>
+## ba7b2597f17c3af375f19c1eb8a29abe74d2bd61 (#34)
+- XWayland support
