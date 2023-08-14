@@ -75,7 +75,8 @@ impl<B: Backend> State<B> {
 
         let top_fullscreen_window = self.focus_state.focus_stack.iter().rev().find(|win| {
             win.with_state(|state| {
-                state.status.is_fullscreen() && state.tags.iter().any(|tag| tag.active())
+                state.fullscreen_or_maximized.is_fullscreen()
+                    && state.tags.iter().any(|tag| tag.active())
             })
         });
 

@@ -28,10 +28,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{
-        window_state::{Status, StatusName},
-        WindowBlocker, WindowElement, BLOCKER_COUNTER,
-    },
+    window::{window_state::FloatingOrTiled, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -131,7 +128,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             if should_float(surface) {
                 window.with_state(|state| {
-                    state.status = Status::Floating(bbox);
+                    state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
                 });
             }
 
@@ -279,11 +276,9 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             self.state
                 .windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
-            if win.with_state(|state| state.status.is_tiled()) {
-                if let Some(output) = win.output(&self.state) {
-                    self.state.update_windows(&output);
-                    // self.state.re_layout(&output);
-                }
+
+            if let Some(output) = win.output(&self.state) {
+                self.state.update_windows(&output);
             }
         }
         tracing::debug!("destroyed x11 window");
@@ -341,7 +336,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
             return;
         };
-        window.set_status(StatusName::Maximized);
+
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -351,8 +349,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
             return;
         };
-        // TODO: remember previous status
-        window.set_status(StatusName::Tiled);
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -363,9 +363,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
             return;
         };
-        window.set_status(StatusName::Fullscreen);
 
-        // TODO: do i need to update_windows here?
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -375,8 +376,10 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
             return;
         };
-        // TODO: remember previous status
-        window.set_status(StatusName::Tiled);
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
     }
 
     fn resize_request(

@@ -20,7 +20,7 @@ use crate::{
     backend::Backend,
     state::{State, WithState},
     window::{
-        window_state::{LocationRequestState, Status},
+        window_state::{FloatingOrTiled, LocationRequestState},
         WindowElement,
     },
 };
@@ -60,7 +60,9 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
         // tracing::info!("window geo is: {:?}", self.window.geometry());
         // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
 
-        let tiled = self.window.with_state(|state| state.status.is_tiled());
+        let tiled = self
+            .window
+            .with_state(|state| state.floating_or_tiled.is_tiled());
 
         if tiled {
             // INFO: this is being used instead of space.element_under(event.location) because that
@@ -85,7 +87,8 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                     return;
                 }
 
-                let is_floating = window_under.with_state(|state| state.status.is_floating());
+                let is_floating =
+                    window_under.with_state(|state| state.floating_or_tiled.is_floating());
 
                 if is_floating {
                     return;
@@ -113,10 +116,12 @@ impl<B: Backend> PointerGrab<State<B>> for MoveSurfaceGrab<State<B>> {
                 .size;
 
             self.window.with_state(|state| {
-                if state.status.is_floating() {
-                    state.status = Status::Floating(Rectangle::from_loc_and_size(new_loc, size));
+                if state.floating_or_tiled.is_floating() {
+                    state.floating_or_tiled =
+                        FloatingOrTiled::Floating(Rectangle::from_loc_and_size(new_loc, size));
                 }
             });
+
             if let WindowElement::X11(surface) = &self.window {
                 let geo = surface.geometry();
                 let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);

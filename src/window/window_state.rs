@@ -6,7 +6,8 @@ use std::{
 };
 
 use smithay::{
-    desktop::Window,
+    desktop::{space::SpaceElement, Window},
+    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Point, Rectangle, Serial},
 };
 
@@ -66,12 +67,12 @@ impl WithState for Window {
 pub struct WindowElementState {
     /// The id of this window.
     pub id: WindowId,
-    /// Whether the window is floating, tiled, fullscreen, or maximized.
-    pub status: Status,
     /// The window's resize state. See [WindowResizeState] for more.
     pub loc_request_state: LocationRequestState,
     /// What tags the window is currently on.
     pub tags: Vec<Tag>,
+    pub floating_or_tiled: FloatingOrTiled,
+    pub fullscreen_or_maximized: FullscreenOrMaximized,
 }
 
 /// The state of a window's resize operation.
@@ -114,55 +115,215 @@ pub enum LocationRequestState {
     Acknowledged(Point<i32, Logical>),
 }
 
-/// Whether the window is floating, tiled, fullscreen, or maximized.
+impl WindowElement {
+    /// This method uses a [`RefCell`].
+    pub fn toggle_floating(&self) {
+        match self.with_state(|state| state.floating_or_tiled) {
+            FloatingOrTiled::Floating(current_rect) => {
+                self.with_state(|state| {
+                    state.floating_or_tiled = FloatingOrTiled::Tiled(Some(current_rect))
+                });
+                self.set_tiled_states();
+            }
+            FloatingOrTiled::Tiled(prev_rect) => {
+                let prev_rect = prev_rect.unwrap_or_else(|| self.geometry());
+
+                self.with_state(|state| {
+                    state.floating_or_tiled = FloatingOrTiled::Floating(prev_rect);
+                });
+
+                // TODO: maybe move this into update_windows
+                self.change_geometry(prev_rect);
+                self.set_floating_states();
+            }
+        }
+    }
+
+    /// This method uses a [`RefCell`].
+    pub fn toggle_fullscreen(&self) {
+        self.with_state(|state| match state.fullscreen_or_maximized {
+            FullscreenOrMaximized::Neither | FullscreenOrMaximized::Maximized => {
+                state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
+
+                match self {
+                    WindowElement::Wayland(window) => {
+                        window.toplevel().with_pending_state(|state| {
+                            state.states.unset(xdg_toplevel::State::Maximized);
+                            state.states.set(xdg_toplevel::State::Fullscreen);
+                            state.states.set(xdg_toplevel::State::TiledTop);
+                            state.states.set(xdg_toplevel::State::TiledLeft);
+                            state.states.set(xdg_toplevel::State::TiledBottom);
+                            state.states.set(xdg_toplevel::State::TiledRight);
+                        });
+                    }
+                    WindowElement::X11(surface) => {
+                        surface
+                            .set_maximized(false)
+                            .expect("failed to set x11 win to maximized");
+                        surface
+                            .set_fullscreen(true)
+                            .expect("failed to set x11 win to not fullscreen");
+                    }
+                }
+            }
+            FullscreenOrMaximized::Fullscreen => {
+                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+
+                match state.floating_or_tiled {
+                    FloatingOrTiled::Floating(current_rect) => {
+                        self.change_geometry(current_rect);
+                        self.set_floating_states();
+                    }
+                    FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
+                }
+            }
+        });
+    }
+
+    /// This method uses a [`RefCell`].
+    pub fn toggle_maximized(&self) {
+        self.with_state(|state| match state.fullscreen_or_maximized {
+            FullscreenOrMaximized::Neither | FullscreenOrMaximized::Fullscreen => {
+                state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
+
+                match self {
+                    WindowElement::Wayland(window) => {
+                        window.toplevel().with_pending_state(|state| {
+                            state.states.set(xdg_toplevel::State::Maximized);
+                            state.states.unset(xdg_toplevel::State::Fullscreen);
+                            state.states.set(xdg_toplevel::State::TiledTop);
+                            state.states.set(xdg_toplevel::State::TiledLeft);
+                            state.states.set(xdg_toplevel::State::TiledBottom);
+                            state.states.set(xdg_toplevel::State::TiledRight);
+                        });
+                    }
+                    WindowElement::X11(surface) => {
+                        surface
+                            .set_maximized(true)
+                            .expect("failed to set x11 win to maximized");
+                        surface
+                            .set_fullscreen(false)
+                            .expect("failed to set x11 win to not fullscreen");
+                    }
+                }
+            }
+            FullscreenOrMaximized::Maximized => {
+                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+
+                match state.floating_or_tiled {
+                    FloatingOrTiled::Floating(current_rect) => {
+                        self.change_geometry(current_rect);
+                        self.set_floating_states();
+                    }
+                    FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
+                }
+            }
+        });
+    }
+
+    fn set_floating_states(&self) {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.toplevel().with_pending_state(|state| {
+                    state.states.unset(xdg_toplevel::State::Maximized);
+                    state.states.unset(xdg_toplevel::State::Fullscreen);
+                    state.states.unset(xdg_toplevel::State::TiledTop);
+                    state.states.unset(xdg_toplevel::State::TiledLeft);
+                    state.states.unset(xdg_toplevel::State::TiledBottom);
+                    state.states.unset(xdg_toplevel::State::TiledRight);
+                });
+            }
+            WindowElement::X11(surface) => {
+                surface
+                    .set_maximized(false)
+                    .expect("failed to set x11 win to maximized");
+                surface
+                    .set_fullscreen(false)
+                    .expect("failed to set x11 win to not fullscreen");
+            }
+        }
+    }
+
+    fn set_tiled_states(&self) {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.toplevel().with_pending_state(|state| {
+                    state.states.unset(xdg_toplevel::State::Maximized);
+                    state.states.unset(xdg_toplevel::State::Fullscreen);
+                    state.states.set(xdg_toplevel::State::TiledTop);
+                    state.states.set(xdg_toplevel::State::TiledLeft);
+                    state.states.set(xdg_toplevel::State::TiledBottom);
+                    state.states.set(xdg_toplevel::State::TiledRight);
+                });
+            }
+            WindowElement::X11(surface) => {
+                surface
+                    .set_maximized(false)
+                    .expect("failed to set x11 win to maximized");
+                surface
+                    .set_fullscreen(false)
+                    .expect("failed to set x11 win to not fullscreen");
+            }
+        }
+    }
+}
+
+// You know what they say, the two hardest things in computer science are
+// cache invalidation and naming things (and off by one errors).
 #[derive(Debug, Clone, Copy)]
-pub enum Status {
+pub enum FloatingOrTiled {
     Floating(Rectangle<i32, Logical>),
     Tiled(Option<Rectangle<i32, Logical>>),
-    Fullscreen(Option<Rectangle<i32, Logical>>),
-    Maximized(Option<Rectangle<i32, Logical>>),
-}
-// TODO: couple these somehow
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum StatusName {
-    Floating,
-    Tiled,
-    Fullscreen,
-    Maximized,
 }
 
-impl Status {
-    /// Returns `true` if the float is [`Tiled`].
+impl FloatingOrTiled {
+    /// Returns `true` if the floating or tiled is [`Floating`].
     ///
-    /// [`Tiled`]: Float::Tiled
+    /// [`Floating`]: FloatingOrTiled::Floating
+    #[must_use]
+    pub fn is_floating(&self) -> bool {
+        matches!(self, Self::Floating(..))
+    }
+
+    /// Returns `true` if the floating or tiled is [`Tiled`].
+    ///
+    /// [`Tiled`]: FloatingOrTiled::Tiled
     #[must_use]
     pub fn is_tiled(&self) -> bool {
         matches!(self, Self::Tiled(..))
     }
+}
 
-    /// Returns `true` if the float is [`Floating`].
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum FullscreenOrMaximized {
+    Neither,
+    Fullscreen,
+    Maximized,
+}
+
+impl FullscreenOrMaximized {
+    /// Returns `true` if the fullscreen or maximized is [`Neither`].
     ///
-    /// [`Floating`]: Float::Floating
+    /// [`Neither`]: FullscreenOrMaximized::Neither
     #[must_use]
-    pub fn is_floating(&self) -> bool {
-        matches!(self, Self::Floating(_))
+    pub fn is_neither(&self) -> bool {
+        matches!(self, Self::Neither)
     }
 
-    /// Returns `true` if the status is [`Fullscreen`].
+    /// Returns `true` if the fullscreen or maximized is [`Fullscreen`].
     ///
-    /// [`Fullscreen`]: Status::Fullscreen
+    /// [`Fullscreen`]: FullscreenOrMaximized::Fullscreen
     #[must_use]
     pub fn is_fullscreen(&self) -> bool {
-        matches!(self, Self::Fullscreen(..))
+        matches!(self, Self::Fullscreen)
     }
 
-    /// Returns `true` if the status is [`Maximized`].
+    /// Returns `true` if the fullscreen or maximized is [`Maximized`].
     ///
-    /// [`Maximized`]: Status::Maximized
+    /// [`Maximized`]: FullscreenOrMaximized::Maximized
     #[must_use]
     pub fn is_maximized(&self) -> bool {
-        matches!(self, Self::Maximized(..))
+        matches!(self, Self::Maximized)
     }
 }
 
@@ -178,9 +339,10 @@ impl Default for WindowElementState {
         Self {
             // INFO: I think this will assign the id on use of the state, not on window spawn.
             id: WindowId::next(),
-            status: Status::Tiled(None),
             loc_request_state: LocationRequestState::Idle,
             tags: vec![],
+            floating_or_tiled: FloatingOrTiled::Tiled(None),
+            fullscreen_or_maximized: FullscreenOrMaximized::Neither,
         }
     }
 }

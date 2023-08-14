@@ -12,7 +12,7 @@ use crate::{
     state::{State, WithState},
     tag::Tag,
     window::{
-        window_state::{LocationRequestState, Status},
+        window_state::{FullscreenOrMaximized, LocationRequestState},
         WindowElement,
     },
 };
@@ -70,7 +70,11 @@ impl<B: Backend> State<B> {
 
         let tiled_windows = windows_on_foc_tags
             .iter()
-            .filter(|win| win.with_state(|state| state.status.is_tiled()))
+            .filter(|win| {
+                win.with_state(|state| {
+                    state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
+                })
+            })
             .cloned()
             .collect::<Vec<_>>();
 
@@ -78,11 +82,11 @@ impl<B: Backend> State<B> {
 
         let output_geo = self.space.output_geometry(output).expect("no output geo");
         for window in windows_on_foc_tags.iter() {
-            match window.with_state(|state| state.status) {
-                Status::Fullscreen(_) => {
+            match window.with_state(|state| state.fullscreen_or_maximized) {
+                FullscreenOrMaximized::Fullscreen => {
                     window.change_geometry(output_geo);
                 }
-                Status::Maximized(_) => {
+                FullscreenOrMaximized::Maximized => {
                     let map = layer_map_for_output(output);
                     let geo = if map.layers().peekable().peek().is_none() {
                         // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
@@ -96,7 +100,7 @@ impl<B: Backend> State<B> {
                     };
                     window.change_geometry(geo);
                 }
-                _ => (),
+                FullscreenOrMaximized::Neither => (),
             }
         }
 
@@ -474,7 +478,7 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
 fn filter_windows(windows: &[WindowElement], tags: Vec<Tag>) -> Vec<WindowElement> {
     windows
         .iter()
-        .filter(|window| window.with_state(|state| state.status.is_tiled()))
+        .filter(|window| window.with_state(|state| state.floating_or_tiled.is_tiled()))
         .filter(|window| {
             window.with_state(|state| {
                 for tag in state.tags.iter() {

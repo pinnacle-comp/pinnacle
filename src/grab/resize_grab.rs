@@ -18,7 +18,7 @@ use smithay::{
 use crate::{
     backend::Backend,
     state::{State, WithState},
-    window::{window_state::Status, WindowElement},
+    window::{window_state::FloatingOrTiled, WindowElement},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,8 +332,9 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
             .size;
 
         window.with_state(|state| {
-            if state.status.is_floating() {
-                state.status = Status::Floating(Rectangle::from_loc_and_size(window_loc, size));
+            if state.floating_or_tiled.is_floating() {
+                state.floating_or_tiled =
+                    FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
             }
         });
 
@@ -365,7 +366,8 @@ pub fn resize_request_client<B: Backend>(
             return;
         };
 
-        if window.with_state(|state| state.status.is_tiled()) {
+        // TODO: check for fullscreen/maximized (probably shouldn't matter)
+        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
             return;
         }
 
@@ -412,7 +414,7 @@ pub fn resize_request_server<B: Backend>(
         return;
     };
 
-    if window.with_state(|state| state.status.is_tiled()) {
+    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
         return;
     }
 

@@ -181,7 +181,7 @@ where
                         true
                     }
                 };
-                state.status.is_fullscreen()
+                state.fullscreen_or_maximized.is_fullscreen()
                     && state.tags.iter().any(|tag| tag.active())
                     && is_wayland_actually_fullscreen
             })

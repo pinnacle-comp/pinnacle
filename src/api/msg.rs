@@ -7,7 +7,7 @@ use crate::{
     layout::Layout,
     output::OutputName,
     tag::TagId,
-    window::window_state::{StatusName, WindowId},
+    window::window_state::{FullscreenOrMaximized, WindowId},
 };
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
@@ -44,9 +44,14 @@ pub enum Msg {
         window_id: WindowId,
         tag_id: TagId,
     },
-    SetStatus {
+    ToggleFloating {
         window_id: WindowId,
-        status: StatusName,
+    },
+    ToggleFullscreen {
+        window_id: WindowId,
+    },
+    ToggleMaximized {
+        window_id: WindowId,
     },
 
     // Tag management
@@ -207,7 +212,8 @@ pub enum RequestResponse {
         class: Option<String>,
         title: Option<String>,
         focused: Option<bool>,
-        status: Option<StatusName>,
+        floating: Option<bool>,
+        fullscreen_or_maximized: Option<FullscreenOrMaximized>,
     },
     Output {
         output_name: Option<String>,

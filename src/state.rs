@@ -20,10 +20,7 @@ use crate::{
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     tag::Tag,
-    window::{
-        window_state::{LocationRequestState, Status, StatusName},
-        WindowElement,
-    },
+    window::{window_state::LocationRequestState, WindowElement},
 };
 use calloop::futures::Scheduler;
 use futures_lite::AsyncBufReadExt;
@@ -201,15 +198,26 @@ impl<B: Backend> State<B> {
                 self.update_windows(&output);
                 // self.re_layout(&output);
             }
-            Msg::SetStatus { window_id, status } => {
+            Msg::ToggleFloating { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
-                window.set_status(status);
-                let outputs = self.space.outputs_for_element(&window);
-                self.focus_state.set_focus(window);
+                window.toggle_floating();
 
-                if let Some(output) = outputs.into_iter().next() {
-                    self.update_windows(&output);
-                }
+                let Some(output) = window.output(self) else { return };
+                self.update_windows(&output);
+            }
+            Msg::ToggleFullscreen { window_id } => {
+                let Some(window) = window_id.window(self) else { return };
+                window.toggle_fullscreen();
+
+                let Some(output) = window.output(self) else { return };
+                self.update_windows(&output);
+            }
+            Msg::ToggleMaximized { window_id } => {
+                let Some(window) = window_id.window(self) else { return };
+                window.toggle_maximized();
+
+                let Some(output) = window.output(self) else { return };
+                self.update_windows(&output);
             }
 
             // Tags ----------------------------------------
@@ -369,19 +377,17 @@ impl<B: Backend> State<B> {
                     }
                     WindowElement::X11(surface) => (Some(surface.class()), Some(surface.title())),
                 });
-                let status = window.as_ref().map(|win| {
-                    win.with_state(|state| match state.status {
-                        Status::Floating(_) => StatusName::Floating,
-                        Status::Tiled(_) => StatusName::Tiled,
-                        Status::Fullscreen(_) => StatusName::Fullscreen,
-                        Status::Maximized(_) => StatusName::Maximized,
-                    })
-                });
                 let focused = window.as_ref().and_then(|win| {
                     self.focus_state
                         .current_focus() // TODO: actual focus
                         .map(|foc_win| win == &foc_win)
                 });
+                let floating = window
+                    .as_ref()
+                    .map(|win| win.with_state(|state| state.floating_or_tiled.is_floating()));
+                let fullscreen_or_maximized = window
+                    .as_ref()
+                    .map(|win| win.with_state(|state| state.fullscreen_or_maximized));
                 crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
@@ -392,7 +398,8 @@ impl<B: Backend> State<B> {
                             class,
                             title,
                             focused,
-                            status,
+                            floating,
+                            fullscreen_or_maximized,
                         },
                     },
                 )
@@ -660,78 +667,6 @@ impl<B: Backend> State<B> {
                 tracing::error!("Failed to schedule future: {err}");
             }
         }
-    }
-
-    pub fn re_layout(&mut self, output: &Output) {
-        let windows = self
-            .windows
-            .iter()
-            .filter(|win| {
-                win.with_state(|state| {
-                    state
-                        .tags
-                        .iter()
-                        .any(|tag| tag.output(self).is_some_and(|op| &op == output))
-                })
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        let (render, do_not_render) = output.with_state(|state| {
-            let first_tag = state.focused_tags().next();
-            if let Some(first_tag) = first_tag {
-                first_tag.layout().layout(
-                    self.windows.clone(),
-                    state.focused_tags().cloned().collect(),
-                    &mut self.space,
-                    output,
-                );
-            }
-
-            windows.iter().cloned().partition::<Vec<_>, _>(|win| {
-                win.with_state(|win_state| {
-                    win_state
-                        .tags
-                        .iter()
-                        .any(|tag| state.focused_tags().any(|tg| tag == tg))
-                })
-            })
-        });
-
-        tracing::debug!(
-            "{} to render, {} to not render",
-            render.len(),
-            do_not_render.len()
-        );
-
-        let clone = render.clone();
-        self.loop_handle.insert_idle(|data| {
-            schedule_on_commit(data, clone.clone(), |dt| {
-                for win in do_not_render {
-                    dt.state.space.unmap_elem(&win);
-                    if let WindowElement::X11(surface) = win {
-                        if !surface.is_override_redirect() {
-                            surface.set_mapped(false).expect("failed to unmap x11 win");
-                        }
-                    }
-                }
-
-                for (win, rect) in
-                    clone
-                        .into_iter()
-                        .filter_map(|win| match win.with_state(|state| state.status) {
-                            Status::Floating(loc) => Some((win, loc)),
-                            _ => None,
-                        })
-                {
-                    if let WindowElement::X11(surface) = &win {
-                        if !surface.is_override_redirect() {
-                            surface.set_mapped(true).expect("failed to map x11 win");
-                        }
-                    }
-                    dt.state.space.map_element(win, rect.loc, false);
-                }
-            });
-        });
     }
 }
 

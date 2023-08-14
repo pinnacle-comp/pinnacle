@@ -30,10 +30,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{State, WithState},
-    window::{
-        window_state::{LocationRequestState, StatusName},
-        WindowElement, BLOCKER_COUNTER,
-    },
+    window::{window_state::LocationRequestState, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XdgShellHandler for State<B> {
@@ -42,9 +39,14 @@ impl<B: Backend> XdgShellHandler for State<B> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = WindowElement::Wayland(Window::new(surface.clone()));
+        surface.with_pending_state(|state| {
+            state.states.set(xdg_toplevel::State::TiledTop);
+            state.states.set(xdg_toplevel::State::TiledBottom);
+            state.states.set(xdg_toplevel::State::TiledLeft);
+            state.states.set(xdg_toplevel::State::TiledRight);
+        });
 
-        window.set_status(StatusName::Tiled);
+        let window = WindowElement::Wayland(Window::new(surface.clone()));
 
         window.with_state(|state| {
             state.tags = match (
@@ -323,7 +325,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
                 return;
             };
 
-            window.set_status(StatusName::Fullscreen);
+            if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+                window.toggle_fullscreen();
+            }
         }
 
         surface.send_configure();
@@ -351,8 +355,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
             return;
         };
 
-        // TODO: remember the last status instead of tiled
-        window.set_status(StatusName::Tiled);
+        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
@@ -360,8 +365,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
             return;
         };
 
-        window.set_status(StatusName::Maximized);
-
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
         // TODO: might need to update_windows here
     }
 
@@ -370,8 +376,9 @@ impl<B: Backend> XdgShellHandler for State<B> {
             return;
         };
 
-        // TODO: remember last status
-        window.set_status(StatusName::Tiled);
+        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
     }
 
     // fn minimize_request(&mut self, surface: ToplevelSurface) {

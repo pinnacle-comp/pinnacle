@@ -20,10 +20,7 @@ use smithay::{
     },
     output::Output,
     reexports::{
-        wayland_protocols::{
-            wp::presentation_time::server::wp_presentation_feedback,
-            xdg::shell::server::xdg_toplevel,
-        },
+        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial, Size},
@@ -40,7 +37,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{LocationRequestState, Status, StatusName, WindowElementState};
+use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
@@ -184,6 +181,8 @@ impl WindowElement {
     /// configures to Wayland windows.
     ///
     /// Xwayland windows will still receive a configure.
+    ///
+    /// This method uses a [`RefCell`].
     // TODO: ^ does that make things flicker?
     pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
         match self {
@@ -267,116 +266,6 @@ impl WindowElement {
     #[must_use]
     pub fn is_x11(&self) -> bool {
         matches!(self, Self::X11(..))
-    }
-
-    pub fn set_status(&self, status: StatusName) {
-        let prev_status = self.with_state(|state| state.status);
-        let geo = match prev_status {
-            Status::Floating(rect)
-            | Status::Tiled(Some(rect))
-            | Status::Fullscreen(Some(rect))
-            | Status::Maximized(Some(rect)) => rect,
-            _ => self.geometry(),
-        };
-
-        match status {
-            StatusName::Floating => {
-                self.with_state(|state| state.status = Status::Floating(geo));
-
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Maximized);
-                            state.states.unset(xdg_toplevel::State::Fullscreen);
-                            state.states.unset(xdg_toplevel::State::TiledTop);
-                            state.states.unset(xdg_toplevel::State::TiledBottom);
-                            state.states.unset(xdg_toplevel::State::TiledLeft);
-                            state.states.unset(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_fullscreen(false)
-                            .expect("failed to set x11 win to not fullscreen");
-                        surface
-                            .set_maximized(false)
-                            .expect("failed to set x11 win to not maximized");
-                    }
-                }
-            }
-            StatusName::Tiled => {
-                self.with_state(|state| state.status = Status::Tiled(Some(geo)));
-
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Maximized);
-                            state.states.unset(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_fullscreen(false)
-                            .expect("failed to set x11 win to not fullscreen");
-                        surface
-                            .set_maximized(false)
-                            .expect("failed to set x11 win to not maximized");
-                    }
-                }
-            }
-            StatusName::Fullscreen => {
-                self.with_state(|state| state.status = Status::Fullscreen(Some(geo)));
-
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Maximized);
-                            state.states.set(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_fullscreen(true)
-                            .expect("failed to set x11 win to fullscreen");
-                        surface
-                            .set_maximized(false)
-                            .expect("failed to set x11 win to not maximzied");
-                    }
-                }
-            }
-            StatusName::Maximized => {
-                self.with_state(|state| state.status = Status::Maximized(Some(geo)));
-
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::Maximized);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_fullscreen(false)
-                            .expect("failed to set x11 win to not fullscreen");
-                        surface
-                            .set_maximized(true)
-                            .expect("failed to set x11 win to maximized");
-                    }
-                }
-            }
-        }
     }
 }
 

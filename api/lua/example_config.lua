@@ -53,11 +53,7 @@ require("pinnacle").setup(function(pinnacle)
     input.keybind({ mod_key, "Alt" }, keys.space, function()
         local win = window.get_focused()
         if win ~= nil then
-            if win:status() == "Tiled" then
-                win:set_status("Floating")
-            elseif win:status() == "Floating" then
-                win:set_status("Tiled")
-            end
+            win:toggle_floating()
         end
     end)
 
@@ -70,21 +66,14 @@ require("pinnacle").setup(function(pinnacle)
     input.keybind({ mod_key }, keys.f, function()
         local win = window.get_focused()
         if win ~= nil then
-            win:set_status("Fullscreen")
+            win:toggle_fullscreen()
         end
     end)
 
     input.keybind({ mod_key }, keys.m, function()
         local win = window.get_focused()
         if win ~= nil then
-            win:set_status("Maximized")
-        end
-    end)
-
-    input.keybind({ mod_key }, keys.t, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:set_status("Tiled")
+            win:toggle_maximized()
         end
     end)
 

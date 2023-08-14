@@ -90,12 +90,6 @@ function window:close()
     window_module.close(self)
 end
 
----Set this window's status. Yes, this isn't a great name.
----@param status StatusName
-function window:set_status(status)
-    window_module.set_status(self, status)
-end
-
 ---Get this window's size.
 ---
 ---### Example
@@ -158,10 +152,48 @@ function window:title()
 end
 
 ---Get this window's status.
----@return StatusName|nil
+---@return boolean|nil
 ---@see WindowModule.status — The corresponding module function
-function window:status()
-    return window_module.status(self)
+function window:floating()
+    return window_module.floating(self)
+end
+
+---Get this window's status.
+---@return boolean|nil
+---@see WindowModule.status — The corresponding module function
+function window:fullscreen()
+    return window_module.fullscreen(self)
+end
+
+---Get this window's status.
+---@return boolean|nil
+---@see WindowModule.status — The corresponding module function
+function window:maximized()
+    return window_module.maximized(self)
+end
+
+function window:toggle_floating()
+    SendMsg({
+        ToggleFloating = {
+            window_id = self:id(),
+        },
+    })
+end
+
+function window:toggle_fullscreen()
+    SendMsg({
+        ToggleFullscreen = {
+            window_id = self:id(),
+        },
+    })
+end
+
+function window:toggle_maximized()
+    SendMsg({
+        ToggleMaximized = {
+            window_id = self:id(),
+        },
+    })
 end
 
 ---Get whether or not this window is focused.
@@ -361,18 +393,6 @@ function window_module.close(win)
     })
 end
 
----Set `win`'s status. Yes, this is not a great name for the function.
----@param win Window
----@param status StatusName
-function window_module.set_status(win, status)
-    SendMsg({
-        SetStatus = {
-            window_id = win:id(),
-            status = status,
-        },
-    })
-end
-
 ---Get the specified window's size.
 ---
 ---### Example
@@ -482,18 +502,48 @@ function window_module.title(win)
     return title
 end
 
----Get this window's status.
+---Get this window's floating status.
 ---@param win Window
----@return StatusName|nil
+---@return boolean|nil
 ---@see Window.status — The corresponding object method
-function window_module.status(win)
+function window_module.floating(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
         },
     })
-    local status = response.RequestResponse.response.WindowProps.status
-    return status
+    local floating = response.RequestResponse.response.WindowProps.floating
+    return floating
+end
+
+---Get this window's fullscreen status.
+---@param win Window
+---@return boolean|nil
+---@see Window.status — The corresponding object method
+function window_module.fullscreen(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local fom =
+        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    return fom == "Fullscreen"
+end
+
+---Get this window's maximized status.
+---@param win Window
+---@return boolean|nil
+---@see Window.status — The corresponding object method
+function window_module.maximized(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local fom =
+        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    return fom == "Maximized"
 end
 
 ---Get whether or not this window is focused.
