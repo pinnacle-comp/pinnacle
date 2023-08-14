@@ -121,17 +121,32 @@ function window_module.class(win) end
 ---@see Window.title
 function window_module.title(win) end
 
----Get `win`'s status.
+---Toggle `win`'s floating status.
+---
+---When used on a floating window, this will change it to tiled, and vice versa.
+---
+---When used on a fullscreen or maximized window, this will still change its
+---underlying floating/tiled status.
 ---@tparam Window win
----@treturn string|nil One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, `"Maximized"`, or `nil`.
----@see Window.status
-function window_module.status(win) end
+function window_module.toggle_floating(win) end
 
----Set `win`'s status.
+---Toggle `win`'s fullscreen status.
+---
+---When used on a fullscreen window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-fullscreen window, it becomes fullscreen.
 ---@tparam Window win
----@tparam string status One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, or `"Maximized"`.
----@see Window.set_status
-function window_module.set_status(win, status) end
+function window_module.toggle_fullscreen(win) end
+
+---Toggle `win`'s maximized status.
+---
+---When used on a maximized window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-maximized window, it becomes maximized.
+---@tparam Window win
+function window_module.toggle_maximized(win) end
 
 ---Get whether or not this window is focused.
 ---
@@ -144,6 +159,18 @@ function window_module.set_status(win, status) end
 ---@treturn boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
 ---@see Window.focused
 function window_module.focused(win) end
+
+---Get whether or not `win` is floating (true) or tiled (false).
+---@treturn boolean|nil
+function window_module.floating(win) end
+
+---Get whether or not `win` is fullscreen.
+---@treturn boolean|nil
+function window_module.fullscreen(win) end
+
+---Get whether or not `win` is maximized.
+---@treturn boolean|nil
+function window_module.maximized(win) end
 
 --------------------------------------------------------
 
@@ -240,21 +267,49 @@ function window:class() end
 ---@see WindowModule.title
 function window:title() end
 
----Get this window's status.
----@treturn string|nil One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, `"Maximized"`, or `nil`.
----@see WindowModule.status
-function window:status() end
-
----Get `win`'s status.
+---Toggle this window's floating status.
+---
+---When used on a floating window, this will change it to tiled, and vice versa.
+---
+---When used on a fullscreen or maximized window, this will still change its
+---underlying floating/tiled status.
 ---@tparam Window win
----@tparam string status One of `"Floating"`, `"Tiled"`, `"Fullscreen"`, or `"Maximized"`.
----@see WindowModule.set_status
-function window:set_status(win, status) end
+function window:toggle_floating(win) end
+
+---Toggle this window's fullscreen status.
+---
+---When used on a fullscreen window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-fullscreen window, it becomes fullscreen.
+---@tparam Window win
+function window:toggle_fullscreen(win) end
+
+---Toggle this window's maximized status.
+---
+---When used on a maximized window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-maximized window, it becomes maximized.
+---@tparam Window win
+function window:toggle_maximized(win) end
 
 ---Get whether or not this window is focused.
 ---
 ---@usage
 ---print(window.get_focused():focused()) -- should print `true`.
----@treturn boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@treturn boolean|nil floating `true` if it's focused, `false` if it's tiled, or nil if it doesn't exist.
 ---@see WindowModule.focused
 function window:focused() end
+
+---Get whether or not this window is floating (true) or tiled (false).
+---@treturn boolean|nil
+function window:floating() end
+
+---Get whether or not this window is fullscreen.
+---@treturn boolean|nil
+function window:fullscreen() end
+
+---Get whether or not this window is maximized.
+---@treturn boolean|nil
+function window:maximized() end
