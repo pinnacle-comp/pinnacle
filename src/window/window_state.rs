@@ -141,9 +141,11 @@ impl WindowElement {
 
     /// This method uses a [`RefCell`].
     pub fn toggle_fullscreen(&self) {
-        self.with_state(|state| match state.fullscreen_or_maximized {
+        match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Maximized => {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
+                self.with_state(|state| {
+                    state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
+                });
 
                 match self {
                     WindowElement::Wayland(window) => {
@@ -167,9 +169,11 @@ impl WindowElement {
                 }
             }
             FullscreenOrMaximized::Fullscreen => {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+                self.with_state(|state| {
+                    state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+                });
 
-                match state.floating_or_tiled {
+                match self.with_state(|state| state.floating_or_tiled) {
                     FloatingOrTiled::Floating(current_rect) => {
                         self.change_geometry(current_rect);
                         self.set_floating_states();
@@ -177,14 +181,16 @@ impl WindowElement {
                     FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
                 }
             }
-        });
+        }
     }
 
     /// This method uses a [`RefCell`].
     pub fn toggle_maximized(&self) {
-        self.with_state(|state| match state.fullscreen_or_maximized {
+        match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Fullscreen => {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
+                self.with_state(|state| {
+                    state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
+                });
 
                 match self {
                     WindowElement::Wayland(window) => {
@@ -208,9 +214,11 @@ impl WindowElement {
                 }
             }
             FullscreenOrMaximized::Maximized => {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+                self.with_state(|state| {
+                    state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
+                });
 
-                match state.floating_or_tiled {
+                match self.with_state(|state| state.floating_or_tiled) {
                     FloatingOrTiled::Floating(current_rect) => {
                         self.change_geometry(current_rect);
                         self.set_floating_states();
@@ -218,7 +226,7 @@ impl WindowElement {
                     FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
                 }
             }
-        });
+        }
     }
 
     fn set_floating_states(&self) {
