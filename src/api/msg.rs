@@ -3,7 +3,12 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-use crate::{layout::Layout, output::OutputName, tag::TagId, window::window_state::WindowId};
+use crate::{
+    layout::Layout,
+    output::OutputName,
+    tag::TagId,
+    window::window_state::{FullscreenOrMaximized, WindowId},
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -24,9 +29,6 @@ pub enum Msg {
     CloseWindow {
         window_id: WindowId,
     },
-    ToggleFloating {
-        window_id: WindowId,
-    },
     SetWindowSize {
         window_id: WindowId,
         #[serde(default)]
@@ -41,6 +43,15 @@ pub enum Msg {
     ToggleTagOnWindow {
         window_id: WindowId,
         tag_id: TagId,
+    },
+    ToggleFloating {
+        window_id: WindowId,
+    },
+    ToggleFullscreen {
+        window_id: WindowId,
+    },
+    ToggleMaximized {
+        window_id: WindowId,
     },
 
     // Tag management
@@ -200,8 +211,9 @@ pub enum RequestResponse {
         loc: Option<(i32, i32)>,
         class: Option<String>,
         title: Option<String>,
-        floating: Option<bool>,
         focused: Option<bool>,
+        floating: Option<bool>,
+        fullscreen_or_maximized: Option<FullscreenOrMaximized>,
     },
     Output {
         output_name: Option<String>,

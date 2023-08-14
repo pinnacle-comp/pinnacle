@@ -28,7 +28,7 @@ use crate::{
     backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{window_state::Float, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::FloatingOrTiled, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
 impl<B: Backend> XwmHandler for CalloopData<B> {
@@ -128,7 +128,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             if should_float(surface) {
                 window.with_state(|state| {
-                    state.floating = Float::Floating(loc);
+                    state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
                 });
             }
 
@@ -156,17 +156,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
             self.state.windows.push(window.clone());
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
-                focused_output.with_state(|state| {
-                    let first_tag = state.focused_tags().next();
-                    if let Some(first_tag) = first_tag {
-                        first_tag.layout().layout(
-                            self.state.windows.clone(),
-                            state.focused_tags().cloned().collect(),
-                            &mut self.state.space,
-                            &focused_output,
-                        );
-                    }
-                });
+                self.state.update_windows(&focused_output);
                 BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
                 tracing::debug!(
                     "blocker {}",
@@ -196,7 +186,6 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
 
                         // Schedule the popup to raise when all windows have committed after having
                         // their blockers cleared
-                        // FIXME: I've seen one instance where this didn't work, figure that out
                         crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
                             let WindowElement::X11(surface) = &clone else { unreachable!() };
                             if should_float(surface) {
@@ -204,6 +193,7 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
                                     tracing::debug!("raising x11 popup");
                                     xwm.raise_window(surface).expect("failed to raise x11 win");
                                     dt.state.space.raise_element(&clone, true);
+                                    dt.state.focus_state.set_focus(clone);
                                 }
                             }
                         });
@@ -276,10 +266,9 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
             self.state
                 .windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
-            if win.with_state(|state| state.floating.is_tiled()) {
-                if let Some(output) = win.output(&self.state) {
-                    self.state.re_layout(&output);
-                }
+
+            if let Some(output) = win.output(&self.state) {
+                self.state.update_windows(&output);
             }
         }
         tracing::debug!("destroyed x11 window");
@@ -330,22 +319,58 @@ impl<B: Backend> XwmHandler for CalloopData<B> {
         // TODO: anvil has a TODO here
     }
 
-    // fn maximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
-    //
-    // fn unmaximize_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
-    //
-    // fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    //     // window.set_fullscreen(true).unwrap();
-    // }
-    //
-    // fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-    //     // TODO:
-    // }
+    fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_maximized(true)
+            .expect("failed to set x11 win to maximized");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
+    }
+
+    fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_maximized(false)
+            .expect("failed to set x11 win to maximized");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_maximized();
+        }
+    }
+
+    fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_fullscreen(true)
+            .expect("failed to set x11 win to fullscreen");
+        // TODO: fix this mess
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
+    }
+
+    fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        window
+            .set_fullscreen(false)
+            .expect("failed to set x11 win to unfullscreen");
+        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+            return;
+        };
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
+    }
 
     fn resize_request(
         &mut self,

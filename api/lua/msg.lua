@@ -7,10 +7,13 @@
 ---@field SetMousebind { button: integer }?
 --Windows
 ---@field CloseWindow { window_id: WindowId }?
----@field ToggleFloating { window_id: WindowId }?
 ---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }?
 ---@field MoveWindowToTag { window_id: WindowId, tag_id: TagId }?
 ---@field ToggleTagOnWindow { window_id: WindowId, tag_id: TagId }?
+---@field ToggleFloating { window_id: WindowId }?
+---@field ToggleFullscreen { window_id: WindowId }?
+---@field ToggleMaximized { window_id: WindowId }?
+--
 ---@field Spawn { command: string[], callback_id: integer? }?
 ---@field Request Request?
 --Tags
@@ -24,6 +27,11 @@
 ---@field SetOutputLocation { output_name: OutputName, x: integer?, y: integer? }?
 
 ---@alias Msg _Msg | "Quit"
+
+---@alias FullscreenOrMaximized
+---| "Neither"
+---| "Fullscreen"
+---| "Maximized"
 
 --------------------------------------------------------------------------------------------
 
@@ -55,7 +63,7 @@
 --Windows
 ---@field Window { window_id: WindowId|nil }?
 ---@field Windows { window_ids: WindowId[] }?
----@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, floating: boolean?, focused: boolean? }?
+---@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, focused: boolean?, floating: boolean?, fullscreen_or_maximized: FullscreenOrMaximized? }?
 --Outputs
 ---@field Output { output_name: OutputName? }?
 ---@field Outputs { output_names: OutputName[] }?

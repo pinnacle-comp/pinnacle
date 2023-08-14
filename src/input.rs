@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::{
     api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
     focus::FocusTarget,
+    state::WithState,
     window::WindowElement,
 };
 use smithay::{
@@ -56,7 +57,6 @@ impl<B: Backend> State<B> {
     where
         P: Into<Point<f64, Logical>>,
     {
-        // TODO: fullscreen
         let point: Point<f64, Logical> = point.into();
 
         let output = self.space.outputs().find(|op| {
@@ -73,13 +73,24 @@ impl<B: Backend> State<B> {
 
         let layers = layer_map_for_output(output);
 
+        let top_fullscreen_window = self.focus_state.focus_stack.iter().rev().find(|win| {
+            win.with_state(|state| {
+                state.fullscreen_or_maximized.is_fullscreen()
+                    && state.tags.iter().any(|tag| tag.active())
+            })
+        });
+
         // I think I'm going a bit too far with the functional stuff
-        layers
-            .layer_under(wlr_layer::Layer::Overlay, point)
-            .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
-            .map(|layer| {
-                let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+        top_fullscreen_window
+            .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
+            .or_else(|| {
+                layers
+                    .layer_under(wlr_layer::Layer::Overlay, point)
+                    .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
+                    .map(|layer| {
+                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
+                    })
             })
             .or_else(|| {
                 self.space

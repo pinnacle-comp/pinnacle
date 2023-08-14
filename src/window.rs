@@ -20,10 +20,7 @@ use smithay::{
     },
     output::Output,
     reexports::{
-        wayland_protocols::{
-            wp::presentation_time::server::wp_presentation_feedback,
-            xdg::shell::server::xdg_toplevel,
-        },
+        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial, Size},
@@ -40,7 +37,7 @@ use crate::{
     state::{State, WithState},
 };
 
-use self::window_state::{Float, WindowElementState, WindowResizeState};
+use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
@@ -180,6 +177,31 @@ impl WindowElement {
         }
     }
 
+    /// Send a geometry change without mapping windows or sending
+    /// configures to Wayland windows.
+    ///
+    /// Xwayland windows will still receive a configure.
+    ///
+    /// This method uses a [`RefCell`].
+    // TODO: ^ does that make things flicker?
+    pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
+        match self {
+            WindowElement::Wayland(window) => {
+                window.toplevel().with_pending_state(|state| {
+                    state.size = Some(new_geo.size);
+                });
+            }
+            WindowElement::X11(surface) => {
+                surface
+                    .configure(new_geo)
+                    .expect("failed to configure x11 win");
+            }
+        }
+        self.with_state(|state| {
+            state.loc_request_state = LocationRequestState::Sent(new_geo.loc);
+        });
+    }
+
     /// Request a size and loc change.
     pub fn request_size_change(
         &self,
@@ -193,8 +215,8 @@ impl WindowElement {
                     state.size = Some(new_size);
                 });
                 self.with_state(|state| {
-                    state.resize_state =
-                        WindowResizeState::Requested(window.toplevel().send_configure(), new_loc)
+                    state.loc_request_state =
+                        LocationRequestState::Requested(window.toplevel().send_configure(), new_loc)
                 });
             }
             WindowElement::X11(surface) => {
@@ -476,103 +498,6 @@ impl<B: Backend> State<B> {
                     .cloned()
             })
     }
-}
-
-/// Toggle a window's floating status.
-pub fn toggle_floating<B: Backend>(state: &mut State<B>, window: &WindowElement) {
-    let mut resize: Option<_> = None;
-    window.with_state(|window_state| {
-        match window_state.floating {
-            Float::Tiled(prev_loc_and_size) => {
-                if let Some((prev_loc, prev_size)) = prev_loc_and_size {
-                    resize = Some((prev_loc, prev_size));
-                }
-
-                window_state.floating =
-                    Float::Floating(resize.map(|(point, _)| point).unwrap_or_else(|| {
-                        state
-                            .space
-                            .element_location(window)
-                            .unwrap_or((0, 0).into())
-                    }));
-                if let WindowElement::Wayland(window) = window {
-                    window.toplevel().with_pending_state(|tl_state| {
-                        tl_state.states.unset(xdg_toplevel::State::TiledTop);
-                        tl_state.states.unset(xdg_toplevel::State::TiledBottom);
-                        tl_state.states.unset(xdg_toplevel::State::TiledLeft);
-                        tl_state.states.unset(xdg_toplevel::State::TiledRight);
-                    });
-                } // TODO: tiled states for x11
-            }
-            Float::Floating(current_loc) => {
-                window_state.floating = Float::Tiled(Some((
-                    // We get the location this way because window.geometry().loc
-                    // doesn't seem to be the actual location
-
-                    // TODO: maybe store the location in state
-                    current_loc,
-                    window.geometry().size,
-                )));
-
-                if let WindowElement::Wayland(window) = window {
-                    window.toplevel().with_pending_state(|tl_state| {
-                        tl_state.states.set(xdg_toplevel::State::TiledTop);
-                        tl_state.states.set(xdg_toplevel::State::TiledBottom);
-                        tl_state.states.set(xdg_toplevel::State::TiledLeft);
-                        tl_state.states.set(xdg_toplevel::State::TiledRight);
-                    });
-                }
-            }
-        }
-    });
-
-    if let Some((prev_loc, prev_size)) = resize {
-        window.request_size_change(&mut state.space, prev_loc, prev_size);
-    }
-
-    // TODO: don't use the focused output, use the one the window is on
-    let output = state
-        .focus_state
-        .focused_output
-        .clone()
-        .expect("no focused output");
-    state.re_layout(&output);
-
-    let render = output.with_state(|op_state| {
-        state
-            .windows
-            .iter()
-            .cloned()
-            .filter(|win| {
-                win.with_state(|win_state| {
-                    if win_state.floating.is_floating() {
-                        return true;
-                    }
-                    for tag in win_state.tags.iter() {
-                        if op_state.focused_tags().any(|tg| tg == tag) {
-                            return true;
-                        }
-                    }
-                    false
-                })
-            })
-            .collect::<Vec<_>>()
-    });
-
-    let clone = window.clone();
-    state.loop_handle.insert_idle(move |data| {
-        crate::state::schedule_on_commit(data, render, move |dt| {
-            dt.state.space.raise_element(&clone, true);
-            if let WindowElement::X11(surface) = clone {
-                dt.state
-                    .xwm
-                    .as_mut()
-                    .expect("no xwm")
-                    .raise_window(&surface)
-                    .expect("failed to raise x11 win");
-            }
-        });
-    });
 }
 
 pub struct WindowBlocker;

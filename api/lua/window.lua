@@ -90,17 +90,6 @@ function window:close()
     window_module.close(self)
 end
 
----Toggle this window's floating status.
----
----### Example
----```lua
----window.get_focused():toggle_floating() -- toggles the focused window between tiled and floating
----```
----@see WindowModule.toggle_floating — The corresponding module function
-function window:toggle_floating()
-    window_module.toggle_floating(self)
-end
-
 ---Get this window's size.
 ---
 ---### Example
@@ -163,17 +152,54 @@ function window:title()
 end
 
 ---Get this window's floating status.
----
----### Example
----```lua
------ With the focused window floating...
----print(window.get_focused():floating())
------ ...should print `true`.
----```
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@return boolean|nil
 ---@see WindowModule.floating — The corresponding module function
 function window:floating()
     return window_module.floating(self)
+end
+
+---Get this window's fullscreen status.
+---@return boolean|nil
+---@see WindowModule.fullscreen — The corresponding module function
+function window:fullscreen()
+    return window_module.fullscreen(self)
+end
+
+---Get this window's maximized status.
+---@return boolean|nil
+---@see WindowModule.maximized — The corresponding module function
+function window:maximized()
+    return window_module.maximized(self)
+end
+
+---Toggle this window's floating status.
+---
+---When used on a floating window, this will change it to tiled, and vice versa.
+---
+---When used on a fullscreen or maximized window, this will still change its
+---underlying floating/tiled status.
+function window:toggle_floating()
+    window_module.toggle_floating(self)
+end
+
+---Toggle this window's fullscreen status.
+---
+---When used on a fullscreen window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-fullscreen window, it becomes fullscreen.
+function window:toggle_fullscreen()
+    window_module.toggle_fullscreen(self)
+end
+
+---Toggle this window's maximized status.
+---
+---When used on a maximized window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-maximized window, it becomes maximized.
+function window:toggle_maximized()
+    window_module.toggle_maximized(self)
 end
 
 ---Get whether or not this window is focused.
@@ -182,7 +208,7 @@ end
 ---```lua
 ---print(window.get_focused():focused()) -- should print `true`.
 ---```
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@return boolean|nil
 ---@see WindowModule.focused — The corresponding module function
 function window:focused()
     return window_module.focused(self)
@@ -241,7 +267,8 @@ end
 ---Get all windows.
 ---@return Window[]
 function window_module.get_all()
-    local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
+    local window_ids =
+        Request("GetWindows").RequestResponse.response.Windows.window_ids
     ---@type Window[]
     local windows = {}
     for _, window_id in pairs(window_ids) do
@@ -326,6 +353,51 @@ function window_module.move_to_tag(w, name, output)
     end
 end
 
+---Toggle `win`'s floating status.
+---
+---When used on a floating window, this will change it to tiled, and vice versa.
+---
+---When used on a fullscreen or maximized window, this will still change its
+---underlying floating/tiled status.
+---@param win Window
+function window_module.toggle_floating(win)
+    SendMsg({
+        ToggleFloating = {
+            window_id = win:id(),
+        },
+    })
+end
+
+---Toggle `win`'s fullscreen status.
+---
+---When used on a fullscreen window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-fullscreen window, it becomes fullscreen.
+---@param win Window
+function window_module.toggle_fullscreen(win)
+    SendMsg({
+        ToggleFloating = {
+            window_id = win:id(),
+        },
+    })
+end
+
+---Toggle `win`'s maximized status.
+---
+---When used on a maximized window, this will change the window back to
+---floating or tiled.
+---
+---When used on a non-maximized window, it becomes maximized.
+---@param win Window
+function window_module.toggle_maximized(win)
+    SendMsg({
+        ToggleFloating = {
+            window_id = win:id(),
+        },
+    })
+end
+
 ---Set the specified window's size.
 ---
 ---### Examples
@@ -367,17 +439,6 @@ end
 function window_module.close(win)
     SendMsg({
         CloseWindow = {
-            window_id = win:id(),
-        },
-    })
-end
-
----Toggle the specified window between tiled and floating.
----@param win Window
----@see Window.toggle_floating — The corresponding object method
-function window_module.toggle_floating(win)
-    SendMsg({
-        ToggleFloating = {
             window_id = win:id(),
         },
     })
@@ -493,18 +554,8 @@ function window_module.title(win)
 end
 
 ---Get this window's floating status.
----
----### Example
----```lua
------ With the focused window floating...
----local win = window.get_focused()
----if win ~= nil then
----    print(window.floating(win))
----end
------ ...should print `true`.
----```
 ---@param win Window
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@return boolean|nil
 ---@see Window.floating — The corresponding object method
 function window_module.floating(win)
     local response = Request({
@@ -514,6 +565,36 @@ function window_module.floating(win)
     })
     local floating = response.RequestResponse.response.WindowProps.floating
     return floating
+end
+
+---Get this window's fullscreen status.
+---@param win Window
+---@return boolean|nil
+---@see Window.fullscreen — The corresponding object method
+function window_module.fullscreen(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local fom =
+        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    return fom == "Fullscreen"
+end
+
+---Get this window's maximized status.
+---@param win Window
+---@return boolean|nil
+---@see Window.maximized — The corresponding object method
+function window_module.maximized(win)
+    local response = Request({
+        GetWindowProps = {
+            window_id = win:id(),
+        },
+    })
+    local fom =
+        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    return fom == "Maximized"
 end
 
 ---Get whether or not this window is focused.
@@ -526,7 +607,7 @@ end
 ---end
 ---```
 ---@param win Window
----@return boolean|nil floating `true` if it's floating, `false` if it's tiled, or nil if it doesn't exist.
+---@return boolean|nil
 ---@see Window.focused — The corresponding object method
 function window_module.focused(win)
     local response = Request({

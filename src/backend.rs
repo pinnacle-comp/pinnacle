@@ -37,7 +37,8 @@ pub fn post_repaint(
     dmabuf_feedback: Option<SurfaceDmabufFeedback<'_>>,
     time: Duration,
 ) {
-    let throttle = Some(Duration::from_secs(1));
+    // let throttle = Some(Duration::from_secs(1));
+    let throttle = Some(Duration::ZERO);
 
     space.elements().for_each(|window| {
         window.with_surfaces(|surface, states_inner| {

@@ -64,6 +64,27 @@ require("pinnacle").setup(function(pinnacle)
         process.spawn("nautilus")
     end)
 
+    input.keybind({ mod_key }, keys.f, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:set_status("Fullscreen")
+        end
+    end)
+
+    input.keybind({ mod_key }, keys.m, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:set_status("Maximized")
+        end
+    end)
+
+    input.keybind({ mod_key }, keys.t, function()
+        local win = window.get_focused()
+        if win ~= nil then
+            win:set_status("Tiled")
+        end
+    end)
+
     -- Just testing stuff
     input.keybind({ mod_key }, keys.h, function()
         local dp2 = output.get_by_name("DP-2")

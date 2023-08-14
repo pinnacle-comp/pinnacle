@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{error::Error, ffi::OsString, sync::Mutex, time::Duration};
+use std::{error::Error, ffi::OsString, time::Duration};
 
 use smithay::{
     backend::{
@@ -8,15 +8,14 @@ use smithay::{
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
             gles::{GlesRenderer, GlesTexture},
             ImportDma, ImportEgl, ImportMemWl,
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
     delegate_dmabuf,
-    desktop::{layer_map_for_output, space, utils::send_frames_surface_tree},
-    input::pointer::{CursorImageAttributes, CursorImageStatus},
+    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
     reexports::{
         calloop::{
@@ -26,18 +25,18 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
-    utils::{IsAlive, Scale, Transform},
+    utils::{IsAlive, Transform},
     wayland::{
-        compositor,
         dmabuf::{
             DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
             ImportError,
         },
+        input_method::InputMethodSeat,
     },
 };
 
 use crate::{
-    render::{pointer::PointerElement, CustomRenderElements, OutputRenderElements},
+    render::pointer::PointerElement,
     state::{take_presentation_feedback, CalloopData, State},
 };
 
@@ -228,7 +227,8 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                         None,
                     );
                     layer_map_for_output(&output).arrange();
-                    state.re_layout(&output);
+                    state.update_windows(&output);
+                    // state.re_layout(&output);
                 }
                 WinitEvent::Focus(_) => {}
                 WinitEvent::Input(input_evt) => {
@@ -257,42 +257,18 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
             let full_redraw = &mut state.backend_data.full_redraw;
             *full_redraw = full_redraw.saturating_sub(1);
 
-            let scale = Scale::from(output.current_scale().fractional_scale());
-            let cursor_hotspot =
-                if let CursorImageStatus::Surface(ref surface) = state.cursor_status {
-                    compositor::with_states(surface, |states| {
-                        states
-                            .data_map
-                            .get::<Mutex<CursorImageAttributes>>()
-                            .expect("Mutex<CursorImageAttributes> wasn't in the data map")
-                            .lock()
-                            .expect("Failed to lock Mutex<CursorImageAttributes>")
-                            .hotspot
-                    })
-                } else {
-                    (0, 0).into()
-                };
-            let cursor_pos = state.pointer_location - cursor_hotspot.to_f64();
-            let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round::<i32>();
-
-            let mut custom_render_elements = Vec::<CustomRenderElements<GlesRenderer>>::new();
-
-            custom_render_elements.extend(pointer_element.render_elements(
+            let output_render_elements = crate::render::generate_render_elements(
                 state.backend_data.backend.renderer(),
-                cursor_pos_scaled,
-                scale,
-                1.0,
-            ));
-
-            if let Some(dnd_icon) = state.dnd_icon.as_ref() {
-                custom_render_elements.extend(AsRenderElements::<GlesRenderer>::render_elements(
-                    &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
-                    state.backend_data.backend.renderer(),
-                    cursor_pos_scaled,
-                    scale,
-                    1.0,
-                ));
-            }
+                &state.space,
+                &output,
+                state.seat.input_method(),
+                state.pointer_location,
+                &mut pointer_element,
+                None,
+                &mut state.cursor_status,
+                state.dnd_icon.as_ref(),
+                &state.focus_state.focus_stack,
+            );
 
             let render_res = state.backend_data.backend.bind().and_then(|_| {
                 let age = if *full_redraw > 0 {
@@ -304,24 +280,6 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
                 let renderer = state.backend_data.backend.renderer();
 
                 // render_output()
-                let space_render_elements =
-                    space::space_render_elements(renderer, [&state.space], &output, 1.0)
-                        .expect("Failed to get render elements");
-
-                let mut output_render_elements = Vec::<
-                    OutputRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
-                >::new();
-
-                output_render_elements.extend(
-                    custom_render_elements
-                        .into_iter()
-                        .map(OutputRenderElements::from),
-                );
-                output_render_elements.extend(
-                    space_render_elements
-                        .into_iter()
-                        .map(OutputRenderElements::from),
-                );
 
                 state
                     .backend_data

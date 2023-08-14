@@ -92,6 +92,7 @@ impl Tag {
             layout: Layout::MasterStack, // TODO: get from config
         })))
     }
+
     pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
         state
             .space
