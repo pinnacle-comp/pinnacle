@@ -377,7 +377,7 @@ end
 ---@param win Window
 function window_module.toggle_fullscreen(win)
     SendMsg({
-        ToggleFloating = {
+        ToggleFullscreen = {
             window_id = win:id(),
         },
     })
@@ -392,7 +392,7 @@ end
 ---@param win Window
 function window_module.toggle_maximized(win)
     SendMsg({
-        ToggleFloating = {
+        ToggleMaximized = {
             window_id = win:id(),
         },
     })
