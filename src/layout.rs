@@ -59,13 +59,15 @@ impl<B: Backend> State<B> {
             state.focused_tags().next().cloned().map(|tag| tag.layout())
         }) else { return };
 
-        let (windows_on_foc_tags, windows_not_on_foc_tags): (Vec<_>, _) =
+        let (windows_on_foc_tags, mut windows_not_on_foc_tags): (Vec<_>, _) =
             output.with_state(|state| {
                 let focused_tags = state.focused_tags().collect::<Vec<_>>();
                 self.windows.iter().cloned().partition(|win| {
                     win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
                 })
             });
+
+        windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
 
         let tiled_windows = windows_on_foc_tags
             .iter()

@@ -351,9 +351,15 @@ impl<B: Backend> State<B> {
 
 fn start_config() -> Result<(), Box<dyn std::error::Error>> {
     let config_dir = {
-        let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
-            .or_else(|_| std::env::var("XDG_CONFIG_HOME"))
-            .unwrap_or("~/.config".to_string());
+        let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
+            let default_config_dir =
+                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+
+            PathBuf::from(default_config_dir)
+                .join("pinnacle")
+                .to_string_lossy()
+                .to_string()
+        });
         PathBuf::from(shellexpand::tilde(&config_dir).to_string())
     };
 
