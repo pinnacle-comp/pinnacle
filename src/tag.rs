@@ -32,6 +32,14 @@ impl TagId {
             .flat_map(|op| op.with_state(|state| state.tags.clone()))
             .find(|tag| &tag.id() == self)
     }
+
+    /// Reset the global TagId counter.
+    ///
+    /// This is used, for example, when a config is reloaded and you want to keep
+    /// windows on the same tags.
+    pub fn reset() {
+        TAG_ID_COUNTER.store(0, Ordering::SeqCst);
+    }
 }
 
 #[derive(Debug)]

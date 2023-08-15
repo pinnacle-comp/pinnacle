@@ -151,10 +151,25 @@ impl<B: Backend> State<B> {
                     .outputs()
                     .find(|output| output.name() == output_name)
                 {
+                    let new_tags = tag_names.into_iter().map(Tag::new).collect::<Vec<_>>();
                     output.with_state(|state| {
-                        state.tags.extend(tag_names.iter().cloned().map(Tag::new));
+                        state.tags.extend(new_tags.clone());
                         tracing::debug!("tags added, are now {:?}", state.tags);
                     });
+
+                    // replace tags that windows have that are the same id
+                    // (this should only happen on config reload)
+                    for tag in new_tags {
+                        for window in self.windows.iter() {
+                            window.with_state(|state| {
+                                for win_tag in state.tags.iter_mut() {
+                                    if win_tag.id() == tag.id() {
+                                        *win_tag = tag.clone();
+                                    }
+                                }
+                            });
+                        }
+                    }
                 }
             }
             Msg::RemoveTags { tag_ids } => {

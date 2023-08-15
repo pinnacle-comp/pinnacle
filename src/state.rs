@@ -13,12 +13,13 @@ use std::{
 
 use crate::{
     api::{
-        msg::{CallbackId, Msg},
+        msg::{CallbackId, ModifierMask, Msg},
         PinnacleSocketSource,
     },
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
+    tag::TagId,
     window::{window_state::LocationRequestState, WindowElement},
 };
 use calloop::futures::Scheduler;
@@ -101,6 +102,7 @@ pub struct State<B: Backend> {
     pub windows: Vec<WindowElement>,
 
     pub async_scheduler: Scheduler<()>,
+    pub config_process: async_process::Child,
 
     // TODO: move into own struct
     // |     basically just clean this mess up
@@ -240,7 +242,11 @@ impl<B: Backend> State<B> {
             calloop::futures::executor::<()>().expect("Couldn't create executor");
         loop_handle.insert_source(executor, |_, _, _| {})?;
 
-        start_config()?;
+        let ConfigReturn {
+            reload_keybind,
+            kill_keybind,
+            config_child_handle,
+        } = start_config()?;
         // start_lua_config()?;
 
         let display_handle = display.handle();
@@ -324,7 +330,7 @@ impl<B: Backend> State<B> {
             primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
-            input_state: InputState::new(),
+            input_state: InputState::new(reload_keybind, kill_keybind),
             api_state: ApiState::new(),
             focus_state: FocusState::new(),
 
@@ -338,6 +344,7 @@ impl<B: Backend> State<B> {
             popup_manager: PopupManager::default(),
 
             async_scheduler: sched,
+            config_process: config_child_handle,
 
             windows: vec![],
             output_callback_ids: vec![],
@@ -348,8 +355,9 @@ impl<B: Backend> State<B> {
         })
     }
 }
-
-fn start_config() -> Result<(), Box<dyn std::error::Error>> {
+/// Returns a result with a tuple, the first is the reload_keybind and the second
+/// is the kill_keybind.
+fn start_config() -> Result<ConfigReturn, Box<dyn std::error::Error>> {
     let config_dir = {
         let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
             let default_config_dir =
@@ -364,44 +372,92 @@ fn start_config() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let metaconfig = crate::metaconfig::parse(&config_dir)?;
+    let reload_keybind = metaconfig.reload_keybind;
+    let kill_keybind = metaconfig.kill_keybind;
 
-    let handle = std::thread::spawn(move || {
-        let mut command = metaconfig.command.split(' ');
+    let mut command = metaconfig.command.split(' ');
 
-        let arg1 = command.next().expect("empty command");
+    let arg1 = command.next().expect("empty command");
 
-        std::env::set_current_dir(&config_dir).expect("failed to cd");
+    let envs = metaconfig
+        .envs
+        .unwrap_or(toml::map::Map::new())
+        .into_iter()
+        .filter_map(|(key, val)| {
+            if let toml::Value::String(string) = val {
+                Some((
+                    key,
+                    shellexpand::full_with_context(
+                        &string,
+                        || std::env::var("HOME").ok(),
+                        |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
+                    )
+                    .ok()?
+                    .to_string(),
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
 
-        let envs = metaconfig
-            .envs
-            .unwrap_or(toml::map::Map::new())
-            .into_iter()
-            .filter_map(|(key, val)| {
-                if let toml::Value::String(string) = val {
-                    Some((
-                        key,
-                        shellexpand::full_with_context(
-                            &string,
-                            || std::env::var("HOME").ok(),
-                            |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
-                        )
-                        .ok()?
-                        .to_string(),
-                    ))
-                } else {
-                    None
-                }
-            });
+    tracing::debug!("Config envs are {:?}", envs);
 
-        let mut child = std::process::Command::new(arg1)
-            .args(command)
-            .envs(envs)
-            .spawn()
-            .expect("failed to spawn");
-        let _ = child.wait();
-    });
+    let child = async_process::Command::new(arg1)
+        .args(command)
+        .envs(envs)
+        .current_dir(&config_dir)
+        .spawn()
+        .expect("failed to spawn config");
 
-    Ok(())
+    tracing::info!("Started config with {}", metaconfig.command);
+
+    let reload_mask = ModifierMask::from(reload_keybind.modifiers);
+    let kill_mask = ModifierMask::from(kill_keybind.modifiers);
+
+    Ok(ConfigReturn {
+        reload_keybind: (reload_mask, reload_keybind.key as u32),
+        kill_keybind: (kill_mask, kill_keybind.key as u32),
+        config_child_handle: child,
+    })
+}
+
+struct ConfigReturn {
+    reload_keybind: (ModifierMask, u32),
+    kill_keybind: (ModifierMask, u32),
+    config_child_handle: async_process::Child,
+}
+
+impl<B: Backend> State<B> {
+    pub fn restart_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        tracing::info!("Restarting config");
+        tracing::debug!("Clearing tags");
+        for output in self.space.outputs() {
+            output.with_state(|state| state.tags.clear());
+        }
+        TagId::reset();
+
+        tracing::debug!("Clearing mouse- and keybinds");
+        self.input_state.keybinds.clear();
+        self.input_state.mousebinds.clear();
+
+        tracing::debug!("Killing old config");
+        if let Err(err) = self.config_process.kill() {
+            tracing::warn!("Error when killing old config: {err}");
+        }
+
+        let ConfigReturn {
+            reload_keybind,
+            kill_keybind,
+            config_child_handle,
+        } = start_config()?;
+
+        self.input_state.reload_keybind = reload_keybind;
+        self.input_state.kill_keybind = kill_keybind;
+        self.config_process = config_child_handle;
+
+        Ok(())
+    }
 }
 
 pub struct CalloopData<B: Backend> {

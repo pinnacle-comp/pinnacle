@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use smithay::input::keyboard::keysyms;
 use toml::Table;
 
 use crate::api::msg::Modifier;
@@ -21,75 +22,76 @@ pub struct Keybind {
 
 #[derive(serde::Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
+#[repr(u32)]
 pub enum Key {
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U,
-    V,
-    W,
-    X,
-    Y,
-    Z,
-    #[serde(rename = "1")]
-    One,
-    #[serde(rename = "2")]
-    Two,
-    #[serde(rename = "3")]
-    Three,
-    #[serde(rename = "4")]
-    Four,
-    #[serde(rename = "5")]
-    Five,
-    #[serde(rename = "6")]
-    Six,
-    #[serde(rename = "7")]
-    Seven,
-    #[serde(rename = "8")]
-    Eight,
-    #[serde(rename = "9")]
-    Nine,
-    #[serde(rename = "0")]
-    Zero,
-    #[serde(rename = "num1")]
-    NumOne,
-    #[serde(rename = "num2")]
-    NumTwo,
-    #[serde(rename = "num3")]
-    NumThree,
-    #[serde(rename = "num4")]
-    NumFour,
-    #[serde(rename = "num5")]
-    NumFive,
-    #[serde(rename = "num6")]
-    NumSix,
-    #[serde(rename = "num7")]
-    NumSeven,
-    #[serde(rename = "num8")]
-    NumEight,
-    #[serde(rename = "num9")]
-    NumNine,
-    #[serde(rename = "num0")]
-    NumZero,
+    A = keysyms::KEY_a,
+    B = keysyms::KEY_b,
+    C = keysyms::KEY_c,
+    D = keysyms::KEY_d,
+    E = keysyms::KEY_e,
+    F = keysyms::KEY_f,
+    G = keysyms::KEY_g,
+    H = keysyms::KEY_h,
+    I = keysyms::KEY_i,
+    J = keysyms::KEY_j,
+    K = keysyms::KEY_k,
+    L = keysyms::KEY_l,
+    M = keysyms::KEY_m,
+    N = keysyms::KEY_n,
+    O = keysyms::KEY_o,
+    P = keysyms::KEY_p,
+    Q = keysyms::KEY_q,
+    R = keysyms::KEY_r,
+    S = keysyms::KEY_s,
+    T = keysyms::KEY_t,
+    U = keysyms::KEY_u,
+    V = keysyms::KEY_v,
+    W = keysyms::KEY_w,
+    X = keysyms::KEY_x,
+    Y = keysyms::KEY_y,
+    Z = keysyms::KEY_z,
+    #[serde(alias = "0")]
+    Zero = keysyms::KEY_0,
+    #[serde(alias = "1")]
+    One = keysyms::KEY_1,
+    #[serde(alias = "2")]
+    Two = keysyms::KEY_2,
+    #[serde(alias = "3")]
+    Three = keysyms::KEY_3,
+    #[serde(alias = "4")]
+    Four = keysyms::KEY_4,
+    #[serde(alias = "5")]
+    Five = keysyms::KEY_5,
+    #[serde(alias = "6")]
+    Six = keysyms::KEY_6,
+    #[serde(alias = "7")]
+    Seven = keysyms::KEY_7,
+    #[serde(alias = "8")]
+    Eight = keysyms::KEY_8,
+    #[serde(alias = "9")]
+    Nine = keysyms::KEY_9,
+    #[serde(alias = "num0")]
+    NumZero = keysyms::KEY_KP_0,
+    #[serde(alias = "num1")]
+    NumOne = keysyms::KEY_KP_1,
+    #[serde(alias = "num2")]
+    NumTwo = keysyms::KEY_KP_2,
+    #[serde(alias = "num3")]
+    NumThree = keysyms::KEY_KP_3,
+    #[serde(alias = "num4")]
+    NumFour = keysyms::KEY_KP_4,
+    #[serde(alias = "num5")]
+    NumFive = keysyms::KEY_KP_5,
+    #[serde(alias = "num6")]
+    NumSix = keysyms::KEY_KP_6,
+    #[serde(alias = "num7")]
+    NumSeven = keysyms::KEY_KP_7,
+    #[serde(alias = "num8")]
+    NumEight = keysyms::KEY_KP_8,
+    #[serde(alias = "num9")]
+    NumNine = keysyms::KEY_KP_9,
     #[serde(alias = "esc")]
-    Escape,
+    Escape = keysyms::KEY_Escape,
 }
 
 pub fn parse(config_dir: &Path) -> Result<Metaconfig, Box<dyn std::error::Error>> {
