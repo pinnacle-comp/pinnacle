@@ -19,6 +19,7 @@ mod grab;
 mod handlers;
 mod input;
 mod layout;
+mod metaconfig;
 mod output;
 mod pointer;
 mod render;

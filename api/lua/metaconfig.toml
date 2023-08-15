@@ -1,0 +1,7 @@
+command = "lua example_config.lua"
+reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+
+[envs]
+LUA_PATH = "./?.lua;./?/init.lua;./lib/?.lua;./lib/?/init.lua;$LUA_PATH"
+LUA_CPATH = "./lib/?.so;$LUA_CPATH"

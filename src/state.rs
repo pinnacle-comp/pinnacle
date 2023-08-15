@@ -799,7 +799,8 @@ impl<B: Backend> State<B> {
             calloop::futures::executor::<()>().expect("Couldn't create executor");
         loop_handle.insert_source(executor, |_, _, _| {})?;
 
-        start_lua_config()?;
+        start_config()?;
+        // start_lua_config()?;
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -905,6 +906,55 @@ impl<B: Backend> State<B> {
             xdisplay: None,
         })
     }
+}
+
+fn start_config() -> Result<(), Box<dyn std::error::Error>> {
+    let config_dir = {
+        let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
+            .or_else(|_| std::env::var("XDG_CONFIG_HOME"))
+            .unwrap_or("~/.config".to_string());
+        PathBuf::from(shellexpand::tilde(&config_dir).to_string())
+    };
+
+    let metaconfig = crate::metaconfig::parse(&config_dir)?;
+
+    let handle = std::thread::spawn(move || {
+        let mut command = metaconfig.command.split(' ');
+
+        let arg1 = command.next().expect("empty command");
+
+        std::env::set_current_dir(&config_dir).expect("failed to cd");
+
+        let envs = metaconfig
+            .envs
+            .unwrap_or(toml::map::Map::new())
+            .into_iter()
+            .filter_map(|(key, val)| {
+                if let toml::Value::String(string) = val {
+                    Some((
+                        key,
+                        shellexpand::full_with_context(
+                            &string,
+                            || std::env::var("HOME").ok(),
+                            |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
+                        )
+                        .ok()?
+                        .to_string(),
+                    ))
+                } else {
+                    None
+                }
+            });
+
+        let mut child = std::process::Command::new(arg1)
+            .args(command)
+            .envs(envs)
+            .spawn()
+            .expect("failed to spawn");
+        let _ = child.wait();
+    });
+
+    Ok(())
 }
 
 fn start_lua_config() -> Result<(), Box<dyn std::error::Error>> {
