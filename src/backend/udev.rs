@@ -6,7 +6,6 @@
 #![allow(clippy::unwrap_used)] // I don't know what this stuff does yet
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
@@ -172,7 +171,7 @@ impl Backend for UdevData {
     }
 }
 
-pub fn run_udev() -> Result<(), Box<dyn Error>> {
+pub fn run_udev() -> anyhow::Result<()> {
     let mut event_loop = EventLoop::try_new().unwrap();
     let mut display = Display::new().unwrap();
 
@@ -281,12 +280,16 @@ pub fn run_udev() -> Result<(), Box<dyn Error>> {
     /*
      * Bind all our objects that get driven by the event loop
      */
-    event_loop
+    let insert_ret = event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             // println!("event: {:?}", event);
             data.state.process_input_event(event);
-        })?;
+        });
+
+    if let Err(err) = insert_ret {
+        anyhow::bail!("Failed to insert libinput_backend into event loop: {err}");
+    }
 
     let handle = event_loop.handle();
     event_loop

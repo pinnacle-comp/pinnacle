@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use anyhow::Context;
 use smithay::input::keyboard::keysyms;
 use toml::Table;
 
@@ -94,10 +95,11 @@ pub enum Key {
     Escape = keysyms::KEY_Escape,
 }
 
-pub fn parse(config_dir: &Path) -> Result<Metaconfig, Box<dyn std::error::Error>> {
+pub fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
     let config_dir = config_dir.join("metaconfig.toml");
 
-    let metaconfig = std::fs::read_to_string(config_dir)?;
+    let metaconfig =
+        std::fs::read_to_string(config_dir).context("Failed to read metaconfig.toml")?;
 
-    Ok(toml::from_str(&metaconfig)?)
+    toml::from_str(&metaconfig).context("Failed to deserialize toml")
 }

@@ -4,7 +4,6 @@ mod api_handlers;
 
 use std::{
     cell::RefCell,
-    error::Error,
     os::{fd::AsRawFd, unix::net::UnixStream},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -23,6 +22,7 @@ use crate::{
     tag::TagId,
     window::{window_state::LocationRequestState, WindowElement},
 };
+use anyhow::Context;
 use calloop::futures::Scheduler;
 use smithay::{
     backend::renderer::element::RenderElementStates,
@@ -162,7 +162,7 @@ impl<B: Backend> State<B> {
         display: &mut Display<Self>,
         loop_signal: LoopSignal,
         loop_handle: LoopHandle<'static, CalloopData<B>>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
 
@@ -234,13 +234,8 @@ impl<B: Backend> State<B> {
             pathbuf
         };
 
-        let socket_source = match PinnacleSocketSource::new(tx_channel, &socket_dir) {
-            Ok(source) => source,
-            Err(err) => {
-                tracing::error!("Failed to create the socket source: {err}");
-                Err(err)?
-            }
-        };
+        let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
+            .context("Failed to create socket source")?;
 
         let ConfigReturn {
             reload_keybind,
@@ -248,7 +243,7 @@ impl<B: Backend> State<B> {
             config_child_handle,
         } = start_config(metaconfig, &config_dir)?;
 
-        loop_handle.insert_source(socket_source, |stream, _, data| {
+        let insert_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
             if let Some(old_stream) = data
                 .state
                 .api_state
@@ -261,11 +256,17 @@ impl<B: Backend> State<B> {
                     .shutdown(std::net::Shutdown::Both)
                     .expect("Couldn't shutdown old stream");
             }
-        })?;
+        });
+
+        if let Err(err) = insert_ret {
+            anyhow::bail!("Failed to insert socket source into event loop: {err}");
+        }
 
         let (executor, sched) =
             calloop::futures::executor::<()>().expect("Couldn't create executor");
-        loop_handle.insert_source(executor, |_, _, _| {})?;
+        if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
+            anyhow::bail!("Failed to insert async executor into event loop: {err}");
+        }
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -389,10 +390,7 @@ fn get_config_dir() -> PathBuf {
 
 /// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
 /// PINNACLE_SOCKET is set correctly for use in API implementations.
-fn start_config(
-    metaconfig: Metaconfig,
-    config_dir: &Path,
-) -> Result<ConfigReturn, Box<dyn std::error::Error>> {
+fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<ConfigReturn> {
     let reload_keybind = metaconfig.reload_keybind;
     let kill_keybind = metaconfig.kill_keybind;
 
@@ -452,7 +450,7 @@ struct ConfigReturn {
 }
 
 impl<B: Backend> State<B> {
-    pub fn restart_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn restart_config(&mut self) -> anyhow::Result<()> {
         tracing::info!("Restarting config");
         tracing::debug!("Clearing tags");
         for output in self.space.outputs() {
@@ -471,7 +469,8 @@ impl<B: Backend> State<B> {
 
         let config_dir = get_config_dir();
 
-        let metaconfig = crate::metaconfig::parse(&config_dir)?;
+        let metaconfig =
+            crate::metaconfig::parse(&config_dir).context("Failed to parse metaconfig.toml")?;
 
         let ConfigReturn {
             reload_keybind,

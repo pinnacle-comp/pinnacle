@@ -42,6 +42,7 @@ use std::{
     path::Path,
 };
 
+use anyhow::Context;
 use smithay::reexports::calloop::{
     self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
 };
@@ -88,32 +89,22 @@ pub struct PinnacleSocketSource {
 impl PinnacleSocketSource {
     /// Create a loop source that listens for connections to the provided socket_dir.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
-    pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> Result<Self, io::Error> {
+    pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
         let socket_path = socket_dir.join("pinnacle_socket");
 
         if let Ok(exists) = socket_path.try_exists() {
             if exists {
-                if let Err(err) = std::fs::remove_file(&socket_path) {
-                    tracing::error!("Failed to remove old socket: {err}");
-                    return Err(err);
-                }
+                std::fs::remove_file(&socket_path).context("Failed to remove old socket")?;
             }
         }
 
-        let listener = match UnixListener::bind(&socket_path) {
-            Ok(listener) => {
-                tracing::info!("Bound to socket at {socket_path:?}");
-                listener
-            }
-            Err(err) => {
-                tracing::error!("Failed to bind to socket: {err}");
-                return Err(err);
-            }
-        };
-        if let Err(err) = listener.set_nonblocking(true) {
-            tracing::error!("Failed to set socket to nonblocking: {err}");
-            return Err(err);
-        }
+        let listener = UnixListener::bind(&socket_path)
+            .with_context(|| format!("Failed to bind to socket at {socket_path:?}"))?;
+        tracing::info!("Bound to socket at {socket_path:?}");
+
+        listener
+            .set_nonblocking(true)
+            .context("Failed to set socket to nonblocking")?;
 
         let socket = Generic::new(listener, Interest::READ, Mode::Level);
 
