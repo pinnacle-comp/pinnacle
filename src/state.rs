@@ -14,7 +14,7 @@ use std::{
 use crate::{
     api::{
         msg::{CallbackId, ModifierMask, Msg},
-        PinnacleSocketSource,
+        PinnacleSocketSource, DEFAULT_SOCKET_DIR,
     },
     cursor::Cursor,
     focus::FocusState,
@@ -215,8 +215,13 @@ impl<B: Backend> State<B> {
         let metaconfig = crate::metaconfig::parse(&config_dir)?;
 
         let socket_dir = {
-            let dir_string =
-                shellexpand::full(metaconfig.socket_dir.as_deref().unwrap_or("/tmp"))?.to_string();
+            let dir_string = shellexpand::full(
+                metaconfig
+                    .socket_dir
+                    .as_deref()
+                    .unwrap_or(DEFAULT_SOCKET_DIR),
+            )?
+            .to_string();
 
             // cd into the metaconfig dir and canonicalize to preserve relative paths
             // like ./dir/here
@@ -382,9 +387,6 @@ fn get_config_dir() -> PathBuf {
     PathBuf::from(shellexpand::tilde(&config_dir).to_string())
 }
 
-/// Returns a result with a tuple, the first is the reload_keybind and the second
-/// is the kill_keybind.
-///
 /// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
 /// PINNACLE_SOCKET is set correctly for use in API implementations.
 fn start_config(
@@ -427,7 +429,7 @@ fn start_config(
     let child = async_process::Command::new(arg1)
         .args(command)
         .envs(envs)
-        .current_dir(&config_dir)
+        .current_dir(config_dir)
         .spawn()
         .expect("failed to spawn config");
 

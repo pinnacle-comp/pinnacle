@@ -48,7 +48,7 @@ use smithay::reexports::calloop::{
 
 use self::msg::{Msg, OutgoingMsg};
 
-const DEFAULT_SOCKET_DIR: &str = "/tmp";
+pub const DEFAULT_SOCKET_DIR: &str = "/tmp";
 
 fn handle_client(
     mut stream: UnixStream,
