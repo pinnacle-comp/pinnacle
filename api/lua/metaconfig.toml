@@ -32,6 +32,15 @@ reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
 # The keybind that will kill Pinnacle.
 kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 
+### Socket directory ###
+# Pinnacle will open a Unix socket at `/tmp` by default. If you want/need to change this,
+# use the `socket_dir` setting set to the directory of your choosing.
+#
+# Changing this between reloads will not change the actual location of the socket
+# until you restart Pinnacle.
+# socket_dir = "/your/dir/here/"
+
+### Environment Variables ###
 # You may need to specify to Lua where Pinnacle's Lua API library is.
 # This is currently done using the `envs` table, with keys as the name of the environment variable and
 # the value as the variable value. This supports $var expansion, and paths are relative to this metaconfig.toml file.

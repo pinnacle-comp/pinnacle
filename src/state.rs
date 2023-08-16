@@ -6,7 +6,7 @@ use std::{
     cell::RefCell,
     error::Error,
     os::{fd::AsRawFd, unix::net::UnixStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -19,6 +19,7 @@ use crate::{
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
+    metaconfig::Metaconfig,
     tag::TagId,
     window::{window_state::LocationRequestState, WindowElement},
 };
@@ -209,19 +210,38 @@ impl<B: Backend> State<B> {
 
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
-        // We want to replace the client if a new one pops up
-        // TODO: there should only ever be one client working at a time, and creating a new client
-        // |     when one is already running should be impossible.
-        // INFO: this source try_clone()s the stream
+        let config_dir = get_config_dir();
 
-        // TODO: probably use anyhow or something
-        let socket_source = match PinnacleSocketSource::new(tx_channel) {
+        let metaconfig = crate::metaconfig::parse(&config_dir)?;
+
+        let socket_dir = {
+            let dir_string =
+                shellexpand::full(metaconfig.socket_dir.as_deref().unwrap_or("/tmp"))?.to_string();
+
+            // cd into the metaconfig dir and canonicalize to preserve relative paths
+            // like ./dir/here
+            let current_dir = std::env::current_dir()?;
+
+            std::env::set_current_dir(&config_dir)?;
+            let pathbuf = PathBuf::from(&dir_string).canonicalize()?;
+            std::env::set_current_dir(current_dir)?;
+
+            pathbuf
+        };
+
+        let socket_source = match PinnacleSocketSource::new(tx_channel, &socket_dir) {
             Ok(source) => source,
             Err(err) => {
                 tracing::error!("Failed to create the socket source: {err}");
                 Err(err)?
             }
         };
+
+        let ConfigReturn {
+            reload_keybind,
+            kill_keybind,
+            config_child_handle,
+        } = start_config(metaconfig, &config_dir)?;
 
         loop_handle.insert_source(socket_source, |stream, _, data| {
             if let Some(old_stream) = data
@@ -241,13 +261,6 @@ impl<B: Backend> State<B> {
         let (executor, sched) =
             calloop::futures::executor::<()>().expect("Couldn't create executor");
         loop_handle.insert_source(executor, |_, _, _| {})?;
-
-        let ConfigReturn {
-            reload_keybind,
-            kill_keybind,
-            config_child_handle,
-        } = start_config()?;
-        // start_lua_config()?;
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -355,23 +368,29 @@ impl<B: Backend> State<B> {
         })
     }
 }
+
+fn get_config_dir() -> PathBuf {
+    let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
+        let default_config_dir =
+            std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+
+        PathBuf::from(default_config_dir)
+            .join("pinnacle")
+            .to_string_lossy()
+            .to_string()
+    });
+    PathBuf::from(shellexpand::tilde(&config_dir).to_string())
+}
+
 /// Returns a result with a tuple, the first is the reload_keybind and the second
 /// is the kill_keybind.
-fn start_config() -> Result<ConfigReturn, Box<dyn std::error::Error>> {
-    let config_dir = {
-        let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
-            let default_config_dir =
-                std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
-
-            PathBuf::from(default_config_dir)
-                .join("pinnacle")
-                .to_string_lossy()
-                .to_string()
-        });
-        PathBuf::from(shellexpand::tilde(&config_dir).to_string())
-    };
-
-    let metaconfig = crate::metaconfig::parse(&config_dir)?;
+///
+/// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
+/// PINNACLE_SOCKET is set correctly for use in API implementations.
+fn start_config(
+    metaconfig: Metaconfig,
+    config_dir: &Path,
+) -> Result<ConfigReturn, Box<dyn std::error::Error>> {
     let reload_keybind = metaconfig.reload_keybind;
     let kill_keybind = metaconfig.kill_keybind;
 
@@ -448,11 +467,15 @@ impl<B: Backend> State<B> {
             tracing::warn!("Error when killing old config: {err}");
         }
 
+        let config_dir = get_config_dir();
+
+        let metaconfig = crate::metaconfig::parse(&config_dir)?;
+
         let ConfigReturn {
             reload_keybind,
             kill_keybind,
             config_child_handle,
-        } = start_config()?;
+        } = start_config(metaconfig, &config_dir)?;
 
         self.input_state.reload_keybind = reload_keybind;
         self.input_state.kill_keybind = kill_keybind;

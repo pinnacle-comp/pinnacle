@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use smithay::input::keyboard::keysyms;
 use toml::Table;
@@ -11,7 +11,7 @@ pub struct Metaconfig {
     pub envs: Option<Table>,
     pub reload_keybind: Keybind,
     pub kill_keybind: Keybind,
-    pub socket_dir: Option<PathBuf>,
+    pub socket_dir: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]

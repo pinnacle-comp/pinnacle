@@ -3,13 +3,7 @@
 local socket = require("posix.sys.socket")
 local msgpack = require("msgpack")
 
-local socket_dir = os.getenv("SOCKET_DIR")
-if socket_dir then
-    if socket_dir:match("/$") then
-        socket_dir = socket_dir:sub(0, socket_dir:len() - 1)
-    end
-end
-local SOCKET_PATH = (socket_dir or "/tmp") .. "/pinnacle_socket"
+local SOCKET_PATH = os.getenv("PINNACLE_SOCKET") or "/tmp/pinnacle_socket"
 
 ---From https://gist.github.com/stuby/5445834#file-rprint-lua
 ---rPrint(struct, [limit], [indent])   Recursively print arbitrary data.

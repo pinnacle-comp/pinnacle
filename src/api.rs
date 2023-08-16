@@ -86,41 +86,21 @@ pub struct PinnacleSocketSource {
 }
 
 impl PinnacleSocketSource {
-    pub fn new(sender: Sender<Msg>) -> Result<Self, io::Error> {
-        let socket_path = std::env::var("SOCKET_DIR").unwrap_or(DEFAULT_SOCKET_DIR.to_string());
-        let socket_path = Path::new(&socket_path);
-        if !socket_path.is_dir() {
-            tracing::error!("SOCKET_DIR must be a directory");
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "SOCKET_DIR must be a directory",
-            ));
-        }
-
-        let Some(socket_path) = socket_path
-            .join("pinnacle_socket")
-            .to_str()
-            .map(|st| st.to_string())
-        else {
-            tracing::error!("Socket path {socket_path:?} had invalid Unicode");
-            return Err(io::Error::new(io::ErrorKind::Other, "socket path had invalid unicode"));
-        };
-
-        let socket_path = shellexpand::tilde(&socket_path).to_string();
-        let socket_path = Path::new(&socket_path);
-
-        // TODO: use anyhow
+    /// Create a loop source that listens for connections to the provided socket_dir.
+    /// This will also set PINNACLE_SOCKET for use in API implementations.
+    pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> Result<Self, io::Error> {
+        let socket_path = socket_dir.join("pinnacle_socket");
 
         if let Ok(exists) = socket_path.try_exists() {
             if exists {
-                if let Err(err) = std::fs::remove_file(socket_path) {
+                if let Err(err) = std::fs::remove_file(&socket_path) {
                     tracing::error!("Failed to remove old socket: {err}");
                     return Err(err);
                 }
             }
         }
 
-        let listener = match UnixListener::bind(socket_path) {
+        let listener = match UnixListener::bind(&socket_path) {
             Ok(listener) => {
                 tracing::info!("Bound to socket at {socket_path:?}");
                 listener
@@ -136,6 +116,8 @@ impl PinnacleSocketSource {
         }
 
         let socket = Generic::new(listener, Interest::READ, Mode::Level);
+
+        std::env::set_var("PINNACLE_SOCKET", socket_path);
 
         Ok(Self { socket, sender })
     }
