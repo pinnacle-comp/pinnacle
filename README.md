@@ -11,9 +11,6 @@
     A very, VERY WIP Smithay-based wayland compositor
 </div>
 
-## Changelog
-See [`CHANGELOG.md`](CHANGELOG.md).
-
 ## Info
 ### What is Pinnacle?
 Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
@@ -22,7 +19,7 @@ for Wayland.
 
 It sports high configurability through a (soon to be) extensive Lua API, with plans for a Rust API in the future.
 
-Showcase soon:tm: (don't expect anything mind-blowing)
+Showcase/gallery soon:tm:
 
 ### Features
 > This is a non-exhaustive list.
@@ -73,6 +70,8 @@ For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can 
 <sup>flake soon:tm:</sup>
 
 ## Running
+> :information_source: Before running, read the information in [Configuration](#configuration).
+
 After building, run the executable located in either:
 ```sh
 ./target/debug/pinnacle     # without --release
@@ -83,6 +82,7 @@ Or, run the project directly with
 ```sh
 cargo run [--release]
 ```
+
 
 Pinnacle will automatically initialize the correct backend for your environment.
 
@@ -97,14 +97,13 @@ If you try to run either in environments where you shouldn't be, you will get a 
 pass in the `--force` flag to continue. *You probably shouldn't be doing that.*
 
 > #### :information_source: Make sure `command` in your `metaconfig.toml` is set to the right file.
-> If it isn't, the compositor will open, but your config will not apply. In that case, kill the compositor using the keybind defined in `kill_keybind` and set `command` properly.
+> If it isn't, the compositor will open, but your config will not apply.
+In that case, kill the compositor using the keybind defined in 
+`kill_keybind` (default <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>Esc</kbd>) and set `command` properly.
 
 > #### :information_source: Pinnacle will open a socket in the `/tmp` directory.
-> If for whatever reason you need the socket to be in a different place, run Pinnacle with
-> the `SOCKET_DIR` environment variable:
-> ```sh
-> SOCKET_DIR=/path/to/new/dir/ cargo run
-> ```
+> If for whatever reason you need the socket to be in a different place, set `socket_dir` in
+> your `metaconfig.toml` file to a directory of your choosing.
 
 > #### :warning: Do not run Pinnacle as root.
 > This will open the socket with root-only permissions, and future non-root invocations
@@ -121,9 +120,10 @@ $XDG_CONFIG_HOME/pinnacle/
 ```
 
 The `metaconfig.toml` file provides information on what config to run, kill and reload keybinds,
-and any environment variables you want set.
+and any environment variables you want set. For more details, see the provided 
+[`metaconfig.toml`](api/lua/metaconfig.toml) file.
 
-To use the provided Lua config, run the following:
+To use the provided Lua config, run the following in the root of the Git project:
 ```sh
 PINNACLE_CONFIG_DIR="./api/lua" cargo run
 ```
@@ -166,10 +166,13 @@ Documentation for other branches can be reached at `https://ottatop.github.io/pi
 ## Controls
 The following controls are currently hardcoded:
 
-- `Ctrl + Left Mouse`: Move a window
-- `Ctrl + Right Mouse`: Resize a window
+- <kbd>Ctrl</kbd> + <kbd>Left click drag</kbd>: Move a window
+- <kbd>Ctrl</kbd> + <kbd>Right click drag</kbd>: Resize a window
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
 
 ## Feature Requests, Bug Reports, Contributions, and Questions
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Changelog
+See [`CHANGELOG.md`](CHANGELOG.md).
