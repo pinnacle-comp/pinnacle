@@ -14,17 +14,27 @@
 ## Changelog
 See [`CHANGELOG.md`](CHANGELOG.md).
 
-## Features
-- [x] Winit backend
-- [x] Udev backend
-    - This is currently just a copy of Anvil's udev backend.
-- [x] Basic tags
+## Info
+### What is Pinnacle?
+Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
+It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
+for Wayland.
+
+It sports high configurability through a (soon to be) extensive Lua API, with plans for a Rust API in the future.
+
+Showcase soon:tm: (don't expect anything mind-blowing)
+
+### Features
+> This is a non-exhaustive list.
+- [x] Winit backend (so you can run Pinnacle in your graphical environment)
+- [x] Udev backend (so you can run Pinnacle in a tty)
+- [x] Tag system
 - [ ] Layout system
     - [x] Left master stack, corner, dwindle, spiral layouts
     - [ ] Other three master stack directions, floating, magnifier, maximized, and fullscreen layouts
     - [ ] Resizable layouts
 - [x] XWayland support
-    - This is currently somewhat buggy. If you find a problem that's not already listed in GitHub issues, feel free to submit it!
+    - This is currently somewhat buggy. If you find a problem, please submit an issue!
 - [x] Layer-shell support
     - [ ] wlr-screencopy support
     - [ ] wlr-output-management support
@@ -34,29 +44,15 @@ See [`CHANGELOG.md`](CHANGELOG.md).
 - [ ] The other stuff Awesome has
 - [x] Is very cool :thumbsup:
 
-## Info
-### What is Pinnacle?
-Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
-
-In short, this is my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
-for Wayland.
-
-It sports high configurability through a (soon to be) deep Lua API, with plans for a Rust API in the future.
-
-### Why Pinnacle?
-Well, I currently use [Awesome](https://github.com/awesomeWM/awesome). And I really like it! Unfortunately, Awesome doesn't exist for Wayland ([anymore](http://way-cooler.org/blog/2020/01/09/way-cooler-post-mortem.html)). There doesn't seem to be any Wayland compositor out there that has all of the following:
-- Tags for window management
-- Configurable in Lua (or any other programming language for that matter)
-- Has a bunch of batteries included (widget system, systray, etc)
-
-So, this is my attempt at making an Awesome-esque Wayland compositor.
 
 ## Dependencies
+> I have not tested these. If Pinnacle doesn't work properly with these packages installed, please submit an issue.
+
 You'll need the following packages, as specified by [Smithay](https://github.com/Smithay/smithay):
 `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`.
 - Arch:
     ```
-    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatda xwayland
+    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xwayland
     ```
 - Debian:
     ```
@@ -74,7 +70,7 @@ cargo build [--release]
 ```
 
 For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can use for `nix-shell`.
-It *should* work, but if it doesn't, please raise an issue. <sup>flake soon:tm:</sup>
+<sup>flake soon:tm:</sup>
 
 ## Running
 After building, run the executable located in either:
@@ -88,26 +84,20 @@ Or, run the project directly with
 cargo run [--release]
 ```
 
-There is an additional flag you can pass in: `--<backend>`. You most likely do not need to use it.
+Pinnacle will automatically initialize the correct backend for your environment.
+
+However, there is an additional flag you can pass in: `--<backend>`. You most likely do not need to use it.
 
 `backend` can be one of two values:
 
 - `winit`: run Pinnacle as a window in your graphical environment
-- `udev`: run Pinnacle in a tty. NOTE: I tried running udev in Awesome and some things broke so uh, don't do that
+- `udev`: run Pinnacle in a tty.
 
 If you try to run either in environments where you shouldn't be, you will get a warning requiring you to
 pass in the `--force` flag to continue. *You probably shouldn't be doing that.*
 
-> :information_source: When running in debug mode, the compositor will drastically slow down
-> if there are too many windows on screen. If you don't want this to happen, use release mode.
-
-> #### :exclamation: IMPORTANT: Read the following before you launch the `udev` backend:
-> If you successfully enter the `udev` backend but none of the controls work, this means either Pinnacle
-failed to find your config, or the config process crashed.
-> 
-> You can either switch ttys or press
-> `Ctrl + Alt + Shift + Escape`,
-> which has been hardcoded in to kill the compositor.
+> #### :information_source: Make sure `command` in your `metaconfig.toml` is set to the right file.
+> If it isn't, the compositor will open, but your config will not apply. In that case, kill the compositor using the keybind defined in `kill_keybind` and set `command` properly.
 
 > #### :information_source: Pinnacle will open a socket in the `/tmp` directory.
 > If for whatever reason you need the socket to be in a different place, run Pinnacle with
@@ -116,43 +106,38 @@ failed to find your config, or the config process crashed.
 > SOCKET_DIR=/path/to/new/dir/ cargo run
 > ```
 
-> #### :warning: Don't run Pinnacle as root.
+> #### :warning: Do not run Pinnacle as root.
 > This will open the socket with root-only permissions, and future non-root invocations
 of Pinnacle will fail when trying to remove the socket until it is removed manually.
 
 ## Configuration
-Please note: this is WIP and has few options.
+Pinnacle is configured in Lua. Rust support is planned.
 
-Pinnacle supports configuration through Lua (and hopefully more languages if it's not too unwieldy :crab:).
-
-Run Pinnacle with the `PINNACLE_CONFIG` environment variable set to the path of your config file.
-If not specified, Pinnacle will look for the following: 
+Pinnacle will search for a `metaconfig.toml` file in the following directories, from top to bottom:
 ```sh
-$XDG_CONFIG_HOME/pinnacle/init.lua
-~/.config/pinnacle/init.lua         # if XDG_CONFIG_HOME isn't set
-```
-The following will use the example config file in [`api/lua`](api/lua):
-```sh
-PINNACLE_CONFIG="./api/lua/example_config.lua" cargo run
+$PINNACLE_CONFIG_DIR
+$XDG_CONFIG_HOME/pinnacle/
+~/.config/pinnacle
 ```
 
-> #### :information_source: The config is an external process.
-> If it crashes for whatever reason, all of your keybinds will stop working.
-> Again, you can switch ttys or exit the compositor with `Ctrl + Alt + Shift + Escape`.
->
-> Config reloading soon:tm:
+The `metaconfig.toml` file provides information on what config to run, kill and reload keybinds,
+and any environment variables you want set.
 
-### API Documentation
-There is a preliminary [doc website](https://ottatop.github.io/pinnacle/main) generated with LDoc.
-Note that there are some missing things like the `Keys` table and `Layout` enum
-as well as any function overloads, but these should be autocompleted through the language server.
+To use the provided Lua config, run the following:
+```sh
+PINNACLE_CONFIG_DIR="./api/lua" cargo run
+```
 
-Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
+To run without the above environment variable, copy [`metaconfig.toml`](api/lua/metaconfig.toml) and
+[`example_config.lua`](api/lua/example_config.lua) to `$XDG_CONFIG_HOME/pinnacle/`
+(this will probably be `~/.config/pinnacle`).
 
-### :information_source: Using the Lua Language Server :information_source:
-It is *highly* recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server)
-and set it up to have the [`api/lua`](api/lua) directory as a library, as I'll be using
-its doc comments to provide documentation, autocomplete, and error checking.
+> If you rename `example_config.lua` to something like `init.lua`, you will need to change `command` in `metaconfig.toml` to reflect that.
+
+### :information_source: Using the Lua Language Server
+It is ***highly*** recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server)
+and set it up to have the [`api/lua`](api/lua) directory as a library.
+This will provide documentation, autocomplete, and error checking.
 
 #### For VS Code:
 Install the [Lua](https://marketplace.visualstudio.com/items?itemName=sumneko.lua) plugin, then go into
@@ -170,13 +155,19 @@ Lua = {
 }
 ```
 
+### API Documentation
+You can find online documentation for the Lua API [here](https://ottatop.github.io/pinnacle/main).
+
+Note that there are some missing things like the `Keys` table and `Layout` enum
+as well as any function overloads, but these should be autocompleted through the language server.
+
+Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
+
 ## Controls
 The following controls are currently hardcoded:
 
 - `Ctrl + Left Mouse`: Move a window
 - `Ctrl + Right Mouse`: Resize a window
-- `Ctrl + Alt + Shift + Esc`: Kill Pinnacle. This is for when the compositor inevitably
-locks up because I did a dumb thing :thumbsup:
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
 
