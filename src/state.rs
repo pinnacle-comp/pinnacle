@@ -379,6 +379,8 @@ fn start_config() -> Result<ConfigReturn, Box<dyn std::error::Error>> {
 
     let arg1 = command.next().expect("empty command");
 
+    std::env::set_var("PINNACLE_DIR", std::env::current_dir()?);
+
     let envs = metaconfig
         .envs
         .unwrap_or(toml::map::Map::new())

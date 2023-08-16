@@ -35,6 +35,14 @@ See [`CHANGELOG.md`](CHANGELOG.md).
 - [x] Is very cool :thumbsup:
 
 ## Info
+### What is Pinnacle?
+Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
+
+In short, this is my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
+for Wayland.
+
+It sports high configurability through a (soon to be) deep Lua API, with plans for a Rust API in the future.
+
 ### Why Pinnacle?
 Well, I currently use [Awesome](https://github.com/awesomeWM/awesome). And I really like it! Unfortunately, Awesome doesn't exist for Wayland ([anymore](http://way-cooler.org/blog/2020/01/09/way-cooler-post-mortem.html)). There doesn't seem to be any Wayland compositor out there that has all of the following:
 - Tags for window management
