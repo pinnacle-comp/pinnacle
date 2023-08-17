@@ -3,7 +3,7 @@
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="/assets/pinnacle_banner_dark.png">
         <source media="(prefers-color-scheme: light)" srcset="/assets/pinnacle_banner_light.png">
-        <img alt="Pinnacle banner" src="/assets/pinnacle_banner_light.png">
+        <img alt="Pinnacle banner" src="https://github.com/Ottatop/pinnacle/blob/logo/assets/pinnacle_banner_dark.png">
     </picture>
 </div>
 
