@@ -1,6 +1,6 @@
 ![Pinnacle banner](/assets/pinnacle_banner_dark.png)
 
-## Info
+# Info
 ### What is Pinnacle?
 Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
@@ -31,7 +31,7 @@ Showcase/gallery soon:tm:
 - [x] Is very cool :thumbsup:
 
 
-## Dependencies
+# Dependencies
 > I have not tested these. If Pinnacle doesn't work properly with these packages installed, please submit an issue.
 
 You'll need the following packages, as specified by [Smithay](https://github.com/Smithay/smithay):
@@ -49,7 +49,7 @@ You'll need the following packages, as specified by [Smithay](https://github.com
 
 You'll also need Lua 5.4 for configuration. **Older versions will not work.** Check with your package manager to see which version you have.
 
-## Building
+# Building
 Build the project with:
 ```
 cargo build [--release]
@@ -58,7 +58,7 @@ cargo build [--release]
 For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can use for `nix-shell`.
 <sup>flake soon:tm:</sup>
 
-## Running
+# Running
 > :information_source: Before running, read the information in [Configuration](#configuration).
 
 After building, run the executable located in either:
@@ -98,7 +98,7 @@ In that case, kill the compositor using the keybind defined in
 > This will open the socket with root-only permissions, and future non-root invocations
 of Pinnacle will fail when trying to remove the socket until it is removed manually.
 
-## Configuration
+# Configuration
 Pinnacle is configured in Lua. Rust support is planned.
 
 Pinnacle will search for a `metaconfig.toml` file in the following directories, from top to bottom:
@@ -152,7 +152,7 @@ as well as any function overloads, but these should be autocompleted through the
 
 Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
 
-## Controls
+# Controls
 The following controls are currently hardcoded:
 
 - <kbd>Ctrl</kbd> + <kbd>Left click drag</kbd>: Move a window
@@ -160,8 +160,8 @@ The following controls are currently hardcoded:
 
 You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
 
-## Feature Requests, Bug Reports, Contributions, and Questions
+# Feature Requests, Bug Reports, Contributions, and Questions
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Changelog
+# Changelog
 See [`CHANGELOG.md`](CHANGELOG.md).
