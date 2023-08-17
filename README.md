@@ -1,4 +1,3 @@
-# <div align="center">Pinnacle</div>
 ![Pinnacle banner](/assets/pinnacle_banner_dark.png)
 
 ## Info
