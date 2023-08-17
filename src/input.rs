@@ -31,17 +31,23 @@ use crate::{
     state::State,
 };
 
-#[derive(Default)]
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
     pub keybinds: HashMap<(ModifierMask, u32), CallbackId>,
     /// A hashmap of modifier keys and mouse button codes to callback IDs
     pub mousebinds: HashMap<(ModifierMask, u32), CallbackId>,
+    pub reload_keybind: (ModifierMask, u32),
+    pub kill_keybind: (ModifierMask, u32),
 }
 
 impl InputState {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(reload_keybind: (ModifierMask, u32), kill_keybind: (ModifierMask, u32)) -> Self {
+        Self {
+            keybinds: HashMap::new(),
+            mousebinds: HashMap::new(),
+            reload_keybind,
+            kill_keybind,
+        }
     }
 }
 
@@ -50,6 +56,7 @@ enum KeyAction {
     CallCallback(CallbackId),
     Quit,
     SwitchVt(i32),
+    ReloadConfig,
 }
 
 impl<B: Backend> State<B> {
@@ -113,6 +120,10 @@ impl<B: Backend> State<B> {
         let time = event.time_msec();
         let press_state = event.state();
         let mut move_mode = false;
+
+        let reload_keybind = self.input_state.reload_keybind;
+        let kill_keybind = self.input_state.kill_keybind;
+
         let action = self
             .seat
             .get_keyboard()
@@ -138,23 +149,23 @@ impl<B: Backend> State<B> {
                         if modifiers.logo {
                             modifier_mask.push(Modifier::Super);
                         }
+                        let modifier_mask = ModifierMask::from(modifier_mask);
                         let raw_sym = if keysym.raw_syms().len() == 1 {
                             keysym.raw_syms()[0]
                         } else {
                             keysyms::KEY_NoSymbol
                         };
+
                         if let Some(callback_id) = state
                             .input_state
                             .keybinds
-                            .get(&(modifier_mask.into(), raw_sym))
+                            .get(&(modifier_mask, raw_sym))
                         {
                             return FilterResult::Intercept(KeyAction::CallCallback(*callback_id));
-                        } else if modifiers.ctrl
-                            && modifiers.shift
-                            && modifiers.alt
-                            && keysym.modified_sym() == keysyms::KEY_Escape
-                        {
+                        } else if (modifier_mask, raw_sym) == kill_keybind {
                             return FilterResult::Intercept(KeyAction::Quit);
+                        } else if (modifier_mask, raw_sym) == reload_keybind {
+                            return FilterResult::Intercept(KeyAction::ReloadConfig);
                         } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                             keysym.modified_sym() {
                             vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
@@ -205,7 +216,10 @@ impl<B: Backend> State<B> {
             Some(KeyAction::Quit) => {
                 self.loop_signal.stop();
             }
-            _ => {}
+            Some(KeyAction::ReloadConfig) => {
+                self.restart_config().expect("failed to restart config");
+            }
+            None => {}
         }
     }
 

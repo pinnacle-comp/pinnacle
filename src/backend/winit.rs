@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{error::Error, ffi::OsString, time::Duration};
+use std::{ffi::OsString, time::Duration};
 
 use smithay::{
     backend::{
@@ -82,7 +82,7 @@ impl DmabufHandler for State<WinitData> {
 delegate_dmabuf!(State<WinitData>);
 
 /// Start Pinnacle as a window in a graphical environment.
-pub fn run_winit() -> Result<(), Box<dyn Error>> {
+pub fn run_winit() -> anyhow::Result<()> {
     let mut event_loop: EventLoop<CalloopData<WinitData>> = EventLoop::try_new()?;
 
     let mut display: Display<State<WinitData>> = Display::new()?;
@@ -90,7 +90,11 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
     let evt_loop_handle = event_loop.handle();
 
-    let (mut winit_backend, mut winit_evt_loop) = smithay::backend::winit::init::<GlesRenderer>()?;
+    let (mut winit_backend, mut winit_evt_loop) =
+        match smithay::backend::winit::init::<GlesRenderer>() {
+            Ok(ret) => ret,
+            Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
+        };
 
     let mode = smithay::output::Mode {
         size: winit_backend.window_size().physical_size,
@@ -205,160 +209,164 @@ pub fn run_winit() -> Result<(), Box<dyn Error>> {
 
     let mut pointer_element = PointerElement::<GlesTexture>::new();
 
-    // TODO: pointer
-    state
-        .loop_handle
-        .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
-            let display = &mut data.display;
-            let state = &mut data.state;
+    let insert_ret =
+        state
+            .loop_handle
+            .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
+                let display = &mut data.display;
+                let state = &mut data.state;
 
-            let result = winit_evt_loop.dispatch_new_events(|event| match event {
-                WinitEvent::Resized {
-                    size,
-                    scale_factor: _,
-                } => {
-                    output.change_current_state(
-                        Some(smithay::output::Mode {
-                            size,
-                            refresh: 144_000,
-                        }),
-                        None,
-                        None,
-                        None,
-                    );
-                    layer_map_for_output(&output).arrange();
-                    state.update_windows(&output);
-                    // state.re_layout(&output);
-                }
-                WinitEvent::Focus(_) => {}
-                WinitEvent::Input(input_evt) => {
-                    state.process_input_event(input_evt);
-                }
-                WinitEvent::Refresh => {}
-            });
+                let result = winit_evt_loop.dispatch_new_events(|event| match event {
+                    WinitEvent::Resized {
+                        size,
+                        scale_factor: _,
+                    } => {
+                        output.change_current_state(
+                            Some(smithay::output::Mode {
+                                size,
+                                refresh: 144_000,
+                            }),
+                            None,
+                            None,
+                            None,
+                        );
+                        layer_map_for_output(&output).arrange();
+                        state.update_windows(&output);
+                        // state.re_layout(&output);
+                    }
+                    WinitEvent::Focus(_) => {}
+                    WinitEvent::Input(input_evt) => {
+                        state.process_input_event(input_evt);
+                    }
+                    WinitEvent::Refresh => {}
+                });
 
-            match result {
-                Ok(_) => {}
-                Err(WinitError::WindowClosed) => {
-                    state.loop_signal.stop();
-                }
-            };
-
-            if let CursorImageStatus::Surface(surface) = &state.cursor_status {
-                if !surface.alive() {
-                    state.cursor_status = CursorImageStatus::Default;
-                }
-            }
-
-            let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
-
-            pointer_element.set_status(state.cursor_status.clone());
-
-            let full_redraw = &mut state.backend_data.full_redraw;
-            *full_redraw = full_redraw.saturating_sub(1);
-
-            let output_render_elements = crate::render::generate_render_elements(
-                state.backend_data.backend.renderer(),
-                &state.space,
-                &output,
-                state.seat.input_method(),
-                state.pointer_location,
-                &mut pointer_element,
-                None,
-                &mut state.cursor_status,
-                state.dnd_icon.as_ref(),
-                &state.focus_state.focus_stack,
-            );
-
-            let render_res = state.backend_data.backend.bind().and_then(|_| {
-                let age = if *full_redraw > 0 {
-                    0
-                } else {
-                    state.backend_data.backend.buffer_age().unwrap_or(0)
+                match result {
+                    Ok(_) => {}
+                    Err(WinitError::WindowClosed) => {
+                        state.loop_signal.stop();
+                    }
                 };
 
-                let renderer = state.backend_data.backend.renderer();
-
-                // render_output()
-
-                state
-                    .backend_data
-                    .damage_tracker
-                    .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
-                    .map_err(|err| match err {
-                        damage::Error::Rendering(err) => err.into(),
-                        damage::Error::OutputNoMode(_) => todo!(),
-                    })
-            });
-
-            match render_res {
-                Ok(render_output_result) => {
-                    let has_rendered = render_output_result.damage.is_some();
-                    if let Some(damage) = render_output_result.damage {
-                        if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
-                            tracing::warn!("{}", err);
-                        }
+                if let CursorImageStatus::Surface(surface) = &state.cursor_status {
+                    if !surface.alive() {
+                        state.cursor_status = CursorImageStatus::Default;
                     }
+                }
+
+                let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
+
+                pointer_element.set_status(state.cursor_status.clone());
+
+                let full_redraw = &mut state.backend_data.full_redraw;
+                *full_redraw = full_redraw.saturating_sub(1);
+
+                let output_render_elements = crate::render::generate_render_elements(
+                    state.backend_data.backend.renderer(),
+                    &state.space,
+                    &output,
+                    state.seat.input_method(),
+                    state.pointer_location,
+                    &mut pointer_element,
+                    None,
+                    &mut state.cursor_status,
+                    state.dnd_icon.as_ref(),
+                    &state.focus_state.focus_stack,
+                );
+
+                let render_res = state.backend_data.backend.bind().and_then(|_| {
+                    let age = if *full_redraw > 0 {
+                        0
+                    } else {
+                        state.backend_data.backend.buffer_age().unwrap_or(0)
+                    };
+
+                    let renderer = state.backend_data.backend.renderer();
+
+                    // render_output()
 
                     state
                         .backend_data
-                        .backend
-                        .window()
-                        .set_cursor_visible(cursor_visible);
+                        .damage_tracker
+                        .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
+                        .map_err(|err| match err {
+                            damage::Error::Rendering(err) => err.into(),
+                            damage::Error::OutputNoMode(_) => todo!(),
+                        })
+                });
 
-                    let time = state.clock.now();
+                match render_res {
+                    Ok(render_output_result) => {
+                        let has_rendered = render_output_result.damage.is_some();
+                        if let Some(damage) = render_output_result.damage {
+                            if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
+                                tracing::warn!("{}", err);
+                            }
+                        }
 
-                    // Send frames to the cursor surface so it updates in xwayland
-                    if let CursorImageStatus::Surface(surf) = &state.cursor_status {
-                        if let Some(op) = state.focus_state.focused_output.as_ref() {
-                            send_frames_surface_tree(
-                                surf,
-                                op,
+                        state
+                            .backend_data
+                            .backend
+                            .window()
+                            .set_cursor_visible(cursor_visible);
+
+                        let time = state.clock.now();
+
+                        // Send frames to the cursor surface so it updates in xwayland
+                        if let CursorImageStatus::Surface(surf) = &state.cursor_status {
+                            if let Some(op) = state.focus_state.focused_output.as_ref() {
+                                send_frames_surface_tree(
+                                    surf,
+                                    op,
+                                    time,
+                                    Some(Duration::ZERO),
+                                    |_, _| None,
+                                );
+                            }
+                        }
+
+                        super::post_repaint(
+                            &output,
+                            &render_output_result.states,
+                            &state.space,
+                            None,
+                            time.into(),
+                        );
+
+                        if has_rendered {
+                            let mut output_presentation_feedback = take_presentation_feedback(
+                                &output,
+                                &state.space,
+                                &render_output_result.states,
+                            );
+                            output_presentation_feedback.presented(
                                 time,
-                                Some(Duration::ZERO),
-                                |_, _| None,
+                                output
+                                    .current_mode()
+                                    .map(|mode| mode.refresh as u32)
+                                    .unwrap_or_default(),
+                                0,
+                                wp_presentation_feedback::Kind::Vsync,
                             );
                         }
                     }
-
-                    super::post_repaint(
-                        &output,
-                        &render_output_result.states,
-                        &state.space,
-                        None,
-                        time.into(),
-                    );
-
-                    if has_rendered {
-                        let mut output_presentation_feedback = take_presentation_feedback(
-                            &output,
-                            &state.space,
-                            &render_output_result.states,
-                        );
-                        output_presentation_feedback.presented(
-                            time,
-                            output
-                                .current_mode()
-                                .map(|mode| mode.refresh as u32)
-                                .unwrap_or_default(),
-                            0,
-                            wp_presentation_feedback::Kind::Vsync,
-                        );
+                    Err(err) => {
+                        tracing::warn!("{}", err);
                     }
                 }
-                Err(err) => {
-                    tracing::warn!("{}", err);
-                }
-            }
 
-            state.space.refresh();
-            state.popup_manager.cleanup();
-            display
-                .flush_clients()
-                .expect("failed to flush client buffers");
+                state.space.refresh();
+                state.popup_manager.cleanup();
+                display
+                    .flush_clients()
+                    .expect("failed to flush client buffers");
 
-            TimeoutAction::ToDuration(Duration::from_millis(1))
-        })?;
+                TimeoutAction::ToDuration(Duration::from_millis(1))
+            });
+
+    if let Err(err) = insert_ret {
+        anyhow::bail!("Failed to insert winit events into event loop: {err}");
+    }
 
     event_loop.run(
         Some(Duration::from_millis(1)),

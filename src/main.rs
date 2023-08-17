@@ -19,6 +19,7 @@ mod grab;
 mod handlers;
 mod input;
 mod layout;
+mod metaconfig;
 mod output;
 mod pointer;
 mod render;
@@ -26,9 +27,7 @@ mod state;
 mod tag;
 mod window;
 
-use std::error::Error;
-
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> anyhow::Result<()> {
     match tracing_subscriber::EnvFilter::try_from_default_env() {
         Ok(env_filter) => {
             tracing_subscriber::fmt()
