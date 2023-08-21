@@ -11,7 +11,7 @@ use crate::{
     backend::Backend,
     state::{State, WithState},
     window::{
-        window_state::{FullscreenOrMaximized, LocationRequestState},
+        window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
         WindowElement,
     },
 };
@@ -101,7 +101,13 @@ impl<B: Backend> State<B> {
                     };
                     window.change_geometry(geo);
                 }
-                FullscreenOrMaximized::Neither => (),
+                FullscreenOrMaximized::Neither => {
+                    if let FloatingOrTiled::Floating(rect) =
+                        window.with_state(|state| state.floating_or_tiled)
+                    {
+                        window.change_geometry(rect);
+                    }
+                }
             }
         }
 
@@ -113,10 +119,13 @@ impl<B: Backend> State<B> {
                             let serial = window.toplevel().send_configure();
                             state.loc_request_state = LocationRequestState::Requested(serial, loc);
                         }
-                        WindowElement::X11(_) => {
+                        WindowElement::X11(surface) => {
                             // already configured, just need to map
                             // maybe wait for all wayland windows to commit before mapping
                             self.space.map_element(window.clone(), loc, false);
+                            surface
+                                .set_mapped(true)
+                                .expect("failed to set x11 win to mapped");
                             state.loc_request_state = LocationRequestState::Idle;
                         }
                     }
