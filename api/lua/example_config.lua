@@ -90,7 +90,7 @@ require("pinnacle").setup(function(pinnacle)
 
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-        tag.toggle("1", op)
+        tag.toggle({ "1", op })
     end)
 
     ---@type Layout[]
