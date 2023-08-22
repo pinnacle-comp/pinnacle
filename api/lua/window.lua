@@ -243,79 +243,38 @@ function window_module.get_all()
 end
 
 ---Toggle the tag with the given name and (optional) output for the specified window.
----You can also provide a tag object instead of a name and output.
 ---
 ---@param w Window
----@param name string
----@param output Output?
----@overload fun(w: Window, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Window.toggle_tag — The corresponding object method
-function window_module.toggle_tag(w, name, output)
-    if type(name) == "table" then
+function window_module.toggle_tag(w, t)
+    local t = require("tag").create_tag_from_params(t)
+
+    if t then
         SendMsg({
             ToggleTagOnWindow = {
                 window_id = w:id(),
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = require("tag").get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                ToggleTagOnWindow = {
-                    window_id = w:id(),
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 
 ---Move the specified window to the tag with the given name and (optional) output.
----You can also provide a tag object instead of a name and output.
+---
 ---@param w Window
----@param name string
----@param output Output?
----@overload fun(w: Window, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Window.move_to_tag — The corresponding object method
-function window_module.move_to_tag(w, name, output)
-    if type(name) == "table" then
+function window_module.move_to_tag(w, t)
+    local t = require("tag").create_tag_from_params(t)
+
+    if t then
         SendMsg({
             MoveWindowToTag = {
                 window_id = w:id(),
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = require("tag").get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                MoveWindowToTag = {
-                    window_id = w:id(),
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 

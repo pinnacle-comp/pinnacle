@@ -19,10 +19,12 @@ local tag_module = {}
 ---@field private _id integer The internal id of this tag.
 local tag = {}
 
+---***You probably don't need to use this function.***
+---
 ---Create a tag from `Tag|TagTable|TagTableNamed|string`.
 ---@param tb Tag|TagTable|TagTableNamed|string
 ---@return Tag|nil
-local function create_tag_from_params(tb)
+function tag_module.create_tag_from_params(tb)
     -- If creating from a tag object, just return the obj
     if tb.id then
         return tb --[[@as Tag]]
@@ -232,7 +234,7 @@ end
 ---@param t Tag|TagTable|TagTableNamed|string
 ---@see Tag.toggle — The corresponding object method
 function tag_module.toggle(t)
-    local t = create_tag_from_params(t)
+    local t = tag_module.create_tag_from_params(t)
 
     if t then
         SendMsg({
@@ -269,7 +271,7 @@ end
 ---@param t Tag|TagTable|TagTableNamed|string
 ---@see Tag.switch_to — The corresponding object method
 function tag_module.switch_to(t)
-    local t = create_tag_from_params(t)
+    local t = tag_module.create_tag_from_params(t)
 
     if t then
         SendMsg({
@@ -305,7 +307,7 @@ end
 ---@param layout Layout The layout.
 ---@see Tag.set_layout — The corresponding object method
 function tag_module.set_layout(t, layout)
-    local t = create_tag_from_params(t)
+    local t = tag_module.create_tag_from_params(t)
 
     if t then
         SendMsg({
@@ -337,12 +339,13 @@ end
 ---end
 ---```
 ---@param params TagTable|TagTableNamed|string
+---@return Tag|nil
 ---
 ---@see TagModule.get_on_output
 ---@see TagModule.get_by_name
 ---@see TagModule.get_all
 function tag_module.get(params)
-    return create_tag_from_params(params)
+    return tag_module.create_tag_from_params(params)
 end
 
 ---Get all tags on the specified output.
