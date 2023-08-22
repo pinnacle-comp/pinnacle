@@ -12,9 +12,95 @@ local tag_module = {}
 ---| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
+---@alias TagTable { [1]: string, [2]: (string|Output)? }
+---@alias TagTableNamed { name: string, output: (string|Output)? }
+
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
 local tag = {}
+
+---Create a tag from `Tag|TagTable|TagTableNamed|string`.
+---@param tb Tag|TagTable|TagTableNamed|string
+---@return Tag|nil
+local function create_tag_from_params(tb)
+    -- If creating from a tag object, just return the obj
+    if tb.id then
+        return tb --[[@as Tag]]
+    end
+
+    -- string passed in
+    if type(tb) == "string" then
+        local op = require("output").get_focused()
+        if op == nil then
+            return nil
+        end
+
+        local tags = tag_module.get_by_name(tb)
+        for _, t in pairs(tags) do
+            if t:output() and t:output():name() == op:name() then
+                return t
+            end
+        end
+
+        return nil
+    end
+
+    -- TagTable was passed in
+    local tag_name = tb[1]
+    if type(tag_name) == "string" then
+        local op = tb[2]
+        if op == nil then
+            local o = require("output").get_focused()
+            if o == nil then
+                return nil
+            end
+            op = o
+        elseif type(op) == "string" then
+            local o = require("output").get_by_name(op)
+            if o == nil then
+                return nil
+            end
+            op = o
+        end
+
+        local tags = tag_module.get_by_name(tag_name)
+        for _, t in pairs(tags) do
+            if t:output() and t:output():name() == op:name() then
+                return t
+            end
+        end
+
+        return nil
+    end
+
+    -- TagTableNamed was passed in
+    local tb = tb --[[@as TagTableNamed]]
+    local tag_name = tb.name
+    local op = tb.output
+
+    if op == nil then
+        local o = require("output").get_focused()
+        if o == nil then
+            return nil
+        end
+        op = o
+    elseif type(op) == "string" then
+        local o = require("output").get_by_name(op)
+        if o == nil then
+            return nil
+        end
+        op = o
+    end
+
+    local tags = tag_module.get_by_name(tag_name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == op:name() then
+            return t
+        end
+    end
+
+    return nil
+end
 
 ---Create a tag from an id.
 ---The id is the unique identifier for each tag.
@@ -122,142 +208,141 @@ function tag_module.add(output, ...)
     end
 end
 
----Toggle a tag on the specified output. If `output` isn't specified, toggle it on the currently focused output instead.
+---Toggle a tag on the specified output. If the output isn't specified, toggle it on the currently focused output instead.
 ---
 ---### Example
 ---
 ---```lua
------ Assuming all tags are toggled off...
 ---local op = output.get_by_name("DP-1")
----tag.toggle("1", op)
----tag.toggle("2", op)
------ will cause windows on both tags 1 and 2 to be displayed at the same time.
+---
+---tag.toggle("1")             -- Toggle tag 1 on the focused output
+---tag.toggle({ "1" })         -- Same as above
+---
+---tag.toggle({ "1", "DP-1" }) -- Toggle tag 1 on DP-1
+---tag.toggle({ "1", op })     -- Same as above
+---
+----- Verbose versions of the two above
+---tag.toggle({ name = "1", output = "DP-1" })
+---tag.toggle({ name = "1", output = op })
+---
+----- Using a tag object
+---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
+---tag.toggle(t)
 ---```
----@param name string The name of the tag.
----@param output Output? The output.
----@overload fun(t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Tag.toggle — The corresponding object method
-function tag_module.toggle(name, output)
-    if type(name) == "table" then
+function tag_module.toggle(t)
+    local t = create_tag_from_params(t)
+
+    if t then
         SendMsg({
             ToggleTag = {
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    print("before tag_global.get_by_name")
-    local tags = tag_module.get_by_name(name)
-    print("after tag_global.get_by_name")
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                ToggleTag = {
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 
 ---Switch to a tag on the specified output, deactivating any other active tags on it.
----If `output` is not specified, this uses the currently focused output instead.
----Alternatively, provide a tag object instead of a name and output.
+---If the output is not specified, this uses the currently focused output instead.
 ---
 ---This is used to replicate what a traditional workspace is on some other Wayland compositors.
 ---
 ---### Examples
 ---```lua
------ Switches to and displays *only* windows on tag `3` on the focused output.
----tag.switch_to("3")
+---local op = output.get_by_name("DP-1")
+---
+---tag.switch_to("1")             -- Switch to tag 1 on the focused output
+---tag.switch_to({ "1" })         -- Same as above
+---
+---tag.switch_to({ "1", "DP-1" }) -- Switch to tag 1 on DP-1
+---tag.switch_to({ "1", op })     -- Same as above
+---
+----- Verbose versions of the two above
+---tag.switch_to({ name = "1", output = "DP-1" })
+---tag.switch_to({ name = "1", output = op })
+---
+----- Using a tag object
+---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
+---tag.switch_to(t)
 ---```
----@param name string The name of the tag.
----@param output Output? The output.
----@overload fun(t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Tag.switch_to — The corresponding object method
-function tag_module.switch_to(name, output)
-    if type(name) == "table" then
+function tag_module.switch_to(t)
+    local t = create_tag_from_params(t)
+
+    if t then
         SendMsg({
             SwitchToTag = {
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = tag_module.get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                SwitchToTag = {
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 
 ---Set a layout for the tag on the specified output. If no output is provided, set it for the tag on the currently focused one.
----Alternatively, provide a tag object instead of a name and output.
 ---
 ---### Examples
 ---```lua
------ Set tag `1` on `DP-1` to the `Dwindle` layout
----tag.set_layout("1", "Dwindle", output.get_by_name("DP-1"))
+---local op = output.get_by_name("DP-1")
 ---
------ Do the same as above. Note: if you have more than one tag named `1` then this picks the first one.
----local t = tag.get_by_name("1")[1]
+---tag.set_layout("1", "Dwindle")     -- Set tag 1 on the focused output to "Dwindle"
+---tag.set_layout({ "1" }, "Dwindle") -- Same as above
+---
+---tag.set_layout({ "1", "DP-1" }, "Dwindle") -- Set tag 1 on DP-1 to "Dwindle"
+---tag.set_layout({ "1", op }, "Dwindle")     -- Same as above
+---
+----- Verbose versions of the two above
+---tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle")
+---tag.set_layout({ name = "1", output = op }, "Dwindle")
+---
+----- Using a tag object
+---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.set_layout(t, "Dwindle")
 ---```
----@param name string The name of the tag.
+---
+---@param t Tag|TagTable|TagTableNamed|string
 ---@param layout Layout The layout.
----@param output Output? The output.
----@overload fun(t: Tag, layout: Layout)
 ---@see Tag.set_layout — The corresponding object method
-function tag_module.set_layout(name, layout, output)
-    if type(name) == "table" then
+function tag_module.set_layout(t, layout)
+    local t = create_tag_from_params(t)
+
+    if t then
         SendMsg({
             SetLayout = {
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
                 layout = layout,
             },
         })
-        return
     end
+end
 
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = tag_module.get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                SetLayout = {
-                    tag_id = t:id(),
-                    layout = layout,
-                },
-            })
-            return
-        end
-    end
+---Get a tag with the specified name and optional output.
+---
+---If the output isn't specified, the focused one is used.
+---
+---If you have duplicate tags on an output, this returns the first one.
+---If you need access to all duplicates, use `tag.get_on_output`, `tag.get_by_name`, or `tag.get_all`
+---and filter for what you need.
+---
+---### Examples
+---```lua
+---local t = tag.get("1")
+---local t = tag.get({ "1", "HDMI-A-0" })
+---local t = tag.get({ name = "3" })
+---
+---local op = output.get_by_name("DP-2")
+---if op ~= nil then
+---    local t = tag.get({ name = "Code", output = op })
+---end
+---```
+---@param params TagTable|TagTableNamed|string
+---
+---@see TagModule.get_on_output
+---@see TagModule.get_by_name
+---@see TagModule.get_all
+function tag_module.get(params)
+    return create_tag_from_params(params)
 end
 
 ---Get all tags on the specified output.
