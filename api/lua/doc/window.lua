@@ -23,20 +23,16 @@ function window_module.get_focused() end
 function window_module.get_all() end
 
 ---Toggle the tag with the given name and (optional) output for the specified window.
----You can also provide a tag object instead of a name and output.
 ---@tparam Window w
----@tparam string name
----@tparam ?Output output
+---@tparam Tag|table|string t A tag object, string of a name, `{ [1]: string, [2]: (string|Output)? }`, or `{ name: string, output: (string|Output)? }`
 ---@see Window.toggle_tag
-function window_module.toggle_tag(w, name, output) end
+function window_module.toggle_tag(w, t) end
 
 ---Move the specified window to the tag with the given name and (optional) output.
----You can also provide a tag object instead of a name and output.
 ---@tparam Window w
----@tparam string name
----@tparam ?Output output
+---@tparam Tag|table|string t A tag object, string of a name, `{ [1]: string, [2]: (string|Output)? }`, or `{ name: string, output: (string|Output)? }`
 ---@see Window.move_to_tag
-function window_module.move_to_tag(w, name, output) end
+function window_module.move_to_tag(w, t) end
 
 ---Set the specified window's size.
 ---
