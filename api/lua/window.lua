@@ -42,12 +42,10 @@ end
 ---
 ---See `WindowModule.move_to_tag` for examples.
 ---
----@param name string
----@param output Output?
----@overload fun(self: self, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see WindowModule.move_to_tag — The corresponding module function
-function window:move_to_tag(name, output)
-    window_module.move_to_tag(self, name, output)
+function window:move_to_tag(t)
+    window_module.move_to_tag(self, t)
 end
 
 ---Toggle the specified tag for this window.
@@ -55,12 +53,10 @@ end
 ---Note: toggling off all tags currently makes a window not respond to layouting.
 ---
 ---See `WindowModule.toggle_tag` for examples.
----@param name string
----@param output Output?
----@overload fun(self: self, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see WindowModule.toggle_tag — The corresponding module function
-function window:toggle_tag(name, output)
-    window_module.toggle_tag(self, name, output)
+function window:toggle_tag(t)
+    window_module.toggle_tag(self, t)
 end
 
 ---Close this window.
