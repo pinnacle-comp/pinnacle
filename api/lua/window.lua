@@ -3,6 +3,7 @@
 ---@class WindowModule
 local window_module = {}
 
+---@classmod
 ---@class Window
 ---@field private _id integer The internal id of this window
 local window = {}

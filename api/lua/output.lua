@@ -3,6 +3,7 @@
 ---@class OutputModule
 local output_module = {}
 
+---@classmod
 ---@class Output A display.
 ---@field private _name string The name of this output (or rather, of its connector).
 local output = {}

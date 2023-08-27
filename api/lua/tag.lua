@@ -15,6 +15,7 @@ local tag_module = {}
 ---@alias TagTable { [1]: string, [2]: (string|Output)? }
 ---@alias TagTableNamed { name: string, output: (string|Output)? }
 
+---@classmod
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
 local tag = {}

@@ -32,12 +32,14 @@ jobs:
         uses: leafo/gh-actions-luarocks@v4
       - name: Setup dependencies
         run: luarocks install ldoc
+      - name: Generate LDoc compatible code
+        run: git clone https://github.com/Ottatop/ldoc_gen --depth 1 && cd ./ldoc_gen && cargo run -- -p ../api/lua
       - name: Build docs
-        run: cd ./api/lua/doc && ldoc . && cd ../../..
+        run: cd ./.ldoc_gen && cp ../../api/lua/doc/ldoc.css ../../api/lua/doc/config.ld . && ldoc . && cd ../..
       - name: Deploy
         if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./api/lua/doc/doc
+          publish_dir: ./ldoc_gen/.ldoc_gen/doc
           destination_dir: ${{ env.BRANCH_NAME }}
