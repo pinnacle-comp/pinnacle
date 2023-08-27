@@ -40,7 +40,7 @@ jobs:
       - name: Generate LDoc compatible code
         run: cd ./ldoc_gen && cargo run -- -p ../api/lua
       - name: Build docs
-        run: cd ./ldoc_gen/.ldoc_gen && cp ../../api/lua/doc/ldoc.css ../../api/lua/doc/config.ld . && ldoc . && cd ../..
+        run: cd ./ldoc_gen/.ldoc_gen && cp ../../api/lua/ldoc.css ../../api/lua/config.ld . && ldoc . && cd ../..
       - name: Deploy
         if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
         uses: peaceiris/actions-gh-pages@v3
