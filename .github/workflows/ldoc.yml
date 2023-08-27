@@ -24,6 +24,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Get ldoc_gen
+        uses: actions/checkout@v3
+        with:
+          repository: Ottatop/ldoc_gen
+          path: ./ldoc_gen
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v8
         with:
@@ -33,7 +38,7 @@ jobs:
       - name: Setup dependencies
         run: luarocks install ldoc
       - name: Generate LDoc compatible code
-        run: git clone https://github.com/Ottatop/ldoc_gen --depth 1 && cd ./ldoc_gen && cargo run -- -p ../api/lua
+        run: cd ./ldoc_gen && cargo run -- -p ../api/lua
       - name: Build docs
         run: cd ./.ldoc_gen && cp ../../api/lua/doc/ldoc.css ../../api/lua/doc/config.ld . && ldoc . && cd ../..
       - name: Deploy
