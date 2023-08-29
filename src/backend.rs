@@ -3,9 +3,17 @@
 use std::time::Duration;
 
 use smithay::{
-    backend::renderer::element::{
-        default_primary_scanout_output_compare, utils::select_dmabuf_feedback, RenderElementStates,
+    backend::{
+        allocator::dmabuf::Dmabuf,
+        renderer::{
+            element::{
+                default_primary_scanout_output_compare, utils::select_dmabuf_feedback,
+                RenderElementStates,
+            },
+            ImportDma,
+        },
     },
+    delegate_dmabuf,
     desktop::{
         layer_map_for_output,
         utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
@@ -13,16 +21,22 @@ use smithay::{
     },
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    wayland::fractional_scale::with_fractional_scale,
+    wayland::{
+        dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError},
+        fractional_scale::with_fractional_scale,
+    },
 };
 
-use crate::{state::SurfaceDmabufFeedback, window::WindowElement};
+use crate::{
+    state::{Backend, State, SurfaceDmabufFeedback},
+    window::WindowElement,
+};
 
 pub mod udev;
 pub mod winit;
 
 /// A trait defining common methods for each available backend: winit and tty-udev
-pub trait Backend: 'static {
+pub trait BackendData: 'static {
     fn seat_name(&self) -> String;
     fn reset_buffers(&mut self, output: &Output);
 
@@ -111,3 +125,40 @@ pub fn post_repaint(
         }
     }
 }
+
+impl DmabufHandler for State {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        match &mut self.backend {
+            Backend::Winit(winit) => &mut winit.dmabuf_state.0,
+            Backend::Udev(udev) => {
+                &mut udev
+                    .dmabuf_state
+                    .as_mut()
+                    .expect("udev had no dmabuf state")
+                    .0
+            }
+        }
+    }
+
+    fn dmabuf_imported(
+        &mut self,
+        _global: &DmabufGlobal,
+        dmabuf: Dmabuf,
+    ) -> Result<(), ImportError> {
+        match &mut self.backend {
+            Backend::Winit(winit) => winit
+                .backend
+                .renderer()
+                .import_dmabuf(&dmabuf, None)
+                .map(|_| ())
+                .map_err(|_| ImportError::Failed),
+            Backend::Udev(udev) => udev
+                .gpu_manager
+                .single_renderer(&udev.primary_gpu)
+                .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
+                .map(|_| ())
+                .map_err(|_| ImportError::Failed),
+        }
+    }
+}
+delegate_dmabuf!(State);

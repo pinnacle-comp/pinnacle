@@ -8,7 +8,6 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     state::{State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
@@ -18,7 +17,7 @@ use crate::{
 
 // -------------------------------------------
 
-impl<B: Backend> State<B> {
+impl State {
     /// Compute the positions and sizes of tiled windows on
     /// `output` according to the provided [`Layout`].
     ///
@@ -442,7 +441,7 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
     }
 }
 
-impl<B: Backend> State<B> {
+impl State {
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
         let mut elems = self
             .windows

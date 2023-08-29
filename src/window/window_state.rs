@@ -12,7 +12,6 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     state::{State, WithState},
     tag::Tag,
 };
@@ -30,7 +29,7 @@ impl WindowId {
     }
 
     /// Get the window that has this WindowId.
-    pub fn window<B: Backend>(&self, state: &State<B>) -> Option<WindowElement> {
+    pub fn window(&self, state: &State) -> Option<WindowElement> {
         state
             .windows
             .iter()

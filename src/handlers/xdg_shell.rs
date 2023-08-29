@@ -27,13 +27,12 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     focus::FocusTarget,
     state::{State, WithState},
     window::{window_state::LocationRequestState, WindowElement, BLOCKER_COUNTER},
 };
 
-impl<B: Backend> XdgShellHandler for State<B> {
+impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
         &mut self.xdg_shell_state
     }
@@ -389,4 +388,4 @@ impl<B: Backend> XdgShellHandler for State<B> {
 
     // TODO: impl the rest of the fns in XdgShellHandler
 }
-delegate_xdg_shell!(@<B: Backend> State<B>);
+delegate_xdg_shell!(State);
