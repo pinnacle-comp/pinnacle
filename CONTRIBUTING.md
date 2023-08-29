@@ -47,15 +47,6 @@ as well as documentation that follows the following format:
     > ---@and_other_appropriate_annotations
     > function thingy(param1, param2, ...) end
     > ````
-    - You will also need to duplicate documentation for LDoc. This is unfortunate, but Lua LS documentation
-    exporting *really* isn't that great, and I haven't gotten around to finding a way to make it better.
-        - Place dummy functions of the same names in a respective file in the [`api/lua/doc`](api/lua/doc) folder.
-        - You can follow the above format with some minor changes:
-            - Replace `@param` with `@tparam` and swap the parameter name and type.
-            - Replace `@return` with `@treturn`.
-            - Instead of an H3 markdown section for examples, place them in `@usage` without the fences
-            (you may need to add a space between the beginning 3 dashes and any start-of-the-line comments).
-        - LDoc documentation will then be auto-generated on pull request.
 - Format Rust code using [rustfmt](https://github.com/rust-lang/rustfmt) and the provided
 [rustfmt.toml](rustfmt.toml) file.
 - Format Lua code with [StyLua](https://github.com/JohnnyMorganz/StyLua) and the provided
@@ -132,7 +123,7 @@ This includes the following:
 
 > #### Important:
 > **If you have a log, config, or similar that is over 50 lines, please either upload it to
-> a place like [pastebin](https://pastebin.com/) and link to it or place the text in the
+> a place like [pastebin](https://pastebin.com/) and link to it, attach a file, or place the text in the
 > `<details>` tag, as shown below. The whitespace lines and indentation are important.**
 > This helps both desktop and mobile users not have to scroll several miles to reach the next comment.
 > > ````md
@@ -170,8 +161,7 @@ If there are other labels you feel are appropriate, like https://github.com/Otta
 for XWayland issues, add them as well. These labels help us filter out issues reliably.
 
 ### 5. Smash that `Submit new issue` button!
-Congrats! You've helped Pinnacle move one step closer towards the summit!
-Don't forget to ~~like and comment~~ star and watch the repo! :thumbsup:
+We'll get to work on it soon (hopefully).
 
 ## Questions
 Have a question about the future of the project? Perhaps you're writing your own
