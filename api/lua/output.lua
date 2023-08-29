@@ -1,11 +1,34 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Output management.
+---
+---An output is what you would call a monitor. It presents windows, your cursor, and other UI elements.
+---
+---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---@class OutputModule
 local output_module = {}
 
+---An output object.
+---
+---This is a representation of your actual output to the config process.
+---It serves to make it easier to deal with your outputs, defining methods for getting properties and
+---helpers for things like positioning multiple monitors.
+---
+---This can be retrieved through that various `get` functions in the `OutputModule`.
+---@classmod
 ---@class Output A display.
 ---@field private _name string The name of this output (or rather, of its connector).
 local output = {}
+
+---@param params Output|string
+---@return Output|nil
+local function create_output_from_params(params)
+    if type(params) == "table" then
+        return params
+    end
+
+    return output_module.get_by_name(params --[[@as string]])
+end
 
 ---Create a new output object from a name.
 ---The name is the unique identifier for each output.
@@ -440,10 +463,16 @@ end
 ---------Fully-qualified functions
 
 ---Get the specified output's make.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return string|nil
 ---@see Output.make — The corresponding object method
 function output_module.make(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -454,10 +483,16 @@ function output_module.make(op)
 end
 
 ---Get the specified output's model.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return string|nil
 ---@see Output.model — The corresponding object method
 function output_module.model(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -468,10 +503,16 @@ function output_module.model(op)
 end
 
 ---Get the specified output's location in the global space, in pixels.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return { x: integer, y: integer }|nil
 ---@see Output.loc — The corresponding object method
 function output_module.loc(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -486,10 +527,16 @@ function output_module.loc(op)
 end
 
 ---Get the specified output's resolution in pixels.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return { w: integer, h: integer }|nil
 ---@see Output.res — The corresponding object method
 function output_module.res(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -505,10 +552,16 @@ end
 
 ---Get the specified output's refresh rate in millihertz.
 ---For example, 60Hz will be returned as 60000.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return integer|nil
 ---@see Output.refresh_rate — The corresponding object method
 function output_module.refresh_rate(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -519,10 +572,16 @@ function output_module.refresh_rate(op)
 end
 
 ---Get the specified output's physical size in millimeters.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return { w: integer, h: integer }|nil
 ---@see Output.physical_size — The corresponding object method
 function output_module.physical_size(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -537,10 +596,16 @@ function output_module.physical_size(op)
 end
 
 ---Get whether or not the specified output is focused. This is currently defined as having the cursor on it.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@return boolean|nil
 ---@see Output.focused — The corresponding object method
 function output_module.focused(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return nil
+    end
+
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -551,20 +616,33 @@ function output_module.focused(op)
 end
 
 ---Get the specified output's tags.
----@param op Output
+---@param op Output|string The name of the output or an output object.
+---@return Tag[]
 ---@see TagModule.get_on_output — The called function
 ---@see Output.tags — The corresponding object method
 function output_module.tags(op)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return {}
+    end
+
     return require("tag").get_on_output(op)
 end
 
 ---Add tags to the specified output.
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@param ... string The names of the tags you want to add. You can also pass in a table.
----@overload fun(op: Output, tag_names: string[])
+---@overload fun(op: Output|string, tag_names: string[])
 ---@see TagModule.add — The called function
 ---@see Output.add_tags — The corresponding object method
 function output_module.add_tags(op, ...)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return
+    end
+
     require("tag").add(op, ...)
 end
 
@@ -588,9 +666,15 @@ end
 ---output.set_loc(dp1, { x = 0, y = 0 })
 ---output.set_loc(dp2, { x = 2560, y = 1440 - 1080 })
 ---```
----@param op Output
+---@param op Output|string The name of the output or an output object.
 ---@param loc { x: integer?, y: integer? }
 function output_module.set_loc(op, loc)
+    local op = create_output_from_params(op)
+
+    if op == nil then
+        return
+    end
+
     SendMsg({
         SetOutputLocation = {
             output_name = op:name(),

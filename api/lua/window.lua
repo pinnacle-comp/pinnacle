@@ -1,8 +1,18 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Window management.
+---
+---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
+---moving them between tags, and various other actions.
 ---@class WindowModule
 local window_module = {}
 
+---A window object.
+---
+---This is a representation of an application window to the config process.
+---
+---You can retrieve windows through the various `get` function in the `WindowModule`.
+---@classmod
 ---@class Window
 ---@field private _id integer The internal id of this window
 local window = {}
@@ -30,12 +40,8 @@ end
 
 ---Set this window's size.
 ---
----### Examples
----```lua
----window.get_focused():set_size({ w = 500, h = 500 }) -- make the window square and 500 pixels wide/tall
----window.get_focused():set_size({ h = 300 })          -- keep the window's width but make it 300 pixels tall
----window.get_focused():set_size({})                   -- do absolutely nothing useful
----```
+---See `WindowModule.set_size` for examples.
+---
 ---@param size { w: integer?, h: integer? }
 ---@see WindowModule.set_size — The corresponding module function
 function window:set_size(size)
@@ -44,36 +50,23 @@ end
 
 ---Move this window to a tag, removing all other ones.
 ---
----### Example
----```lua
------ With the focused window on tags 1, 2, 3, and 4...
----window.get_focused():move_to_tag("5")
------ ...will make the window only appear on tag 5.
----```
----@param name string
----@param output Output?
----@overload fun(self: self, t: Tag)
+---See `WindowModule.move_to_tag` for examples.
+---
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see WindowModule.move_to_tag — The corresponding module function
-function window:move_to_tag(name, output)
-    window_module.move_to_tag(self, name, output)
+function window:move_to_tag(t)
+    window_module.move_to_tag(self, t)
 end
 
 ---Toggle the specified tag for this window.
 ---
----Note: toggling off all tags currently makes a window not response to layouting.
+---Note: toggling off all tags currently makes a window not respond to layouting.
 ---
----### Example
----```lua
------ With the focused window only on tag 1...
----window.get_focused():toggle_tag("2")
------ ...will also make the window appear on tag 2.
----```
----@param name string
----@param output Output?
----@overload fun(self: self, t: Tag)
+---See `WindowModule.toggle_tag` for examples.
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see WindowModule.toggle_tag — The corresponding module function
-function window:toggle_tag(name, output)
-    window_module.toggle_tag(self, name, output)
+function window:toggle_tag(t)
+    window_module.toggle_tag(self, t)
 end
 
 ---Close this window.
@@ -81,10 +74,7 @@ end
 ---This only sends a close *event* to the window and is the same as just clicking the X button in the titlebar.
 ---This will trigger save prompts in applications like GIMP.
 ---
----### Example
----```lua
----window.get_focused():close() -- close the currently focused window
----```
+---See `WindowModule.close` for examples.
 ---@see WindowModule.close — The corresponding module function
 function window:close()
     window_module.close(self)
@@ -92,12 +82,7 @@ end
 
 ---Get this window's size.
 ---
----### Example
----```lua
------ With a 4K monitor, given a focused fullscreen window...
----local size = window.get_focused():size()
------ ...should have size equal to `{ w = 3840, h = 2160 }`.
----```
+---See `WindowModule.size` for examples.
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
 ---@see WindowModule.size — The corresponding module function
 function window:size()
@@ -107,16 +92,12 @@ end
 ---Get this window's location in the global space.
 ---
 ---Think of your monitors as being laid out on a big sheet.
----The top left of the sheet if you trim it down is (0, 0).
----The location of this window is relative to that point.
+---The location of this window is relative inside the sheet.
 ---
----### Example
----```lua
------ With two 1080p monitors side by side and set up as such,
------ if a window is fullscreen on the right one...
----local loc = that_window:loc()
------ ...should have loc equal to `{ x = 1920, y = 0 }`.
----```
+---If you don't set the location of your monitors, they will start at (0, 0)
+---and extend rightward with their tops aligned.
+---
+---See `WindowModule.loc` for examples.
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
 ---@see WindowModule.loc — The corresponding module function
 function window:loc()
@@ -125,12 +106,7 @@ end
 
 ---Get this window's class. This is usually the name of the application.
 ---
----### Example
----```lua
------ With Alacritty focused...
----print(window.get_focused():class())
------ ...should print "Alacritty".
----```
+---See `WindowModule.class` for examples.
 ---@return string|nil class This window's class, or nil if it doesn't exist.
 ---@see WindowModule.class — The corresponding module function
 function window:class()
@@ -139,12 +115,7 @@ end
 
 ---Get this window's title.
 ---
----### Example
----```lua
------ With Alacritty focused...
----print(window.get_focused():title())
------ ...should print the directory Alacritty is in or what it's running (what's in its title bar).
----```
+---See `WindowModule.title` for examples.
 ---@return string|nil title This window's title, or nil if it doesn't exist.
 ---@see WindowModule.title — The corresponding module function
 function window:title()
@@ -204,10 +175,7 @@ end
 
 ---Get whether or not this window is focused.
 ---
----### Example
----```lua
----print(window.get_focused():focused()) -- should print `true`.
----```
+---See `WindowModule.focused` for examples.
 ---@return boolean|nil
 ---@see WindowModule.focused — The corresponding module function
 function window:focused()
@@ -269,87 +237,50 @@ end
 function window_module.get_all()
     local window_ids =
         Request("GetWindows").RequestResponse.response.Windows.window_ids
+
     ---@type Window[]
     local windows = {}
+
     for _, window_id in pairs(window_ids) do
         table.insert(windows, create_window(window_id))
     end
+
     return windows
 end
 
 ---Toggle the tag with the given name and (optional) output for the specified window.
----You can also provide a tag object instead of a name and output.
+---
 ---@param w Window
----@param name string
----@param output Output?
----@overload fun(w: Window, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Window.toggle_tag — The corresponding object method
-function window_module.toggle_tag(w, name, output)
-    if type(name) == "table" then
+function window_module.toggle_tag(w, t)
+    local t = require("tag").create_tag_from_params(t)
+
+    if t then
         SendMsg({
             ToggleTagOnWindow = {
                 window_id = w:id(),
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = require("tag").get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                ToggleTagOnWindow = {
-                    window_id = w:id(),
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 
 ---Move the specified window to the tag with the given name and (optional) output.
----You can also provide a tag object instead of a name and output.
+---
 ---@param w Window
----@param name string
----@param output Output?
----@overload fun(w: Window, t: Tag)
+---@param t Tag|TagTable|TagTableNamed|string
 ---@see Window.move_to_tag — The corresponding object method
-function window_module.move_to_tag(w, name, output)
-    if type(name) == "table" then
+function window_module.move_to_tag(w, t)
+    local t = require("tag").create_tag_from_params(t)
+
+    if t then
         SendMsg({
             MoveWindowToTag = {
                 window_id = w:id(),
-                tag_id = name--[[@as Tag]]:id(),
+                tag_id = t:id(),
             },
         })
-        return
-    end
-
-    local output = output or require("output").get_focused()
-
-    if output == nil then
-        return
-    end
-
-    local tags = require("tag").get_by_name(name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == output:name() then
-            SendMsg({
-                MoveWindowToTag = {
-                    window_id = w:id(),
-                    tag_id = t:id(),
-                },
-            })
-            return
-        end
     end
 end
 
@@ -475,8 +406,10 @@ end
 ---Get the specified window's location in the global space.
 ---
 ---Think of your monitors as being laid out on a big sheet.
----The top left of the sheet if you trim it down is (0, 0).
----The location of this window is relative to that point.
+---The location of this window is relative inside the sheet.
+---
+---If you don't set the location of your monitors, they will start at (0, 0)
+---and extend rightward with their tops aligned.
 ---
 ---### Example
 ---```lua
