@@ -5,6 +5,7 @@ local msgpack = require("msgpack")
 
 local SOCKET_PATH = os.getenv("PINNACLE_SOCKET") or "/tmp/pinnacle_socket"
 
+---@nodoc
 ---From https://gist.github.com/stuby/5445834#file-rprint-lua
 ---rPrint(struct, [limit], [indent])   Recursively print arbitrary data.
 ---	Set limit (default 100) to stanch infinite loops.
@@ -71,10 +72,8 @@ local function read_exact(socket_fd, count)
     return data
 end
 
----@class Pinnacle
----The main Pinnacle table, where all of the config options come from.
----
----While you *can* import the fields directly, all config must be in the `setup` function, so you might as well just use the provided table. The ability to directly `require` fields may be dropped in the future.
+---The entry point to all configuration.
+---@class PinnacleModule
 local pinnacle = {
     ---Key and mouse binds
     input = require("input"),
@@ -94,8 +93,8 @@ function pinnacle.quit()
 end
 
 ---Configure Pinnacle. You should put mostly eveything into the config_func to avoid invalid state.
----The function takes one argument: the Pinnacle table, which is how you'll access all of the available config options.
----@param config_func fun(pinnacle: Pinnacle)
+---The function takes one argument: the `PinnacleModule` table, which is how you'll access all of the available config options.
+---@param config_func fun(pinnacle: PinnacleModule)
 function pinnacle.setup(config_func)
     ---@type integer
     local socket_fd = assert(
