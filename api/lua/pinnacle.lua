@@ -72,8 +72,8 @@ local function read_exact(socket_fd, count)
     return data
 end
 
----The entry point to all configuration.
 ---@class PinnacleModule
+---The entry point to all configuration.
 local pinnacle = {
     ---Key and mouse binds
     input = require("input"),
