@@ -16,7 +16,6 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     state::{State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
@@ -83,12 +82,12 @@ impl<S: SeatHandler> ResizeSurfaceGrab<S> {
     }
 }
 
-impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
+impl PointerGrab<State> for ResizeSurfaceGrab<State> {
     fn motion(
         &mut self,
-        data: &mut State<B>,
-        handle: &mut PointerInnerHandle<'_, State<B>>,
-        _focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &smithay::input::pointer::MotionEvent,
     ) {
         handle.motion(data, None, event);
@@ -180,9 +179,9 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
 
     fn relative_motion(
         &mut self,
-        data: &mut State<B>,
-        handle: &mut PointerInnerHandle<'_, State<B>>,
-        focus: Option<(<State<B> as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         handle.relative_motion(data, focus, event);
@@ -190,8 +189,8 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
 
     fn button(
         &mut self,
-        data: &mut State<B>,
-        handle: &mut PointerInnerHandle<'_, State<B>>,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
         event: &ButtonEvent,
     ) {
         handle.button(data, event);
@@ -236,14 +235,14 @@ impl<B: Backend> PointerGrab<State<B>> for ResizeSurfaceGrab<State<B>> {
 
     fn axis(
         &mut self,
-        data: &mut State<B>,
-        handle: &mut PointerInnerHandle<'_, State<B>>,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
         details: AxisFrame,
     ) {
         handle.axis(data, details);
     }
 
-    fn start_data(&self) -> &GrabStartData<State<B>> {
+    fn start_data(&self) -> &GrabStartData<State> {
         &self.start_data
     }
 }
@@ -281,7 +280,7 @@ impl ResizeSurfaceState {
     }
 }
 
-pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> Option<()> {
+pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
     let window = state.window_for_surface(surface)?;
     let mut window_loc = state.space.element_location(&window)?;
     let geometry = window.geometry();
@@ -350,10 +349,10 @@ pub fn handle_commit<B: Backend>(state: &mut State<B>, surface: &WlSurface) -> O
     Some(())
 }
 
-pub fn resize_request_client<B: Backend>(
-    state: &mut State<B>,
+pub fn resize_request_client(
+    state: &mut State,
     surface: &WlSurface,
-    seat: &Seat<State<B>>,
+    seat: &Seat<State>,
     serial: smithay::utils::Serial,
     edges: self::ResizeEdge,
     button_used: u32,
@@ -399,10 +398,10 @@ pub fn resize_request_client<B: Backend>(
     }
 }
 
-pub fn resize_request_server<B: Backend>(
-    state: &mut State<B>,
+pub fn resize_request_server(
+    state: &mut State,
     surface: &WlSurface,
-    seat: &Seat<State<B>>,
+    seat: &Seat<State>,
     serial: smithay::utils::Serial,
     edges: self::ResizeEdge,
     button_used: u32,

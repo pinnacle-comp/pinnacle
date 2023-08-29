@@ -13,7 +13,7 @@ use smithay::{
     wayland::seat::WaylandFocus,
 };
 
-use crate::{backend::Backend, state::State, window::WindowElement};
+use crate::{state::State, window::WindowElement};
 
 #[derive(Default)]
 pub struct FocusState {
@@ -82,8 +82,8 @@ impl TryFrom<FocusTarget> for WlSurface {
     }
 }
 
-impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
-    fn enter(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+impl PointerTarget<State> for FocusTarget {
+    fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         // tracing::debug!("Pointer enter on {self:?}");
         match self {
             FocusTarget::Window(window) => PointerTarget::enter(window, seat, data, event),
@@ -94,7 +94,7 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
         }
     }
 
-    fn motion(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+    fn motion(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         match self {
             FocusTarget::Window(window) => PointerTarget::motion(window, seat, data, event),
             FocusTarget::Popup(popup) => {
@@ -106,8 +106,8 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
 
     fn relative_motion(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         match self {
@@ -125,8 +125,8 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
 
     fn button(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         event: &smithay::input::pointer::ButtonEvent,
     ) {
         match self {
@@ -140,8 +140,8 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
 
     fn axis(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         frame: smithay::input::pointer::AxisFrame,
     ) {
         match self {
@@ -153,8 +153,8 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
 
     fn leave(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         serial: smithay::utils::Serial,
         time: u32,
     ) {
@@ -169,11 +169,11 @@ impl<B: Backend> PointerTarget<State<B>> for FocusTarget {
     }
 }
 
-impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
+impl KeyboardTarget<State> for FocusTarget {
     fn enter(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         keys: Vec<smithay::input::keyboard::KeysymHandle<'_>>,
         serial: smithay::utils::Serial,
     ) {
@@ -188,7 +188,7 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
         }
     }
 
-    fn leave(&self, seat: &Seat<State<B>>, data: &mut State<B>, serial: smithay::utils::Serial) {
+    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: smithay::utils::Serial) {
         match self {
             FocusTarget::Window(window) => KeyboardTarget::leave(window, seat, data, serial),
             FocusTarget::Popup(popup) => {
@@ -200,8 +200,8 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
 
     fn key(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         key: smithay::input::keyboard::KeysymHandle<'_>,
         state: smithay::backend::input::KeyState,
         serial: smithay::utils::Serial,
@@ -222,8 +222,8 @@ impl<B: Backend> KeyboardTarget<State<B>> for FocusTarget {
 
     fn modifiers(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         modifiers: smithay::input::keyboard::ModifiersState,
         serial: smithay::utils::Serial,
     ) {

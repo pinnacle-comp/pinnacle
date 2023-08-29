@@ -25,13 +25,12 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, WithState},
     window::{window_state::FloatingOrTiled, WindowBlocker, WindowElement, BLOCKER_COUNTER},
 };
 
-impl<B: Backend> XwmHandler for CalloopData<B> {
+impl XwmHandler for CalloopData {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
         self.state.xwm.as_mut().expect("xwm not in state")
     }

@@ -13,6 +13,7 @@ use smithay::{
     output::Output,
     reexports::{
         calloop::Interest,
+        wayland_protocols::wp::primary_selection::zv1::server::zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1,
         wayland_server::{
             protocol::{
                 wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
@@ -47,17 +48,16 @@ use smithay::{
 };
 
 use crate::{
-    backend::Backend,
     focus::FocusTarget,
     state::{CalloopData, ClientState, State, WithState},
     window::{window_state::LocationRequestState, WindowElement},
 };
 
-impl<B: Backend> BufferHandler for State<B> {
+impl BufferHandler for State {
     fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {}
 }
 
-impl<B: Backend> CompositorHandler for State<B> {
+impl CompositorHandler for State {
     fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.compositor_state
     }
@@ -97,10 +97,10 @@ impl<B: Backend> CompositorHandler for State<B> {
     fn commit(&mut self, surface: &WlSurface) {
         // tracing::debug!("commit");
 
-        X11Wm::commit_hook::<CalloopData<B>>(surface);
+        X11Wm::commit_hook::<CalloopData>(surface);
 
         utils::on_commit_buffer_handler::<Self>(surface);
-        self.backend_data.early_import(surface);
+        self.backend.early_import(surface);
 
         if !compositor::is_sync_subsurface(surface) {
             let mut root = surface.clone();
@@ -141,9 +141,9 @@ impl<B: Backend> CompositorHandler for State<B> {
         panic!("Unknown client data type");
     }
 }
-delegate_compositor!(@<B: Backend> State<B>);
+delegate_compositor!(State);
 
-fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B>) {
+fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
     if let Some(window) = state.window_for_surface(surface) {
         if let WindowElement::Wayland(window) = &window {
             let initial_configure_sent = compositor::with_states(surface, |states| {
@@ -211,7 +211,7 @@ fn ensure_initial_configure<B: Backend>(surface: &WlSurface, state: &mut State<B
     }
 }
 
-impl<B: Backend> ClientDndGrabHandler for State<B> {
+impl ClientDndGrabHandler for State {
     fn started(
         &mut self,
         _source: Option<WlDataSource>,
@@ -226,9 +226,9 @@ impl<B: Backend> ClientDndGrabHandler for State<B> {
     }
 }
 
-impl<B: Backend> ServerDndGrabHandler for State<B> {}
+impl ServerDndGrabHandler for State {}
 
-impl<B: Backend> DataDeviceHandler for State<B> {
+impl DataDeviceHandler for State {
     type SelectionUserData = ();
 
     fn data_device_state(&self) -> &DataDeviceState {
@@ -268,20 +268,16 @@ impl<B: Backend> DataDeviceHandler for State<B> {
         }
     }
 }
-delegate_data_device!(@<B: Backend> State<B>);
+delegate_data_device!(State);
 
-impl<B: Backend> PrimarySelectionHandler for State<B> {
+impl PrimarySelectionHandler for State {
     type SelectionUserData = ();
 
     fn primary_selection_state(&self) -> &PrimarySelectionState {
         &self.primary_selection_state
     }
 
-    fn new_selection(
-        &mut self,
-        source: Option<smithay::reexports::wayland_protocols::wp::primary_selection::zv1::server::zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1>,
-        _seat: Seat<Self>,
-    ) {
+    fn new_selection(&mut self, source: Option<ZwpPrimarySelectionSourceV1>, _seat: Seat<Self>) {
         if let Some(xwm) = self.xwm.as_mut() {
             if let Some(source) = source {
                 if let Ok(Err(err)) = primary_selection::with_source_metadata(&source, |metadata| {
@@ -314,9 +310,9 @@ impl<B: Backend> PrimarySelectionHandler for State<B> {
         }
     }
 }
-delegate_primary_selection!(@<B: Backend> State<B>);
+delegate_primary_selection!(State);
 
-impl<B: Backend> SeatHandler for State<B> {
+impl SeatHandler for State {
     type KeyboardFocus = FocusTarget;
     type PointerFocus = FocusTarget;
 
@@ -344,20 +340,20 @@ impl<B: Backend> SeatHandler for State<B> {
         set_primary_focus(&self.display_handle, seat, focus_client);
     }
 }
-delegate_seat!(@<B: Backend> State<B>);
+delegate_seat!(State);
 
-impl<B: Backend> ShmHandler for State<B> {
+impl ShmHandler for State {
     fn shm_state(&self) -> &ShmState {
         &self.shm_state
     }
 }
-delegate_shm!(@<B: Backend> State<B>);
+delegate_shm!(State);
 
-delegate_output!(@<B: Backend> State<B>);
+delegate_output!(State);
 
-delegate_viewporter!(@<B: Backend> State<B>);
+delegate_viewporter!(State);
 
-impl<B: Backend> FractionalScaleHandler for State<B> {
+impl FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
         // ripped straight from anvil
 
@@ -406,13 +402,13 @@ impl<B: Backend> FractionalScaleHandler for State<B> {
     }
 }
 
-delegate_fractional_scale!(@<B: Backend> State<B>);
+delegate_fractional_scale!(State);
 
-delegate_relative_pointer!(@<B: Backend> State<B>);
+delegate_relative_pointer!(State);
 
-delegate_presentation!(@<B: Backend> State<B>);
+delegate_presentation!(State);
 
-impl<B: Backend> WlrLayerShellHandler for State<B> {
+impl WlrLayerShellHandler for State {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {
         &mut self.layer_shell_state
     }
@@ -473,4 +469,4 @@ impl<B: Backend> WlrLayerShellHandler for State<B> {
         }
     }
 }
-delegate_layer_shell!(@<B: Backend> State<B>);
+delegate_layer_shell!(State);

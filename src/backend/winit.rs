@@ -4,7 +4,6 @@ use std::{ffi::OsString, time::Duration};
 
 use smithay::{
     backend::{
-        allocator::dmabuf::Dmabuf,
         egl::EGLDevice,
         renderer::{
             damage::{self, OutputDamageTracker},
@@ -13,7 +12,6 @@ use smithay::{
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
-    delegate_dmabuf,
     desktop::{layer_map_for_output, utils::send_frames_surface_tree},
     input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
@@ -27,29 +25,26 @@ use smithay::{
     },
     utils::{IsAlive, Transform},
     wayland::{
-        dmabuf::{
-            DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
-            ImportError,
-        },
+        dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::InputMethodSeat,
     },
 };
 
 use crate::{
     render::pointer::PointerElement,
-    state::{take_presentation_feedback, CalloopData, State},
+    state::{take_presentation_feedback, Backend, CalloopData, State},
 };
 
-use super::Backend;
+use super::BackendData;
 
-pub struct WinitData {
+pub struct Winit {
     pub backend: WinitGraphicsBackend<GlesRenderer>,
     pub damage_tracker: OutputDamageTracker,
     pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     pub full_redraw: u8,
 }
 
-impl Backend for WinitData {
+impl BackendData for Winit {
     fn seat_name(&self) -> String {
         "winit".to_string()
     }
@@ -61,31 +56,11 @@ impl Backend for WinitData {
     fn early_import(&mut self, _surface: &WlSurface) {}
 }
 
-impl DmabufHandler for State<WinitData> {
-    fn dmabuf_state(&mut self) -> &mut DmabufState {
-        &mut self.backend_data.dmabuf_state.0
-    }
-
-    fn dmabuf_imported(
-        &mut self,
-        _global: &DmabufGlobal,
-        dmabuf: Dmabuf,
-    ) -> Result<(), ImportError> {
-        self.backend_data
-            .backend
-            .renderer()
-            .import_dmabuf(&dmabuf, None)
-            .map(|_| ())
-            .map_err(|_| ImportError::Failed)
-    }
-}
-delegate_dmabuf!(State<WinitData>);
-
 /// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<CalloopData<WinitData>> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
 
-    let mut display: Display<State<WinitData>> = Display::new()?;
+    let mut display: Display<State> = Display::new()?;
     let display_handle = display.handle();
 
     let evt_loop_handle = event_loop.handle();
@@ -111,7 +86,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     let output = Output::new("Pinnacle window".to_string(), physical_properties);
 
-    output.create_global::<State<WinitData>>(&display_handle);
+    output.create_global::<State>(&display_handle);
 
     output.change_current_state(
         Some(mode),
@@ -151,10 +126,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         Some(default_feedback) => {
             let mut dmabuf_state = DmabufState::new();
             let dmabuf_global = dmabuf_state
-                .create_global_with_default_feedback::<State<WinitData>>(
-                    &display_handle,
-                    &default_feedback,
-                );
+                .create_global_with_default_feedback::<State>(&display_handle, &default_feedback);
             (dmabuf_state, dmabuf_global, Some(default_feedback))
         }
         None => {
@@ -164,7 +136,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                 .collect::<Vec<_>>();
             let mut dmabuf_state = DmabufState::new();
             let dmabuf_global =
-                dmabuf_state.create_global::<State<WinitData>>(&display_handle, dmabuf_formats);
+                dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);
             (dmabuf_state, dmabuf_global, None)
         }
     };
@@ -177,13 +149,13 @@ pub fn run_winit() -> anyhow::Result<()> {
         tracing::info!("EGL hardware-acceleration enabled");
     }
 
-    let mut state = State::<WinitData>::init(
-        WinitData {
+    let mut state = State::init(
+        Backend::Winit(Winit {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
             dmabuf_state,
             full_redraw: 0,
-        },
+        }),
         &mut display,
         event_loop.get_signal(),
         evt_loop_handle,
@@ -191,9 +163,11 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     state.focus_state.focused_output = Some(output.clone());
 
+    let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+
     state
         .shm_state
-        .update_formats(state.backend_data.backend.renderer().shm_formats());
+        .update_formats(backend.backend.renderer().shm_formats());
 
     state.space.map_output(&output, (0, 0));
 
@@ -258,11 +232,12 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 pointer_element.set_status(state.cursor_status.clone());
 
-                let full_redraw = &mut state.backend_data.full_redraw;
+                let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+                let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);
 
                 let output_render_elements = crate::render::generate_render_elements(
-                    state.backend_data.backend.renderer(),
+                    backend.backend.renderer(),
                     &state.space,
                     &output,
                     state.seat.input_method(),
@@ -274,19 +249,16 @@ pub fn run_winit() -> anyhow::Result<()> {
                     &state.focus_state.focus_stack,
                 );
 
-                let render_res = state.backend_data.backend.bind().and_then(|_| {
+                let render_res = backend.backend.bind().and_then(|_| {
                     let age = if *full_redraw > 0 {
                         0
                     } else {
-                        state.backend_data.backend.buffer_age().unwrap_or(0)
+                        backend.backend.buffer_age().unwrap_or(0)
                     };
 
-                    let renderer = state.backend_data.backend.renderer();
+                    let renderer = backend.backend.renderer();
 
-                    // render_output()
-
-                    state
-                        .backend_data
+                    backend
                         .damage_tracker
                         .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
                         .map_err(|err| match err {
@@ -299,16 +271,12 @@ pub fn run_winit() -> anyhow::Result<()> {
                     Ok(render_output_result) => {
                         let has_rendered = render_output_result.damage.is_some();
                         if let Some(damage) = render_output_result.damage {
-                            if let Err(err) = state.backend_data.backend.submit(Some(&damage)) {
+                            if let Err(err) = backend.backend.submit(Some(&damage)) {
                                 tracing::warn!("{}", err);
                             }
                         }
 
-                        state
-                            .backend_data
-                            .backend
-                            .window()
-                            .set_cursor_visible(cursor_visible);
+                        backend.backend.window().set_cursor_visible(cursor_visible);
 
                         let time = state.clock.now();
 

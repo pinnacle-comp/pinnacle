@@ -32,10 +32,7 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::{
-    backend::Backend,
-    state::{State, WithState},
-};
+use crate::state::{State, WithState};
 
 use self::window_state::{LocationRequestState, WindowElementState};
 
@@ -248,7 +245,7 @@ impl WindowElement {
     /// Get the output this window is on.
     ///
     /// This method gets the first tag the window has and returns its output.
-    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+    pub fn output(&self, state: &State) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
     }
 
@@ -278,8 +275,8 @@ impl IsAlive for WindowElement {
     }
 }
 
-impl<B: Backend> PointerTarget<State<B>> for WindowElement {
-    fn enter(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+impl PointerTarget<State> for WindowElement {
+    fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::enter(window, seat, data, event),
@@ -287,7 +284,7 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
         }
     }
 
-    fn motion(&self, seat: &Seat<State<B>>, data: &mut State<B>, event: &MotionEvent) {
+    fn motion(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::motion(window, seat, data, event),
@@ -297,8 +294,8 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
 
     fn relative_motion(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         // TODO: ssd
@@ -314,8 +311,8 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
 
     fn button(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         event: &smithay::input::pointer::ButtonEvent,
     ) {
         // TODO: ssd
@@ -325,7 +322,7 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
         }
     }
 
-    fn axis(&self, seat: &Seat<State<B>>, data: &mut State<B>, frame: AxisFrame) {
+    fn axis(&self, seat: &Seat<State>, data: &mut State, frame: AxisFrame) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::axis(window, seat, data, frame),
@@ -333,7 +330,7 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
         }
     }
 
-    fn leave(&self, seat: &Seat<State<B>>, data: &mut State<B>, serial: Serial, time: u32) {
+    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial, time: u32) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
@@ -344,11 +341,11 @@ impl<B: Backend> PointerTarget<State<B>> for WindowElement {
     }
 }
 
-impl<B: Backend> KeyboardTarget<State<B>> for WindowElement {
+impl KeyboardTarget<State> for WindowElement {
     fn enter(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         keys: Vec<KeysymHandle<'_>>,
         serial: Serial,
     ) {
@@ -360,7 +357,7 @@ impl<B: Backend> KeyboardTarget<State<B>> for WindowElement {
         }
     }
 
-    fn leave(&self, seat: &Seat<State<B>>, data: &mut State<B>, serial: Serial) {
+    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial) {
         match self {
             WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, data, serial),
             WindowElement::X11(surface) => KeyboardTarget::leave(surface, seat, data, serial),
@@ -369,8 +366,8 @@ impl<B: Backend> KeyboardTarget<State<B>> for WindowElement {
 
     fn key(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         key: KeysymHandle<'_>,
         state: KeyState,
         serial: Serial,
@@ -388,8 +385,8 @@ impl<B: Backend> KeyboardTarget<State<B>> for WindowElement {
 
     fn modifiers(
         &self,
-        seat: &Seat<State<B>>,
-        data: &mut State<B>,
+        seat: &Seat<State>,
+        data: &mut State,
         modifiers: ModifiersState,
         serial: Serial,
     ) {
@@ -484,7 +481,7 @@ impl WithState for WindowElement {
     }
 }
 
-impl<B: Backend> State<B> {
+impl State {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.space

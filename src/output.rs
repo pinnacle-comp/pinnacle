@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use smithay::output::Output;
 
 use crate::{
-    backend::Backend,
     state::{State, WithState},
     tag::Tag,
 };
@@ -15,7 +14,7 @@ pub struct OutputName(pub String);
 
 impl OutputName {
     /// Get the output with this name.
-    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+    pub fn output(&self, state: &State) -> Option<Output> {
         state
             .space
             .outputs()

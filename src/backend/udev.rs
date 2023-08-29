@@ -44,7 +44,6 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    delegate_dmabuf,
     desktop::{
         utils::{send_frames_surface_tree, OutputPresentationFeedback},
         Space,
@@ -75,10 +74,7 @@ use smithay::{
     },
     utils::{Clock, DeviceFd, Logical, Monotonic, Physical, Point, Rectangle, Transform},
     wayland::{
-        dmabuf::{
-            DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
-            ImportError,
-        },
+        dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::{InputMethodHandle, InputMethodSeat},
     },
 };
@@ -90,11 +86,11 @@ use smithay_drm_extras::{
 use crate::{
     api::msg::{Args, OutgoingMsg},
     render::{pointer::PointerElement, CustomRenderElements},
-    state::{take_presentation_feedback, CalloopData, State, SurfaceDmabufFeedback},
+    state::{take_presentation_feedback, Backend, CalloopData, State, SurfaceDmabufFeedback},
     window::WindowElement,
 };
 
-use super::Backend;
+use super::BackendData;
 
 const SUPPORTED_FORMATS: &[Fourcc] = &[
     Fourcc::Abgr2101010,
@@ -113,40 +109,20 @@ struct UdevOutputId {
     crtc: crtc::Handle,
 }
 
-pub struct UdevData {
+pub struct Udev {
     pub session: LibSeatSession,
     display_handle: DisplayHandle,
-    dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
-    primary_gpu: DrmNode,
+    pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
+    pub(super) primary_gpu: DrmNode,
     allocator: Option<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>,
-    gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer>>,
-    backends: HashMap<DrmNode, BackendData>,
+    pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer>>,
+    backends: HashMap<DrmNode, UdevBackendData>,
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
 }
 
-impl DmabufHandler for State<UdevData> {
-    fn dmabuf_state(&mut self) -> &mut DmabufState {
-        &mut self.backend_data.dmabuf_state.as_mut().unwrap().0
-    }
-
-    fn dmabuf_imported(
-        &mut self,
-        _global: &DmabufGlobal,
-        dmabuf: Dmabuf,
-    ) -> Result<(), ImportError> {
-        self.backend_data
-            .gpu_manager
-            .single_renderer(&self.backend_data.primary_gpu)
-            .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
-            .map(|_| ())
-            .map_err(|_| ImportError::Failed)
-    }
-}
-delegate_dmabuf!(State<UdevData>);
-
-impl Backend for UdevData {
+impl BackendData for Udev {
     fn seat_name(&self) -> String {
         self.session.seat()
     }
@@ -206,7 +182,7 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     let gpu_manager = GpuManager::new(GbmGlesBackend::default()).unwrap();
 
-    let data = UdevData {
+    let data = Udev {
         display_handle: display.handle(),
         dmabuf_state: None,
         session,
@@ -219,8 +195,8 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_element: PointerElement::default(),
     };
 
-    let mut state = State::<UdevData>::init(
-        data,
+    let mut state = State::init(
+        Backend::Udev(data),
         &mut display,
         event_loop.get_signal(),
         event_loop.handle(),
@@ -240,6 +216,9 @@ pub fn run_udev() -> anyhow::Result<()> {
             tracing::error!("Skipping device {device_id}: {err}");
         }
     }
+
+    let Backend::Udev(backend) = &mut state.backend else { unreachable!() };
+
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
@@ -270,7 +249,7 @@ pub fn run_udev() -> anyhow::Result<()> {
      * Initialize libinput backend
      */
     let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
-        state.backend_data.session.clone().into(),
+        backend.session.clone().into(),
     );
     libinput_context
         .udev_assign_seat(state.seat.name())
@@ -294,48 +273,48 @@ pub fn run_udev() -> anyhow::Result<()> {
     let handle = event_loop.handle();
     event_loop
         .handle()
-        .insert_source(notifier, move |event, &mut (), data| match event {
-            session::Event::PauseSession => {
-                libinput_context.suspend();
-                tracing::info!("pausing session");
+        .insert_source(notifier, move |event, &mut (), data| {
+            let Backend::Udev(backend) = &mut data.state.backend else { unreachable!() };
+            match event {
+                session::Event::PauseSession => {
+                    libinput_context.suspend();
+                    tracing::info!("pausing session");
 
-                for backend in data.state.backend_data.backends.values_mut() {
-                    backend.drm.pause();
-                }
-            }
-            session::Event::ActivateSession => {
-                tracing::info!("resuming session");
-
-                if let Err(err) = libinput_context.resume() {
-                    tracing::error!("Failed to resume libinput context: {:?}", err);
-                }
-                for (node, backend) in data
-                    .state
-                    .backend_data
-                    .backends
-                    .iter_mut()
-                    .map(|(handle, backend)| (*handle, backend))
-                {
-                    backend.drm.activate();
-                    for surface in backend.surfaces.values_mut() {
-                        if let Err(err) = surface.compositor.surface().reset_state() {
-                            tracing::warn!("Failed to reset drm surface state: {}", err);
-                        }
-                        // reset the buffers after resume to trigger a full redraw
-                        // this is important after a vt switch as the primary plane
-                        // has no content and damage tracking may prevent a redraw
-                        // otherwise
-                        surface.compositor.reset_buffers();
+                    for backend in backend.backends.values_mut() {
+                        backend.drm.pause();
                     }
-                    handle.insert_idle(move |data| data.state.render(node, None));
+                }
+                session::Event::ActivateSession => {
+                    tracing::info!("resuming session");
+
+                    if let Err(err) = libinput_context.resume() {
+                        tracing::error!("Failed to resume libinput context: {:?}", err);
+                    }
+                    for (node, backend) in backend
+                        .backends
+                        .iter_mut()
+                        .map(|(handle, backend)| (*handle, backend))
+                    {
+                        backend.drm.activate();
+                        for surface in backend.surfaces.values_mut() {
+                            if let Err(err) = surface.compositor.surface().reset_state() {
+                                tracing::warn!("Failed to reset drm surface state: {}", err);
+                            }
+                            // reset the buffers after resume to trigger a full redraw
+                            // this is important after a vt switch as the primary plane
+                            // has no content and damage tracking may prevent a redraw
+                            // otherwise
+                            surface.compositor.reset_buffers();
+                        }
+                        handle.insert_idle(move |data| data.state.render(node, None));
+                    }
                 }
             }
         })
         .unwrap();
 
     state.shm_state.update_formats(
-        state
-            .backend_data
+        backend
             .gpu_manager
             .single_renderer(&primary_gpu)
             .unwrap()
@@ -370,7 +349,7 @@ pub fn run_udev() -> anyhow::Result<()> {
                     ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
                 ) {
                     Ok(allocator) => {
-                        state.backend_data.allocator = Some(Box::new(DmabufAllocator(allocator))
+                        backend.allocator = Some(Box::new(DmabufAllocator(allocator))
                             as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
                     }
                     Err(err) => {
@@ -381,17 +360,16 @@ pub fn run_udev() -> anyhow::Result<()> {
         }
     }
 
-    if state.backend_data.allocator.is_none() {
+    if backend.allocator.is_none() {
         tracing::info!("No vulkan allocator found, using GBM.");
-        let gbm = state
-            .backend_data
+        let gbm = backend
             .backends
             .get(&primary_gpu)
             // If the primary_gpu failed to initialize, we likely have a kmsro device
-            .or_else(|| state.backend_data.backends.values().next())
+            .or_else(|| backend.backends.values().next())
             // Don't fail, if there is no allocator. There is a chance, that this a single gpu system and we don't need one.
             .map(|backend| backend.gbm.clone());
-        state.backend_data.allocator = gbm.map(|gbm| {
+        backend.allocator = gbm.map(|gbm| {
             Box::new(DmabufAllocator(GbmAllocator::new(
                 gbm,
                 GbmBufferFlags::RENDERING,
@@ -400,11 +378,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     }
 
     #[cfg_attr(not(feature = "egl"), allow(unused_mut))]
-    let mut renderer = state
-        .backend_data
-        .gpu_manager
-        .single_renderer(&primary_gpu)
-        .unwrap();
+    let mut renderer = backend.gpu_manager.single_renderer(&primary_gpu).unwrap();
 
     {
         tracing::info!(
@@ -423,30 +397,24 @@ pub fn run_udev() -> anyhow::Result<()> {
         .build()
         .unwrap();
     let mut dmabuf_state = DmabufState::new();
-    let global = dmabuf_state.create_global_with_default_feedback::<State<UdevData>>(
-        &display.handle(),
-        &default_feedback,
-    );
-    state.backend_data.dmabuf_state = Some((dmabuf_state, global));
+    let global = dmabuf_state
+        .create_global_with_default_feedback::<State>(&display.handle(), &default_feedback);
+    backend.dmabuf_state = Some((dmabuf_state, global));
 
-    let gpu_manager = &mut state.backend_data.gpu_manager;
-    state
-        .backend_data
-        .backends
-        .values_mut()
-        .for_each(|backend_data| {
-            // Update the per drm surface dmabuf feedback
-            backend_data.surfaces.values_mut().for_each(|surface_data| {
-                surface_data.dmabuf_feedback = surface_data.dmabuf_feedback.take().or_else(|| {
-                    get_surface_dmabuf_feedback(
-                        primary_gpu,
-                        surface_data.render_node,
-                        gpu_manager,
-                        &surface_data.compositor,
-                    )
-                });
+    let gpu_manager = &mut backend.gpu_manager;
+    backend.backends.values_mut().for_each(|backend_data| {
+        // Update the per drm surface dmabuf feedback
+        backend_data.surfaces.values_mut().for_each(|surface_data| {
+            surface_data.dmabuf_feedback = surface_data.dmabuf_feedback.take().or_else(|| {
+                get_surface_dmabuf_feedback(
+                    primary_gpu,
+                    surface_data.render_node,
+                    gpu_manager,
+                    &surface_data.compositor,
+                )
             });
         });
+    });
 
     if let Err(err) = state.xwayland.start(
         state.loop_handle.clone(),
@@ -471,7 +439,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     Ok(())
 }
 
-struct BackendData {
+struct UdevBackendData {
     surfaces: HashMap<crtc::Handle, SurfaceData>,
     gbm: GbmDevice<DrmDeviceFd>,
     drm: DrmDevice,
@@ -578,7 +546,7 @@ struct SurfaceData {
 impl Drop for SurfaceData {
     fn drop(&mut self) {
         if let Some(global) = self.global.take() {
-            self.display_handle.remove_global::<State<UdevData>>(global);
+            self.display_handle.remove_global::<State>(global);
         }
     }
 }
@@ -734,11 +702,12 @@ impl SurfaceComposition {
     }
 }
 
-impl State<UdevData> {
+impl State {
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
         // Try to open the device
-        let fd = self
-            .backend_data
+        let fd = backend
             .session
             .open(
                 path,
@@ -756,7 +725,7 @@ impl State<UdevData> {
             .loop_handle
             .insert_source(
                 notifier,
-                move |event, metadata, data: &mut CalloopData<_>| match event {
+                move |event, metadata, data: &mut CalloopData| match event {
                     DrmEvent::VBlank(crtc) => {
                         data.state.frame_finish(node, crtc, metadata);
                     }
@@ -772,15 +741,15 @@ impl State<UdevData> {
             .and_then(|x| x.try_get_render_node().ok().flatten())
             .unwrap_or(node);
 
-        self.backend_data
+        backend
             .gpu_manager
             .as_mut()
             .add_node(render_node, gbm.clone())
             .map_err(DeviceAddError::AddNode)?;
 
-        self.backend_data.backends.insert(
+        backend.backends.insert(
             node,
-            BackendData {
+            UdevBackendData {
                 registration_token,
                 gbm,
                 drm,
@@ -801,14 +770,15 @@ impl State<UdevData> {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
         } else {
             return;
         };
 
-        let mut renderer = self
-            .backend_data
+        let mut renderer = backend
             .gpu_manager
             .single_renderer(&device.render_node)
             .unwrap();
@@ -865,7 +835,7 @@ impl State<UdevData> {
                 model,
             },
         );
-        let global = output.create_global::<State<UdevData>>(&self.backend_data.display_handle);
+        let global = output.create_global::<State>(&backend.display_handle);
 
         self.focus_state.focused_output = Some(output.clone());
 
@@ -992,14 +962,14 @@ impl State<UdevData> {
         };
 
         let dmabuf_feedback = get_surface_dmabuf_feedback(
-            self.backend_data.primary_gpu,
+            backend.primary_gpu,
             device.render_node,
-            &mut self.backend_data.gpu_manager,
+            &mut backend.gpu_manager,
             &compositor,
         );
 
         let surface = SurfaceData {
-            display_handle: self.backend_data.display_handle.clone(),
+            display_handle: backend.display_handle.clone(),
             device_id: node,
             render_node: device.render_node,
             global: Some(global),
@@ -1018,7 +988,9 @@ impl State<UdevData> {
         _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
         } else {
             return;
@@ -1043,7 +1015,9 @@ impl State<UdevData> {
     }
 
     fn device_changed(&mut self, node: DrmNode) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
         } else {
             return;
@@ -1072,15 +1046,19 @@ impl State<UdevData> {
     }
 
     fn device_removed(&mut self, node: DrmNode) {
-        let Some(device) = self.backend_data.backends.get_mut(&node) else {
-            return;
-        };
+        let crtcs = {
+            let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
 
-        let crtcs: Vec<_> = device
-            .drm_scanner
-            .crtcs()
-            .map(|(info, crtc)| (info.clone(), crtc))
-            .collect();
+            let Some(device) = backend.backends.get_mut(&node) else {
+                return;
+            };
+
+            device
+                .drm_scanner
+                .crtcs()
+                .map(|(info, crtc)| (info.clone(), crtc))
+                .collect::<Vec<_>>()
+        };
 
         for (connector, crtc) in crtcs {
             self.connector_disconnected(node, connector, crtc);
@@ -1088,9 +1066,11 @@ impl State<UdevData> {
 
         tracing::debug!("Surfaces dropped");
 
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
         // drop the backends on this side
-        if let Some(backend_data) = self.backend_data.backends.remove(&node) {
-            self.backend_data
+        if let Some(backend_data) = backend.backends.remove(&node) {
+            backend
                 .gpu_manager
                 .as_mut()
                 .remove_node(&backend_data.render_node);
@@ -1109,7 +1089,9 @@ impl State<UdevData> {
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let device_backend = match self.backend_data.backends.get_mut(&dev_id) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device_backend = match backend.backends.get_mut(&dev_id) {
             Some(backend) => backend,
             None => {
                 tracing::error!("Trying to finish frame on non-existent backend {}", dev_id);
@@ -1240,7 +1222,7 @@ impl State<UdevData> {
             let repaint_delay =
                 Duration::from_millis(((1_000_000f32 / output_refresh as f32) * 0.6f32) as u64);
 
-            let timer = if self.backend_data.primary_gpu != surface.render_node {
+            let timer = if backend.primary_gpu != surface.render_node {
                 // However, if we need to do a copy, that might not be enough.
                 // (And without actual comparision to previous frames we cannot really know.)
                 // So lets ignore that in those cases to avoid thrashing performance.
@@ -1266,7 +1248,9 @@ impl State<UdevData> {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        let device_backend = match self.backend_data.backends.get_mut(&node) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device_backend = match backend.backends.get_mut(&node) {
             Some(backend) => backend,
             None => {
                 tracing::error!("Trying to render on non-existent backend {}", node);
@@ -1285,7 +1269,9 @@ impl State<UdevData> {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let Some(device) = self.backend_data.backends.get_mut(&node) else {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let Some(device) = backend.backends.get_mut(&node) else {
             return;
         };
 
@@ -1294,21 +1280,20 @@ impl State<UdevData> {
         };
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = self
-            .backend_data
+        let frame = backend
             .pointer_image
             .get_image(1 /*scale*/, self.clock.now().try_into().unwrap());
 
         let render_node = surface.render_node;
-        let primary_gpu = self.backend_data.primary_gpu;
+        let primary_gpu = backend.primary_gpu;
         let mut renderer = if primary_gpu == render_node {
-            self.backend_data.gpu_manager.single_renderer(&render_node)
+            backend.gpu_manager.single_renderer(&render_node)
         } else {
             let format = surface.compositor.format();
-            self.backend_data.gpu_manager.renderer(
+            backend.gpu_manager.renderer(
                 &primary_gpu,
                 &render_node,
-                self.backend_data
+                backend
                     .allocator
                     .as_mut()
                     // TODO: We could build some kind of `GLAllocator` using Renderbuffers in theory for this case.
@@ -1320,7 +1305,7 @@ impl State<UdevData> {
         }
         .unwrap();
 
-        let pointer_images = &mut self.backend_data.pointer_images;
+        let pointer_images = &mut backend.pointer_images;
         let pointer_image = pointer_images
             .iter()
             .find_map(
@@ -1369,7 +1354,7 @@ impl State<UdevData> {
             self.seat.input_method(),
             self.pointer_location,
             &pointer_image,
-            &mut self.backend_data.pointer_element,
+            &mut backend.pointer_element,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
             &self.clock,
@@ -1425,9 +1410,11 @@ impl State<UdevData> {
         &mut self,
         node: DrmNode,
         crtc: crtc::Handle,
-        evt_handle: LoopHandle<'static, CalloopData<UdevData>>,
+        evt_handle: LoopHandle<'static, CalloopData>,
     ) {
-        let device = if let Some(device) = self.backend_data.backends.get_mut(&node) {
+        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+
+        let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
         } else {
             return;
@@ -1441,11 +1428,7 @@ impl State<UdevData> {
 
         let node = surface.render_node;
         let result = {
-            let mut renderer = self
-                .backend_data
-                .gpu_manager
-                .single_renderer(&node)
-                .unwrap();
+            let mut renderer = backend.gpu_manager.single_renderer(&node).unwrap();
             initial_render(surface, &mut renderer)
         };
 

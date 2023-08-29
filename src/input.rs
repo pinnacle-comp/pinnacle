@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::{
     api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
     focus::FocusTarget,
-    state::WithState,
+    state::{Backend, WithState},
     window::WindowElement,
 };
 use smithay::{
@@ -26,10 +26,7 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus, shell::wlr_layer},
 };
 
-use crate::{
-    backend::{udev::UdevData, winit::WinitData, Backend},
-    state::State,
-};
+use crate::state::State;
 
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
@@ -59,7 +56,23 @@ enum KeyAction {
     ReloadConfig,
 }
 
-impl<B: Backend> State<B> {
+impl State {
+    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
+        match event {
+            // TODO: rest of input events
+
+            // InputEvent::DeviceAdded { device } => todo!(),
+            // InputEvent::DeviceRemoved { device } => todo!(),
+            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
+            InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
+            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
+            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
+            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
+
+            _ => (),
+        }
+    }
+
     pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
@@ -206,9 +219,8 @@ impl<B: Backend> State<B> {
                 }
             }
             Some(KeyAction::SwitchVt(vt)) => {
-                if let Some(st) = (self as &mut dyn std::any::Any).downcast_mut::<State<UdevData>>()
-                {
-                    if let Err(err) = st.backend_data.session.change_vt(vt) {
+                if let Backend::Udev(udev) = &mut self.backend {
+                    if let Err(err) = udev.session.change_vt(vt) {
                         tracing::error!("Failed to switch to vt {vt}: {err}");
                     }
                 }
@@ -439,23 +451,35 @@ impl<B: Backend> State<B> {
             .expect("Seat has no pointer")
             .axis(self, frame);
     }
-}
 
-impl State<WinitData> {
-    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
-        match event {
-            // TODO: rest of input events
-
-            // InputEvent::DeviceAdded { device } => todo!(),
-            // InputEvent::DeviceRemoved { device } => todo!(),
-            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
-            // InputEvent::PointerMotion { event } => {}
-            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
-            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
-            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
-
-            _ => (),
+    /// Clamp pointer coordinates inside outputs
+    fn clamp_coords(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
+        if self.space.outputs().next().is_none() {
+            return pos;
         }
+
+        let (pos_x, pos_y) = pos.into();
+
+        let nearest_points = self.space.outputs().map(|op| {
+            let size = self
+                .space
+                .output_geometry(op)
+                .expect("called output_geometry on unmapped output")
+                .size;
+            let loc = op.current_location();
+            let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
+            let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
+            (pos_x, pos_y)
+        });
+
+        let nearest_point = nearest_points.min_by(|(x1, y1), (x2, y2)| {
+            f64::total_cmp(
+                &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
+                &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
+            )
+        });
+
+        nearest_point.map(|point| point.into()).unwrap_or(pos)
     }
 
     fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
@@ -501,25 +525,6 @@ impl State<WinitData> {
                 time: event.time_msec(),
             },
         );
-    }
-}
-
-impl State<UdevData> {
-    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
-        match event {
-            // TODO: rest of input events
-
-            // InputEvent::DeviceAdded { device } => todo!(),
-            // InputEvent::DeviceRemoved { device } => todo!(),
-            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
-            InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
-            // currently does not seem to use absolute
-            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
-            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
-            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
-
-            _ => (),
-        }
     }
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
@@ -569,88 +574,5 @@ impl State<UdevData> {
             //     },
             // )
         }
-    }
-
-    fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
-        let serial = SERIAL_COUNTER.next_serial();
-
-        let max_x = self.space.outputs().fold(0, |acc, o| {
-            acc + self
-                .space
-                .output_geometry(o)
-                .expect("Output geometry doesn't exist")
-                .size
-                .w
-        });
-
-        let Some(max_h_output) = self
-            .space
-            .outputs()
-            .max_by_key(|o| {
-                self.space
-                    .output_geometry(o)
-                    .expect("Output geometry doesn't exist")
-                    .size
-                    .h
-            })
-        else {
-            tracing::warn!("Pointer moved, but there was no output");
-            return;
-        };
-
-        let max_y = self
-            .space
-            .output_geometry(max_h_output)
-            .expect("Output geometry doesn't exist")
-            .size
-            .h;
-
-        self.pointer_location.x = event.x_transformed(max_x);
-        self.pointer_location.y = event.y_transformed(max_y);
-
-        self.pointer_location = self.clamp_coords(self.pointer_location);
-
-        let surface_under = self.surface_under(self.pointer_location);
-
-        if let Some(ptr) = self.seat.get_pointer() {
-            ptr.motion(
-                self,
-                surface_under,
-                &MotionEvent {
-                    location: self.pointer_location,
-                    serial,
-                    time: event.time_msec(),
-                },
-            );
-        }
-    }
-
-    fn clamp_coords(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
-        if self.space.outputs().next().is_none() {
-            return pos;
-        }
-
-        let (pos_x, pos_y) = pos.into();
-
-        let nearest_points = self.space.outputs().map(|op| {
-            let size = self
-                .space
-                .output_geometry(op)
-                .expect("called output_geometry on unmapped output")
-                .size;
-            let loc = op.current_location();
-            let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
-            let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
-            (pos_x, pos_y)
-        });
-
-        let nearest_point = nearest_points.min_by(|(x1, y1), (x2, y2)| {
-            f64::total_cmp(
-                &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
-                &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
-            )
-        });
-
-        nearest_point.map(|point| point.into()).unwrap_or(pos)
     }
 }

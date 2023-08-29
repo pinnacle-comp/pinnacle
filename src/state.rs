@@ -15,6 +15,7 @@ use crate::{
         msg::{CallbackId, ModifierMask, Msg},
         PinnacleSocketSource, DEFAULT_SOCKET_DIR,
     },
+    backend::{udev::Udev, winit::Winit, BackendData},
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
@@ -62,14 +63,35 @@ use smithay::{
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
 
-use crate::{backend::Backend, input::InputState};
+use crate::input::InputState;
+
+pub enum Backend {
+    Winit(Winit),
+    Udev(Udev),
+}
+
+impl Backend {
+    pub fn seat_name(&self) -> String {
+        match self {
+            Backend::Winit(winit) => winit.seat_name(),
+            Backend::Udev(udev) => udev.seat_name(),
+        }
+    }
+
+    pub fn early_import(&mut self, surface: &WlSurface) {
+        match self {
+            Backend::Winit(winit) => winit.early_import(surface),
+            Backend::Udev(udev) => udev.early_import(surface),
+        }
+    }
+}
 
 /// The main state of the application.
-pub struct State<B: Backend> {
-    pub backend_data: B,
+pub struct State {
+    pub backend: Backend,
 
     pub loop_signal: LoopSignal,
-    pub loop_handle: LoopHandle<'static, CalloopData<B>>,
+    pub loop_handle: LoopHandle<'static, CalloopData>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
@@ -77,7 +99,7 @@ pub struct State<B: Backend> {
     pub move_mode: bool,
     pub socket_name: String,
 
-    pub seat: Seat<State<B>>,
+    pub seat: Seat<State>,
 
     pub compositor_state: CompositorState,
     pub data_device_state: DataDeviceState,
@@ -116,12 +138,9 @@ pub struct State<B: Backend> {
 
 /// Schedule something to be done when windows have finished committing and have become
 /// idle.
-pub fn schedule_on_commit<F, B: Backend>(
-    data: &mut CalloopData<B>,
-    windows: Vec<WindowElement>,
-    on_commit: F,
-) where
-    F: FnOnce(&mut CalloopData<B>) + 'static,
+pub fn schedule_on_commit<F>(data: &mut CalloopData, windows: Vec<WindowElement>, on_commit: F)
+where
+    F: FnOnce(&mut CalloopData) + 'static,
 {
     for window in windows.iter().filter(|win| win.alive()) {
         if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
@@ -141,10 +160,10 @@ pub fn schedule_on_commit<F, B: Backend>(
 }
 
 // Schedule something to be done when `condition` returns true.
-pub fn schedule<F1, F2, B: Backend>(data: &mut CalloopData<B>, condition: F1, run: F2)
+pub fn schedule<F1, F2>(data: &mut CalloopData, condition: F1, run: F2)
 where
-    F1: Fn(&mut CalloopData<B>) -> bool + 'static,
-    F2: FnOnce(&mut CalloopData<B>) + 'static,
+    F1: Fn(&mut CalloopData) -> bool + 'static,
+    F2: FnOnce(&mut CalloopData) + 'static,
 {
     if !condition(data) {
         data.state.loop_handle.insert_idle(|data| {
@@ -156,12 +175,12 @@ where
     run(data);
 }
 
-impl<B: Backend> State<B> {
+impl State {
     pub fn init(
-        backend_data: B,
+        backend: Backend,
         display: &mut Display<Self>,
         loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData<B>>,
+        loop_handle: LoopHandle<'static, CalloopData>,
     ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
@@ -270,7 +289,8 @@ impl<B: Backend> State<B> {
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
-        let mut seat = seat_state.new_wl_seat(&display_handle, backend_data.seat_name());
+
+        let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
         seat.add_keyboard(XkbConfig::default(), 200, 25)?;
 
@@ -328,7 +348,7 @@ impl<B: Backend> State<B> {
         tracing::debug!("after xwayland");
 
         Ok(Self {
-            backend_data,
+            backend,
             loop_signal,
             loop_handle,
             display_handle: display_handle.clone(),
@@ -449,7 +469,7 @@ struct ConfigReturn {
     config_child_handle: async_process::Child,
 }
 
-impl<B: Backend> State<B> {
+impl State {
     pub fn restart_config(&mut self) -> anyhow::Result<()> {
         tracing::info!("Restarting config");
         tracing::debug!("Clearing tags");
@@ -486,9 +506,9 @@ impl<B: Backend> State<B> {
     }
 }
 
-pub struct CalloopData<B: Backend> {
-    pub display: Display<State<B>>,
-    pub state: State<B>,
+pub struct CalloopData {
+    pub display: Display<State>,
+    pub state: State,
 }
 
 #[derive(Default)]

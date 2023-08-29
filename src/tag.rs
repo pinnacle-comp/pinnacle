@@ -10,7 +10,6 @@ use std::{
 use smithay::output::Output;
 
 use crate::{
-    backend::Backend,
     layout::Layout,
     state::{State, WithState},
 };
@@ -25,7 +24,7 @@ impl TagId {
         Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
-    pub fn tag<B: Backend>(&self, state: &State<B>) -> Option<Tag> {
+    pub fn tag(&self, state: &State) -> Option<Tag> {
         state
             .space
             .outputs()
@@ -101,7 +100,7 @@ impl Tag {
         })))
     }
 
-    pub fn output<B: Backend>(&self, state: &State<B>) -> Option<Output> {
+    pub fn output(&self, state: &State) -> Option<Output> {
         state
             .space
             .outputs()

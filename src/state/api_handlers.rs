@@ -9,14 +9,13 @@ use smithay::{
 
 use crate::{
     api::msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestId, RequestResponse},
-    backend::Backend,
     tag::Tag,
     window::WindowElement,
 };
 
 use super::{State, WithState};
 
-impl<B: Backend> State<B> {
+impl State {
     pub fn handle_msg(&mut self, msg: Msg) {
         // tracing::debug!("Got {msg:?}");
         match msg {
