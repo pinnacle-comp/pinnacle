@@ -1,8 +1,20 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Output management.
+---
+---An output is what you would call a monitor. It presents windows, your cursor, and other UI elements.
+---
+---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---@class OutputModule
 local output_module = {}
 
+---An output object.
+---
+---This is a representation of your actual output to the config process.
+---It serves to make it easier to deal with your outputs, defining methods for getting properties and
+---helpers for things like positioning multiple monitors.
+---
+---This can be retrieved through that various `get` functions in the `OutputModule`.
 ---@classmod
 ---@class Output A display.
 ---@field private _name string The name of this output (or rather, of its connector).

@@ -1,5 +1,34 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Tag management.
+---
+---This module provides utilities for creating and manipulating tags.
+---
+---A tag is a sort of marker for each of your windows. It allows you to present windows in ways that
+---traditional workspaces cannot.
+---
+---More specifically:
+--- - A window can have multiple tags.
+---     - This means that you can have one window show up across multiple "workspaces" if you come
+---       something like i3.
+--- - An output can display multiple tags at once.
+---     - This allows you to toggle a tag and have windows on both tags display at once.
+---       This is helpful if you, say, want to reference a browser window while coding; you toggle your
+---       browser's tag and temporarily reference it while you work without having to change screens.
+---
+---Many of the functions in this module take Tag|TagTable|TagTableNamed|string.
+---This is a convenience so you don't have to get a tag object every time you want to do
+---something with tags.
+---
+---Instead, you can pass in either:
+--- - A string of the tag's name (ex. "1")
+---     - This will get the first tag with that name on the focused output.
+--- - A table where [1] is the name and [2] is the output (or its name) (ex. { "1", output.get_by_name("DP-1") })
+---     - This will get the first tag with that name on the specified output.
+--- - The same table as above, but keyed with `name` and `output` (ex. { name = "1", output = "DP-1" })
+---     - This is simply for those who want more clarity in their config.
+---
+---If you need to get tags beyond the first with the same name, use a `get` function and find what you need.
 ---@class TagModule
 local tag_module = {}
 
@@ -15,11 +44,15 @@ local tag_module = {}
 ---@alias TagTable { [1]: string, [2]: (string|Output)? }
 ---@alias TagTableNamed { name: string, output: (string|Output)? }
 
+---A tag object.
+---
+---This can be retrieved through the various `get` functions in the `TagModule`.
 ---@classmod
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
 local tag = {}
 
+---@nodoc
 ---***You probably don't need to use this function.***
 ---
 ---Create a tag from `Tag|TagTable|TagTableNamed|string`.

@@ -1,8 +1,17 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Window management.
+---
+---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
+---moving them between tags, and various other actions.
 ---@class WindowModule
 local window_module = {}
 
+---A window object.
+---
+---This is a representation of an application window to the config process.
+---
+---You can retrieve windows through the various `get` function in the `WindowModule`.
 ---@classmod
 ---@class Window
 ---@field private _id integer The internal id of this window
