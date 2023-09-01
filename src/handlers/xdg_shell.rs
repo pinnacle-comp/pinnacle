@@ -91,8 +91,9 @@ impl XdgShellHandler for State {
         // note to self: don't reorder this
         // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
-        // self.space.map_element(window.clone(), (0, 0), true);
+
         if let Some(focused_output) = self.focus_state.focused_output.clone() {
+            // FIXME: ignoring initial configure here
             self.update_windows(&focused_output);
             BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
             tracing::debug!(

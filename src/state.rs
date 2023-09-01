@@ -159,22 +159,6 @@ where
     on_commit(data);
 }
 
-// Schedule something to be done when `condition` returns true.
-pub fn schedule<F1, F2>(data: &mut CalloopData, condition: F1, run: F2)
-where
-    F1: Fn(&mut CalloopData) -> bool + 'static,
-    F2: FnOnce(&mut CalloopData) + 'static,
-{
-    if !condition(data) {
-        data.state.loop_handle.insert_idle(|data| {
-            schedule(data, condition, run);
-        });
-        return;
-    }
-
-    run(data);
-}
-
 impl State {
     pub fn init(
         backend: Backend,
@@ -392,6 +376,35 @@ impl State {
             xwm: None,
             xdisplay: None,
         })
+    }
+
+    /// Schedule `run` to run when `condition` returns true.
+    ///
+    /// This will continually reschedule `run` in the event loop if `condition` returns false.
+    pub fn schedule<F1, F2>(&self, condition: F1, run: F2)
+    where
+        F1: Fn(&mut CalloopData) -> bool + 'static,
+        F2: FnOnce(&mut CalloopData) + 'static,
+    {
+        self.loop_handle.insert_idle(|data| {
+            Self::schedule_inner(data, condition, run);
+        });
+    }
+
+    // Schedule something to be done when `condition` returns true.
+    fn schedule_inner<F1, F2>(data: &mut CalloopData, condition: F1, run: F2)
+    where
+        F1: Fn(&mut CalloopData) -> bool + 'static,
+        F2: FnOnce(&mut CalloopData) + 'static,
+    {
+        if !condition(data) {
+            data.state.loop_handle.insert_idle(|data| {
+                Self::schedule_inner(data, condition, run);
+            });
+            return;
+        }
+
+        run(data);
     }
 }
 
