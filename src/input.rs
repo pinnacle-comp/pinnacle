@@ -102,9 +102,12 @@ impl State {
         });
 
         // I think I'm going a bit too far with the functional stuff
+
+        // The topmost fullscreen window
         top_fullscreen_window
             .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
             .or_else(|| {
+                // The topmost layer surface in Overlay or Top
                 layers
                     .layer_under(wlr_layer::Layer::Overlay, point)
                     .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
@@ -114,6 +117,7 @@ impl State {
                     })
             })
             .or_else(|| {
+                // The topmost window
                 self.space
                     .elements()
                     .rev()
@@ -133,6 +137,7 @@ impl State {
                     })
             })
             .or_else(|| {
+                // The topmost layer surface in Bottom or Background
                 layers
                     .layer_under(wlr_layer::Layer::Bottom, point)
                     .or_else(|| layers.layer_under(wlr_layer::Layer::Background, point))
