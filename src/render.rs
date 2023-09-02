@@ -226,7 +226,7 @@ where
                 Tag::tag_render_elements(&tags, windows, space, renderer);
 
             let mut output_render_elements =
-                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
+                Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
 
             output_render_elements.extend(
                 custom_render_elements

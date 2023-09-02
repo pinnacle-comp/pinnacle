@@ -73,6 +73,7 @@ impl State {
         }
     }
 
+    /// Get the [`FocusTarget`] under `point`.
     pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
@@ -114,8 +115,22 @@ impl State {
             })
             .or_else(|| {
                 self.space
-                    .element_under(point)
-                    .map(|(window, loc)| (window.clone().into(), loc))
+                    .elements()
+                    .rev()
+                    .filter(|win| win.is_on_active_tag(self.space.outputs()))
+                    .find_map(|win| {
+                        let loc = self
+                            .space
+                            .element_location(win)
+                            .expect("called elem loc on unmapped win")
+                            - win.geometry().loc;
+
+                        if win.is_in_input_region(&(point - loc.to_f64())) {
+                            Some((win.clone().into(), loc))
+                        } else {
+                            None
+                        }
+                    })
             })
             .or_else(|| {
                 layers
