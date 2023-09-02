@@ -72,6 +72,8 @@ impl XdgShellHandler for State {
         self.space.map_element(window.clone(), (0, 0), true);
 
         let win_clone = window.clone();
+
+        // Let the initial configure happen before updating the windows
         self.schedule(
             move |_data| {
                 if let WindowElement::Wayland(window) = &win_clone {
@@ -123,10 +125,8 @@ impl XdgShellHandler for State {
             self.update_windows(&focused_output);
         }
 
-        // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
-        // windows.retain(|window| window.toplevel() != &surface);
-        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
         let focus = self.focus_state.current_focus().map(FocusTarget::Window);
+
         self.seat
             .get_keyboard()
             .expect("Seat had no keyboard")
@@ -145,7 +145,7 @@ impl XdgShellHandler for State {
         crate::grab::move_grab::move_request_client(
             self,
             surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
+            &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
             BUTTON_LEFT,
         );
@@ -162,7 +162,7 @@ impl XdgShellHandler for State {
         crate::grab::resize_grab::resize_request_client(
             self,
             surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
+            &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
             edges.into(),
             BUTTON_LEFT,
@@ -183,7 +183,7 @@ impl XdgShellHandler for State {
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
-        let seat: Seat<Self> = Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat");
+        let seat: Seat<Self> = Seat::from_resource(&seat).expect("couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
             self.window_for_surface(&root)

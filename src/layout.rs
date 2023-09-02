@@ -57,6 +57,8 @@ impl State {
         }
     }
 
+    /// Compute tiled window locations and sizes, size maximized and fullscreen windows correctly,
+    /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
         let Some(layout) = output.with_state(|state| {
             state.focused_tags().next().map(|tag| tag.layout())
@@ -70,7 +72,7 @@ impl State {
                 })
             });
 
-        // Don't unmap windows on other outputs
+        // Don't unmap windows that aren't on `output` (that would clear all other monitors)
         windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
 
         let tiled_windows = windows_on_foc_tags

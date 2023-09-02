@@ -121,6 +121,7 @@ impl CompositorHandler for State {
         if let Some(window) = self.window_for_surface(surface) {
             window.with_state(|state| {
                 if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
+                    tracing::debug!("Mapping Acknowledged window");
                     state.loc_request_state = LocationRequestState::Idle;
                     self.space.map_element(window.clone(), new_pos, false);
                 }
@@ -128,6 +129,7 @@ impl CompositorHandler for State {
         }
 
         // correct focus layering
+        // TODO: maybe do this at the end of every event loop cycle instead?
         self.focus_state.fix_up_focus(&mut self.space);
     }
 
