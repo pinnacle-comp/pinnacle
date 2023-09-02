@@ -53,6 +53,8 @@ impl State {
         }
     }
 
+    /// Compute tiled window locations and sizes, size maximized and fullscreen windows correctly,
+    /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
         let Some(layout) = output.with_state(|state| {
             state.focused_tags().next().cloned().map(|tag| tag.layout())
@@ -66,6 +68,9 @@ impl State {
                 })
             });
 
+        tracing::debug!("{} on", windows_on_foc_tags.len());
+
+        // Don't unmap windows that aren't on `output` (that would clear all other monitors)
         windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
 
         let tiled_windows = windows_on_foc_tags
@@ -132,13 +137,14 @@ impl State {
             });
         }
 
-        self.loop_handle.insert_idle(|data| {
-            crate::state::schedule_on_commit(data, windows_on_foc_tags, |dt| {
-                for win in windows_not_on_foc_tags {
-                    dt.state.space.unmap_elem(&win);
-                }
-            })
-        });
+        // self.loop_handle.insert_idle(|data| {
+        //     crate::state::schedule_on_commit(data, windows_on_foc_tags, |dt| {
+        //         for win in windows_not_on_foc_tags {
+        //             // dt.state.space.map_element(win, (500, 0), false);
+        //             dt.state.space.unmap_elem(&win);
+        //         }
+        //     })
+        // });
     }
 }
 

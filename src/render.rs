@@ -11,7 +11,7 @@ use smithay::{
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
-        space::{self, SpaceRenderElements, SurfaceTree},
+        space::{SpaceRenderElements, SurfaceTree},
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -25,7 +25,7 @@ use smithay::{
     wayland::{compositor, input_method::InputMethodHandle},
 };
 
-use crate::{state::WithState, window::WindowElement};
+use crate::{state::WithState, tag::Tag, window::WindowElement};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -78,16 +78,17 @@ where
 
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
-    renderer: &mut R,
     space: &Space<WindowElement>,
-    output: &Output,
-    input_method: &InputMethodHandle,
+    windows: &[WindowElement],
     pointer_location: Point<f64, Logical>,
-    pointer_element: &mut PointerElement<T>,
-    pointer_image: Option<&TextureBuffer<T>>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     focus_stack: &[WindowElement],
+    renderer: &mut R,
+    output: &Output,
+    input_method: &InputMethodHandle,
+    pointer_element: &mut PointerElement<T>,
+    pointer_image: Option<&TextureBuffer<T>>,
 ) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer<TextureId = T> + ImportAll + ImportMem,
@@ -211,9 +212,18 @@ where
             output_render_elements
         } else {
             // render everything
-            let space_render_elements =
-                space::space_render_elements(renderer, [space], output, 1.0)
-                    .expect("Failed to get render elements");
+            // let space_render_elements =
+            //     space::space_render_elements(renderer, [space], output, 1.0)
+            //         .expect("Failed to get render elements");
+
+            let tags = space
+                .outputs()
+                .flat_map(|op| {
+                    op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>())
+                })
+                .collect::<Vec<_>>();
+            let space_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
+                Tag::tag_render_elements(&tags, windows, space, renderer);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
@@ -226,6 +236,7 @@ where
             output_render_elements.extend(
                 space_render_elements
                     .into_iter()
+                    .map(CustomRenderElements::from)
                     .map(OutputRenderElements::from),
             );
             output_render_elements

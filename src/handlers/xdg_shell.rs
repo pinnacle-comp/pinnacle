@@ -93,6 +93,8 @@ impl XdgShellHandler for State {
         self.windows.push(window.clone());
 
         let win_clone = window.clone();
+
+        // Let the initial configure happen before updating the windows
         self.schedule(
             move |_data| {
                 if let WindowElement::Wayland(window) = &win_clone {
@@ -170,10 +172,8 @@ impl XdgShellHandler for State {
             self.update_windows(&focused_output);
         }
 
-        // let mut windows: Vec<Window> = self.space.elements().cloned().collect();
-        // windows.retain(|window| window.toplevel() != &surface);
-        // Layouts::master_stack(self, windows, crate::layout::Direction::Left);
         let focus = self.focus_state.current_focus().map(FocusTarget::Window);
+
         self.seat
             .get_keyboard()
             .expect("Seat had no keyboard")
@@ -192,7 +192,7 @@ impl XdgShellHandler for State {
         crate::grab::move_grab::move_request_client(
             self,
             surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
+            &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
             BUTTON_LEFT,
         );
@@ -209,7 +209,7 @@ impl XdgShellHandler for State {
         crate::grab::resize_grab::resize_request_client(
             self,
             surface.wl_surface(),
-            &Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat"),
+            &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
             edges.into(),
             BUTTON_LEFT,
@@ -230,7 +230,7 @@ impl XdgShellHandler for State {
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
-        let seat: Seat<Self> = Seat::from_resource(&seat).expect("Couldn't get seat from WlSeat");
+        let seat: Seat<Self> = Seat::from_resource(&seat).expect("couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
             self.window_for_surface(&root)
@@ -282,17 +282,42 @@ impl XdgShellHandler for State {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
-                                // tracing::debug!("acked configure, new loc is {:?}", new_loc);
+                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
+
+                                // Send a frame here because it causes (most) unmapped windows to
+                                // commit. I haven't done enough doc diving to know if there's a
+                                // better way.
+
                                 if let Some(focused_output) =
                                     self.focus_state.focused_output.clone()
                                 {
+                                    tracing::debug!("Sending ack frame to window");
                                     window.send_frame(
                                         &focused_output,
                                         self.clock.now(),
                                         Some(Duration::ZERO),
                                         surface_primary_scanout_output,
+                                    );
+                                    // Forcibly map the window after 16ms if it hasn't committed
+                                    let current_time = self.clock.now();
+                                    let win_clone = window.clone();
+                                    self.schedule(
+                                        move |data| {
+                                            smithay::utils::Time::elapsed(
+                                                &current_time,
+                                                data.state.clock.now(),
+                                            ) > Duration::from_millis(100)
+                                        },
+                                        move |data| {
+                                            win_clone.send_frame(
+                                                &focused_output,
+                                                data.state.clock.now(),
+                                                Some(Duration::ZERO),
+                                                surface_primary_scanout_output,
+                                            );
+                                        },
                                     );
                                 }
                             }
