@@ -264,11 +264,6 @@ where
 
             output_render_elements
         } else {
-            // render everything
-            // let space_render_elements =
-            //     space::space_render_elements(renderer, [space], output, 1.0)
-            //         .expect("Failed to get render elements");
-
             let LayerRenderElements {
                 background,
                 bottom,
