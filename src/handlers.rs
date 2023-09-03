@@ -130,7 +130,7 @@ impl CompositorHandler for State {
 
         // correct focus layering
         // TODO: maybe do this at the end of every event loop cycle instead?
-        self.focus_state.fix_up_focus(&mut self.space);
+        // self.focus_state.fix_up_focus(&mut self.space);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

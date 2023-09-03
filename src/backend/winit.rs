@@ -246,6 +246,8 @@ pub fn run_winit() -> anyhow::Result<()> {
                 let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);
 
+                state.focus_state.fix_up_focus(&mut state.space);
+
                 let output_render_elements = crate::render::generate_render_elements(
                     &state.space,
                     &state.windows,
