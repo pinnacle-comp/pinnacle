@@ -92,6 +92,8 @@ impl XdgShellHandler for State {
         // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
 
+        self.space.map_element(window.clone(), (0, 0), true);
+
         let win_clone = window.clone();
 
         // Let the initial configure happen before updating the windows
@@ -115,6 +117,7 @@ impl XdgShellHandler for State {
                 }
             },
             |data| {
+                tracing::debug!("UPDATING WINDOWS");
                 if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
                     data.state.update_windows(&focused_output);
                     BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
