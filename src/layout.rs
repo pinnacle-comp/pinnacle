@@ -2,7 +2,7 @@
 
 use itertools::{Either, Itertools};
 use smithay::{
-    desktop::layer_map_for_output,
+    desktop::{layer_map_for_output, space::SpaceElement},
     output::Output,
     utils::{Logical, Point, Rectangle, Size},
 };
@@ -462,13 +462,27 @@ impl State {
             }
         }
 
-        // TODO: don't use the focused output, use the outputs the two windows are on
-        let output = self
-            .focus_state
-            .focused_output
-            .clone()
-            .expect("no focused output");
-        self.update_windows(&output);
-        // self.re_layout(&output);
+        // Some windows just don't want to commit on a timely basis, like VS Code on Wayland,
+        // unless their sizes change. In this case, if the two windows have the same size,
+        // just map them to the other's location instead of going through update_windows().
+        if win1.geometry().size == win2.geometry().size {
+            let win1_loc = self.space.element_location(win1);
+            let win2_loc = self.space.element_location(win2);
+
+            if let Some(win1_loc) = win1_loc {
+                if let Some(win2_loc) = win2_loc {
+                    self.space.map_element(win1.clone(), win2_loc, false);
+                    self.space.map_element(win2.clone(), win1_loc, false);
+                }
+            }
+        } else {
+            // TODO: don't use the focused output, use the outputs the two windows are on
+            let output = self
+                .focus_state
+                .focused_output
+                .clone()
+                .expect("no focused output");
+            self.update_windows(&output);
+        }
     }
 }

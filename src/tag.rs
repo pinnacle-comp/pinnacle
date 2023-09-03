@@ -120,7 +120,6 @@ impl Tag {
 
     /// Get the render_elements for the provided tags.
     pub fn tag_render_elements<R, C>(
-        tags: &[Tag],
         windows: &[WindowElement],
         space: &Space<WindowElement>,
         renderer: &mut R,
@@ -132,14 +131,8 @@ impl Tag {
     {
         let elements = windows
             .iter()
-            .filter(|win| {
-                win.with_state(|state| {
-                    state
-                        .tags
-                        .iter()
-                        .any(|tag| tags.iter().any(|tag2| tag == tag2))
-                })
-            })
+            .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
+            .filter(|win| win.is_on_active_tag(space.outputs()))
             .flat_map(|win| {
                 // subtract win.geometry().loc to align decorations correctly
                 let loc = (space.element_location(win).unwrap_or((0, 0).into())

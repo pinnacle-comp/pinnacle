@@ -271,14 +271,8 @@ where
                 overlay,
             } = layer_render_elements(output, renderer);
 
-            let tags = space
-                .outputs()
-                .flat_map(|op| {
-                    op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>())
-                })
-                .collect::<Vec<_>>();
             let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                Tag::tag_render_elements(&tags, windows, space, renderer);
+                Tag::tag_render_elements(windows, space, renderer);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
