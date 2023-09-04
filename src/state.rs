@@ -589,10 +589,6 @@ impl ApiState {
 
 pub trait WithState {
     type State: Default;
-
-    /// Access data map state.
-    ///
-    /// RefCell Safety: This function will panic if called within itself.
     fn with_state<F, T>(&self, func: F) -> T
     where
         F: FnMut(&mut Self::State) -> T;

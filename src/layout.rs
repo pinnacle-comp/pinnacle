@@ -53,8 +53,6 @@ impl State {
         }
     }
 
-    /// Compute tiled window locations and sizes, size maximized and fullscreen windows correctly,
-    /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
         let Some(layout) = output.with_state(|state| {
             state.focused_tags().next().cloned().map(|tag| tag.layout())
@@ -68,9 +66,6 @@ impl State {
                 })
             });
 
-        tracing::debug!("{} on", windows_on_foc_tags.len());
-
-        // Don't unmap windows that aren't on `output` (that would clear all other monitors)
         windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
 
         let tiled_windows = windows_on_foc_tags
@@ -137,14 +132,13 @@ impl State {
             });
         }
 
-        // self.loop_handle.insert_idle(|data| {
-        //     crate::state::schedule_on_commit(data, windows_on_foc_tags, |dt| {
-        //         for win in windows_not_on_foc_tags {
-        //             // dt.state.space.map_element(win, (500, 0), false);
-        //             dt.state.space.unmap_elem(&win);
-        //         }
-        //     })
-        // });
+        self.loop_handle.insert_idle(|data| {
+            crate::state::schedule_on_commit(data, windows_on_foc_tags, |dt| {
+                for win in windows_not_on_foc_tags {
+                    dt.state.space.unmap_elem(&win);
+                }
+            })
+        });
     }
 }
 
@@ -462,36 +456,13 @@ impl State {
             }
         }
 
-        let mut same_suggested_size = false;
-
-        if let WindowElement::Wayland(w1) = win1 {
-            if let WindowElement::Wayland(w2) = win2 {
-                if let Some(w1_size) = w1.toplevel().current_state().size {
-                    if let Some(w2_size) = w2.toplevel().current_state().size {
-                        same_suggested_size = w1_size == w2_size;
-                    }
-                }
-            }
-        }
-
-        if same_suggested_size {
-            let win1_loc = self.space.element_location(win1);
-            let win2_loc = self.space.element_location(win2);
-
-            if let Some(win1_loc) = win1_loc {
-                if let Some(win2_loc) = win2_loc {
-                    self.space.map_element(win1.clone(), win2_loc, false);
-                    self.space.map_element(win2.clone(), win1_loc, false);
-                }
-            }
-        } else {
-            // TODO: don't use the focused output, use the outputs the two windows are on
-            let output = self
-                .focus_state
-                .focused_output
-                .clone()
-                .expect("no focused output");
-            self.update_windows(&output);
-        }
+        // TODO: don't use the focused output, use the outputs the two windows are on
+        let output = self
+            .focus_state
+            .focused_output
+            .clone()
+            .expect("no focused output");
+        self.update_windows(&output);
+        // self.re_layout(&output);
     }
 }

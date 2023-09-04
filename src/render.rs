@@ -11,8 +11,7 @@ use smithay::{
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
-        layer_map_for_output,
-        space::{SpaceRenderElements, SurfaceTree},
+        space::{self, SpaceRenderElements, SurfaceTree},
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -23,10 +22,10 @@ use smithay::{
     },
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
-    wayland::{compositor, input_method::InputMethodHandle, shell::wlr_layer},
+    wayland::{compositor, input_method::InputMethodHandle},
 };
 
-use crate::{state::WithState, tag::Tag, window::WindowElement};
+use crate::{state::WithState, window::WindowElement};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -77,71 +76,18 @@ where
     }
 }
 
-struct LayerRenderElements<R> {
-    background: Vec<WaylandSurfaceRenderElement<R>>,
-    bottom: Vec<WaylandSurfaceRenderElement<R>>,
-    top: Vec<WaylandSurfaceRenderElement<R>>,
-    overlay: Vec<WaylandSurfaceRenderElement<R>>,
-}
-
-fn layer_render_elements<R>(output: &Output, renderer: &mut R) -> LayerRenderElements<R>
-where
-    R: Renderer + ImportAll,
-    <R as Renderer>::TextureId: 'static,
-{
-    let layer_map = layer_map_for_output(output);
-    let mut overlay = vec![];
-    let mut top = vec![];
-    let mut bottom = vec![];
-    let mut background = vec![];
-
-    let layer_elements = layer_map
-        .layers()
-        .filter_map(|surface| {
-            layer_map
-                .layer_geometry(surface)
-                .map(|geo| (surface, geo.loc))
-        })
-        .map(|(surface, loc)| {
-            let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
-                renderer,
-                loc.to_physical(1),
-                Scale::from(1.0),
-                1.0,
-            );
-            (surface.layer(), render_elements)
-        });
-
-    for (layer, elements) in layer_elements {
-        match layer {
-            wlr_layer::Layer::Background => background.extend(elements),
-            wlr_layer::Layer::Bottom => bottom.extend(elements),
-            wlr_layer::Layer::Top => top.extend(elements),
-            wlr_layer::Layer::Overlay => overlay.extend(elements),
-        }
-    }
-
-    LayerRenderElements {
-        background,
-        bottom,
-        top,
-        overlay,
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
+    renderer: &mut R,
     space: &Space<WindowElement>,
-    windows: &[WindowElement],
+    output: &Output,
+    input_method: &InputMethodHandle,
     pointer_location: Point<f64, Logical>,
+    pointer_element: &mut PointerElement<T>,
+    pointer_image: Option<&TextureBuffer<T>>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     focus_stack: &[WindowElement],
-    renderer: &mut R,
-    output: &Output,
-    input_method: &InputMethodHandle,
-    pointer_element: &mut PointerElement<T>,
-    pointer_image: Option<&TextureBuffer<T>>,
 ) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer<TextureId = T> + ImportAll + ImportMem,
@@ -264,48 +210,24 @@ where
 
             output_render_elements
         } else {
-            let LayerRenderElements {
-                background,
-                bottom,
-                top,
-                overlay,
-            } = layer_render_elements(output, renderer);
-
-            let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                Tag::tag_render_elements(windows, space, renderer);
+            // render everything
+            let space_render_elements =
+                space::space_render_elements(renderer, [space], output, 1.0)
+                    .expect("Failed to get render elements");
 
             let mut output_render_elements =
-                Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
-
-            // let space_render_elements =
-            //     smithay::desktop::space::space_render_elements(renderer, [space], output, 1.0)
-            //         .expect("failed to get space_render_elements");
-
-            // Elements render from top to bottom
+                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
 
             output_render_elements.extend(
                 custom_render_elements
                     .into_iter()
                     .map(OutputRenderElements::from),
             );
-
             output_render_elements.extend(
-                overlay
+                space_render_elements
                     .into_iter()
-                    .chain(top)
-                    .chain(window_render_elements)
-                    .chain(bottom)
-                    .chain(background)
-                    .map(CustomRenderElements::from)
                     .map(OutputRenderElements::from),
             );
-
-            // output_render_elements.extend(
-            //     space_render_elements
-            //         .into_iter()
-            //         .map(OutputRenderElements::from),
-            // );
-
             output_render_elements
         }
     };

@@ -50,7 +50,9 @@ impl FocusState {
     /// to back to correct their z locations.
     pub fn fix_up_focus(&self, space: &mut Space<WindowElement>) {
         for win in self.focus_stack.iter() {
-            space.raise_element(win, false);
+            if let Some(loc) = space.element_location(win) {
+                space.map_element(win.clone(), loc, false);
+            }
         }
     }
 }
