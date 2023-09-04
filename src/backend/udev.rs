@@ -1344,19 +1344,18 @@ impl State {
         };
 
         let result = render_surface(
-            &mut self.cursor_status,
-            &self.space,
-            &self.windows,
-            self.dnd_icon.as_ref(),
-            &self.focus_state.focus_stack,
             surface,
             &mut renderer,
+            &self.space,
             &output,
             self.seat.input_method(),
+            self.pointer_location,
             &pointer_image,
             &mut backend.pointer_element,
-            self.pointer_location,
+            &mut self.cursor_status,
+            self.dnd_icon.as_ref(),
             &self.clock,
+            &self.focus_state.focus_stack,
         );
         let reschedule = match &result {
             Ok(has_rendered) => !has_rendered,
@@ -1449,32 +1448,30 @@ impl State {
 
 #[allow(clippy::too_many_arguments)]
 fn render_surface<'a>(
-    cursor_status: &mut CursorImageStatus,
-    space: &Space<WindowElement>,
-    windows: &[WindowElement],
-    dnd_icon: Option<&WlSurface>,
-    focus_stack: &[WindowElement],
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
+    space: &Space<WindowElement>,
     output: &Output,
     input_method: &InputMethodHandle,
+    pointer_location: Point<f64, Logical>,
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
-    pointer_location: Point<f64, Logical>,
+    cursor_status: &mut CursorImageStatus,
+    dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
+    focus_stack: &[WindowElement],
 ) -> Result<bool, SwapBuffersError> {
     let output_render_elements = crate::render::generate_render_elements(
+        renderer,
         space,
-        windows,
+        output,
+        input_method,
         pointer_location,
+        pointer_element,
+        Some(pointer_image),
         cursor_status,
         dnd_icon,
         focus_stack,
-        renderer,
-        output,
-        input_method,
-        pointer_element,
-        Some(pointer_image),
     );
 
     let res = surface.compositor.render_frame::<_, _, GlesTexture>(

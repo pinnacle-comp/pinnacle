@@ -236,20 +236,17 @@ pub fn run_winit() -> anyhow::Result<()> {
                 let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);
 
-                state.focus_state.fix_up_focus(&mut state.space);
-
                 let output_render_elements = crate::render::generate_render_elements(
+                    backend.backend.renderer(),
                     &state.space,
-                    &state.windows,
+                    &output,
+                    state.seat.input_method(),
                     state.pointer_location,
+                    &mut pointer_element,
+                    None,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),
                     &state.focus_state.focus_stack,
-                    backend.backend.renderer(),
-                    &output,
-                    state.seat.input_method(),
-                    &mut pointer_element,
-                    None,
                 );
 
                 let render_res = backend.backend.bind().and_then(|_| {
@@ -274,7 +271,6 @@ pub fn run_winit() -> anyhow::Result<()> {
                     Ok(render_output_result) => {
                         let has_rendered = render_output_result.damage.is_some();
                         if let Some(damage) = render_output_result.damage {
-                            // tracing::debug!("damage rects are {damage:?}");
                             if let Err(err) = backend.backend.submit(Some(&damage)) {
                                 tracing::warn!("{}", err);
                             }
