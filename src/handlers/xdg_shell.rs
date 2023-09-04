@@ -92,6 +92,8 @@ impl XdgShellHandler for State {
         // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
 
+        self.space.map_element(window.clone(), (0, 0), true);
+
         let win_clone = window.clone();
         self.schedule(
             move |_data| {
