@@ -1,11 +1,8 @@
-use std::time::Duration;
-
 use smithay::{
     delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, layer_map_for_output, utils::surface_primary_scanout_output,
-        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
-        WindowSurfaceType,
+        find_popup_root_surface, layer_map_for_output, PopupKeyboardGrab, PopupKind,
+        PopupPointerGrab, PopupUngrabStrategy, Window, WindowSurfaceType,
     },
     input::{pointer::Focus, Seat},
     output::Output,
@@ -287,16 +284,6 @@ impl XdgShellHandler for State {
                                 // tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
-                                if let Some(focused_output) =
-                                    self.focus_state.focused_output.clone()
-                                {
-                                    window.send_frame(
-                                        &focused_output,
-                                        self.clock.now(),
-                                        Some(Duration::ZERO),
-                                        surface_primary_scanout_output,
-                                    );
-                                }
                             }
                         }
                         Configure::Popup(_) => todo!(),

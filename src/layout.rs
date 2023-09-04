@@ -114,9 +114,17 @@ impl State {
             window.with_state(|state| {
                 if let LocationRequestState::Sent(loc) = state.loc_request_state {
                     match &window {
-                        WindowElement::Wayland(window) => {
-                            let serial = window.toplevel().send_configure();
-                            state.loc_request_state = LocationRequestState::Requested(serial, loc);
+                        WindowElement::Wayland(win) => {
+                            // If the above didn't cause any change to size or other state, simply
+                            // map the window.
+                            if !win.toplevel().has_pending_changes() {
+                                state.loc_request_state = LocationRequestState::Idle;
+                                self.space.map_element(window.clone(), loc, false);
+                            } else {
+                                let serial = win.toplevel().send_configure();
+                                state.loc_request_state =
+                                    LocationRequestState::Requested(serial, loc);
+                            }
                         }
                         WindowElement::X11(surface) => {
                             // already configured, just need to map
