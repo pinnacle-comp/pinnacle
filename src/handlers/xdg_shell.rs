@@ -1,11 +1,8 @@
-use std::time::Duration;
-
 use smithay::{
     delegate_xdg_shell,
     desktop::{
-        find_popup_root_surface, layer_map_for_output, utils::surface_primary_scanout_output,
-        PopupKeyboardGrab, PopupKind, PopupPointerGrab, PopupUngrabStrategy, Window,
-        WindowSurfaceType,
+        find_popup_root_surface, layer_map_for_output, PopupKeyboardGrab, PopupKind,
+        PopupPointerGrab, PopupUngrabStrategy, Window, WindowSurfaceType,
     },
     input::{pointer::Focus, Seat},
     output::Output,
@@ -91,49 +88,74 @@ impl XdgShellHandler for State {
         // note to self: don't reorder this
         // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
-        // self.space.map_element(window.clone(), (0, 0), true);
-        if let Some(focused_output) = self.focus_state.focused_output.clone() {
-            self.update_windows(&focused_output);
-            BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-            tracing::debug!(
-                "blocker {}",
-                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-            );
-            for win in windows_on_output.iter() {
-                if let Some(surf) = win.wl_surface() {
-                    compositor::add_blocker(&surf, crate::window::WindowBlocker);
+
+        self.space.map_element(window.clone(), (0, 0), true);
+
+        let win_clone = window.clone();
+        self.schedule(
+            move |_data| {
+                if let WindowElement::Wayland(window) = &win_clone {
+                    let initial_configure_sent =
+                        compositor::with_states(window.toplevel().wl_surface(), |states| {
+                            states
+                                .data_map
+                                .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                .lock()
+                                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                                .initial_configure_sent
+                        });
+
+                    initial_configure_sent
+                } else {
+                    true
                 }
-            }
-            let clone = window.clone();
-            self.loop_handle.insert_idle(|data| {
-                crate::state::schedule_on_commit(data, vec![clone], move |data| {
-                    BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
+            },
+            |data| {
+                if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
+                    data.state.update_windows(&focused_output);
+                    BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
                     tracing::debug!(
                         "blocker {}",
                         BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
                     );
-                    for client in windows_on_output
-                        .iter()
-                        .filter_map(|win| win.wl_surface()?.client())
-                    {
-                        data.state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(&mut data.state, &data.display.handle())
+                    for win in windows_on_output.iter() {
+                        if let Some(surf) = win.wl_surface() {
+                            compositor::add_blocker(&surf, crate::window::WindowBlocker);
+                        }
                     }
-                })
-            });
-        }
-        self.loop_handle.insert_idle(move |data| {
-            data.state
-                .seat
-                .get_keyboard()
-                .expect("Seat had no keyboard") // FIXME: actually handle error
-                .set_focus(
-                    &mut data.state,
-                    Some(FocusTarget::Window(window)),
-                    SERIAL_COUNTER.next_serial(),
-                );
-        });
+                    let clone = window.clone();
+                    data.state.loop_handle.insert_idle(|data| {
+                        crate::state::schedule_on_commit(data, vec![clone], move |data| {
+                            BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
+                            tracing::debug!(
+                                "blocker {}",
+                                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+                            );
+                            for client in windows_on_output
+                                .iter()
+                                .filter_map(|win| win.wl_surface()?.client())
+                            {
+                                data.state
+                                    .client_compositor_state(&client)
+                                    .blocker_cleared(&mut data.state, &data.display.handle())
+                            }
+                        })
+                    });
+                }
+                data.state.loop_handle.insert_idle(move |data| {
+                    data.state
+                        .seat
+                        .get_keyboard()
+                        .expect("Seat had no keyboard") // FIXME: actually handle error
+                        .set_focus(
+                            &mut data.state,
+                            Some(FocusTarget::Window(window)),
+                            SERIAL_COUNTER.next_serial(),
+                        );
+                });
+            },
+        );
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
@@ -262,16 +284,6 @@ impl XdgShellHandler for State {
                                 // tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
-                                if let Some(focused_output) =
-                                    self.focus_state.focused_output.clone()
-                                {
-                                    window.send_frame(
-                                        &focused_output,
-                                        self.clock.now(),
-                                        Some(Duration::ZERO),
-                                        surface_primary_scanout_output,
-                                    );
-                                }
                             }
                         }
                         Configure::Popup(_) => todo!(),

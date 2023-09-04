@@ -853,38 +853,6 @@ impl State {
             device_id: node,
         });
 
-        // Run any connected callbacks
-        {
-            let clone = output.clone();
-            self.loop_handle.insert_idle(|data| {
-                crate::state::schedule(
-                    data,
-                    |dt| dt.state.api_state.stream.is_some(),
-                    move |dt| {
-                        let stream = dt
-                            .state
-                            .api_state
-                            .stream
-                            .as_ref()
-                            .expect("Stream doesn't exist");
-                        let mut stream = stream.lock().expect("Couldn't lock stream");
-                        for callback_id in dt.state.output_callback_ids.iter() {
-                            crate::api::send_to_client(
-                                &mut stream,
-                                &OutgoingMsg::CallCallback {
-                                    callback_id: *callback_id,
-                                    args: Some(Args::ConnectForAllOutputs {
-                                        output_name: clone.name(),
-                                    }),
-                                },
-                            )
-                            .expect("Send to client failed");
-                        }
-                    },
-                )
-            });
-        }
-
         let allocator = GbmAllocator::new(
             device.gbm.clone(),
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
@@ -980,6 +948,35 @@ impl State {
         device.surfaces.insert(crtc, surface);
 
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
+
+        // Run any connected callbacks
+        {
+            let clone = output.clone();
+            self.schedule(
+                |dt| dt.state.api_state.stream.is_some(),
+                move |dt| {
+                    let stream = dt
+                        .state
+                        .api_state
+                        .stream
+                        .as_ref()
+                        .expect("Stream doesn't exist");
+                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                    for callback_id in dt.state.output_callback_ids.iter() {
+                        crate::api::send_to_client(
+                            &mut stream,
+                            &OutgoingMsg::CallCallback {
+                                callback_id: *callback_id,
+                                args: Some(Args::ConnectForAllOutputs {
+                                    output_name: clone.name(),
+                                }),
+                            },
+                        )
+                        .expect("Send to client failed");
+                    }
+                },
+            );
+        }
     }
 
     fn connector_disconnected(
