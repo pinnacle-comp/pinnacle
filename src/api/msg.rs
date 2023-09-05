@@ -3,6 +3,8 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
+mod window_rules;
+
 use crate::{
     layout::Layout,
     output::OutputName,
