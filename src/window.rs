@@ -221,23 +221,13 @@ impl WindowElement {
                 surface
                     .configure(Rectangle::from_loc_and_size(new_loc, new_size))
                     .expect("failed to configure x11 win");
-                // self.with_state(|state| {
-                //     state.resize_state = WindowResizeState::Acknowledged(new_loc);
-                // });
+
                 if !surface.is_override_redirect() {
                     surface
                         .set_mapped(true)
                         .expect("failed to set x11 win to mapped");
                 }
                 space.map_element(self.clone(), new_loc, false);
-                // if let Some(focused_output) = state.focus_state.focused_output.clone() {
-                //     self.send_frame(
-                //         &focused_output,
-                //         state.clock.now(),
-                //         Some(Duration::ZERO),
-                //         surface_primary_scanout_output,
-                //     );
-                // }
             }
         }
     }

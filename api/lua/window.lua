@@ -5,7 +5,10 @@
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class WindowModule
-local window_module = {}
+local window_module = {
+    ---Window rules.
+    rules = require("window_rules"),
+}
 
 ---A window object.
 ---

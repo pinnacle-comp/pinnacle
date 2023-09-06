@@ -59,7 +59,7 @@ pub enum Msg {
     },
     AddWindowRule {
         cond: WindowRuleCondition,
-        rule: Vec<WindowRule>,
+        rule: WindowRule,
     },
 
     // Tag management

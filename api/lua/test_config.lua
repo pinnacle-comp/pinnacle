@@ -27,10 +27,21 @@ require("pinnacle").setup(function(pinnacle)
 
     local terminal = "alacritty"
 
+    -- Outputs -----------------------------------------------------------------------
+
+    -- You can set your own monitor layout as I have done below for my monitors.
+
+    -- local lg = output.get_by_name("DP-2") --[[@as Output]]
+    -- local dell = output.get_by_name("DP-3") --[[@as Output]]
+    --
+    -- dell:set_loc_left_of(lg, "bottom")
+
     -- Keybinds ----------------------------------------------------------------------
 
+    -- mod_key + Alt + q quits the compositor
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
+    -- mod_key + Alt + c closes the focused window
     input.keybind({ mod_key, "Alt" }, keys.c, function()
         -- The commented out line may crash the config process if you have no windows open.
         -- There is no nil warning here due to limitations in Lua LS type checking, so check for nil as shown below.
@@ -41,6 +52,14 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
+    -- mod_key + return spawns a terminal
+    input.keybind({ mod_key }, keys.Return, function()
+        process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
+            -- do something with the output here
+        end)
+    end)
+
+    -- mod_key + Alt + Space toggle floating on the focused window
     input.keybind({ mod_key, "Alt" }, keys.space, function()
         local win = window.get_focused()
         if win ~= nil then
@@ -48,138 +67,30 @@ require("pinnacle").setup(function(pinnacle)
         end
     end)
 
-    input.keybind({ mod_key }, keys.Return, function()
-        process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
-            -- do something with the output here
-        end)
-    end)
-
-    input.keybind({ mod_key }, keys.l, function()
-        process.spawn("kitty")
-    end)
-    input.keybind({ mod_key }, keys.k, function()
-        process.spawn("foot")
-    end)
-    input.keybind({ mod_key }, keys.j, function()
-        process.spawn("nautilus")
-    end)
-
+    -- mod_key + f toggles fullscreen on the focused window
     input.keybind({ mod_key }, keys.f, function()
         local win = window.get_focused()
         if win ~= nil then
-            win:set_status("Fullscreen")
+            win:toggle_fullscreen()
         end
     end)
 
+    -- mod_key + m toggles maximized on the focused window
     input.keybind({ mod_key }, keys.m, function()
         local win = window.get_focused()
         if win ~= nil then
-            win:set_status("Maximized")
+            win:toggle_maximized()
         end
-    end)
-
-    input.keybind({ mod_key }, keys.t, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:set_status("Tiled")
-        end
-    end)
-
-    -- Just testing stuff
-    input.keybind({ mod_key }, keys.h, function()
-        local dp2 = output.get_by_name("DP-2")
-        local dp3 = output.get_by_name("DP-3")
-
-        dp2:set_loc_bottom_of(dp3, "right")
-
-        -- local win = window.get_focused()
-        -- if win ~= nil then
-        --     win:set_size({ w = 500, h = 500 })
-        -- end
-
-        -- local wins = window.get_all()
-        -- for _, win in pairs(wins) do
-        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-        --     print("class: " .. (win:class() or "nil"))
-        --     print("title: " .. (win:title() or "nil"))
-        --     print("float: " .. tostring(win:floating()))
-        -- end
-        --
-        -- print("----------------------")
-        --
-        -- local op = output.get_focused() --[[@as Output]]
-        -- print("res: " .. (op:res() and (op:res().w .. ", " .. op:res().h) or "nil"))
-        -- print("loc: " .. (op:loc() and (op:loc().x .. ", " .. op:loc().y) or "nil"))
-        -- print("rr: " .. (op:refresh_rate() or "nil"))
-        -- print("make: " .. (op:make() or "nil"))
-        -- print("model: " .. (op:model() or "nil"))
-        -- print("focused: " .. (tostring(op:focused())))
-        --
-        -- print("----------------------")
-        --
-        -- local wins = window.get_by_class("Alacritty")
-        -- for _, win in pairs(wins) do
-        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-        --     print("class: " .. (win:class() or "nil"))
-        --     print("title: " .. (win:title() or "nil"))
-        --     print("float: " .. tostring(win:floating()))
-        -- end
-        --
-        -- print("----------------------")
-        --
-        -- local wins = window.get_by_title("~/p/pinnacle")
-        -- for _, win in pairs(wins) do
-        --     print("loc: " .. (win:loc() and win:loc().x or "nil") .. ", " .. (win:loc() and win:loc().y or "nil"))
-        --     print("size: " .. (win:size() and win:size().w or "nil") .. ", " .. (win:size() and win:size().h or "nil"))
-        --     print("class: " .. (win:class() or "nil"))
-        --     print("title: " .. (win:title() or "nil"))
-        --     print("float: " .. tostring(win:floating()))
-        -- end
-        --
-        -- print("----------------------")
-        --
-        -- local tags = tag.get_on_output(output.get_focused() --[[@as Output]])
-        -- for _, tg in pairs(tags) do
-        --     print(tg:name())
-        --     print((tg:output() and tg:output():name()) or "nil output")
-        --     print(tg:active())
-        -- end
-        --
-        -- print("----------------------")
-        --
-        -- local tags = tag.get_by_name("2")
-        -- for _, tg in pairs(tags) do
-        --     print(tg:name())
-        --     print((tg:output() and tg:output():name()) or "nil output")
-        --     print(tg:active())
-        -- end
-        --
-        -- print("----------------------")
-        --
-        -- local tags = tag.get_all()
-        -- for _, tg in pairs(tags) do
-        --     print(tg:name())
-        --     print((tg:output() and tg:output():name()) or "nil output")
-        --     print(tg:active())
-        -- end
     end)
 
     -- Tags ---------------------------------------------------------------------------
 
     output.connect_for_all(function(op)
+        -- Add tags 1, 2, 3, 4 and 5 on all monitors, and toggle tag 1 active by default
+
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-
-        -- local tags_table = { "Terminal", "Browser", "Code", "Email", "Potato" }
-        -- op:add_tags(tags_table)
-
-        -- for _, t in pairs(tag.get_by_name("1")) do
-        --     t:toggle()
-        -- end
-
-        tag.toggle("1", op)
+        tag.toggle({ "1", op })
     end)
 
     ---@type Layout[]
@@ -193,6 +104,12 @@ require("pinnacle").setup(function(pinnacle)
         "CornerBottomRight",
     }
     local indices = {}
+
+    -- Window rules
+    window.rules.add({
+        cond = { class = "kitty" },
+        rule = { floating_or_tiled = "Floating" },
+    })
 
     -- Layout cycling
     -- Yes, this is overly complicated and yes, I'll cook up a way to make it less so.

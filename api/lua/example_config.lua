@@ -105,6 +105,12 @@ require("pinnacle").setup(function(pinnacle)
     }
     local indices = {}
 
+    -- Window rules
+    window.rules.add({
+        cond = { class = "kitty" },
+        rule = { size = { 300, 300 }, location = { 50, 50 } },
+    })
+
     -- Layout cycling
     -- Yes, this is overly complicated and yes, I'll cook up a way to make it less so.
     input.keybind({ mod_key }, keys.space, function()

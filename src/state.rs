@@ -126,7 +126,7 @@ pub struct State {
     pub dnd_icon: Option<WlSurface>,
 
     pub windows: Vec<WindowElement>,
-    pub window_rules: Vec<(WindowRuleCondition, Vec<WindowRule>)>,
+    pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
 
     pub async_scheduler: Scheduler<()>,
     pub config_process: async_process::Child,
