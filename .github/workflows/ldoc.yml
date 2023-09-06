@@ -7,12 +7,12 @@ on:
     branches:
       - main
     paths:
-      - "api/lua/doc/**"
+      - "api/lua/**"
   push:
     branches:
       - main
     paths:
-      - "api/lua/doc/**"
+      - "api/lua/**"
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
