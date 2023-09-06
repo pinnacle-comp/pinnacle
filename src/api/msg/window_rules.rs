@@ -83,20 +83,20 @@ impl WindowRuleCondition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum WindowRule {
+pub struct WindowRule {
     /// Set the output the window will open on.
-    Output(OutputName),
+    pub output: Option<OutputName>,
     /// Set the tags the output will have on open.
-    Tags(Vec<TagId>),
+    pub tags: Option<Vec<TagId>>,
     /// Set the window to floating or tiled on open.
-    FloatingOrTiled(FloatingOrTiled),
+    pub floating_or_tiled: Option<FloatingOrTiled>,
     /// Set the window to fullscreen, maximized, or force it to neither.
-    FullscreenOrMaximized(FullscreenOrMaximized),
+    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
     /// Set the window's initial size.
-    Size(NonZeroU32, NonZeroU32),
+    pub size: Option<(NonZeroU32, NonZeroU32)>,
     /// Set the window's initial location. If the window is tiled, it will snap to this position
     /// when set to floating.
-    Location(i32, i32),
+    pub location: Option<(i32, i32)>,
 }
 
 // TODO: just skip serializing fields on the other FloatingOrTiled

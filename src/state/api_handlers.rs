@@ -117,6 +117,9 @@ impl State {
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
             }
+            Msg::AddWindowRule { cond, rule } => {
+                self.window_rules.push((cond, rule));
+            }
 
             // Tags ----------------------------------------
             Msg::ToggleTag { tag_id } => {

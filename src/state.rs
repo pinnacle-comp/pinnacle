@@ -12,7 +12,10 @@ use std::{
 
 use crate::{
     api::{
-        msg::{CallbackId, ModifierMask, Msg},
+        msg::{
+            window_rules::{WindowRule, WindowRuleCondition},
+            CallbackId, ModifierMask, Msg,
+        },
         PinnacleSocketSource, DEFAULT_SOCKET_DIR,
     },
     backend::{udev::Udev, winit::Winit, BackendData},
@@ -123,6 +126,7 @@ pub struct State {
     pub dnd_icon: Option<WlSurface>,
 
     pub windows: Vec<WindowElement>,
+    pub window_rules: Vec<(WindowRuleCondition, Vec<WindowRule>)>,
 
     pub async_scheduler: Scheduler<()>,
     pub config_process: async_process::Child,
@@ -145,10 +149,6 @@ where
     for window in windows.iter().filter(|win| win.alive()) {
         if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
         {
-            // tracing::debug!(
-            //     "window state is {:?}",
-            //     window.with_state(|state| state.loc_request_state.clone())
-            // );
             data.state.loop_handle.insert_idle(|data| {
                 schedule_on_commit(data, windows, on_commit);
             });
@@ -370,6 +370,7 @@ impl State {
             config_process: config_child_handle,
 
             windows: vec![],
+            window_rules: vec![],
             output_callback_ids: vec![],
 
             xwayland,
@@ -391,7 +392,7 @@ impl State {
         });
     }
 
-    // Schedule something to be done when `condition` returns true.
+    /// Schedule something to be done when `condition` returns true.
     fn schedule_inner<F1, F2>(data: &mut CalloopData, condition: F1, run: F2)
     where
         F1: Fn(&mut CalloopData) -> bool + 'static,
@@ -418,6 +419,7 @@ fn get_config_dir() -> PathBuf {
             .to_string_lossy()
             .to_string()
     });
+
     PathBuf::from(shellexpand::tilde(&config_dir).to_string())
 }
 
@@ -444,6 +446,7 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
                     shellexpand::full_with_context(
                         &string,
                         || std::env::var("HOME").ok(),
+                        // Expand nonexistent vars to an empty string instead of crashing
                         |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
                     )
                     .ok()?
@@ -457,6 +460,8 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
 
     tracing::debug!("Config envs are {:?}", envs);
 
+    // Using async_process's Child instead of std::process because I don't have to spawn my own
+    // thread to wait for the child
     let child = async_process::Command::new(arg1)
         .args(command)
         .envs(envs)
@@ -494,6 +499,7 @@ impl State {
         tracing::debug!("Clearing mouse- and keybinds");
         self.input_state.keybinds.clear();
         self.input_state.mousebinds.clear();
+        self.window_rules.clear();
 
         tracing::debug!("Killing old config");
         if let Err(err) = self.config_process.kill() {
@@ -528,6 +534,7 @@ pub struct CalloopData {
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
 }
+
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
 
@@ -588,7 +595,7 @@ impl ApiState {
 }
 
 pub trait WithState {
-    type State: Default;
+    type State;
     fn with_state<F, T>(&self, func: F) -> T
     where
         F: FnMut(&mut Self::State) -> T;
