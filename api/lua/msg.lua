@@ -13,7 +13,7 @@
 ---@field ToggleFloating { window_id: WindowId }?
 ---@field ToggleFullscreen { window_id: WindowId }?
 ---@field ToggleMaximized { window_id: WindowId }?
----@field AddWindowRule { cond: WindowRuleCondition, rule: WindowRule }?
+---@field AddWindowRule { cond: _WindowRuleCondition, rule: _WindowRule }?
 --
 ---@field Spawn { command: string[], callback_id: integer? }?
 ---@field Request Request?

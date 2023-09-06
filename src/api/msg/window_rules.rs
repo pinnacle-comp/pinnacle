@@ -74,6 +74,7 @@ impl WindowRuleCondition {
             }
             WindowRuleCondition::Tag(tag) => {
                 let Some(tag) = tag.tag(state) else {
+                    tracing::warn!("WindowRuleCondition no tag");
                     return false;
                 };
 

@@ -2,6 +2,39 @@
 ---@class WindowRules
 local window_rules = {}
 
+---Convert all tag constructors in `cond` to actual tags
+---@param cond WindowRuleCondition
+---@return _WindowRuleCondition
+local function convert_tag_params(cond)
+    if cond.tag then
+        ---@type TagId|Tag|nil
+        local tag = require("tag").create_tag_from_params(cond.tag)
+        if tag then
+            ---@diagnostic disable-next-line
+            tag = tag:id()
+        end
+        cond.tag = tag
+    end
+
+    if cond.cond_any then
+        local conds = {}
+        for _, c in pairs(cond.cond_any) do
+            table.insert(conds, convert_tag_params(c))
+        end
+        cond.cond_any = conds
+    end
+
+    if cond.cond_all then
+        local conds = {}
+        for _, c in pairs(cond.cond_all) do
+            table.insert(conds, convert_tag_params(c))
+        end
+        cond.cond_all = conds
+    end
+
+    return cond --[[@as _WindowRuleCondition]]
+end
+
 ---Add one or more window rules.
 ---
 ---A window rule defines what a window will spawn with given certain conditions.
@@ -56,10 +89,31 @@ function window_rules.add(...)
     local rules = { ... }
 
     for _, rule in pairs(rules) do
+        ---@diagnostic disable-next-line a lil cheating
+        rule.cond = convert_tag_params(rule.cond)
+
+        if rule.rule.tags then
+            local tags = {}
+            for _, tag in pairs(rule.rule.tags) do
+                ---@type TagId|Tag|nil
+                local t = require("tag").create_tag_from_params(tag)
+                if t then
+                    ---@diagnostic disable-next-line
+                    t = t:id()
+                end
+                table.insert(tags, t)
+            end
+            rule.rule.tags = tags
+        end
+
+        RPrint(rule)
+
         SendMsg({
             AddWindowRule = {
-                cond = rule.cond,
-                rule = rule.rule,
+                -- stylua: ignore start
+                cond = rule.cond --[[@as _WindowRuleCondition]],
+                rule = rule.rule --[[@as _WindowRule]],
+                -- stylua: ignore end
             },
         })
     end

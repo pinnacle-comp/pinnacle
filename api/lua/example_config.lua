@@ -91,6 +91,17 @@ require("pinnacle").setup(function(pinnacle)
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
         tag.toggle({ "1", op })
+
+        -- Window rules
+        window.rules.add({
+            cond = { class = "kitty" },
+            rule = { size = { 300, 300 }, location = { 50, 50 } },
+        }, {
+            cond = {
+                cond_all = { { class = "Alacritty" }, { tag = "4" } },
+            },
+            rule = { size = { 500, 500 }, floating_or_tiled = "Floating" },
+        })
     end)
 
     ---@type Layout[]
@@ -104,12 +115,6 @@ require("pinnacle").setup(function(pinnacle)
         "CornerBottomRight",
     }
     local indices = {}
-
-    -- Window rules
-    window.rules.add({
-        cond = { class = "kitty" },
-        rule = { size = { 300, 300 }, location = { 50, 50 } },
-    })
 
     -- Layout cycling
     -- Yes, this is overly complicated and yes, I'll cook up a way to make it less so.
