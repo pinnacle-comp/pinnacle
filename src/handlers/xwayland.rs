@@ -187,20 +187,6 @@ impl XwmHandler for CalloopData {
                                 .client_compositor_state(&client)
                                 .blocker_cleared(&mut data.state, &data.display.handle())
                         }
-
-                        // Schedule the popup to raise when all windows have committed after having
-                        // their blockers cleared
-                        crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
-                            let WindowElement::X11(surface) = &clone else { unreachable!() };
-                            if should_float(surface) {
-                                if let Some(xwm) = dt.state.xwm.as_mut() {
-                                    tracing::debug!("raising x11 popup");
-                                    xwm.raise_window(surface).expect("failed to raise x11 win");
-                                    dt.state.space.raise_element(&clone, true);
-                                    dt.state.focus_state.set_focus(clone);
-                                }
-                            }
-                        });
                     });
                 });
             }
