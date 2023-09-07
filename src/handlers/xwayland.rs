@@ -154,6 +154,11 @@ impl XwmHandler for CalloopData {
                 .collect::<Vec<_>>();
 
             self.state.windows.push(window.clone());
+
+            self.state.focus_state.set_focus(window.clone());
+
+            self.state.apply_window_rules(&window);
+
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
                 self.state.update_windows(&focused_output);
                 BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);

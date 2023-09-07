@@ -2,8 +2,6 @@
 
 use std::num::NonZeroU32;
 
-use smithay::wayland::{compositor, shell::xdg::XdgToplevelSurfaceData};
-
 use crate::{
     output::OutputName,
     state::{State, WithState},
@@ -36,42 +34,8 @@ impl WindowRuleCondition {
             WindowRuleCondition::CondAll(conds) => {
                 conds.iter().all(|cond| Self::is_met(cond, state, window))
             }
-            WindowRuleCondition::Class(class) => {
-                let Some(wl_surf) = window.wl_surface() else {
-                    return false;
-                };
-
-                let current_class = compositor::with_states(&wl_surf, |states| {
-                    states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                        .lock()
-                        .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                        .app_id
-                        .clone()
-                });
-
-                current_class.as_ref() == Some(class)
-            }
-            WindowRuleCondition::Title(title) => {
-                let Some(wl_surf) = window.wl_surface() else {
-                    return false;
-                };
-
-                let current_title = compositor::with_states(&wl_surf, |states| {
-                    states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                        .lock()
-                        .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                        .title
-                        .clone()
-                });
-
-                current_title.as_ref() == Some(title)
-            }
+            WindowRuleCondition::Class(class) => window.class().as_ref() == Some(class),
+            WindowRuleCondition::Title(title) => window.title().as_ref() == Some(title),
             WindowRuleCondition::Tag(tag) => {
                 let Some(tag) = tag.tag(state) else {
                     tracing::warn!("WindowRuleCondition no tag");

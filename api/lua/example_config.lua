@@ -98,7 +98,7 @@ require("pinnacle").setup(function(pinnacle)
             rule = { size = { 300, 300 }, location = { 50, 50 } },
         }, {
             cond = {
-                cond_all = { { class = "Alacritty" }, { tag = "4" } },
+                cond_all = { { class = "XTerm" }, { tag = "4" } },
             },
             rule = { size = { 500, 500 }, floating_or_tiled = "Floating" },
         })
