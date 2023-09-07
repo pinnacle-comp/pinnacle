@@ -127,8 +127,17 @@ impl XdgShellHandler for State {
                             location,
                         } = rule;
 
-                        if let Some(_output_name) = output {
-                            // TODO:
+                        // TODO: If both `output` and `tags` are specified, `tags` will apply over
+                        // |     `output`.
+
+                        if let Some(output_name) = output {
+                            if let Some(output) = output_name.output(&data.state) {
+                                let tags = output.with_state(|state| {
+                                    state.focused_tags().cloned().collect::<Vec<_>>()
+                                });
+
+                                window.with_state(|state| state.tags = tags.clone());
+                            }
                         }
 
                         if let Some(tag_ids) = tags {

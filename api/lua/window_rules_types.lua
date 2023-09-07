@@ -31,7 +31,7 @@
 ---@field location { [1]: integer, [2]: integer }? The location the window will spawn at. If the window spawns tiled, it will instead snap to this location when set to floating.
 
 ---@class WindowRule Attributes the window will be spawned with.
----@field output OutputName? The output this window will be spawned on. TODO:
+---@field output (Output|OutputName)? The output this window will be spawned on. TODO:
 ---@field tags (Tag|TagTable|TagTableNamed|string)[]? The tags this window will be spawned with.
 ---@field floating_or_tiled ("Floating"|"Tiled")? Whether or not this window will be spawned floating or tiled.
 ---@field fullscreen_or_maximized FullscreenOrMaximized? Whether or not this window will be spawned fullscreen, maximized, or forced to neither.

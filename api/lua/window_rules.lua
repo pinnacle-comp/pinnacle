@@ -13,6 +13,7 @@ local function convert_tag_params(cond)
             ---@diagnostic disable-next-line
             tag = tag:id()
         end
+        ---@diagnostic disable-next-line
         cond.tag = tag
     end
 
@@ -89,13 +90,12 @@ function window_rules.add(...)
     local rules = { ... }
 
     for _, rule in pairs(rules) do
-        ---@diagnostic disable-next-line a lil cheating
+        ---@diagnostic disable-next-line
         rule.cond = convert_tag_params(rule.cond)
 
         if rule.rule.tags then
             local tags = {}
             for _, tag in pairs(rule.rule.tags) do
-                ---@type TagId|Tag|nil
                 local t = require("tag").create_tag_from_params(tag)
                 if t then
                     ---@diagnostic disable-next-line
@@ -106,7 +106,12 @@ function window_rules.add(...)
             rule.rule.tags = tags
         end
 
-        RPrint(rule)
+        if rule.rule.output and type(rule.rule.output) == "table" then
+            rule.rule.output = rule
+                .rule
+                .output--[[@as Output]]
+                :name()
+        end
 
         SendMsg({
             AddWindowRule = {
