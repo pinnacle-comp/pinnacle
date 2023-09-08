@@ -75,7 +75,8 @@ For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can 
 <sup>flake soon:tm:</sup>
 
 # Running
-> :information_source: Before running, read the information in [Configuration](#configuration).
+> [!IMPORTANT]
+> Before running, read the information in [Configuration](#configuration).
 
 After building, run the executable located in either:
 ```sh
@@ -107,7 +108,7 @@ pass in the `--force` flag to continue. *This is not recommended.*
 > In that case, kill the compositor using the keybind defined in 
 > `kill_keybind` (default <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>Esc</kbd>) and set `command` properly.
 
-> [!INFO]
+> [!NOTE]
 > Pinnacle will open a socket in the `/tmp` directory.
 > If for whatever reason you need the socket to be in a different place, set `socket_dir` in
 > your `metaconfig.toml` file to a directory of your choosing.
