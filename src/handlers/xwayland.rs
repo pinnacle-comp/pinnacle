@@ -224,12 +224,6 @@ impl XwmHandler for CalloopData {
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
-            // self.state.windows.retain(|elem| &win != elem);
-            // if win.with_state(|state| state.floating.is_tiled()) {
-            //     if let Some(output) = win.output(&self.state) {
-            //         self.state.re_layout(&output);
-            //     }
-            // }
         }
         if !window.is_override_redirect() {
             tracing::debug!("set mapped to false");
@@ -290,7 +284,6 @@ impl XwmHandler for CalloopData {
         geometry: Rectangle<i32, Logical>,
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
-        // tracing::debug!("x11 configure_notify");
         let Some(win) = self
             .state
             .space

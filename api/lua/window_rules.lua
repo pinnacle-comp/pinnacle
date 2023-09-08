@@ -2,38 +2,117 @@
 ---@class WindowRules
 local window_rules = {}
 
----Convert all tag constructors in `cond` to actual tags
+---Convert all tag constructors in `cond` to tag ids for serialization.
 ---@param cond WindowRuleCondition
 ---@return _WindowRuleCondition
 local function convert_tag_params(cond)
     if cond.tag then
-        ---@type TagId|Tag|nil
-        local tag = require("tag").create_tag_from_params(cond.tag)
-        if tag then
-            ---@diagnostic disable-next-line
-            tag = tag:id()
+        local tags = {}
+
+        if type(cond.tag) == "table" then
+            if cond.tag.name or cond.tag.output then
+                -- Tag constructor
+                local tag = require("tag").get(cond.tag)
+                if tag then
+                    table.insert(tags, tag:id())
+                end
+            else
+                -- Array of tag constructors
+                ---@diagnostic disable-next-line
+                for _, t in pairs(cond.tag) do
+                    local tag = require("tag").get(t)
+                    if tag then
+                        table.insert(tags, tag:id())
+                    end
+                end
+            end
+        else
+            -- Tag constructor
+            local tag = require("tag").get(cond.tag)
+            if tag then
+                table.insert(tags, tag:id())
+            end
         end
-        ---@diagnostic disable-next-line
-        cond.tag = tag
+
+        cond.tag = tags
     end
 
     if cond.cond_any then
         local conds = {}
-        for _, c in pairs(cond.cond_any) do
-            table.insert(conds, convert_tag_params(c))
+        if type(cond.cond_any[1]) == "table" then
+            -- Array of conds
+            for _, c in pairs(cond.cond_any) do
+                table.insert(conds, convert_tag_params(c))
+            end
+        else
+            -- Single cond
+            table.insert(conds, convert_tag_params(cond.cond_any))
         end
         cond.cond_any = conds
     end
 
     if cond.cond_all then
         local conds = {}
-        for _, c in pairs(cond.cond_all) do
-            table.insert(conds, convert_tag_params(c))
+        if type(cond.cond_all[1]) == "table" then
+            -- Array of conds
+            for _, c in pairs(cond.cond_all) do
+                table.insert(conds, convert_tag_params(c))
+            end
+        else
+            -- Single cond
+            table.insert(conds, convert_tag_params(cond.cond_all))
         end
         cond.cond_all = conds
     end
 
     return cond --[[@as _WindowRuleCondition]]
+end
+
+---These attributes need to be arrays, so this function converts single values into arrays.
+---@param cond WindowRuleCondition
+---@return WindowRuleCondition
+local function convert_single_attrs(cond)
+    if type(cond.class) == "string" then
+        -- stylua: ignore start
+        cond.class = { cond.class --[[@as string]] }
+        -- stylua: ignore end
+    end
+
+    if type(cond.title) == "string" then
+        -- stylua: ignore start
+        cond.title = { cond.title --[[@as string]] }
+        -- stylua: ignore end
+    end
+
+    if cond.cond_any then
+        local conds = {}
+        if type(cond.cond_any[1]) == "table" then
+            -- Array of conds
+            for _, c in pairs(cond.cond_any) do
+                table.insert(conds, convert_single_attrs(c))
+            end
+        else
+            -- Single cond
+            table.insert(conds, convert_single_attrs(cond.cond_any))
+        end
+        cond.cond_any = conds
+    end
+
+    if cond.cond_all then
+        local conds = {}
+        if type(cond.cond_all[1]) == "table" then
+            -- Array of conds
+            for _, c in pairs(cond.cond_all) do
+                table.insert(conds, convert_single_attrs(c))
+            end
+        else
+            -- Single cond
+            table.insert(conds, convert_single_attrs(cond.cond_all))
+        end
+        cond.cond_all = conds
+    end
+
+    return cond
 end
 
 ---Add one or more window rules.
@@ -45,8 +124,15 @@ end
 --- - `cond`: The condition for `rule` to apply to a new window.
 --- - `rule`: What gets applied to the new window if `cond` is true.
 ---
----`cond` can be a bit confusing and *very* table heavy. Examples are shown below for guidance.
----An attempt at simplifying this API will happen in the future, but is a low priority.
+---There are some important mechanics you should know when using window rules:
+---
+--- - All children inside a `cond_all` block must be true for the block to be true.
+--- - At least one child inside a `cond_any` block must be true for the block to be true.
+--- - The outermost block of a window rule condition is implicitly a `cond_all` block.
+--- - All condition attributes (`tag`, `title`, `class`, etc.) can either be a single value or an array.
+---   This includes `cond_all` and `cond_any`.
+---
+---`cond` can be a bit confusing and quite table heavy. Examples are shown below for guidance.
 ---
 ---### Examples
 ---```lua
@@ -58,28 +144,45 @@ end
 ---
 ----- To apply rules when *all* provided conditions are true, use `cond_all`.
 ----- `cond_all` takes an array of conditions and checks if all are true.
------ Note that `cond_any` is not a keyed table; rather, it's a table of tables.
----
 ----- The following will open Steam fullscreen only if it opens on tag "5".
 ---window.rules.add({
 ---    cond = {
----        cond_any = {
----            { class = "steam" }, -- Note that each table must only have one key.
----            { tag = tag.get_by_name("5")[1] },
+---        cond_all = {
+---            class = "steam",
+---            tag = tag.get("5"),
 ---        }
 ---    },
 ---    rule = { fullscreen_or_maximized = "Fullscreen" },
 ---})
 ---
+----- The outermost block of a `cond` is implicitly a `cond_all`.
+----- Thus, the above can be shortened to:
+---window.rules.add({
+---    cond = {
+---        class = "steam",
+---        tag = tag.get("5"),
+---    },
+---    rule = { fullscreen_or_maximized = "Fullscreen" },
+---})
+---
+----- `cond_any` also exists to allow at least one provided condition to match.
+----- The following will open either xterm or Alacritty floating.
+---window.rules.add({
+---    cond = {
+---        cond_any = { class = { "xterm", "Alacritty" } }
+---    },
+---    rule = { floating_or_tiled = "Floating" }
+---})
+---
 ----- You can arbitrarily nest `cond_any` and `cond_all` to achieve desired logic.
------ The following will open Discord, Thunderbird, or Alacritty floating if they
+----- The following will open Discord, Thunderbird, or Firefox floating if they
 ----- open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
 ---window.rules.add({
----    cond = { cond_all = {
----        { cond_any = { { class = "discord" }, { class = "firefox" }, { class = "thunderbird" } } },
+---    cond = { cond_all = { -- This outer `cond_all` block is unnecessary, but it's here for clarity.
+---        { cond_any = { class = { "firefox", "thunderbird", "discord" } } },
 ---        { cond_any = {
----            { cond_all = { { tag = "A" }, { tag = "B" }, { tag = "C" } } },
----            { cond_all = { { tag = "1" }, { tag = "2" } } },
+---            { cond_all = { tag = { "A", "B", "C" } } },
+---            { cond_all = { tag = { "1", "2" } } },
 ---        } }
 ---    } },
 ---    rule = { floating_or_tiled = "Floating" },
@@ -90,13 +193,15 @@ function window_rules.add(...)
     local rules = { ... }
 
     for _, rule in pairs(rules) do
+        rule.cond = convert_single_attrs(rule.cond)
+
         ---@diagnostic disable-next-line
         rule.cond = convert_tag_params(rule.cond)
 
         if rule.rule.tags then
             local tags = {}
             for _, tag in pairs(rule.rule.tags) do
-                local t = require("tag").create_tag_from_params(tag)
+                local t = require("tag").get(tag)
                 if t then
                     ---@diagnostic disable-next-line
                     t = t:id()

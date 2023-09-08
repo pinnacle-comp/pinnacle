@@ -41,8 +41,9 @@ local tag_module = {}
 ---| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
----@alias TagTable { [1]: string, [2]: (string|Output)? }
----@alias TagTableNamed { name: string, output: (string|Output)? }
+---@alias TagTable { name: string, output: (string|Output)? }
+
+---@alias TagConstructor Tag|TagTable|string
 
 ---A tag object.
 ---
@@ -51,92 +52,6 @@ local tag_module = {}
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
 local tag = {}
-
----@nodoc
----***You probably don't need to use this function.***
----
----Create a tag from `Tag|TagTable|TagTableNamed|string`.
----@param tb Tag|TagTable|TagTableNamed|string
----@return Tag|nil
-function tag_module.create_tag_from_params(tb)
-    -- If creating from a tag object, just return the obj
-    if tb.id then
-        return tb --[[@as Tag]]
-    end
-
-    -- string passed in
-    if type(tb) == "string" then
-        local op = require("output").get_focused()
-        if op == nil then
-            return nil
-        end
-
-        local tags = tag_module.get_by_name(tb)
-        for _, t in pairs(tags) do
-            if t:output() and t:output():name() == op:name() then
-                return t
-            end
-        end
-
-        return nil
-    end
-
-    -- TagTable was passed in
-    local tag_name = tb[1]
-    if type(tag_name) == "string" then
-        local op = tb[2]
-        if op == nil then
-            local o = require("output").get_focused()
-            if o == nil then
-                return nil
-            end
-            op = o
-        elseif type(op) == "string" then
-            local o = require("output").get_by_name(op)
-            if o == nil then
-                return nil
-            end
-            op = o
-        end
-
-        local tags = tag_module.get_by_name(tag_name)
-        for _, t in pairs(tags) do
-            if t:output() and t:output():name() == op:name() then
-                return t
-            end
-        end
-
-        return nil
-    end
-
-    -- TagTableNamed was passed in
-    local tb = tb --[[@as TagTableNamed]]
-    local tag_name = tb.name
-    local op = tb.output
-
-    if op == nil then
-        local o = require("output").get_focused()
-        if o == nil then
-            return nil
-        end
-        op = o
-    elseif type(op) == "string" then
-        local o = require("output").get_by_name(op)
-        if o == nil then
-            return nil
-        end
-        op = o
-    end
-
-    local tags = tag_module.get_by_name(tag_name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == op:name() then
-            return t
-        end
-    end
-
-    return nil
-end
 
 ---Create a tag from an id.
 ---The id is the unique identifier for each tag.
@@ -265,10 +180,10 @@ end
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.toggle(t)
 ---```
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Tag.toggle — The corresponding object method
 function tag_module.toggle(t)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -302,10 +217,10 @@ end
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.switch_to(t)
 ---```
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Tag.switch_to — The corresponding object method
 function tag_module.switch_to(t)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -323,25 +238,20 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.set_layout("1", "Dwindle")     -- Set tag 1 on the focused output to "Dwindle"
----tag.set_layout({ "1" }, "Dwindle") -- Same as above
 ---
----tag.set_layout({ "1", "DP-1" }, "Dwindle") -- Set tag 1 on DP-1 to "Dwindle"
----tag.set_layout({ "1", op }, "Dwindle")     -- Same as above
----
------ Verbose versions of the two above
----tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle")
----tag.set_layout({ name = "1", output = op }, "Dwindle")
+---tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle") -- Set tag 1 on "DP-1" to "Dwindle"
+---tag.set_layout({ name = "1", output = op }, "Dwindle")     -- Same as above
 ---
 ----- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.set_layout(t, "Dwindle")
 ---```
 ---
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@param layout Layout The layout.
 ---@see Tag.set_layout — The corresponding object method
 function tag_module.set_layout(t, layout)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -364,22 +274,70 @@ end
 ---### Examples
 ---```lua
 ---local t = tag.get("1")
----local t = tag.get({ "1", "HDMI-A-0" })
 ---local t = tag.get({ name = "3" })
+---local t = tag.get({ name = "1", output = "HDMI-A-0" })
 ---
 ---local op = output.get_by_name("DP-2")
 ---if op ~= nil then
 ---    local t = tag.get({ name = "Code", output = op })
 ---end
 ---```
----@param params TagTable|TagTableNamed|string
+---@param params TagConstructor
 ---@return Tag|nil
 ---
 ---@see TagModule.get_on_output
 ---@see TagModule.get_by_name
 ---@see TagModule.get_all
 function tag_module.get(params)
-    return tag_module.create_tag_from_params(params)
+    -- If creating from a tag object, just return the obj
+    if params.id then
+        return params --[[@as Tag]]
+    end
+
+    -- string passed in
+    if type(params) == "string" then
+        local op = require("output").get_focused()
+        if op == nil then
+            return nil
+        end
+
+        local tags = tag_module.get_by_name(params)
+        for _, t in pairs(tags) do
+            if t:output() and t:output():name() == op:name() then
+                return t
+            end
+        end
+
+        return nil
+    end
+
+    -- TagTable was passed in
+    local params = params --[[@as TagTable]]
+    local tag_name = params.name
+    local op = params.output
+
+    if op == nil then
+        local o = require("output").get_focused()
+        if o == nil then
+            return nil
+        end
+        op = o
+    elseif type(op) == "string" then
+        local o = require("output").get_by_name(op)
+        if o == nil then
+            return nil
+        end
+        op = o
+    end
+
+    local tags = tag_module.get_by_name(tag_name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == op:name() then
+            return t
+        end
+    end
+
+    return nil
 end
 
 ---Get all tags on the specified output.

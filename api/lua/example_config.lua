@@ -90,7 +90,7 @@ require("pinnacle").setup(function(pinnacle)
 
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-        tag.toggle({ "1", op })
+        tag.toggle({ name = "1", output = op })
 
         -- Window rules
         window.rules.add({
@@ -98,9 +98,27 @@ require("pinnacle").setup(function(pinnacle)
             rule = { size = { 300, 300 }, location = { 50, 50 } },
         }, {
             cond = {
-                cond_all = { { class = "XTerm" }, { tag = "4" } },
+                class = "XTerm",
+                tag = "4",
             },
-            rule = { size = { 500, 500 }, floating_or_tiled = "Floating" },
+            rule = { size = { 500, 800 }, floating_or_tiled = "Floating" },
+        })
+
+        window.rules.add({
+            cond = {
+                cond_all = {
+                    class = "Alacritty",
+                    cond_any = {
+                        {
+                            cond_all = {
+                                tag = { "3", "4", "5" },
+                            },
+                        },
+                        { cond_all = { tag = { "1", "2" } } },
+                    },
+                },
+            },
+            rule = { floating_or_tiled = "Floating" },
         })
     end)
 

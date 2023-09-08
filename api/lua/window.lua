@@ -55,7 +55,7 @@ end
 ---
 ---See `WindowModule.move_to_tag` for examples.
 ---
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see WindowModule.move_to_tag — The corresponding module function
 function window:move_to_tag(t)
     window_module.move_to_tag(self, t)
@@ -66,7 +66,7 @@ end
 ---Note: toggling off all tags currently makes a window not respond to layouting.
 ---
 ---See `WindowModule.toggle_tag` for examples.
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see WindowModule.toggle_tag — The corresponding module function
 function window:toggle_tag(t)
     window_module.toggle_tag(self, t)
@@ -254,10 +254,10 @@ end
 ---Toggle the tag with the given name and (optional) output for the specified window.
 ---
 ---@param w Window
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Window.toggle_tag — The corresponding object method
 function window_module.toggle_tag(w, t)
-    local t = require("tag").create_tag_from_params(t)
+    local t = require("tag").get(t)
 
     if t then
         SendMsg({
@@ -272,10 +272,10 @@ end
 ---Move the specified window to the tag with the given name and (optional) output.
 ---
 ---@param w Window
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Window.move_to_tag — The corresponding object method
 function window_module.move_to_tag(w, t)
-    local t = require("tag").create_tag_from_params(t)
+    local t = require("tag").get(t)
 
     if t then
         SendMsg({
