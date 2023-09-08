@@ -96,7 +96,7 @@ require("pinnacle").setup(function(pinnacle)
         -- Add your own window rules here. Below is an example.
         --
         -- These currently need to be added inside of `connect_for_all` because
-        -- it only runs after the whole config is parsed, so any specified tags won't be availible outside
+        -- it only runs after the whole config is parsed, so any specified tags won't be available outside
         -- of this function. This means that if you have multiple monitors,
         -- these rules will be duplicated unless you write in some logic to prevent that.
         --
