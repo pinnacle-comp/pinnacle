@@ -93,33 +93,18 @@ require("pinnacle").setup(function(pinnacle)
         tag.toggle({ name = "1", output = op })
 
         -- Window rules
-        window.rules.add({
-            cond = { class = "kitty" },
-            rule = { size = { 300, 300 }, location = { 50, 50 } },
-        }, {
-            cond = {
-                class = "XTerm",
-                tag = "4",
-            },
-            rule = { size = { 500, 800 }, floating_or_tiled = "Floating" },
-        })
-
-        window.rules.add({
-            cond = {
-                cond_all = {
-                    class = "Alacritty",
-                    cond_any = {
-                        {
-                            cond_all = {
-                                tag = { "3", "4", "5" },
-                            },
-                        },
-                        { cond_all = { tag = { "1", "2" } } },
-                    },
-                },
-            },
-            rule = { floating_or_tiled = "Floating" },
-        })
+        -- Add your own window rules here. Below is an example.
+        --
+        -- window.rules.add({
+        --     cond = { class = "kitty" },
+        --     rule = { size = { 300, 300 }, location = { 50, 50 } },
+        -- }, {
+        --     cond = {
+        --         class = "XTerm",
+        --         tag = "4",
+        --     },
+        --     rule = { size = { 500, 800 }, floating_or_tiled = "Floating" },
+        -- })
     end)
 
     ---@type Layout[]
