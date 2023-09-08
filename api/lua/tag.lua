@@ -8,11 +8,12 @@
 ---traditional workspaces cannot.
 ---
 ---More specifically:
+---
 --- - A window can have multiple tags.
----   - This means that you can have one window show up across multiple "workspaces" if you come
+---     - This means that you can have one window show up across multiple "workspaces" if you come
 ---       something like i3.
 --- - An output can display multiple tags at once.
----   - This allows you to toggle a tag and have windows on both tags display at once.
+---     - This allows you to toggle a tag and have windows on both tags display at once.
 ---       This is helpful if you, say, want to reference a browser window while coding; you toggle your
 ---       browser's tag and temporarily reference it while you work without having to change screens.
 ---
@@ -21,12 +22,13 @@
 ---something with tags.
 ---
 ---Instead, you can pass in either:
+---
 --- - A string of the tag's name (ex. "1")
----   - This will get the first tag with that name on the focused output.
+---     - This will get the first tag with that name on the focused output.
 --- - A table where [1] is the name and [2] is the output (or its name) (ex. { "1", output.get_by_name("DP-1") })
----   - This will get the first tag with that name on the specified output.
+---     - This will get the first tag with that name on the specified output.
 --- - The same table as above, but keyed with `name` and `output` (ex. { name = "1", output = "DP-1" })
----   - This is simply for those who want more clarity in their config.
+---     - This is simply for those who want more clarity in their config.
 ---
 ---If you need to get tags beyond the first with the same name, use a `get` function and find what you need.
 ---@class TagModule
@@ -41,8 +43,9 @@ local tag_module = {}
 ---| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
----@alias TagTable { [1]: string, [2]: (string|Output)? }
----@alias TagTableNamed { name: string, output: (string|Output)? }
+---@alias TagTable { name: string, output: (string|Output)? }
+
+---@alias TagConstructor Tag|TagTable|string
 
 ---A tag object.
 ---
@@ -51,92 +54,6 @@ local tag_module = {}
 ---@class Tag
 ---@field private _id integer The internal id of this tag.
 local tag = {}
-
----@nodoc
----***You probably don't need to use this function.***
----
----Create a tag from `Tag|TagTable|TagTableNamed|string`.
----@param tb Tag|TagTable|TagTableNamed|string
----@return Tag|nil
-function tag_module.create_tag_from_params(tb)
-    -- If creating from a tag object, just return the obj
-    if tb.id then
-        return tb --[[@as Tag]]
-    end
-
-    -- string passed in
-    if type(tb) == "string" then
-        local op = require("output").get_focused()
-        if op == nil then
-            return nil
-        end
-
-        local tags = tag_module.get_by_name(tb)
-        for _, t in pairs(tags) do
-            if t:output() and t:output():name() == op:name() then
-                return t
-            end
-        end
-
-        return nil
-    end
-
-    -- TagTable was passed in
-    local tag_name = tb[1]
-    if type(tag_name) == "string" then
-        local op = tb[2]
-        if op == nil then
-            local o = require("output").get_focused()
-            if o == nil then
-                return nil
-            end
-            op = o
-        elseif type(op) == "string" then
-            local o = require("output").get_by_name(op)
-            if o == nil then
-                return nil
-            end
-            op = o
-        end
-
-        local tags = tag_module.get_by_name(tag_name)
-        for _, t in pairs(tags) do
-            if t:output() and t:output():name() == op:name() then
-                return t
-            end
-        end
-
-        return nil
-    end
-
-    -- TagTableNamed was passed in
-    local tb = tb --[[@as TagTableNamed]]
-    local tag_name = tb.name
-    local op = tb.output
-
-    if op == nil then
-        local o = require("output").get_focused()
-        if o == nil then
-            return nil
-        end
-        op = o
-    elseif type(op) == "string" then
-        local o = require("output").get_by_name(op)
-        if o == nil then
-            return nil
-        end
-        op = o
-    end
-
-    local tags = tag_module.get_by_name(tag_name)
-    for _, t in pairs(tags) do
-        if t:output() and t:output():name() == op:name() then
-            return t
-        end
-    end
-
-    return nil
-end
 
 ---Create a tag from an id.
 ---The id is the unique identifier for each tag.
@@ -210,11 +127,10 @@ end
 ---if op ~= nil then
 ---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
 ---end
----```
----You can also pass in a table.
----```lua
+--
+--- -- You can also pass in a table.
 ---local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
----tag.add(op, tags) -- Add tags with those names
+---tag.add(op, tags)
 ---```
 ---@param output Output The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
@@ -257,18 +173,18 @@ end
 ---tag.toggle({ "1", "DP-1" }) -- Toggle tag 1 on DP-1
 ---tag.toggle({ "1", op })     -- Same as above
 ---
------ Verbose versions of the two above
+--- -- Verbose versions of the two above
 ---tag.toggle({ name = "1", output = "DP-1" })
 ---tag.toggle({ name = "1", output = op })
 ---
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.toggle(t)
 ---```
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Tag.toggle — The corresponding object method
 function tag_module.toggle(t)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -294,18 +210,18 @@ end
 ---tag.switch_to({ "1", "DP-1" }) -- Switch to tag 1 on DP-1
 ---tag.switch_to({ "1", op })     -- Same as above
 ---
------ Verbose versions of the two above
+--- -- Verbose versions of the two above
 ---tag.switch_to({ name = "1", output = "DP-1" })
 ---tag.switch_to({ name = "1", output = op })
 ---
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.switch_to(t)
 ---```
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Tag.switch_to — The corresponding object method
 function tag_module.switch_to(t)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -323,25 +239,20 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.set_layout("1", "Dwindle")     -- Set tag 1 on the focused output to "Dwindle"
----tag.set_layout({ "1" }, "Dwindle") -- Same as above
 ---
----tag.set_layout({ "1", "DP-1" }, "Dwindle") -- Set tag 1 on DP-1 to "Dwindle"
----tag.set_layout({ "1", op }, "Dwindle")     -- Same as above
+---tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle") -- Set tag 1 on "DP-1" to "Dwindle"
+---tag.set_layout({ name = "1", output = op }, "Dwindle")     -- Same as above
 ---
------ Verbose versions of the two above
----tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle")
----tag.set_layout({ name = "1", output = op }, "Dwindle")
----
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.set_layout(t, "Dwindle")
 ---```
 ---
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@param layout Layout The layout.
 ---@see Tag.set_layout — The corresponding object method
 function tag_module.set_layout(t, layout)
-    local t = tag_module.create_tag_from_params(t)
+    local t = tag_module.get(t)
 
     if t then
         SendMsg({
@@ -364,22 +275,70 @@ end
 ---### Examples
 ---```lua
 ---local t = tag.get("1")
----local t = tag.get({ "1", "HDMI-A-0" })
 ---local t = tag.get({ name = "3" })
+---local t = tag.get({ name = "1", output = "HDMI-A-0" })
 ---
 ---local op = output.get_by_name("DP-2")
 ---if op ~= nil then
 ---    local t = tag.get({ name = "Code", output = op })
 ---end
 ---```
----@param params TagTable|TagTableNamed|string
+---@param params TagConstructor
 ---@return Tag|nil
 ---
 ---@see TagModule.get_on_output
 ---@see TagModule.get_by_name
 ---@see TagModule.get_all
 function tag_module.get(params)
-    return tag_module.create_tag_from_params(params)
+    -- If creating from a tag object, just return the obj
+    if params.id then
+        return params --[[@as Tag]]
+    end
+
+    -- string passed in
+    if type(params) == "string" then
+        local op = require("output").get_focused()
+        if op == nil then
+            return nil
+        end
+
+        local tags = tag_module.get_by_name(params)
+        for _, t in pairs(tags) do
+            if t:output() and t:output():name() == op:name() then
+                return t
+            end
+        end
+
+        return nil
+    end
+
+    -- TagTable was passed in
+    local params = params --[[@as TagTable]]
+    local tag_name = params.name
+    local op = params.output
+
+    if op == nil then
+        local o = require("output").get_focused()
+        if o == nil then
+            return nil
+        end
+        op = o
+    elseif type(op) == "string" then
+        local o = require("output").get_by_name(op)
+        if o == nil then
+            return nil
+        end
+        op = o
+    end
+
+    local tags = tag_module.get_by_name(tag_name)
+    for _, t in pairs(tags) do
+        if t:output() and t:output():name() == op:name() then
+            return t
+        end
+    end
+
+    return nil
 end
 
 ---Get all tags on the specified output.
@@ -422,11 +381,11 @@ end
 ---
 ---### Example
 ---```lua
------ Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
+--- -- Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
 ---local tags = tag.get_by_name("OBS")
------ ...will have 2 tags in `tags`, while...
+--- -- ...will have 2 tags in `tags`, while...
 ---local no_tags = tag.get_by_name("Firefox")
------ ...will have `no_tags` be empty.
+--- -- ...will have `no_tags` be empty.
 ---```
 ---@param name string The name of the tag(s) you want.
 ---@return Tag[]
@@ -449,9 +408,9 @@ end
 ---
 ---### Example
 ---```lua
------ With two monitors with the same tags: "1", "2", "3", "4", and "5"...
+--- -- With two monitors with the same tags: "1", "2", "3", "4", and "5"...
 ---local tags = tag.get_all()
------ ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
+--- -- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
 ---```
 ---@return Tag[]
 function tag_module.get_all()
@@ -473,9 +432,9 @@ end
 ---
 ---### Example
 ---```lua
------ Assuming the tag `Terminal` exists...
+--- -- Assuming the tag `Terminal` exists...
 ---print(tag.name(tag.get_by_name("Terminal")[1]))
------ ...should print `Terminal`.
+--- -- ...should print `Terminal`.
 ---```
 ---@param t Tag
 ---@return string|nil

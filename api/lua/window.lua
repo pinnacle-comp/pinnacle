@@ -5,7 +5,10 @@
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class WindowModule
-local window_module = {}
+local window_module = {
+    ---Window rules.
+    rules = require("window_rules"),
+}
 
 ---A window object.
 ---
@@ -52,7 +55,7 @@ end
 ---
 ---See `WindowModule.move_to_tag` for examples.
 ---
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see WindowModule.move_to_tag — The corresponding module function
 function window:move_to_tag(t)
     window_module.move_to_tag(self, t)
@@ -63,7 +66,7 @@ end
 ---Note: toggling off all tags currently makes a window not respond to layouting.
 ---
 ---See `WindowModule.toggle_tag` for examples.
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see WindowModule.toggle_tag — The corresponding module function
 function window:toggle_tag(t)
     window_module.toggle_tag(self, t)
@@ -251,10 +254,10 @@ end
 ---Toggle the tag with the given name and (optional) output for the specified window.
 ---
 ---@param w Window
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Window.toggle_tag — The corresponding object method
 function window_module.toggle_tag(w, t)
-    local t = require("tag").create_tag_from_params(t)
+    local t = require("tag").get(t)
 
     if t then
         SendMsg({
@@ -269,10 +272,10 @@ end
 ---Move the specified window to the tag with the given name and (optional) output.
 ---
 ---@param w Window
----@param t Tag|TagTable|TagTableNamed|string
+---@param t TagConstructor
 ---@see Window.move_to_tag — The corresponding object method
 function window_module.move_to_tag(w, t)
-    local t = require("tag").create_tag_from_params(t)
+    local t = require("tag").get(t)
 
     if t then
         SendMsg({
@@ -379,9 +382,9 @@ end
 ---
 ---### Example
 ---```lua
------ With a 4K monitor, given a focused fullscreen window `win`...
+--- -- With a 4K monitor, given a focused fullscreen window `win`...
 ---local size = window.size(win)
------ ...should have size equal to `{ w = 3840, h = 2160 }`.
+--- -- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
 ---@param win Window
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
@@ -413,10 +416,10 @@ end
 ---
 ---### Example
 ---```lua
------ With two 1080p monitors side by side and set up as such,
------ if a window `win` is fullscreen on the right one...
+--- -- With two 1080p monitors side by side and set up as such,
+--- -- if a window `win` is fullscreen on the right one...
 ---local loc = window.loc(win)
------ ...should have loc equal to `{ x = 1920, y = 0 }`.
+--- -- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
 ---@param win Window
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
@@ -442,12 +445,12 @@ end
 ---
 ---### Example
 ---```lua
------ With Alacritty focused...
+--- -- With Alacritty focused...
 ---local win = window.get_focused()
 ---if win ~= nil then
 ---    print(window.class(win))
 ---end
------ ...should print "Alacritty".
+--- -- ...should print "Alacritty".
 ---```
 ---@param win Window
 ---@return string|nil class This window's class, or nil if it doesn't exist.
@@ -466,12 +469,12 @@ end
 ---
 ---### Example
 ---```lua
------ With Alacritty focused...
+--- -- With Alacritty focused...
 ---local win = window.get_focused()
 ---if win ~= nil then
 ---    print(window.title(win))
 ---end
------ ...should print the directory Alacritty is in or what it's running (what's in its title bar).
+--- -- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
 ---@param win Window
 ---@return string|nil title This window's title, or nil if it doesn't exist.

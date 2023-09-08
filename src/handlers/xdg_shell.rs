@@ -112,6 +112,8 @@ impl XdgShellHandler for State {
                 }
             },
             |data| {
+                data.state.apply_window_rules(&window);
+
                 if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
                     data.state.update_windows(&focused_output);
                     BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);

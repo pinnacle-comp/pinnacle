@@ -3,12 +3,16 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
+pub mod window_rules;
+
 use crate::{
     layout::Layout,
     output::OutputName,
     tag::TagId,
     window::window_state::{FullscreenOrMaximized, WindowId},
 };
+
+use self::window_rules::{WindowRule, WindowRuleCondition};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
@@ -52,6 +56,10 @@ pub enum Msg {
     },
     ToggleMaximized {
         window_id: WindowId,
+    },
+    AddWindowRule {
+        cond: WindowRuleCondition,
+        rule: WindowRule,
     },
 
     // Tag management

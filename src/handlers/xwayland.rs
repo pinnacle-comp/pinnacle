@@ -1,8 +1,4 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
     reexports::wayland_server::Resource,
@@ -154,6 +150,11 @@ impl XwmHandler for CalloopData {
                 .collect::<Vec<_>>();
 
             self.state.windows.push(window.clone());
+
+            self.state.focus_state.set_focus(window.clone());
+
+            self.state.apply_window_rules(&window);
+
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
                 self.state.update_windows(&focused_output);
                 BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
@@ -182,20 +183,6 @@ impl XwmHandler for CalloopData {
                                 .client_compositor_state(&client)
                                 .blocker_cleared(&mut data.state, &data.display.handle())
                         }
-
-                        // Schedule the popup to raise when all windows have committed after having
-                        // their blockers cleared
-                        crate::state::schedule_on_commit(data, windows_on_output, move |dt| {
-                            let WindowElement::X11(surface) = &clone else { unreachable!() };
-                            if should_float(surface) {
-                                if let Some(xwm) = dt.state.xwm.as_mut() {
-                                    tracing::debug!("raising x11 popup");
-                                    xwm.raise_window(surface).expect("failed to raise x11 win");
-                                    dt.state.space.raise_element(&clone, true);
-                                    dt.state.focus_state.set_focus(clone);
-                                }
-                            }
-                        });
                     });
                 });
             }
@@ -237,12 +224,6 @@ impl XwmHandler for CalloopData {
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
-            // self.state.windows.retain(|elem| &win != elem);
-            // if win.with_state(|state| state.floating.is_tiled()) {
-            //     if let Some(output) = win.output(&self.state) {
-            //         self.state.re_layout(&output);
-            //     }
-            // }
         }
         if !window.is_override_redirect() {
             tracing::debug!("set mapped to false");
@@ -303,7 +284,6 @@ impl XwmHandler for CalloopData {
         geometry: Rectangle<i32, Logical>,
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
-        // tracing::debug!("x11 configure_notify");
         let Some(win) = self
             .state
             .space

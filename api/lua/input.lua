@@ -10,7 +10,7 @@ local input_module = {
 ---### Example
 ---
 ---```lua
------ Set `Super + Return` to open Alacritty
+--- -- Set `Super + Return` to open Alacritty
 ---input.keybind({ "Super" }, input.keys.Return, function()
 ---    process.spawn("Alacritty")
 ---end)

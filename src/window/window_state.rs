@@ -301,7 +301,7 @@ impl FloatingOrTiled {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FullscreenOrMaximized {
     Neither,
     Fullscreen,

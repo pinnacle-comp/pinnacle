@@ -90,7 +90,26 @@ require("pinnacle").setup(function(pinnacle)
 
         op:add_tags("1", "2", "3", "4", "5")
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-        tag.toggle({ "1", op })
+        tag.toggle({ name = "1", output = op })
+
+        -- Window rules
+        -- Add your own window rules here. Below is an example.
+        --
+        -- These currently need to be added inside of `connect_for_all` because
+        -- it only runs after the whole config is parsed, so any specified tags won't be available outside
+        -- of this function. This means that if you have multiple monitors,
+        -- these rules will be duplicated unless you write in some logic to prevent that.
+        --
+        -- window.rules.add({
+        --     cond = { class = "kitty" },
+        --     rule = { size = { 300, 300 }, location = { 50, 50 } },
+        -- }, {
+        --     cond = {
+        --         class = "XTerm",
+        --         tag = "4",
+        --     },
+        --     rule = { size = { 500, 800 }, floating_or_tiled = "Floating" },
+        -- })
     end)
 
     ---@type Layout[]

@@ -8,6 +8,7 @@ local process_module = {}
 ---Spawn a process with an optional callback for its stdout, stderr, and exit information.
 ---
 ---`callback` has the following parameters:
+---
 --- - `stdout` - The process's stdout printed this line.
 --- - `stderr` - The process's stderr printed this line.
 --- - `exit_code` - The process exited with this code.
@@ -47,6 +48,7 @@ end
 ---Spawn a process only if it isn't already running, with an optional callback for its stdout, stderr, and exit information.
 ---
 ---`callback` has the following parameters:
+---
 --- - `stdout`: The process's stdout printed this line.
 --- - `stderr`: The process's stderr printed this line.
 --- - `exit_code`: The process exited with this code.
