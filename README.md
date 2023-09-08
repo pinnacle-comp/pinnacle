@@ -99,20 +99,18 @@ However, there is an additional flag you can pass in: `--<backend>`. You most li
 - `udev`: run Pinnacle in a tty.
 
 If you try to run either in environments where you shouldn't be, you will get a warning requiring you to
-pass in the `--force` flag to continue. *You probably shouldn't be doing that.*
+pass in the `--force` flag to continue. *This is not recommended.*
 
-> #### :information_source: Make sure `command` in your `metaconfig.toml` is set to the right file.
+> [!IMPORTANT]
+> Make sure `command` in your `metaconfig.toml` is set to the right file.
 > If it isn't, the compositor will open, but your config will not apply.
-In that case, kill the compositor using the keybind defined in 
-`kill_keybind` (default <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>Esc</kbd>) and set `command` properly.
+> In that case, kill the compositor using the keybind defined in 
+> `kill_keybind` (default <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>Esc</kbd>) and set `command` properly.
 
-> #### :information_source: Pinnacle will open a socket in the `/tmp` directory.
+> [!INFO]
+> Pinnacle will open a socket in the `/tmp` directory.
 > If for whatever reason you need the socket to be in a different place, set `socket_dir` in
 > your `metaconfig.toml` file to a directory of your choosing.
-
-> #### :warning: Do not run Pinnacle as root.
-> This will open the socket with root-only permissions, and future non-root invocations
-of Pinnacle will fail when trying to remove the socket until it is removed manually.
 
 # Configuration
 Pinnacle is configured in Lua. Rust support is planned.
