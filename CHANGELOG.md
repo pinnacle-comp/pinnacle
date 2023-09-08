@@ -1,5 +1,12 @@
 # Changelog
 
+## [01b6e25](https://github.com/Ottatop/pinnacle/commit/01b6e258ff72a5517e2c653f058f5241fa953162) [(#65)](https://github.com/Ottatop/pinnacle/pull/65)
+This update adds an initial window rules implementation! There are only a few conditions and rules to start,
+but this is expected to grow over time as I add more.
+
+### Changes
+- Add window rules
+
 ## [43949e3](https://github.com/Ottatop/pinnacle/commit/43949e386dd6ddd2092699ca6ec2109dd65f3d5a) [(#56)](https://github.com/Ottatop/pinnacle/pull/56)
 This update brings breaking changes to configuration.
 
