@@ -1,5 +1,7 @@
 ![Pinnacle banner](/assets/pinnacle_banner_dark.png)
 
+https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7a6639b0c9
+
 # Info
 ### What is Pinnacle?
 Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
@@ -8,7 +10,21 @@ for Wayland.
 
 It sports high configurability through a (soon to be) extensive Lua API, with plans for a Rust API in the future.
 
-Showcase/gallery soon:tm:
+> ### More video examples below!
+> <details>
+> 
+> <summary>Click me</summary>
+>
+> All videos were recorded using [Screenkey](https://gitlab.com/screenkey/screenkey) and the Winit backend.
+> Expect minor flickering here and there, but I hope to fix that in the future.
+> 
+> https://github.com/Ottatop/pinnacle/assets/120758733/5b6b224b-3031-4a1c-9375-1143f1bfc0e3
+>
+> https://github.com/Ottatop/pinnacle/assets/120758733/7a465983-2560-412e-9154-40b3dfd20488
+>
+> (This video is very crunchy in my attempts to get under the 10mb limit)
+>
+> </details>
 
 ### Features
 > This is a non-exhaustive list.
