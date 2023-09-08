@@ -131,6 +131,8 @@ end
 --- - The outermost block of a window rule condition is implicitly a `cond_all` block.
 --- - All condition attributes (`tag`, `title`, `class`, etc.) can either be a single value or an array.
 ---   This includes `cond_all` and `cond_any`.
+---   - Within a `cond_all` block, any arrays must have all items be true for the attribute to be true.
+---   - Within a `cond_any` block, any arrays only need one item to be true for the attribute to be true.
 ---
 ---`cond` can be a bit confusing and quite table heavy. Examples are shown below for guidance.
 ---
