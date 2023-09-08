@@ -117,10 +117,11 @@ end
 
 ---Add one or more window rules.
 ---
----A window rule defines what a window will spawn with given certain conditions.
----For example, if Firefox is spawned, you can set it to open on the second tag.
+---A window rule defines what properties a window will spawn with given certain conditions.
+---For example, if Firefox is spawned, you can set it to open on a specific tag.
 ---
 ---This function takes in a table with two keys:
+---
 --- - `cond`: The condition for `rule` to apply to a new window.
 --- - `rule`: What gets applied to the new window if `cond` is true.
 ---
@@ -131,22 +132,22 @@ end
 --- - The outermost block of a window rule condition is implicitly a `cond_all` block.
 --- - All condition attributes (`tag`, `title`, `class`, etc.) can either be a single value or an array.
 ---   This includes `cond_all` and `cond_any`.
----   - Within a `cond_all` block, any arrays must have all items be true for the attribute to be true.
----   - Within a `cond_any` block, any arrays only need one item to be true for the attribute to be true.
+---     - Within a `cond_all` block, any arrays must have all items be true for the attribute to be true.
+---     - Within a `cond_any` block, any arrays only need one item to be true for the attribute to be true.
 ---
 ---`cond` can be a bit confusing and quite table heavy. Examples are shown below for guidance.
 ---
 ---### Examples
 ---```lua
------ A simple window rule. This one will cause Firefox to open on tag "Browser".
+--- -- A simple window rule. This one will cause Firefox to open on tag "Browser".
 ---window.rules.add({
 ---    cond = { class = "firefox" },
 ---    rule = { tags = { "Browser" } },
 ---})
 ---
------ To apply rules when *all* provided conditions are true, use `cond_all`.
------ `cond_all` takes an array of conditions and checks if all are true.
------ The following will open Steam fullscreen only if it opens on tag "5".
+--- -- To apply rules when *all* provided conditions are true, use `cond_all`.
+--- -- `cond_all` takes an array of conditions and checks if all are true.
+--- -- The following will open Steam fullscreen only if it opens on tag "5".
 ---window.rules.add({
 ---    cond = {
 ---        cond_all = {
@@ -157,8 +158,8 @@ end
 ---    rule = { fullscreen_or_maximized = "Fullscreen" },
 ---})
 ---
------ The outermost block of a `cond` is implicitly a `cond_all`.
------ Thus, the above can be shortened to:
+--- -- The outermost block of a `cond` is implicitly a `cond_all`.
+--- -- Thus, the above can be shortened to:
 ---window.rules.add({
 ---    cond = {
 ---        class = "steam",
@@ -167,8 +168,8 @@ end
 ---    rule = { fullscreen_or_maximized = "Fullscreen" },
 ---})
 ---
------ `cond_any` also exists to allow at least one provided condition to match.
------ The following will open either xterm or Alacritty floating.
+--- -- `cond_any` also exists to allow at least one provided condition to match.
+--- -- The following will open either xterm or Alacritty floating.
 ---window.rules.add({
 ---    cond = {
 ---        cond_any = { class = { "xterm", "Alacritty" } }
@@ -176,13 +177,16 @@ end
 ---    rule = { floating_or_tiled = "Floating" }
 ---})
 ---
------ You can arbitrarily nest `cond_any` and `cond_all` to achieve desired logic.
------ The following will open Discord, Thunderbird, or Firefox floating if they
------ open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
+--- -- You can arbitrarily nest `cond_any` and `cond_all` to achieve desired logic.
+--- -- The following will open Discord, Thunderbird, or Firefox floating if they
+--- -- open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
 ---window.rules.add({
 ---    cond = { cond_all = { -- This outer `cond_all` block is unnecessary, but it's here for clarity.
 ---        { cond_any = { class = { "firefox", "thunderbird", "discord" } } },
 ---        { cond_any = {
+---            -- Because `tag` is inside a `cond_all` block,
+---            -- the window must have all these tags for this to be true.
+---            -- If it was in a `cond_any` block, only one tag would need to match.
 ---            { cond_all = { tag = { "A", "B", "C" } } },
 ---            { cond_all = { tag = { "1", "2" } } },
 ---        } }

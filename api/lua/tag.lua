@@ -8,11 +8,12 @@
 ---traditional workspaces cannot.
 ---
 ---More specifically:
+---
 --- - A window can have multiple tags.
----   - This means that you can have one window show up across multiple "workspaces" if you come
+---     - This means that you can have one window show up across multiple "workspaces" if you come
 ---       something like i3.
 --- - An output can display multiple tags at once.
----   - This allows you to toggle a tag and have windows on both tags display at once.
+---     - This allows you to toggle a tag and have windows on both tags display at once.
 ---       This is helpful if you, say, want to reference a browser window while coding; you toggle your
 ---       browser's tag and temporarily reference it while you work without having to change screens.
 ---
@@ -21,12 +22,13 @@
 ---something with tags.
 ---
 ---Instead, you can pass in either:
+---
 --- - A string of the tag's name (ex. "1")
----   - This will get the first tag with that name on the focused output.
+---     - This will get the first tag with that name on the focused output.
 --- - A table where [1] is the name and [2] is the output (or its name) (ex. { "1", output.get_by_name("DP-1") })
----   - This will get the first tag with that name on the specified output.
+---     - This will get the first tag with that name on the specified output.
 --- - The same table as above, but keyed with `name` and `output` (ex. { name = "1", output = "DP-1" })
----   - This is simply for those who want more clarity in their config.
+---     - This is simply for those who want more clarity in their config.
 ---
 ---If you need to get tags beyond the first with the same name, use a `get` function and find what you need.
 ---@class TagModule
@@ -125,11 +127,10 @@ end
 ---if op ~= nil then
 ---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
 ---end
----```
----You can also pass in a table.
----```lua
+--
+--- -- You can also pass in a table.
 ---local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
----tag.add(op, tags) -- Add tags with those names
+---tag.add(op, tags)
 ---```
 ---@param output Output The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
@@ -172,11 +173,11 @@ end
 ---tag.toggle({ "1", "DP-1" }) -- Toggle tag 1 on DP-1
 ---tag.toggle({ "1", op })     -- Same as above
 ---
------ Verbose versions of the two above
+--- -- Verbose versions of the two above
 ---tag.toggle({ name = "1", output = "DP-1" })
 ---tag.toggle({ name = "1", output = op })
 ---
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.toggle(t)
 ---```
@@ -209,11 +210,11 @@ end
 ---tag.switch_to({ "1", "DP-1" }) -- Switch to tag 1 on DP-1
 ---tag.switch_to({ "1", op })     -- Same as above
 ---
------ Verbose versions of the two above
+--- -- Verbose versions of the two above
 ---tag.switch_to({ name = "1", output = "DP-1" })
 ---tag.switch_to({ name = "1", output = op })
 ---
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.switch_to(t)
 ---```
@@ -242,7 +243,7 @@ end
 ---tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle") -- Set tag 1 on "DP-1" to "Dwindle"
 ---tag.set_layout({ name = "1", output = op }, "Dwindle")     -- Same as above
 ---
------ Using a tag object
+--- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.set_layout(t, "Dwindle")
 ---```
@@ -380,11 +381,11 @@ end
 ---
 ---### Example
 ---```lua
------ Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
+--- -- Given one monitor with the tags "OBS", "OBS", "VSCode", and "Spotify"...
 ---local tags = tag.get_by_name("OBS")
------ ...will have 2 tags in `tags`, while...
+--- -- ...will have 2 tags in `tags`, while...
 ---local no_tags = tag.get_by_name("Firefox")
------ ...will have `no_tags` be empty.
+--- -- ...will have `no_tags` be empty.
 ---```
 ---@param name string The name of the tag(s) you want.
 ---@return Tag[]
@@ -407,9 +408,9 @@ end
 ---
 ---### Example
 ---```lua
------ With two monitors with the same tags: "1", "2", "3", "4", and "5"...
+--- -- With two monitors with the same tags: "1", "2", "3", "4", and "5"...
 ---local tags = tag.get_all()
------ ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
+--- -- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
 ---```
 ---@return Tag[]
 function tag_module.get_all()
@@ -431,9 +432,9 @@ end
 ---
 ---### Example
 ---```lua
------ Assuming the tag `Terminal` exists...
+--- -- Assuming the tag `Terminal` exists...
 ---print(tag.name(tag.get_by_name("Terminal")[1]))
------ ...should print `Terminal`.
+--- -- ...should print `Terminal`.
 ---```
 ---@param t Tag
 ---@return string|nil

@@ -382,9 +382,9 @@ end
 ---
 ---### Example
 ---```lua
------ With a 4K monitor, given a focused fullscreen window `win`...
+--- -- With a 4K monitor, given a focused fullscreen window `win`...
 ---local size = window.size(win)
------ ...should have size equal to `{ w = 3840, h = 2160 }`.
+--- -- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
 ---@param win Window
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
@@ -416,10 +416,10 @@ end
 ---
 ---### Example
 ---```lua
------ With two 1080p monitors side by side and set up as such,
------ if a window `win` is fullscreen on the right one...
+--- -- With two 1080p monitors side by side and set up as such,
+--- -- if a window `win` is fullscreen on the right one...
 ---local loc = window.loc(win)
------ ...should have loc equal to `{ x = 1920, y = 0 }`.
+--- -- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
 ---@param win Window
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
@@ -445,12 +445,12 @@ end
 ---
 ---### Example
 ---```lua
------ With Alacritty focused...
+--- -- With Alacritty focused...
 ---local win = window.get_focused()
 ---if win ~= nil then
 ---    print(window.class(win))
 ---end
------ ...should print "Alacritty".
+--- -- ...should print "Alacritty".
 ---```
 ---@param win Window
 ---@return string|nil class This window's class, or nil if it doesn't exist.
@@ -469,12 +469,12 @@ end
 ---
 ---### Example
 ---```lua
------ With Alacritty focused...
+--- -- With Alacritty focused...
 ---local win = window.get_focused()
 ---if win ~= nil then
 ---    print(window.title(win))
 ---end
------ ...should print the directory Alacritty is in or what it's running (what's in its title bar).
+--- -- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
 ---@param win Window
 ---@return string|nil title This window's title, or nil if it doesn't exist.

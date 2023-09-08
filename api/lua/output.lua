@@ -120,19 +120,19 @@ end
 ---
 ---### Examples
 ---```lua
------ Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
+--- -- Assuming DP-1 is 2560x1440 and DP-2 is 1920x1080...
 ---local dp1 = output.get_by_name("DP-1")
 ---local dp2 = output.get_by_name("DP-2")
 ---
------ Place DP-2 to the left of DP-1, top borders aligned
+--- -- Place DP-2 to the left of DP-1, top borders aligned
 ---dp1:set_loc({ x = 1920, y = 0 })
 ---dp2:set_loc({ x = 0, y = 0 })
 ---
------ Do the same as above, with a different origin
+--- -- Do the same as above, with a different origin
 ---dp1:set_loc({ x = 0, y = 0 })
 ---dp2:set_loc({ x = -1920, y = 0 })
 ---
------ Place DP-2 to the right of DP-1, bottom borders aligned
+--- -- Place DP-2 to the right of DP-1, bottom borders aligned
 ---dp1:set_loc({ x = 0, y = 0 })
 ---dp2:set_loc({ x = 2560, y = 1440 - 1080 })
 ---```
