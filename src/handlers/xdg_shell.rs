@@ -15,7 +15,7 @@ use smithay::{
     },
     utils::{Serial, SERIAL_COUNTER},
     wayland::{
-        compositor::{self, CompositorHandler},
+        compositor::{self},
         shell::xdg::{
             Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler,
             XdgShellState,
@@ -26,7 +26,7 @@ use smithay::{
 use crate::{
     focus::FocusTarget,
     state::{State, WithState},
-    window::{window_state::LocationRequestState, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::LocationRequestState, WindowElement},
 };
 
 impl XdgShellHandler for State {
@@ -65,26 +65,6 @@ impl XdgShellHandler for State {
             tracing::debug!("new window, tags are {:?}", state.tags);
         });
 
-        let windows_on_output = self
-            .windows
-            .iter()
-            .filter(|win| {
-                win.with_state(|state| {
-                    self.focus_state
-                        .focused_output
-                        .as_ref()
-                        .expect("no focused output")
-                        .with_state(|op_state| {
-                            op_state
-                                .tags
-                                .iter()
-                                .any(|tag| state.tags.iter().any(|tg| tg == tag))
-                        })
-                })
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
         // note to self: don't reorder this
         // TODO: fix it so that reordering this doesn't break stuff
         self.windows.push(window.clone());
@@ -116,34 +96,6 @@ impl XdgShellHandler for State {
 
                 if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
                     data.state.update_windows(&focused_output);
-                    BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-                    tracing::debug!(
-                        "blocker {}",
-                        BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                    );
-                    for win in windows_on_output.iter() {
-                        if let Some(surf) = win.wl_surface() {
-                            compositor::add_blocker(&surf, crate::window::WindowBlocker);
-                        }
-                    }
-                    let clone = window.clone();
-                    data.state.loop_handle.insert_idle(|data| {
-                        crate::state::schedule_on_commit(data, vec![clone], move |data| {
-                            BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
-                            tracing::debug!(
-                                "blocker {}",
-                                BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                            );
-                            for client in windows_on_output
-                                .iter()
-                                .filter_map(|win| win.wl_surface()?.client())
-                            {
-                                data.state
-                                    .client_compositor_state(&client)
-                                    .blocker_cleared(&mut data.state, &data.display.handle())
-                            }
-                        })
-                    });
                 }
                 data.state.loop_handle.insert_idle(move |data| {
                     data.state
@@ -283,7 +235,7 @@ impl XdgShellHandler for State {
                     match &configure {
                         Configure::Toplevel(configure) => {
                             if configure.serial >= serial {
-                                // tracing::debug!("acked configure, new loc is {:?}", new_loc);
+                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
                             }

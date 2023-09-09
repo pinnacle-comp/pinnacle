@@ -232,6 +232,16 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 pointer_element.set_status(state.cursor_status.clone());
 
+                if state.pause_rendering {
+                    state.space.refresh();
+                    state.popup_manager.cleanup();
+                    display
+                        .flush_clients()
+                        .expect("failed to flush client buffers");
+
+                    return TimeoutAction::ToDuration(Duration::from_millis(1));
+                }
+
                 let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
                 let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);

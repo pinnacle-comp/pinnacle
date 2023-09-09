@@ -24,7 +24,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     metaconfig::Metaconfig,
     tag::TagId,
-    window::{window_state::LocationRequestState, WindowElement},
+    window::WindowElement,
 };
 use anyhow::Context;
 use calloop::futures::Scheduler;
@@ -50,7 +50,7 @@ use smithay::{
             Display, DisplayHandle,
         },
     },
-    utils::{Clock, IsAlive, Logical, Monotonic, Point, Size},
+    utils::{Clock, Logical, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         data_device::DataDeviceState,
@@ -138,25 +138,8 @@ pub struct State {
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
-}
 
-/// Schedule something to be done when windows have finished committing and have become
-/// idle.
-pub fn schedule_on_commit<F>(data: &mut CalloopData, windows: Vec<WindowElement>, on_commit: F)
-where
-    F: FnOnce(&mut CalloopData) + 'static,
-{
-    for window in windows.iter().filter(|win| win.alive()) {
-        if window.with_state(|state| !matches!(state.loc_request_state, LocationRequestState::Idle))
-        {
-            data.state.loop_handle.insert_idle(|data| {
-                schedule_on_commit(data, windows, on_commit);
-            });
-            return;
-        }
-    }
-
-    on_commit(data);
+    pub pause_rendering: bool,
 }
 
 impl State {
@@ -376,6 +359,8 @@ impl State {
             xwayland,
             xwm: None,
             xdisplay: None,
+
+            pause_rendering: false,
         })
     }
 

@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    reexports::wayland_server::Resource,
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
-        compositor::{self, CompositorHandler},
         data_device::{
             clear_data_device_selection, current_data_device_selection_userdata,
             request_data_device_client_selection, set_data_device_selection,
@@ -23,7 +21,7 @@ use smithay::{
 use crate::{
     focus::FocusTarget,
     state::{CalloopData, WithState},
-    window::{window_state::FloatingOrTiled, WindowBlocker, WindowElement, BLOCKER_COUNTER},
+    window::{window_state::FloatingOrTiled, WindowElement},
 };
 
 impl XwmHandler for CalloopData {
@@ -127,28 +125,6 @@ impl XwmHandler for CalloopData {
                 });
             }
 
-            let windows_on_output = self
-                .state
-                .windows
-                .iter()
-                .filter(|win| {
-                    win.with_state(|state| {
-                        self.state
-                            .focus_state
-                            .focused_output
-                            .as_ref()
-                            .expect("no focused output")
-                            .with_state(|op_state| {
-                                op_state
-                                    .tags
-                                    .iter()
-                                    .any(|tag| state.tags.iter().any(|tg| tg == tag))
-                            })
-                    })
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-
             self.state.windows.push(window.clone());
 
             self.state.focus_state.set_focus(window.clone());
@@ -157,34 +133,6 @@ impl XwmHandler for CalloopData {
 
             if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
                 self.state.update_windows(&focused_output);
-                BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-                tracing::debug!(
-                    "blocker {}",
-                    BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                );
-                for win in windows_on_output.iter() {
-                    if let Some(surf) = win.wl_surface() {
-                        compositor::add_blocker(&surf, WindowBlocker);
-                    }
-                }
-                let clone = window.clone();
-                self.state.loop_handle.insert_idle(move |data| {
-                    crate::state::schedule_on_commit(data, vec![clone.clone()], move |data| {
-                        BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
-                        tracing::debug!(
-                            "blocker {}",
-                            BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                        );
-                        for client in windows_on_output
-                            .iter()
-                            .filter_map(|win| win.wl_surface()?.client())
-                        {
-                            data.state
-                                .client_compositor_state(&client)
-                                .blocker_cleared(&mut data.state, &data.display.handle())
-                        }
-                    });
-                });
             }
             self.state.loop_handle.insert_idle(move |data| {
                 data.state
