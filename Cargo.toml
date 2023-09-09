@@ -14,12 +14,12 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-smithay = { git = "https://github.com/Smithay/smithay", rev = "ae7fb22", features = ["desktop", "wayland_frontend"] }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "1a61e1c", features = ["desktop", "wayland_frontend"] }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", optional = true }
-thiserror = "1.0.44"
+thiserror = "1.0.48"
 xcursor = { version = "0.3.4", optional = true }
-image = { version = "0.24.6", default-features = false, optional = true }
-serde = { version = "1.0.174", features = ["derive"] }
+image = { version = "0.24.7", default-features = false, optional = true }
+serde = { version = "1.0.188", features = ["derive"] }
 rmp = { version = "0.8.12" }
 rmp-serde = { version = "1.1.2" }
 calloop = { version = "0.10.1", features = ["executor", "futures-io"] }
@@ -28,8 +28,8 @@ async-process = { version = "1.7.0" }
 itertools = { version = "0.11.0" }
 x11rb = { version = "0.12.0", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
-toml = "0.7.6"
-anyhow = { version = "1.0.74", features = ["backtrace"] }
+toml = "0.7.7"
+anyhow = { version = "1.0.75", features = ["backtrace"] }
 clap = { version = "4.4.2", features = ["derive"] }
 
 [features]
