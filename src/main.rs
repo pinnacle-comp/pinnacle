@@ -30,7 +30,7 @@ mod tag;
 mod window;
 
 #[derive(clap::Args, Debug)]
-#[group(id = "backend", required = false)]
+#[group(id = "backend", required = false, multiple = false)]
 struct Backends {
     #[arg(long, group = "backend")]
     /// Run Pinnacle in a window in your graphical environment
@@ -42,7 +42,6 @@ struct Backends {
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-#[group(required = false, multiple = false)]
 struct Args {
     #[command(flatten)]
     backend: Backends,
