@@ -262,14 +262,10 @@ pub fn run_winit() -> anyhow::Result<()> {
                         .flush_clients()
                         .expect("failed to flush client buffers");
 
-                    state.prev_pending_win_count = pending_win_count;
-
                     // TODO: still draw the cursor here
 
                     return TimeoutAction::ToDuration(Duration::from_millis(1));
                 }
-
-                state.prev_pending_win_count = pending_win_count;
 
                 let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
                 let full_redraw = &mut backend.full_redraw;
