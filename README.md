@@ -16,7 +16,6 @@ It sports high configurability through a (soon to be) extensive Lua API, with pl
 > <summary>Click me</summary>
 >
 > All videos were recorded using [Screenkey](https://gitlab.com/screenkey/screenkey) and the Winit backend.
-> Expect minor flickering here and there, but I hope to fix that in the future.
 > 
 > https://github.com/Ottatop/pinnacle/assets/120758733/5b6b224b-3031-4a1c-9375-1143f1bfc0e3
 >
