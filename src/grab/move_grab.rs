@@ -166,6 +166,78 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
     fn start_data(&self) -> &GrabStartData<State> {
         &self.start_data
     }
+
+    fn gesture_swipe_begin(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GestureSwipeBeginEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_swipe_update(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GestureSwipeUpdateEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_swipe_end(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GestureSwipeEndEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_pinch_begin(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GesturePinchBeginEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_pinch_update(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GesturePinchUpdateEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_pinch_end(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GesturePinchEndEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_hold_begin(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GestureHoldBeginEvent,
+    ) {
+        todo!()
+    }
+
+    fn gesture_hold_end(
+        &mut self,
+        _data: &mut State,
+        _handle: &mut PointerInnerHandle<'_, State>,
+        _event: &smithay::input::pointer::GestureHoldEndEvent,
+    ) {
+        todo!()
+    }
 }
 
 pub fn move_request_client(
