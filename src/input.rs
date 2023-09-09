@@ -20,7 +20,6 @@ use smithay::{
     input::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
-        SeatHandler,
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},

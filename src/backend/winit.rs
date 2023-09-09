@@ -12,7 +12,10 @@ use smithay::{
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    desktop::{
+        layer_map_for_output,
+        utils::{send_frames_surface_tree, surface_primary_scanout_output},
+    },
     input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
     reexports::{
@@ -32,7 +35,7 @@ use smithay::{
 
 use crate::{
     render::pointer::PointerElement,
-    state::{take_presentation_feedback, Backend, CalloopData, State},
+    state::{take_presentation_feedback, Backend, CalloopData, State, WithState},
 };
 
 use super::BackendData;
@@ -232,15 +235,41 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 pointer_element.set_status(state.cursor_status.clone());
 
-                if state.pause_rendering {
+                // TODO: make a pending_windows state, when pending_windows increases,
+                // |     pause rendering.
+                // |     If it goes down, push a frame, then repeat until no pending_windows are left.
+
+                let pending_win_count = state
+                    .windows
+                    .iter()
+                    .filter(|win| win.alive())
+                    .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+                    .count() as u32;
+
+                if pending_win_count > 0 {
+                    for win in state.windows.iter() {
+                        win.send_frame(
+                            &output,
+                            state.clock.now(),
+                            Some(Duration::ZERO),
+                            surface_primary_scanout_output,
+                        );
+                    }
+
                     state.space.refresh();
                     state.popup_manager.cleanup();
                     display
                         .flush_clients()
                         .expect("failed to flush client buffers");
 
+                    state.prev_pending_win_count = pending_win_count;
+
+                    // TODO: still draw the cursor here
+
                     return TimeoutAction::ToDuration(Duration::from_millis(1));
                 }
+
+                state.prev_pending_win_count = pending_win_count;
 
                 let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
                 let full_redraw = &mut backend.full_redraw;

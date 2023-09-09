@@ -139,7 +139,7 @@ pub struct State {
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
-    pub pause_rendering: bool,
+    pub prev_pending_win_count: u32,
 }
 
 impl State {
@@ -360,7 +360,7 @@ impl State {
             xwm: None,
             xdisplay: None,
 
-            pause_rendering: false,
+            prev_pending_win_count: 0,
         })
     }
 

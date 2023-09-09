@@ -161,7 +161,7 @@ impl State {
         //
         // This *will* cause everything to freeze for a few frames, but it shouldn't impact
         // anything meaningfully.
-        self.pause_rendering = true;
+        // self.pause_rendering = true;
 
         // schedule on all idle
         self.schedule(
@@ -186,7 +186,7 @@ impl State {
                 for (loc, win) in non_pending_wins {
                     dt.state.space.map_element(win, loc, false);
                 }
-                dt.state.pause_rendering = false;
+                // dt.state.pause_rendering = false;
             },
         );
     }
