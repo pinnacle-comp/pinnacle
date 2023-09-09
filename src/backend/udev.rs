@@ -72,7 +72,7 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{Clock, DeviceFd, Logical, Monotonic, Physical, Point, Rectangle, Transform},
+    utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Physical, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::{InputMethodHandle, InputMethodSeat},
@@ -1332,10 +1332,18 @@ impl State {
             return;
         };
 
+        let windows = self
+            .focus_state
+            .focus_stack
+            .iter()
+            .filter(|win| win.alive())
+            .cloned()
+            .collect::<Vec<_>>();
+
         let result = render_surface(
             &mut self.cursor_status,
             &self.space,
-            &self.windows,
+            &windows,
             self.dnd_icon.as_ref(),
             &self.focus_state.focus_stack,
             surface,

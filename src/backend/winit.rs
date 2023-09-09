@@ -248,9 +248,17 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 state.focus_state.fix_up_focus(&mut state.space);
 
+                let windows = state
+                    .focus_state
+                    .focus_stack
+                    .iter()
+                    .filter(|win| win.alive())
+                    .cloned()
+                    .collect::<Vec<_>>();
+
                 let output_render_elements = crate::render::generate_render_elements(
                     &state.space,
-                    &state.windows,
+                    &windows,
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),
