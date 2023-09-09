@@ -5,7 +5,7 @@ use smithay::{
     desktop::layer_map_for_output,
     output::Output,
     reexports::wayland_server::Resource,
-    utils::{Logical, Point, Rectangle, Size},
+    utils::{IsAlive, Logical, Point, Rectangle, Size},
     wayland::compositor::{self, CompositorHandler},
 };
 
@@ -199,9 +199,12 @@ impl State {
                 // schedule on all idle
                 data.state.schedule(
                     move |_dt| {
-                        pending_wins.iter().all(|(_, win)| {
-                            win.with_state(|state| state.loc_request_state.is_idle())
-                        })
+                        pending_wins
+                            .iter()
+                            .filter(|(_, win)| win.alive())
+                            .all(|(_, win)| {
+                                win.with_state(|state| state.loc_request_state.is_idle())
+                            })
                     },
                     move |dt| {
                         for (loc, win) in non_pending_wins {

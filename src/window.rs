@@ -203,39 +203,6 @@ impl WindowElement {
         });
     }
 
-    /// Request a size and loc change.
-    pub fn request_size_change(
-        &self,
-        space: &mut Space<WindowElement>,
-        new_loc: Point<i32, Logical>,
-        new_size: Size<i32, Logical>,
-    ) {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
-                    state.size = Some(new_size);
-                });
-                self.with_state(|state| {
-                    state.loc_request_state =
-                        LocationRequestState::Requested(window.toplevel().send_configure(), new_loc)
-                });
-            }
-            WindowElement::X11(surface) => {
-                tracing::debug!("sending size change to x11 win");
-                surface
-                    .configure(Rectangle::from_loc_and_size(new_loc, new_size))
-                    .expect("failed to configure x11 win");
-
-                if !surface.is_override_redirect() {
-                    surface
-                        .set_mapped(true)
-                        .expect("failed to set x11 win to mapped");
-                }
-                space.map_element(self.clone(), new_loc, false);
-            }
-        }
-    }
-
     pub fn class(&self) -> Option<String> {
         match self {
             WindowElement::Wayland(window) => {
