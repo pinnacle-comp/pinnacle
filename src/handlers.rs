@@ -95,7 +95,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // tracing::debug!("commit");
+        // tracing::debug!("commit on surface {:?}", surface);
 
         X11Wm::commit_hook::<CalloopData>(surface);
 
