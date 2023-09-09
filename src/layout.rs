@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::time::Duration;
-
 use itertools::{Either, Itertools};
 use smithay::{
     desktop::layer_map_for_output,
     output::Output,
-    reexports::wayland_server::Resource,
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::compositor::{self, CompositorHandler},
 };
 
 use crate::{
     state::{State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
-        WindowElement, BLOCKER_COUNTER,
+        WindowElement,
     },
 };
 
@@ -161,12 +157,6 @@ impl State {
             });
         }
 
-        // BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-        // tracing::debug!(
-        //     "blocker {}",
-        //     BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-        // );
-
         // Pause rendering. Here we'll wait until all windows have ack'ed and committed,
         // then resume rendering. This prevents flickering because some windows will commit before
         // others.
@@ -174,15 +164,6 @@ impl State {
         // This *will* cause everything to freeze for a few frames, but it shouldn't impact
         // anything meaningfully.
         self.pause_rendering = true;
-
-        // for (_loc, win) in pending_wins.iter() {
-        //     if let Some(surf) = win.wl_surface() {
-        //         tracing::debug!("adding blocker");
-        //         compositor::add_blocker(&surf, crate::window::WindowBlocker);
-        //     }
-        // }
-
-        let pending_wins_clone = pending_wins.clone();
 
         // schedule on all idle
         self.schedule(
@@ -199,62 +180,9 @@ impl State {
                 for (loc, win) in non_pending_wins {
                     dt.state.space.map_element(win, loc, false);
                 }
-                for win in windows_not_on_foc_tags {
-                    dt.state.space.unmap_elem(&win);
-                }
                 dt.state.pause_rendering = false;
             },
         );
-
-        // self.schedule(
-        //     move |_data| {
-        //         // tracing::debug!("Waiting for all to ack");
-        //         pending_wins_clone.iter().all(|(_, win)| {
-        //             win.with_state(|state| state.loc_request_state.is_acknowledged())
-        //         })
-        //     },
-        //     move |data| {
-        //         // remove and trigger blockers
-        //         BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
-        //         tracing::debug!(
-        //             "blocker {}",
-        //             BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-        //         );
-        //         for client in pending_wins
-        //             .iter()
-        //             .filter_map(|(_, win)| win.wl_surface()?.client())
-        //         {
-        //             data.state
-        //                 .client_compositor_state(&client)
-        //                 .blocker_cleared(&mut data.state, &data.display.handle())
-        //         }
-        //
-        //         // schedule on all idle
-        //         data.state.schedule(
-        //             move |_dt| {
-        //                 // tracing::debug!("Waiting for all to be idle");
-        //                 let all_idle =
-        //                     pending_wins
-        //                         .iter()
-        //                         .filter(|(_, win)| win.alive())
-        //                         .all(|(_, win)| {
-        //                             win.with_state(|state| state.loc_request_state.is_idle())
-        //                         });
-        //
-        //                 all_idle
-        //             },
-        //             move |dt| {
-        //                 for (loc, win) in non_pending_wins {
-        //                     dt.state.space.map_element(win, loc, false);
-        //                 }
-        //                 for win in windows_not_on_foc_tags {
-        //                     dt.state.space.unmap_elem(&win);
-        //                 }
-        //                 dt.state.pause_rendering = false;
-        //             },
-        //         );
-        //     },
-        // );
     }
 }
 

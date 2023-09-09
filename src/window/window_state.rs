@@ -122,14 +122,6 @@ impl LocationRequestState {
     pub fn is_idle(&self) -> bool {
         matches!(self, Self::Idle)
     }
-
-    /// Returns `true` if the location request state is [`Acknowledged`].
-    ///
-    /// [`Acknowledged`]: LocationRequestState::Acknowledged
-    #[must_use]
-    pub fn is_acknowledged(&self) -> bool {
-        matches!(self, Self::Acknowledged(..))
-    }
 }
 
 impl WindowElement {
