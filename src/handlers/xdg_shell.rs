@@ -333,7 +333,9 @@ impl XdgShellHandler for State {
         if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
             window.toggle_maximized();
         }
-        // TODO: might need to update_windows here
+
+        let Some(output) = window.output(self) else { return };
+        self.update_windows(&output);
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
@@ -344,6 +346,9 @@ impl XdgShellHandler for State {
         if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
             window.toggle_maximized();
         }
+
+        let Some(output) = window.output(self) else { return };
+        self.update_windows(&output);
     }
 
     // fn minimize_request(&mut self, surface: ToplevelSurface) {

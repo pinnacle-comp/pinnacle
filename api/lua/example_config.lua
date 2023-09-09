@@ -112,8 +112,11 @@ require("pinnacle").setup(function(pinnacle)
         -- })
     end)
 
-    ---@type Layout[]
-    local layouts = {
+    -- Layout cycling
+
+    -- Create a layout cycler to cycle your tag layouts. This will store which layout each tag has
+    -- and change to the next or previous one in the array when the respective function is called.
+    local layout_cycler = tag.layout_cycler({
         "MasterStack",
         "Dwindle",
         "Spiral",
@@ -121,55 +124,16 @@ require("pinnacle").setup(function(pinnacle)
         "CornerTopRight",
         "CornerBottomLeft",
         "CornerBottomRight",
-    }
-    local indices = {}
+    })
 
-    -- Layout cycling
-    -- Yes, this is overly complicated and yes, I'll cook up a way to make it less so.
     input.keybind({ mod_key }, keys.space, function()
-        local tags = output.get_focused():tags()
-        for _, tg in pairs(tags) do
-            if tg:active() then
-                local name = tg:name()
-                if name == nil then
-                    return
-                end
-                tg:set_layout(layouts[indices[name] or 1])
-                if indices[name] == nil then
-                    indices[name] = 2
-                else
-                    if indices[name] + 1 > #layouts then
-                        indices[name] = 1
-                    else
-                        indices[name] = indices[name] + 1
-                    end
-                end
-                break
-            end
-        end
+        layout_cycler.next()
     end)
     input.keybind({ mod_key, "Shift" }, keys.space, function()
-        local tags = output.get_focused():tags()
-        for _, tg in pairs(tags) do
-            if tg:active() then
-                local name = tg:name()
-                if name == nil then
-                    return
-                end
-                tg:set_layout(layouts[indices[name] or #layouts])
-                if indices[name] == nil then
-                    indices[name] = #layouts - 1
-                else
-                    if indices[name] - 1 < 1 then
-                        indices[name] = #layouts
-                    else
-                        indices[name] = indices[name] - 1
-                    end
-                end
-                break
-            end
-        end
+        layout_cycler.prev()
     end)
+
+    -- Tag manipulation
 
     input.keybind({ mod_key }, keys.KEY_1, function()
         tag.switch_to("1")
