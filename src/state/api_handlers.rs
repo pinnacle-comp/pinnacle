@@ -4,6 +4,7 @@ use async_process::Stdio;
 use futures_lite::AsyncBufReadExt;
 use smithay::{
     desktop::space::SpaceElement,
+    utils::Rectangle,
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 
@@ -68,7 +69,10 @@ impl State {
                 if let Some(height) = height {
                     window_size.h = height;
                 }
-                window.request_size_change(&mut self.space, window_loc, window_size);
+                window.change_geometry(Rectangle::from_loc_and_size(window_loc, window_size));
+                if let Some(output) = window.output(self) {
+                    self.update_windows(&output);
+                }
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };

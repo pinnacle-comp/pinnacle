@@ -73,6 +73,7 @@ impl State {
         }
     }
 
+    /// Get the [`FocusTarget`] under `point`.
     pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
@@ -101,9 +102,12 @@ impl State {
         });
 
         // I think I'm going a bit too far with the functional stuff
+
+        // The topmost fullscreen window
         top_fullscreen_window
             .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
             .or_else(|| {
+                // The topmost layer surface in Overlay or Top
                 layers
                     .layer_under(wlr_layer::Layer::Overlay, point)
                     .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
@@ -113,11 +117,27 @@ impl State {
                     })
             })
             .or_else(|| {
+                // The topmost window
                 self.space
-                    .element_under(point)
-                    .map(|(window, loc)| (window.clone().into(), loc))
+                    .elements()
+                    .rev()
+                    .filter(|win| win.is_on_active_tag(self.space.outputs()))
+                    .find_map(|win| {
+                        let loc = self
+                            .space
+                            .element_location(win)
+                            .expect("called elem loc on unmapped win")
+                            - win.geometry().loc;
+
+                        if win.is_in_input_region(&(point - loc.to_f64())) {
+                            Some((win.clone().into(), loc))
+                        } else {
+                            None
+                        }
+                    })
             })
             .or_else(|| {
+                // The topmost layer surface in Bottom or Background
                 layers
                     .layer_under(wlr_layer::Layer::Bottom, point)
                     .or_else(|| layers.layer_under(wlr_layer::Layer::Background, point))

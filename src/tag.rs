@@ -7,11 +7,20 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use smithay::output::Output;
+use smithay::{
+    backend::renderer::{
+        element::{surface::WaylandSurfaceRenderElement, AsRenderElements},
+        ImportAll, ImportMem, Renderer,
+    },
+    desktop::{space::SpaceElement, Space},
+    output::Output,
+    utils::Scale,
+};
 
 use crate::{
     layout::Layout,
     state::{State, WithState},
+    window::WindowElement,
 };
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -64,6 +73,7 @@ impl Eq for TagInner {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag(Rc<RefCell<TagInner>>);
 
+// RefCell Safety: These methods should never panic because they are all self-contained or Copy.
 impl Tag {
     pub fn id(&self) -> TagId {
         self.0.borrow().id
@@ -106,5 +116,32 @@ impl Tag {
             .outputs()
             .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == self)))
             .cloned()
+    }
+
+    /// Get the render_elements for the provided tags.
+    pub fn tag_render_elements<R, C>(
+        windows: &[WindowElement],
+        space: &Space<WindowElement>,
+        renderer: &mut R,
+    ) -> Vec<C>
+    where
+        R: Renderer + ImportAll + ImportMem,
+        <R as Renderer>::TextureId: 'static,
+        C: From<WaylandSurfaceRenderElement<R>>,
+    {
+        let elements = windows
+            .iter()
+            .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
+            .filter(|win| win.is_on_active_tag(space.outputs()))
+            .flat_map(|win| {
+                // subtract win.geometry().loc to align decorations correctly
+                let loc = (space.element_location(win).unwrap_or((0, 0).into())
+                    - win.geometry().loc)
+                    .to_physical(1);
+                win.render_elements::<C>(renderer, loc, Scale::from(1.0), 1.0)
+            })
+            .collect::<Vec<_>>();
+
+        elements
     }
 }

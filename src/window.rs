@@ -11,7 +11,7 @@ use smithay::{
             take_presentation_feedback_surface_tree, under_from_surface_tree,
             with_surfaces_surface_tree, OutputPresentationFeedback,
         },
-        Space, Window, WindowSurfaceType,
+        Window, WindowSurfaceType,
     },
     input::{
         keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
@@ -23,7 +23,7 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial, Size},
+    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor::{self, Blocker, BlockerState, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -203,39 +203,6 @@ impl WindowElement {
         });
     }
 
-    /// Request a size and loc change.
-    pub fn request_size_change(
-        &self,
-        space: &mut Space<WindowElement>,
-        new_loc: Point<i32, Logical>,
-        new_size: Size<i32, Logical>,
-    ) {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
-                    state.size = Some(new_size);
-                });
-                self.with_state(|state| {
-                    state.loc_request_state =
-                        LocationRequestState::Requested(window.toplevel().send_configure(), new_loc)
-                });
-            }
-            WindowElement::X11(surface) => {
-                tracing::debug!("sending size change to x11 win");
-                surface
-                    .configure(Rectangle::from_loc_and_size(new_loc, new_size))
-                    .expect("failed to configure x11 win");
-
-                if !surface.is_override_redirect() {
-                    surface
-                        .set_mapped(true)
-                        .expect("failed to set x11 win to mapped");
-                }
-                space.map_element(self.clone(), new_loc, false);
-            }
-        }
-    }
-
     pub fn class(&self) -> Option<String> {
         match self {
             WindowElement::Wayland(window) => {
@@ -277,6 +244,21 @@ impl WindowElement {
     /// This method gets the first tag the window has and returns its output.
     pub fn output(&self, state: &State) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
+    }
+
+    /// RefCell Safety: This uses RefCells on both `self` and everything in `outputs`.
+    pub fn is_on_active_tag<'a>(&self, outputs: impl IntoIterator<Item = &'a Output>) -> bool {
+        let tags = outputs
+            .into_iter()
+            .flat_map(|op| op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>()))
+            .collect::<Vec<_>>();
+
+        self.with_state(|state| {
+            state
+                .tags
+                .iter()
+                .any(|tag| tags.iter().any(|tag2| tag == tag2))
+        })
     }
 
     /// Returns `true` if the window element is [`Wayland`].
