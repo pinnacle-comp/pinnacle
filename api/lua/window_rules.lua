@@ -181,7 +181,7 @@ end
 --- -- The following will open Discord, Thunderbird, or Firefox floating if they
 --- -- open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
 ---window.rules.add({
----    cond = { cond_all = { -- This outer `cond_all` block is unnecessary, but it's here for clarity.
+---    cond = { cond_all = { -- This `cond_all` block is needed because the outermost block cannot be an array.
 ---        { cond_any = { class = { "firefox", "thunderbird", "discord" } } },
 ---        { cond_any = {
 ---            -- Because `tag` is inside a `cond_all` block,
