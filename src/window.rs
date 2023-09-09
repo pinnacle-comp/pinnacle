@@ -248,10 +248,17 @@ impl WindowElement {
 
     /// RefCell Safety: This uses RefCells on both `self` and everything in `outputs`.
     pub fn is_on_active_tag<'a>(&self, outputs: impl IntoIterator<Item = &'a Output>) -> bool {
-        let mut tags = outputs.into_iter().flat_map(|op| {
-            op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>())
-        });
-        self.with_state(|state| state.tags.iter().any(|tag| tags.any(|tag2| tag == &tag2)))
+        let tags = outputs
+            .into_iter()
+            .flat_map(|op| op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>()))
+            .collect::<Vec<_>>();
+
+        self.with_state(|state| {
+            state
+                .tags
+                .iter()
+                .any(|tag| tags.iter().any(|tag2| tag == tag2))
+        })
     }
 
     /// Returns `true` if the window element is [`Wayland`].
