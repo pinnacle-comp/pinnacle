@@ -168,14 +168,9 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.toggle("1")             -- Toggle tag 1 on the focused output
----tag.toggle({ "1" })         -- Same as above
 ---
----tag.toggle({ "1", "DP-1" }) -- Toggle tag 1 on DP-1
----tag.toggle({ "1", op })     -- Same as above
----
---- -- Verbose versions of the two above
----tag.toggle({ name = "1", output = "DP-1" })
----tag.toggle({ name = "1", output = op })
+---tag.toggle({ name = "1", output = "DP-1" }) -- Toggle tag 1 on "DP-1"
+---tag.toggle({ name = "1", output = op })     -- Same as above
 ---
 --- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
@@ -205,14 +200,9 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.switch_to("1")             -- Switch to tag 1 on the focused output
----tag.switch_to({ "1" })         -- Same as above
 ---
----tag.switch_to({ "1", "DP-1" }) -- Switch to tag 1 on DP-1
----tag.switch_to({ "1", op })     -- Same as above
----
---- -- Verbose versions of the two above
----tag.switch_to({ name = "1", output = "DP-1" })
----tag.switch_to({ name = "1", output = op })
+---tag.switch_to({ name = "1", output = "DP-1" }) -- Switch to tag 1 on "DP-1"
+---tag.switch_to({ name = "1", output = op })     -- Same as above
 ---
 --- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
