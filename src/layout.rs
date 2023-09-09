@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::time::Duration;
+
 use itertools::{Either, Itertools};
 use smithay::{
-    desktop::layer_map_for_output,
+    desktop::{layer_map_for_output, utils::surface_primary_scanout_output},
     output::Output,
     reexports::wayland_server::Resource,
     utils::{IsAlive, Logical, Point, Rectangle, Size},
@@ -57,7 +59,7 @@ impl State {
 
     pub fn update_windows(&mut self, output: &Output) {
         let Some(layout) = output.with_state(|state| {
-            state.focused_tags().next().cloned().map(|tag| tag.layout())
+            state.focused_tags().next().map(|tag| tag.layout())
         }) else { return };
 
         let (windows_on_foc_tags, mut windows_not_on_foc_tags): (Vec<_>, _) =
@@ -68,6 +70,7 @@ impl State {
                 })
             });
 
+        // Don't unmap windows on other outputs
         windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
 
         let tiled_windows = windows_on_foc_tags
@@ -122,12 +125,19 @@ impl State {
                         WindowElement::Wayland(win) => {
                             // If the above didn't cause any change to size or other state, simply
                             // map the window.
-                            if !win.toplevel().has_pending_changes() {
+                            let current_state = win.toplevel().current_state();
+                            let is_pending = win
+                                .toplevel()
+                                .with_pending_state(|state| state.size != current_state.size);
+                            // for whatever reason vscode on wayland likes to have pending state
+                            // (like tiled states) but not commit, so we check for just the size
+                            // here
+                            if !is_pending {
+                                tracing::debug!("No pending changes");
                                 state.loc_request_state = LocationRequestState::Idle;
                                 non_pending_wins.push((loc, window.clone()));
-                                // TODO: wait for windows with pending state to ack and commit
-                                // self.space.map_element(window.clone(), loc, false);
                             } else {
+                                tracing::debug!("Pending changes");
                                 let serial = win.toplevel().send_configure();
                                 state.loc_request_state =
                                     LocationRequestState::Requested(serial, loc);
@@ -149,81 +159,100 @@ impl State {
             });
         }
 
-        BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
-        tracing::debug!(
-            "blocker {}",
-            BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-        );
-
-        let start_time = self.clock.now();
+        // BLOCKER_COUNTER.store(1, std::sync::atomic::Ordering::SeqCst);
+        // tracing::debug!(
+        //     "blocker {}",
+        //     BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+        // );
 
         // Pause rendering. Here we'll wait until all windows have ack'ed and committed,
         // then resume rendering. This prevents flickering because some windows will commit before
         // others.
         //
-        // This *will* cause everything to freeze for a few frames, but it should'nt impact
+        // This *will* cause everything to freeze for a few frames, but it shouldn't impact
         // anything meaningfully.
         self.pause_rendering = true;
 
-        for (_loc, win) in pending_wins.iter() {
-            if let Some(surf) = win.wl_surface() {
-                tracing::debug!("adding blocker");
-                compositor::add_blocker(&surf, crate::window::WindowBlocker);
-            }
-        }
+        // for (_loc, win) in pending_wins.iter() {
+        //     if let Some(surf) = win.wl_surface() {
+        //         tracing::debug!("adding blocker");
+        //         compositor::add_blocker(&surf, crate::window::WindowBlocker);
+        //     }
+        // }
 
         let pending_wins_clone = pending_wins.clone();
 
+        // schedule on all idle
         self.schedule(
-            move |_data| {
-                pending_wins_clone.iter().all(|(_, win)| {
-                    win.with_state(|state| state.loc_request_state.is_acknowledged())
-                })
-            },
-            move |data| {
-                // remove and trigger blockers
-                BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
-                tracing::debug!(
-                    "blocker {}",
-                    BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
-                );
-                for client in pending_wins
+            move |_dt| {
+                // tracing::debug!("Waiting for all to be idle");
+                let all_idle = pending_wins
                     .iter()
-                    .filter_map(|(_, win)| win.wl_surface()?.client())
-                {
-                    data.state
-                        .client_compositor_state(&client)
-                        .blocker_cleared(&mut data.state, &data.display.handle())
-                }
+                    .filter(|(_, win)| win.alive())
+                    .all(|(_, win)| win.with_state(|state| state.loc_request_state.is_idle()));
 
-                // schedule on all idle
-                data.state.schedule(
-                    move |_dt| {
-                        pending_wins
-                            .iter()
-                            .filter(|(_, win)| win.alive())
-                            .all(|(_, win)| {
-                                win.with_state(|state| state.loc_request_state.is_idle())
-                            })
-                    },
-                    move |dt| {
-                        for (loc, win) in non_pending_wins {
-                            dt.state.space.map_element(win, loc, false);
-                        }
-                        for win in windows_not_on_foc_tags {
-                            dt.state.space.unmap_elem(&win);
-                        }
-                        dt.state.pause_rendering = false;
-                        let finish_time =
-                            smithay::utils::Time::elapsed(&start_time, dt.state.clock.now());
-                        tracing::debug!(
-                            "spent {} microseconds not rendering",
-                            finish_time.as_micros()
-                        );
-                    },
-                );
+                all_idle
+            },
+            move |dt| {
+                for (loc, win) in non_pending_wins {
+                    dt.state.space.map_element(win, loc, false);
+                }
+                for win in windows_not_on_foc_tags {
+                    dt.state.space.unmap_elem(&win);
+                }
+                dt.state.pause_rendering = false;
             },
         );
+
+        // self.schedule(
+        //     move |_data| {
+        //         // tracing::debug!("Waiting for all to ack");
+        //         pending_wins_clone.iter().all(|(_, win)| {
+        //             win.with_state(|state| state.loc_request_state.is_acknowledged())
+        //         })
+        //     },
+        //     move |data| {
+        //         // remove and trigger blockers
+        //         BLOCKER_COUNTER.store(0, std::sync::atomic::Ordering::SeqCst);
+        //         tracing::debug!(
+        //             "blocker {}",
+        //             BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+        //         );
+        //         for client in pending_wins
+        //             .iter()
+        //             .filter_map(|(_, win)| win.wl_surface()?.client())
+        //         {
+        //             data.state
+        //                 .client_compositor_state(&client)
+        //                 .blocker_cleared(&mut data.state, &data.display.handle())
+        //         }
+        //
+        //         // schedule on all idle
+        //         data.state.schedule(
+        //             move |_dt| {
+        //                 // tracing::debug!("Waiting for all to be idle");
+        //                 let all_idle =
+        //                     pending_wins
+        //                         .iter()
+        //                         .filter(|(_, win)| win.alive())
+        //                         .all(|(_, win)| {
+        //                             win.with_state(|state| state.loc_request_state.is_idle())
+        //                         });
+        //
+        //                 all_idle
+        //             },
+        //             move |dt| {
+        //                 for (loc, win) in non_pending_wins {
+        //                     dt.state.space.map_element(win, loc, false);
+        //                 }
+        //                 for win in windows_not_on_foc_tags {
+        //                     dt.state.space.unmap_elem(&win);
+        //                 }
+        //                 dt.state.pause_rendering = false;
+        //             },
+        //         );
+        //     },
+        // );
     }
 }
 

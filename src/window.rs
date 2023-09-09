@@ -11,7 +11,7 @@ use smithay::{
             take_presentation_feedback_surface_tree, under_from_surface_tree,
             with_surfaces_surface_tree, OutputPresentationFeedback,
         },
-        Space, Window, WindowSurfaceType,
+        Window, WindowSurfaceType,
     },
     input::{
         keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
@@ -23,7 +23,7 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial, Size},
+    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor::{self, Blocker, BlockerState, SurfaceData},
         dmabuf::DmabufFeedback,
