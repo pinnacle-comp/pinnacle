@@ -15,8 +15,6 @@ use crate::{
     },
 };
 
-// -------------------------------------------
-
 impl State {
     /// Compute the positions and sizes of tiled windows on
     /// `output` according to the provided [`Layout`].
