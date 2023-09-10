@@ -3,7 +3,7 @@
 ---@meta _
 
 ---@class _Msg
----@field SetKeybind { key: Keys, modifiers: Modifier[], callback_id: integer }?
+---@field SetKeybind { key: { Int: Keys?, String: string? }, modifiers: Modifier[], callback_id: integer }?
 ---@field SetMousebind { button: integer }?
 --Windows
 ---@field CloseWindow { window_id: WindowId }?

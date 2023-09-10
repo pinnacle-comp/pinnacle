@@ -17,11 +17,17 @@ use self::window_rules::{WindowRule, WindowRuleCondition};
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum KeyIntOrString {
+    Int(u32),
+    String(String),
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Msg {
     // Input
     SetKeybind {
-        key: u32,
+        key: KeyIntOrString,
         modifiers: Vec<Modifier>,
         callback_id: CallbackId,
     },

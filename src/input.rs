@@ -183,21 +183,17 @@ impl State {
                             modifier_mask.push(Modifier::Super);
                         }
                         let modifier_mask = ModifierMask::from(modifier_mask);
-                        let raw_sym = if keysym.raw_syms().len() == 1 {
-                            keysym.raw_syms()[0]
-                        } else {
-                            keysyms::KEY_NoSymbol
-                        };
+                        let sym = keysym.modified_sym();
 
                         if let Some(callback_id) = state
                             .input_state
                             .keybinds
-                            .get(&(modifier_mask, raw_sym))
+                            .get(&(modifier_mask, sym))
                         {
                             return FilterResult::Intercept(KeyAction::CallCallback(*callback_id));
-                        } else if (modifier_mask, raw_sym) == kill_keybind {
+                        } else if (modifier_mask, sym) == kill_keybind {
                             return FilterResult::Intercept(KeyAction::Quit);
-                        } else if (modifier_mask, raw_sym) == reload_keybind {
+                        } else if (modifier_mask, sym) == reload_keybind {
                             return FilterResult::Intercept(KeyAction::ReloadConfig);
                         } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                             keysym.modified_sym() {

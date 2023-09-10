@@ -9,7 +9,9 @@ use smithay::{
 };
 
 use crate::{
-    api::msg::{Args, CallbackId, Msg, OutgoingMsg, Request, RequestId, RequestResponse},
+    api::msg::{
+        Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
+    },
     tag::Tag,
     window::WindowElement,
 };
@@ -25,7 +27,25 @@ impl State {
                 modifiers,
                 callback_id,
             } => {
-                tracing::info!("set keybind: {:?}, {}", modifiers, key);
+                let key = match key {
+                    KeyIntOrString::Int(num) => num,
+                    KeyIntOrString::String(s) => {
+                        if s.chars().count() == 1 {
+                            let Some(ch) = s.chars().next() else { unreachable!() };
+                            tracing::info!("set keybind: {:?}, {:?}", modifiers, ch);
+                            xkbcommon::xkb::Keysym::from_char(ch).raw()
+                        } else {
+                            let raw = xkbcommon::xkb::keysym_from_name(
+                                &s,
+                                xkbcommon::xkb::KEYSYM_NO_FLAGS,
+                            )
+                            .raw();
+                            tracing::info!("set keybind: {:?}, {:?}", modifiers, raw);
+                            raw
+                        }
+                    }
+                };
+
                 self.input_state
                     .keybinds
                     .insert((modifiers.into(), key), callback_id);

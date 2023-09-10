@@ -15,15 +15,24 @@ local input_module = {
 ---    process.spawn("Alacritty")
 ---end)
 ---```
----@param key Keys The key for the keybind.
+---@param key Keys|string The key for the keybind.
 ---@param modifiers (Modifier)[] Which modifiers need to be pressed for the keybind to trigger.
 ---@param action fun() What to do.
 function input_module.keybind(modifiers, key, action)
     table.insert(CallbackTable, action)
+
+    local k = {}
+
+    if type(key) == "string" then
+        k.String = key
+    else
+        k.Int = key
+    end
+
     SendMsg({
         SetKeybind = {
             modifiers = modifiers,
-            key = key,
+            key = k,
             callback_id = #CallbackTable,
         },
     })
