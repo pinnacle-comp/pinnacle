@@ -328,10 +328,13 @@ impl SeatHandler for State {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
-        if let Some(focus) =
+        if let Some(win) =
             focused.and_then(|focused| self.window_for_surface(&focused.wl_surface()?))
         {
-            self.focus_state.set_focus(focus);
+            if let WindowElement::Wayland(win) = &win {
+                win.set_activated(true);
+            }
+            self.focus_state.set_focus(win);
         }
         let focus_client = focused.and_then(|foc_target| {
             self.display_handle

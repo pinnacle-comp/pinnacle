@@ -268,16 +268,10 @@ impl State {
         let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
         let keyboard = self.seat.get_keyboard().expect("Seat has no keyboard"); // FIXME: handle err
 
-        // A serial is a number sent with a event that is sent back to the
-        // server by the clients in further requests. This allows the server to
-        // keep track of which event caused which requests. It is an AtomicU32
-        // that increments when next_serial is called.
         let serial = SERIAL_COUNTER.next_serial();
 
-        // Returns which button on the pointer was used.
         let button = event.button_code();
 
-        // The state, either released or pressed.
         let button_state = event.state();
 
         let pointer_loc = pointer.current_location();
@@ -390,21 +384,7 @@ impl State {
                     });
 
                     if let FocusTarget::Window(window) = &focus {
-                        let focused_name = match &window {
-                            WindowElement::Wayland(win) => {
-                                compositor::with_states(win.toplevel().wl_surface(), |states| {
-                                    let lock = states
-                                        .data_map
-                                        .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
-                                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                        .lock()
-                                        .expect("failed to acquire lock");
-                                    lock.app_id.clone().unwrap_or_default()
-                                })
-                            }
-                            WindowElement::X11(surf) => surf.class(),
-                        };
-                        tracing::debug!("setting keyboard focus to {focused_name}");
+                        tracing::debug!("setting keyboard focus to {:?}", window.class());
                     }
                 }
             } else {

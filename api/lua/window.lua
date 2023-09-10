@@ -224,6 +224,7 @@ end
 ---Get the currently focused window.
 ---@return Window|nil
 function window_module.get_focused()
+    -- TODO: get focused on output
     local windows = window_module.get_all()
 
     for _, w in pairs(windows) do
@@ -238,8 +239,7 @@ end
 ---Get all windows.
 ---@return Window[]
 function window_module.get_all()
-    local window_ids =
-        Request("GetWindows").RequestResponse.response.Windows.window_ids
+    local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
 
     ---@type Window[]
     local windows = {}
@@ -513,8 +513,7 @@ function window_module.fullscreen(win)
             window_id = win:id(),
         },
     })
-    local fom =
-        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    local fom = response.RequestResponse.response.WindowProps.fullscreen_or_maximized
     return fom == "Fullscreen"
 end
 
@@ -528,8 +527,7 @@ function window_module.maximized(win)
             window_id = win:id(),
         },
     })
-    local fom =
-        response.RequestResponse.response.WindowProps.fullscreen_or_maximized
+    local fom = response.RequestResponse.response.WindowProps.fullscreen_or_maximized
     return fom == "Maximized"
 end
 

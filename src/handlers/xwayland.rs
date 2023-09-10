@@ -153,17 +153,40 @@ impl XwmHandler for CalloopData {
     // }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::debug!("MAPPED OVERRIDE REDIRECT WINDOW");
+        tracing::debug!("mapped override redirect window");
         let win_type = window.window_type();
         tracing::debug!("window type is {win_type:?}");
         let loc = window.geometry().loc;
         let window = WindowElement::X11(window);
+        window.with_state(|state| {
+            state.tags = match (
+                &self.state.focus_state.focused_output,
+                self.state.space.outputs().next(),
+            ) {
+                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
+                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                    if !output_tags.is_empty() {
+                        output_tags
+                    } else if let Some(first_tag) = state.tags.first() {
+                        vec![first_tag.clone()]
+                    } else {
+                        vec![]
+                    }
+                }),
+                (None, None) => vec![],
+            };
+        });
+        self.state.focus_state.set_focus(window.clone());
         // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
         tracing::debug!("UNMAPPED WINDOW");
+        self.state.focus_state.focus_stack.retain(|win| {
+            win.wl_surface()
+                .is_some_and(|surf| Some(surf) != window.wl_surface())
+        });
         let win = self
             .state
             .space
@@ -172,6 +195,22 @@ impl XwmHandler for CalloopData {
             .cloned();
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
+            if let Some(output) = win.output(&self.state) {
+                self.state.update_windows(&output);
+                let focus = self.state.current_focus(&output).map(FocusTarget::Window);
+                if let Some(FocusTarget::Window(win)) = &focus {
+                    tracing::debug!("Focusing on prev win");
+                    self.state.space.raise_element(win, true);
+                    if let WindowElement::Wayland(win) = &win {
+                        win.toplevel().send_configure();
+                    }
+                }
+                self.state
+                    .seat
+                    .get_keyboard()
+                    .expect("Seat had no keyboard")
+                    .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
+            }
         }
         if !window.is_override_redirect() {
             tracing::debug!("set mapped to false");
@@ -180,6 +219,10 @@ impl XwmHandler for CalloopData {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
+        self.state.focus_state.focus_stack.retain(|win| {
+            win.wl_surface()
+                .is_some_and(|surf| Some(surf) != window.wl_surface())
+        });
         let win = self
             .state
             .windows
@@ -197,6 +240,19 @@ impl XwmHandler for CalloopData {
 
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
+                let focus = self.state.current_focus(&output).map(FocusTarget::Window);
+                if let Some(FocusTarget::Window(win)) = &focus {
+                    tracing::debug!("Focusing on prev win");
+                    self.state.space.raise_element(win, true);
+                    if let WindowElement::Wayland(win) = &win {
+                        win.toplevel().send_configure();
+                    }
+                }
+                self.state
+                    .seat
+                    .get_keyboard()
+                    .expect("Seat had no keyboard")
+                    .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
             }
         }
         tracing::debug!("destroyed x11 window");

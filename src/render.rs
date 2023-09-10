@@ -63,13 +63,11 @@ where
         // let window_bbox = self.bbox();
         match self {
             WindowElement::Wayland(window) => {
-                AsRenderElements::<R>::render_elements::<WaylandSurfaceRenderElement<R>>(
-                    window, renderer, location, scale, alpha,
-                )
+                window.render_elements(renderer, location, scale, alpha)
             }
-            WindowElement::X11(surface) => AsRenderElements::<R>::render_elements::<
-                WaylandSurfaceRenderElement<R>,
-            >(surface, renderer, location, scale, alpha),
+            WindowElement::X11(surface) => {
+                surface.render_elements(renderer, location, scale, alpha)
+            }
         }
         .into_iter()
         .map(C::from)
