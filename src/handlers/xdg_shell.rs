@@ -121,16 +121,31 @@ impl XdgShellHandler for State {
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
-        if let Some(focused_output) = self.focus_state.focused_output.as_ref().cloned() {
-            self.update_windows(&focused_output);
+        self.focus_state.focus_stack.retain(|window| {
+            window
+                .wl_surface()
+                .is_some_and(|surf| &surf != surface.wl_surface())
+        });
+
+        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+            return;
+        };
+
+        if let Some(output) = window.output(self) {
+            self.update_windows(&output);
+            let focus = self.current_focus(&output).map(FocusTarget::Window);
+            if let Some(FocusTarget::Window(win)) = &focus {
+                tracing::debug!("Focusing on prev win");
+                self.space.raise_element(win, true);
+                if let WindowElement::Wayland(win) = &win {
+                    win.toplevel().send_configure();
+                }
+            }
+            self.seat
+                .get_keyboard()
+                .expect("Seat had no keyboard")
+                .set_focus(self, focus, SERIAL_COUNTER.next_serial());
         }
-
-        let focus = self.focus_state.current_focus().map(FocusTarget::Window);
-
-        self.seat
-            .get_keyboard()
-            .expect("Seat had no keyboard")
-            .set_focus(self, focus, SERIAL_COUNTER.next_serial());
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {

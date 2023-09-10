@@ -271,7 +271,8 @@ impl State {
             .api_state
             .stream
             .as_ref()
-            .expect("Stream doesn't exist");
+            .expect("Stream doesn't exist")
+            .clone();
         let mut stream = stream.lock().expect("Couldn't lock stream");
         match request {
             Request::GetWindows => {
@@ -319,9 +320,8 @@ impl State {
                     WindowElement::X11(surface) => (Some(surface.class()), Some(surface.title())),
                 });
                 let focused = window.as_ref().and_then(|win| {
-                    self.focus_state
-                        .current_focus() // TODO: actual focus
-                        .map(|foc_win| win == &foc_win)
+                    let output = win.output(self)?;
+                    self.current_focus(&output).map(|foc_win| win == &foc_win)
                 });
                 let floating = window
                     .as_ref()

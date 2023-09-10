@@ -13,7 +13,10 @@ use smithay::{
     wayland::seat::WaylandFocus,
 };
 
-use crate::{state::State, window::WindowElement};
+use crate::{
+    state::{State, WithState},
+    window::WindowElement,
+};
 
 #[derive(Default)]
 pub struct FocusState {
@@ -21,21 +24,28 @@ pub struct FocusState {
     pub focused_output: Option<Output>,
 }
 
+impl State {
+    /// Get the currently focused window on `output`, if any.
+    pub fn current_focus(&mut self, output: &Output) -> Option<WindowElement> {
+        self.focus_state.focus_stack.retain(|win| win.alive());
+
+        let mut windows = self.focus_state.focus_stack.iter().rev().filter(|win| {
+            let win_tags = win.with_state(|state| state.tags.clone());
+            let output_tags =
+                output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
+
+            win_tags
+                .iter()
+                .any(|win_tag| output_tags.iter().any(|op_tag| win_tag == op_tag))
+        });
+
+        windows.next().cloned()
+    }
+}
+
 impl FocusState {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    // TODO: how does this work with unmapped windows?
-    /// Get the currently focused window. If there is none, the previous focus is returned.
-    pub fn current_focus(&mut self) -> Option<WindowElement> {
-        while let Some(window) = self.focus_stack.last() {
-            if window.alive() {
-                return Some(window.clone());
-            }
-            self.focus_stack.pop();
-        }
-        None
     }
 
     /// Set the currently focused window.
@@ -46,8 +56,8 @@ impl FocusState {
 
     /// Fix focus layering for all windows in the `focus_stack`.
     ///
-    /// This will call `space.map_element` on all windows from front
-    /// to back to correct their z locations.
+    /// This will call `space.raise_element` on all windows from back
+    /// to front to correct their z locations.
     pub fn fix_up_focus(&self, space: &mut Space<WindowElement>) {
         for win in self.focus_stack.iter() {
             space.raise_element(win, false);
