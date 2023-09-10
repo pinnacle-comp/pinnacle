@@ -468,6 +468,17 @@ end
 
 ---Given an array of layouts, this will create two functions; one will cycle forward the layout
 ---for the provided tag, and one will cycle backward.
+---
+--- ### Example
+---```lua
+---local layout_cycler = tag.layout_cycler({ "Dwindle", "Spiral", "MasterStack" })
+---
+---layout_cycler.next() -- Go to the next layout on the first tag of the focused output
+---layout_cycler.prev() -- Go to the previous layout on the first tag of the focused output
+---
+---layout_cycler.next("DP-1") -- Do the above but on "DP-1" instead
+---layout_cycler.prev(output.get_by_name("DP-1")) -- With an output object
+---```
 ---@param layouts Layout[] The available layouts.
 ---@return LayoutCycler layout_cycler A table with the functions `next` and `prev`, which will cycle layouts for the given tag.
 function tag_module.layout_cycler(layouts)

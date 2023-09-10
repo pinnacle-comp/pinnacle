@@ -1,7 +1,11 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---Input management.
+---
+---This module provides utilities to set keybinds.
 ---@class InputModule
 local input_module = {
+    --- A table with every key provided by xkbcommon.
     keys = require("keys"),
 }
 

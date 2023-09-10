@@ -2,6 +2,9 @@
 
 ---@diagnostic disable: redefined-local
 
+---Process management.
+---
+---This module provides utilities to spawn processes and capture their output.
 ---@class ProcessModule
 local process_module = {}
 
