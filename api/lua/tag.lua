@@ -168,14 +168,9 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.toggle("1")             -- Toggle tag 1 on the focused output
----tag.toggle({ "1" })         -- Same as above
 ---
----tag.toggle({ "1", "DP-1" }) -- Toggle tag 1 on DP-1
----tag.toggle({ "1", op })     -- Same as above
----
---- -- Verbose versions of the two above
----tag.toggle({ name = "1", output = "DP-1" })
----tag.toggle({ name = "1", output = op })
+---tag.toggle({ name = "1", output = "DP-1" }) -- Toggle tag 1 on "DP-1"
+---tag.toggle({ name = "1", output = op })     -- Same as above
 ---
 --- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
@@ -205,14 +200,9 @@ end
 ---local op = output.get_by_name("DP-1")
 ---
 ---tag.switch_to("1")             -- Switch to tag 1 on the focused output
----tag.switch_to({ "1" })         -- Same as above
 ---
----tag.switch_to({ "1", "DP-1" }) -- Switch to tag 1 on DP-1
----tag.switch_to({ "1", op })     -- Same as above
----
---- -- Verbose versions of the two above
----tag.switch_to({ name = "1", output = "DP-1" })
----tag.switch_to({ name = "1", output = op })
+---tag.switch_to({ name = "1", output = "DP-1" }) -- Switch to tag 1 on "DP-1"
+---tag.switch_to({ name = "1", output = op })     -- Same as above
 ---
 --- -- Using a tag object
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
@@ -470,6 +460,115 @@ end
 ---@see Tag.output — The corresponding object method
 function tag_module.output(t)
     return require("output").get_for_tag(t)
+end
+
+---@class LayoutCycler
+---@field next fun(output: (Output|OutputName)?) Change the first active tag on `output` to its next layout. If `output` is empty, the focused output is used.
+---@field prev fun(output: (Output|OutputName)?) Change the first active tag on `output` to its previous layout. If `output` is empty, the focused output is used.
+
+---Given an array of layouts, this will create two functions; one will cycle forward the layout
+---for the provided tag, and one will cycle backward.
+---
+--- ### Example
+---```lua
+---local layout_cycler = tag.layout_cycler({ "Dwindle", "Spiral", "MasterStack" })
+---
+---layout_cycler.next() -- Go to the next layout on the first tag of the focused output
+---layout_cycler.prev() -- Go to the previous layout on the first tag of the focused output
+---
+---layout_cycler.next("DP-1") -- Do the above but on "DP-1" instead
+---layout_cycler.prev(output.get_by_name("DP-1")) -- With an output object
+---```
+---@param layouts Layout[] The available layouts.
+---@return LayoutCycler layout_cycler A table with the functions `next` and `prev`, which will cycle layouts for the given tag.
+function tag_module.layout_cycler(layouts)
+    local indices = {}
+
+    -- Return empty functions if layouts is empty
+    if #layouts == 0 then
+        return {
+            next = function(_) end,
+            prev = function(_) end,
+        }
+    end
+
+    return {
+        ---@param output (Output|OutputName)?
+        next = function(output)
+            if type(output) == "string" then
+                output = require("output").get_by_name(output)
+            end
+
+            output = output or require("output").get_focused()
+
+            if output == nil then
+                return
+            end
+
+            local tags = output:tags()
+            for _, tg in pairs(tags) do
+                if tg:active() then
+                    local id = tg:id()
+                    if id == nil then
+                        return
+                    end
+
+                    if #layouts == 1 then
+                        indices[id] = 1
+                    elseif indices[id] == nil then
+                        indices[id] = 2
+                    else
+                        if indices[id] + 1 > #layouts then
+                            indices[id] = 1
+                        else
+                            indices[id] = indices[id] + 1
+                        end
+                    end
+
+                    tg:set_layout(layouts[indices[id]])
+                    break
+                end
+            end
+        end,
+
+        ---@param output (Output|OutputName)?
+        prev = function(output)
+            if type(output) == "string" then
+                output = require("output").get_by_name(output)
+            end
+
+            output = output or require("output").get_focused()
+
+            if output == nil then
+                return
+            end
+
+            local tags = output:tags()
+            for _, tg in pairs(tags) do
+                if tg:active() then
+                    local id = tg:id()
+                    if id == nil then
+                        return
+                    end
+
+                    if #layouts == 1 then
+                        indices[id] = 1
+                    elseif indices[id] == nil then
+                        indices[id] = #layouts - 1
+                    else
+                        if indices[id] - 1 < 1 then
+                            indices[id] = #layouts
+                        else
+                            indices[id] = indices[id] - 1
+                        end
+                    end
+
+                    tg:set_layout(layouts[indices[id]])
+                    break
+                end
+            end
+        end,
+    }
 end
 
 return tag_module

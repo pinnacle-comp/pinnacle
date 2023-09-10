@@ -138,8 +138,6 @@ pub struct State {
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
-
-    pub pause_rendering: bool,
 }
 
 impl State {
@@ -359,8 +357,6 @@ impl State {
             xwayland,
             xwm: None,
             xdisplay: None,
-
-            pause_rendering: false,
         })
     }
 

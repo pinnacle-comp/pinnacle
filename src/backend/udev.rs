@@ -72,7 +72,7 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{Clock, DeviceFd, Logical, Monotonic, Physical, Point, Rectangle, Transform},
+    utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Physical, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::{InputMethodHandle, InputMethodSeat},
@@ -86,7 +86,9 @@ use smithay_drm_extras::{
 use crate::{
     api::msg::{Args, OutgoingMsg},
     render::{pointer::PointerElement, CustomRenderElements},
-    state::{take_presentation_feedback, Backend, CalloopData, State, SurfaceDmabufFeedback},
+    state::{
+        take_presentation_feedback, Backend, CalloopData, State, SurfaceDmabufFeedback, WithState,
+    },
     window::WindowElement,
 };
 
@@ -151,14 +153,10 @@ pub fn run_udev() -> anyhow::Result<()> {
     let mut event_loop = EventLoop::try_new().unwrap();
     let mut display = Display::new().unwrap();
 
-    /*
-     * Initialize session
-     */
+    // Initialize session
     let (session, notifier) = LibSeatSession::new()?;
 
-    /*
-     * Initialize the compositor
-     */
+    // Initialize the compositor
     let primary_gpu = if let Ok(var) = std::env::var("ANVIL_DRM_DEVICE") {
         DrmNode::from_path(var).expect("Invalid drm device path")
     } else {
@@ -202,9 +200,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         event_loop.handle(),
     )?;
 
-    /*
-     * Initialize the udev backend
-     */
+    // Initialize the udev backend
     let udev_backend = UdevBackend::new(state.seat.name())?;
 
     // Create DrmNodes from already connected GPUs
@@ -245,9 +241,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         })
         .unwrap();
 
-    /*
-     * Initialize libinput backend
-     */
+    // Initialize libinput backend
     let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
         backend.session.clone().into(),
     );
@@ -256,9 +250,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         .unwrap();
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
-    /*
-     * Bind all our objects that get driven by the event loop
-     */
+    // Bind all our objects that get driven by the event loop
     let insert_ret = event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
@@ -1332,10 +1324,18 @@ impl State {
             return;
         };
 
+        let windows = self
+            .focus_state
+            .focus_stack
+            .iter()
+            .filter(|win| win.alive())
+            .cloned()
+            .collect::<Vec<_>>();
+
         let result = render_surface(
             &mut self.cursor_status,
             &self.space,
-            &self.windows,
+            &windows,
             self.dnd_icon.as_ref(),
             &self.focus_state.focus_stack,
             surface,
@@ -1452,6 +1452,31 @@ fn render_surface<'a>(
     pointer_location: Point<f64, Logical>,
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
+    let pending_win_count = windows
+        .iter()
+        .filter(|win| win.alive())
+        .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+        .count() as u32;
+
+    tracing::debug!("pending_win_count is {pending_win_count}");
+
+    if pending_win_count > 0 {
+        for win in windows.iter() {
+            win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
+                Some(output.clone())
+            });
+        }
+
+        surface
+            .compositor
+            .queue_frame(None, None, None)
+            .map_err(Into::<SwapBuffersError>::into)?;
+
+        // TODO: still draw the cursor here
+
+        return Ok(true);
+    }
+
     let output_render_elements = crate::render::generate_render_elements(
         space,
         windows,

@@ -12,7 +12,10 @@ use smithay::{
         },
         winit::{WinitError, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    desktop::{
+        layer_map_for_output,
+        utils::{send_frames_surface_tree, surface_primary_scanout_output},
+    },
     input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
     reexports::{
@@ -32,7 +35,7 @@ use smithay::{
 
 use crate::{
     render::pointer::PointerElement,
-    state::{take_presentation_feedback, Backend, CalloopData, State},
+    state::{take_presentation_feedback, Backend, CalloopData, State, WithState},
 };
 
 use super::BackendData;
@@ -232,12 +235,34 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 pointer_element.set_status(state.cursor_status.clone());
 
-                if state.pause_rendering {
+                // TODO: make a pending_windows state, when pending_windows increases,
+                // |     pause rendering.
+                // |     If it goes down, push a frame, then repeat until no pending_windows are left.
+
+                let pending_win_count = state
+                    .windows
+                    .iter()
+                    .filter(|win| win.alive())
+                    .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+                    .count() as u32;
+
+                if pending_win_count > 0 {
+                    for win in state.windows.iter() {
+                        win.send_frame(
+                            &output,
+                            state.clock.now(),
+                            Some(Duration::ZERO),
+                            surface_primary_scanout_output,
+                        );
+                    }
+
                     state.space.refresh();
                     state.popup_manager.cleanup();
                     display
                         .flush_clients()
                         .expect("failed to flush client buffers");
+
+                    // TODO: still draw the cursor here
 
                     return TimeoutAction::ToDuration(Duration::from_millis(1));
                 }
@@ -248,9 +273,17 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 state.focus_state.fix_up_focus(&mut state.space);
 
+                let windows = state
+                    .focus_state
+                    .focus_stack
+                    .iter()
+                    .filter(|win| win.alive())
+                    .cloned()
+                    .collect::<Vec<_>>();
+
                 let output_render_elements = crate::render::generate_render_elements(
                     &state.space,
-                    &state.windows,
+                    &windows,
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),

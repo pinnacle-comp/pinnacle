@@ -161,16 +161,24 @@ impl State {
         //
         // This *will* cause everything to freeze for a few frames, but it shouldn't impact
         // anything meaningfully.
-        self.pause_rendering = true;
+        // self.pause_rendering = true;
 
         // schedule on all idle
         self.schedule(
             move |_dt| {
-                // tracing::debug!("Waiting for all to be idle");
+                tracing::debug!("Waiting for all to be idle");
                 let all_idle = pending_wins
                     .iter()
                     .filter(|(_, win)| win.alive())
                     .all(|(_, win)| win.with_state(|state| state.loc_request_state.is_idle()));
+
+                let num_not_idle = pending_wins
+                    .iter()
+                    .filter(|(_, win)| win.alive())
+                    .filter(|(_, win)| !win.with_state(|state| state.loc_request_state.is_idle()))
+                    .count();
+
+                tracing::debug!("{num_not_idle} not idle");
 
                 all_idle
             },
@@ -178,7 +186,7 @@ impl State {
                 for (loc, win) in non_pending_wins {
                     dt.state.space.map_element(win, loc, false);
                 }
-                dt.state.pause_rendering = false;
+                // dt.state.pause_rendering = false;
             },
         );
     }
