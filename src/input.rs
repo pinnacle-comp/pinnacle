@@ -183,17 +183,30 @@ impl State {
                             modifier_mask.push(Modifier::Super);
                         }
                         let modifier_mask = ModifierMask::from(modifier_mask);
-                        let sym = keysym.modified_sym();
+                        let raw_sym = keysym.raw_syms().iter().next();
+                        let mod_sym = keysym.modified_sym();
 
-                        if let Some(callback_id) = state
+                        let cb_id_mod = state
                             .input_state
                             .keybinds
-                            .get(&(modifier_mask, sym))
-                        {
-                            return FilterResult::Intercept(KeyAction::CallCallback(*callback_id));
-                        } else if (modifier_mask, sym) == kill_keybind {
+                            .get(&(modifier_mask, mod_sym));
+
+                        let cb_id_raw = if let Some(raw_sym) = raw_sym {
+                            state.input_state.keybinds.get(&(modifier_mask, *raw_sym))
+                        } else {
+                            None
+                        };
+
+                        match (cb_id_mod, cb_id_raw) {
+                            (Some(cb_id), _) | (None, Some(cb_id)) => {
+                                return FilterResult::Intercept(KeyAction::CallCallback(*cb_id));
+                            }
+                            (None, None) => ()
+                        }
+
+                        if (modifier_mask, mod_sym) == kill_keybind {
                             return FilterResult::Intercept(KeyAction::Quit);
-                        } else if (modifier_mask, sym) == reload_keybind {
+                        } else if (modifier_mask, mod_sym) == reload_keybind {
                             return FilterResult::Intercept(KeyAction::ReloadConfig);
                         } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                             keysym.modified_sym() {

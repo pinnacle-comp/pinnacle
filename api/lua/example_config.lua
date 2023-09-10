@@ -18,7 +18,6 @@ require("pinnacle").setup(function(pinnacle)
     local output = pinnacle.output -- Output management
 
     -- Every key supported by xkbcommon.
-    -- Support for just putting in a string of a key is intended.
     local keys = input.keys
 
     ---@type Modifier
@@ -128,25 +127,25 @@ require("pinnacle").setup(function(pinnacle)
         "CornerBottomRight",
     })
 
-    input.keybind({ mod_key }, keys.space, function()
-        layout_cycler.next()
-    end)
-    input.keybind({ mod_key, "Shift" }, keys.space, function()
-        layout_cycler.prev()
-    end)
+    input.keybind({ mod_key }, keys.space, layout_cycler.next)
+    input.keybind({ mod_key, "Shift" }, keys.space, layout_cycler.prev)
 
     -- Tag manipulation
 
     for _, tag_name in pairs(tags) do
+        -- mod_key + 1-5 switches tags
         input.keybind({ mod_key }, tag_name, function()
             tag.switch_to(tag_name)
         end)
+        -- mod_key + Shift + 1-5 toggles tags
         input.keybind({ mod_key, "Shift" }, tag_name, function()
             tag.toggle(tag_name)
         end)
+        -- mod_key + Alt + 1-5 moves windows to tags
         input.keybind({ mod_key, "Alt" }, tag_name, function()
             local _ = window.get_focused() and window:get_focused():move_to_tag(tag_name)
         end)
+        -- mod_key + Shift + Alt + 1-5 toggles tags on windows
         input.keybind({ mod_key, "Shift", "Alt" }, tag_name, function()
             local _ = window.get_focused() and window.get_focused():toggle_tag(tag_name)
         end)
