@@ -423,9 +423,13 @@ impl State {
             .amount(Axis::Horizontal)
             .unwrap_or_else(|| event.amount_discrete(Axis::Horizontal).unwrap_or(0.0) * 3.0);
 
-        let vertical_amount = event
+        let mut vertical_amount = event
             .amount(Axis::Vertical)
             .unwrap_or_else(|| event.amount_discrete(Axis::Vertical).unwrap_or(0.0) * 3.0);
+
+        if self.backend.is_winit() {
+            vertical_amount = -vertical_amount;
+        }
 
         let horizontal_amount_discrete = event.amount_discrete(Axis::Horizontal);
         let vertical_amount_discrete = event.amount_discrete(Axis::Vertical);

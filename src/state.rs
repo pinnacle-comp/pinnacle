@@ -87,6 +87,14 @@ impl Backend {
             Backend::Udev(udev) => udev.early_import(surface),
         }
     }
+
+    /// Returns `true` if the backend is [`Winit`].
+    ///
+    /// [`Winit`]: Backend::Winit
+    #[must_use]
+    pub fn is_winit(&self) -> bool {
+        matches!(self, Self::Winit(..))
+    }
 }
 
 /// The main state of the application.
