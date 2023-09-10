@@ -159,7 +159,7 @@ Lua = {
 ```
 
 ### API Documentation
-You can find online documentation for the Lua API [here](https://ottatop.github.io/pinnacle/main).
+You can find online documentation for the Lua API [here](https://pinnacle-comp.github.io/pinnacle/main).
 
 This documentation is auto-generated from the provided LuaLS annotation through
 [ldoc_gen](https://github.com/Ottatop/ldoc_gen), so there may be some errors as I work the kinks out.
@@ -167,7 +167,7 @@ This documentation is auto-generated from the provided LuaLS annotation through
 Note that there are some missing things like the `Keys` table and `Layout` enum
 as well as any function overloads, but these should be autocompleted through the language server.
 
-Documentation for other branches can be reached at `https://ottatop.github.io/pinnacle/<branch name>`.
+Documentation for other branches can be reached at `https://pinnacle-comp.github.io/pinnacle/<branch name>`.
 
 # Controls
 The following controls are currently hardcoded:
