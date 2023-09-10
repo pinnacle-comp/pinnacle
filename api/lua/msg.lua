@@ -16,6 +16,7 @@
 ---@field AddWindowRule { cond: _WindowRuleCondition, rule: _WindowRule }?
 --
 ---@field Spawn { command: string[], callback_id: integer? }?
+---@field SetEnv { key: string, value: string }?
 ---@field Request Request?
 --Tags
 ---@field ToggleTag { tag_id: TagId }?

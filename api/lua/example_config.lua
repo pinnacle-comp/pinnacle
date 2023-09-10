@@ -26,6 +26,8 @@ require("pinnacle").setup(function(pinnacle)
 
     local terminal = "alacritty"
 
+    process.set_env("MOZ_ENABLE_WAYLAND", "1")
+
     -- Outputs -----------------------------------------------------------------------
 
     -- You can set your own monitor layout as I have done below for my monitors.

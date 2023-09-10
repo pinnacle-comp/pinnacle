@@ -108,6 +108,10 @@ pub enum Msg {
         #[serde(default)]
         callback_id: Option<CallbackId>,
     },
+    SetEnv {
+        key: String,
+        value: String,
+    },
 
     // Pinnacle management
     /// Quit the compositor.

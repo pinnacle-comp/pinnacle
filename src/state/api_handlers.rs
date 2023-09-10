@@ -69,6 +69,7 @@ impl State {
             } => {
                 self.handle_spawn(command, callback_id);
             }
+            Msg::SetEnv { key, value } => std::env::set_var(key, value),
 
             Msg::SetWindowSize {
                 window_id,

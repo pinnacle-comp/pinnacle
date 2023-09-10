@@ -127,13 +127,19 @@ impl XwmHandler for CalloopData {
 
             self.state.windows.push(window.clone());
 
+            // FIXME: this breaks window closing if the popup is focused
             self.state.focus_state.set_focus(window.clone());
 
             self.state.apply_window_rules(&window);
 
-            if let Some(focused_output) = self.state.focus_state.focused_output.clone() {
-                self.state.update_windows(&focused_output);
+            if let Some(output) = window.output(&self.state) {
+                self.state.update_windows(&output);
             }
+
+            if let WindowElement::X11(s) = &window {
+                tracing::debug!("new x11 win geo is {:?}", s.geometry());
+            }
+
             self.state.loop_handle.insert_idle(move |data| {
                 data.state
                     .seat
@@ -148,15 +154,12 @@ impl XwmHandler for CalloopData {
         }
     }
 
-    // fn map_window_notify(&mut self, xwm: XwmId, window: X11Surface) {
-    //     //
-    // }
-
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
         tracing::debug!("mapped override redirect window");
         let win_type = window.window_type();
         tracing::debug!("window type is {win_type:?}");
         let loc = window.geometry().loc;
+        tracing::debug!("or win geo is {:?}", window.geometry());
         let window = WindowElement::X11(window);
         window.with_state(|state| {
             state.tags = match (

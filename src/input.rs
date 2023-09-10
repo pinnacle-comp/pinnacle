@@ -23,7 +23,7 @@ use smithay::{
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::{compositor, seat::WaylandFocus, shell::wlr_layer},
+    wayland::{seat::WaylandFocus, shell::wlr_layer},
 };
 
 use crate::state::State;
