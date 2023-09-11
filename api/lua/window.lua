@@ -552,4 +552,31 @@ function window_module.focused(win)
     local focused = response.RequestResponse.response.WindowProps.focused
     return focused
 end
+
+---Begin a window move.
+---
+---This will start a window move grab with the provided button on the window the pointer
+---is currently hovering over. Once `button` is let go, the move will end.
+---@param button MouseButton The button you want to trigger the move.
+function window_module.begin_move(button)
+    SendMsg({
+        WindowMoveGrab = {
+            button = button,
+        },
+    })
+end
+
+---Begin a window resize.
+---
+---This will start a window resize grab with the provided button on the window the
+---pointer is currently hovering over. Once `button` is let go, the resize will end.
+---@param button MouseButton
+function window_module.begin_resize(button)
+    SendMsg({
+        WindowResizeGrab = {
+            button = button,
+        },
+    })
+end
+
 return window_module

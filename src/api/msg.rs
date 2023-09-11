@@ -5,6 +5,8 @@
 
 pub mod window_rules;
 
+use smithay::input::keyboard::ModifiersState;
+
 use crate::{
     layout::Layout,
     output::OutputName,
@@ -23,6 +25,12 @@ pub enum KeyIntOrString {
     String(String),
 }
 
+#[derive(Debug, Hash, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum MouseEdge {
+    Press,
+    Release,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Msg {
     // Input
@@ -32,7 +40,10 @@ pub enum Msg {
         callback_id: CallbackId,
     },
     SetMousebind {
-        button: u8,
+        modifiers: Vec<Modifier>,
+        button: u32,
+        edge: MouseEdge,
+        callback_id: CallbackId,
     },
 
     // Window management
@@ -66,6 +77,12 @@ pub enum Msg {
     AddWindowRule {
         cond: WindowRuleCondition,
         rule: WindowRule,
+    },
+    WindowMoveGrab {
+        button: u32,
+    },
+    WindowResizeGrab {
+        button: u32,
     },
 
     // Tag management
@@ -153,12 +170,42 @@ pub enum Modifier {
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub struct ModifierMask(u8);
 
-impl<T: IntoIterator<Item = Modifier>> From<T> for ModifierMask {
-    fn from(value: T) -> Self {
+impl From<Vec<Modifier>> for ModifierMask {
+    fn from(value: Vec<Modifier>) -> Self {
         let value = value.into_iter();
         let mut mask: u8 = 0b0000_0000;
         for modifier in value {
             mask |= modifier as u8;
+        }
+        Self(mask)
+    }
+}
+
+impl From<&[Modifier]> for ModifierMask {
+    fn from(value: &[Modifier]) -> Self {
+        let value = value.iter();
+        let mut mask: u8 = 0b0000_0000;
+        for modifier in value {
+            mask |= *modifier as u8;
+        }
+        Self(mask)
+    }
+}
+
+impl From<ModifiersState> for ModifierMask {
+    fn from(state: ModifiersState) -> Self {
+        let mut mask: u8 = 0b0000_0000;
+        if state.shift {
+            mask |= Modifier::Shift as u8;
+        }
+        if state.ctrl {
+            mask |= Modifier::Ctrl as u8;
+        }
+        if state.alt {
+            mask |= Modifier::Alt as u8;
+        }
+        if state.logo {
+            mask |= Modifier::Super as u8;
         }
         Self(mask)
     }

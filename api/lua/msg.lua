@@ -4,7 +4,7 @@
 
 ---@class _Msg
 ---@field SetKeybind { key: { Int: Keys?, String: string? }, modifiers: Modifier[], callback_id: integer }?
----@field SetMousebind { button: integer }?
+---@field SetMousebind { modifiers: (Modifier)[], button: integer, edge: "Press"|"Release", callback_id: integer }?
 --Windows
 ---@field CloseWindow { window_id: WindowId }?
 ---@field SetWindowSize { window_id: WindowId, width: integer?, height: integer? }?
@@ -14,6 +14,8 @@
 ---@field ToggleFullscreen { window_id: WindowId }?
 ---@field ToggleMaximized { window_id: WindowId }?
 ---@field AddWindowRule { cond: _WindowRuleCondition, rule: _WindowRule }?
+---@field WindowMoveGrab { button: integer }?
+---@field WindowResizeGrab { button: integer }?
 --
 ---@field Spawn { command: string[], callback_id: integer? }?
 ---@field SetEnv { key: string, value: string }?

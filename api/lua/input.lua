@@ -7,6 +7,32 @@
 local input_module = {
     --- A table with every key provided by xkbcommon.
     keys = require("keys"),
+    --- A table with mouse button codes. You can use indexes (1, 2, and 3 are left, right, and middle)
+    --- or keyed values (buttons.left, buttons.right, etc.).
+    ---@enum MouseButton
+    buttons = {
+        --- Left
+        [1] = 0x110,
+        --- Right
+        [2] = 0x111,
+        --- Middle
+        [3] = 0x112,
+        --- Side
+        [4] = 0x113,
+        --- Extra
+        [5] = 0x114,
+        --- Forward
+        [6] = 0x115,
+        --- Back
+        [7] = 0x116,
+        left = 0x110,
+        right = 0x111,
+        middle = 0x112,
+        side = 0x113,
+        extra = 0x114,
+        forward = 0x115,
+        back = 0x116,
+    },
 }
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
@@ -58,6 +84,28 @@ function input_module.keybind(modifiers, key, action)
         SetKeybind = {
             modifiers = modifiers,
             key = k,
+            callback_id = #CallbackTable,
+        },
+    })
+end
+
+---Set a mousebind. If called with an already existing mousebind, it gets replaced.
+---
+---The mousebind can happen either on button press or release, so you must specify
+---which edge you desire.
+---
+---@param modifiers (Modifier)[] The modifiers that need to be held for the mousebind to trigger.
+---@param button MouseButton The button that needs to be pressed or released.
+---@param edge "Press"|"Release" Whether or not to trigger `action` on button press or release.
+---@param action fun() The function to run.
+function input_module.mousebind(modifiers, button, edge, action)
+    table.insert(CallbackTable, action)
+
+    SendMsg({
+        SetMousebind = {
+            modifiers = modifiers,
+            button = button,
+            edge = edge,
             callback_id = #CallbackTable,
         },
     })

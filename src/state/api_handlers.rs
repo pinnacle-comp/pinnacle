@@ -4,7 +4,8 @@ use async_process::Stdio;
 use futures_lite::AsyncBufReadExt;
 use smithay::{
     desktop::space::SpaceElement,
-    utils::Rectangle,
+    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
+    utils::{Point, Rectangle, SERIAL_COUNTER},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 
@@ -12,6 +13,7 @@ use crate::{
     api::msg::{
         Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
     },
+    focus::FocusTarget,
     tag::Tag,
     window::WindowElement,
 };
@@ -51,7 +53,17 @@ impl State {
                     .keybinds
                     .insert((modifiers.into(), key), callback_id);
             }
-            Msg::SetMousebind { button: _ } => todo!(),
+            Msg::SetMousebind {
+                modifiers,
+                button,
+                edge,
+                callback_id,
+            } => {
+                // TODO: maybe validate/parse valid codes?
+                self.input_state
+                    .mousebinds
+                    .insert((modifiers.into(), button, edge), callback_id);
+            }
             Msg::CloseWindow { window_id } => {
                 if let Some(window) = window_id.window(self) {
                     match window {
@@ -145,6 +157,77 @@ impl State {
             }
             Msg::AddWindowRule { cond, rule } => {
                 self.window_rules.push((cond, rule));
+            }
+            Msg::WindowMoveGrab { button } => {
+                // TODO: in the future, there may be movable layer surfaces
+                let Some((FocusTarget::Window(window), _)) =
+                    self.surface_under(self.pointer_location) else { return };
+                let Some(wl_surf) = window.wl_surface() else { return };
+                let seat = self.seat.clone();
+
+                // We use the server one and not the client because windows like Steam don't provide
+                // GrabStartData, so we need to create it ourselves.
+                crate::grab::move_grab::move_request_server(
+                    self,
+                    &wl_surf,
+                    &seat,
+                    SERIAL_COUNTER.next_serial(),
+                    button,
+                );
+            }
+            Msg::WindowResizeGrab { button } => {
+                // TODO: in the future, there may be movable layer surfaces
+                let pointer_loc = self.pointer_location;
+                let Some((FocusTarget::Window(window), window_loc)) =
+                    self.surface_under(pointer_loc) else { return };
+                let Some(wl_surf) = window.wl_surface() else { return };
+
+                let window_geometry = window.geometry();
+                let window_x = window_loc.x as f64;
+                let window_y = window_loc.y as f64;
+                let window_width = window_geometry.size.w as f64;
+                let window_height = window_geometry.size.h as f64;
+                let half_width = window_x + window_width / 2.0;
+                let half_height = window_y + window_height / 2.0;
+                let full_width = window_x + window_width;
+                let full_height = window_y + window_height;
+
+                let edges = match pointer_loc {
+                    Point { x, y, .. }
+                        if (window_x..=half_width).contains(&x)
+                            && (window_y..=half_height).contains(&y) =>
+                    {
+                        ResizeEdge::TopLeft
+                    }
+                    Point { x, y, .. }
+                        if (half_width..=full_width).contains(&x)
+                            && (window_y..=half_height).contains(&y) =>
+                    {
+                        ResizeEdge::TopRight
+                    }
+                    Point { x, y, .. }
+                        if (window_x..=half_width).contains(&x)
+                            && (half_height..=full_height).contains(&y) =>
+                    {
+                        ResizeEdge::BottomLeft
+                    }
+                    Point { x, y, .. }
+                        if (half_width..=full_width).contains(&x)
+                            && (half_height..=full_height).contains(&y) =>
+                    {
+                        ResizeEdge::BottomRight
+                    }
+                    _ => ResizeEdge::None,
+                };
+
+                crate::grab::resize_grab::resize_request_server(
+                    self,
+                    &wl_surf,
+                    &self.seat.clone(),
+                    SERIAL_COUNTER.next_serial(),
+                    edges.into(),
+                    button,
+                );
             }
 
             // Tags ----------------------------------------

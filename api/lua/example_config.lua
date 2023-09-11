@@ -19,6 +19,8 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Every key supported by xkbcommon.
     local keys = input.keys
+    -- Mouse buttons
+    local buttons = input.buttons
 
     ---@type Modifier
     local mod_key = "Ctrl" -- This is set to `Ctrl` instead of `Super` to not conflict with your WM/DE keybinds
@@ -36,6 +38,15 @@ require("pinnacle").setup(function(pinnacle)
     -- local dell = output.get_by_name("DP-3") --[[@as Output]]
     --
     -- dell:set_loc_left_of(lg, "bottom")
+
+    -- Mousebinds --------------------------------------------------------------------
+
+    input.mousebind({ "Ctrl" }, buttons.left, "Press", function()
+        window.begin_move(buttons.left)
+    end)
+    input.mousebind({ "Ctrl" }, buttons.right, "Press", function()
+        window.begin_resize(buttons.right)
+    end)
 
     -- Keybinds ----------------------------------------------------------------------
 
