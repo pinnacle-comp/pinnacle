@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
 
     trim_logs(&xdg_state_dir);
 
-    let appender = tracing_appender::rolling::hourly(xdg_state_dir, PINNACLE_LOG_PREFIX);
+    let appender = tracing_appender::rolling::hourly(&xdg_state_dir, PINNACLE_LOG_PREFIX);
     let (appender, _guard) = tracing_appender::non_blocking(appender);
     let writer = appender.and(std::io::stdout);
 
@@ -157,6 +157,7 @@ fn trim_logs(log_path: impl AsRef<Path>) {
 
             a_creation_time.cmp(&b_creation_time)
         })
+        .contents_first(true)
         .into_iter()
         .filter_entry(|entry| {
             entry.file_type().is_file()
@@ -168,10 +169,12 @@ fn trim_logs(log_path: impl AsRef<Path>) {
         .filter_map(|dir| dir.ok())
         .collect::<Vec<_>>();
 
-    // If there are more than 3 logs, delete the oldest ones
-    let num_to_delete = logs.len().saturating_sub(3);
-
-    for entry in logs.into_iter().take(num_to_delete) {
-        std::fs::remove_file(entry.path()).expect("failed to remove oldest log file");
+    // If there are more than 4 logs, delete all but 3
+    if logs.len() > 4 {
+        let num_to_delete = logs.len().saturating_sub(3);
+        for entry in logs.into_iter().take(num_to_delete) {
+            tracing::info!("Deleting {:?}", entry.path());
+            std::fs::remove_file(entry.path()).expect("failed to remove oldest log file");
+        }
     }
 }
