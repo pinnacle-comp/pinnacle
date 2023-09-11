@@ -8,7 +8,7 @@ This update brings mousebinds to the config API. You can now do things on button
 - Add env setting to API
 
 ### Bugfixes
-- Correct scroll direction on API
+- Correct scroll direction on Winit
 
 ## [01b6e25](https://github.com/Ottatop/pinnacle/commit/01b6e258ff72a5517e2c653f058f5241fa953162) [(#65)](https://github.com/Ottatop/pinnacle/pull/65)
 This update adds an initial window rules implementation! There are only a few conditions and rules to start,
