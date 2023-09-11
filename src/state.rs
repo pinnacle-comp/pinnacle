@@ -16,7 +16,7 @@ use crate::{
             window_rules::{WindowRule, WindowRuleCondition},
             CallbackId, ModifierMask, Msg,
         },
-        PinnacleSocketSource, DEFAULT_SOCKET_DIR,
+        PinnacleSocketSource,
     },
     backend::{udev::Udev, winit::Winit, BackendData},
     cursor::Cursor,
