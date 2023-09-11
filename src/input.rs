@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    api::msg::{CallbackId, Modifier, ModifierMask, OutgoingMsg},
+    api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
     focus::FocusTarget,
     state::{Backend, WithState},
     window::WindowElement,
@@ -21,9 +21,8 @@ use smithay::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
-    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::{compositor, seat::WaylandFocus, shell::wlr_layer},
+    wayland::{seat::WaylandFocus, shell::wlr_layer},
 };
 
 use crate::state::State;
@@ -32,7 +31,7 @@ pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
     pub keybinds: HashMap<(ModifierMask, u32), CallbackId>,
     /// A hashmap of modifier keys and mouse button codes to callback IDs
-    pub mousebinds: HashMap<(ModifierMask, u32), CallbackId>,
+    pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
     pub reload_keybind: (ModifierMask, u32),
     pub kill_keybind: (ModifierMask, u32),
 }
@@ -276,116 +275,74 @@ impl State {
 
         let pointer_loc = pointer.current_location();
 
+        let edge = match button_state {
+            ButtonState::Released => MouseEdge::Release,
+            ButtonState::Pressed => MouseEdge::Press,
+        };
+        let modifier_mask = ModifierMask::from(keyboard.modifier_state());
+
+        // If any mousebinds are detected, call the config's callback and return.
+        if let Some(&callback_id) = self
+            .input_state
+            .mousebinds
+            .get(&(modifier_mask, button, edge))
+        {
+            if let Some(stream) = self.api_state.stream.clone() {
+                let mut stream = stream.lock().expect("failed to lock api stream");
+                crate::api::send_to_client(
+                    &mut stream,
+                    &OutgoingMsg::CallCallback {
+                        callback_id,
+                        args: None,
+                    },
+                )
+                .expect("failed to call callback");
+            }
+            return;
+        }
+
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
         if ButtonState::Pressed == button_state {
-            if let Some((focus, window_loc)) = self.surface_under(pointer_loc) {
-                // tracing::debug!("button click on {window:?}");
-                const BUTTON_LEFT: u32 = 0x110;
-                const BUTTON_RIGHT: u32 = 0x111;
-                if self.move_mode {
-                    if event.button_code() == BUTTON_LEFT {
-                        if let Some(wl_surf) = focus.wl_surface() {
-                            crate::grab::move_grab::move_request_server(
-                                self,
-                                &wl_surf,
-                                &self.seat.clone(),
-                                serial,
-                                BUTTON_LEFT,
-                            );
-                        }
-                        return; // TODO: kinda ugly return here
-                    } else if event.button_code() == BUTTON_RIGHT {
-                        let FocusTarget::Window(window) = focus else { return };
-                        let window_geometry = window.geometry();
-                        let window_x = window_loc.x as f64;
-                        let window_y = window_loc.y as f64;
-                        let window_width = window_geometry.size.w as f64;
-                        let window_height = window_geometry.size.h as f64;
-                        let half_width = window_x + window_width / 2.0;
-                        let half_height = window_y + window_height / 2.0;
-                        let full_width = window_x + window_width;
-                        let full_height = window_y + window_height;
-
-                        let edges = match pointer_loc {
-                            Point { x, y, .. }
-                                if (window_x..=half_width).contains(&x)
-                                    && (window_y..=half_height).contains(&y) =>
-                            {
-                                ResizeEdge::TopLeft
-                            }
-                            Point { x, y, .. }
-                                if (half_width..=full_width).contains(&x)
-                                    && (window_y..=half_height).contains(&y) =>
-                            {
-                                ResizeEdge::TopRight
-                            }
-                            Point { x, y, .. }
-                                if (window_x..=half_width).contains(&x)
-                                    && (half_height..=full_height).contains(&y) =>
-                            {
-                                ResizeEdge::BottomLeft
-                            }
-                            Point { x, y, .. }
-                                if (half_width..=full_width).contains(&x)
-                                    && (half_height..=full_height).contains(&y) =>
-                            {
-                                ResizeEdge::BottomRight
-                            }
-                            _ => ResizeEdge::None,
-                        };
-
-                        if let Some(wl_surf) = window.wl_surface() {
-                            crate::grab::resize_grab::resize_request_server(
-                                self,
-                                &wl_surf,
-                                &self.seat.clone(),
-                                serial,
-                                edges.into(),
-                                BUTTON_RIGHT,
-                            );
+            if let Some((focus, _)) = self.surface_under(pointer_loc) {
+                // Move window to top of stack.
+                if let FocusTarget::Window(window) = &focus {
+                    self.space.raise_element(window, true);
+                    if let WindowElement::X11(surface) = &window {
+                        if !surface.is_override_redirect() {
+                            self.xwm
+                                .as_mut()
+                                .expect("no xwm")
+                                .raise_window(surface)
+                                .expect("failed to raise x11 win");
+                            surface
+                                .set_activated(true)
+                                .expect("failed to set x11 win to activated");
                         }
                     }
-                } else {
-                    // Move window to top of stack.
-                    if let FocusTarget::Window(window) = &focus {
-                        self.space.raise_element(window, true);
-                        if let WindowElement::X11(surface) = &window {
-                            if !surface.is_override_redirect() {
-                                self.xwm
-                                    .as_mut()
-                                    .expect("no xwm")
-                                    .raise_window(surface)
-                                    .expect("failed to raise x11 win");
-                                surface
-                                    .set_activated(true)
-                                    .expect("failed to set x11 win to activated");
-                            }
-                        }
+                }
+
+                tracing::debug!("wl_surface focus is some? {}", focus.wl_surface().is_some());
+
+                // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
+                // |     to wonky things like right-click menus not correctly getting pointer
+                // |     clicks or showing up at all.
+
+                // TODO: use update_keyboard_focus from anvil
+
+                if !matches!(&focus, FocusTarget::Window(WindowElement::X11(surf)) if surf.is_override_redirect())
+                {
+                    keyboard.set_focus(self, Some(focus.clone()), serial);
+                }
+
+                self.space.elements().for_each(|window| {
+                    if let WindowElement::Wayland(window) = window {
+                        window.toplevel().send_configure();
                     }
+                });
 
-                    tracing::debug!("wl_surface focus is some? {}", focus.wl_surface().is_some());
-
-                    // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
-                    // |     to wonky things like right-click menus not correctly getting pointer
-                    // |     clicks or showing up at all.
-
-                    // TODO: use update_keyboard_focus from anvil
-
-                    if !matches!(&focus, FocusTarget::Window(WindowElement::X11(surf)) if surf.is_override_redirect())
-                    {
-                        keyboard.set_focus(self, Some(focus.clone()), serial);
-                    }
-
-                    self.space.elements().for_each(|window| {
-                        if let WindowElement::Wayland(window) = window {
-                            window.toplevel().send_configure();
-                        }
-                    });
-
-                    if let FocusTarget::Window(window) = &focus {
-                        tracing::debug!("setting keyboard focus to {:?}", window.class());
-                    }
+                if let FocusTarget::Window(window) = &focus {
+                    tracing::debug!("setting keyboard focus to {:?}", window.class());
                 }
             } else {
                 self.space.elements().for_each(|window| match window {
@@ -423,9 +380,13 @@ impl State {
             .amount(Axis::Horizontal)
             .unwrap_or_else(|| event.amount_discrete(Axis::Horizontal).unwrap_or(0.0) * 3.0);
 
-        let vertical_amount = event
+        let mut vertical_amount = event
             .amount(Axis::Vertical)
             .unwrap_or_else(|| event.amount_discrete(Axis::Vertical).unwrap_or(0.0) * 3.0);
+
+        if self.backend.is_winit() {
+            vertical_amount = -vertical_amount;
+        }
 
         let horizontal_amount_discrete = event.amount_discrete(Axis::Horizontal);
         let vertical_amount_discrete = event.amount_discrete(Axis::Vertical);

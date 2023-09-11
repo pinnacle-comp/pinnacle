@@ -76,4 +76,24 @@ function process_module.spawn_once(command, callback)
     process_module.spawn(command, callback)
 end
 
+---Set an environment variable for Pinnacle. All future processes spawned will have this env set.
+---
+---Note that this will only set the variable for Pinnacle the compositor, not the running Lua config process.
+---If you need to set an environment variable for this config, place them in the `metaconfig.toml` file instead.
+---
+---### Example
+---```lua
+---process.set_env("MOZ_ENABLE_WAYLAND", "1")
+---```
+---@param key string
+---@param value string
+function process_module.set_env(key, value)
+    SendMsg({
+        SetEnv = {
+            key = key,
+            value = value,
+        },
+    })
+end
+
 return process_module

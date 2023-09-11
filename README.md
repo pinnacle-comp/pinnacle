@@ -170,12 +170,23 @@ as well as any function overloads, but these should be autocompleted through the
 Documentation for other branches can be reached at `https://pinnacle-comp.github.io/pinnacle/<branch name>`.
 
 # Controls
-The following controls are currently hardcoded:
-
-- <kbd>Ctrl</kbd> + <kbd>Left click drag</kbd>: Move a window
-- <kbd>Ctrl</kbd> + <kbd>Right click drag</kbd>: Resize a window
-
-You can find the rest of the controls in the [`example_config`](api/lua/example_config.lua).
+The following are the default controls in the [`example_config`](api/lua/example_config.lua).
+| Binding                                      | Action                             |
+|----------------------------------------------|------------------------------------|
+| <kbd>Ctrl</kbd> + <kbd>Mouse left drag</kbd> | Move window                        |
+| <kbd>Ctrl</kbd> + <kbd>Mouse right drag</kbd>| Resize window                      |
+| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>q</kbd> | Quit Pinnacle                      |
+| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>c</kbd> | Close window                       |
+| <kbd>Ctrl</kbd> + <kbd>Return</kbd>          | Spawn [Alacritty](https://github.com/alacritty/alacritty) (you can change this in the config)|
+| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>Space</kbd> | Toggle between floating and tiled |
+| <kbd>Ctrl</kbd> + <kbd>f</kbd>     | Toggle fullscreen        |
+| <kbd>Ctrl</kbd> + <kbd>m</kbd>     | Toggle maximized         |
+| <kbd>Ctrl</kbd> + <kbd>Space</kbd> | Cycle to the next layout |
+| <kbd>Ctrl</kbd><kbd>Shift</kbd> + <kbd>Space</kbd>                           | Cycle to the previous layout      |
+| <kbd>Ctrl</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                               | Switch to tag `1` to `5`          |
+| <kbd>Ctrl</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd>               | Toggle tag `1` to `5`             |
+| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                 | Move a window to tag `1` to `5`   |
+| <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd> | Toggle tag `1` to `5` on a window |
 
 # Feature Requests, Bug Reports, Contributions, and Questions
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).

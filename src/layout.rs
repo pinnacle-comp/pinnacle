@@ -171,12 +171,6 @@ impl State {
                     .filter(|(_, win)| win.alive())
                     .all(|(_, win)| win.with_state(|state| state.loc_request_state.is_idle()));
 
-                let num_not_idle = pending_wins
-                    .iter()
-                    .filter(|(_, win)| win.alive())
-                    .filter(|(_, win)| !win.with_state(|state| state.loc_request_state.is_idle()))
-                    .count();
-
                 all_idle
             },
             move |dt| {
