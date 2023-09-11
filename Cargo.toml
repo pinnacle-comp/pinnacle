@@ -6,10 +6,8 @@ edition = "2021"
 license = "GPL-3.0+"
 description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM"
 readme = "README.md"
-repository = "https://github.com/Ottatop/pinnacle/"
+repository = "https://github.com/pinnacle-comp/pinnacle/"
 keywords = ["wayland", "compositor", "smithay", "lua"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tracing = "0.1.37"
@@ -32,6 +30,7 @@ anyhow = { version = "1.0.75", features = ["backtrace"] }
 clap = { version = "4.4.2", features = ["derive"] }
 xkbcommon = "0.6.0"
 xdg = "2.5.2"
+lazy_static = "1.4.0"
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]

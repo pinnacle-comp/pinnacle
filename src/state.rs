@@ -65,8 +65,14 @@ use smithay::{
     },
     xwayland::{X11Surface, X11Wm, XWayland, XWaylandEvent},
 };
+use xdg::BaseDirectories;
 
 use crate::input::InputState;
+
+lazy_static::lazy_static! {
+    static ref XDG_BASE_DIRS: BaseDirectories =
+        BaseDirectories::with_prefix("pinnacle").expect("couldn't create xdg BaseDirectories");
+}
 
 pub enum Backend {
     Winit(Winit),
@@ -204,6 +210,7 @@ impl State {
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
         let config_dir = get_config_dir();
+        tracing::debug!("config dir is {:?}", config_dir);
 
         let metaconfig = crate::metaconfig::parse(&config_dir)?;
 
@@ -401,17 +408,11 @@ impl State {
 }
 
 fn get_config_dir() -> PathBuf {
-    let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
-        let default_config_dir =
-            std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+    let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
+        .ok()
+        .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
 
-        PathBuf::from(default_config_dir)
-            .join("pinnacle")
-            .to_string_lossy()
-            .to_string()
-    });
-
-    PathBuf::from(shellexpand::tilde(&config_dir).to_string())
+    config_dir.unwrap_or(XDG_BASE_DIRS.get_config_home())
 }
 
 /// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
@@ -422,7 +423,9 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
 
     let mut command = metaconfig.command.split(' ');
 
-    let arg1 = command.next().expect("empty command");
+    let arg1 = command
+        .next()
+        .context("command in metaconfig.toml was empty")?;
 
     std::env::set_var("PINNACLE_DIR", std::env::current_dir()?);
 
