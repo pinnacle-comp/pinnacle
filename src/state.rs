@@ -65,14 +65,8 @@ use smithay::{
     },
     xwayland::{X11Surface, X11Wm, XWayland, XWaylandEvent},
 };
-use xdg::BaseDirectories;
 
 use crate::input::InputState;
-
-lazy_static::lazy_static! {
-    static ref XDG_BASE_DIRS: BaseDirectories =
-        BaseDirectories::with_prefix("pinnacle").expect("couldn't create xdg BaseDirectories");
-}
 
 pub enum Backend {
     Winit(Winit),
@@ -412,7 +406,7 @@ fn get_config_dir() -> PathBuf {
         .ok()
         .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
 
-    config_dir.unwrap_or(XDG_BASE_DIRS.get_config_home())
+    config_dir.unwrap_or(crate::XDG_BASE_DIRS.get_config_home())
 }
 
 /// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
@@ -460,6 +454,8 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
         .args(command)
         .envs(envs)
         .current_dir(config_dir)
+        .stdout(async_process::Stdio::inherit())
+        .stderr(async_process::Stdio::inherit())
         .spawn()
         .expect("failed to spawn config");
 
