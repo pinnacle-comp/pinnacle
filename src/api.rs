@@ -50,6 +50,7 @@ use smithay::reexports::calloop::{
 use self::msg::{Msg, OutgoingMsg};
 
 pub const DEFAULT_SOCKET_DIR: &str = "/tmp";
+pub const SOCKET_NAME: &str = "pinnacle_socket";
 
 fn handle_client(
     mut stream: UnixStream,
@@ -90,7 +91,7 @@ impl PinnacleSocketSource {
     /// Create a loop source that listens for connections to the provided socket_dir.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
     pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
-        let socket_path = socket_dir.join("pinnacle_socket");
+        let socket_path = socket_dir.join(SOCKET_NAME);
 
         if let Ok(exists) = socket_path.try_exists() {
             if exists {

@@ -208,24 +208,22 @@ impl State {
 
         let metaconfig = crate::metaconfig::parse(&config_dir)?;
 
-        let socket_dir = {
-            let dir_string = shellexpand::full(
-                metaconfig
-                    .socket_dir
-                    .as_deref()
-                    .unwrap_or(DEFAULT_SOCKET_DIR),
-            )?
-            .to_string();
-
+        // If a socket is provided in the metaconfig, use it.
+        let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
             // cd into the metaconfig dir and canonicalize to preserve relative paths
             // like ./dir/here
             let current_dir = std::env::current_dir()?;
 
             std::env::set_current_dir(&config_dir)?;
-            let pathbuf = PathBuf::from(&dir_string).canonicalize()?;
+            let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
             std::env::set_current_dir(current_dir)?;
-
-            pathbuf
+            socket_dir
+        } else {
+            // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
+            crate::XDG_BASE_DIRS
+                .get_runtime_directory()
+                .cloned()
+                .unwrap_or(PathBuf::from(crate::api::DEFAULT_SOCKET_DIR))
         };
 
         let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
