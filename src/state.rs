@@ -16,7 +16,7 @@ use crate::{
             window_rules::{WindowRule, WindowRuleCondition},
             CallbackId, ModifierMask, Msg,
         },
-        PinnacleSocketSource, DEFAULT_SOCKET_DIR,
+        PinnacleSocketSource,
     },
     backend::{udev::Udev, winit::Winit, BackendData},
     cursor::Cursor,
@@ -204,27 +204,26 @@ impl State {
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
         let config_dir = get_config_dir();
+        tracing::debug!("config dir is {:?}", config_dir);
 
         let metaconfig = crate::metaconfig::parse(&config_dir)?;
 
-        let socket_dir = {
-            let dir_string = shellexpand::full(
-                metaconfig
-                    .socket_dir
-                    .as_deref()
-                    .unwrap_or(DEFAULT_SOCKET_DIR),
-            )?
-            .to_string();
-
+        // If a socket is provided in the metaconfig, use it.
+        let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
             // cd into the metaconfig dir and canonicalize to preserve relative paths
             // like ./dir/here
             let current_dir = std::env::current_dir()?;
 
             std::env::set_current_dir(&config_dir)?;
-            let pathbuf = PathBuf::from(&dir_string).canonicalize()?;
+            let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
             std::env::set_current_dir(current_dir)?;
-
-            pathbuf
+            socket_dir
+        } else {
+            // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
+            crate::XDG_BASE_DIRS
+                .get_runtime_directory()
+                .cloned()
+                .unwrap_or(PathBuf::from(crate::api::DEFAULT_SOCKET_DIR))
         };
 
         let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
@@ -401,17 +400,11 @@ impl State {
 }
 
 fn get_config_dir() -> PathBuf {
-    let config_dir = std::env::var("PINNACLE_CONFIG_DIR").unwrap_or_else(|_| {
-        let default_config_dir =
-            std::env::var("XDG_CONFIG_HOME").unwrap_or("~/.config".to_string());
+    let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
+        .ok()
+        .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
 
-        PathBuf::from(default_config_dir)
-            .join("pinnacle")
-            .to_string_lossy()
-            .to_string()
-    });
-
-    PathBuf::from(shellexpand::tilde(&config_dir).to_string())
+    config_dir.unwrap_or(crate::XDG_BASE_DIRS.get_config_home())
 }
 
 /// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
@@ -422,7 +415,9 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
 
     let mut command = metaconfig.command.split(' ');
 
-    let arg1 = command.next().expect("empty command");
+    let arg1 = command
+        .next()
+        .context("command in metaconfig.toml was empty")?;
 
     std::env::set_var("PINNACLE_DIR", std::env::current_dir()?);
 
@@ -457,6 +452,8 @@ fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<Con
         .args(command)
         .envs(envs)
         .current_dir(config_dir)
+        .stdout(async_process::Stdio::inherit())
+        .stderr(async_process::Stdio::inherit())
         .spawn()
         .expect("failed to spawn config");
 
