@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use itertools::{Either, Itertools};
 use smithay::{
     desktop::layer_map_for_output,
     output::Output,
@@ -401,14 +400,17 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
         _ => {
             let mut windows = windows.into_iter();
             let Some(corner) = windows.next() else { unreachable!() };
-            let (horiz_stack, vert_stack): (Vec<WindowElement>, Vec<WindowElement>) =
-                windows.enumerate().partition_map(|(i, win)| {
-                    if i % 2 == 0 {
-                        Either::Left(win)
-                    } else {
-                        Either::Right(win)
-                    }
-                });
+
+            let mut horiz_stack = Vec::<WindowElement>::new();
+            let mut vert_stack = Vec::<WindowElement>::new();
+
+            for (i, win) in windows.enumerate() {
+                if i % 2 == 0 {
+                    horiz_stack.push(win);
+                } else {
+                    vert_stack.push(win);
+                }
+            }
 
             let div_factor = 2;
 
