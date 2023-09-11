@@ -46,6 +46,8 @@ use anyhow::Context;
 use smithay::reexports::calloop::{
     self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
 };
+use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
+use walkdir::WalkDir;
 
 use self::msg::{Msg, OutgoingMsg};
 
@@ -91,11 +93,51 @@ impl PinnacleSocketSource {
     /// Create a loop source that listens for connections to the provided socket_dir.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
     pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
-        let socket_path = socket_dir.join(SOCKET_NAME);
+        let system = sysinfo::System::new_with_specifics(
+            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+        );
 
-        if let Ok(exists) = socket_path.try_exists() {
-            if exists {
-                std::fs::remove_file(&socket_path).context("Failed to remove old socket")?;
+        // Test if you are running multiple instances of Pinnacle
+        let multiple_instances = system.processes_by_exact_name("pinnacle").count() > 1;
+
+        // If you are, append a suffix to the socket name
+        let socket_name = if multiple_instances {
+            let mut suffix: u8 = 1;
+            while let Ok(true) = socket_dir
+                .join(format!("{SOCKET_NAME}_{suffix}"))
+                .try_exists()
+            {
+                suffix += 1;
+            }
+            format!("{SOCKET_NAME}_{suffix}")
+        } else {
+            SOCKET_NAME.to_string()
+        };
+
+        let socket_path = socket_dir.join(socket_name);
+
+        // If there are multiple instances, don't touch other sockets
+        if multiple_instances {
+            if let Ok(exists) = socket_path.try_exists() {
+                if exists {
+                    std::fs::remove_file(&socket_path).context(format!(
+                        "Failed to remove old socket at {}",
+                        socket_path.to_string_lossy()
+                    ))?;
+                }
+            }
+        } else {
+            // If there are, remove them all
+            for entry in WalkDir::new(socket_dir)
+                .contents_first(true)
+                .into_iter()
+                .filter_entry(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
+                .filter_map(|e| e.ok())
+            {
+                std::fs::remove_file(entry.path()).context(format!(
+                    "Failed to remove old socket at {}",
+                    entry.path().to_string_lossy()
+                ))?;
             }
         }
 

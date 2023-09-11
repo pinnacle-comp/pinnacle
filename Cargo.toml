@@ -33,6 +33,8 @@ xdg = "2.5.2"
 lazy_static = "1.4.0"
 tracing-appender = "0.2.2"
 walkdir = "2.4.0"
+sysinfo = "0.29.10"
+
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]
