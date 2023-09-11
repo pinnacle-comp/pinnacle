@@ -1,5 +1,15 @@
 # Changelog
 
+## [8499a29](https://github.com/pinnacle-comp/pinnacle/commit/8499a291e2225f00b2d745381915f7cffc570d37) [(#78)](https://github.com/pinnacle-comp/pinnacle/pull/78)
+This update brings mousebinds to the config API. You can now do things on button press and release.
+
+### Changes
+- Add mousebinds to API
+- Add env setting to API
+
+### Bugfixes
+- Correct scroll direction on API
+
 ## [01b6e25](https://github.com/Ottatop/pinnacle/commit/01b6e258ff72a5517e2c653f058f5241fa953162) [(#65)](https://github.com/Ottatop/pinnacle/pull/65)
 This update adds an initial window rules implementation! There are only a few conditions and rules to start,
 but this is expected to grow over time as I add more.
