@@ -1,5 +1,31 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---@nodoc TODO: add enum, alias, and type capabilities to ldoc_gen
+---@enum MouseButton
+local buttons = {
+    --- Left
+    [1] = 0x110,
+    --- Right
+    [2] = 0x111,
+    --- Middle
+    [3] = 0x112,
+    --- Side
+    [4] = 0x113,
+    --- Extra
+    [5] = 0x114,
+    --- Forward
+    [6] = 0x115,
+    --- Back
+    [7] = 0x116,
+    left = 0x110,
+    right = 0x111,
+    middle = 0x112,
+    side = 0x113,
+    extra = 0x114,
+    forward = 0x115,
+    back = 0x116,
+}
+
 ---Input management.
 ---
 ---This module provides utilities to set keybinds.
@@ -9,30 +35,7 @@ local input_module = {
     keys = require("keys"),
     --- A table with mouse button codes. You can use indexes (1, 2, and 3 are left, right, and middle)
     --- or keyed values (buttons.left, buttons.right, etc.).
-    ---@enum MouseButton
-    buttons = {
-        --- Left
-        [1] = 0x110,
-        --- Right
-        [2] = 0x111,
-        --- Middle
-        [3] = 0x112,
-        --- Side
-        [4] = 0x113,
-        --- Extra
-        [5] = 0x114,
-        --- Forward
-        [6] = 0x115,
-        --- Back
-        [7] = 0x116,
-        left = 0x110,
-        right = 0x111,
-        middle = 0x112,
-        side = 0x113,
-        extra = 0x114,
-        forward = 0x115,
-        back = 0x116,
-    },
+    buttons = buttons,
 }
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
