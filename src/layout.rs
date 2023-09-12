@@ -128,11 +128,12 @@ impl State {
                             // (like tiled states) but not commit, so we check for just the size
                             // here
                             if !is_pending {
-                                tracing::debug!("No pending changes");
+                                tracing::debug!("No pending changes, mapping window");
+                                // TODO: map win here, not down there
                                 state.loc_request_state = LocationRequestState::Idle;
                                 non_pending_wins.push((loc, window.clone()));
                             } else {
-                                tracing::debug!("Pending changes");
+                                tracing::debug!("Pending changes, requesting commit");
                                 let serial = win.toplevel().send_configure();
                                 state.loc_request_state =
                                     LocationRequestState::Requested(serial, loc);
@@ -154,14 +155,6 @@ impl State {
             });
         }
 
-        // Pause rendering. Here we'll wait until all windows have ack'ed and committed,
-        // then resume rendering. This prevents flickering because some windows will commit before
-        // others.
-        //
-        // This *will* cause everything to freeze for a few frames, but it shouldn't impact
-        // anything meaningfully.
-        // self.pause_rendering = true;
-
         // schedule on all idle
         self.schedule(
             move |_dt| {
@@ -176,7 +169,6 @@ impl State {
                 for (loc, win) in non_pending_wins {
                     dt.state.space.map_element(win, loc, false);
                 }
-                // dt.state.pause_rendering = false;
             },
         );
     }
