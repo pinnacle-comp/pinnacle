@@ -9,7 +9,7 @@ use smithay::{
     },
     output::Output,
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
-    utils::IsAlive,
+    utils::{IsAlive, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
 
@@ -40,6 +40,22 @@ impl State {
         });
 
         windows.next().cloned()
+    }
+
+    /// Update the focus. This will raise the current focus and activate it,
+    /// as well as setting the keyboard focus to it.
+    pub fn update_focus(&mut self, output: &Output) {
+        let current_focus = self.current_focus(output);
+
+        if let Some(win) = &current_focus {
+            self.space.raise_element(win, true);
+        }
+
+        self.seat.get_keyboard().expect("no keyboard").set_focus(
+            self,
+            current_focus.map(|win| win.into()),
+            SERIAL_COUNTER.next_serial(),
+        );
     }
 }
 
