@@ -174,11 +174,51 @@ impl XdgShellHandler for State {
         }
 
         let mut final_rect = None;
-        let parent_loc = surface
-            .get_parent_surface()
-            .and_then(|surf| self.window_for_surface(&surf))
-            .and_then(|win| self.space.element_location(&win))
-            .unwrap_or_else(|| (0, 0).into());
+
+        let mut is_subpopup = false;
+
+        // We have to go through this really verbose way of getting the location of the popup in
+        // the global space.
+        //
+        // The location from PopupSurface.with_pending_state's state.geometry.loc is relative to
+        // its parent. When its parent is a window, we can simply add the window's location to the
+        // popup's to get its global location.
+        //
+        // However, if its parent is another popup, we need to step upwards and grab the location
+        // from each popup, aggregating them into one global space location.
+        let global_loc = {
+            let mut surf = surface.get_parent_surface();
+            let mut loc = surface.with_pending_state(|state| state.geometry.loc);
+            tracing::debug!(?loc);
+
+            while let Some(s) = &surf {
+                if let Some(popup) = self.popup_manager.find_popup(s) {
+                    // popup.geometry() doesn't return the right location, so we dive into the
+                    // PopupSurface's state to grab it.
+                    let PopupKind::Xdg(popup_surf) = &popup;
+                    let l = popup_surf.with_pending_state(|state| state.geometry.loc);
+                    tracing::debug!(loc = ?l, "parent is popup");
+                    loc += l;
+                    is_subpopup = true;
+                    surf = popup_surf.get_parent_surface();
+                } else if let Some(win) = self.window_for_surface(s) {
+                    // Once we reach a window, we can stop as windows are already in the global space.
+                    tracing::debug!("parent is window");
+                    loc += self
+                        .space
+                        .element_location(&win)
+                        .unwrap_or_else(|| (0, 0).into());
+                    tracing::debug!(?loc);
+                    break;
+                }
+            }
+
+            loc
+        };
+
+        // The final rectangle that the popup is set to needs to be relative to its parent,
+        // so we store its old location here and subtract it at the end.
+        let old_loc = global_loc - surface.with_pending_state(|state| state.geometry.loc);
 
         if let Some(output_rect) = output_rect {
             // Check if the rect is constrained horizontally, and if so, which side.
@@ -208,7 +248,9 @@ impl XdgShellHandler for State {
             };
 
             let mut popup_rect = surface.with_pending_state(|state| state.geometry);
-            popup_rect.loc += parent_loc;
+            // Set the loc to the global space loc we calculated previously.
+            popup_rect.loc = global_loc;
+            tracing::debug!(?popup_rect.loc);
 
             // We're going to need to position popups such that they stay fully onscreen.
             // We can use the provided `positioner.constraint_adjustment` to get hints on how
@@ -236,6 +278,9 @@ impl XdgShellHandler for State {
                     if positioner
                         .constraint_adjustment
                         .contains(ConstraintAdjustment::SlideX)
+                        && !is_subpopup
+                    // If it's a subpopup, flip instead of slide. This makes
+                    // stuff like Firefox nested dropdowns more intuitive.
                     {
                         // Slide towards the gravity until the opposite edge is unconstrained or the
                         // same edge is constrained
@@ -310,6 +355,7 @@ impl XdgShellHandler for State {
                         }
                     }
 
+                    // If the above didn't bring the popup onscreen or if it's a nested popup, flip it.
                     if positioner
                         .constraint_adjustment
                         .contains(ConstraintAdjustment::FlipX)
@@ -341,15 +387,18 @@ impl XdgShellHandler for State {
                         };
 
                         let mut geo = positioner.get_geometry();
-                        geo.loc += parent_loc;
+                        geo.loc += global_loc;
                         if constrained_x(geo).is_none() {
                             break 'block;
                         }
 
+                        // The protocol states that if flipping it didn't bring it onscreen,
+                        // then it should just stay at its unflipped state.
                         positioner.gravity = old_gravity;
                         positioner.anchor_edges = old_anchor;
                     }
 
+                    // Finally, if flipping it failed, resize it to fit.
                     if positioner
                         .constraint_adjustment
                         .contains(ConstraintAdjustment::ResizeX)
@@ -379,6 +428,7 @@ impl XdgShellHandler for State {
                                 .into();
                             popup_rect = Rectangle::from_extemities(top_left, new_bottom_right);
                         }
+
                         if constrained_x(popup_rect).is_none() {
                             final_rect = Some(popup_rect);
                             break 'block;
@@ -390,12 +440,12 @@ impl XdgShellHandler for State {
 
         let final_rect = final_rect
             .map(|mut rect| {
-                rect.loc -= parent_loc;
+                rect.loc -= old_loc;
                 rect
             })
             .unwrap_or_else(|| positioner.get_geometry());
 
-        tracing::debug!(?positioner, geo = ?final_rect, "New popup");
+        tracing::debug!(?final_rect, "New popup");
 
         surface.with_pending_state(|state| state.geometry = final_rect);
 
@@ -440,6 +490,8 @@ impl XdgShellHandler for State {
         positioner: PositionerState,
         token: u32,
     ) {
+        // TODO: reposition logic
+
         surface.with_pending_state(|state| {
             state.geometry = positioner.get_geometry();
             state.positioner = positioner;
