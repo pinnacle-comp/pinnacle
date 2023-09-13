@@ -56,6 +56,8 @@ impl State {
             current_focus.map(|win| win.into()),
             SERIAL_COUNTER.next_serial(),
         );
+
+        // TODO: if there already is a visible focused window, don't do anything
     }
 }
 

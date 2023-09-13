@@ -7,13 +7,16 @@ use smithay::{
     input::{pointer::Focus, Seat},
     output::Output,
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
+        wayland_protocols::xdg::shell::server::{
+            xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+            xdg_toplevel::{self, ResizeEdge},
+        },
         wayland_server::{
             protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
             Resource,
         },
     },
-    utils::{Serial, SERIAL_COUNTER},
+    utils::{Logical, Point, Rectangle, Serial, SERIAL_COUNTER},
     wayland::{
         compositor::{self},
         shell::xdg::{
@@ -148,7 +151,254 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
+    fn new_popup(&mut self, surface: PopupSurface, mut positioner: PositionerState) {
+        let output_rect = self
+            .focus_state
+            .focused_output
+            .as_ref()
+            .or_else(|| self.space.outputs().next())
+            .and_then(|op| self.space.output_geometry(op));
+
+        /// Horizontal direction
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DirH {
+            Left,
+            Right,
+        }
+
+        /// Vertical direction
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DirV {
+            Top,
+            Bottom,
+        }
+
+        let mut final_rect = None;
+        let parent_loc = surface
+            .get_parent_surface()
+            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|win| self.space.element_location(&win))
+            .unwrap_or_else(|| (0, 0).into());
+
+        if let Some(output_rect) = output_rect {
+            // Check if the rect is constrained horizontally, and if so, which side.
+            let constrained_x = |rect: Rectangle<i32, Logical>| -> Option<DirH> {
+                tracing::debug!(?rect, ?output_rect);
+
+                if rect.loc.x < output_rect.loc.x {
+                    Some(DirH::Left)
+                } else if rect.loc.x + rect.size.w > output_rect.loc.x + output_rect.size.w {
+                    Some(DirH::Right)
+                } else {
+                    None
+                }
+            };
+
+            // Check if the rect is constrained vertically, and if so, which side.
+            let constrained_y = |rect: Rectangle<i32, Logical>| -> Option<DirV> {
+                tracing::debug!(?rect, ?output_rect);
+
+                if rect.loc.y < output_rect.loc.y {
+                    Some(DirV::Top)
+                } else if rect.loc.y + rect.size.h > output_rect.loc.y + output_rect.size.h {
+                    Some(DirV::Bottom)
+                } else {
+                    None
+                }
+            };
+
+            let mut popup_rect = surface.with_pending_state(|state| state.geometry);
+            popup_rect.loc += parent_loc;
+
+            // We're going to need to position popups such that they stay fully onscreen.
+            // We can use the provided `positioner.constraint_adjustment` to get hints on how
+            // the popups want to be relocated.
+
+            let output_left_x = output_rect.loc.x;
+            let output_right_x = output_rect.loc.x + output_rect.size.w;
+            let output_top_y = output_rect.loc.y;
+            let output_bottom_y = output_rect.loc.y + output_rect.size.h;
+
+            // The popup is flowing offscreen in the horizontal direction.
+            if let Some(constrain_dir) = constrained_x(popup_rect) {
+                tracing::debug!("Popup was constrained on the x axis, repositioning");
+                let gravity = match positioner.gravity {
+                    Gravity::Left | Gravity::TopLeft | Gravity::BottomLeft => DirH::Left,
+                    _ => DirH::Right,
+                };
+
+                tracing::debug!(?gravity);
+                tracing::debug!(?constrain_dir);
+
+                'block: {
+                    // If the constraint_adjustment has SlideX, we attempt to slide the popup
+                    // towards the direction specified by positioner.gravity until  TODO:
+                    if positioner
+                        .constraint_adjustment
+                        .contains(ConstraintAdjustment::SlideX)
+                    {
+                        // Slide towards the gravity until the opposite edge is unconstrained or the
+                        // same edge is constrained
+                        match (&constrain_dir, &gravity) {
+                            (DirH::Left, DirH::Right) => {
+                                let len_until_same_edge_constrained =
+                                    output_right_x - (popup_rect.loc.x + popup_rect.size.w);
+                                let len_until_opp_edge_unconstrained =
+                                    output_left_x - popup_rect.loc.x;
+
+                                popup_rect.loc.x += i32::min(
+                                    len_until_same_edge_constrained,
+                                    len_until_opp_edge_unconstrained,
+                                )
+                                .max(0);
+                                tracing::debug!(?popup_rect, "Constrained SlideX left right");
+                            }
+                            (DirH::Right, DirH::Left) => {
+                                let len_until_same_edge_constrained =
+                                    popup_rect.loc.x - output_left_x;
+                                let len_until_opp_edge_unconstrained =
+                                    (popup_rect.loc.x + popup_rect.size.w) - output_right_x;
+
+                                popup_rect.loc.x -= i32::min(
+                                    len_until_opp_edge_unconstrained,
+                                    len_until_same_edge_constrained,
+                                )
+                                .max(0);
+                                tracing::debug!(?popup_rect, "Constrained SlideX right left");
+                            }
+                            _ => (),
+                        };
+
+                        if constrained_x(popup_rect).is_none() {
+                            break 'block;
+                        }
+
+                        // Do the same but in the other direction
+                        match (constrain_dir, gravity) {
+                            (DirH::Right, DirH::Right) => {
+                                let len_until_same_edge_unconstrained =
+                                    popup_rect.loc.x - output_left_x;
+                                let len_until_opp_edge_constrained =
+                                    (popup_rect.loc.x + popup_rect.size.w) - output_right_x;
+
+                                popup_rect.loc.x -= i32::min(
+                                    len_until_opp_edge_constrained,
+                                    len_until_same_edge_unconstrained,
+                                )
+                                .max(0);
+                                tracing::debug!(?popup_rect, "Constrained SlideX right right");
+                            }
+                            (DirH::Left, DirH::Left) => {
+                                let len_until_same_edge_unconstrained =
+                                    output_right_x - (popup_rect.loc.x + popup_rect.size.w);
+                                let len_until_opp_edge_constrained =
+                                    output_left_x - popup_rect.loc.x;
+
+                                popup_rect.loc.x += i32::min(
+                                    len_until_same_edge_unconstrained,
+                                    len_until_opp_edge_constrained,
+                                )
+                                .max(0);
+                                tracing::debug!(?popup_rect, "Constrained SlideX left left");
+                            }
+                            _ => (),
+                        };
+
+                        if constrained_x(popup_rect).is_none() {
+                            final_rect = Some(popup_rect);
+                            break 'block;
+                        }
+                    }
+
+                    if positioner
+                        .constraint_adjustment
+                        .contains(ConstraintAdjustment::FlipX)
+                    {
+                        let old_gravity = positioner.gravity;
+                        positioner.gravity = match positioner.gravity {
+                            Gravity::Left => Gravity::Right,
+                            Gravity::Right => Gravity::Left,
+                            Gravity::TopLeft => Gravity::TopRight,
+                            Gravity::BottomLeft => Gravity::BottomRight,
+                            Gravity::TopRight => Gravity::TopLeft,
+                            Gravity::BottomRight => Gravity::BottomLeft,
+                            Gravity::Top => Gravity::Top,
+                            Gravity::Bottom => Gravity::Bottom,
+                            _ => Gravity::None,
+                        };
+
+                        let old_anchor = positioner.anchor_edges;
+                        positioner.anchor_edges = match positioner.anchor_edges {
+                            Anchor::Top => Anchor::Top,
+                            Anchor::Bottom => Anchor::Bottom,
+                            Anchor::Left => Anchor::Right,
+                            Anchor::Right => Anchor::Left,
+                            Anchor::TopLeft => Anchor::TopRight,
+                            Anchor::BottomLeft => Anchor::BottomRight,
+                            Anchor::TopRight => Anchor::TopLeft,
+                            Anchor::BottomRight => Anchor::BottomLeft,
+                            _ => Anchor::None,
+                        };
+
+                        let mut geo = positioner.get_geometry();
+                        geo.loc += parent_loc;
+                        if constrained_x(geo).is_none() {
+                            break 'block;
+                        }
+
+                        positioner.gravity = old_gravity;
+                        positioner.anchor_edges = old_anchor;
+                    }
+
+                    if positioner
+                        .constraint_adjustment
+                        .contains(ConstraintAdjustment::ResizeX)
+                    {
+                        // Slice off the left side
+                        if popup_rect.loc.x < output_left_x {
+                            let len_to_slice = output_left_x - popup_rect.loc.x;
+                            let new_top_left: Point<i32, Logical> =
+                                (popup_rect.loc.x + len_to_slice, popup_rect.loc.y).into();
+                            let bottom_right: Point<i32, Logical> = (
+                                popup_rect.loc.x + popup_rect.size.w,
+                                popup_rect.loc.y + popup_rect.size.h,
+                            )
+                                .into();
+                            popup_rect = Rectangle::from_extemities(new_top_left, bottom_right);
+                        }
+
+                        // Slice off the right side
+                        if popup_rect.loc.x + popup_rect.size.w > output_right_x {
+                            let len_to_slice =
+                                (popup_rect.loc.x + popup_rect.size.w) - output_right_x;
+                            let top_left = popup_rect.loc;
+                            let new_bottom_right: Point<i32, Logical> = (
+                                popup_rect.loc.x + popup_rect.size.w - len_to_slice,
+                                popup_rect.loc.y + popup_rect.size.h,
+                            )
+                                .into();
+                            popup_rect = Rectangle::from_extemities(top_left, new_bottom_right);
+                        }
+                        if constrained_x(popup_rect).is_none() {
+                            final_rect = Some(popup_rect);
+                            break 'block;
+                        }
+                    }
+                }
+            }
+        }
+
+        let final_rect = final_rect
+            .map(|mut rect| {
+                rect.loc -= parent_loc;
+                rect
+            })
+            .unwrap_or_else(|| positioner.get_geometry());
+
+        tracing::debug!(?positioner, geo = ?final_rect, "New popup");
+
+        surface.with_pending_state(|state| state.geometry = final_rect);
+
         if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
             tracing::warn!("failed to track popup: {}", err);
         }
