@@ -10,8 +10,9 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing = { git = "https://github.com/tokio-rs/tracing", rev = "b8c45cc" }
+tracing-subscriber = { git = "https://github.com/tokio-rs/tracing", rev = "b8c45cc", features = ["env-filter"] }
+tracing-appender = { git = "https://github.com/tokio-rs/tracing", rev = "b8c45cc" }
 smithay = { git = "https://github.com/Smithay/smithay", rev = "1a61e1c", features = ["desktop", "wayland_frontend"] }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", optional = true }
 thiserror = "1.0.48"
@@ -31,7 +32,6 @@ clap = { version = "4.4.2", features = ["derive"] }
 xkbcommon = "0.6.0"
 xdg = "2.5.2"
 lazy_static = "1.4.0"
-tracing-appender = "0.2.2"
 walkdir = "2.4.0"
 sysinfo = "0.29.10"
 
