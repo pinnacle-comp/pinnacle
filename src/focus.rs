@@ -26,7 +26,7 @@ pub struct FocusState {
 
 impl State {
     /// Get the currently focused window on `output`, if any.
-    pub fn current_focus(&mut self, output: &Output) -> Option<WindowElement> {
+    pub fn focused_window(&mut self, output: &Output) -> Option<WindowElement> {
         self.focus_state.focus_stack.retain(|win| win.alive());
 
         let mut windows = self.focus_state.focus_stack.iter().rev().filter(|win| {
@@ -45,10 +45,13 @@ impl State {
     /// Update the focus. This will raise the current focus and activate it,
     /// as well as setting the keyboard focus to it.
     pub fn update_focus(&mut self, output: &Output) {
-        let current_focus = self.current_focus(output);
+        let current_focus = self.focused_window(output);
 
         if let Some(win) = &current_focus {
             self.space.raise_element(win, true);
+            if let WindowElement::Wayland(w) = win {
+                w.toplevel().send_configure();
+            }
         }
 
         self.seat.get_keyboard().expect("no keyboard").set_focus(

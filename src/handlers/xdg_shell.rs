@@ -136,7 +136,7 @@ impl XdgShellHandler for State {
 
         if let Some(output) = window.output(self) {
             self.update_windows(&output);
-            let focus = self.current_focus(&output).map(FocusTarget::Window);
+            let focus = self.focused_window(&output).map(FocusTarget::Window);
             if let Some(FocusTarget::Window(win)) = &focus {
                 tracing::debug!("Focusing on prev win");
                 self.space.raise_element(win, true);
@@ -151,6 +151,7 @@ impl XdgShellHandler for State {
         }
     }
 
+    // this is 500 lines there has to be a shorter way to do this
     fn new_popup(&mut self, surface: PopupSurface, mut positioner: PositionerState) {
         tracing::debug!(?positioner.constraint_adjustment, ?positioner.gravity);
         let output_rect = self

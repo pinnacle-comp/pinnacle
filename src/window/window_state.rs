@@ -75,29 +75,6 @@ pub struct WindowElementState {
 }
 
 /// The state of a window's resize operation.
-///
-/// A naive implementation of window swapping would probably immediately call
-/// [`space.map_element()`] right after setting its size through [`with_pending_state()`] and
-/// sending a configure event. However, the client will probably not acknowledge the configure
-/// until *after* the window has moved, causing flickering.
-///
-/// To solve this, we need to create two additional steps: [`Requested`] and [`Acknowledged`].
-/// If we need to change a window's location when we change its size, instead of
-/// calling `map_element()`, we change the window's [`WindowState`] and set
-/// its [`resize_state`] to `Requested` with the new position we want.
-///
-/// When the client acks the configure, we can move the state to `Acknowledged` in
-/// [`XdgShellHandler.ack_configure()`]. Finally, in [`CompositorHandler.commit()`], we set the
-/// state back to [`Idle`] and map the window.
-///
-/// [`space.map_element()`]: smithay::desktop::space::Space#method.map_element
-/// [`with_pending_state()`]: smithay::wayland::shell::xdg::ToplevelSurface#method.with_pending_state
-/// [`Idle`]: WindowResizeState::Idle
-/// [`Requested`]: WindowResizeState::Requested
-/// [`Acknowledged`]: WindowResizeState::Acknowledged
-/// [`resize_state`]: WindowState#structfield.resize_state
-/// [`XdgShellHandler.ack_configure()`]: smithay::wayland::shell::xdg::XdgShellHandler#method.ack_configure
-/// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
 #[derive(Debug, Default, Clone)]
 pub enum LocationRequestState {
     /// The window doesn't need to be moved.

@@ -1460,6 +1460,7 @@ fn render_surface<'a>(
             (
                 win.class().unwrap_or("None".to_string()),
                 win.title().unwrap_or("None".to_string()),
+                win.with_state(|state| state.loc_request_state.clone()),
             )
         })
         .collect::<Vec<_>>();

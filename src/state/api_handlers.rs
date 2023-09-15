@@ -404,7 +404,7 @@ impl State {
                 });
                 let focused = window.as_ref().and_then(|win| {
                     let output = win.output(self)?;
-                    self.current_focus(&output).map(|foc_win| win == &foc_win)
+                    self.focused_window(&output).map(|foc_win| win == &foc_win)
                 });
                 let floating = window
                     .as_ref()

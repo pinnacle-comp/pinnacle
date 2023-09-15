@@ -53,6 +53,7 @@ impl State {
     /// Compute tiled window locations and sizes, size maximized and fullscreen windows correctly,
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
+        tracing::debug!("Updating windows");
         let Some(layout) = output.with_state(|state| {
             state.focused_tags().next().map(|tag| tag.layout())
         }) else { return };
@@ -478,49 +479,14 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
 
 impl State {
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
-        let mut elems = self
-            .windows
-            .iter_mut()
-            .filter(|win| *win == win1 || *win == win2);
+        let win1_index = self.windows.iter().position(|win| win == win1);
+        let win2_index = self.windows.iter().position(|win| win == win2);
 
-        let (first, second) = (elems.next(), elems.next());
-
-        if let Some(first) = first {
-            if let Some(second) = second {
-                std::mem::swap(first, second);
+        if let (Some(first), Some(second)) = (win1_index, win2_index) {
+            self.windows.swap(first, second);
+            if let Some(output) = win1.output(self) {
+                self.update_windows(&output);
             }
-        }
-
-        let mut same_suggested_size = false;
-
-        if let WindowElement::Wayland(w1) = win1 {
-            if let WindowElement::Wayland(w2) = win2 {
-                if let Some(w1_size) = w1.toplevel().current_state().size {
-                    if let Some(w2_size) = w2.toplevel().current_state().size {
-                        same_suggested_size = w1_size == w2_size;
-                    }
-                }
-            }
-        }
-
-        if same_suggested_size {
-            let win1_loc = self.space.element_location(win1);
-            let win2_loc = self.space.element_location(win2);
-
-            if let Some(win1_loc) = win1_loc {
-                if let Some(win2_loc) = win2_loc {
-                    self.space.map_element(win1.clone(), win2_loc, false);
-                    self.space.map_element(win2.clone(), win1_loc, false);
-                }
-            }
-        } else {
-            // TODO: don't use the focused output, use the outputs the two windows are on
-            let output = self
-                .focus_state
-                .focused_output
-                .clone()
-                .expect("no focused output");
-            self.update_windows(&output);
         }
     }
 }
