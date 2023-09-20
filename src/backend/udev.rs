@@ -77,6 +77,7 @@ use smithay::{
         dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::{InputMethodHandle, InputMethodSeat},
     },
+    xwayland::X11Surface,
 };
 use smithay_drm_extras::{
     drm_scanner::{DrmScanEvent, DrmScanner},
@@ -1356,8 +1357,8 @@ impl State {
             &mut self.cursor_status,
             &self.space,
             &windows,
+            &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
-            &self.focus_state.focus_stack,
             surface,
             &mut renderer,
             &output,
@@ -1463,8 +1464,8 @@ fn render_surface<'a>(
     cursor_status: &mut CursorImageStatus,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
+    override_redirect_windows: &[X11Surface],
     dnd_icon: Option<&WlSurface>,
-    focus_stack: &[WindowElement],
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
     output: &Output,
@@ -1507,7 +1508,8 @@ fn render_surface<'a>(
 
     let output_render_elements = crate::render::generate_render_elements(
         space,
-        focus_stack,
+        windows,
+        override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,

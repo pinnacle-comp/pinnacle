@@ -284,6 +284,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                 let output_render_elements = crate::render::generate_render_elements(
                     &state.space,
                     &state.focus_state.focus_stack,
+                    &state.override_redirect_windows,
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),

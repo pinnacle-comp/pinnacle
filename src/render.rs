@@ -28,6 +28,7 @@ use smithay::{
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
     wayland::{compositor, input_method::InputMethodHandle, shell::wlr_layer},
+    xwayland::X11Surface,
 };
 
 use crate::{state::WithState, window::WindowElement};
@@ -85,7 +86,11 @@ struct LayerRenderElements<R> {
     overlay: Vec<WaylandSurfaceRenderElement<R>>,
 }
 
-fn layer_render_elements<R>(output: &Output, renderer: &mut R) -> LayerRenderElements<R>
+fn layer_render_elements<R>(
+    output: &Output,
+    renderer: &mut R,
+    scale: Scale<f64>,
+) -> LayerRenderElements<R>
 where
     R: Renderer + ImportAll,
     <R as Renderer>::TextureId: 'static,
@@ -107,7 +112,7 @@ where
             let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
                 renderer,
                 loc.to_physical(1),
-                Scale::from(1.0),
+                scale,
                 1.0,
             );
             (surface.layer(), render_elements)
@@ -135,6 +140,7 @@ fn tag_render_elements<R, C>(
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
+    scale: Scale<f64>,
 ) -> Vec<C>
 where
     R: Renderer + ImportAll + ImportMem,
@@ -150,7 +156,7 @@ where
             let loc = (space.element_location(win).unwrap_or((0, 0).into())
                 - win.geometry().loc)
                 .to_physical(1);
-            win.render_elements::<C>(renderer, loc, Scale::from(1.0), 1.0)
+            win.render_elements::<C>(renderer, loc, scale, 1.0)
         })
         .collect::<Vec<_>>();
 
@@ -161,6 +167,7 @@ where
 pub fn generate_render_elements<R, T>(
     space: &Space<WindowElement>,
     windows: &[WindowElement],
+    override_redirect_windows: &[X11Surface],
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
@@ -247,10 +254,23 @@ where
         }
     }
 
+    let o_r_elements = override_redirect_windows.iter().flat_map(|surf| {
+        surf.render_elements::<WaylandSurfaceRenderElement<R>>(
+            renderer,
+            space
+                .element_location(&WindowElement::X11(surf.clone()))
+                .unwrap_or((0, 0).into())
+                .to_physical_precise_round(scale),
+            scale,
+            1.0,
+        )
+    });
+
+    custom_render_elements.extend(o_r_elements.map(CustomRenderElements::from));
+
     let output_render_elements = {
         let top_fullscreen_window = windows.iter().rev().find(|win| {
             win.with_state(|state| {
-                // TODO: for wayland windows, check if current state has xdg_toplevel fullscreen
                 let is_wayland_actually_fullscreen = {
                     if let WindowElement::Wayland(window) = win {
                         window
@@ -269,7 +289,6 @@ where
         });
 
         // If fullscreen windows exist, render only the topmost one
-        // TODO: wait until the fullscreen window has committed, this will stop flickering
         if let Some(window) = top_fullscreen_window {
             let mut output_render_elements =
                 Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
@@ -296,10 +315,10 @@ where
                 bottom,
                 top,
                 overlay,
-            } = layer_render_elements(output, renderer);
+            } = layer_render_elements(output, renderer, scale);
 
             let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                tag_render_elements(windows, space, renderer);
+                tag_render_elements(windows, space, renderer, scale);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
