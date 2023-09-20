@@ -1490,7 +1490,7 @@ fn render_surface<'a>(
         .collect::<Vec<_>>();
 
     if !pending_wins.is_empty() {
-        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+        // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
         for win in windows.iter() {
             win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
                 Some(output.clone())

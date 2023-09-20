@@ -252,7 +252,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     .collect::<Vec<_>>();
 
                 if !pending_wins.is_empty() {
-                    tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+                    // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
                     for win in state.windows.iter() {
                         win.send_frame(
                             &output,
