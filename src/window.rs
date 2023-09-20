@@ -34,7 +34,7 @@ use smithay::{
 };
 
 use crate::{
-    api::msg::window_rules::{self, WindowRule},
+    config::api::msg::window_rules::{self, WindowRule},
     state::{State, WithState},
 };
 

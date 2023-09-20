@@ -10,7 +10,7 @@ use smithay::{
 };
 
 use crate::{
-    api::msg::{
+    config::api::msg::{
         Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
     },
     focus::FocusTarget,
@@ -313,7 +313,7 @@ impl State {
                     .expect("stream doesn't exist");
                 let mut stream = stream.lock().expect("couldn't lock stream");
                 for output in self.space.outputs() {
-                    crate::api::send_to_client(
+                    crate::config::api::send_to_client(
                         &mut stream,
                         &OutgoingMsg::CallCallback {
                             callback_id,
@@ -372,7 +372,7 @@ impl State {
                     .collect::<Vec<_>>();
 
                 // FIXME: figure out what to do if error
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -418,7 +418,7 @@ impl State {
                 let fullscreen_or_maximized = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.fullscreen_or_maximized));
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -441,7 +441,7 @@ impl State {
                     .outputs()
                     .map(|output| output.name())
                     .collect::<Vec<_>>();
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -486,7 +486,7 @@ impl State {
                         state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
                     })
                 });
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -512,7 +512,7 @@ impl State {
                     .map(|tag| tag.id())
                     .collect::<Vec<_>>();
                 tracing::debug!("GetTags: {:?}", tag_ids);
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -529,7 +529,7 @@ impl State {
                     .map(|output| output.name());
                 let active = tag.as_ref().map(|tag| tag.active());
                 let name = tag.as_ref().map(|tag| tag.name());
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -609,7 +609,7 @@ impl State {
                             Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_out.lock().expect("Couldn't lock stream");
-                                crate::api::send_to_client(
+                                crate::config::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
                                         callback_id,
@@ -645,7 +645,7 @@ impl State {
                             Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_err.lock().expect("Couldn't lock stream");
-                                crate::api::send_to_client(
+                                crate::config::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
                                         callback_id,
@@ -675,7 +675,7 @@ impl State {
                 match child.status().await {
                     Ok(exit_status) => {
                         let mut stream = stream_exit.lock().expect("Couldn't lock stream");
-                        crate::api::send_to_client(
+                        crate::config::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
                                 callback_id,

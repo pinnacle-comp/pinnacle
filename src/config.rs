@@ -1,10 +1,12 @@
+pub mod api;
+
 use std::path::Path;
 
 use anyhow::Context;
 use smithay::input::keyboard::keysyms;
 use toml::Table;
 
-use crate::api::msg::Modifier;
+use api::msg::Modifier;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Metaconfig {

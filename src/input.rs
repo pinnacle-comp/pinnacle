@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
+    config::api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
     focus::FocusTarget,
     state::{Backend, WithState},
     window::WindowElement,
@@ -235,7 +235,7 @@ impl State {
         match action {
             Some(KeyAction::CallCallback(callback_id)) => {
                 if let Some(stream) = self.api_state.stream.as_ref() {
-                    if let Err(err) = crate::api::send_to_client(
+                    if let Err(err) = crate::config::api::send_to_client(
                         &mut stream.lock().expect("Could not lock stream mutex"),
                         &OutgoingMsg::CallCallback {
                             callback_id,
@@ -289,7 +289,7 @@ impl State {
         {
             if let Some(stream) = self.api_state.stream.clone() {
                 let mut stream = stream.lock().expect("failed to lock api stream");
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::CallCallback {
                         callback_id,

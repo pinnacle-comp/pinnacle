@@ -16,15 +16,14 @@ use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
 
-mod api;
 mod backend;
+mod config;
 mod cursor;
 mod focus;
 mod grab;
 mod handlers;
 mod input;
 mod layout;
-mod metaconfig;
 mod output;
 mod pointer;
 mod render;

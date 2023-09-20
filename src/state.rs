@@ -11,18 +11,18 @@ use std::{
 };
 
 use crate::{
-    api::{
+    backend::{udev::Udev, winit::Winit, BackendData},
+    config::api::{
         msg::{
             window_rules::{WindowRule, WindowRuleCondition},
             CallbackId, ModifierMask, Msg,
         },
         PinnacleSocketSource,
     },
-    backend::{udev::Udev, winit::Winit, BackendData},
+    config::Metaconfig,
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
-    metaconfig::Metaconfig,
     tag::TagId,
     window::WindowElement,
 };
@@ -206,7 +206,7 @@ impl State {
         let config_dir = get_config_dir();
         tracing::debug!("config dir is {:?}", config_dir);
 
-        let metaconfig = crate::metaconfig::parse(&config_dir)?;
+        let metaconfig = crate::config::parse(&config_dir)?;
 
         // If a socket is provided in the metaconfig, use it.
         let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
@@ -223,7 +223,7 @@ impl State {
             crate::XDG_BASE_DIRS
                 .get_runtime_directory()
                 .cloned()
-                .unwrap_or(PathBuf::from(crate::api::DEFAULT_SOCKET_DIR))
+                .unwrap_or(PathBuf::from(crate::config::api::DEFAULT_SOCKET_DIR))
         };
 
         let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
@@ -497,7 +497,7 @@ impl State {
         let config_dir = get_config_dir();
 
         let metaconfig =
-            crate::metaconfig::parse(&config_dir).context("Failed to parse metaconfig.toml")?;
+            crate::config::parse(&config_dir).context("Failed to parse metaconfig.toml")?;
 
         let ConfigReturn {
             reload_keybind,
