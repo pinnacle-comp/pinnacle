@@ -1509,11 +1509,10 @@ fn render_surface<'a>(
 
     let output_render_elements = crate::render::generate_render_elements(
         space,
-        windows,
+        focus_stack,
         pointer_location,
         cursor_status,
         dnd_icon,
-        focus_stack,
         renderer,
         output,
         input_method,

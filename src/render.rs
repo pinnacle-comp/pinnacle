@@ -12,7 +12,7 @@ use smithay::{
     },
     desktop::{
         layer_map_for_output,
-        space::{SpaceRenderElements, SurfaceTree},
+        space::{SpaceElement, SpaceRenderElements, SurfaceTree},
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -26,7 +26,7 @@ use smithay::{
     wayland::{compositor, input_method::InputMethodHandle, shell::wlr_layer},
 };
 
-use crate::{state::WithState, tag::Tag, window::WindowElement};
+use crate::{state::WithState, window::WindowElement};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -126,6 +126,33 @@ where
     }
 }
 
+/// Get the render_elements for the provided tags.
+fn tag_render_elements<R, C>(
+    windows: &[WindowElement],
+    space: &Space<WindowElement>,
+    renderer: &mut R,
+) -> Vec<C>
+where
+    R: Renderer + ImportAll + ImportMem,
+    <R as Renderer>::TextureId: 'static,
+    C: From<WaylandSurfaceRenderElement<R>>,
+{
+    let elements = windows
+        .iter()
+        .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
+        .filter(|win| win.is_on_active_tag(space.outputs()))
+        .flat_map(|win| {
+            // subtract win.geometry().loc to align decorations correctly
+            let loc = (space.element_location(win).unwrap_or((0, 0).into())
+                - win.geometry().loc)
+                .to_physical(1);
+            win.render_elements::<C>(renderer, loc, Scale::from(1.0), 1.0)
+        })
+        .collect::<Vec<_>>();
+
+    elements
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
     space: &Space<WindowElement>,
@@ -133,7 +160,6 @@ pub fn generate_render_elements<R, T>(
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
-    focus_stack: &[WindowElement],
     renderer: &mut R,
     output: &Output,
     input_method: &InputMethodHandle,
@@ -218,7 +244,7 @@ where
     }
 
     let output_render_elements = {
-        let top_fullscreen_window = focus_stack.iter().rev().find(|win| {
+        let top_fullscreen_window = windows.iter().rev().find(|win| {
             win.with_state(|state| {
                 // TODO: for wayland windows, check if current state has xdg_toplevel fullscreen
                 let is_wayland_actually_fullscreen = {
@@ -269,7 +295,7 @@ where
             } = layer_render_elements(output, renderer);
 
             let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                Tag::tag_render_elements(windows, space, renderer);
+                tag_render_elements(windows, space, renderer);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
