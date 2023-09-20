@@ -31,17 +31,13 @@ pub struct OutputState {
 impl WithState for Output {
     type State = OutputState;
 
-    fn with_state<F, T>(&self, mut func: F) -> T
+    fn with_state<F, T>(&self, func: F) -> T
     where
-        F: FnMut(&mut Self::State) -> T,
+        F: FnOnce(&mut Self::State) -> T,
     {
-        self.user_data()
-            .insert_if_missing(RefCell::<Self::State>::default);
-
         let state = self
             .user_data()
-            .get::<RefCell<Self::State>>()
-            .expect("RefCell not in data map");
+            .get_or_insert(RefCell::<Self::State>::default);
 
         func(&mut state.borrow_mut())
     }

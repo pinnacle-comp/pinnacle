@@ -584,12 +584,13 @@ impl ApiState {
 
 pub trait WithState {
     type State;
+
     /// Access data map state.
     ///
     /// RefCell Safety: This function will panic if called within itself.
     fn with_state<F, T>(&self, func: F) -> T
     where
-        F: FnMut(&mut Self::State) -> T;
+        F: FnOnce(&mut Self::State) -> T;
 }
 
 #[derive(Default, Debug)]
@@ -600,18 +601,14 @@ pub struct WlSurfaceState {
 impl WithState for WlSurface {
     type State = WlSurfaceState;
 
-    fn with_state<F, T>(&self, mut func: F) -> T
+    fn with_state<F, T>(&self, func: F) -> T
     where
-        F: FnMut(&mut Self::State) -> T,
+        F: FnOnce(&mut Self::State) -> T,
     {
         compositor::with_states(self, |states| {
-            states
-                .data_map
-                .insert_if_missing(RefCell::<Self::State>::default);
             let state = states
                 .data_map
-                .get::<RefCell<Self::State>>()
-                .expect("This should never happen");
+                .get_or_insert(RefCell::<Self::State>::default);
 
             func(&mut state.borrow_mut())
         })
