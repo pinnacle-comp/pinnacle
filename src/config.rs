@@ -143,6 +143,8 @@ pub fn start_config(tx_channel: Sender<api::msg::Msg>) -> anyhow::Result<ConfigR
 
     // If a socket is provided in the metaconfig, use it.
     let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
+        let socket_dir = shellexpand::full(socket_dir)?.to_string();
+
         // cd into the metaconfig dir and canonicalize to preserve relative paths
         // like ./dir/here
         let current_dir = std::env::current_dir()?;

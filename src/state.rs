@@ -51,7 +51,9 @@ use smithay::{
 use crate::input::InputState;
 
 pub enum Backend {
+    /// The compositor is running in a Winit window
     Winit(Winit),
+    /// The compositor is running in a tty
     Udev(Udev),
 }
 
@@ -131,6 +133,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates the central state and starts the config and xwayland
     pub fn init(
         backend: Backend,
         display: &mut Display<Self>,
@@ -395,7 +398,10 @@ pub struct ApiState {
     pub config_process: async_process::Child,
 }
 
+/// A trait meant to be used in types with a [`UserDataMap`][smithay::utils::user_data::UserDataMap]
+/// to get user-defined state.
 pub trait WithState {
+    /// The user-defined state
     type State;
 
     /// Access data map state.
