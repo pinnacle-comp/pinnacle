@@ -6,13 +6,17 @@ use smithay::{
     backend::renderer::{
         element::{
             self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer, AsRenderElements,
-            Wrap,
+            RenderElementStates, Wrap,
         },
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
         layer_map_for_output,
         space::{SpaceElement, SpaceRenderElements, SurfaceTree},
+        utils::{
+            surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
+            OutputPresentationFeedback,
+        },
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -324,4 +328,38 @@ where
     };
 
     output_render_elements
+}
+
+// TODO: docs
+pub fn take_presentation_feedback(
+    output: &Output,
+    space: &Space<WindowElement>,
+    render_element_states: &RenderElementStates,
+) -> OutputPresentationFeedback {
+    let mut output_presentation_feedback = OutputPresentationFeedback::new(output);
+
+    space.elements().for_each(|window| {
+        if space.outputs_for_element(window).contains(output) {
+            window.take_presentation_feedback(
+                &mut output_presentation_feedback,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    surface_presentation_feedback_flags_from_states(surface, render_element_states)
+                },
+            );
+        }
+    });
+
+    let map = smithay::desktop::layer_map_for_output(output);
+    for layer_surface in map.layers() {
+        layer_surface.take_presentation_feedback(
+            &mut output_presentation_feedback,
+            surface_primary_scanout_output,
+            |surface, _| {
+                surface_presentation_feedback_flags_from_states(surface, render_element_states)
+            },
+        );
+    }
+
+    output_presentation_feedback
 }

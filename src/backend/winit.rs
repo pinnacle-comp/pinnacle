@@ -34,8 +34,8 @@ use smithay::{
 };
 
 use crate::{
-    render::pointer::PointerElement,
-    state::{take_presentation_feedback, Backend, CalloopData, State, WithState},
+    render::{pointer::PointerElement, take_presentation_feedback},
+    state::{Backend, CalloopData, State, WithState},
 };
 
 use super::BackendData;

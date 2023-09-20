@@ -25,16 +25,8 @@ use crate::{
 };
 use calloop::{channel::Sender, futures::Scheduler, RegistrationToken};
 use smithay::{
-    backend::renderer::element::RenderElementStates,
-    desktop::{
-        utils::{
-            surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
-            OutputPresentationFeedback,
-        },
-        PopupManager, Space,
-    },
+    desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
-    output::Output,
     reexports::{
         calloop::{
             self, channel::Event, generic::Generic, Interest, LoopHandle, LoopSignal, Mode,
@@ -397,40 +389,6 @@ impl ClientData for ClientState {
 pub struct SurfaceDmabufFeedback<'a> {
     pub render_feedback: &'a DmabufFeedback,
     pub scanout_feedback: &'a DmabufFeedback,
-}
-
-// TODO: docs
-pub fn take_presentation_feedback(
-    output: &Output,
-    space: &Space<WindowElement>,
-    render_element_states: &RenderElementStates,
-) -> OutputPresentationFeedback {
-    let mut output_presentation_feedback = OutputPresentationFeedback::new(output);
-
-    space.elements().for_each(|window| {
-        if space.outputs_for_element(window).contains(output) {
-            window.take_presentation_feedback(
-                &mut output_presentation_feedback,
-                surface_primary_scanout_output,
-                |surface, _| {
-                    surface_presentation_feedback_flags_from_states(surface, render_element_states)
-                },
-            );
-        }
-    });
-
-    let map = smithay::desktop::layer_map_for_output(output);
-    for layer_surface in map.layers() {
-        layer_surface.take_presentation_feedback(
-            &mut output_presentation_feedback,
-            surface_primary_scanout_output,
-            |surface, _| {
-                surface_presentation_feedback_flags_from_states(surface, render_element_states)
-            },
-        );
-    }
-
-    output_presentation_feedback
 }
 
 pub struct ApiState {
