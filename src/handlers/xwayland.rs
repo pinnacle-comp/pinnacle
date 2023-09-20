@@ -200,7 +200,7 @@ impl XwmHandler for CalloopData {
             self.state.space.unmap_elem(&win);
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
-                let focus = self.state.current_focus(&output).map(FocusTarget::Window);
+                let focus = self.state.focused_window(&output).map(FocusTarget::Window);
                 if let Some(FocusTarget::Window(win)) = &focus {
                     tracing::debug!("Focusing on prev win");
                     self.state.space.raise_element(win, true);
@@ -243,7 +243,7 @@ impl XwmHandler for CalloopData {
 
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
-                let focus = self.state.current_focus(&output).map(FocusTarget::Window);
+                let focus = self.state.focused_window(&output).map(FocusTarget::Window);
                 if let Some(FocusTarget::Window(win)) = &focus {
                     tracing::debug!("Focusing on prev win");
                     self.state.space.raise_element(win, true);

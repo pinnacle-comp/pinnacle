@@ -235,18 +235,22 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 pointer_element.set_status(state.cursor_status.clone());
 
-                // TODO: make a pending_windows state, when pending_windows increases,
-                // |     pause rendering.
-                // |     If it goes down, push a frame, then repeat until no pending_windows are left.
-
-                let pending_win_count = state
+                let pending_wins = state
                     .windows
                     .iter()
                     .filter(|win| win.alive())
                     .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
-                    .count() as u32;
+                    .map(|win| {
+                        (
+                            win.class().unwrap_or("None".to_string()),
+                            win.title().unwrap_or("None".to_string()),
+                            win.with_state(|state| state.loc_request_state.clone()),
+                        )
+                    })
+                    .collect::<Vec<_>>();
 
-                if pending_win_count > 0 {
+                if !pending_wins.is_empty() {
+                    tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
                     for win in state.windows.iter() {
                         win.send_frame(
                             &output,

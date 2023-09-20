@@ -242,6 +242,8 @@ impl WindowElement {
     /// Get the output this window is on.
     ///
     /// This method gets the first tag the window has and returns its output.
+    ///
+    /// This method uses a [`RefCell`].
     pub fn output(&self, state: &State) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
     }

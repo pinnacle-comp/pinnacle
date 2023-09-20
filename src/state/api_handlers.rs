@@ -237,7 +237,7 @@ impl State {
                     tag.set_active(!tag.active());
                     if let Some(output) = tag.output(self) {
                         self.update_windows(&output);
-                        // self.re_layout(&output);
+                        self.update_focus(&output);
                     }
                 }
             }
@@ -251,7 +251,7 @@ impl State {
                     tag.set_active(true);
                 });
                 self.update_windows(&output);
-                // self.re_layout(&output);
+                self.update_focus(&output);
             }
             Msg::AddTags {
                 output_name,
@@ -297,7 +297,6 @@ impl State {
                 tag.set_layout(layout);
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
-                // self.re_layout(&output);
             }
 
             Msg::ConnectForAllOutputs { callback_id } => {
@@ -305,8 +304,8 @@ impl State {
                     .api_state
                     .stream
                     .as_ref()
-                    .expect("Stream doesn't exist");
-                let mut stream = stream.lock().expect("Couldn't lock stream");
+                    .expect("stream doesn't exist");
+                let mut stream = stream.lock().expect("couldn't lock stream");
                 for output in self.space.outputs() {
                     crate::api::send_to_client(
                         &mut stream,
@@ -332,12 +331,12 @@ impl State {
                 }
                 output.change_current_state(None, None, None, Some(loc));
                 self.space.map_output(&output, loc);
-                tracing::debug!("mapping output {} to {loc:?}", output.name());
+                tracing::debug!("Mapping output {} to {loc:?}", output.name());
                 self.update_windows(&output);
-                // self.re_layout(&output);
             }
 
             Msg::Quit => {
+                tracing::info!("Quitting Pinnacle");
                 self.loop_signal.stop();
             }
 
@@ -405,7 +404,7 @@ impl State {
                 });
                 let focused = window.as_ref().and_then(|win| {
                     let output = win.output(self)?;
-                    self.current_focus(&output).map(|foc_win| win == &foc_win)
+                    self.focused_window(&output).map(|foc_win| win == &foc_win)
                 });
                 let floating = window
                     .as_ref()

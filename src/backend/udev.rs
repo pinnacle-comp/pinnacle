@@ -1452,15 +1452,21 @@ fn render_surface<'a>(
     pointer_location: Point<f64, Logical>,
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
-    let pending_win_count = windows
+    let pending_wins = windows
         .iter()
         .filter(|win| win.alive())
         .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
-        .count() as u32;
+        .map(|win| {
+            (
+                win.class().unwrap_or("None".to_string()),
+                win.title().unwrap_or("None".to_string()),
+                win.with_state(|state| state.loc_request_state.clone()),
+            )
+        })
+        .collect::<Vec<_>>();
 
-    tracing::debug!("pending_win_count is {pending_win_count}");
-
-    if pending_win_count > 0 {
+    if !pending_wins.is_empty() {
+        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
         for win in windows.iter() {
             win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
                 Some(output.clone())

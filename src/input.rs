@@ -19,7 +19,7 @@ use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{
         keyboard::{keysyms, FilterResult},
-        pointer::{AxisFrame, ButtonEvent, MotionEvent},
+        pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
     utils::{Logical, Point, SERIAL_COUNTER},
     wayland::{seat::WaylandFocus, shell::wlr_layer},
@@ -526,7 +526,7 @@ impl State {
         if let Some(ptr) = self.seat.get_pointer() {
             ptr.motion(
                 self,
-                surface_under,
+                surface_under.clone(),
                 &MotionEvent {
                     location: self.pointer_location,
                     serial,
@@ -534,15 +534,15 @@ impl State {
                 },
             );
 
-            // ptr.relative_motion(
-            //     self,
-            //     under,
-            //     &RelativeMotionEvent {
-            //         delta: event.delta(),
-            //         delta_unaccel: event.delta_unaccel(),
-            //         utime: event.time(),
-            //     },
-            // )
+            ptr.relative_motion(
+                self,
+                surface_under,
+                &RelativeMotionEvent {
+                    delta: event.delta(),
+                    delta_unaccel: event.delta_unaccel(),
+                    utime: event.time(),
+                },
+            )
         }
     }
 }

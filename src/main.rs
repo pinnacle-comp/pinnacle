@@ -11,11 +11,9 @@
 // #![deny(unused_imports)] // gonna force myself to keep stuff clean
 #![warn(clippy::unwrap_used)]
 
-use std::path::Path;
-
 use clap::Parser;
+use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
-use walkdir::WalkDir;
 use xdg::BaseDirectories;
 
 mod api;
@@ -63,14 +61,16 @@ struct Args {
     force: bool,
 }
 
-const PINNACLE_LOG_PREFIX: &str = "pinnacle.log";
-
 fn main() -> anyhow::Result<()> {
     let xdg_state_dir = XDG_BASE_DIRS.get_state_home();
 
-    trim_logs(&xdg_state_dir);
+    let appender = tracing_appender::rolling::Builder::new()
+        .rotation(Rotation::HOURLY)
+        .filename_suffix("pinnacle.log")
+        .max_log_files(8)
+        .build(xdg_state_dir)
+        .expect("failed to build file logger");
 
-    let appender = tracing_appender::rolling::hourly(&xdg_state_dir, PINNACLE_LOG_PREFIX);
     let (appender, _guard) = tracing_appender::non_blocking(appender);
     let writer = appender.and(std::io::stdout);
 
@@ -139,42 +139,4 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-fn trim_logs(log_path: impl AsRef<Path>) {
-    let logs = WalkDir::new(log_path)
-        .sort_by(|a, b| {
-            let a_creation_time = a
-                .metadata()
-                .expect("failed to get log metadata")
-                .created()
-                .expect("failed to get log creation time");
-            let b_creation_time = b
-                .metadata()
-                .expect("failed to get log metadata")
-                .created()
-                .expect("failed to get log creation time");
-
-            a_creation_time.cmp(&b_creation_time)
-        })
-        .contents_first(true)
-        .into_iter()
-        .filter_entry(|entry| {
-            entry.file_type().is_file()
-                && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(PINNACLE_LOG_PREFIX)
-        })
-        .filter_map(|dir| dir.ok())
-        .collect::<Vec<_>>();
-
-    // If there are more than 4 logs, delete all but 3
-    if logs.len() > 4 {
-        let num_to_delete = logs.len().saturating_sub(3);
-        for entry in logs.into_iter().take(num_to_delete) {
-            tracing::info!("Deleting {:?}", entry.path());
-            std::fs::remove_file(entry.path()).expect("failed to remove oldest log file");
-        }
-    }
 }
