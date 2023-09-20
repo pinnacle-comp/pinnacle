@@ -121,10 +121,8 @@ impl PinnacleSocketSource {
         if multiple_instances {
             if let Ok(exists) = socket_path.try_exists() {
                 if exists {
-                    std::fs::remove_file(&socket_path).context(format!(
-                        "Failed to remove old socket at {}",
-                        socket_path.to_string_lossy()
-                    ))?;
+                    std::fs::remove_file(&socket_path)
+                        .context(format!("Failed to remove old socket at {socket_path:?}",))?;
                 }
             }
         } else {
@@ -133,14 +131,9 @@ impl PinnacleSocketSource {
                 .filter_map(|entry| entry.ok())
                 .filter(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
             {
-                tracing::debug!(
-                    "trying to remove socket at {}",
-                    file.path().to_string_lossy()
-                );
-                std::fs::remove_file(file.path()).context(format!(
-                    "Failed to remove old socket at {}",
-                    file.path().to_string_lossy()
-                ))?;
+                tracing::debug!("Removing socket at {:?}", file.path());
+                std::fs::remove_file(file.path())
+                    .context(format!("Failed to remove old socket at {:?}", file.path()))?;
             }
         }
 

@@ -949,7 +949,7 @@ impl State {
                         .as_ref()
                         .expect("Stream doesn't exist");
                     let mut stream = stream.lock().expect("Couldn't lock stream");
-                    for callback_id in dt.state.output_callback_ids.iter() {
+                    for callback_id in dt.state.config.output_callback_ids.iter() {
                         crate::config::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {

@@ -114,8 +114,8 @@ pub enum Key {
 
 #[derive(Default, Debug)]
 pub struct Config {
-    window_rules: Vec<(WindowRuleCondition, WindowRule)>,
-    output_callback_ids: Vec<CallbackId>,
+    pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
+    pub output_callback_ids: Vec<CallbackId>,
 }
 
 fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
@@ -243,7 +243,7 @@ impl State {
         tracing::debug!("Clearing mouse and keybinds");
         self.input_state.keybinds.clear();
         self.input_state.mousebinds.clear();
-        self.window_rules.clear();
+        self.config.window_rules.clear();
 
         tracing::debug!("Killing old config");
         if let Err(err) = self.api_state.config_process.kill() {

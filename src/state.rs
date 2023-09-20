@@ -11,13 +11,7 @@ use std::{
 
 use crate::{
     backend::{udev::Udev, winit::Winit, BackendData},
-    config::{
-        api::msg::{
-            window_rules::{WindowRule, WindowRuleCondition},
-            CallbackId, Msg,
-        },
-        ConfigReturn,
-    },
+    config::{api::msg::Msg, Config, ConfigReturn},
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
@@ -125,13 +119,10 @@ pub struct State {
     pub dnd_icon: Option<WlSurface>,
 
     pub windows: Vec<WindowElement>,
-    pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
+
+    pub config: Config,
 
     pub async_scheduler: Scheduler<()>,
-
-    // TODO: move into own struct
-    // |     basically just clean this mess up
-    pub output_callback_ids: Vec<CallbackId>,
 
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
@@ -320,6 +311,8 @@ impl State {
             },
             focus_state: FocusState::new(),
 
+            config: Config::default(),
+
             seat,
 
             dnd_icon: None,
@@ -331,8 +324,6 @@ impl State {
             async_scheduler: sched,
 
             windows: vec![],
-            window_rules: vec![],
-            output_callback_ids: vec![],
 
             xwayland,
             xwm: None,

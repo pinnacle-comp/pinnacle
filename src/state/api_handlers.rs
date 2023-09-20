@@ -30,7 +30,10 @@ impl State {
                 callback_id,
             } => {
                 let key = match key {
-                    KeyIntOrString::Int(num) => num,
+                    KeyIntOrString::Int(num) => {
+                        tracing::info!("set keybind: {:?}, raw {}", modifiers, num);
+                        num
+                    }
                     KeyIntOrString::String(s) => {
                         if s.chars().count() == 1 {
                             let Some(ch) = s.chars().next() else { unreachable!() };
@@ -156,7 +159,7 @@ impl State {
                 self.update_windows(&output);
             }
             Msg::AddWindowRule { cond, rule } => {
-                self.window_rules.push((cond, rule));
+                self.config.window_rules.push((cond, rule));
             }
             Msg::WindowMoveGrab { button } => {
                 // TODO: in the future, there may be movable layer surfaces
@@ -324,7 +327,7 @@ impl State {
                     )
                     .expect("Send to client failed");
                 }
-                self.output_callback_ids.push(callback_id);
+                self.config.output_callback_ids.push(callback_id);
             }
             Msg::SetOutputLocation { output_name, x, y } => {
                 let Some(output) = output_name.output(self) else { return };

@@ -595,7 +595,7 @@ impl Blocker for WindowBlocker {
 impl State {
     pub fn apply_window_rules(&mut self, window: &WindowElement) {
         tracing::debug!("Applying window rules");
-        for (cond, rule) in self.window_rules.iter() {
+        for (cond, rule) in self.config.window_rules.iter() {
             if cond.is_met(self, window) {
                 let WindowRule {
                     output,
