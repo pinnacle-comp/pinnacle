@@ -127,10 +127,6 @@ impl CompositorHandler for State {
                 }
             });
         }
-
-        // correct focus layering
-        // TODO: maybe do this at the end of every event loop cycle instead?
-        // self.focus_state.fix_up_focus(&mut self.space);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
@@ -323,7 +319,6 @@ impl SeatHandler for State {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        // tracing::info!("new cursor image: {:?}", image);
         self.cursor_status = image;
     }
 
@@ -360,8 +355,6 @@ delegate_viewporter!(State);
 
 impl FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
-        // ripped straight from anvil
-
         // Here we can set the initial fractional scale
         //
         // First we look if the surface already has a primary scan-out output, if not
@@ -425,7 +418,7 @@ impl WlrLayerShellHandler for State {
         _layer: Layer,
         namespace: String,
     ) {
-        tracing::debug!("-------------NEW LAYER SURFACE");
+        tracing::debug!("New layer surface");
         let output = output
             .as_ref()
             .and_then(Output::from_resource)
@@ -441,16 +434,12 @@ impl WlrLayerShellHandler for State {
             .expect("failed to map layer surface");
         drop(map); // wow i really love refcells haha
 
-        // TODO: instead of deferring by 1 cycle, actually check if the surface has committed
-        // |     before re-layouting
         self.loop_handle.insert_idle(move |data| {
             data.state.update_windows(&output);
-            // data.state.re_layout(&output);
         });
     }
 
     fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
-        // WOO love having to deal with the borrow checker haha
         let mut output: Option<Output> = None;
         if let Some((mut map, layer, op)) = self.space.outputs().find_map(|o| {
             let map = layer_map_for_output(o);
@@ -464,12 +453,9 @@ impl WlrLayerShellHandler for State {
             output = Some(op.clone());
         }
 
-        // TODO: instead of deferring by 1 cycle, actually check if the surface has committed
-        // |     before re-layouting
         if let Some(output) = output {
             self.loop_handle.insert_idle(move |data| {
                 data.state.update_windows(&output);
-                // data.state.re_layout(&output);
             });
         }
     }

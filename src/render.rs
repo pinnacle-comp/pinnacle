@@ -43,7 +43,6 @@ render_elements! {
     Space=SpaceRenderElements<R, E>,
     Window=Wrap<E>,
     Custom=CustomRenderElements<R>,
-    // TODO: preview
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -275,10 +274,6 @@ where
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
 
-            // let space_render_elements =
-            //     smithay::desktop::space::space_render_elements(renderer, [space], output, 1.0)
-            //         .expect("failed to get space_render_elements");
-
             // Elements render from top to bottom
 
             output_render_elements.extend(
@@ -297,12 +292,6 @@ where
                     .map(CustomRenderElements::from)
                     .map(OutputRenderElements::from),
             );
-
-            // output_render_elements.extend(
-            //     space_render_elements
-            //         .into_iter()
-            //         .map(OutputRenderElements::from),
-            // );
 
             output_render_elements
         }

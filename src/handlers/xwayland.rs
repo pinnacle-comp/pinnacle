@@ -81,7 +81,9 @@ impl XwmHandler for CalloopData {
         )
             .into();
 
-        let WindowElement::X11(surface) = &window else { unreachable!() };
+        let WindowElement::X11(surface) = &window else {
+            unreachable!()
+        };
         surface.set_mapped(true).expect("failed to map x11 window");
 
         self.state.space.map_element(window.clone(), loc, true);
@@ -117,7 +119,9 @@ impl XwmHandler for CalloopData {
                 tracing::debug!("new window, tags are {:?}", state.tags);
             });
 
-            let WindowElement::X11(surface) = &window else { unreachable!() };
+            let WindowElement::X11(surface) = &window else {
+                unreachable!()
+            };
 
             if should_float(surface) {
                 window.with_state(|state| {
@@ -179,6 +183,7 @@ impl XwmHandler for CalloopData {
                 (None, None) => vec![],
             };
         });
+
         self.state.focus_state.set_focus(window.clone());
         // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);
@@ -485,8 +490,12 @@ fn should_float(surface: &X11Surface) -> bool {
         )
     });
     let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
-        let Some((min_w, min_h)) = size_hints.min_size else { return false };
-        let Some((max_w, max_h)) = size_hints.max_size else { return false };
+        let Some((min_w, min_h)) = size_hints.min_size else {
+            return false;
+        };
+        let Some((max_w, max_h)) = size_hints.max_size else {
+            return false;
+        };
         min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
     });
     surface.is_popup() || is_popup_by_type || is_popup_by_size

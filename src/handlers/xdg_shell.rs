@@ -857,11 +857,12 @@ impl XdgShellHandler for State {
         self.update_windows(&output);
     }
 
-    // fn minimize_request(&mut self, surface: ToplevelSurface) {
-    //     if let Some(window) = self.window_for_surface(surface.wl_surface()) {
-    //         self.space.unmap_elem(&window);
-    //     }
-    // }
+    fn minimize_request(&mut self, _surface: ToplevelSurface) {
+        // TODO:
+        // if let Some(window) = self.window_for_surface(surface.wl_surface()) {
+        //     self.space.unmap_elem(&window);
+        // }
+    }
 
     // TODO: impl the rest of the fns in XdgShellHandler
 }
