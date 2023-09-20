@@ -166,7 +166,9 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     state.focus_state.focused_output = Some(output.clone());
 
-    let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+    let Backend::Winit(backend) = &mut state.backend else {
+        unreachable!()
+    };
 
     state
         .shm_state
@@ -271,7 +273,9 @@ pub fn run_winit() -> anyhow::Result<()> {
                     return TimeoutAction::ToDuration(Duration::from_millis(1));
                 }
 
-                let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+                let Backend::Winit(backend) = &mut state.backend else {
+                    unreachable!()
+                };
                 let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);
 

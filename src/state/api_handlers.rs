@@ -161,7 +161,10 @@ impl State {
             Msg::WindowMoveGrab { button } => {
                 // TODO: in the future, there may be movable layer surfaces
                 let Some((FocusTarget::Window(window), _)) =
-                    self.surface_under(self.pointer_location) else { return };
+                    self.surface_under(self.pointer_location)
+                else {
+                    return;
+                };
                 let Some(wl_surf) = window.wl_surface() else { return };
                 let seat = self.seat.clone();
 
@@ -179,7 +182,10 @@ impl State {
                 // TODO: in the future, there may be movable layer surfaces
                 let pointer_loc = self.pointer_location;
                 let Some((FocusTarget::Window(window), window_loc)) =
-                    self.surface_under(pointer_loc) else { return };
+                    self.surface_under(pointer_loc)
+                else {
+                    return;
+                };
                 let Some(wl_surf) = window.wl_surface() else { return };
 
                 let window_geometry = window.geometry();
@@ -551,9 +557,7 @@ impl State {
             .envs(
                 [("WAYLAND_DISPLAY", self.socket_name.clone())]
                     .into_iter()
-                    .chain(
-                        self.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))
-                    )
+                    .chain(self.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))),
             )
             .stdin(if callback_id.is_some() {
                 Stdio::piped()
@@ -576,7 +580,10 @@ impl State {
             .spawn()
         else {
             // TODO: notify user that program doesn't exist
-            tracing::warn!("tried to run {}, but it doesn't exist", program.to_string_lossy());
+            tracing::warn!(
+                "tried to run {}, but it doesn't exist",
+                program.to_string_lossy()
+            );
             return;
         };
 

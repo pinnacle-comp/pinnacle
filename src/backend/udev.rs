@@ -213,7 +213,9 @@ pub fn run_udev() -> anyhow::Result<()> {
         }
     }
 
-    let Backend::Udev(backend) = &mut state.backend else { unreachable!() };
+    let Backend::Udev(backend) = &mut state.backend else {
+        unreachable!()
+    };
 
     event_loop
         .handle()
@@ -266,7 +268,9 @@ pub fn run_udev() -> anyhow::Result<()> {
     event_loop
         .handle()
         .insert_source(notifier, move |event, &mut (), data| {
-            let Backend::Udev(backend) = &mut data.state.backend else { unreachable!() };
+            let Backend::Udev(backend) = &mut data.state.backend else {
+                unreachable!()
+            };
             match event {
                 session::Event::PauseSession => {
                     libinput_context.suspend();
@@ -691,7 +695,9 @@ impl SurfaceComposition {
 
 impl State {
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         // Try to open the device
         let fd = backend
@@ -757,7 +763,9 @@ impl State {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -966,7 +974,9 @@ impl State {
         _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -993,7 +1003,9 @@ impl State {
     }
 
     fn device_changed(&mut self, node: DrmNode) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -1025,7 +1037,9 @@ impl State {
 
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
-            let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+            let Backend::Udev(backend) = &mut self.backend else {
+                unreachable!()
+            };
 
             let Some(device) = backend.backends.get_mut(&node) else {
                 return;
@@ -1044,7 +1058,9 @@ impl State {
 
         tracing::debug!("Surfaces dropped");
 
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         // drop the backends on this side
         if let Some(backend_data) = backend.backends.remove(&node) {
@@ -1067,7 +1083,9 @@ impl State {
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device_backend = match backend.backends.get_mut(&dev_id) {
             Some(backend) => backend,
@@ -1226,7 +1244,9 @@ impl State {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device_backend = match backend.backends.get_mut(&node) {
             Some(backend) => backend,
@@ -1247,7 +1267,9 @@ impl State {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let Some(device) = backend.backends.get_mut(&node) else {
             return;
@@ -1399,7 +1421,9 @@ impl State {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, CalloopData>,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device

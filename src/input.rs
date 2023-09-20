@@ -453,7 +453,9 @@ impl State {
     }
 
     fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
-        let Some(output) = self.space.outputs().next() else { return; };
+        let Some(output) = self.space.outputs().next() else {
+            return;
+        };
         let output_geo = self
             .space
             .output_geometry(output)

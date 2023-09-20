@@ -54,9 +54,11 @@ impl State {
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
         tracing::debug!("Updating windows");
-        let Some(layout) = output.with_state(|state| {
-            state.focused_tags().next().map(|tag| tag.layout())
-        }) else { return };
+        let Some(layout) =
+            output.with_state(|state| state.focused_tags().next().map(|tag| tag.layout()))
+        else {
+            return;
+        };
 
         let (windows_on_foc_tags, mut windows_not_on_foc_tags): (Vec<_>, _) =
             output.with_state(|state| {
