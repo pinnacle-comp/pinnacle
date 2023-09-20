@@ -18,6 +18,11 @@ use crate::{
     tag::TagId,
 };
 
+use self::api::msg::{
+    window_rules::{WindowRule, WindowRuleCondition},
+    CallbackId,
+};
+
 #[derive(serde::Deserialize, Debug)]
 pub struct Metaconfig {
     pub command: String,
@@ -105,6 +110,12 @@ pub enum Key {
     NumNine = keysyms::KEY_KP_9,
     #[serde(alias = "esc")]
     Escape = keysyms::KEY_Escape,
+}
+
+#[derive(Default, Debug)]
+pub struct Config {
+    window_rules: Vec<(WindowRuleCondition, WindowRule)>,
+    output_callback_ids: Vec<CallbackId>,
 }
 
 fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {

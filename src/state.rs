@@ -87,15 +87,18 @@ impl Backend {
 
 /// The main state of the application.
 pub struct State {
+    /// Which backend is currently running
     pub backend: Backend,
 
+    /// A loop signal used to stop the compositor
     pub loop_signal: LoopSignal,
+    /// A handle to the event loop
     pub loop_handle: LoopHandle<'static, CalloopData>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
     pub space: Space<WindowElement>,
-    pub move_mode: bool,
+    /// The name of the Wayland socket
     pub socket_name: String,
 
     pub seat: Seat<State>,
@@ -321,7 +324,6 @@ impl State {
 
             dnd_icon: None,
 
-            move_mode: false,
             socket_name: socket_name.to_string_lossy().to_string(),
 
             popup_manager: PopupManager::default(),

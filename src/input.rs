@@ -230,8 +230,6 @@ impl State {
                 },
             );
 
-        self.move_mode = move_mode;
-
         match action {
             Some(KeyAction::CallCallback(callback_id)) => {
                 if let Some(stream) = self.api_state.stream.as_ref() {
