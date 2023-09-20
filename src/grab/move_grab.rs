@@ -248,7 +248,7 @@ pub fn move_request_client(
     button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
-    if let Some(start_data) = crate::pointer::pointer_grab_start_data(&pointer, surface, serial) {
+    if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
         let Some(window) = state.window_for_surface(surface) else {
             tracing::error!("Surface had no window, cancelling move request");
             return;

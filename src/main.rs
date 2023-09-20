@@ -25,7 +25,6 @@ mod handlers;
 mod input;
 mod layout;
 mod output;
-mod pointer;
 mod render;
 mod state;
 mod tag;
