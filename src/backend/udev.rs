@@ -798,6 +798,8 @@ impl State {
         let drm_mode = connector.modes()[mode_id];
         let wl_mode = smithay::output::Mode::from(drm_mode);
 
+        tracing::debug!(clock = ?drm_mode.clock(), hsync = ?drm_mode.hsync(), vsync = ?drm_mode.vsync());
+
         let surface = match device
             .drm
             .create_surface(crtc, drm_mode, &[connector.handle()])

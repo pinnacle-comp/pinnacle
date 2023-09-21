@@ -127,7 +127,7 @@ fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
     toml::from_str(&metaconfig).context("Failed to deserialize toml")
 }
 
-fn get_config_dir() -> PathBuf {
+pub fn get_config_dir() -> PathBuf {
     let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
         .ok()
         .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
@@ -135,11 +135,16 @@ fn get_config_dir() -> PathBuf {
     config_dir.unwrap_or(crate::XDG_BASE_DIRS.get_config_home())
 }
 
-pub fn start_config(tx_channel: Sender<api::msg::Msg>) -> anyhow::Result<ConfigReturn> {
-    let config_dir = get_config_dir();
+pub fn start_config(
+    tx_channel: Sender<api::msg::Msg>,
+    config_dir: impl AsRef<Path>,
+) -> anyhow::Result<ConfigReturn> {
+    std::env::set_var("PINNACLE_LIB_DIR", crate::XDG_BASE_DIRS.get_data_home());
+
+    let config_dir = config_dir.as_ref();
     tracing::debug!("config dir is {:?}", config_dir);
 
-    let metaconfig = parse(&config_dir)?;
+    let metaconfig = parse(config_dir)?;
 
     // If a socket is provided in the metaconfig, use it.
     let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
@@ -149,7 +154,7 @@ pub fn start_config(tx_channel: Sender<api::msg::Msg>) -> anyhow::Result<ConfigR
         // like ./dir/here
         let current_dir = std::env::current_dir()?;
 
-        std::env::set_current_dir(&config_dir)?;
+        std::env::set_current_dir(config_dir)?;
         let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
         std::env::set_current_dir(current_dir)?;
         socket_dir
@@ -172,8 +177,6 @@ pub fn start_config(tx_channel: Sender<api::msg::Msg>) -> anyhow::Result<ConfigR
     let arg1 = command
         .next()
         .context("command in metaconfig.toml was empty")?;
-
-    std::env::set_var("PINNACLE_DIR", std::env::current_dir()?);
 
     let envs = metaconfig
         .envs
@@ -200,14 +203,13 @@ pub fn start_config(tx_channel: Sender<api::msg::Msg>) -> anyhow::Result<ConfigR
 
     tracing::debug!("Config envs are {:?}", envs);
 
-    // Using async_process's Child instead of std::process because I don't have to spawn my own
-    // thread to wait for the child
     let child = async_process::Command::new(arg1)
         .args(command)
         .envs(envs)
         .current_dir(config_dir)
         .stdout(async_process::Stdio::inherit())
         .stderr(async_process::Stdio::inherit())
+        .kill_on_drop(true)
         .spawn()
         .expect("failed to spawn config");
 
@@ -232,7 +234,9 @@ pub struct ConfigReturn {
 }
 
 impl State {
-    pub fn restart_config(&mut self) -> anyhow::Result<()> {
+    pub fn restart_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
+        let config_dir = config_dir.as_ref();
+
         tracing::info!("Restarting config");
         tracing::debug!("Clearing tags");
 
@@ -248,19 +252,18 @@ impl State {
         self.config.window_rules.clear();
 
         tracing::debug!("Killing old config");
-        if let Err(err) = self.api_state.config_process.kill() {
-            tracing::warn!("Error when killing old config: {err}");
-        }
 
         self.loop_handle.remove(self.api_state.socket_token);
 
         let ConfigReturn {
             reload_keybind,
             kill_keybind,
-            config_child_handle,
+            mut config_child_handle,
             socket_source,
-        } = start_config(self.api_state.tx_channel.clone())?;
+        } = start_config(self.api_state.tx_channel.clone(), config_dir)?;
 
+        // TODO: there is some code dup in here and in state.rs because the state doesn't
+        // |     exist on creation
         let socket_token = self
             .loop_handle
             .insert_source(socket_source, |stream, _, data| {
@@ -280,8 +283,19 @@ impl State {
 
         self.input_state.reload_keybind = reload_keybind;
         self.input_state.kill_keybind = kill_keybind;
-        self.api_state.config_process = config_child_handle;
         self.api_state.socket_token = socket_token;
+
+        let loop_handle = self.loop_handle.clone();
+
+        let _ = self.async_scheduler.schedule(async move {
+            let _ = config_child_handle.status().await;
+
+            loop_handle.insert_idle(|data| {
+                data.state
+                    .restart_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
+                    .expect("failed to load default config");
+            });
+        });
 
         Ok(())
     }

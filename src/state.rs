@@ -4,20 +4,23 @@ mod api_handlers;
 
 use std::{
     cell::RefCell,
-    os::{fd::AsRawFd, unix::net::UnixStream},
+    os::fd::AsRawFd,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use crate::{
     backend::{udev::Udev, winit::Winit, BackendData},
-    config::{api::msg::Msg, Config, ConfigReturn},
+    config::{
+        api::{msg::Msg, ApiState},
+        Config, ConfigReturn,
+    },
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
-use calloop::{channel::Sender, futures::Scheduler, RegistrationToken};
+use calloop::futures::Scheduler;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -190,9 +193,9 @@ impl State {
         let ConfigReturn {
             reload_keybind,
             kill_keybind,
-            config_child_handle,
+            mut config_child_handle,
             socket_source,
-        } = crate::config::start_config(tx_channel.clone())?;
+        } = crate::config::start_config(tx_channel.clone(), crate::config::get_config_dir())?;
 
         let socket_token_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
             if let Some(old_stream) = data
@@ -216,17 +219,31 @@ impl State {
             }
         };
 
-        let (executor, sched) =
-            calloop::futures::executor::<()>().expect("Couldn't create executor");
+        let (executor, sched) = calloop::futures::executor::<()>()?;
+
         if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
             anyhow::bail!("Failed to insert async executor into event loop: {err}");
         }
+
+        let loop_handle_clone = loop_handle.clone();
+
+        let _ = sched.schedule(async move {
+            let _ = config_child_handle.status().await;
+
+            loop_handle_clone.insert_idle(|data| {
+                data.state
+                    .restart_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
+                    .expect("failed to load default config");
+            });
+        });
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
+
+        // TODO: update from config
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
         loop_handle.insert_idle(|data| {
@@ -310,7 +327,6 @@ impl State {
                 stream: None,
                 socket_token,
                 tx_channel,
-                config_process: config_child_handle,
             },
             focus_state: FocusState::new(),
 
@@ -385,17 +401,6 @@ impl ClientData for ClientState {
 pub struct SurfaceDmabufFeedback<'a> {
     pub render_feedback: &'a DmabufFeedback,
     pub scanout_feedback: &'a DmabufFeedback,
-}
-
-pub struct ApiState {
-    // TODO: this may not need to be in an arc mutex because of the move to async
-    /// The stream API messages are being sent through
-    pub stream: Option<Arc<Mutex<UnixStream>>>,
-    /// A token used to remove the socket source from the event loop on config restart
-    pub socket_token: RegistrationToken,
-    /// The sending channel used to send API messages from the socket source to a handler
-    pub tx_channel: Sender<Msg>,
-    pub config_process: async_process::Child,
 }
 
 /// A trait meant to be used in types with a [`UserDataMap`][smithay::utils::user_data::UserDataMap]

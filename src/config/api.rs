@@ -40,9 +40,11 @@ use std::{
     io::{self, Read, Write},
     os::unix::net::{UnixListener, UnixStream},
     path::Path,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
+use calloop::RegistrationToken;
 use smithay::reexports::calloop::{
     self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
 };
@@ -234,4 +236,14 @@ impl EventSource for PinnacleSocketSource {
     fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()> {
         self.socket.unregister(poll)
     }
+}
+
+pub struct ApiState {
+    // TODO: this may not need to be in an arc mutex because of the move to async
+    /// The stream API messages are being sent through.
+    pub stream: Option<Arc<Mutex<UnixStream>>>,
+    /// A token used to remove the socket source from the event loop on config restart.
+    pub socket_token: RegistrationToken,
+    /// The sending channel used to send API messages received from the socket source to a handler.
+    pub tx_channel: Sender<Msg>,
 }

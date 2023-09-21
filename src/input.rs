@@ -255,7 +255,8 @@ impl State {
                 self.loop_signal.stop();
             }
             Some(KeyAction::ReloadConfig) => {
-                self.restart_config().expect("failed to restart config");
+                self.restart_config(crate::config::get_config_dir())
+                    .expect("failed to restart config");
             }
             None => {}
         }
