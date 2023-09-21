@@ -34,8 +34,8 @@ use smithay::{
 };
 
 use crate::{
-    render::pointer::PointerElement,
-    state::{take_presentation_feedback, Backend, CalloopData, State, WithState},
+    render::{pointer::PointerElement, take_presentation_feedback},
+    state::{Backend, CalloopData, State, WithState},
 };
 
 use super::BackendData;
@@ -166,7 +166,9 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     state.focus_state.focused_output = Some(output.clone());
 
-    let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+    let Backend::Winit(backend) = &mut state.backend else {
+        unreachable!()
+    };
 
     state
         .shm_state
@@ -250,7 +252,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     .collect::<Vec<_>>();
 
                 if !pending_wins.is_empty() {
-                    tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+                    // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
                     for win in state.windows.iter() {
                         win.send_frame(
                             &output,
@@ -271,27 +273,21 @@ pub fn run_winit() -> anyhow::Result<()> {
                     return TimeoutAction::ToDuration(Duration::from_millis(1));
                 }
 
-                let Backend::Winit(backend) = &mut state.backend else { unreachable!() };
+                let Backend::Winit(backend) = &mut state.backend else {
+                    unreachable!()
+                };
                 let full_redraw = &mut backend.full_redraw;
                 *full_redraw = full_redraw.saturating_sub(1);
 
                 state.focus_state.fix_up_focus(&mut state.space);
 
-                let windows = state
-                    .focus_state
-                    .focus_stack
-                    .iter()
-                    .filter(|win| win.alive())
-                    .cloned()
-                    .collect::<Vec<_>>();
-
                 let output_render_elements = crate::render::generate_render_elements(
                     &state.space,
-                    &windows,
+                    &state.focus_state.focus_stack,
+                    &state.override_redirect_windows,
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),
-                    &state.focus_state.focus_stack,
                     backend.backend.renderer(),
                     &output,
                     state.seat.input_method(),

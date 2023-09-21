@@ -10,7 +10,7 @@ use smithay::{
 };
 
 use crate::{
-    api::msg::{
+    config::api::msg::{
         Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
     },
     focus::FocusTarget,
@@ -30,7 +30,10 @@ impl State {
                 callback_id,
             } => {
                 let key = match key {
-                    KeyIntOrString::Int(num) => num,
+                    KeyIntOrString::Int(num) => {
+                        tracing::info!("set keybind: {:?}, raw {}", modifiers, num);
+                        num
+                    }
                     KeyIntOrString::String(s) => {
                         if s.chars().count() == 1 {
                             let Some(ch) = s.chars().next() else { unreachable!() };
@@ -156,12 +159,15 @@ impl State {
                 self.update_windows(&output);
             }
             Msg::AddWindowRule { cond, rule } => {
-                self.window_rules.push((cond, rule));
+                self.config.window_rules.push((cond, rule));
             }
             Msg::WindowMoveGrab { button } => {
                 // TODO: in the future, there may be movable layer surfaces
                 let Some((FocusTarget::Window(window), _)) =
-                    self.surface_under(self.pointer_location) else { return };
+                    self.surface_under(self.pointer_location)
+                else {
+                    return;
+                };
                 let Some(wl_surf) = window.wl_surface() else { return };
                 let seat = self.seat.clone();
 
@@ -179,7 +185,10 @@ impl State {
                 // TODO: in the future, there may be movable layer surfaces
                 let pointer_loc = self.pointer_location;
                 let Some((FocusTarget::Window(window), window_loc)) =
-                    self.surface_under(pointer_loc) else { return };
+                    self.surface_under(pointer_loc)
+                else {
+                    return;
+                };
                 let Some(wl_surf) = window.wl_surface() else { return };
 
                 let window_geometry = window.geometry();
@@ -307,7 +316,7 @@ impl State {
                     .expect("stream doesn't exist");
                 let mut stream = stream.lock().expect("couldn't lock stream");
                 for output in self.space.outputs() {
-                    crate::api::send_to_client(
+                    crate::config::api::send_to_client(
                         &mut stream,
                         &OutgoingMsg::CallCallback {
                             callback_id,
@@ -318,7 +327,7 @@ impl State {
                     )
                     .expect("Send to client failed");
                 }
-                self.output_callback_ids.push(callback_id);
+                self.config.output_callback_ids.push(callback_id);
             }
             Msg::SetOutputLocation { output_name, x, y } => {
                 let Some(output) = output_name.output(self) else { return };
@@ -366,7 +375,7 @@ impl State {
                     .collect::<Vec<_>>();
 
                 // FIXME: figure out what to do if error
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -412,7 +421,7 @@ impl State {
                 let fullscreen_or_maximized = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.fullscreen_or_maximized));
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -435,7 +444,7 @@ impl State {
                     .outputs()
                     .map(|output| output.name())
                     .collect::<Vec<_>>();
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -480,7 +489,7 @@ impl State {
                         state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
                     })
                 });
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -506,7 +515,7 @@ impl State {
                     .map(|tag| tag.id())
                     .collect::<Vec<_>>();
                 tracing::debug!("GetTags: {:?}", tag_ids);
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -523,7 +532,7 @@ impl State {
                     .map(|output| output.name());
                 let active = tag.as_ref().map(|tag| tag.active());
                 let name = tag.as_ref().map(|tag| tag.name());
-                crate::api::send_to_client(
+                crate::config::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -551,9 +560,7 @@ impl State {
             .envs(
                 [("WAYLAND_DISPLAY", self.socket_name.clone())]
                     .into_iter()
-                    .chain(
-                        self.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))
-                    )
+                    .chain(self.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))),
             )
             .stdin(if callback_id.is_some() {
                 Stdio::piped()
@@ -576,7 +583,10 @@ impl State {
             .spawn()
         else {
             // TODO: notify user that program doesn't exist
-            tracing::warn!("tried to run {}, but it doesn't exist", program.to_string_lossy());
+            tracing::warn!(
+                "tried to run {}, but it doesn't exist",
+                program.to_string_lossy()
+            );
             return;
         };
 
@@ -602,7 +612,7 @@ impl State {
                             Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_out.lock().expect("Couldn't lock stream");
-                                crate::api::send_to_client(
+                                crate::config::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
                                         callback_id,
@@ -638,7 +648,7 @@ impl State {
                             Ok(0) => break,
                             Ok(_) => {
                                 let mut stream = stream_err.lock().expect("Couldn't lock stream");
-                                crate::api::send_to_client(
+                                crate::config::api::send_to_client(
                                     &mut stream,
                                     &OutgoingMsg::CallCallback {
                                         callback_id,
@@ -668,7 +678,7 @@ impl State {
                 match child.status().await {
                     Ok(exit_status) => {
                         let mut stream = stream_exit.lock().expect("Couldn't lock stream");
-                        crate::api::send_to_client(
+                        crate::config::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
                                 callback_id,

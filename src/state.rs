@@ -5,40 +5,22 @@ mod api_handlers;
 use std::{
     cell::RefCell,
     os::{fd::AsRawFd, unix::net::UnixStream},
-    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use crate::{
-    api::{
-        msg::{
-            window_rules::{WindowRule, WindowRuleCondition},
-            CallbackId, ModifierMask, Msg,
-        },
-        PinnacleSocketSource,
-    },
     backend::{udev::Udev, winit::Winit, BackendData},
+    config::{api::msg::Msg, Config, ConfigReturn},
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
-    metaconfig::Metaconfig,
-    tag::TagId,
     window::WindowElement,
 };
-use anyhow::Context;
-use calloop::futures::Scheduler;
+use calloop::{channel::Sender, futures::Scheduler, RegistrationToken};
 use smithay::{
-    backend::renderer::element::RenderElementStates,
-    desktop::{
-        utils::{
-            surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
-            OutputPresentationFeedback,
-        },
-        PopupManager, Space,
-    },
+    desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
-    output::Output,
     reexports::{
         calloop::{
             self, channel::Event, generic::Generic, Interest, LoopHandle, LoopSignal, Mode,
@@ -69,7 +51,9 @@ use smithay::{
 use crate::input::InputState;
 
 pub enum Backend {
+    /// The compositor is running in a Winit window
     Winit(Winit),
+    /// The compositor is running in a tty
     Udev(Udev),
 }
 
@@ -99,15 +83,18 @@ impl Backend {
 
 /// The main state of the application.
 pub struct State {
+    /// Which backend is currently running
     pub backend: Backend,
 
+    /// A loop signal used to stop the compositor
     pub loop_signal: LoopSignal,
+    /// A handle to the event loop
     pub loop_handle: LoopHandle<'static, CalloopData>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
     pub space: Space<WindowElement>,
-    pub move_mode: bool,
+    /// The name of the Wayland socket
     pub socket_name: String,
 
     pub seat: Seat<State>,
@@ -134,14 +121,10 @@ pub struct State {
     pub dnd_icon: Option<WlSurface>,
 
     pub windows: Vec<WindowElement>,
-    pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
+
+    pub config: Config,
 
     pub async_scheduler: Scheduler<()>,
-    pub config_process: async_process::Child,
-
-    // TODO: move into own struct
-    // |     basically just clean this mess up
-    pub output_callback_ids: Vec<CallbackId>,
 
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
@@ -150,6 +133,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates the central state and starts the config and xwayland
     pub fn init(
         backend: Backend,
         display: &mut Display<Self>,
@@ -203,39 +187,14 @@ impl State {
 
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
-        let config_dir = get_config_dir();
-        tracing::debug!("config dir is {:?}", config_dir);
-
-        let metaconfig = crate::metaconfig::parse(&config_dir)?;
-
-        // If a socket is provided in the metaconfig, use it.
-        let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
-            // cd into the metaconfig dir and canonicalize to preserve relative paths
-            // like ./dir/here
-            let current_dir = std::env::current_dir()?;
-
-            std::env::set_current_dir(&config_dir)?;
-            let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
-            std::env::set_current_dir(current_dir)?;
-            socket_dir
-        } else {
-            // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-            crate::XDG_BASE_DIRS
-                .get_runtime_directory()
-                .cloned()
-                .unwrap_or(PathBuf::from(crate::api::DEFAULT_SOCKET_DIR))
-        };
-
-        let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
-            .context("Failed to create socket source")?;
-
         let ConfigReturn {
             reload_keybind,
             kill_keybind,
             config_child_handle,
-        } = start_config(metaconfig, &config_dir)?;
+            socket_source,
+        } = crate::config::start_config(tx_channel.clone())?;
 
-        let insert_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
+        let socket_token_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
             if let Some(old_stream) = data
                 .state
                 .api_state
@@ -250,9 +209,12 @@ impl State {
             }
         });
 
-        if let Err(err) = insert_ret {
-            anyhow::bail!("Failed to insert socket source into event loop: {err}");
-        }
+        let socket_token = match socket_token_ret {
+            Ok(token) => token,
+            Err(err) => {
+                anyhow::bail!("Failed to insert socket source into event loop: {err}");
+            }
+        };
 
         let (executor, sched) =
             calloop::futures::executor::<()>().expect("Couldn't create executor");
@@ -265,7 +227,7 @@ impl State {
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
-        seat.add_keyboard(XkbConfig::default(), 200, 25)?;
+        seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
         loop_handle.insert_idle(|data| {
             data.state
@@ -277,7 +239,6 @@ impl State {
                 .expect("failed to insert rx_channel into loop");
         });
 
-        tracing::debug!("before xwayland");
         let xwayland = {
             let (xwayland, channel) = XWayland::new(&display_handle);
             let clone = display_handle.clone();
@@ -289,7 +250,6 @@ impl State {
                     client_fd: _,
                     display,
                 } => {
-                    tracing::debug!("XWaylandEvent ready");
                     let mut wm = X11Wm::start_wm(
                         data.state.loop_handle.clone(),
                         clone.clone(),
@@ -297,6 +257,7 @@ impl State {
                         client,
                     )
                     .expect("failed to attach x11wm");
+
                     let cursor = Cursor::load();
                     let image = cursor.get_image(1, Duration::ZERO);
                     wm.set_cursor(
@@ -305,7 +266,9 @@ impl State {
                         Point::from((image.xhot as u16, image.yhot as u16)),
                     )
                     .expect("failed to set xwayland default cursor");
+
                     tracing::debug!("setting xwm and xdisplay");
+
                     data.state.xwm = Some(wm);
                     data.state.xdisplay = Some(display);
                 }
@@ -318,7 +281,7 @@ impl State {
             }
             xwayland
         };
-        tracing::debug!("after xwayland");
+        tracing::debug!("xwayland set up");
 
         Ok(Self {
             backend,
@@ -343,24 +306,27 @@ impl State {
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
             input_state: InputState::new(reload_keybind, kill_keybind),
-            api_state: ApiState::new(),
+            api_state: ApiState {
+                stream: None,
+                socket_token,
+                tx_channel,
+                config_process: config_child_handle,
+            },
             focus_state: FocusState::new(),
+
+            config: Config::default(),
 
             seat,
 
             dnd_icon: None,
 
-            move_mode: false,
             socket_name: socket_name.to_string_lossy().to_string(),
 
             popup_manager: PopupManager::default(),
 
             async_scheduler: sched,
-            config_process: config_child_handle,
 
             windows: vec![],
-            window_rules: vec![],
-            output_callback_ids: vec![],
 
             xwayland,
             xwm: None,
@@ -399,120 +365,6 @@ impl State {
     }
 }
 
-fn get_config_dir() -> PathBuf {
-    let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
-        .ok()
-        .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
-
-    config_dir.unwrap_or(crate::XDG_BASE_DIRS.get_config_home())
-}
-
-/// This should be called *after* you have created the [`PinnacleSocketSource`] to ensure
-/// PINNACLE_SOCKET is set correctly for use in API implementations.
-fn start_config(metaconfig: Metaconfig, config_dir: &Path) -> anyhow::Result<ConfigReturn> {
-    let reload_keybind = metaconfig.reload_keybind;
-    let kill_keybind = metaconfig.kill_keybind;
-
-    let mut command = metaconfig.command.split(' ');
-
-    let arg1 = command
-        .next()
-        .context("command in metaconfig.toml was empty")?;
-
-    std::env::set_var("PINNACLE_DIR", std::env::current_dir()?);
-
-    let envs = metaconfig
-        .envs
-        .unwrap_or(toml::map::Map::new())
-        .into_iter()
-        .filter_map(|(key, val)| {
-            if let toml::Value::String(string) = val {
-                Some((
-                    key,
-                    shellexpand::full_with_context(
-                        &string,
-                        || std::env::var("HOME").ok(),
-                        // Expand nonexistent vars to an empty string instead of crashing
-                        |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
-                    )
-                    .ok()?
-                    .to_string(),
-                ))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    tracing::debug!("Config envs are {:?}", envs);
-
-    // Using async_process's Child instead of std::process because I don't have to spawn my own
-    // thread to wait for the child
-    let child = async_process::Command::new(arg1)
-        .args(command)
-        .envs(envs)
-        .current_dir(config_dir)
-        .stdout(async_process::Stdio::inherit())
-        .stderr(async_process::Stdio::inherit())
-        .spawn()
-        .expect("failed to spawn config");
-
-    tracing::info!("Started config with {}", metaconfig.command);
-
-    let reload_mask = ModifierMask::from(reload_keybind.modifiers);
-    let kill_mask = ModifierMask::from(kill_keybind.modifiers);
-
-    Ok(ConfigReturn {
-        reload_keybind: (reload_mask, reload_keybind.key as u32),
-        kill_keybind: (kill_mask, kill_keybind.key as u32),
-        config_child_handle: child,
-    })
-}
-
-struct ConfigReturn {
-    reload_keybind: (ModifierMask, u32),
-    kill_keybind: (ModifierMask, u32),
-    config_child_handle: async_process::Child,
-}
-
-impl State {
-    pub fn restart_config(&mut self) -> anyhow::Result<()> {
-        tracing::info!("Restarting config");
-        tracing::debug!("Clearing tags");
-        for output in self.space.outputs() {
-            output.with_state(|state| state.tags.clear());
-        }
-        TagId::reset();
-
-        tracing::debug!("Clearing mouse- and keybinds");
-        self.input_state.keybinds.clear();
-        self.input_state.mousebinds.clear();
-        self.window_rules.clear();
-
-        tracing::debug!("Killing old config");
-        if let Err(err) = self.config_process.kill() {
-            tracing::warn!("Error when killing old config: {err}");
-        }
-
-        let config_dir = get_config_dir();
-
-        let metaconfig =
-            crate::metaconfig::parse(&config_dir).context("Failed to parse metaconfig.toml")?;
-
-        let ConfigReturn {
-            reload_keybind,
-            kill_keybind,
-            config_child_handle,
-        } = start_config(metaconfig, &config_dir)?;
-
-        self.input_state.reload_keybind = reload_keybind;
-        self.input_state.kill_keybind = kill_keybind;
-        self.config_process = config_child_handle;
-
-        Ok(())
-    }
-}
-
 pub struct CalloopData {
     pub display: Display<State>,
     pub state: State,
@@ -535,61 +387,29 @@ pub struct SurfaceDmabufFeedback<'a> {
     pub scanout_feedback: &'a DmabufFeedback,
 }
 
-// TODO: docs
-pub fn take_presentation_feedback(
-    output: &Output,
-    space: &Space<WindowElement>,
-    render_element_states: &RenderElementStates,
-) -> OutputPresentationFeedback {
-    let mut output_presentation_feedback = OutputPresentationFeedback::new(output);
-
-    space.elements().for_each(|window| {
-        if space.outputs_for_element(window).contains(output) {
-            window.take_presentation_feedback(
-                &mut output_presentation_feedback,
-                surface_primary_scanout_output,
-                |surface, _| {
-                    surface_presentation_feedback_flags_from_states(surface, render_element_states)
-                },
-            );
-        }
-    });
-
-    let map = smithay::desktop::layer_map_for_output(output);
-    for layer_surface in map.layers() {
-        layer_surface.take_presentation_feedback(
-            &mut output_presentation_feedback,
-            surface_primary_scanout_output,
-            |surface, _| {
-                surface_presentation_feedback_flags_from_states(surface, render_element_states)
-            },
-        );
-    }
-
-    output_presentation_feedback
-}
-
-/// State containing the config API's stream.
-#[derive(Default)]
 pub struct ApiState {
     // TODO: this may not need to be in an arc mutex because of the move to async
+    /// The stream API messages are being sent through
     pub stream: Option<Arc<Mutex<UnixStream>>>,
+    /// A token used to remove the socket source from the event loop on config restart
+    pub socket_token: RegistrationToken,
+    /// The sending channel used to send API messages from the socket source to a handler
+    pub tx_channel: Sender<Msg>,
+    pub config_process: async_process::Child,
 }
 
-impl ApiState {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
+/// A trait meant to be used in types with a [`UserDataMap`][smithay::utils::user_data::UserDataMap]
+/// to get user-defined state.
 pub trait WithState {
+    /// The user-defined state
     type State;
+
     /// Access data map state.
     ///
     /// RefCell Safety: This function will panic if called within itself.
     fn with_state<F, T>(&self, func: F) -> T
     where
-        F: FnMut(&mut Self::State) -> T;
+        F: FnOnce(&mut Self::State) -> T;
 }
 
 #[derive(Default, Debug)]
@@ -600,18 +420,14 @@ pub struct WlSurfaceState {
 impl WithState for WlSurface {
     type State = WlSurfaceState;
 
-    fn with_state<F, T>(&self, mut func: F) -> T
+    fn with_state<F, T>(&self, func: F) -> T
     where
-        F: FnMut(&mut Self::State) -> T,
+        F: FnOnce(&mut Self::State) -> T,
     {
         compositor::with_states(self, |states| {
-            states
-                .data_map
-                .insert_if_missing(RefCell::<Self::State>::default);
             let state = states
                 .data_map
-                .get::<RefCell<Self::State>>()
-                .expect("This should never happen");
+                .get_or_insert(RefCell::<Self::State>::default);
 
             func(&mut state.borrow_mut())
         })

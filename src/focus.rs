@@ -113,7 +113,6 @@ impl TryFrom<FocusTarget> for WlSurface {
 
 impl PointerTarget<State> for FocusTarget {
     fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
-        // tracing::debug!("Pointer enter on {self:?}");
         match self {
             FocusTarget::Window(window) => PointerTarget::enter(window, seat, data, event),
             FocusTarget::Popup(popup) => {
@@ -187,7 +186,6 @@ impl PointerTarget<State> for FocusTarget {
         serial: smithay::utils::Serial,
         time: u32,
     ) {
-        // tracing::debug!("Pointer leave on {self:?}");
         match self {
             FocusTarget::Window(window) => PointerTarget::leave(window, seat, data, serial, time),
             FocusTarget::Popup(popup) => {

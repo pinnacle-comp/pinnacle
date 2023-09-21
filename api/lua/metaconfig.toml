@@ -36,8 +36,6 @@ kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 # Pinnacle will open a Unix socket at `$XDG_RUNTIME_DIR` by default, falling back to `/tmp` if it doesn't exist.
 # If you want/need to change this, use the `socket_dir` setting set to the directory of your choosing.
 #
-# Changing this between reloads will not change the actual location of the socket
-# until you restart Pinnacle.
 # socket_dir = "/your/dir/here/"
 
 ### Environment Variables ###

@@ -47,7 +47,6 @@ use smithay::reexports::calloop::{
     self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
-use walkdir::WalkDir;
 
 use self::msg::{Msg, OutgoingMsg};
 
@@ -93,6 +92,8 @@ impl PinnacleSocketSource {
     /// Create a loop source that listens for connections to the provided socket_dir.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
     pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
+        tracing::debug!("Creating socket source for dir {socket_dir:?}");
+
         let system = sysinfo::System::new_with_specifics(
             RefreshKind::new().with_processes(ProcessRefreshKind::new()),
         );
@@ -120,24 +121,19 @@ impl PinnacleSocketSource {
         if multiple_instances {
             if let Ok(exists) = socket_path.try_exists() {
                 if exists {
-                    std::fs::remove_file(&socket_path).context(format!(
-                        "Failed to remove old socket at {}",
-                        socket_path.to_string_lossy()
-                    ))?;
+                    std::fs::remove_file(&socket_path)
+                        .context(format!("Failed to remove old socket at {socket_path:?}",))?;
                 }
             }
         } else {
             // If there are, remove them all
-            for entry in WalkDir::new(socket_dir)
-                .contents_first(true)
-                .into_iter()
-                .filter_entry(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
-                .filter_map(|e| e.ok())
+            for file in std::fs::read_dir(socket_dir)?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
             {
-                std::fs::remove_file(entry.path()).context(format!(
-                    "Failed to remove old socket at {}",
-                    entry.path().to_string_lossy()
-                ))?;
+                tracing::debug!("Removing socket at {:?}", file.path());
+                std::fs::remove_file(file.path())
+                    .context(format!("Failed to remove old socket at {:?}", file.path()))?;
             }
         }
 

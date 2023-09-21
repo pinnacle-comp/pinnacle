@@ -81,7 +81,9 @@ impl XwmHandler for CalloopData {
         )
             .into();
 
-        let WindowElement::X11(surface) = &window else { unreachable!() };
+        let WindowElement::X11(surface) = &window else {
+            unreachable!()
+        };
         surface.set_mapped(true).expect("failed to map x11 window");
 
         self.state.space.map_element(window.clone(), loc, true);
@@ -93,55 +95,53 @@ impl XwmHandler for CalloopData {
             .expect("failed to configure x11 window");
         // TODO: ssd
 
-        // TODO: this is a duplicate of the code in new_toplevel,
-        // |     move into its own function
-        {
+        window.with_state(|state| {
+            state.tags = match (
+                &self.state.focus_state.focused_output,
+                self.state.space.outputs().next(),
+            ) {
+                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
+                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                    if !output_tags.is_empty() {
+                        output_tags
+                    } else if let Some(first_tag) = state.tags.first() {
+                        vec![first_tag.clone()]
+                    } else {
+                        vec![]
+                    }
+                }),
+                (None, None) => vec![],
+            };
+
+            tracing::debug!("new window, tags are {:?}", state.tags);
+        });
+
+        let WindowElement::X11(surface) = &window else {
+            unreachable!()
+        };
+
+        if should_float(surface) {
             window.with_state(|state| {
-                state.tags = match (
-                    &self.state.focus_state.focused_output,
-                    self.state.space.outputs().next(),
-                ) {
-                    (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                        let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-                        if !output_tags.is_empty() {
-                            output_tags
-                        } else if let Some(first_tag) = state.tags.first() {
-                            vec![first_tag.clone()]
-                        } else {
-                            vec![]
-                        }
-                    }),
-                    (None, None) => vec![],
-                };
-
-                tracing::debug!("new window, tags are {:?}", state.tags);
+                state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
             });
+        }
 
-            let WindowElement::X11(surface) = &window else { unreachable!() };
+        self.state.windows.push(window.clone());
 
-            if should_float(surface) {
-                window.with_state(|state| {
-                    state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
-                });
-            }
+        self.state.focus_state.set_focus(window.clone());
 
-            self.state.windows.push(window.clone());
+        self.state.apply_window_rules(&window);
 
-            // FIXME: this breaks window closing if the popup is focused
-            self.state.focus_state.set_focus(window.clone());
+        if let Some(output) = window.output(&self.state) {
+            self.state.update_windows(&output);
+        }
 
-            self.state.apply_window_rules(&window);
+        if let WindowElement::X11(s) = &window {
+            tracing::debug!("new x11 win geo is {:?}", s.geometry());
+        }
 
-            if let Some(output) = window.output(&self.state) {
-                self.state.update_windows(&output);
-            }
-
-            if let WindowElement::X11(s) = &window {
-                tracing::debug!("new x11 win geo is {:?}", s.geometry());
-            }
-
-            self.state.loop_handle.insert_idle(move |data| {
-                data.state
+        self.state.loop_handle.insert_idle(move |data| {
+            data.state
                     .seat
                     .get_keyboard()
                     .expect("Seat had no keyboard") // FIXME: actually handle error
@@ -150,8 +150,7 @@ impl XwmHandler for CalloopData {
                         Some(FocusTarget::Window(window)),
                         SERIAL_COUNTER.next_serial(),
                     );
-            });
-        }
+        });
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -160,6 +159,9 @@ impl XwmHandler for CalloopData {
         tracing::debug!("window type is {win_type:?}");
         let loc = window.geometry().loc;
         tracing::debug!("or win geo is {:?}", window.geometry());
+
+        self.state.override_redirect_windows.push(window.clone());
+
         let window = WindowElement::X11(window);
         window.with_state(|state| {
             state.tags = match (
@@ -179,7 +181,7 @@ impl XwmHandler for CalloopData {
                 (None, None) => vec![],
             };
         });
-        self.state.focus_state.set_focus(window.clone());
+
         // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);
     }
@@ -222,6 +224,12 @@ impl XwmHandler for CalloopData {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
+        if window.is_override_redirect() {
+            self.state
+                .override_redirect_windows
+                .retain(|win| win != &window);
+        }
+
         self.state.focus_state.focus_stack.retain(|win| {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())
@@ -485,8 +493,12 @@ fn should_float(surface: &X11Surface) -> bool {
         )
     });
     let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
-        let Some((min_w, min_h)) = size_hints.min_size else { return false };
-        let Some((max_w, max_h)) = size_hints.max_size else { return false };
+        let Some((min_w, min_h)) = size_hints.min_size else {
+            return false;
+        };
+        let Some((max_w, max_h)) = size_hints.max_size else {
+            return false;
+        };
         min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
     });
     surface.is_popup() || is_popup_by_type || is_popup_by_size

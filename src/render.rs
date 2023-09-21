@@ -6,13 +6,17 @@ use smithay::{
     backend::renderer::{
         element::{
             self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer, AsRenderElements,
-            Wrap,
+            RenderElementStates, Wrap,
         },
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
         layer_map_for_output,
-        space::{SpaceRenderElements, SurfaceTree},
+        space::{SpaceElement, SpaceRenderElements, SurfaceTree},
+        utils::{
+            surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
+            OutputPresentationFeedback,
+        },
         Space,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
@@ -24,9 +28,10 @@ use smithay::{
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
     wayland::{compositor, input_method::InputMethodHandle, shell::wlr_layer},
+    xwayland::X11Surface,
 };
 
-use crate::{state::WithState, tag::Tag, window::WindowElement};
+use crate::{state::WithState, window::WindowElement};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -43,7 +48,6 @@ render_elements! {
     Space=SpaceRenderElements<R, E>,
     Window=Wrap<E>,
     Custom=CustomRenderElements<R>,
-    // TODO: preview
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -82,7 +86,11 @@ struct LayerRenderElements<R> {
     overlay: Vec<WaylandSurfaceRenderElement<R>>,
 }
 
-fn layer_render_elements<R>(output: &Output, renderer: &mut R) -> LayerRenderElements<R>
+fn layer_render_elements<R>(
+    output: &Output,
+    renderer: &mut R,
+    scale: Scale<f64>,
+) -> LayerRenderElements<R>
 where
     R: Renderer + ImportAll,
     <R as Renderer>::TextureId: 'static,
@@ -104,7 +112,7 @@ where
             let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
                 renderer,
                 loc.to_physical(1),
-                Scale::from(1.0),
+                scale,
                 1.0,
             );
             (surface.layer(), render_elements)
@@ -127,14 +135,42 @@ where
     }
 }
 
+/// Get the render_elements for the provided tags.
+fn tag_render_elements<R, C>(
+    windows: &[WindowElement],
+    space: &Space<WindowElement>,
+    renderer: &mut R,
+    scale: Scale<f64>,
+) -> Vec<C>
+where
+    R: Renderer + ImportAll + ImportMem,
+    <R as Renderer>::TextureId: 'static,
+    C: From<WaylandSurfaceRenderElement<R>>,
+{
+    let elements = windows
+        .iter()
+        .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
+        .filter(|win| win.is_on_active_tag(space.outputs()))
+        .flat_map(|win| {
+            // subtract win.geometry().loc to align decorations correctly
+            let loc = (space.element_location(win).unwrap_or((0, 0).into())
+                - win.geometry().loc)
+                .to_physical(1);
+            win.render_elements::<C>(renderer, loc, scale, 1.0)
+        })
+        .collect::<Vec<_>>();
+
+    elements
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
     space: &Space<WindowElement>,
     windows: &[WindowElement],
+    override_redirect_windows: &[X11Surface],
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
-    focus_stack: &[WindowElement],
     renderer: &mut R,
     output: &Output,
     input_method: &InputMethodHandle,
@@ -218,10 +254,23 @@ where
         }
     }
 
+    let o_r_elements = override_redirect_windows.iter().flat_map(|surf| {
+        surf.render_elements::<WaylandSurfaceRenderElement<R>>(
+            renderer,
+            space
+                .element_location(&WindowElement::X11(surf.clone()))
+                .unwrap_or((0, 0).into())
+                .to_physical_precise_round(scale),
+            scale,
+            1.0,
+        )
+    });
+
+    custom_render_elements.extend(o_r_elements.map(CustomRenderElements::from));
+
     let output_render_elements = {
-        let top_fullscreen_window = focus_stack.iter().rev().find(|win| {
+        let top_fullscreen_window = windows.iter().rev().find(|win| {
             win.with_state(|state| {
-                // TODO: for wayland windows, check if current state has xdg_toplevel fullscreen
                 let is_wayland_actually_fullscreen = {
                     if let WindowElement::Wayland(window) = win {
                         window
@@ -240,7 +289,6 @@ where
         });
 
         // If fullscreen windows exist, render only the topmost one
-        // TODO: wait until the fullscreen window has committed, this will stop flickering
         if let Some(window) = top_fullscreen_window {
             let mut output_render_elements =
                 Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
@@ -267,17 +315,13 @@ where
                 bottom,
                 top,
                 overlay,
-            } = layer_render_elements(output, renderer);
+            } = layer_render_elements(output, renderer, scale);
 
             let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                Tag::tag_render_elements(windows, space, renderer);
+                tag_render_elements(windows, space, renderer, scale);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
-
-            // let space_render_elements =
-            //     smithay::desktop::space::space_render_elements(renderer, [space], output, 1.0)
-            //         .expect("failed to get space_render_elements");
 
             // Elements render from top to bottom
 
@@ -298,15 +342,43 @@ where
                     .map(OutputRenderElements::from),
             );
 
-            // output_render_elements.extend(
-            //     space_render_elements
-            //         .into_iter()
-            //         .map(OutputRenderElements::from),
-            // );
-
             output_render_elements
         }
     };
 
     output_render_elements
+}
+
+// TODO: docs
+pub fn take_presentation_feedback(
+    output: &Output,
+    space: &Space<WindowElement>,
+    render_element_states: &RenderElementStates,
+) -> OutputPresentationFeedback {
+    let mut output_presentation_feedback = OutputPresentationFeedback::new(output);
+
+    space.elements().for_each(|window| {
+        if space.outputs_for_element(window).contains(output) {
+            window.take_presentation_feedback(
+                &mut output_presentation_feedback,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    surface_presentation_feedback_flags_from_states(surface, render_element_states)
+                },
+            );
+        }
+    });
+
+    let map = smithay::desktop::layer_map_for_output(output);
+    for layer_surface in map.layers() {
+        layer_surface.take_presentation_feedback(
+            &mut output_presentation_feedback,
+            surface_primary_scanout_output,
+            |surface, _| {
+                surface_presentation_feedback_flags_from_states(surface, render_element_states)
+            },
+        );
+    }
+
+    output_presentation_feedback
 }

@@ -77,6 +77,7 @@ use smithay::{
         dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         input_method::{InputMethodHandle, InputMethodSeat},
     },
+    xwayland::X11Surface,
 };
 use smithay_drm_extras::{
     drm_scanner::{DrmScanEvent, DrmScanner},
@@ -84,11 +85,9 @@ use smithay_drm_extras::{
 };
 
 use crate::{
-    api::msg::{Args, OutgoingMsg},
-    render::{pointer::PointerElement, CustomRenderElements},
-    state::{
-        take_presentation_feedback, Backend, CalloopData, State, SurfaceDmabufFeedback, WithState,
-    },
+    config::api::msg::{Args, OutgoingMsg},
+    render::{pointer::PointerElement, take_presentation_feedback, CustomRenderElements},
+    state::{Backend, CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
 
@@ -213,7 +212,9 @@ pub fn run_udev() -> anyhow::Result<()> {
         }
     }
 
-    let Backend::Udev(backend) = &mut state.backend else { unreachable!() };
+    let Backend::Udev(backend) = &mut state.backend else {
+        unreachable!()
+    };
 
     event_loop
         .handle()
@@ -266,7 +267,9 @@ pub fn run_udev() -> anyhow::Result<()> {
     event_loop
         .handle()
         .insert_source(notifier, move |event, &mut (), data| {
-            let Backend::Udev(backend) = &mut data.state.backend else { unreachable!() };
+            let Backend::Udev(backend) = &mut data.state.backend else {
+                unreachable!()
+            };
             match event {
                 session::Event::PauseSession => {
                     libinput_context.suspend();
@@ -691,7 +694,9 @@ impl SurfaceComposition {
 
 impl State {
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         // Try to open the device
         let fd = backend
@@ -757,7 +762,9 @@ impl State {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -943,8 +950,8 @@ impl State {
                         .as_ref()
                         .expect("Stream doesn't exist");
                     let mut stream = stream.lock().expect("Couldn't lock stream");
-                    for callback_id in dt.state.output_callback_ids.iter() {
-                        crate::api::send_to_client(
+                    for callback_id in dt.state.config.output_callback_ids.iter() {
+                        crate::config::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
                                 callback_id: *callback_id,
@@ -966,7 +973,9 @@ impl State {
         _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -993,7 +1002,9 @@ impl State {
     }
 
     fn device_changed(&mut self, node: DrmNode) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -1025,7 +1036,9 @@ impl State {
 
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
-            let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+            let Backend::Udev(backend) = &mut self.backend else {
+                unreachable!()
+            };
 
             let Some(device) = backend.backends.get_mut(&node) else {
                 return;
@@ -1044,7 +1057,9 @@ impl State {
 
         tracing::debug!("Surfaces dropped");
 
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         // drop the backends on this side
         if let Some(backend_data) = backend.backends.remove(&node) {
@@ -1067,7 +1082,9 @@ impl State {
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device_backend = match backend.backends.get_mut(&dev_id) {
             Some(backend) => backend,
@@ -1226,7 +1243,9 @@ impl State {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device_backend = match backend.backends.get_mut(&node) {
             Some(backend) => backend,
@@ -1247,7 +1266,9 @@ impl State {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let Some(device) = backend.backends.get_mut(&node) else {
             return;
@@ -1336,8 +1357,8 @@ impl State {
             &mut self.cursor_status,
             &self.space,
             &windows,
+            &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
-            &self.focus_state.focus_stack,
             surface,
             &mut renderer,
             &output,
@@ -1399,7 +1420,9 @@ impl State {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, CalloopData>,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else { unreachable!() };
+        let Backend::Udev(backend) = &mut self.backend else {
+            unreachable!()
+        };
 
         let device = if let Some(device) = backend.backends.get_mut(&node) {
             device
@@ -1441,8 +1464,8 @@ fn render_surface<'a>(
     cursor_status: &mut CursorImageStatus,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
+    override_redirect_windows: &[X11Surface],
     dnd_icon: Option<&WlSurface>,
-    focus_stack: &[WindowElement],
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
     output: &Output,
@@ -1466,7 +1489,7 @@ fn render_surface<'a>(
         .collect::<Vec<_>>();
 
     if !pending_wins.is_empty() {
-        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+        // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
         for win in windows.iter() {
             win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
@@ -1486,10 +1509,10 @@ fn render_surface<'a>(
     let output_render_elements = crate::render::generate_render_elements(
         space,
         windows,
+        override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,
-        focus_stack,
         renderer,
         output,
         input_method,
