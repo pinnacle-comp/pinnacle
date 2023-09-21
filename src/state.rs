@@ -2,18 +2,13 @@
 
 mod api_handlers;
 
-use std::{
-    cell::RefCell,
-    os::fd::AsRawFd,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{cell::RefCell, os::fd::AsRawFd, sync::Arc, time::Duration};
 
 use crate::{
     backend::{udev::Udev, winit::Winit, BackendData},
     config::{
         api::{msg::Msg, ApiState},
-        Config, ConfigReturn,
+        Config,
     },
     cursor::Cursor,
     focus::FocusState,
@@ -190,52 +185,17 @@ impl State {
 
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
-        let ConfigReturn {
-            reload_keybind,
-            kill_keybind,
-            mut config_child_handle,
-            socket_source,
-        } = crate::config::start_config(tx_channel.clone(), crate::config::get_config_dir())?;
-
-        let socket_token_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
-            if let Some(old_stream) = data
-                .state
-                .api_state
-                .stream
-                .replace(Arc::new(Mutex::new(stream)))
-            {
-                old_stream
-                    .lock()
-                    .expect("Couldn't lock old stream")
-                    .shutdown(std::net::Shutdown::Both)
-                    .expect("Couldn't shutdown old stream");
+        loop_handle.insert_idle(|data| {
+            if let Err(err) = data.state.start_config(crate::config::get_config_dir()) {
+                panic!("failed to start config: {err}");
             }
         });
-
-        let socket_token = match socket_token_ret {
-            Ok(token) => token,
-            Err(err) => {
-                anyhow::bail!("Failed to insert socket source into event loop: {err}");
-            }
-        };
 
         let (executor, sched) = calloop::futures::executor::<()>()?;
 
         if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
             anyhow::bail!("Failed to insert async executor into event loop: {err}");
         }
-
-        let loop_handle_clone = loop_handle.clone();
-
-        let _ = sched.schedule(async move {
-            let _ = config_child_handle.status().await;
-
-            loop_handle_clone.insert_idle(|data| {
-                data.state
-                    .restart_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
-                    .expect("failed to load default config");
-            });
-        });
 
         let display_handle = display.handle();
         let mut seat_state = SeatState::new();
@@ -322,10 +282,10 @@ impl State {
             primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
-            input_state: InputState::new(reload_keybind, kill_keybind),
+            input_state: InputState::new(),
             api_state: ApiState {
                 stream: None,
-                socket_token,
+                socket_token: None,
                 tx_channel,
             },
             focus_state: FocusState::new(),

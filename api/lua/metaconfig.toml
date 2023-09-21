@@ -18,7 +18,8 @@
 
 # The command Pinnacle will run on startup and when you reload your config.
 # Paths are relative to the directory the metaconfig.toml file is in.
-command = "lua example_config.lua"
+# This must be an array.
+command = ["lua", "example_config.lua"]
 
 ### Keybinds ###
 # Each keybind takes in a table with two fields: `modifiers` and `key`.

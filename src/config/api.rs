@@ -243,7 +243,7 @@ pub struct ApiState {
     /// The stream API messages are being sent through.
     pub stream: Option<Arc<Mutex<UnixStream>>>,
     /// A token used to remove the socket source from the event loop on config restart.
-    pub socket_token: RegistrationToken,
+    pub socket_token: Option<RegistrationToken>,
     /// The sending channel used to send API messages received from the socket source to a handler.
     pub tx_channel: Sender<Msg>,
 }
