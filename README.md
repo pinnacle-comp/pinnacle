@@ -62,7 +62,8 @@ You'll need the following packages, as specified by [Smithay](https://github.com
 - NixOS: Use the provided [`shell.nix`](shell.nix).
 - TODO: other distros.
 
-You'll also need Lua 5.4 for configuration. **Older versions will not work.** Check with your package manager to see which version you have.
+You'll also need Lua 5.4 for configuration. **Older versions will not work.**
+Check with your package manager to see which version you have.
 
 # Building
 Build the project with:
@@ -73,9 +74,17 @@ cargo build [--release]
 For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can use for `nix-shell`.
 <sup>flake soon:tm:</sup>
 
+Additionally, you will need to copy the Lua API to `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`).
+You can do this by running [`install_libs.sh`](install_libs.sh).
+
+You will need to do this whenever the Lua API is updated.
+
 # Running
 > [!IMPORTANT]
 > Before running, read the information in [Configuration](#configuration).
+>
+> Also, ensure you have installed the Lua API library to its correct location,
+> as noted in [Building](#building).
 
 After building, run the executable located in either:
 ```sh
@@ -88,24 +97,11 @@ Or, run the project directly with
 cargo run [--release]
 ```
 
-
-Pinnacle will automatically initialize the correct backend for your environment.
-
-However, there is an additional flag you can pass in: `--<backend>`. You most likely do not need to use it.
-
-`backend` can be one of two values:
-
-- `winit`: run Pinnacle as a window in your graphical environment
-- `udev`: run Pinnacle in a tty.
-
-If you try to run either in environments where you shouldn't be, you will get a warning requiring you to
-pass in the `--force` flag to continue. *This is not recommended.*
+See flags you can pass in by running `cargo run -- --help` (or `-h`).
 
 > [!IMPORTANT]
 > Make sure `command` in your `metaconfig.toml` is set to the right file.
-> If it isn't, the compositor will open, but your config will not apply.
-> In that case, kill the compositor using the keybind defined in 
-> `kill_keybind` (default <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>Esc</kbd>) and set `command` properly.
+> If it isn't, the compositor will load the default config instead.
 
 # Configuration
 Pinnacle is configured in Lua. Rust support is planned.
@@ -113,24 +109,22 @@ Pinnacle is configured in Lua. Rust support is planned.
 Pinnacle will search for a `metaconfig.toml` file in the following directories, from top to bottom:
 ```sh
 $PINNACLE_CONFIG_DIR
-$XDG_CONFIG_HOME/pinnacle/
-~/.config/pinnacle
+$XDG_CONFIG_HOME/pinnacle
+~/.config/pinnacle # Only if $XDG_CONFIG_HOME is not defined
 ```
 
 The `metaconfig.toml` file provides information on what config to run, kill and reload keybinds,
 and any environment variables you want set. For more details, see the provided 
 [`metaconfig.toml`](api/lua/metaconfig.toml) file.
 
-To use the provided Lua config, run the following in the root of the Git project:
-```sh
-PINNACLE_CONFIG_DIR="./api/lua" cargo run
-```
+If no `metaconfig.toml` file is found, the default config will be loaded.
 
-To run without the above environment variable, copy [`metaconfig.toml`](api/lua/metaconfig.toml) and
-[`example_config.lua`](api/lua/example_config.lua) to `$XDG_CONFIG_HOME/pinnacle/`
+For custom configuration, you can copy [`metaconfig.toml`](api/lua/metaconfig.toml) and
+[`example_config.lua`](api/lua/example_config.lua) to `$XDG_CONFIG_HOME/pinnacle`
 (this will probably be `~/.config/pinnacle`).
 
-> If you rename `example_config.lua` to something like `init.lua`, you will need to change `command` in `metaconfig.toml` to reflect that.
+> If you rename `example_config.lua` to something like `init.lua`,
+> you will need to change `command` in `metaconfig.toml` to reflect that.
 
 ### :information_source: Using the Lua Language Server
 It is ***highly*** recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server)
