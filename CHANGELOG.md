@@ -1,5 +1,21 @@
 # Changelog
 
+## [5e49d77](https://github.com/pinnacle-comp/pinnacle/commit/5e49d77ef8cdbd063a8a8bd3b66b3474cb150d78) [(#94)](https://github.com/pinnacle-comp/pinnacle/pull/94) (21 Sep 2023)
+This update brings breaking changes to the `metaconfig.toml` file.
+
+If you have an old one, you will need to:
+- Change `command` to be an array of arguments instead of one string, and
+- Change all references to `$PINNACLE_DIR/api` to `$PINNACLE_LIB_DIR`.
+
+Additionally, the default config will now automatically load if your's crashes or can't be found.
+
+### Changes
+- Change `command` in `metaconfig.toml` to take in an array of strings instead of a single string
+    - Fixes a problem due to me splitting the command by spaces
+- Change `$PINNACLE_DIR/api` to be `$PINNACLE_LIB_DIR` instead
+- Load default config if current one crashes or can't be found
+- Pinnacle now copies the Lua library to `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`)
+
 ## [8499a29](https://github.com/pinnacle-comp/pinnacle/commit/8499a291e2225f00b2d745381915f7cffc570d37) [(#78)](https://github.com/pinnacle-comp/pinnacle/pull/78)
 This update brings mousebinds to the config API. You can now do things on button press and release.
 
