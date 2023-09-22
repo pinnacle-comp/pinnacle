@@ -74,10 +74,9 @@ cargo build [--release]
 For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can use for `nix-shell`.
 <sup>flake soon:tm:</sup>
 
-Additionally, you will need to copy the Lua API to `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`).
-You can do this by running [`install_libs.sh`](install_libs.sh).
-
-You will need to do this whenever the Lua API is updated.
+> [!NOTE]
+> On build, [`install_libs.sh`](install_libs.sh) will run to copy the Lua API library to
+> `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`).
 
 # Running
 > [!IMPORTANT]
