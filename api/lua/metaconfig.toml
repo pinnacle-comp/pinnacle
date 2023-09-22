@@ -18,7 +18,8 @@
 
 # The command Pinnacle will run on startup and when you reload your config.
 # Paths are relative to the directory the metaconfig.toml file is in.
-command = "lua example_config.lua"
+# This must be an array.
+command = ["lua", "example_config.lua"]
 
 ### Keybinds ###
 # Each keybind takes in a table with two fields: `modifiers` and `key`.
@@ -47,5 +48,5 @@ kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 #
 # Here, LUA_PATH and LUA_CPATH are used to tell Lua the path to the library.
 [envs]
-LUA_PATH = "$PINNACLE_DIR/api/lua/?.lua;$PINNACLE_DIR/api/lua/?/init.lua;$PINNACLE_DIR/api/lua/lib/?.lua;$PINNACLE_DIR/api/lua/lib/?/init.lua;$LUA_PATH"
-LUA_CPATH = "$PINNACLE_DIR/api/lua/lib/?.so;$LUA_CPATH"
+LUA_PATH = "$PINNACLE_LIB_DIR/lua/?.lua;$PINNACLE_LIB_DIR/lua/?/init.lua;$PINNACLE_LIB_DIR/lua/lib/?.lua;$PINNACLE_LIB_DIR/lua/lib/?/init.lua;$LUA_PATH"
+LUA_CPATH = "$PINNACLE_LIB_DIR/lua/lib/?.so;$LUA_CPATH"

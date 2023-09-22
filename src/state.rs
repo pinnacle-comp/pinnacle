@@ -2,22 +2,20 @@
 
 mod api_handlers;
 
-use std::{
-    cell::RefCell,
-    os::{fd::AsRawFd, unix::net::UnixStream},
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{cell::RefCell, os::fd::AsRawFd, sync::Arc, time::Duration};
 
 use crate::{
     backend::{udev::Udev, winit::Winit, BackendData},
-    config::{api::msg::Msg, Config, ConfigReturn},
+    config::{
+        api::{msg::Msg, ApiState},
+        Config,
+    },
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
-use calloop::{channel::Sender, futures::Scheduler, RegistrationToken};
+use calloop::futures::Scheduler;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -187,37 +185,14 @@ impl State {
 
         let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
 
-        let ConfigReturn {
-            reload_keybind,
-            kill_keybind,
-            config_child_handle,
-            socket_source,
-        } = crate::config::start_config(tx_channel.clone())?;
-
-        let socket_token_ret = loop_handle.insert_source(socket_source, |stream, _, data| {
-            if let Some(old_stream) = data
-                .state
-                .api_state
-                .stream
-                .replace(Arc::new(Mutex::new(stream)))
-            {
-                old_stream
-                    .lock()
-                    .expect("Couldn't lock old stream")
-                    .shutdown(std::net::Shutdown::Both)
-                    .expect("Couldn't shutdown old stream");
+        loop_handle.insert_idle(|data| {
+            if let Err(err) = data.state.start_config(crate::config::get_config_dir()) {
+                panic!("failed to start config: {err}");
             }
         });
 
-        let socket_token = match socket_token_ret {
-            Ok(token) => token,
-            Err(err) => {
-                anyhow::bail!("Failed to insert socket source into event loop: {err}");
-            }
-        };
+        let (executor, sched) = calloop::futures::executor::<()>()?;
 
-        let (executor, sched) =
-            calloop::futures::executor::<()>().expect("Couldn't create executor");
         if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
             anyhow::bail!("Failed to insert async executor into event loop: {err}");
         }
@@ -227,6 +202,8 @@ impl State {
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
+
+        // TODO: update from config
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
         loop_handle.insert_idle(|data| {
@@ -305,12 +282,13 @@ impl State {
             primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
-            input_state: InputState::new(reload_keybind, kill_keybind),
+            input_state: InputState::new(),
             api_state: ApiState {
                 stream: None,
-                socket_token,
+                socket_token: None,
                 tx_channel,
-                config_process: config_child_handle,
+                kill_channel: None,
+                future_channel: None,
             },
             focus_state: FocusState::new(),
 
@@ -385,17 +363,6 @@ impl ClientData for ClientState {
 pub struct SurfaceDmabufFeedback<'a> {
     pub render_feedback: &'a DmabufFeedback,
     pub scanout_feedback: &'a DmabufFeedback,
-}
-
-pub struct ApiState {
-    // TODO: this may not need to be in an arc mutex because of the move to async
-    /// The stream API messages are being sent through
-    pub stream: Option<Arc<Mutex<UnixStream>>>,
-    /// A token used to remove the socket source from the event loop on config restart
-    pub socket_token: RegistrationToken,
-    /// The sending channel used to send API messages from the socket source to a handler
-    pub tx_channel: Sender<Msg>,
-    pub config_process: async_process::Child,
 }
 
 /// A trait meant to be used in types with a [`UserDataMap`][smithay::utils::user_data::UserDataMap]

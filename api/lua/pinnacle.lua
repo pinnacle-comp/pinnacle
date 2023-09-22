@@ -97,16 +97,18 @@ end
 ---@param config_func fun(pinnacle: PinnacleModule)
 function pinnacle.setup(config_func)
     ---@type integer
-    local socket_fd = assert(
-        socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0),
-        "Failed to create socket"
-    )
+    local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0), "Failed to create socket")
     print("created socket at fd " .. socket_fd)
 
-    assert(0 == socket.connect(socket_fd, {
+    local status, error, errnum = socket.connect(socket_fd, {
         family = socket.AF_UNIX,
         path = SOCKET_PATH,
-    }), "Failed to connect to Pinnacle socket")
+    })
+
+    if status ~= 0 then
+        print("Failed to connect to Pinnacle socket: error: " .. tostring(error) .. ", errnum: " .. tostring(errnum))
+        return
+    end
 
     ---@type fun(args: table?)[]
     CallbackTable = {}
@@ -186,8 +188,7 @@ function pinnacle.setup(config_func)
                 if inc_msg.CallCallback then
                     unread_cb_msgs[inc_msg.CallCallback.callback_id] = inc_msg
                 elseif inc_msg.RequestResponse.request_id ~= req_id then
-                    unread_req_msgs[inc_msg.RequestResponse.request_id] =
-                        inc_msg
+                    unread_req_msgs[inc_msg.RequestResponse.request_id] = inc_msg
                 else
                     return inc_msg
                 end
@@ -201,9 +202,7 @@ function pinnacle.setup(config_func)
 
     while true do
         for cb_id, inc_msg in pairs(unread_cb_msgs) do
-            CallbackTable[inc_msg.CallCallback.callback_id](
-                inc_msg.CallCallback.args
-            )
+            CallbackTable[inc_msg.CallCallback.callback_id](inc_msg.CallCallback.args)
             unread_cb_msgs[cb_id] = nil -- INFO: does this shift the table and frick everything up?
         end
 
@@ -213,9 +212,7 @@ function pinnacle.setup(config_func)
 
         if inc_msg.CallCallback and inc_msg.CallCallback.callback_id then
             if inc_msg.CallCallback.args then -- TODO: can just inline
-                CallbackTable[inc_msg.CallCallback.callback_id](
-                    inc_msg.CallCallback.args
-                )
+                CallbackTable[inc_msg.CallCallback.callback_id](inc_msg.CallCallback.args)
             else
                 CallbackTable[inc_msg.CallCallback.callback_id](nil)
             end

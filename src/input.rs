@@ -27,23 +27,19 @@ use smithay::{
 
 use crate::state::State;
 
+#[derive(Default, Debug)]
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
     pub keybinds: HashMap<(ModifierMask, u32), CallbackId>,
     /// A hashmap of modifier keys and mouse button codes to callback IDs
     pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
-    pub reload_keybind: (ModifierMask, u32),
-    pub kill_keybind: (ModifierMask, u32),
+    pub reload_keybind: Option<(ModifierMask, u32)>,
+    pub kill_keybind: Option<(ModifierMask, u32)>,
 }
 
 impl InputState {
-    pub fn new(reload_keybind: (ModifierMask, u32), kill_keybind: (ModifierMask, u32)) -> Self {
-        Self {
-            keybinds: HashMap::new(),
-            mousebinds: HashMap::new(),
-            reload_keybind,
-            kill_keybind,
-        }
+    pub fn new() -> Self {
+        Default::default()
     }
 }
 
@@ -203,9 +199,9 @@ impl State {
                             (None, None) => ()
                         }
 
-                        if (modifier_mask, mod_sym) == kill_keybind {
+                        if Some((modifier_mask, mod_sym)) == kill_keybind {
                             return FilterResult::Intercept(KeyAction::Quit);
-                        } else if (modifier_mask, mod_sym) == reload_keybind {
+                        } else if Some((modifier_mask, mod_sym)) == reload_keybind {
                             return FilterResult::Intercept(KeyAction::ReloadConfig);
                         } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                             keysym.modified_sym() {
@@ -255,7 +251,8 @@ impl State {
                 self.loop_signal.stop();
             }
             Some(KeyAction::ReloadConfig) => {
-                self.restart_config().expect("failed to restart config");
+                self.start_config(crate::config::get_config_dir())
+                    .expect("failed to restart config");
             }
             None => {}
         }
