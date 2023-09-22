@@ -81,9 +81,6 @@ For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can 
 # Running
 > [!IMPORTANT]
 > Before running, read the information in [Configuration](#configuration).
->
-> Also, ensure you have installed the Lua API library to its correct location,
-> as noted in [Building](#building).
 
 After building, run the executable located in either:
 ```sh
@@ -97,10 +94,6 @@ cargo run [--release]
 ```
 
 See flags you can pass in by running `cargo run -- --help` (or `-h`).
-
-> [!IMPORTANT]
-> Make sure `command` in your `metaconfig.toml` is set to the right file.
-> If it isn't, the compositor will load the default config instead.
 
 # Configuration
 Pinnacle is configured in Lua. Rust support is planned.
@@ -118,12 +111,16 @@ and any environment variables you want set. For more details, see the provided
 
 If no `metaconfig.toml` file is found, the default config will be loaded.
 
+
 For custom configuration, you can copy [`metaconfig.toml`](api/lua/metaconfig.toml) and
 [`example_config.lua`](api/lua/example_config.lua) to `$XDG_CONFIG_HOME/pinnacle`
 (this will probably be `~/.config/pinnacle`).
 
+> Make sure `command` in your `metaconfig.toml` is set to the right file.
+> If it isn't, the compositor will load the default config instead.
+> 
 > If you rename `example_config.lua` to something like `init.lua`,
-> you will need to change `command` in `metaconfig.toml` to reflect that.
+> you will need to change `command` to reflect that.
 
 ### :information_source: Using the Lua Language Server
 It is ***highly*** recommended to use the [Lua language server](https://github.com/LuaLS/lua-language-server)
