@@ -138,7 +138,7 @@ impl State {
     pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
         let config_dir = config_dir.as_ref();
 
-        tracing::info!("Restarting config");
+        tracing::info!("Starting config");
         tracing::debug!("Clearing tags");
 
         for output in self.space.outputs() {
@@ -154,6 +154,12 @@ impl State {
 
         tracing::debug!("Killing old config");
 
+        if let Some(channel) = self.api_state.kill_channel.as_ref() {
+            if let Err(err) = futures_lite::future::block_on(channel.send(())) {
+                tracing::warn!("failed to send kill ping to config future: {err}");
+            }
+        }
+
         if let Some(token) = self.api_state.socket_token {
             // Should only happen if parsing the metaconfig failed
             self.loop_handle.remove(token);
@@ -161,7 +167,15 @@ impl State {
 
         let tx_channel = self.api_state.tx_channel.clone();
 
-        std::env::set_var("PINNACLE_LIB_DIR", crate::XDG_BASE_DIRS.get_data_home());
+        // Love that trailing slash
+        let data_home = PathBuf::from(
+            crate::XDG_BASE_DIRS
+                .get_data_home()
+                .to_string_lossy()
+                .to_string()
+                .trim_end_matches('/'),
+        );
+        std::env::set_var("PINNACLE_LIB_DIR", data_home);
 
         tracing::debug!("config dir is {:?}", config_dir);
 
@@ -205,30 +219,24 @@ impl State {
             .next()
             .context("command in metaconfig.toml was empty")?;
 
+        let command = command.collect::<Vec<_>>();
+
+        tracing::debug!(arg1, ?command);
+
         let envs = metaconfig
             .envs
             .unwrap_or(toml::map::Map::new())
             .into_iter()
             .filter_map(|(key, val)| {
                 if let toml::Value::String(string) = val {
-                    Some((
-                        key,
-                        shellexpand::full_with_context(
-                            &string,
-                            || std::env::var("HOME").ok(),
-                            // Expand nonexistent vars to an empty string instead of crashing
-                            |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
-                        )
-                        .ok()?
-                        .to_string(),
-                    ))
+                    Some((key, shellexpand::full(&string).ok()?.to_string()))
                 } else {
                     None
                 }
             })
             .collect::<Vec<_>>();
 
-        tracing::debug!("Config envs are {:?}", envs);
+        tracing::debug!("Config envs are {envs:?}");
 
         let mut child = async_process::Command::new(arg1)
             .args(command)
@@ -238,7 +246,7 @@ impl State {
             .stderr(async_process::Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
-            .expect("failed to spawn config");
+            .context("failed to spawn config")?;
 
         tracing::info!("Started config with {:?}", metaconfig.command);
 
@@ -269,17 +277,43 @@ impl State {
         self.input_state.kill_keybind = Some(kill_keybind);
         self.api_state.socket_token = Some(socket_token);
 
+        let (kill_channel, future_channel) = async_channel::unbounded::<()>();
+
+        self.api_state.kill_channel = Some(kill_channel);
+        self.api_state.future_channel = Some(future_channel.clone());
+
         let loop_handle = self.loop_handle.clone();
 
-        let _ = self.async_scheduler.schedule(async move {
-            let _ = child.status().await;
+        enum Either {
+            First,
+            Second,
+        }
 
-            loop_handle.insert_idle(|data| {
-                data.state
-                    .start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
-                    .expect("failed to load default config");
-            });
-        });
+        self.async_scheduler.schedule(async move {
+            let which = futures_lite::future::race(
+                async move {
+                    tracing::debug!("awaiting child");
+                    let _ = child.status().await;
+                    tracing::debug!("child ded");
+                    Either::First
+                },
+                async move {
+                    let _ = future_channel.recv().await;
+                    Either::Second
+                },
+            )
+            .await;
+
+            if let Either::First = which {
+                tracing::warn!("Config crashed, loading default");
+
+                loop_handle.insert_idle(|data| {
+                    data.state
+                        .start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
+                        .expect("failed to load default config");
+                });
+            }
+        })?;
 
         Ok(())
     }

@@ -287,6 +287,8 @@ impl State {
                 stream: None,
                 socket_token: None,
                 tx_channel,
+                kill_channel: None,
+                future_channel: None,
             },
             focus_state: FocusState::new(),
 
