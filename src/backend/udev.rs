@@ -1484,13 +1484,14 @@ fn render_surface<'a>(
         .iter()
         .filter(|win| win.alive())
         .filter(|win| {
-            if let WindowElement::Wayland(win) = win {
+            let pending_size = if let WindowElement::Wayland(win) = win {
                 let current_state = win.toplevel().current_state();
                 win.toplevel()
                     .with_pending_state(|state| state.size != current_state.size)
             } else {
                 false
-            }
+            };
+            pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
         })
         .map(|win| {
             (
