@@ -95,8 +95,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // tracing::debug!("commit on surface {:?}", surface);
-
+        // tracing::debug!("commit on surface {surface:?}");
         X11Wm::commit_hook::<CalloopData>(surface);
 
         utils::on_commit_buffer_handler::<Self>(surface);
@@ -107,8 +106,16 @@ impl CompositorHandler for State {
             while let Some(parent) = compositor::get_parent(&root) {
                 root = parent;
             }
-            if let Some(WindowElement::Wayland(window)) = self.window_for_surface(surface) {
+            if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
+                // tracing::debug!("window commit thing {:?}", win.class());
                 window.on_commit();
+                win.with_state(|state| {
+                    if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
+                        tracing::debug!("Mapping Acknowledged window");
+                        state.loc_request_state = LocationRequestState::Idle;
+                        self.space.map_element(win.clone(), new_pos, false);
+                    }
+                });
             }
         };
 
@@ -118,15 +125,9 @@ impl CompositorHandler for State {
 
         crate::grab::resize_grab::handle_commit(self, surface);
 
-        if let Some(window) = self.window_for_surface(surface) {
-            window.with_state(|state| {
-                if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
-                    tracing::debug!("Mapping Acknowledged window");
-                    state.loc_request_state = LocationRequestState::Idle;
-                    self.space.map_element(window.clone(), new_pos, false);
-                }
-            });
-        }
+        // if let Some(window) = self.window_for_surface(surface) {
+        //     tracing::debug!("commit on window {:?}", window.class());
+        // }
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

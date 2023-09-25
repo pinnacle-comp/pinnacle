@@ -29,7 +29,10 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
+            element::{
+                surface::WaylandSurfaceRenderElement, texture::TextureBuffer, RenderElement,
+                RenderElementStates,
+            },
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             sync::SyncPoint,
@@ -1480,7 +1483,15 @@ fn render_surface<'a>(
     let pending_wins = windows
         .iter()
         .filter(|win| win.alive())
-        .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+        .filter(|win| {
+            if let WindowElement::Wayland(win) = win {
+                let current_state = win.toplevel().current_state();
+                win.toplevel()
+                    .with_pending_state(|state| state.size != current_state.size)
+            } else {
+                false
+            }
+        })
         .map(|win| {
             (
                 win.class().unwrap_or("None".to_string()),
@@ -1491,7 +1502,7 @@ fn render_surface<'a>(
         .collect::<Vec<_>>();
 
     if !pending_wins.is_empty() {
-        // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
         for win in windows.iter() {
             win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
@@ -1509,14 +1520,14 @@ fn render_surface<'a>(
     }
 
     let output_render_elements = crate::render::generate_render_elements(
+        output,
+        renderer,
         space,
         windows,
         override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,
-        renderer,
-        output,
         input_method,
         pointer_element,
         Some(pointer_image),
@@ -1567,7 +1578,7 @@ fn initial_render(
 ) -> Result<(), SwapBuffersError> {
     surface
         .compositor
-        .render_frame::<_, CustomRenderElements<_>, GlesTexture>(
+        .render_frame::<_, CustomRenderElements<_, WaylandSurfaceRenderElement<_>>, GlesTexture>(
             renderer,
             &[],
             [0.6, 0.6, 0.6, 1.0],

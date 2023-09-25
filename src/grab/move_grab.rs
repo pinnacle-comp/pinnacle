@@ -86,6 +86,19 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
                     return;
                 }
 
+                if state
+                    .space
+                    .element_geometry(&self.window)
+                    .is_some_and(|geo| {
+                        state
+                            .space
+                            .element_geometry(&window_under)
+                            .is_some_and(|geo2| geo.overlaps(geo2))
+                    })
+                {
+                    return;
+                }
+
                 let is_floating =
                     window_under.with_state(|state| state.floating_or_tiled.is_floating());
 
@@ -101,6 +114,7 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
                     return;
                 }
 
+                tracing::debug!("Swapping window positions");
                 state.swap_window_positions(&self.window, &window_under);
             }
         } else {

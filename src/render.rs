@@ -5,8 +5,8 @@ use std::sync::Mutex;
 use smithay::{
     backend::renderer::{
         element::{
-            self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer, AsRenderElements,
-            RenderElementStates, Wrap,
+            self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer,
+            utils::CropRenderElement, AsRenderElements, RenderElementStates, Wrap,
         },
         ImportAll, ImportMem, Renderer, Texture,
     },
@@ -38,16 +38,17 @@ use self::pointer::{PointerElement, PointerRenderElement};
 pub mod pointer;
 
 render_elements! {
-    pub CustomRenderElements<R> where R: ImportAll + ImportMem;
-    Pointer=PointerRenderElement<R>,
-    Surface=WaylandSurfaceRenderElement<R>,
+    pub CustomRenderElements<R, E> where R: ImportAll + ImportMem;
+    Pointer = PointerRenderElement<R>,
+    Surface = WaylandSurfaceRenderElement<R>,
+    Crop = CropRenderElement<E>,
 }
 
 render_elements! {
     pub OutputRenderElements<R, E> where R: ImportAll + ImportMem;
     Space=SpaceRenderElements<R, E>,
     Window=Wrap<E>,
-    Custom=CustomRenderElements<R>,
+    Custom=CustomRenderElements<R, E>,
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -136,27 +137,35 @@ where
 }
 
 /// Get the render_elements for the provided tags.
-fn tag_render_elements<R, C>(
+fn tag_render_elements<R>(
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> Vec<C>
+) -> Vec<CustomRenderElements<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
-    C: From<WaylandSurfaceRenderElement<R>>,
 {
     let elements = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .filter(|win| win.is_on_active_tag(space.outputs()))
-        .flat_map(|win| {
+        .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
             let loc = (space.element_location(win).unwrap_or((0, 0).into())
                 - win.geometry().loc)
-                .to_physical(1);
-            win.render_elements::<C>(renderer, loc, scale, 1.0)
+                .to_physical((scale.x.round() as i32, scale.x.round() as i32));
+            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), space.element_geometry(win))
+        }).flat_map(|(elems, rect)| {
+            match rect {
+                Some(rect) => {
+                    elems.into_iter().filter_map(|elem| {
+                        CropRenderElement::from_element(elem, scale, rect.to_physical_precise_down(scale))
+                    }).map(CustomRenderElements::from).collect::<Vec<_>>()
+                },
+                None => elems.into_iter().map(CustomRenderElements::from).collect(),
+            }
         })
         .collect::<Vec<_>>();
 
@@ -165,14 +174,14 @@ where
 
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
+    output: &Output,
+    renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
     override_redirect_windows: &[X11Surface],
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
-    renderer: &mut R,
-    output: &Output,
     input_method: &InputMethodHandle,
     pointer_element: &mut PointerElement<T>,
     pointer_image: Option<&TextureBuffer<T>>,
@@ -187,7 +196,7 @@ where
         .expect("called output_geometry on an unmapped output");
     let scale = Scale::from(output.current_scale().fractional_scale());
 
-    let mut custom_render_elements: Vec<CustomRenderElements<_>> = Vec::new();
+    let mut custom_render_elements: Vec<CustomRenderElements<_, _>> = Vec::new();
     // draw input method surface if any
     let rectangle = input_method.coordinates();
     let position = Point::from((
@@ -317,8 +326,7 @@ where
                 overlay,
             } = layer_render_elements(output, renderer, scale);
 
-            let window_render_elements: Vec<WaylandSurfaceRenderElement<R>> =
-                tag_render_elements(windows, space, renderer, scale);
+            let window_render_elements = tag_render_elements::<R>(windows, space, renderer, scale);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
@@ -335,8 +343,19 @@ where
                 overlay
                     .into_iter()
                     .chain(top)
-                    .chain(window_render_elements)
-                    .chain(bottom)
+                    .map(CustomRenderElements::from)
+                    .map(OutputRenderElements::from),
+            );
+
+            output_render_elements.extend(
+                window_render_elements
+                    .into_iter()
+                    .map(OutputRenderElements::from),
+            );
+
+            output_render_elements.extend(
+                bottom
+                    .into_iter()
                     .chain(background)
                     .map(CustomRenderElements::from)
                     .map(OutputRenderElements::from),
