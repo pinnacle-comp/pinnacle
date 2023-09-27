@@ -65,7 +65,6 @@ where
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<C> {
-        // let window_bbox = self.bbox();
         match self {
             WindowElement::Wayland(window) => {
                 window.render_elements(renderer, location, scale, alpha)
@@ -112,7 +111,7 @@ where
         .map(|(surface, loc)| {
             let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
                 renderer,
-                loc.to_physical(1),
+                loc.to_physical((scale.x.round() as i32, scale.x.round() as i32)),
                 scale,
                 1.0,
             );

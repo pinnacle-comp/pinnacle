@@ -425,7 +425,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     }
 
     event_loop.run(
-        Some(Duration::from_millis(1)),
+        Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
         &mut CalloopData { state, display },
         |data| {
             data.state.space.refresh();
@@ -759,6 +759,8 @@ impl State {
         Ok(())
     }
 
+    /// A display was plugged in.
+    // TODO: better edid info from cosmic-comp
     fn connector_connected(
         &mut self,
         node: DrmNode,
@@ -972,6 +974,7 @@ impl State {
         }
     }
 
+    /// A display was unplugged.
     fn connector_disconnected(
         &mut self,
         node: DrmNode,
@@ -1039,6 +1042,7 @@ impl State {
         // crate::shell::fixup_positions(&mut self.space);
     }
 
+    /// A GPU was unplugged.
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
             let Backend::Udev(backend) = &mut self.backend else {
@@ -1123,7 +1127,7 @@ impl State {
         let schedule_render = match surface
             .compositor
             .frame_submitted()
-            .map_err(Into::<SwapBuffersError>::into)
+            .map_err(SwapBuffersError::from)
         {
             Ok(user_data) => {
                 if let Some(mut feedback) = user_data {
@@ -1246,7 +1250,7 @@ impl State {
         }
     }
 
-    // If crtc is `Some()`, render it, else render all crtcs
+    /// Render using the gpu on `node` to the provided `crtc`, or all available crtcs if `None`.
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
         let Backend::Udev(backend) = &mut self.backend else {
             unreachable!()
@@ -1510,6 +1514,7 @@ fn render_surface<'a>(
             });
         }
 
+        // TODO: set waiting for vblank to true here
         surface
             .compositor
             .queue_frame(None, None, None)
@@ -1564,10 +1569,11 @@ fn render_surface<'a>(
 
     if res.rendered {
         let output_presentation_feedback = take_presentation_feedback(output, space, &res.states);
+        // TODO: set waiting for vblank to true here
         surface
             .compositor
             .queue_frame(res.sync, res.damage, Some(output_presentation_feedback))
-            .map_err(Into::<SwapBuffersError>::into)?;
+            .map_err(SwapBuffersError::from)?;
     }
 
     Ok(res.rendered)
