@@ -36,6 +36,7 @@ use smithay::{
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
     state::{Backend, CalloopData, State, WithState},
+    window::WindowElement,
 };
 
 use super::BackendData;
@@ -241,7 +242,16 @@ pub fn run_winit() -> anyhow::Result<()> {
                     .windows
                     .iter()
                     .filter(|win| win.alive())
-                    .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+                    .filter(|win| {
+                        let pending_size = if let WindowElement::Wayland(win) = win {
+                            let current_state = win.toplevel().current_state();
+                            win.toplevel()
+                                .with_pending_state(|state| state.size != current_state.size)
+                        } else {
+                            false
+                        };
+                        pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+                    })
                     .map(|win| {
                         (
                             win.class().unwrap_or("None".to_string()),
@@ -253,14 +263,17 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 if !pending_wins.is_empty() {
                     // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
-                    for win in state.windows.iter() {
-                        win.send_frame(
-                            &output,
-                            state.clock.now(),
-                            Some(Duration::ZERO),
-                            surface_primary_scanout_output,
-                        );
-                    }
+                    let op_clone = output.clone();
+                    state.loop_handle.insert_idle(move |dt| {
+                        for win in dt.state.windows.iter() {
+                            win.send_frame(
+                                &op_clone,
+                                dt.state.clock.now(),
+                                Some(Duration::ZERO),
+                                surface_primary_scanout_output,
+                            );
+                        }
+                    });
 
                     state.space.refresh();
                     state.popup_manager.cleanup();
@@ -282,14 +295,14 @@ pub fn run_winit() -> anyhow::Result<()> {
                 state.focus_state.fix_up_focus(&mut state.space);
 
                 let output_render_elements = crate::render::generate_render_elements(
+                    &output,
+                    backend.backend.renderer(),
                     &state.space,
                     &state.focus_state.focus_stack,
                     &state.override_redirect_windows,
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),
-                    backend.backend.renderer(),
-                    &output,
                     state.seat.input_method(),
                     &mut pointer_element,
                     None,
@@ -306,7 +319,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                     backend
                         .damage_tracker
-                        .render_output(renderer, age, &output_render_elements, [0.5, 0.5, 0.5, 1.0])
+                        .render_output(renderer, age, &output_render_elements, [0.6, 0.6, 0.6, 1.0])
                         .map_err(|err| match err {
                             damage::Error::Rendering(err) => err.into(),
                             damage::Error::OutputNoMode(_) => todo!(),
@@ -327,7 +340,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                         let time = state.clock.now();
 
-                        // Send frames to the cursor surface so it updates in xwayland
+                        // Send frames to the cursor surface so it updates correctly
                         if let CursorImageStatus::Surface(surf) = &state.cursor_status {
                             if let Some(op) = state.focus_state.focused_output.as_ref() {
                                 send_frames_surface_tree(
@@ -378,7 +391,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     .flush_clients()
                     .expect("failed to flush client buffers");
 
-                TimeoutAction::ToDuration(Duration::from_millis(1))
+                TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
             });
 
     if let Err(err) = insert_ret {
@@ -386,7 +399,7 @@ pub fn run_winit() -> anyhow::Result<()> {
     }
 
     event_loop.run(
-        Some(Duration::from_millis(1)),
+        Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
         &mut CalloopData { display, state },
         |_data| {
             // println!("{}", _data.state.space.elements().count());

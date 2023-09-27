@@ -29,7 +29,10 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             damage::{self, OutputDamageTracker},
-            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
+            element::{
+                surface::WaylandSurfaceRenderElement, texture::TextureBuffer, RenderElement,
+                RenderElementStates,
+            },
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             sync::SyncPoint,
@@ -422,7 +425,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     }
 
     event_loop.run(
-        Some(Duration::from_millis(1)),
+        Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
         &mut CalloopData { state, display },
         |data| {
             data.state.space.refresh();
@@ -756,6 +759,8 @@ impl State {
         Ok(())
     }
 
+    /// A display was plugged in.
+    // TODO: better edid info from cosmic-comp
     fn connector_connected(
         &mut self,
         node: DrmNode,
@@ -969,6 +974,7 @@ impl State {
         }
     }
 
+    /// A display was unplugged.
     fn connector_disconnected(
         &mut self,
         node: DrmNode,
@@ -1036,6 +1042,7 @@ impl State {
         // crate::shell::fixup_positions(&mut self.space);
     }
 
+    /// A GPU was unplugged.
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
             let Backend::Udev(backend) = &mut self.backend else {
@@ -1120,7 +1127,7 @@ impl State {
         let schedule_render = match surface
             .compositor
             .frame_submitted()
-            .map_err(Into::<SwapBuffersError>::into)
+            .map_err(SwapBuffersError::from)
         {
             Ok(user_data) => {
                 if let Some(mut feedback) = user_data {
@@ -1243,7 +1250,7 @@ impl State {
         }
     }
 
-    // If crtc is `Some()`, render it, else render all crtcs
+    /// Render using the gpu on `node` to the provided `crtc`, or all available crtcs if `None`.
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
         let Backend::Udev(backend) = &mut self.backend else {
             unreachable!()
@@ -1480,7 +1487,16 @@ fn render_surface<'a>(
     let pending_wins = windows
         .iter()
         .filter(|win| win.alive())
-        .filter(|win| win.with_state(|state| !state.loc_request_state.is_idle()))
+        .filter(|win| {
+            let pending_size = if let WindowElement::Wayland(win) = win {
+                let current_state = win.toplevel().current_state();
+                win.toplevel()
+                    .with_pending_state(|state| state.size != current_state.size)
+            } else {
+                false
+            };
+            pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+        })
         .map(|win| {
             (
                 win.class().unwrap_or("None".to_string()),
@@ -1491,13 +1507,14 @@ fn render_surface<'a>(
         .collect::<Vec<_>>();
 
     if !pending_wins.is_empty() {
-        // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
         for win in windows.iter() {
             win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
                 Some(output.clone())
             });
         }
 
+        // TODO: set waiting for vblank to true here
         surface
             .compositor
             .queue_frame(None, None, None)
@@ -1509,14 +1526,14 @@ fn render_surface<'a>(
     }
 
     let output_render_elements = crate::render::generate_render_elements(
+        output,
+        renderer,
         space,
         windows,
         override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,
-        renderer,
-        output,
         input_method,
         pointer_element,
         Some(pointer_image),
@@ -1552,10 +1569,11 @@ fn render_surface<'a>(
 
     if res.rendered {
         let output_presentation_feedback = take_presentation_feedback(output, space, &res.states);
+        // TODO: set waiting for vblank to true here
         surface
             .compositor
             .queue_frame(res.sync, res.damage, Some(output_presentation_feedback))
-            .map_err(Into::<SwapBuffersError>::into)?;
+            .map_err(SwapBuffersError::from)?;
     }
 
     Ok(res.rendered)
@@ -1567,7 +1585,7 @@ fn initial_render(
 ) -> Result<(), SwapBuffersError> {
     surface
         .compositor
-        .render_frame::<_, CustomRenderElements<_>, GlesTexture>(
+        .render_frame::<_, CustomRenderElements<_, WaylandSurfaceRenderElement<_>>, GlesTexture>(
             renderer,
             &[],
             [0.6, 0.6, 0.6, 1.0],

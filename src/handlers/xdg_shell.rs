@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use smithay::{
     delegate_xdg_shell,
     desktop::{
@@ -736,20 +738,30 @@ impl XdgShellHandler for State {
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
         if let Some(window) = self.window_for_surface(&surface) {
-            window.with_state(|state| {
-                if let LocationRequestState::Requested(serial, new_loc) = state.loc_request_state {
-                    match &configure {
-                        Configure::Toplevel(configure) => {
-                            if configure.serial >= serial {
-                                tracing::debug!("acked configure, new loc is {:?}", new_loc);
+            if let LocationRequestState::Requested(serial, new_loc) =
+                window.with_state(|state| state.loc_request_state.clone())
+            {
+                match &configure {
+                    Configure::Toplevel(configure) => {
+                        if configure.serial >= serial {
+                            tracing::debug!("acked configure, new loc is {:?}", new_loc);
+                            window.with_state(|state| {
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
+                            });
+                            if let Some(op) = window.output(self) {
+                                window.send_frame(
+                                    &op,
+                                    self.clock.now(),
+                                    Some(Duration::ZERO),
+                                    |_, _| Some(op.clone()),
+                                );
                             }
                         }
-                        Configure::Popup(_) => todo!(),
                     }
+                    Configure::Popup(_) => todo!(),
                 }
-            });
+            }
         }
     }
 
