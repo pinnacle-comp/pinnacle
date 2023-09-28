@@ -259,6 +259,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             // println!("event: {:?}", event);
+            data.state.apply_libinput_settings(&event);
             data.state.process_input_event(event);
         });
 

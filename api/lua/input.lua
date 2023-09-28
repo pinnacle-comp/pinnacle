@@ -43,6 +43,9 @@ local input_module = {
     --- A table with mouse button codes. You can use indexes (1, 2, and 3 are left, right, and middle)
     --- or keyed values (buttons.left, buttons.right, etc.).
     buttons = buttons,
+    ---@type Libinput
+    --- Libinput settings.
+    libinput = require("input.libinput"),
 }
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
@@ -121,9 +124,11 @@ function input_module.mousebind(modifiers, button, edge, action)
     })
 end
 
----Set the xkbconfig for your input device.
+---Set the xkbconfig for your keyboard.
 ---
 ---Fields not present will be set to their default values.
+---
+---Read `xkeyboard-config(7)` for more information.
 ---
 ---### Example
 ---```lua

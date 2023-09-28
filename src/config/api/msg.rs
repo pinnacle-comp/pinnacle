@@ -8,6 +8,7 @@ pub mod window_rules;
 use smithay::input::keyboard::ModifiersState;
 
 use crate::{
+    input::LibinputSetting,
     layout::Layout,
     output::OutputName,
     tag::TagId,
@@ -31,7 +32,7 @@ pub enum MouseEdge {
     Release,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub enum Msg {
     // Input
     SetKeybind {
@@ -147,6 +148,8 @@ pub enum Msg {
         #[serde(default)]
         options: Option<String>,
     },
+
+    SetLibinputSetting(LibinputSetting),
 
     Request {
         request_id: RequestId,

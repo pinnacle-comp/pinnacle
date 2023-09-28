@@ -371,6 +371,15 @@ impl State {
                 }
             }
 
+            Msg::SetLibinputSetting(setting) => {
+                for device in self.input_state.libinput_devices.iter_mut() {
+                    // We're just gonna indiscriminately apply everything and ignore errors
+                    setting.apply_to_device(device);
+                }
+
+                self.input_state.libinput_settings.push(setting);
+            }
+
             Msg::Request {
                 request_id,
                 request,

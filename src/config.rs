@@ -150,6 +150,7 @@ impl State {
         tracing::debug!("Clearing mouse and keybinds");
         self.input_state.keybinds.clear();
         self.input_state.mousebinds.clear();
+        self.input_state.libinput_settings.clear();
         self.config.window_rules.clear();
 
         tracing::debug!("Killing old config");

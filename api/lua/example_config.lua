@@ -39,6 +39,8 @@ require("pinnacle").setup(function(pinnacle)
     --
     -- dell:set_loc_left_of(lg, "bottom")
 
+    input.libinput.set_accel_profile("Flat")
+
     -- Mousebinds --------------------------------------------------------------------
 
     input.mousebind({ "Ctrl" }, buttons.left, "Press", function()

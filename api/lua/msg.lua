@@ -30,6 +30,7 @@
 ---@field SetOutputLocation { output_name: OutputName, x: integer?, y: integer? }?
 --Input
 ---@field SetXkbConfig XkbConfig?
+---@field SetLibinputSetting LibinputSetting?
 ---@field Request Request?
 
 ---@alias Msg _Msg | "Quit"
