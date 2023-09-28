@@ -26,6 +26,13 @@ local buttons = {
     back = 0x116,
 }
 
+---@class XkbConfig
+---@field rules string?
+---@field model string?
+---@field layout string?
+---@field variant string?
+---@field options string?
+
 ---Input management.
 ---
 ---This module provides utilities to set keybinds.
@@ -111,6 +118,25 @@ function input_module.mousebind(modifiers, button, edge, action)
             edge = edge,
             callback_id = #CallbackTable,
         },
+    })
+end
+
+---Set the xkbconfig for your input device.
+---
+---Fields not present will be set to their default values.
+---
+---### Example
+---```lua
+---input.set_xkb_config({
+---    layout = "us,fr,ge",
+---    options = "ctrl:swapcaps,caps:shift"
+---})
+---```
+---
+---@param xkb_config XkbConfig
+function input_module.set_xkb_config(xkb_config)
+    SendMsg({
+        SetXkbConfig = xkb_config,
     })
 end
 

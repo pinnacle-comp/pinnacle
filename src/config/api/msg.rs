@@ -134,6 +134,20 @@ pub enum Msg {
     /// Quit the compositor.
     Quit,
 
+    // Input management
+    SetXkbConfig {
+        #[serde(default)]
+        rules: Option<String>,
+        #[serde(default)]
+        variant: Option<String>,
+        #[serde(default)]
+        layout: Option<String>,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        options: Option<String>,
+    },
+
     Request {
         request_id: RequestId,
         request: Request,
