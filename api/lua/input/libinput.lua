@@ -1,7 +1,5 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
----@meta _
-
 ---@class LibinputSetting
 ---@field AccelProfile (AccelProfile)?
 ---@field AccelSpeed float?

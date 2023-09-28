@@ -43,7 +43,6 @@ local input_module = {
     --- A table with mouse button codes. You can use indexes (1, 2, and 3 are left, right, and middle)
     --- or keyed values (buttons.left, buttons.right, etc.).
     buttons = buttons,
-    ---@type Libinput
     --- Libinput settings.
     libinput = require("input.libinput"),
 }
