@@ -151,7 +151,7 @@ function libinput.set_natural_scroll_enabled(enabled)
 end
 
 ---Set the scroll button.
----@param button MouseButton
+---@param button integer
 function libinput.set_scroll_button(button)
     SendMsg({
         SetLibinputSetting = {

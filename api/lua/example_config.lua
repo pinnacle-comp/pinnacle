@@ -31,15 +31,18 @@ require("pinnacle").setup(function(pinnacle)
     process.set_env("MOZ_ENABLE_WAYLAND", "1")
 
     -- Outputs -----------------------------------------------------------------------
-
     -- You can set your own monitor layout as I have done below for my monitors.
-
+    --
     -- local lg = output.get_by_name("DP-2") --[[@as Output]]
     -- local dell = output.get_by_name("DP-3") --[[@as Output]]
     --
     -- dell:set_loc_left_of(lg, "bottom")
 
-    input.libinput.set_accel_profile("Flat")
+    -- Libinput settings -------------------------------------------------------------
+    -- If you want to change settings like pointer acceleration,
+    -- you can do them in `input.libinput`.
+    --
+    -- input.libinput.set_accel_profile("Flat")
 
     -- Mousebinds --------------------------------------------------------------------
 
