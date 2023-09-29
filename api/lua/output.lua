@@ -1,5 +1,7 @@
 -- SPDX-License-Identifier: GPL-3.0-or-later
 
+---@diagnostic disable:redefined-local
+
 ---Output management.
 ---
 ---An output is what you would call a monitor. It presents windows, your cursor, and other UI elements.
@@ -164,12 +166,7 @@ local function set_loc_horizontal(op1, op2, left_or_right, alignment)
     local other_loc = op2:loc()
     local other_res = op2:res()
 
-    if
-        self_loc == nil
-        or self_res == nil
-        or other_loc == nil
-        or other_res == nil
-    then
+    if self_loc == nil or self_res == nil or other_loc == nil or other_res == nil then
         return
     end
 
@@ -184,15 +181,9 @@ local function set_loc_horizontal(op1, op2, left_or_right, alignment)
     if alignment == "top" then
         output_module.set_loc(op1, { x = x, y = other_loc.y })
     elseif alignment == "center" then
-        output_module.set_loc(
-            op1,
-            { x = x, y = other_loc.y + (other_res.h - self_res.h) // 2 }
-        )
+        output_module.set_loc(op1, { x = x, y = other_loc.y + (other_res.h - self_res.h) // 2 })
     elseif alignment == "bottom" then
-        output_module.set_loc(
-            op1,
-            { x = x, y = other_loc.y + (other_res.h - self_res.h) }
-        )
+        output_module.set_loc(op1, { x = x, y = other_loc.y + (other_res.h - self_res.h) })
     end
 end
 
@@ -243,12 +234,7 @@ local function set_loc_vertical(op1, op2, top_or_bottom, alignment)
     local other_loc = op2:loc()
     local other_res = op2:res()
 
-    if
-        self_loc == nil
-        or self_res == nil
-        or other_loc == nil
-        or other_res == nil
-    then
+    if self_loc == nil or self_res == nil or other_loc == nil or other_res == nil then
         return
     end
 
@@ -263,15 +249,9 @@ local function set_loc_vertical(op1, op2, top_or_bottom, alignment)
     if alignment == "left" then
         output_module.set_loc(op1, { x = other_loc.x, y = y })
     elseif alignment == "center" then
-        output_module.set_loc(
-            op1,
-            { x = other_loc.x + (other_res.w - self_res.w) // 2, y = y }
-        )
+        output_module.set_loc(op1, { x = other_loc.x + (other_res.w - self_res.w) // 2, y = y })
     elseif alignment == "right" then
-        output_module.set_loc(
-            op1,
-            { x = other_loc.x + (other_res.w - self_res.w), y = y }
-        )
+        output_module.set_loc(op1, { x = other_loc.x + (other_res.w - self_res.w), y = y })
     end
 end
 
@@ -423,6 +403,11 @@ end
 ---
 ---When called, `connect_for_all` will immediately run `func` with all currently connected outputs.
 ---If a new output is connected, `func` will also be called with it.
+---
+---This will *not* be called if it has already been called for a given connector.
+---This means turning your monitor off and on or unplugging and replugging it *to the same port*
+---won't trigger `func`. Plugging it in to a new port *will* trigger `func`.
+---This is intended to prevent duplicate setup.
 ---
 ---Please note: this function will be run *after* Pinnacle processes your entire config.
 ---For example, if you define tags in `func` but toggle them directly after `connect_for_all`, nothing will happen as the tags haven't been added yet.

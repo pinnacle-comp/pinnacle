@@ -95,7 +95,7 @@ pub enum Msg {
     },
     AddTags {
         /// The name of the output you want these tags on.
-        output_name: String,
+        output_name: OutputName,
         tag_names: Vec<String>,
     },
     RemoveTags {

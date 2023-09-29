@@ -9,7 +9,7 @@ use crate::{
     tag::Tag,
 };
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct OutputName(pub String);
 
 impl OutputName {

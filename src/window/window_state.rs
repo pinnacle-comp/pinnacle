@@ -327,7 +327,6 @@ impl WindowElementState {
 impl Default for WindowElementState {
     fn default() -> Self {
         Self {
-            // INFO: I think this will assign the id on use of the state, not on window spawn.
             id: WindowId::next(),
             loc_request_state: LocationRequestState::Idle,
             tags: vec![],

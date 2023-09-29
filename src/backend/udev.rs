@@ -88,7 +88,11 @@ use smithay_drm_extras::{
 };
 
 use crate::{
-    config::api::msg::{Args, OutgoingMsg},
+    config::{
+        api::msg::{Args, OutgoingMsg},
+        ConnectorSavedState,
+    },
+    output::OutputName,
     render::{pointer::PointerElement, take_presentation_feedback, CustomRenderElements},
     state::{Backend, CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
@@ -828,6 +832,15 @@ impl State {
             .unwrap_or_else(|| ("Unknown".into(), "Unknown".into()));
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+
+        if self.space.outputs().any(|op| {
+            op.user_data()
+                .get::<UdevOutputId>()
+                .is_some_and(|op_id| op_id.crtc == crtc)
+        }) {
+            return;
+        }
+
         let output = Output::new(
             output_name,
             PhysicalProperties {
@@ -946,7 +959,18 @@ impl State {
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
 
         // Run any connected callbacks
+        if let Some(saved_state) = self
+            .config
+            .connector_saved_states
+            .get(&OutputName(output.name()))
         {
+            let ConnectorSavedState { loc, tags } = saved_state;
+
+            output.change_current_state(None, None, None, Some(*loc));
+            self.space.map_output(&output, *loc);
+
+            output.with_state(|state| state.tags = tags.clone());
+        } else {
             let clone = output.clone();
             self.schedule(
                 |dt| dt.state.api_state.stream.is_some(),
@@ -982,6 +1006,8 @@ impl State {
         _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
+        tracing::debug!(?crtc, "connector_disconnected");
+
         let Backend::Udev(backend) = &mut self.backend else {
             unreachable!()
         };
@@ -1006,6 +1032,13 @@ impl State {
             .cloned();
 
         if let Some(output) = output {
+            self.config.connector_saved_states.insert(
+                OutputName(output.name()),
+                ConnectorSavedState {
+                    loc: output.current_location(),
+                    tags: output.with_state(|state| state.tags.clone()),
+                },
+            );
             self.space.unmap_output(&output);
         }
     }

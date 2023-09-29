@@ -11,8 +11,11 @@ use smithay::{
 };
 
 use crate::{
-    config::api::msg::{
-        Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
+    config::{
+        api::msg::{
+            Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
+        },
+        ConnectorSavedState,
     },
     focus::FocusTarget,
     tag::Tag,
@@ -267,12 +270,27 @@ impl State {
                 output_name,
                 tag_names,
             } => {
+                let new_tags = tag_names.into_iter().map(Tag::new).collect::<Vec<_>>();
+                if let Some(saved_state) = self.config.connector_saved_states.get_mut(&output_name)
+                {
+                    let mut tags = saved_state.tags.clone();
+                    tags.extend(new_tags.clone());
+                    saved_state.tags = tags;
+                } else {
+                    self.config.connector_saved_states.insert(
+                        output_name.clone(),
+                        ConnectorSavedState {
+                            tags: new_tags.clone(),
+                            ..Default::default()
+                        },
+                    );
+                }
+
                 if let Some(output) = self
                     .space
                     .outputs()
-                    .find(|output| output.name() == output_name)
+                    .find(|output| output.name() == output_name.0)
                 {
-                    let new_tags = tag_names.into_iter().map(Tag::new).collect::<Vec<_>>();
                     output.with_state(|state| {
                         state.tags.extend(new_tags.clone());
                         tracing::debug!("tags added, are now {:?}", state.tags);
@@ -294,8 +312,15 @@ impl State {
                 }
             }
             Msg::RemoveTags { tag_ids } => {
-                let tags = tag_ids.into_iter().filter_map(|tag_id| tag_id.tag(self));
+                let tags = tag_ids
+                    .into_iter()
+                    .filter_map(|tag_id| tag_id.tag(self))
+                    .collect::<Vec<_>>();
+
                 for tag in tags {
+                    for saved_state in self.config.connector_saved_states.values_mut() {
+                        saved_state.tags.retain(|tg| tg != &tag);
+                    }
                     let Some(output) = tag.output(self) else { continue };
                     output.with_state(|state| {
                         state.tags.retain(|tg| tg != &tag);
@@ -331,6 +356,24 @@ impl State {
                 self.config.output_callback_ids.push(callback_id);
             }
             Msg::SetOutputLocation { output_name, x, y } => {
+                if let Some(saved_state) = self.config.connector_saved_states.get_mut(&output_name)
+                {
+                    if let Some(x) = x {
+                        saved_state.loc.x = x;
+                    }
+                    if let Some(y) = y {
+                        saved_state.loc.y = y;
+                    }
+                } else {
+                    self.config.connector_saved_states.insert(
+                        output_name.clone(),
+                        ConnectorSavedState {
+                            loc: (x.unwrap_or_default(), y.unwrap_or_default()).into(),
+                            ..Default::default()
+                        },
+                    );
+                }
+
                 let Some(output) = output_name.output(self) else { return };
                 let mut loc = output.current_location();
                 if let Some(x) = x {
