@@ -1,13 +1,21 @@
 pub mod api;
 
-use crate::config::api::{msg::ModifierMask, PinnacleSocketSource};
+use crate::{
+    config::api::{msg::ModifierMask, PinnacleSocketSource},
+    output::OutputName,
+    tag::Tag,
+};
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
-use smithay::input::keyboard::keysyms;
+use smithay::{
+    input::keyboard::keysyms,
+    utils::{Logical, Point},
+};
 use toml::Table;
 
 use api::msg::Modifier;
@@ -115,8 +123,18 @@ pub enum Key {
 pub struct Config {
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
     pub output_callback_ids: Vec<CallbackId>,
+    pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 }
 
+/// State saved when an output is disconnected. When the output is reconnected to the same
+/// connector, the saved state will apply to restore its state.
+#[derive(Debug, Default, Clone)]
+pub struct ConnectorSavedState {
+    pub loc: Point<i32, Logical>,
+    pub tags: Vec<Tag>,
+}
+
+/// Parse a metaconfig file in `config_dir`, if any.
 fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
     let config_dir = config_dir.join("metaconfig.toml");
 
@@ -126,6 +144,8 @@ fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
     toml::from_str(&metaconfig).context("Failed to deserialize toml")
 }
 
+/// Get the config dir. This is $PINNACLE_CONFIG_DIR, then $XDG_CONFIG_HOME/pinnacle,
+/// then ~/.config/pinnacle.
 pub fn get_config_dir() -> PathBuf {
     let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
         .ok()
@@ -135,6 +155,9 @@ pub fn get_config_dir() -> PathBuf {
 }
 
 impl State {
+    /// Start the config in `config_dir`.
+    ///
+    /// If this method is called while a config is already running, it will be replaced.
     pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
         let config_dir = config_dir.as_ref();
 
@@ -154,7 +177,6 @@ impl State {
         self.config.window_rules.clear();
 
         tracing::debug!("Killing old config");
-
         if let Some(channel) = self.api_state.kill_channel.as_ref() {
             if let Err(err) = futures_lite::future::block_on(channel.send(())) {
                 tracing::warn!("failed to send kill ping to config future: {err}");
@@ -290,12 +312,12 @@ impl State {
             Second,
         }
 
+        // We can't get at the child while it's in the executor, so in order to kill it we need a
+        // channel that, when notified, will cause the child to be dropped and terminated.
         self.async_scheduler.schedule(async move {
             let which = futures_lite::future::race(
                 async move {
-                    tracing::debug!("awaiting child");
                     let _ = child.status().await;
-                    tracing::debug!("child ded");
                     Either::First
                 },
                 async move {
