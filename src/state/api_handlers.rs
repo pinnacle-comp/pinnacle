@@ -4,6 +4,7 @@ use async_process::Stdio;
 use futures_lite::AsyncBufReadExt;
 use smithay::{
     desktop::space::SpaceElement,
+    input::keyboard::XkbConfig,
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
     utils::{Point, Rectangle, SERIAL_COUNTER},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
@@ -347,6 +348,36 @@ impl State {
             Msg::Quit => {
                 tracing::info!("Quitting Pinnacle");
                 self.loop_signal.stop();
+            }
+
+            Msg::SetXkbConfig {
+                rules,
+                variant,
+                layout,
+                model,
+                options,
+            } => {
+                let new_config = XkbConfig {
+                    rules: &rules.unwrap_or_default(),
+                    model: &model.unwrap_or_default(),
+                    layout: &layout.unwrap_or_default(),
+                    variant: &variant.unwrap_or_default(),
+                    options,
+                };
+                if let Some(kb) = self.seat.get_keyboard() {
+                    if let Err(err) = kb.set_xkb_config(self, new_config) {
+                        tracing::error!("Failed to set xkbconfig: {err}");
+                    }
+                }
+            }
+
+            Msg::SetLibinputSetting(setting) => {
+                for device in self.input_state.libinput_devices.iter_mut() {
+                    // We're just gonna indiscriminately apply everything and ignore errors
+                    setting.apply_to_device(device);
+                }
+
+                self.input_state.libinput_settings.push(setting);
             }
 
             Msg::Request {

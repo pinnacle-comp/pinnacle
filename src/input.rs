@@ -14,6 +14,7 @@ use smithay::{
             AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
             KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
         },
+        libinput::LibinputInputBackend,
         session::Session,
     },
     desktop::{layer_map_for_output, space::SpaceElement},
@@ -21,6 +22,7 @@ use smithay::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
+    reexports::input::{self, AccelProfile, ClickMethod, Led, ScrollMethod, TapButtonMap},
     utils::{Logical, Point, SERIAL_COUNTER},
     wayland::{seat::WaylandFocus, shell::wlr_layer},
 };
@@ -35,6 +37,8 @@ pub struct InputState {
     pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
     pub reload_keybind: Option<(ModifierMask, u32)>,
     pub kill_keybind: Option<(ModifierMask, u32)>,
+    pub libinput_settings: Vec<LibinputSetting>,
+    pub libinput_devices: Vec<input::Device>,
 }
 
 impl InputState {
@@ -51,7 +55,125 @@ enum KeyAction {
     ReloadConfig,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(remote = "AccelProfile")]
+enum AccelProfileDef {
+    Flat,
+    Adaptive,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(remote = "ClickMethod")]
+enum ClickMethodDef {
+    ButtonAreas,
+    Clickfinger,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(remote = "ScrollMethod")]
+enum ScrollMethodDef {
+    NoScroll,
+    TwoFinger,
+    Edge,
+    OnButtonDown,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(remote = "TapButtonMap")]
+enum TapButtonMapDef {
+    LeftRightMiddle,
+    LeftMiddleRight,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Deserialize)]
+pub enum LibinputSetting {
+    #[serde(with = "AccelProfileDef")]
+    AccelProfile(AccelProfile),
+    AccelSpeed(f64),
+    CalibrationMatrix([f32; 6]),
+    #[serde(with = "ClickMethodDef")]
+    ClickMethod(ClickMethod),
+    DisableWhileTypingEnabled(bool),
+    LeftHanded(bool),
+    MiddleEmulationEnabled(bool),
+    RotationAngle(u32),
+    #[serde(with = "ScrollMethodDef")]
+    ScrollMethod(ScrollMethod),
+    NaturalScrollEnabled(bool),
+    ScrollButton(u32),
+    #[serde(with = "TapButtonMapDef")]
+    TapButtonMap(TapButtonMap),
+    TapDragEnabled(bool),
+    TapDragLockEnabled(bool),
+    TapEnabled(bool),
+}
+
+impl LibinputSetting {
+    pub fn apply_to_device(&self, device: &mut input::Device) {
+        let _ = match self {
+            LibinputSetting::AccelProfile(profile) => device.config_accel_set_profile(*profile),
+            LibinputSetting::AccelSpeed(speed) => device.config_accel_set_speed(*speed),
+            LibinputSetting::CalibrationMatrix(matrix) => {
+                device.config_calibration_set_matrix(*matrix)
+            }
+            LibinputSetting::ClickMethod(method) => device.config_click_set_method(*method),
+            LibinputSetting::DisableWhileTypingEnabled(enabled) => {
+                device.config_dwt_set_enabled(*enabled)
+            }
+            LibinputSetting::LeftHanded(enabled) => device.config_left_handed_set(*enabled),
+            LibinputSetting::MiddleEmulationEnabled(enabled) => {
+                device.config_middle_emulation_set_enabled(*enabled)
+            }
+            LibinputSetting::RotationAngle(angle) => device.config_rotation_set_angle(*angle),
+            LibinputSetting::ScrollMethod(method) => device.config_scroll_set_method(*method),
+            LibinputSetting::NaturalScrollEnabled(enabled) => {
+                device.config_scroll_set_natural_scroll_enabled(*enabled)
+            }
+            LibinputSetting::ScrollButton(button) => device.config_scroll_set_button(*button),
+            LibinputSetting::TapButtonMap(map) => device.config_tap_set_button_map(*map),
+            LibinputSetting::TapDragEnabled(enabled) => {
+                device.config_tap_set_drag_enabled(*enabled)
+            }
+            LibinputSetting::TapDragLockEnabled(enabled) => {
+                device.config_tap_set_drag_lock_enabled(*enabled)
+            }
+            LibinputSetting::TapEnabled(enabled) => device.config_tap_set_enabled(*enabled),
+        };
+    }
+}
+
+// We want to completely replace old settings, so we hash only the discriminant.
+impl std::hash::Hash for LibinputSetting {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+
 impl State {
+    /// Apply current libinput settings to new devices.
+    pub fn apply_libinput_settings(&mut self, event: &InputEvent<LibinputInputBackend>) {
+        let mut device = match event {
+            InputEvent::DeviceAdded { device } => device.clone(),
+            InputEvent::DeviceRemoved { device } => {
+                self.input_state
+                    .libinput_devices
+                    .retain(|dev| dev != device);
+                return;
+            }
+            _ => return,
+        };
+
+        if self.input_state.libinput_devices.contains(&device) {
+            return;
+        }
+
+        for setting in self.input_state.libinput_settings.iter() {
+            setting.apply_to_device(&mut device);
+        }
+
+        self.input_state.libinput_devices.push(device);
+    }
+
     pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
         match event {
             // TODO: rest of input events
@@ -152,79 +274,89 @@ impl State {
         let reload_keybind = self.input_state.reload_keybind;
         let kill_keybind = self.input_state.kill_keybind;
 
-        let action = self
-            .seat
-            .get_keyboard()
-            .expect("Seat has no keyboard") // FIXME: handle err
-            .input(
-                self,
-                event.key_code(),
-                press_state,
-                serial,
-                time,
-                |state, modifiers, keysym| {
-                    if press_state == KeyState::Pressed {
-                        let mut modifier_mask = Vec::<Modifier>::new();
-                        if modifiers.alt {
-                            modifier_mask.push(Modifier::Alt);
-                        }
-                        if modifiers.shift {
-                            modifier_mask.push(Modifier::Shift);
-                        }
-                        if modifiers.ctrl {
-                            modifier_mask.push(Modifier::Ctrl);
-                        }
-                        if modifiers.logo {
-                            modifier_mask.push(Modifier::Super);
-                        }
-                        let modifier_mask = ModifierMask::from(modifier_mask);
-                        let raw_sym = keysym.raw_syms().iter().next();
-                        let mod_sym = keysym.modified_sym();
+        let keyboard = self.seat.get_keyboard().expect("Seat has no keyboard");
 
-                        let cb_id_mod = state
-                            .input_state
-                            .keybinds
-                            .get(&(modifier_mask, mod_sym));
+        let modifiers = keyboard.modifier_state();
 
-                        let cb_id_raw = if let Some(raw_sym) = raw_sym {
-                            state.input_state.keybinds.get(&(modifier_mask, *raw_sym))
-                        } else {
-                            None
-                        };
+        let mut leds = Led::empty();
+        if modifiers.num_lock {
+            leds |= Led::NUMLOCK;
+        }
+        if modifiers.caps_lock {
+            leds |= Led::CAPSLOCK;
+        }
 
-                        match (cb_id_mod, cb_id_raw) {
-                            (Some(cb_id), _) | (None, Some(cb_id)) => {
-                                return FilterResult::Intercept(KeyAction::CallCallback(*cb_id));
-                            }
-                            (None, None) => ()
+        // FIXME: Leds only update once another key is pressed.
+        for device in self.input_state.libinput_devices.iter_mut() {
+            device.led_update(leds);
+        }
+
+        let action = keyboard.input(
+            self,
+            event.key_code(),
+            press_state,
+            serial,
+            time,
+            |state, modifiers, keysym| {
+                if press_state == KeyState::Pressed {
+                    let mut modifier_mask = Vec::<Modifier>::new();
+                    if modifiers.alt {
+                        modifier_mask.push(Modifier::Alt);
+                    }
+                    if modifiers.shift {
+                        modifier_mask.push(Modifier::Shift);
+                    }
+                    if modifiers.ctrl {
+                        modifier_mask.push(Modifier::Ctrl);
+                    }
+                    if modifiers.logo {
+                        modifier_mask.push(Modifier::Super);
+                    }
+                    let modifier_mask = ModifierMask::from(modifier_mask);
+                    let raw_sym = keysym.raw_syms().iter().next();
+                    let mod_sym = keysym.modified_sym();
+
+                    let cb_id_mod = state.input_state.keybinds.get(&(modifier_mask, mod_sym));
+
+                    let cb_id_raw = if let Some(raw_sym) = raw_sym {
+                        state.input_state.keybinds.get(&(modifier_mask, *raw_sym))
+                    } else {
+                        None
+                    };
+
+                    match (cb_id_mod, cb_id_raw) {
+                        (Some(cb_id), _) | (None, Some(cb_id)) => {
+                            return FilterResult::Intercept(KeyAction::CallCallback(*cb_id));
                         }
-
-                        if Some((modifier_mask, mod_sym)) == kill_keybind {
-                            return FilterResult::Intercept(KeyAction::Quit);
-                        } else if Some((modifier_mask, mod_sym)) == reload_keybind {
-                            return FilterResult::Intercept(KeyAction::ReloadConfig);
-                        } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
-                            keysym.modified_sym() {
-                            vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
-                            tracing::info!("Switching to vt {vt}");
-                            return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
-                        }
-
+                        (None, None) => (),
                     }
 
-                    if keysym.modified_sym() == keysyms::KEY_Control_L {
-                        match press_state {
-                            KeyState::Pressed => {
-                                move_mode = true;
-                            }
-                            KeyState::Released => {
-                                move_mode = false;
-                            }
+                    if Some((modifier_mask, mod_sym)) == kill_keybind {
+                        return FilterResult::Intercept(KeyAction::Quit);
+                    } else if Some((modifier_mask, mod_sym)) == reload_keybind {
+                        return FilterResult::Intercept(KeyAction::ReloadConfig);
+                    } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
+                        ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym()
+                    {
+                        vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
+                        tracing::info!("Switching to vt {vt}");
+                        return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
+                    }
+                }
+
+                if keysym.modified_sym() == keysyms::KEY_Control_L {
+                    match press_state {
+                        KeyState::Pressed => {
+                            move_mode = true;
+                        }
+                        KeyState::Released => {
+                            move_mode = false;
                         }
                     }
-                    FilterResult::Forward
-                },
-            );
+                }
+                FilterResult::Forward
+            },
+        );
 
         match action {
             Some(KeyAction::CallCallback(callback_id)) => {

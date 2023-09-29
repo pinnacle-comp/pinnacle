@@ -35,7 +35,6 @@ xdg = "2.5.2"
 lazy_static = "1.4.0"
 sysinfo = "0.29.10"
 
-
 [features]
 default = ["egl", "winit", "udev", "xwayland"]
 egl = ["smithay/use_system_lib", "smithay/backend_egl"]

@@ -19,7 +19,6 @@
 --
 ---@field Spawn { command: string[], callback_id: integer? }?
 ---@field SetEnv { key: string, value: string }?
----@field Request Request?
 --Tags
 ---@field ToggleTag { tag_id: TagId }?
 ---@field SwitchToTag { tag_id: TagId }?
@@ -29,6 +28,10 @@
 --Outputs
 ---@field ConnectForAllOutputs { callback_id: integer }?
 ---@field SetOutputLocation { output_name: OutputName, x: integer?, y: integer? }?
+--Input
+---@field SetXkbConfig XkbConfig?
+---@field SetLibinputSetting LibinputSetting?
+---@field Request Request?
 
 ---@alias Msg _Msg | "Quit"
 

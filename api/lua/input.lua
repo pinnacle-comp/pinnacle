@@ -26,6 +26,13 @@ local buttons = {
     back = 0x116,
 }
 
+---@class XkbConfig
+---@field rules string?
+---@field model string?
+---@field layout string?
+---@field variant string?
+---@field options string?
+
 ---Input management.
 ---
 ---This module provides utilities to set keybinds.
@@ -36,6 +43,8 @@ local input_module = {
     --- A table with mouse button codes. You can use indexes (1, 2, and 3 are left, right, and middle)
     --- or keyed values (buttons.left, buttons.right, etc.).
     buttons = buttons,
+    --- Libinput settings.
+    libinput = require("input.libinput"),
 }
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
@@ -111,6 +120,27 @@ function input_module.mousebind(modifiers, button, edge, action)
             edge = edge,
             callback_id = #CallbackTable,
         },
+    })
+end
+
+---Set the xkbconfig for your keyboard.
+---
+---Fields not present will be set to their default values.
+---
+---Read `xkeyboard-config(7)` for more information.
+---
+---### Example
+---```lua
+---input.set_xkb_config({
+---    layout = "us,fr,ge",
+---    options = "ctrl:swapcaps,caps:shift"
+---})
+---```
+---
+---@param xkb_config XkbConfig
+function input_module.set_xkb_config(xkb_config)
+    SendMsg({
+        SetXkbConfig = xkb_config,
     })
 end
 
