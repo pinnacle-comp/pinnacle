@@ -1,6 +1,6 @@
 # Changelog
 
-## [a109c70](https://github.com/pinnacle-comp/pinnacle/commit/a109c704ec371640829e375bf787db13540330d1)[(#96)](https://github.com/pinnacle-comp/pinnacle/pull/96) (28 Sep 2023)
+## [a109c70](https://github.com/pinnacle-comp/pinnacle/commit/a109c704ec371640829e375bf787db13540330d1) [(#96)](https://github.com/pinnacle-comp/pinnacle/pull/96) (28 Sep 2023)
 There are now API options for xkeyboard and libinput settings.
 
 ### Changes
