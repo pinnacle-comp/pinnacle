@@ -1,5 +1,13 @@
 # Changelog
 
+## [a109c70](https://github.com/pinnacle-comp/pinnacle/commit/a109c704ec371640829e375bf787db13540330d1)[(#96)](https://github.com/pinnacle-comp/pinnacle/pull/96) (28 Sep 2023)
+There are now API options for xkeyboard and libinput settings.
+
+### Changes
+- Add xkbconfig to API
+- Add libinput config options to API
+- Update keyboard LEDs
+
 ## [5e49d77](https://github.com/pinnacle-comp/pinnacle/commit/5e49d77ef8cdbd063a8a8bd3b66b3474cb150d78) [(#94)](https://github.com/pinnacle-comp/pinnacle/pull/94) (21 Sep 2023)
 This update brings breaking changes to the `metaconfig.toml` file.
 
