@@ -252,7 +252,17 @@ impl State {
             .into_iter()
             .filter_map(|(key, val)| {
                 if let toml::Value::String(string) = val {
-                    Some((key, shellexpand::full(&string).ok()?.to_string()))
+                    Some((
+                        key,
+                        shellexpand::full_with_context(
+                            &string,
+                            || std::env::var("HOME").ok(),
+                            // Expand nonexistent vars to an empty string instead of crashing
+                            |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
+                        )
+                        .ok()?
+                        .to_string(),
+                    ))
                 } else {
                     None
                 }
