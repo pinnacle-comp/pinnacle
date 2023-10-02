@@ -3,7 +3,6 @@
 // from anvil
 // TODO: figure out what this stuff does
 
-#![allow(clippy::unwrap_used)] // I don't know what this stuff does yet
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
@@ -12,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::Context;
 use smithay::{
     backend::{
         allocator::{
@@ -159,15 +159,15 @@ impl BackendData for Udev {
 }
 
 pub fn run_udev() -> anyhow::Result<()> {
-    let mut event_loop = EventLoop::try_new_high_precision().unwrap();
-    let mut display = Display::new().unwrap();
+    let mut event_loop = EventLoop::try_new_high_precision()?;
+    let mut display = Display::new()?;
 
     // Initialize session
     let (session, notifier) = LibSeatSession::new()?;
 
     // Get the primary gpu
     let primary_gpu = udev::primary_gpu(&session.seat())
-        .expect("unable to get primary gpu path")
+        .context("unable to get primary gpu path")?
         .and_then(|x| {
             DrmNode::from_path(x)
                 .ok()?
@@ -176,14 +176,14 @@ pub fn run_udev() -> anyhow::Result<()> {
         })
         .unwrap_or_else(|| {
             udev::all_gpus(session.seat())
-                .unwrap()
+                .expect("failed to get gpu paths")
                 .into_iter()
                 .find_map(|x| DrmNode::from_path(x).ok())
                 .expect("No GPU!")
         });
     tracing::info!("Using {} as primary gpu.", primary_gpu);
 
-    let gpu_manager = GpuManager::new(GbmGlesBackend::default()).unwrap();
+    let gpu_manager = GpuManager::new(GbmGlesBackend::default())?;
 
     let data = Udev {
         display_handle: display.handle(),
@@ -246,7 +246,7 @@ pub fn run_udev() -> anyhow::Result<()> {
                 }
             }
         })
-        .unwrap();
+        .expect("failed to insert udev_backend into event loop");
 
     // Initialize libinput backend
     let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
@@ -254,7 +254,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     );
     libinput_context
         .udev_assign_seat(state.seat.name())
-        .unwrap();
+        .expect("failed to assign seat to libinput");
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
     // Bind all our objects that get driven by the event loop
@@ -314,12 +314,11 @@ pub fn run_udev() -> anyhow::Result<()> {
                 }
             }
         })
-        .unwrap();
+        .expect("failed to insert libinput notifier into event loop");
 
     state.shm_state.update_formats(
         udev.gpu_manager
-            .single_renderer(&primary_gpu)
-            .unwrap()
+            .single_renderer(&primary_gpu)?
             .shm_formats(),
     );
 
@@ -331,8 +330,11 @@ pub fn run_udev() -> anyhow::Result<()> {
                     devices
                         .filter(|phd| phd.has_device_extension(ExtPhysicalDeviceDrmFn::name()))
                         .find(|phd| {
-                            phd.primary_node().unwrap() == Some(primary_gpu)
-                                || phd.render_node().unwrap() == Some(primary_gpu)
+                            phd.primary_node()
+                                .is_ok_and(|node| node == Some(primary_gpu))
+                                || phd
+                                    .render_node()
+                                    .is_ok_and(|node| node == Some(primary_gpu))
                         })
                 })
         {
@@ -368,7 +370,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         });
     }
 
-    let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu).unwrap();
+    let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu)?;
 
     {
         tracing::info!(
@@ -422,7 +424,9 @@ pub fn run_udev() -> anyhow::Result<()> {
         |data| {
             data.state.space.refresh();
             data.state.popup_manager.cleanup();
-            data.display.flush_clients().unwrap();
+            data.display
+                .flush_clients()
+                .expect("failed to flush_clients");
         },
     )?;
 
@@ -496,17 +500,17 @@ fn get_surface_dmabuf_feedback(
         .clone()
         .add_preference_tranche(render_node.dev_id(), None, render_formats.clone())
         .build()
-        .unwrap();
+        .ok()?; // INFO: this is an unwrap in Anvil, does it matter?
 
     let scanout_feedback = builder
         .add_preference_tranche(
-            surface.device_fd().dev_id().unwrap(),
+            surface.device_fd().dev_id().ok()?, // INFO: this is an unwrap in Anvil, does it matter?
             Some(zwp_linux_dmabuf_feedback_v1::TrancheFlags::Scanout),
             planes_formats,
         )
         .add_preference_tranche(render_node.dev_id(), None, render_formats)
         .build()
-        .unwrap();
+        .ok()?; // INFO: this is an unwrap in Anvil, does it matter?
 
     Some(DrmSurfaceDmabufFeedback {
         render_feedback,
@@ -615,12 +619,14 @@ impl State {
                     }
                 },
             )
-            .unwrap();
+            .expect("failed to insert drm notifier into event loop");
 
-        let render_node = EGLDevice::device_for_display(&EGLDisplay::new(gbm.clone()).unwrap())
-            .ok()
-            .and_then(|x| x.try_get_render_node().ok().flatten())
-            .unwrap_or(node);
+        let render_node = EGLDevice::device_for_display(
+            &EGLDisplay::new(gbm.clone()).expect("failed to create EGLDisplay"),
+        )
+        .ok()
+        .and_then(|x| x.try_get_render_node().ok().flatten())
+        .unwrap_or(node);
 
         backend
             .gpu_manager
@@ -666,7 +672,7 @@ impl State {
         let mut renderer = backend
             .gpu_manager
             .single_renderer(&device.render_node)
-            .unwrap();
+            .expect("failed to get primary gpu MultiRenderer");
         let render_formats = renderer
             .as_mut()
             .egl_context()
@@ -736,7 +742,10 @@ impl State {
         self.focus_state.focused_output = Some(output.clone());
 
         let x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
+            let Some(geo) = self.space.output_geometry(o) else {
+                unreachable!()
+            };
+            acc + geo.size.w
         });
         let position = (x, 0).into();
 
@@ -1189,9 +1198,13 @@ impl State {
         };
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = backend
-            .pointer_image
-            .get_image(1 /*scale*/, self.clock.now().try_into().unwrap());
+        let frame = backend.pointer_image.get_image(
+            1, /*scale*/
+            self.clock
+                .now()
+                .try_into()
+                .expect("failed to convert time into duration"),
+        );
 
         let render_node = surface.render_node;
         let primary_gpu = backend.primary_gpu;
@@ -1212,7 +1225,7 @@ impl State {
                 format,
             )
         }
-        .unwrap();
+        .expect("failed to create MultiRenderer");
 
         let pointer_images = &mut backend.pointer_images;
         let pointer_image = pointer_images
@@ -1348,7 +1361,10 @@ impl State {
 
         let node = surface.render_node;
         let result = {
-            let mut renderer = backend.gpu_manager.single_renderer(&node).unwrap();
+            let mut renderer = backend
+                .gpu_manager
+                .single_renderer(&node)
+                .expect("failed to create MultiRenderer");
             initial_render(surface, &mut renderer)
         };
 
