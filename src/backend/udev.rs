@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// from anvil
-// TODO: figure out what this stuff does
+mod utils;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -113,11 +112,12 @@ type UdevRenderer<'a, 'b> =
 
 /// Udev state attached to each [`Output`].
 #[derive(Debug, PartialEq)]
-struct UdevOutputId {
+struct UdevOutputData {
     /// The GPU node
     device_id: DrmNode,
     /// The [Crtc][crtc::Handle] the output is pushing to
     crtc: crtc::Handle,
+    mode: Option<drm::control::Mode>,
 }
 
 pub struct Udev {
@@ -139,7 +139,7 @@ impl BackendData for Udev {
     }
 
     fn reset_buffers(&mut self, output: &Output) {
-        if let Some(id) = output.user_data().get::<UdevOutputId>() {
+        if let Some(id) = output.user_data().get::<UdevOutputData>() {
             if let Some(gpu) = self.backends.get_mut(&id.device_id) {
                 if let Some(surface) = gpu.surfaces.get_mut(&id.crtc) {
                     surface.compositor.reset_buffers();
@@ -261,7 +261,6 @@ pub fn run_udev() -> anyhow::Result<()> {
     let insert_ret = event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
-            // println!("event: {:?}", event);
             data.state.apply_libinput_settings(&event);
             data.state.process_input_event(event);
         });
@@ -272,7 +271,7 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     event_loop
         .handle()
-        .insert_source(notifier, move |event, &mut (), data| {
+        .insert_source(notifier, move |event, _, data| {
             let Backend::Udev(backend) = &mut data.state.backend else {
                 unreachable!()
             };
@@ -722,7 +721,7 @@ impl State {
 
         if self.space.outputs().any(|op| {
             op.user_data()
-                .get::<UdevOutputId>()
+                .get::<UdevOutputData>()
                 .is_some_and(|op_id| op_id.crtc == crtc)
         }) {
             return;
@@ -753,9 +752,27 @@ impl State {
         output.change_current_state(Some(wl_mode), None, None, Some(position));
         self.space.map_output(&output, position);
 
-        output.user_data().insert_if_missing(|| UdevOutputId {
+        let mode = connector
+            .modes()
+            .iter()
+            .max_by(|mode1, mode2| {
+                let mode1_preferred = mode1.mode_type().contains(ModeTypeFlags::PREFERRED);
+                let mode2_preferred = mode2.mode_type().contains(ModeTypeFlags::PREFERRED);
+
+                use std::cmp::Ordering;
+
+                match (mode1_preferred, mode2_preferred) {
+                    (true, false) => Ordering::Greater,
+                    (false, true) => Ordering::Less,
+                    _ => mode1.vrefresh().cmp(&mode2.vrefresh()),
+                }
+            })
+            .copied();
+
+        output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
             device_id: node,
+            mode,
         });
 
         let allocator = GbmAllocator::new(
@@ -901,7 +918,7 @@ impl State {
             .outputs()
             .find(|o| {
                 o.user_data()
-                    .get::<UdevOutputId>()
+                    .get::<UdevOutputData>()
                     .map(|id| id.device_id == node && id.crtc == crtc)
                     .unwrap_or(false)
             })
@@ -1001,11 +1018,11 @@ impl State {
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let Backend::Udev(backend) = &mut self.backend else {
+        let Backend::Udev(udev) = &mut self.backend else {
             unreachable!()
         };
 
-        let device_backend = match backend.backends.get_mut(&dev_id) {
+        let device_backend = match udev.backends.get_mut(&dev_id) {
             Some(backend) => backend,
             None => {
                 tracing::error!("Trying to finish frame on non-existent backend {}", dev_id);
@@ -1022,11 +1039,9 @@ impl State {
         };
 
         let output = if let Some(output) = self.space.outputs().find(|o| {
-            o.user_data().get::<UdevOutputId>()
-                == Some(&UdevOutputId {
-                    device_id: surface.device_id,
-                    crtc,
-                })
+            let udev_op_data = o.user_data().get::<UdevOutputData>();
+            udev_op_data
+                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
         }) {
             output.clone()
         } else {
@@ -1101,62 +1116,13 @@ impl State {
         };
 
         if schedule_render {
-            let output_refresh = match output.current_mode() {
-                Some(mode) => mode.refresh,
-                None => return,
-            };
-            // What are we trying to solve by introducing a delay here:
+            // Anvil had some stuff here about delaying a render to reduce latency,
+            // but it introduces visible hitching when scrolling, so I'm removing it here.
             //
-            // Basically it is all about latency of client provided buffers.
-            // A client driven by frame callbacks will wait for a frame callback
-            // to repaint and submit a new buffer. As we send frame callbacks
-            // as part of the repaint in the compositor the latency would always
-            // be approx. 2 frames. By introducing a delay before we repaint in
-            // the compositor we can reduce the latency to approx. 1 frame + the
-            // remaining duration from the repaint to the next VBlank.
-            //
-            // With the delay it is also possible to further reduce latency if
-            // the client is driven by presentation feedback. As the presentation
-            // feedback is directly sent after a VBlank the client can submit a
-            // new buffer during the repaint delay that can hit the very next
-            // VBlank, thus reducing the potential latency to below one frame.
-            //
-            // Choosing a good delay is a topic on its own so we just implement
-            // a simple strategy here. We just split the duration between two
-            // VBlanks into two steps, one for the client repaint and one for the
-            // compositor repaint. Theoretically the repaint in the compositor should
-            // be faster so we give the client a bit more time to repaint. On a typical
-            // modern system the repaint in the compositor should not take more than 2ms
-            // so this should be safe for refresh rates up to at least 120 Hz. For 120 Hz
-            // this results in approx. 3.33ms time for repainting in the compositor.
-            // A too big delay could result in missing the next VBlank in the compositor.
-            //
-            // A more complete solution could work on a sliding window analyzing past repaints
-            // and do some prediction for the next repaint.
-            let repaint_delay =
-                Duration::from_millis(((1_000_000f32 / output_refresh as f32) * 0.6f32) as u64);
-
-            let timer = if backend.primary_gpu != surface.render_node {
-                // However, if we need to do a copy, that might not be enough.
-                // (And without actual comparision to previous frames we cannot really know.)
-                // So lets ignore that in those cases to avoid thrashing performance.
-                tracing::trace!("scheduling repaint timer immediately on {:?}", crtc);
-                Timer::immediate()
-            } else {
-                tracing::trace!(
-                    "scheduling repaint timer with delay {:?} on {:?}",
-                    repaint_delay,
-                    crtc
-                );
-                Timer::from_duration(repaint_delay)
-            };
-
-            self.loop_handle
-                .insert_source(timer, move |_, _, data| {
-                    data.state.render(dev_id, Some(crtc));
-                    TimeoutAction::Drop
-                })
-                .expect("failed to schedule frame timer");
+            // If latency is a problem then future me can deal with it :)
+            self.loop_handle.insert_idle(move |data| {
+                data.state.render(dev_id, Some(crtc));
+            });
         }
     }
 
@@ -1256,11 +1222,9 @@ impl State {
             });
 
         let output = if let Some(output) = self.space.outputs().find(|o| {
-            o.user_data().get::<UdevOutputId>()
-                == Some(&UdevOutputId {
-                    device_id: surface.device_id,
-                    crtc,
-                })
+            let udev_op_data = o.user_data().get::<UdevOutputData>();
+            udev_op_data
+                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
         }) {
             output.clone()
         } else {
@@ -1311,23 +1275,33 @@ impl State {
         };
 
         if reschedule {
-            let output_refresh = match output.current_mode() {
-                Some(mode) => mode.refresh,
-                None => {
-                    return;
-                }
+            let Some(data) = output.user_data().get::<UdevOutputData>() else {
+                unreachable!()
             };
+
+            // Literally no idea if this refresh time calculation is doing anything, but we're
+            // gonna keep it here because I already added the stuff for it
+            let refresh_time = if let Some(mode) = data.mode {
+                self::utils::refresh_time(mode)
+            } else {
+                let output_refresh = match output.current_mode() {
+                    Some(mode) => mode.refresh,
+                    None => {
+                        return;
+                    }
+                };
+                Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64)
+            };
+
             // If reschedule is true we either hit a temporary failure or more likely rendering
             // did not cause any damage on the output. In this case we just re-schedule a repaint
             // after approx. one frame to re-test for damage.
-            let reschedule_duration =
-                Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64);
             tracing::trace!(
                 "reschedule repaint timer with delay {:?} on {:?}",
-                reschedule_duration,
+                refresh_time,
                 crtc,
             );
-            let timer = Timer::from_duration(reschedule_duration);
+            let timer = Timer::from_duration(refresh_time);
             self.loop_handle
                 .insert_source(timer, move |_, _, data| {
                     data.state.render(node, Some(crtc));
@@ -1465,8 +1439,7 @@ fn render_surface<'a>(
 
     let time = clock.now();
 
-    // We need to send frames to the cursor surface so that xwayland windows will properly
-    // update the cursor on motion.
+    // Send frames to the cursor surface to get it to update correctly
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
