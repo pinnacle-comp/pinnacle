@@ -165,26 +165,22 @@ pub fn run_udev() -> anyhow::Result<()> {
     // Initialize session
     let (session, notifier) = LibSeatSession::new()?;
 
-    // Initialize the compositor
-    let primary_gpu = if let Ok(var) = std::env::var("ANVIL_DRM_DEVICE") {
-        DrmNode::from_path(var).expect("Invalid drm device path")
-    } else {
-        udev::primary_gpu(&session.seat())
-            .unwrap()
-            .and_then(|x| {
-                DrmNode::from_path(x)
-                    .ok()?
-                    .node_with_type(NodeType::Render)?
-                    .ok()
-            })
-            .unwrap_or_else(|| {
-                udev::all_gpus(session.seat())
-                    .unwrap()
-                    .into_iter()
-                    .find_map(|x| DrmNode::from_path(x).ok())
-                    .expect("No GPU!")
-            })
-    };
+    // Get the primary gpu
+    let primary_gpu = udev::primary_gpu(&session.seat())
+        .expect("unable to get primary gpu path")
+        .and_then(|x| {
+            DrmNode::from_path(x)
+                .ok()?
+                .node_with_type(NodeType::Render)?
+                .ok()
+        })
+        .unwrap_or_else(|| {
+            udev::all_gpus(session.seat())
+                .unwrap()
+                .into_iter()
+                .find_map(|x| DrmNode::from_path(x).ok())
+                .expect("No GPU!")
+        });
     tracing::info!("Using {} as primary gpu.", primary_gpu);
 
     let gpu_manager = GpuManager::new(GbmGlesBackend::default()).unwrap();
@@ -274,7 +270,6 @@ pub fn run_udev() -> anyhow::Result<()> {
         anyhow::bail!("Failed to insert libinput_backend into event loop: {err}");
     }
 
-    let handle = event_loop.handle();
     event_loop
         .handle()
         .insert_source(notifier, move |event, &mut (), data| {
@@ -312,7 +307,9 @@ pub fn run_udev() -> anyhow::Result<()> {
                             // otherwise
                             surface.compositor.reset_buffers();
                         }
-                        handle.insert_idle(move |data| data.state.render(node, None));
+                        data.state
+                            .loop_handle
+                            .insert_idle(move |data| data.state.render(node, None));
                     }
                 }
             }
@@ -326,40 +323,29 @@ pub fn run_udev() -> anyhow::Result<()> {
             .shm_formats(),
     );
 
-    let skip_vulkan = std::env::var("ANVIL_NO_VULKAN")
-        .map(|x| {
-            x == "1"
-                || x.to_lowercase() == "true"
-                || x.to_lowercase() == "yes"
-                || x.to_lowercase() == "y"
-        })
-        .unwrap_or(false);
-
-    if !skip_vulkan {
-        if let Ok(instance) = vulkan::Instance::new(Version::VERSION_1_2, None) {
-            if let Some(physical_device) =
-                PhysicalDevice::enumerate(&instance)
-                    .ok()
-                    .and_then(|devices| {
-                        devices
-                            .filter(|phd| phd.has_device_extension(ExtPhysicalDeviceDrmFn::name()))
-                            .find(|phd| {
-                                phd.primary_node().unwrap() == Some(primary_gpu)
-                                    || phd.render_node().unwrap() == Some(primary_gpu)
-                            })
-                    })
-            {
-                match VulkanAllocator::new(
-                    &physical_device,
-                    ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
-                ) {
-                    Ok(allocator) => {
-                        udev.allocator = Some(Box::new(DmabufAllocator(allocator))
-                            as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
-                    }
-                    Err(err) => {
-                        tracing::warn!("Failed to create vulkan allocator: {}", err);
-                    }
+    if let Ok(instance) = vulkan::Instance::new(Version::VERSION_1_2, None) {
+        if let Some(physical_device) =
+            PhysicalDevice::enumerate(&instance)
+                .ok()
+                .and_then(|devices| {
+                    devices
+                        .filter(|phd| phd.has_device_extension(ExtPhysicalDeviceDrmFn::name()))
+                        .find(|phd| {
+                            phd.primary_node().unwrap() == Some(primary_gpu)
+                                || phd.render_node().unwrap() == Some(primary_gpu)
+                        })
+                })
+        {
+            match VulkanAllocator::new(
+                &physical_device,
+                ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
+            ) {
+                Ok(allocator) => {
+                    udev.allocator = Some(Box::new(DmabufAllocator(allocator))
+                        as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
+                }
+                Err(err) => {
+                    tracing::warn!("Failed to create vulkan allocator: {}", err);
                 }
             }
         }
@@ -382,7 +368,6 @@ pub fn run_udev() -> anyhow::Result<()> {
         });
     }
 
-    #[cfg_attr(not(feature = "egl"), allow(unused_mut))]
     let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu).unwrap();
 
     {
