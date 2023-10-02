@@ -5,7 +5,7 @@ mod api_handlers;
 use std::{cell::RefCell, os::fd::AsRawFd, sync::Arc, time::Duration};
 
 use crate::{
-    backend::{udev::Udev, winit::Winit, BackendData},
+    backend::Backend,
     config::{
         api::{msg::Msg, ApiState},
         Config,
@@ -47,37 +47,6 @@ use smithay::{
 };
 
 use crate::input::InputState;
-
-pub enum Backend {
-    /// The compositor is running in a Winit window
-    Winit(Winit),
-    /// The compositor is running in a tty
-    Udev(Udev),
-}
-
-impl Backend {
-    pub fn seat_name(&self) -> String {
-        match self {
-            Backend::Winit(winit) => winit.seat_name(),
-            Backend::Udev(udev) => udev.seat_name(),
-        }
-    }
-
-    pub fn early_import(&mut self, surface: &WlSurface) {
-        match self {
-            Backend::Winit(winit) => winit.early_import(surface),
-            Backend::Udev(udev) => udev.early_import(surface),
-        }
-    }
-
-    /// Returns `true` if the backend is [`Winit`].
-    ///
-    /// [`Winit`]: Backend::Winit
-    #[must_use]
-    pub fn is_winit(&self) -> bool {
-        matches!(self, Self::Winit(..))
-    }
-}
 
 /// The main state of the application.
 pub struct State {

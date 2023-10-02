@@ -35,11 +35,11 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{Backend, CalloopData, State, WithState},
+    state::{CalloopData, State, WithState},
     window::WindowElement,
 };
 
-use super::BackendData;
+use super::{Backend, BackendData};
 
 pub struct Winit {
     pub backend: WinitGraphicsBackend<GlesRenderer>,

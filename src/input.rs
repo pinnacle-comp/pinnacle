@@ -3,9 +3,10 @@
 use std::collections::HashMap;
 
 use crate::{
+    backend::Backend,
     config::api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
     focus::FocusTarget,
-    state::{Backend, WithState},
+    state::WithState,
     window::WindowElement,
 };
 use smithay::{

@@ -88,13 +88,14 @@ use smithay_drm_extras::{
 };
 
 use crate::{
+    backend::Backend,
     config::{
         api::msg::{Args, OutgoingMsg},
         ConnectorSavedState,
     },
     output::OutputName,
     render::{pointer::PointerElement, take_presentation_feedback, CustomRenderElements},
-    state::{Backend, CalloopData, State, SurfaceDmabufFeedback, WithState},
+    state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
 
