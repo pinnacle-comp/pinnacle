@@ -159,7 +159,7 @@ impl BackendData for Udev {
 }
 
 pub fn run_udev() -> anyhow::Result<()> {
-    let mut event_loop = EventLoop::try_new().unwrap();
+    let mut event_loop = EventLoop::try_new_high_precision().unwrap();
     let mut display = Display::new().unwrap();
 
     // Initialize session
@@ -377,7 +377,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         );
         match renderer.bind_wl_display(&display.handle()) {
             Ok(_) => tracing::info!("EGL hardware-acceleration enabled"),
-            Err(err) => tracing::info!(?err, "Failed to initialize EGL hardware-acceleration"),
+            Err(err) => tracing::error!(?err, "Failed to initialize EGL hardware-acceleration"),
         }
     }
 
@@ -385,7 +385,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
     let default_feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
         .build()
-        .unwrap();
+        .expect("failed to create dmabuf feedback");
     let mut dmabuf_state = DmabufState::new();
     let global = dmabuf_state
         .create_global_with_default_feedback::<State>(&display.handle(), &default_feedback);

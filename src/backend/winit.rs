@@ -62,7 +62,7 @@ impl BackendData for Winit {
 
 /// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new_high_precision()?;
 
     let mut display: Display<State> = Display::new()?;
     let display_handle = display.handle();
