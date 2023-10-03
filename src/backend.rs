@@ -28,12 +28,45 @@ use smithay::{
 };
 
 use crate::{
-    state::{Backend, State, SurfaceDmabufFeedback},
+    state::{State, SurfaceDmabufFeedback},
     window::WindowElement,
 };
 
+use self::{udev::Udev, winit::Winit};
+
 pub mod udev;
 pub mod winit;
+
+pub enum Backend {
+    /// The compositor is running in a Winit window
+    Winit(Winit),
+    /// The compositor is running in a tty
+    Udev(Udev),
+}
+
+impl Backend {
+    pub fn seat_name(&self) -> String {
+        match self {
+            Backend::Winit(winit) => winit.seat_name(),
+            Backend::Udev(udev) => udev.seat_name(),
+        }
+    }
+
+    pub fn early_import(&mut self, surface: &WlSurface) {
+        match self {
+            Backend::Winit(winit) => winit.early_import(surface),
+            Backend::Udev(udev) => udev.early_import(surface),
+        }
+    }
+
+    /// Returns `true` if the backend is [`Winit`].
+    ///
+    /// [`Winit`]: Backend::Winit
+    #[must_use]
+    pub fn is_winit(&self) -> bool {
+        matches!(self, Self::Winit(..))
+    }
+}
 
 /// A trait defining common methods for each available backend: winit and tty-udev
 pub trait BackendData: 'static {

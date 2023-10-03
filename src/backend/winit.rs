@@ -35,11 +35,11 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{Backend, CalloopData, State, WithState},
+    state::{CalloopData, State, WithState},
     window::WindowElement,
 };
 
-use super::BackendData;
+use super::{Backend, BackendData};
 
 pub struct Winit {
     pub backend: WinitGraphicsBackend<GlesRenderer>,
@@ -62,7 +62,7 @@ impl BackendData for Winit {
 
 /// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new_high_precision()?;
 
     let mut display: Display<State> = Display::new()?;
     let display_handle = display.handle();
