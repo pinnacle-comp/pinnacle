@@ -3,13 +3,14 @@
 use smithay::{
     backend::renderer::{
         element::{
+            self,
             surface::{self, WaylandSurfaceRenderElement},
             texture::{TextureBuffer, TextureRenderElement},
             AsRenderElements,
         },
         ImportAll, Renderer, Texture,
     },
-    input::pointer::CursorImageStatus,
+    input::pointer::{CursorIcon, CursorImageStatus},
     render_elements,
     utils::{Physical, Point, Scale},
 };
@@ -23,7 +24,7 @@ impl<T: Texture> Default for PointerElement<T> {
     fn default() -> Self {
         Self {
             texture: Default::default(),
-            status: CursorImageStatus::Default,
+            status: CursorImageStatus::default_named(),
         }
     }
 }
@@ -64,7 +65,7 @@ where
     ) -> Vec<C> {
         match &self.status {
             CursorImageStatus::Hidden => vec![],
-            CursorImageStatus::Default => {
+            CursorImageStatus::Named(CursorIcon::Default) => {
                 if let Some(texture) = self.texture.as_ref() {
                     vec![PointerRenderElement::<R>::from(
                         TextureRenderElement::from_texture_buffer(
@@ -73,6 +74,7 @@ where
                             None,
                             None,
                             None,
+                            element::Kind::Cursor,
                         ),
                     )
                     .into()]
@@ -80,10 +82,16 @@ where
                     vec![]
                 }
             }
+            CursorImageStatus::Named(_) => vec![],
             CursorImageStatus::Surface(surface) => {
                 let elements: Vec<PointerRenderElement<R>> =
                     surface::render_elements_from_surface_tree(
-                        renderer, surface, location, scale, alpha,
+                        renderer,
+                        surface,
+                        location,
+                        scale,
+                        alpha,
+                        element::Kind::Cursor,
                     );
                 elements.into_iter().map(C::from).collect()
             }

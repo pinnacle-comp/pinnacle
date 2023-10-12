@@ -3,17 +3,20 @@
 use smithay::{
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
-        data_device::{
+        selection::data_device::{
             clear_data_device_selection, current_data_device_selection_userdata,
             request_data_device_client_selection, set_data_device_selection,
         },
-        primary_selection::{
-            clear_primary_selection, current_primary_selection_userdata,
-            request_primary_client_selection, set_primary_selection,
+        selection::{
+            primary_selection::{
+                clear_primary_selection, current_primary_selection_userdata,
+                request_primary_client_selection, set_primary_selection,
+            },
+            SelectionTarget,
         },
     },
     xwayland::{
-        xwm::{Reorder, SelectionType, WmWindowType, XwmId},
+        xwm::{Reorder, WmWindowType, XwmId},
         X11Surface, X11Wm, XwmHandler,
     },
 };
@@ -403,7 +406,7 @@ impl XwmHandler for CalloopData {
         );
     }
 
-    fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionType) -> bool {
+    fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
         self.state
             .seat
             .get_keyboard()
@@ -420,12 +423,12 @@ impl XwmHandler for CalloopData {
     fn send_selection(
         &mut self,
         _xwm: XwmId,
-        selection: SelectionType,
+        selection: SelectionTarget,
         mime_type: String,
         fd: std::os::fd::OwnedFd,
     ) {
         match selection {
-            SelectionType::Clipboard => {
+            SelectionTarget::Clipboard => {
                 if let Err(err) =
                     request_data_device_client_selection(&self.state.seat, mime_type, fd)
                 {
@@ -435,7 +438,7 @@ impl XwmHandler for CalloopData {
                     );
                 }
             }
-            SelectionType::Primary => {
+            SelectionTarget::Primary => {
                 if let Err(err) = request_primary_client_selection(&self.state.seat, mime_type, fd)
                 {
                     tracing::error!(
@@ -447,9 +450,9 @@ impl XwmHandler for CalloopData {
         }
     }
 
-    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionType, mime_types: Vec<String>) {
+    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
         match selection {
-            SelectionType::Clipboard => {
+            SelectionTarget::Clipboard => {
                 set_data_device_selection(
                     &self.state.display_handle,
                     &self.state.seat,
@@ -457,20 +460,20 @@ impl XwmHandler for CalloopData {
                     (),
                 );
             }
-            SelectionType::Primary => {
+            SelectionTarget::Primary => {
                 set_primary_selection(&self.state.display_handle, &self.state.seat, mime_types, ());
             }
         }
     }
 
-    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionType) {
+    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
         match selection {
-            SelectionType::Clipboard => {
+            SelectionTarget::Clipboard => {
                 if current_data_device_selection_userdata(&self.state.seat).is_some() {
                     clear_data_device_selection(&self.state.display_handle, &self.state.seat);
                 }
             }
-            SelectionType::Primary => {
+            SelectionTarget::Primary => {
                 if current_primary_selection_userdata(&self.state.seat).is_some() {
                     clear_primary_selection(&self.state.display_handle, &self.state.seat);
                 }

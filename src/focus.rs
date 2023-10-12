@@ -112,6 +112,14 @@ impl TryFrom<FocusTarget> for WlSurface {
 }
 
 impl PointerTarget<State> for FocusTarget {
+    fn frame(&self, seat: &Seat<State>, data: &mut State) {
+        match self {
+            FocusTarget::Window(window) => window.frame(seat, data),
+            FocusTarget::Popup(popup) => popup.wl_surface().frame(seat, data),
+            FocusTarget::LayerSurface(surf) => surf.frame(seat, data),
+        }
+    }
+
     fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         match self {
             FocusTarget::Window(window) => PointerTarget::enter(window, seat, data, event),
