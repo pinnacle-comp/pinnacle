@@ -197,7 +197,7 @@ impl XdgShellHandler for State {
                 if let Some(popup) = self.popup_manager.find_popup(s) {
                     // popup.geometry() doesn't return the right location, so we dive into the
                     // PopupSurface's state to grab it.
-                    let PopupKind::Xdg(popup_surf) = &popup;
+                    let PopupKind::Xdg(popup_surf) = &popup else { return }; // TODO:
                     let l = popup_surf.with_pending_state(|state| state.geometry.loc);
                     tracing::debug!(loc = ?l, "parent is popup");
                     loc += l;

@@ -3,6 +3,8 @@
 mod xdg_shell;
 mod xwayland;
 
+use std::os::fd::OwnedFd;
+
 use smithay::{
     backend::renderer::utils,
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
@@ -13,7 +15,6 @@ use smithay::{
     output::Output,
     reexports::{
         calloop::Interest,
-        wayland_protocols::wp::primary_selection::zv1::server::zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1,
         wayland_server::{
             protocol::{
                 wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
@@ -28,23 +29,26 @@ use smithay::{
             self, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
             SurfaceAttributes,
         },
-        data_device::{
-            self, set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-            ServerDndGrabHandler,
-        },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
-        primary_selection::{
-            self, set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
-        },
         seat::WaylandFocus,
+        selection::data_device::{
+            set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+            ServerDndGrabHandler,
+        },
+        selection::{
+            primary_selection::{
+                set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
+            },
+            SelectionHandler, SelectionSource, SelectionTarget,
+        },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
             xdg::{XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
     },
-    xwayland::{xwm::SelectionType, X11Wm, XWaylandClientData},
+    xwayland::{X11Wm, XWaylandClientData},
 };
 
 use crate::{
@@ -83,7 +87,7 @@ impl CompositorHandler for State {
                     let res = state.loop_handle.insert_source(source, move |_, _, data| {
                         data.state
                             .client_compositor_state(&client)
-                            .blocker_cleared(&mut data.state, &data.display.handle());
+                            .blocker_cleared(&mut data.state, &data.display_handle);
                         Ok(())
                     });
                     if res.is_ok() {
@@ -164,7 +168,7 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
     }
 
     if let Some(popup) = state.popup_manager.find_popup(surface) {
-        let PopupKind::Xdg(popup) = &popup;
+        let PopupKind::Xdg(popup) = &popup else { return };
         let initial_configure_sent = compositor::with_states(surface, |states| {
             states
                 .data_map
@@ -227,86 +231,48 @@ impl ClientDndGrabHandler for State {
 
 impl ServerDndGrabHandler for State {}
 
-impl DataDeviceHandler for State {
+impl SelectionHandler for State {
     type SelectionUserData = ();
 
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.data_device_state
-    }
-
-    fn new_selection(&mut self, source: Option<WlDataSource>, _seat: Seat<Self>) {
+    fn new_selection(
+        &mut self,
+        ty: SelectionTarget,
+        source: Option<SelectionSource>,
+        _seat: Seat<Self>,
+    ) {
         if let Some(xwm) = self.xwm.as_mut() {
-            if let Some(source) = source {
-                if let Ok(Err(err)) = data_device::with_source_metadata(&source, |metadata| {
-                    xwm.new_selection(SelectionType::Clipboard, Some(metadata.mime_types.clone()))
-                }) {
-                    tracing::warn!(?err, "Failed to set Xwayland clipboard selection");
-                }
-            } else if let Err(err) = xwm.new_selection(SelectionType::Clipboard, None) {
-                tracing::warn!(?err, "Failed to clear Xwayland clipboard selection");
+            if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
+                tracing::warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
         }
     }
 
     fn send_selection(
         &mut self,
+        ty: SelectionTarget,
         mime_type: String,
-        fd: std::os::fd::OwnedFd,
+        fd: OwnedFd,
         _seat: Seat<Self>,
-        _user_data: &Self::SelectionUserData,
+        _user_data: &(),
     ) {
         if let Some(xwm) = self.xwm.as_mut() {
-            if let Err(err) = xwm.send_selection(
-                SelectionType::Clipboard,
-                mime_type,
-                fd,
-                self.loop_handle.clone(),
-            ) {
-                tracing::warn!(?err, "Failed to send clipboard (X11 -> Wayland)");
+            if let Err(err) = xwm.send_selection(ty, mime_type, fd, self.loop_handle.clone()) {
+                tracing::warn!(?err, "Failed to send primary (X11 -> Wayland)");
             }
         }
+    }
+}
+
+impl DataDeviceHandler for State {
+    fn data_device_state(&self) -> &DataDeviceState {
+        &self.data_device_state
     }
 }
 delegate_data_device!(State);
 
 impl PrimarySelectionHandler for State {
-    type SelectionUserData = ();
-
     fn primary_selection_state(&self) -> &PrimarySelectionState {
         &self.primary_selection_state
-    }
-
-    fn new_selection(&mut self, source: Option<ZwpPrimarySelectionSourceV1>, _seat: Seat<Self>) {
-        if let Some(xwm) = self.xwm.as_mut() {
-            if let Some(source) = source {
-                if let Ok(Err(err)) = primary_selection::with_source_metadata(&source, |metadata| {
-                    xwm.new_selection(SelectionType::Primary, Some(metadata.mime_types.clone()))
-                }) {
-                    tracing::warn!(?err, "Failed to set Xwayland primary selection");
-                }
-            } else if let Err(err) = xwm.new_selection(SelectionType::Primary, None) {
-                tracing::warn!(?err, "Failed to clear Xwayland primary selection");
-            }
-        }
-    }
-
-    fn send_selection(
-        &mut self,
-        mime_type: String,
-        fd: std::os::fd::OwnedFd,
-        _seat: Seat<Self>,
-        _user_data: &Self::SelectionUserData,
-    ) {
-        if let Some(xwm) = self.xwm.as_mut() {
-            if let Err(err) = xwm.send_selection(
-                SelectionType::Primary,
-                mime_type,
-                fd,
-                self.loop_handle.clone(),
-            ) {
-                tracing::warn!(?err, "Failed to send primary (X11 -> Wayland)");
-            }
-        }
     }
 }
 delegate_primary_selection!(State);

@@ -19,6 +19,7 @@ use smithay::{
 use toml::Table;
 
 use api::msg::Modifier;
+use xkbcommon::xkb::Keysym;
 
 use crate::{
     state::{State, WithState},
@@ -286,8 +287,8 @@ impl State {
         let reload_mask = ModifierMask::from(reload_keybind.modifiers);
         let kill_mask = ModifierMask::from(kill_keybind.modifiers);
 
-        let reload_keybind = (reload_mask, reload_keybind.key as u32);
-        let kill_keybind = (kill_mask, kill_keybind.key as u32);
+        let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
+        let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
 
         let socket_token = self
             .loop_handle

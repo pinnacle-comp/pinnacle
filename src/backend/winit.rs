@@ -27,10 +27,7 @@ use smithay::{
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
     utils::{IsAlive, Transform},
-    wayland::{
-        dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
-        input_method::InputMethodSeat,
-    },
+    wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 
 use crate::{
@@ -62,9 +59,9 @@ impl BackendData for Winit {
 
 /// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new_high_precision()?;
+    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
 
-    let mut display: Display<State> = Display::new()?;
+    let display: Display<State> = Display::new()?;
     let display_handle = display.handle();
 
     let evt_loop_handle = event_loop.handle();
@@ -84,8 +81,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         size: (0, 0).into(),
         subpixel: Subpixel::Unknown,
         make: "Pinnacle".to_string(),
-        model: "69LongMonitorNameXQ83VGX Super Ultra Pro Max XTX Ti Plus with Max-Q Design (and Knuckles)"
-            .to_string(),
+        model: "Winit Window".to_string(),
     };
 
     let output = Output::new("Pinnacle window".to_string(), physical_properties);
@@ -160,7 +156,7 @@ pub fn run_winit() -> anyhow::Result<()> {
             dmabuf_state,
             full_redraw: 0,
         }),
-        &mut display,
+        display,
         event_loop.get_signal(),
         evt_loop_handle,
     )?;
@@ -193,7 +189,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         state
             .loop_handle
             .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
-                let display = &mut data.display;
+                let display_handle = &mut data.display_handle;
                 let state = &mut data.state;
 
                 let result = winit_evt_loop.dispatch_new_events(|event| match event {
@@ -230,7 +226,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 if let CursorImageStatus::Surface(surface) = &state.cursor_status {
                     if !surface.alive() {
-                        state.cursor_status = CursorImageStatus::Default;
+                        state.cursor_status = CursorImageStatus::default_named();
                     }
                 }
 
@@ -277,7 +273,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                     state.space.refresh();
                     state.popup_manager.cleanup();
-                    display
+                    display_handle
                         .flush_clients()
                         .expect("failed to flush client buffers");
 
@@ -303,7 +299,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     state.pointer_location,
                     &mut state.cursor_status,
                     state.dnd_icon.as_ref(),
-                    state.seat.input_method(),
+                    // state.seat.input_method(),
                     &mut pointer_element,
                     None,
                 );
@@ -387,7 +383,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 
                 state.space.refresh();
                 state.popup_manager.cleanup();
-                display
+                display_handle
                     .flush_clients()
                     .expect("failed to flush client buffers");
 
@@ -400,7 +396,10 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     event_loop.run(
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut CalloopData { display, state },
+        &mut CalloopData {
+            display_handle,
+            state,
+        },
         |_data| {
             // println!("{}", _data.state.space.elements().count());
         },

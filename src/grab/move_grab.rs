@@ -32,6 +32,10 @@ pub struct MoveSurfaceGrab<S: SeatHandler> {
 }
 
 impl PointerGrab<State> for MoveSurfaceGrab<State> {
+    fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
+        handle.frame(data);
+    }
+
     fn motion(
         &mut self,
         state: &mut State,

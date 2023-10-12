@@ -2,7 +2,7 @@
 
 mod api_handlers;
 
-use std::{cell::RefCell, os::fd::AsRawFd, sync::Arc, time::Duration};
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use crate::{
     backend::Backend,
@@ -33,11 +33,11 @@ use smithay::{
     utils::{Clock, Logical, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
-        data_device::DataDeviceState,
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
-        primary_selection::PrimarySelectionState,
+        selection::data_device::DataDeviceState,
+        selection::primary_selection::PrimarySelectionState,
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -103,7 +103,7 @@ impl State {
     /// Creates the central state and starts the config and xwayland
     pub fn init(
         backend: Backend,
-        display: &mut Display<Self>,
+        display: Display<Self>,
         loop_signal: LoopSignal,
         loop_handle: LoopHandle<'static, CalloopData>,
     ) -> anyhow::Result<Self> {
@@ -134,20 +134,23 @@ impl State {
         }
 
         loop_handle.insert_source(socket, |stream, _metadata, data| {
-            data.display
-                .handle()
+            data.display_handle
                 .insert_client(stream, Arc::new(ClientState::default()))
                 .expect("Could not insert client into loop handle");
         })?;
 
+        let display_handle = display.handle();
+
         loop_handle.insert_source(
-            Generic::new(
-                display.backend().poll_fd().as_raw_fd(),
-                Interest::READ,
-                Mode::Level,
-            ),
-            |_readiness, _metadata, data| {
-                data.display.dispatch_clients(&mut data.state)?;
+            Generic::new(display, Interest::READ, Mode::Level),
+            |_readiness, display, data| {
+                // Safety: we don't drop the display
+                unsafe {
+                    display
+                        .get_mut()
+                        .dispatch_clients(&mut data.state)
+                        .expect("failed to dispatch clients");
+                }
                 Ok(PostAction::Continue)
             },
         )?;
@@ -166,7 +169,6 @@ impl State {
             anyhow::bail!("Failed to insert async executor into event loop: {err}");
         }
 
-        let display_handle = display.handle();
         let mut seat_state = SeatState::new();
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
@@ -241,7 +243,7 @@ impl State {
             pointer_location: (0.0, 0.0).into(),
             shm_state: ShmState::new::<Self>(&display_handle, vec![]),
             space: Space::<WindowElement>::default(),
-            cursor_status: CursorImageStatus::Default,
+            cursor_status: CursorImageStatus::default_named(),
             output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
             xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
             viewporter_state: ViewporterState::new::<Self>(&display_handle),
@@ -313,7 +315,7 @@ impl State {
 }
 
 pub struct CalloopData {
-    pub display: Display<State>,
+    pub display_handle: DisplayHandle,
     pub state: State,
 }
 

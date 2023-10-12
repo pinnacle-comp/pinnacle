@@ -83,6 +83,10 @@ impl<S: SeatHandler> ResizeSurfaceGrab<S> {
 }
 
 impl PointerGrab<State> for ResizeSurfaceGrab<State> {
+    fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
+        handle.frame(data);
+    }
+
     fn motion(
         &mut self,
         data: &mut State,

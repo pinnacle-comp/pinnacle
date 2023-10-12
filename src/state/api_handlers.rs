@@ -58,7 +58,7 @@ impl State {
 
                 self.input_state
                     .keybinds
-                    .insert((modifiers.into(), key), callback_id);
+                    .insert((modifiers.into(), key.into()), callback_id);
             }
             Msg::SetMousebind {
                 modifiers,

@@ -27,17 +27,18 @@ use smithay::{
     utils::{Logical, Point, SERIAL_COUNTER},
     wayland::{seat::WaylandFocus, shell::wlr_layer},
 };
+use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
 
 #[derive(Default, Debug)]
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
-    pub keybinds: HashMap<(ModifierMask, u32), CallbackId>,
+    pub keybinds: HashMap<(ModifierMask, Keysym), CallbackId>,
     /// A hashmap of modifier keys and mouse button codes to callback IDs
     pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
-    pub reload_keybind: Option<(ModifierMask, u32)>,
-    pub kill_keybind: Option<(ModifierMask, u32)>,
+    pub reload_keybind: Option<(ModifierMask, Keysym)>,
+    pub kill_keybind: Option<(ModifierMask, Keysym)>,
     pub libinput_settings: Vec<LibinputSetting>,
     pub libinput_devices: Vec<input::Device>,
 }
@@ -337,7 +338,7 @@ impl State {
                     } else if Some((modifier_mask, mod_sym)) == reload_keybind {
                         return FilterResult::Intercept(KeyAction::ReloadConfig);
                     } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
-                        ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym()
+                        ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
                         tracing::info!("Switching to vt {vt}");
@@ -345,7 +346,7 @@ impl State {
                     }
                 }
 
-                if keysym.modified_sym() == keysyms::KEY_Control_L {
+                if keysym.modified_sym() == Keysym::Control_L {
                     match press_state {
                         KeyState::Pressed => {
                             move_mode = true;

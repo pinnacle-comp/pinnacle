@@ -12,7 +12,7 @@ use smithay::{
     },
     desktop::{
         layer_map_for_output,
-        space::{SpaceElement, SpaceRenderElements, SurfaceTree},
+        space::{SpaceElement, SpaceRenderElements},
         utils::{
             surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
             OutputPresentationFeedback,
@@ -27,7 +27,7 @@ use smithay::{
     },
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
-    wayland::{compositor, input_method::InputMethodHandle, shell::wlr_layer},
+    wayland::{compositor, shell::wlr_layer},
     xwayland::X11Surface,
 };
 
@@ -181,7 +181,7 @@ pub fn generate_render_elements<R, T>(
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
-    input_method: &InputMethodHandle,
+    // input_method: &InputMethodHandle,
     pointer_element: &mut PointerElement<T>,
     pointer_image: Option<&TextureBuffer<T>>,
 ) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
@@ -196,21 +196,21 @@ where
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut custom_render_elements: Vec<CustomRenderElements<_, _>> = Vec::new();
-    // draw input method surface if any
-    let rectangle = input_method.coordinates();
-    let position = Point::from((
-        rectangle.loc.x + rectangle.size.w,
-        rectangle.loc.y + rectangle.size.h,
-    ));
-    input_method.with_surface(|surface| {
-        custom_render_elements.extend(AsRenderElements::<R>::render_elements(
-            &SurfaceTree::from_surface(surface),
-            renderer,
-            position.to_physical_precise_round(scale),
-            scale,
-            1.0,
-        ));
-    });
+    // // draw input method surface if any
+    // let rectangle = input_method.coordinates();
+    // let position = Point::from((
+    //     rectangle.loc.x + rectangle.size.w,
+    //     rectangle.loc.y + rectangle.size.h,
+    // ));
+    // input_method.with_surface(|surface| {
+    //     custom_render_elements.extend(AsRenderElements::<R>::render_elements(
+    //         &SurfaceTree::from_surface(surface),
+    //         renderer,
+    //         position.to_physical_precise_round(scale),
+    //         scale,
+    //         1.0,
+    //     ));
+    // });
 
     if output_geometry.to_f64().contains(pointer_location) {
         let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = cursor_status {
@@ -238,7 +238,7 @@ where
         // reset the cursor if the surface is no longer alive
         if let CursorImageStatus::Surface(surface) = &*cursor_status {
             if !surface.alive() {
-                *cursor_status = CursorImageStatus::Default;
+                *cursor_status = CursorImageStatus::default_named();
             }
         }
 

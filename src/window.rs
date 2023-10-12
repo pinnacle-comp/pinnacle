@@ -290,6 +290,13 @@ impl IsAlive for WindowElement {
 }
 
 impl PointerTarget<State> for WindowElement {
+    fn frame(&self, seat: &Seat<State>, data: &mut State) {
+        match self {
+            WindowElement::Wayland(window) => window.frame(seat, data),
+            WindowElement::X11(surface) => surface.frame(seat, data),
+        }
+    }
+
     fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {

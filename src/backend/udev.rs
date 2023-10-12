@@ -73,10 +73,7 @@ use smithay::{
         },
     },
     utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Transform},
-    wayland::{
-        dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
-        input_method::{InputMethodHandle, InputMethodSeat},
-    },
+    wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
     xwayland::X11Surface,
 };
 use smithay_drm_extras::{
@@ -159,8 +156,8 @@ impl BackendData for Udev {
 }
 
 pub fn run_udev() -> anyhow::Result<()> {
-    let mut event_loop = EventLoop::try_new_high_precision()?;
-    let mut display = Display::new()?;
+    let mut event_loop = EventLoop::try_new()?;
+    let display = Display::new()?;
 
     // Initialize session
     let (session, notifier) = LibSeatSession::new()?;
@@ -198,9 +195,11 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_element: PointerElement::default(),
     };
 
+    let display_handle = display.handle();
+
     let mut state = State::init(
         Backend::Udev(data),
-        &mut display,
+        display,
         event_loop.get_signal(),
         event_loop.handle(),
     )?;
@@ -377,7 +376,8 @@ pub fn run_udev() -> anyhow::Result<()> {
         ?primary_gpu,
         "Trying to initialize EGL Hardware Acceleration",
     );
-    match renderer.bind_wl_display(&display.handle()) {
+
+    match renderer.bind_wl_display(&display_handle) {
         Ok(_) => tracing::info!("EGL hardware-acceleration enabled"),
         Err(err) => tracing::error!(?err, "Failed to initialize EGL hardware-acceleration"),
     }
@@ -389,7 +389,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         .expect("failed to create dmabuf feedback");
     let mut dmabuf_state = DmabufState::new();
     let global = dmabuf_state
-        .create_global_with_default_feedback::<State>(&display.handle(), &default_feedback);
+        .create_global_with_default_feedback::<State>(&display_handle, &default_feedback);
     udev.dmabuf_state = Some((dmabuf_state, global));
 
     let gpu_manager = &mut udev.gpu_manager;
@@ -419,11 +419,14 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     event_loop.run(
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut CalloopData { state, display },
+        &mut CalloopData {
+            state,
+            display_handle,
+        },
         |data| {
             data.state.space.refresh();
             data.state.popup_manager.cleanup();
-            data.display
+            data.display_handle
                 .flush_clients()
                 .expect("failed to flush_clients");
         },
@@ -1244,7 +1247,7 @@ impl State {
             surface,
             &mut renderer,
             &output,
-            self.seat.input_method(),
+            // self.seat.input_method(),
             &pointer_image,
             &mut udev.pointer_element,
             self.pointer_location,
@@ -1361,7 +1364,7 @@ fn render_surface<'a>(
     surface: &'a mut SurfaceData,
     renderer: &mut UdevRenderer<'a, '_>,
     output: &Output,
-    input_method: &InputMethodHandle,
+    // input_method: &InputMethodHandle,
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
     pointer_location: Point<f64, Logical>,
@@ -1416,7 +1419,7 @@ fn render_surface<'a>(
         pointer_location,
         cursor_status,
         dnd_icon,
-        input_method,
+        // input_method,
         pointer_element,
         Some(pointer_image),
     );
