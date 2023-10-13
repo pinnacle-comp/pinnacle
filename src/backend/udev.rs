@@ -130,6 +130,18 @@ pub struct Udev {
     pointer_image: crate::cursor::Cursor,
 }
 
+impl Backend {
+    fn udev(&self) -> &Udev {
+        let Backend::Udev(udev) = self else { unreachable!() };
+        udev
+    }
+
+    fn udev_mut(&mut self) -> &mut Udev {
+        let Backend::Udev(udev) = self else { unreachable!() };
+        udev
+    }
+}
+
 impl BackendData for Udev {
     fn seat_name(&self) -> String {
         self.session.seat()
@@ -217,9 +229,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         }
     }
 
-    let Backend::Udev(udev) = &mut state.backend else {
-        unreachable!()
-    };
+    let udev = state.backend.udev_mut();
 
     event_loop
         .handle()
@@ -272,9 +282,8 @@ pub fn run_udev() -> anyhow::Result<()> {
     event_loop
         .handle()
         .insert_source(notifier, move |event, _, data| {
-            let Backend::Udev(udev) = &mut data.state.backend else {
-                unreachable!()
-            };
+            let udev = data.state.backend.udev_mut();
+
             match event {
                 session::Event::PauseSession => {
                     libinput_context.suspend();
@@ -436,7 +445,7 @@ pub fn run_udev() -> anyhow::Result<()> {
 }
 
 struct UdevBackendData {
-    surfaces: HashMap<crtc::Handle, SurfaceData>,
+    surfaces: HashMap<crtc::Handle, RenderSurface>,
     gbm: GbmDevice<DrmDeviceFd>,
     drm: DrmDevice,
     drm_scanner: DrmScanner,
@@ -525,17 +534,22 @@ struct DrmSurfaceDmabufFeedback {
     scanout_feedback: DmabufFeedback,
 }
 
-/// Data associated with a crtc.
-struct SurfaceData {
+struct RenderSurface {
+    /// The output global id.
     global: Option<GlobalId>,
+    /// A display handle used to remove the global on drop.
     display_handle: DisplayHandle,
+    /// The node from `connector_connected`.
     device_id: DrmNode,
+    /// The node doing the rendering?
     render_node: DrmNode,
+    /// The thing rendering elements and queueing frames.
     compositor: GbmDrmCompositor,
     dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
 }
 
-impl Drop for SurfaceData {
+impl Drop for RenderSurface {
+    // Stop advertising this output to clients on drop.
     fn drop(&mut self) {
         if let Some(global) = self.global.take() {
             self.display_handle.remove_global::<State>(global);
@@ -569,6 +583,8 @@ where
     <R as Renderer>::Error: Into<SwapBuffersError>,
     E: RenderElement<R>,
 {
+    use smithay::backend::drm::compositor::RenderFrameError;
+
     compositor
         .render_frame(renderer, elements, clear_color)
         .map(|render_frame_result| {
@@ -581,10 +597,8 @@ where
             }
         })
         .map_err(|err| match err {
-            smithay::backend::drm::compositor::RenderFrameError::PrepareFrame(err) => err.into(),
-            smithay::backend::drm::compositor::RenderFrameError::RenderFrame(
-                damage::Error::Rendering(err),
-            ) => err.into(),
+            RenderFrameError::PrepareFrame(err) => err.into(),
+            RenderFrameError::RenderFrame(damage::Error::Rendering(err)) => err.into(),
             _ => unreachable!(),
         })
 }
@@ -592,9 +606,7 @@ where
 impl State {
     /// A GPU was plugged in.
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         // Try to open the device
         let fd = udev
@@ -663,9 +675,7 @@ impl State {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -845,7 +855,7 @@ impl State {
             &compositor,
         );
 
-        let surface = SurfaceData {
+        let surface = RenderSurface {
             display_handle: udev.display_handle.clone(),
             device_id: node,
             render_node: device.render_node,
@@ -911,9 +921,7 @@ impl State {
     ) {
         tracing::debug!(?crtc, "connector_disconnected");
 
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -948,9 +956,7 @@ impl State {
     }
 
     fn device_changed(&mut self, node: DrmNode) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -980,11 +986,9 @@ impl State {
     /// A GPU was unplugged.
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
-            let Backend::Udev(udev) = &mut self.backend else {
-                unreachable!()
-            };
+            let udev = self.backend.udev();
 
-            let Some(device) = udev.backends.get_mut(&node) else {
+            let Some(device) = udev.backends.get(&node) else {
                 return;
             };
 
@@ -1001,9 +1005,7 @@ impl State {
 
         tracing::debug!("Surfaces dropped");
 
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         // drop the backends on this side
         if let Some(backend_data) = udev.backends.remove(&node) {
@@ -1024,9 +1026,7 @@ impl State {
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let Some(surface) = udev
             .backends
@@ -1126,9 +1126,7 @@ impl State {
 
     /// Render using the gpu on `node` to the provided `crtc`, or all available crtcs if `None`.
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device_backend = match udev.backends.get_mut(&node) {
             Some(backend) => backend,
@@ -1149,9 +1147,7 @@ impl State {
     }
 
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let Some(surface) = udev
             .backends
@@ -1316,9 +1312,7 @@ impl State {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, CalloopData>,
     ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let Some(surface) = udev
             .backends
@@ -1361,7 +1355,7 @@ fn render_surface<'a>(
     windows: &[WindowElement],
     override_redirect_windows: &[X11Surface],
     dnd_icon: Option<&WlSurface>,
-    surface: &'a mut SurfaceData,
+    surface: &'a mut RenderSurface,
     renderer: &mut UdevRenderer<'a, '_>,
     output: &Output,
     // input_method: &InputMethodHandle,
@@ -1464,7 +1458,7 @@ fn render_surface<'a>(
 }
 
 fn initial_render(
-    surface: &mut SurfaceData,
+    surface: &mut RenderSurface,
     renderer: &mut UdevRenderer<'_, '_>,
 ) -> Result<(), SwapBuffersError> {
     render_frame::<_, CustomRenderElements<_, WaylandSurfaceRenderElement<_>>, GlesTexture>(
