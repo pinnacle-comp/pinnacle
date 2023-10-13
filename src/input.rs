@@ -500,6 +500,7 @@ impl State {
                 time: event.time_msec(),
             },
         );
+        pointer.frame(self);
     }
 
     fn pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
@@ -545,10 +546,10 @@ impl State {
         //     self.seat.get_pointer().unwrap().current_focus()
         // );
 
-        self.seat
-            .get_pointer()
-            .expect("Seat has no pointer")
-            .axis(self, frame);
+        let pointer = self.seat.get_pointer().expect("Seat has no pointer");
+
+        pointer.axis(self, frame);
+        pointer.frame(self);
     }
 
     /// Clamp pointer coordinates inside outputs
@@ -626,6 +627,8 @@ impl State {
                 time: event.time_msec(),
             },
         );
+
+        pointer.frame(self);
     }
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
@@ -673,7 +676,9 @@ impl State {
                     delta_unaccel: event.delta_unaccel(),
                     utime: event.time(),
                 },
-            )
+            );
+
+            ptr.frame(self);
         }
     }
 }

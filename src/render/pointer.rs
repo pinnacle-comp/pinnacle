@@ -65,7 +65,7 @@ where
     ) -> Vec<C> {
         match &self.status {
             CursorImageStatus::Hidden => vec![],
-            CursorImageStatus::Named(CursorIcon::Default) => {
+            CursorImageStatus::Named(_) => {
                 if let Some(texture) = self.texture.as_ref() {
                     vec![PointerRenderElement::<R>::from(
                         TextureRenderElement::from_texture_buffer(
@@ -82,7 +82,6 @@ where
                     vec![]
                 }
             }
-            CursorImageStatus::Named(_) => vec![],
             CursorImageStatus::Surface(surface) => {
                 let elements: Vec<PointerRenderElement<R>> =
                     surface::render_elements_from_surface_tree(
