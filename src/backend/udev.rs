@@ -534,6 +534,7 @@ struct DrmSurfaceDmabufFeedback {
     scanout_feedback: DmabufFeedback,
 }
 
+/// Render surface for an output.
 struct RenderSurface {
     /// The output global id.
     global: Option<GlobalId>,
@@ -541,7 +542,10 @@ struct RenderSurface {
     display_handle: DisplayHandle,
     /// The node from `connector_connected`.
     device_id: DrmNode,
-    /// The node doing the rendering?
+    /// The node rendering to the screen? idk
+    ///
+    /// If this is equal to the primary gpu node then it does the rendering operations.
+    /// If it's not it is the node the composited buffer ends up on.
     render_node: DrmNode,
     /// The thing rendering elements and queueing frames.
     compositor: GbmDrmCompositor,
@@ -564,13 +568,15 @@ type GbmDrmCompositor = DrmCompositor<
     DrmDeviceFd,
 >;
 
-/// The result of a frame render from `GbmDrmCompositor::render_frame`.
+/// The result of a frame render from `render_frame`.
 struct SurfaceCompositorRenderResult {
     rendered: bool,
     states: RenderElementStates,
 }
 
 /// Render a frame with the given elements.
+///
+/// This frame needs to be queued for scanout afterwards.
 fn render_frame<R, E, Target>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut R,
@@ -1124,7 +1130,8 @@ impl State {
         }
     }
 
-    /// Render using the gpu on `node` to the provided `crtc`, or all available crtcs if `None`.
+    /// Render to the [`RenderSurface`] associated with the provided `crtc`,
+    /// or all [`RenderSurface`]s on all available crtcs if `None`.
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
         let udev = self.backend.udev_mut();
 
@@ -1146,6 +1153,7 @@ impl State {
         };
     }
 
+    /// Render to the [`RenderSurface`] associated with the given `crtc`.
     fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
         let udev = self.backend.udev_mut();
 
@@ -1235,15 +1243,14 @@ impl State {
             .collect::<Vec<_>>();
 
         let result = render_surface(
-            &mut self.cursor_status,
+            surface,
+            &mut renderer,
+            &output,
             &self.space,
             &windows,
             &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
-            surface,
-            &mut renderer,
-            &output,
-            // self.seat.input_method(),
+            &mut self.cursor_status,
             &pointer_image,
             &mut udev.pointer_element,
             self.pointer_location,
@@ -1306,6 +1313,9 @@ impl State {
         }
     }
 
+    /// Do an initial render that renders nothing to the screen.
+    ///
+    /// If that render failed, schedule another one.
     fn schedule_initial_render(
         &mut self,
         node: DrmNode,
@@ -1348,20 +1358,25 @@ impl State {
     }
 }
 
+/// Render windows, layers, and everything else needed to the given [`RenderSurface`].
+/// Also queues the frame for scanout.
 #[allow(clippy::too_many_arguments)]
 fn render_surface<'a>(
-    cursor_status: &mut CursorImageStatus,
-    space: &Space<WindowElement>,
-    windows: &[WindowElement],
-    override_redirect_windows: &[X11Surface],
-    dnd_icon: Option<&WlSurface>,
     surface: &'a mut RenderSurface,
     renderer: &mut UdevRenderer<'a, '_>,
     output: &Output,
-    // input_method: &InputMethodHandle,
+
+    space: &Space<WindowElement>,
+    windows: &[WindowElement],
+    override_redirect_windows: &[X11Surface],
+
+    dnd_icon: Option<&WlSurface>,
+    cursor_status: &mut CursorImageStatus,
+
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
     pointer_location: Point<f64, Logical>,
+
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
     let pending_wins = windows
@@ -1457,6 +1472,7 @@ fn render_surface<'a>(
     Ok(res.rendered)
 }
 
+/// Renders nothing to the given [`RenderSurface`].
 fn initial_render(
     surface: &mut RenderSurface,
     renderer: &mut UdevRenderer<'_, '_>,
