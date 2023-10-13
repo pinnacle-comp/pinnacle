@@ -299,11 +299,7 @@ pub fn run_udev() -> anyhow::Result<()> {
                     if let Err(err) = libinput_context.resume() {
                         tracing::error!("Failed to resume libinput context: {:?}", err);
                     }
-                    for (node, backend) in udev
-                        .backends
-                        .iter_mut()
-                        .map(|(handle, backend)| (*handle, backend))
-                    {
+                    for backend in udev.backends.values_mut() {
                         backend.drm.activate();
                         for surface in backend.surfaces.values_mut() {
                             if let Err(err) = surface.compositor.surface().reset_state() {
@@ -315,9 +311,12 @@ pub fn run_udev() -> anyhow::Result<()> {
                             // otherwise
                             surface.compositor.reset_buffers();
                         }
+                    }
+
+                    for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
                         data.state
                             .loop_handle
-                            .insert_idle(move |data| data.state.render(node, None));
+                            .insert_idle(move |data| data.state.render_surface(&output));
                     }
                 }
             }
@@ -1125,42 +1124,28 @@ impl State {
             //
             // If latency is a problem then future me can deal with it :)
             self.loop_handle.insert_idle(move |data| {
-                data.state.render(dev_id, Some(crtc));
+                data.state.render_surface(&output);
             });
         }
     }
 
-    /// Render to the [`RenderSurface`] associated with the provided `crtc`,
-    /// or all [`RenderSurface`]s on all available crtcs if `None`.
-    fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
+    /// Render to the [`RenderSurface`] associated with the given `output`.
+    fn render_surface(&mut self, output: &Output) {
         let udev = self.backend.udev_mut();
 
-        let device_backend = match udev.backends.get_mut(&node) {
-            Some(backend) => backend,
-            None => {
-                tracing::error!("Trying to render on non-existent backend {}", node);
-                return;
-            }
+        let Some(UdevOutputData {
+            device_id,
+            crtc,
+            mode: _,
+        }) = output.user_data().get()
+        else {
+            return;
         };
-
-        if let Some(crtc) = crtc {
-            self.render_surface(node, crtc);
-        } else {
-            let crtcs: Vec<_> = device_backend.surfaces.keys().copied().collect();
-            for crtc in crtcs {
-                self.render_surface(node, crtc);
-            }
-        };
-    }
-
-    /// Render to the [`RenderSurface`] associated with the given `crtc`.
-    fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let udev = self.backend.udev_mut();
 
         let Some(surface) = udev
             .backends
-            .get_mut(&node)
-            .and_then(|device| device.surfaces.get_mut(&crtc))
+            .get_mut(device_id)
+            .and_then(|device| device.surfaces.get_mut(crtc))
         else {
             return;
         };
@@ -1223,17 +1208,6 @@ impl State {
                 texture
             });
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
-            let udev_op_data = o.user_data().get::<UdevOutputData>();
-            udev_op_data
-                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
-        }) {
-            output.clone()
-        } else {
-            // somehow we got called with an invalid output
-            return;
-        };
-
         let windows = self
             .focus_state
             .focus_stack
@@ -1245,7 +1219,7 @@ impl State {
         let result = render_surface(
             surface,
             &mut renderer,
-            &output,
+            output,
             &self.space,
             &windows,
             &self.override_redirect_windows,
@@ -1304,9 +1278,10 @@ impl State {
                 crtc,
             );
             let timer = Timer::from_duration(refresh_time);
+            let output = output.clone();
             self.loop_handle
                 .insert_source(timer, move |_, _, data| {
-                    data.state.render(node, Some(crtc));
+                    data.state.render_surface(&output);
                     TimeoutAction::Drop
                 })
                 .expect("failed to schedule frame timer");
