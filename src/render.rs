@@ -407,9 +407,9 @@ pub fn take_presentation_feedback(
 
 impl State {
     pub fn schedule_render(&mut self, output: &Output) {
-        match &mut self.backend {
-            Backend::Winit(winit) => winit.schedule_render(&self.loop_handle, output),
-            Backend::Udev(udev) => udev.schedule_render(&self.loop_handle, output),
+        // I'm relegating winit to render every frame because it's not my priority right now
+        if let Backend::Udev(udev) = &mut self.backend {
+            udev.schedule_render(&self.loop_handle, output);
         }
     }
 }

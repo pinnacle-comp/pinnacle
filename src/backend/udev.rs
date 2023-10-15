@@ -680,7 +680,7 @@ impl State {
                         let then = udev.last_vblank_time;
                         let now = Instant::now();
                         let diff = now.duration_since(then);
-                        tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
+                        // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
                         udev.last_vblank_time = now;
                     }
                     data.state.on_vblank(node, crtc, metadata);
@@ -1160,19 +1160,10 @@ impl State {
                 });
             }
         }
-
-        // if schedule_render {
-        //     // Anvil had some stuff here about delaying a render to reduce latency,
-        //     // but it introduces visible hitching when scrolling, so I'm removing it here.
-        //     //
-        //     // If latency is a problem then future me can deal with it :)
-        //     self.loop_handle.insert_idle(move |data| {
-        //         data.state.render_surface(&output);
-        //     });
-        // }
     }
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
+    #[tracing::instrument(level = "debug", skip(self), fields(output = output.name()))]
     fn render_surface(&mut self, output: &Output) {
         let udev = self.backend.udev_mut();
 
@@ -1267,63 +1258,6 @@ impl State {
             Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
             Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
         }
-
-        // let reschedule = match &result {
-        //     Ok(has_rendered) => !has_rendered,
-        //     Err(err) => {
-        //         tracing::warn!("Error during rendering: {:?}", err);
-        //         match err {
-        //             SwapBuffersError::AlreadySwapped => false,
-        //             SwapBuffersError::TemporaryFailure(err) => !matches!(
-        //                 err.downcast_ref::<DrmError>(),
-        //                 Some(&DrmError::DeviceInactive)
-        //                     | Some(&DrmError::Access {
-        //                         source: drm::SystemError::PermissionDenied,
-        //                         ..
-        //                     })
-        //             ),
-        //             SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
-        //         }
-        //     }
-        // };
-        //
-        // if reschedule {
-        //     tracing::debug!("rescheduling due to no dmg or error");
-        //     let Some(data) = output.user_data().get::<UdevOutputData>() else {
-        //         unreachable!()
-        //     };
-        //
-        //     // Literally no idea if this refresh time calculation is doing anything, but we're
-        //     // gonna keep it here because I already added the stuff for it
-        //     let refresh_time = if let Some(mode) = data.mode {
-        //         self::utils::refresh_time(mode)
-        //     } else {
-        //         let output_refresh = match output.current_mode() {
-        //             Some(mode) => mode.refresh,
-        //             None => {
-        //                 return;
-        //             }
-        //         };
-        //         Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64)
-        //     };
-        //
-        //     // If reschedule is true we either hit a temporary failure or more likely rendering
-        //     // did not cause any damage on the output. In this case we just re-schedule a repaint
-        //     // after approx. one frame to re-test for damage.
-        //     tracing::trace!(
-        //         "reschedule repaint timer with delay {:?} on {}",
-        //         refresh_time,
-        //         output.name(),
-        //     );
-        //     let timer = Timer::from_duration(refresh_time);
-        //     let output = output.clone();
-        //     self.loop_handle
-        //         .insert_source(timer, move |_, _, data| {
-        //             data.state.render_surface(&output);
-        //             TimeoutAction::Drop
-        //         })
-        //         .expect("failed to schedule frame timer");
-        // }
     }
 }
 

@@ -24,7 +24,10 @@ use smithay::{
             timer::{TimeoutAction, Timer},
             EventLoop,
         },
-        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
+        wayland_protocols::{
+            wp::presentation_time::server::wp_presentation_feedback,
+            xdg::shell::server::xdg_toplevel,
+        },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
     utils::{IsAlive, Transform},
@@ -44,7 +47,6 @@ pub struct Winit {
     pub damage_tracker: OutputDamageTracker,
     pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     pub full_redraw: u8,
-    render_state: RenderState,
 }
 
 impl BackendData for Winit {
@@ -60,11 +62,6 @@ impl BackendData for Winit {
 }
 
 impl Backend {
-    fn winit(&self) -> &Winit {
-        let Backend::Winit(winit) = self else { unreachable!() };
-        winit
-    }
-
     fn winit_mut(&mut self) -> &mut Winit {
         let Backend::Winit(winit) = self else { unreachable!() };
         winit
@@ -169,7 +166,6 @@ pub fn run_winit() -> anyhow::Result<()> {
             damage_tracker: OutputDamageTracker::from_output(&output),
             dmabuf_state,
             full_redraw: 0,
-            render_state: RenderState::Idle,
         }),
         display,
         event_loop.get_signal(),
@@ -227,7 +223,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                         state.process_input_event(input_evt);
                     }
                     WinitEvent::Refresh => {
-                        state.schedule_render(&output);
+                        state.render_window(&output);
                     }
                 });
 
@@ -238,32 +234,13 @@ pub fn run_winit() -> anyhow::Result<()> {
                     }
                 };
 
+                state.render_window(&output);
+
                 TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
             });
     if let Err(err) = insert_ret {
         anyhow::bail!("Failed to insert winit events into event loop: {err}");
     }
-
-    let frame_time = Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64);
-    let refresh_timer = Timer::from_duration(frame_time);
-    state
-        .loop_handle
-        .insert_source(refresh_timer, move |instant, _, data| {
-            let winit = data.state.backend.winit();
-
-            winit.backend.window().request_redraw();
-
-            let frame_time = winit
-                .backend
-                .window()
-                .current_monitor()
-                .and_then(|monitor| monitor.refresh_rate_millihertz())
-                .map(|rate| Duration::from_secs_f64(1000.0 / rate as f64))
-                .unwrap_or(frame_time);
-
-            TimeoutAction::ToInstant(instant + frame_time)
-        })
-        .expect("failed to insert render timer into event loop");
 
     event_loop.run(
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
@@ -283,30 +260,9 @@ pub fn run_winit() -> anyhow::Result<()> {
     Ok(())
 }
 
-enum RenderState {
-    Idle,
-    Scheduled,
-}
-
-impl Winit {
-    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
-        match &self.render_state {
-            RenderState::Idle => {
-                let output = output.clone();
-                loop_handle.insert_idle(move |data| data.state.render_window(&output));
-
-                self.render_state = RenderState::Scheduled;
-            }
-            RenderState::Scheduled => (),
-        }
-    }
-}
-
 impl State {
     fn render_window(&mut self, output: &Output) {
         let winit = self.backend.winit_mut();
-
-        assert!(matches!(winit.render_state, RenderState::Scheduled));
 
         let pending_wins = self
             .windows
@@ -321,6 +277,16 @@ impl State {
                     false
                 };
                 pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+            })
+            .filter(|win| {
+                if let WindowElement::Wayland(win) = win {
+                    !win.toplevel()
+                        .current_state()
+                        .states
+                        .contains(xdg_toplevel::State::Resizing)
+                } else {
+                    true
+                }
             })
             .map(|win| {
                 (
@@ -347,7 +313,6 @@ impl State {
 
             // TODO: still draw the cursor here
 
-            winit.render_state = RenderState::Idle;
             return;
         }
         let full_redraw = &mut winit.full_redraw;
@@ -448,6 +413,5 @@ impl State {
                 tracing::warn!("{}", err);
             }
         }
-        winit.render_state = RenderState::Idle;
     }
 }
