@@ -657,8 +657,8 @@ impl State {
         let surface_under = self.surface_under(self.pointer_location);
 
         // tracing::info!("{:?}", self.pointer_location);
-        if let Some(ptr) = self.seat.get_pointer() {
-            ptr.motion(
+        if let Some(pointer) = self.seat.get_pointer() {
+            pointer.motion(
                 self,
                 surface_under.clone(),
                 &MotionEvent {
@@ -668,7 +668,7 @@ impl State {
                 },
             );
 
-            ptr.relative_motion(
+            pointer.relative_motion(
                 self,
                 surface_under,
                 &RelativeMotionEvent {
@@ -678,7 +678,15 @@ impl State {
                 },
             );
 
-            ptr.frame(self);
+            pointer.frame(self);
+
+            self.schedule_render(
+                &self
+                    .focus_state
+                    .focused_output
+                    .clone()
+                    .expect("no focused output"),
+            );
         }
     }
 }

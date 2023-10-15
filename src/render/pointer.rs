@@ -10,7 +10,7 @@ use smithay::{
         },
         ImportAll, Renderer, Texture,
     },
-    input::pointer::{CursorIcon, CursorImageStatus},
+    input::pointer::CursorImageStatus,
     render_elements,
     utils::{Physical, Point, Scale},
 };

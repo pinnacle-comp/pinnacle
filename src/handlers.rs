@@ -10,7 +10,7 @@ use smithay::{
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
     delegate_output, delegate_presentation, delegate_primary_selection, delegate_relative_pointer,
     delegate_seat, delegate_shm, delegate_viewporter,
-    desktop::{self, layer_map_for_output, PopupKind, WindowSurfaceType},
+    desktop::{self, find_popup_root_surface, layer_map_for_output, PopupKind, WindowSurfaceType},
     input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
@@ -105,11 +105,12 @@ impl CompositorHandler for State {
         utils::on_commit_buffer_handler::<Self>(surface);
         self.backend.early_import(surface);
 
+        let mut root = surface.clone();
+        while let Some(parent) = compositor::get_parent(&root) {
+            root = parent;
+        }
+
         if !compositor::is_sync_subsurface(surface) {
-            let mut root = surface.clone();
-            while let Some(parent) = compositor::get_parent(&root) {
-                root = parent;
-            }
             if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
                 // tracing::debug!("window commit thing {:?}", win.class());
                 window.on_commit();
@@ -129,9 +130,41 @@ impl CompositorHandler for State {
 
         crate::grab::resize_grab::handle_commit(self, surface);
 
-        // if let Some(window) = self.window_for_surface(surface) {
-        //     tracing::debug!("commit on window {:?}", window.class());
-        // }
+        // `surface` is a root window
+        let Some(output) = self
+            .window_for_surface(surface)
+            .and_then(|win| win.output(self))
+            .or_else(|| {
+                // `surface` is a descendant of a root window
+                self.window_for_surface(&root)
+                    .and_then(|win| win.output(self))
+            })
+            .or_else(|| {
+                // `surface` is a popup
+                self.popup_manager
+                    .find_popup(surface)
+                    .and_then(|popup| find_popup_root_surface(&popup).ok())
+                    .and_then(|surf| self.window_for_surface(&surf))
+                    .and_then(|win| win.output(self))
+            })
+            .or_else(|| {
+                // `surface` is a layer surface
+                self.space
+                    .outputs()
+                    .find(|op| {
+                        let layer_map = layer_map_for_output(op);
+                        layer_map
+                            .layer_for_surface(surface, WindowSurfaceType::ALL)
+                            .is_some()
+                    })
+                    .cloned()
+            })
+        // TODO: cursor surface and dnd icon
+        else {
+            return;
+        };
+
+        self.schedule_render(&output);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

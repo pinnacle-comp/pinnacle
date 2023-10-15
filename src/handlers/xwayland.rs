@@ -218,6 +218,8 @@ impl XwmHandler for CalloopData {
                     .get_keyboard()
                     .expect("Seat had no keyboard")
                     .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
+
+                self.state.schedule_render(&output);
             }
         }
         if !window.is_override_redirect() {
@@ -267,6 +269,8 @@ impl XwmHandler for CalloopData {
                     .get_keyboard()
                     .expect("Seat had no keyboard")
                     .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
+
+                self.state.schedule_render(&output);
             }
         }
         tracing::debug!("destroyed x11 window");

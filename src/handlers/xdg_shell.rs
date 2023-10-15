@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use smithay::{
     delegate_xdg_shell,
     desktop::{
@@ -150,6 +148,8 @@ impl XdgShellHandler for State {
                 .get_keyboard()
                 .expect("Seat had no keyboard")
                 .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+
+            self.schedule_render(&output);
         }
     }
 
@@ -749,14 +749,6 @@ impl XdgShellHandler for State {
                                 state.loc_request_state =
                                     LocationRequestState::Acknowledged(new_loc);
                             });
-                            if let Some(op) = window.output(self) {
-                                window.send_frame(
-                                    &op,
-                                    self.clock.now(),
-                                    Some(Duration::ZERO),
-                                    |_, _| Some(op.clone()),
-                                );
-                            }
                         }
                     }
                     Configure::Popup(_) => todo!(),

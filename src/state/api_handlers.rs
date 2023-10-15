@@ -147,6 +147,12 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+
+                // Sometimes toggling won't change the window size,
+                // causing no commit.
+                //
+                // Schedule a render in case the window moves.
+                self.schedule_render(&output);
             }
             Msg::ToggleFullscreen { window_id } => {
                 let Some(window) = window_id.window(self) else { return };

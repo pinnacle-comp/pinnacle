@@ -7,10 +7,11 @@ use std::{
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
+use calloop::Idle;
 use smithay::{
     backend::{
         allocator::{
@@ -28,10 +29,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             damage::{self},
-            element::{
-                surface::WaylandSurfaceRenderElement, texture::TextureBuffer, RenderElement,
-                RenderElementStates,
-            },
+            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
@@ -53,10 +51,7 @@ use smithay::{
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
-        calloop::{
-            timer::{TimeoutAction, Timer},
-            EventLoop, LoopHandle, RegistrationToken,
-        },
+        calloop::{EventLoop, LoopHandle, RegistrationToken},
         drm::{
             self,
             control::{connector, crtc, ModeTypeFlags},
@@ -88,7 +83,7 @@ use crate::{
         ConnectorSavedState,
     },
     output::OutputName,
-    render::{pointer::PointerElement, take_presentation_feedback, CustomRenderElements},
+    render::{pointer::PointerElement, take_presentation_feedback},
     state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
@@ -128,6 +123,8 @@ pub struct Udev {
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
+
+    last_vblank_time: Instant,
 }
 
 impl Backend {
@@ -139,6 +136,30 @@ impl Backend {
     fn udev_mut(&mut self) -> &mut Udev {
         let Backend::Udev(udev) = self else { unreachable!() };
         udev
+    }
+}
+
+impl Udev {
+    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            return;
+        };
+        // tracing::debug!(state = ?surface.render_state, "scheduling render");
+
+        match &surface.render_state {
+            RenderState::Idle => {
+                let output = output.clone();
+                let token = loop_handle.insert_idle(move |data| {
+                    data.state.render_surface(&output);
+                });
+
+                surface.render_state = RenderState::Scheduled(token);
+            }
+            RenderState::Scheduled(_) => (),
+            RenderState::WaitingForVblank { dirty: _ } => {
+                surface.render_state = RenderState::WaitingForVblank { dirty: true }
+            }
+        }
     }
 }
 
@@ -205,6 +226,8 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_image: crate::cursor::Cursor::load(),
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
+
+        last_vblank_time: Instant::now(),
     };
 
     let display_handle = display.handle();
@@ -314,9 +337,10 @@ pub fn run_udev() -> anyhow::Result<()> {
                     }
 
                     for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
-                        data.state
-                            .loop_handle
-                            .insert_idle(move |data| data.state.render_surface(&output));
+                        data.state.schedule_render(&output);
+                        // data.state
+                        //     .loop_handle
+                        //     .insert_idle(move |data| data.state.render_surface(&output));
                     }
                 }
             }
@@ -533,6 +557,26 @@ struct DrmSurfaceDmabufFeedback {
     scanout_feedback: DmabufFeedback,
 }
 
+/// The state of a [`RenderSurface`].
+#[derive(Debug)]
+enum RenderState {
+    /// No render is scheduled.
+    Idle,
+    /// A render has been queued.
+    Scheduled(
+        /// The idle token from a render being scheduled.
+        /// This is used to cancel renders if, for example,
+        /// the output being rendered is removed.
+        Idle<'static>,
+    ),
+    /// A frame was rendered and scheduled and we are waiting for vblank.
+    WaitingForVblank {
+        /// A render was scheduled while waiting for vblank.
+        /// In this case, another render will be scheduled once vblank happens.
+        dirty: bool,
+    },
+}
+
 /// Render surface for an output.
 struct RenderSurface {
     /// The output global id.
@@ -549,6 +593,7 @@ struct RenderSurface {
     /// The thing rendering elements and queueing frames.
     compositor: GbmDrmCompositor,
     dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
+    render_state: RenderState,
 }
 
 impl Drop for RenderSurface {
@@ -630,17 +675,22 @@ impl State {
 
         let registration_token = self
             .loop_handle
-            .insert_source(
-                notifier,
-                move |event, metadata, data: &mut CalloopData| match event {
-                    DrmEvent::VBlank(crtc) => {
-                        data.state.frame_finish(node, crtc, metadata);
+            .insert_source(notifier, move |event, metadata, data| match event {
+                DrmEvent::VBlank(crtc) => {
+                    {
+                        let udev = data.state.backend.udev_mut();
+                        let then = udev.last_vblank_time;
+                        let now = Instant::now();
+                        let diff = now.duration_since(then);
+                        tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
+                        udev.last_vblank_time = now;
                     }
-                    DrmEvent::Error(error) => {
-                        tracing::error!("{:?}", error);
-                    }
-                },
-            )
+                    data.state.on_vblank(node, crtc, metadata);
+                }
+                DrmEvent::Error(error) => {
+                    tracing::error!("{:?}", error);
+                }
+            })
             .expect("failed to insert drm notifier into event loop");
 
         let render_node = EGLDevice::device_for_display(
@@ -867,11 +917,10 @@ impl State {
             global: Some(global),
             compositor,
             dmabuf_feedback,
+            render_state: RenderState::Idle,
         };
 
         device.surfaces.insert(crtc, surface);
-
-        self.schedule_initial_render(node, crtc, self.loop_handle.clone());
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
@@ -1025,7 +1074,7 @@ impl State {
     }
 
     /// Mark [`OutputPresentationFeedback`]s as presented and schedule a new render on idle.
-    fn frame_finish(
+    fn on_vblank(
         &mut self,
         dev_id: DrmNode,
         crtc: crtc::Handle,
@@ -1052,7 +1101,7 @@ impl State {
             return;
         };
 
-        let schedule_render = match surface
+        match surface
             .compositor
             .frame_submitted()
             .map_err(SwapBuffersError::from)
@@ -1089,66 +1138,51 @@ impl State {
                         flags,
                     );
                 }
-
-                true
             }
             Err(err) => {
                 tracing::warn!("Error during rendering: {:?}", err);
-                match err {
-                    SwapBuffersError::AlreadySwapped => true,
-                    // If the device has been deactivated do not reschedule, this will be done
-                    // by session resume
-                    SwapBuffersError::TemporaryFailure(err)
-                        if matches!(
-                            err.downcast_ref::<DrmError>(),
-                            Some(&DrmError::DeviceInactive)
-                        ) =>
-                    {
-                        false
-                    }
-                    SwapBuffersError::TemporaryFailure(err) => matches!(
-                        err.downcast_ref::<DrmError>(),
-                        Some(&DrmError::Access {
-                            source: drm::SystemError::PermissionDenied,
-                            ..
-                        })
-                    ),
-                    SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
+                if let SwapBuffersError::ContextLost(err) = err {
+                    panic!("Rendering loop lost: {}", err)
                 }
             }
         };
 
-        if schedule_render {
-            // Anvil had some stuff here about delaying a render to reduce latency,
-            // but it introduces visible hitching when scrolling, so I'm removing it here.
-            //
-            // If latency is a problem then future me can deal with it :)
-            self.loop_handle.insert_idle(move |data| {
-                data.state.render_surface(&output);
-            });
+        let RenderState::WaitingForVblank { dirty } = surface.render_state else {
+            unreachable!();
+        };
+
+        surface.render_state = RenderState::Idle;
+
+        if dirty {
+            self.schedule_render(&output);
+        } else {
+            for window in self.windows.iter() {
+                window.send_frame(&output, self.clock.now(), Some(Duration::ZERO), |_, _| {
+                    Some(output.clone())
+                });
+            }
         }
+
+        // if schedule_render {
+        //     // Anvil had some stuff here about delaying a render to reduce latency,
+        //     // but it introduces visible hitching when scrolling, so I'm removing it here.
+        //     //
+        //     // If latency is a problem then future me can deal with it :)
+        //     self.loop_handle.insert_idle(move |data| {
+        //         data.state.render_surface(&output);
+        //     });
+        // }
     }
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
     fn render_surface(&mut self, output: &Output) {
         let udev = self.backend.udev_mut();
 
-        let Some(UdevOutputData {
-            device_id,
-            crtc,
-            mode: _,
-        }) = output.user_data().get()
-        else {
+        let Some(surface) = render_surface_for_output(output, &mut udev.backends) else {
             return;
         };
 
-        let Some(surface) = udev
-            .backends
-            .get_mut(device_id)
-            .and_then(|device| device.surfaces.get_mut(crtc))
-        else {
-            return;
-        };
+        assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
         let frame = udev.pointer_image.get_image(
@@ -1231,114 +1265,91 @@ impl State {
             &self.clock,
         );
 
-        let reschedule = match &result {
-            Ok(has_rendered) => !has_rendered,
-            Err(err) => {
-                tracing::warn!("Error during rendering: {:?}", err);
-                match err {
-                    SwapBuffersError::AlreadySwapped => false,
-                    SwapBuffersError::TemporaryFailure(err) => !matches!(
-                        err.downcast_ref::<DrmError>(),
-                        Some(&DrmError::DeviceInactive)
-                            | Some(&DrmError::Access {
-                                source: drm::SystemError::PermissionDenied,
-                                ..
-                            })
-                    ),
-                    SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
-                }
-            }
-        };
-
-        if reschedule {
-            let Some(data) = output.user_data().get::<UdevOutputData>() else {
-                unreachable!()
-            };
-
-            // Literally no idea if this refresh time calculation is doing anything, but we're
-            // gonna keep it here because I already added the stuff for it
-            let refresh_time = if let Some(mode) = data.mode {
-                self::utils::refresh_time(mode)
-            } else {
-                let output_refresh = match output.current_mode() {
-                    Some(mode) => mode.refresh,
-                    None => {
-                        return;
-                    }
-                };
-                Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64)
-            };
-
-            // If reschedule is true we either hit a temporary failure or more likely rendering
-            // did not cause any damage on the output. In this case we just re-schedule a repaint
-            // after approx. one frame to re-test for damage.
-            tracing::trace!(
-                "reschedule repaint timer with delay {:?} on {:?}",
-                refresh_time,
-                crtc,
-            );
-            let timer = Timer::from_duration(refresh_time);
-            let output = output.clone();
-            self.loop_handle
-                .insert_source(timer, move |_, _, data| {
-                    data.state.render_surface(&output);
-                    TimeoutAction::Drop
-                })
-                .expect("failed to schedule frame timer");
+        match result {
+            Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
+            Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
         }
+
+        // let reschedule = match &result {
+        //     Ok(has_rendered) => !has_rendered,
+        //     Err(err) => {
+        //         tracing::warn!("Error during rendering: {:?}", err);
+        //         match err {
+        //             SwapBuffersError::AlreadySwapped => false,
+        //             SwapBuffersError::TemporaryFailure(err) => !matches!(
+        //                 err.downcast_ref::<DrmError>(),
+        //                 Some(&DrmError::DeviceInactive)
+        //                     | Some(&DrmError::Access {
+        //                         source: drm::SystemError::PermissionDenied,
+        //                         ..
+        //                     })
+        //             ),
+        //             SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
+        //         }
+        //     }
+        // };
+        //
+        // if reschedule {
+        //     tracing::debug!("rescheduling due to no dmg or error");
+        //     let Some(data) = output.user_data().get::<UdevOutputData>() else {
+        //         unreachable!()
+        //     };
+        //
+        //     // Literally no idea if this refresh time calculation is doing anything, but we're
+        //     // gonna keep it here because I already added the stuff for it
+        //     let refresh_time = if let Some(mode) = data.mode {
+        //         self::utils::refresh_time(mode)
+        //     } else {
+        //         let output_refresh = match output.current_mode() {
+        //             Some(mode) => mode.refresh,
+        //             None => {
+        //                 return;
+        //             }
+        //         };
+        //         Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64)
+        //     };
+        //
+        //     // If reschedule is true we either hit a temporary failure or more likely rendering
+        //     // did not cause any damage on the output. In this case we just re-schedule a repaint
+        //     // after approx. one frame to re-test for damage.
+        //     tracing::trace!(
+        //         "reschedule repaint timer with delay {:?} on {}",
+        //         refresh_time,
+        //         output.name(),
+        //     );
+        //     let timer = Timer::from_duration(refresh_time);
+        //     let output = output.clone();
+        //     self.loop_handle
+        //         .insert_source(timer, move |_, _, data| {
+        //             data.state.render_surface(&output);
+        //             TimeoutAction::Drop
+        //         })
+        //         .expect("failed to schedule frame timer");
+        // }
     }
+}
 
-    /// Do an initial render that renders nothing to the screen.
-    ///
-    /// If that render failed, schedule another one.
-    fn schedule_initial_render(
-        &mut self,
-        node: DrmNode,
-        crtc: crtc::Handle,
-        evt_handle: LoopHandle<'static, CalloopData>,
-    ) {
-        let udev = self.backend.udev_mut();
+fn render_surface_for_output<'a>(
+    output: &Output,
+    backends: &'a mut HashMap<DrmNode, UdevBackendData>,
+) -> Option<&'a mut RenderSurface> {
+    let UdevOutputData {
+        device_id,
+        crtc,
+        mode: _,
+    } = output.user_data().get()?;
 
-        let Some(surface) = udev
-            .backends
-            .get_mut(&node)
-            .and_then(|device| device.surfaces.get_mut(&crtc))
-        else {
-            return;
-        };
-
-        let node = surface.render_node;
-        let result = {
-            let mut renderer = udev
-                .gpu_manager
-                .single_renderer(&node)
-                .expect("failed to create MultiRenderer");
-            initial_render(surface, &mut renderer)
-        };
-
-        if let Err(err) = result {
-            match err {
-                SwapBuffersError::AlreadySwapped => {}
-                SwapBuffersError::TemporaryFailure(err) => {
-                    // TODO dont reschedule after 3(?) retries
-                    tracing::warn!("Failed to submit page_flip: {}", err);
-                    let handle = evt_handle.clone();
-                    evt_handle.insert_idle(move |data| {
-                        data.state.schedule_initial_render(node, crtc, handle)
-                    });
-                }
-                SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
-            }
-        }
-    }
+    backends
+        .get_mut(device_id)
+        .and_then(|device| device.surfaces.get_mut(crtc))
 }
 
 /// Render windows, layers, and everything else needed to the given [`RenderSurface`].
 /// Also queues the frame for scanout.
 #[allow(clippy::too_many_arguments)]
-fn render_surface<'a>(
-    surface: &'a mut RenderSurface,
-    renderer: &mut UdevRenderer<'a, '_>,
+fn render_surface(
+    surface: &mut RenderSurface,
+    renderer: &mut UdevRenderer<'_, '_>,
     output: &Output,
 
     space: &Space<WindowElement>,
@@ -1354,6 +1365,8 @@ fn render_surface<'a>(
 
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
+    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+
     let pending_wins = windows
         .iter()
         .filter(|win| win.alive())
@@ -1366,6 +1379,16 @@ fn render_surface<'a>(
                 false
             };
             pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+        })
+        .filter(|win| {
+            if let WindowElement::Wayland(win) = win {
+                !win.toplevel()
+                    .current_state()
+                    .states
+                    .contains(xdg_toplevel::State::Resizing)
+            } else {
+                true
+            }
         })
         .map(|win| {
             (
@@ -1389,7 +1412,10 @@ fn render_surface<'a>(
             .queue_frame(None)
             .map_err(Into::<SwapBuffersError>::into)?;
 
+        tracing::debug!("queued no frame");
+
         // TODO: still draw the cursor here
+        surface.render_state = RenderState::WaitingForVblank { dirty: false };
 
         return Ok(true);
     }
@@ -1417,7 +1443,6 @@ fn render_surface<'a>(
 
     let time = clock.now();
 
-    // Send frames to the cursor surface to get it to update correctly
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
@@ -1445,21 +1470,4 @@ fn render_surface<'a>(
     }
 
     Ok(res.rendered)
-}
-
-/// Renders nothing to the given [`RenderSurface`].
-fn initial_render(
-    surface: &mut RenderSurface,
-    renderer: &mut UdevRenderer<'_, '_>,
-) -> Result<(), SwapBuffersError> {
-    render_frame::<_, CustomRenderElements<_, WaylandSurfaceRenderElement<_>>, GlesTexture>(
-        &mut surface.compositor,
-        renderer,
-        &[],
-        [0.6, 0.6, 0.6, 1.0],
-    )?;
-    surface.compositor.queue_frame(None)?;
-    surface.compositor.reset_buffers();
-
-    Ok(())
 }
