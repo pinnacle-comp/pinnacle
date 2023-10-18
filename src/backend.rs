@@ -66,6 +66,14 @@ impl Backend {
     pub fn is_winit(&self) -> bool {
         matches!(self, Self::Winit(..))
     }
+
+    /// Returns `true` if the backend is [`Udev`].
+    ///
+    /// [`Udev`]: Backend::Udev
+    #[must_use]
+    pub fn is_udev(&self) -> bool {
+        matches!(self, Self::Udev(..))
+    }
 }
 
 /// A trait defining common methods for each available backend: winit and tty-udev

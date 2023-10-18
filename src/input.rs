@@ -375,10 +375,8 @@ impl State {
                 }
             }
             Some(KeyAction::SwitchVt(vt)) => {
-                if let Backend::Udev(udev) = &mut self.backend {
-                    if let Err(err) = udev.session.change_vt(vt) {
-                        tracing::error!("Failed to switch to vt {vt}: {err}");
-                    }
+                if self.backend.is_udev() {
+                    self.switch_vt(vt);
                 }
             }
             Some(KeyAction::Quit) => {
