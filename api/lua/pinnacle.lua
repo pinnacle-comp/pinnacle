@@ -72,7 +72,7 @@ local function read_exact(socket_fd, count)
     return data
 end
 
----@class PinnacleModule
+---@class Pinnacle
 ---The entry point to all configuration.
 local pinnacle = {
     ---Key and mouse binds
@@ -92,9 +92,11 @@ function pinnacle.quit()
     SendMsg("Quit")
 end
 
----Configure Pinnacle. You should put mostly eveything into the config_func to avoid invalid state.
+---Configure Pinnacle. You should put mostly everything into the config_func to avoid invalid state.
 ---The function takes one argument: the `PinnacleModule` table, which is how you'll access all of the available config options.
----@param config_func fun(pinnacle: PinnacleModule)
+---
+---You can also just `require` all the individual modules, but hey, they're all passed in anyway; might as well use them!
+---@param config_func fun(pinnacle: Pinnacle)
 function pinnacle.setup(config_func)
     ---@type integer
     local socket_fd = assert(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0), "Failed to create socket")

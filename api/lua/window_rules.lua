@@ -220,7 +220,7 @@ function window_rules.add(...)
         if rule.rule.output and type(rule.rule.output) == "table" then
             rule.rule.output = rule
                 .rule
-                .output--[[@as Output]]
+                .output--[[@as OutputHandle]]
                 :name()
         end
 
