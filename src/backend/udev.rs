@@ -389,9 +389,29 @@ pub fn run_udev() -> anyhow::Result<()> {
                         }
                     }
 
-                    for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
-                        data.state.schedule_render(&output);
+                    let connectors = udev
+                        .backends
+                        .iter()
+                        .map(|(node, backend)| {
+                            let connectors = backend
+                                .drm_scanner
+                                .crtcs()
+                                .map(|(info, crtc)| (info.clone(), crtc))
+                                .collect::<Vec<_>>();
+                            (*node, connectors)
+                        })
+                        .collect::<Vec<_>>();
+
+                    for (node, connectors) in connectors {
+                        for (connector, crtc) in connectors {
+                            data.state
+                                .connector_disconnected(node, connector.clone(), crtc);
+                            data.state.connector_connected(node, connector, crtc);
+                        }
                     }
+                    // for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
+                    //     data.state.schedule_render(&output);
+                    // }
                 }
             }
         })
