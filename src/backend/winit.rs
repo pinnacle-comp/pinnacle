@@ -2,7 +2,6 @@
 
 use std::{ffi::OsString, time::Duration};
 
-use calloop::LoopHandle;
 use smithay::{
     backend::{
         egl::EGLDevice,

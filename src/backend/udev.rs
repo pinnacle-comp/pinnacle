@@ -459,6 +459,8 @@ pub fn run_udev() -> anyhow::Result<()> {
             data.display_handle
                 .flush_clients()
                 .expect("failed to flush_clients");
+
+            data.state.focus_state.fix_up_focus(&mut data.state.space);
         },
     )?;
 

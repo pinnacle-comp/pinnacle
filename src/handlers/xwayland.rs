@@ -317,7 +317,6 @@ impl XwmHandler for CalloopData {
         };
         tracing::debug!("configure notify with geo: {geometry:?}");
         self.state.space.map_element(win, geometry.loc, true);
-        // TODO: anvil has a TODO here
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {

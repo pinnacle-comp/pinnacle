@@ -257,6 +257,7 @@ impl State {
                     if let Some(output) = tag.output(self) {
                         self.update_windows(&output);
                         self.update_focus(&output);
+                        self.schedule_render(&output);
                     }
                 }
             }
@@ -271,6 +272,7 @@ impl State {
                 });
                 self.update_windows(&output);
                 self.update_focus(&output);
+                self.schedule_render(&output);
             }
             Msg::AddTags {
                 output_name,
