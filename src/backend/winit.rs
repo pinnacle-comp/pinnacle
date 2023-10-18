@@ -23,7 +23,10 @@ use smithay::{
             timer::{TimeoutAction, Timer},
             EventLoop,
         },
-        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
+        wayland_protocols::{
+            wp::presentation_time::server::wp_presentation_feedback,
+            xdg::shell::server::xdg_toplevel,
+        },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
     },
     utils::{IsAlive, Transform},
@@ -55,6 +58,13 @@ impl BackendData for Winit {
     }
 
     fn early_import(&mut self, _surface: &WlSurface) {}
+}
+
+impl Backend {
+    fn winit_mut(&mut self) -> &mut Winit {
+        let Backend::Winit(winit) = self else { unreachable!() };
+        winit
+    }
 }
 
 /// Start Pinnacle as a window in a graphical environment.
@@ -163,13 +173,13 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     state.focus_state.focused_output = Some(output.clone());
 
-    let Backend::Winit(backend) = &mut state.backend else {
-        unreachable!()
-    };
+    let winit = state.backend.winit_mut();
+
+    winit.backend.window().set_title("Pinnacle");
 
     state
         .shm_state
-        .update_formats(backend.backend.renderer().shm_formats());
+        .update_formats(winit.backend.renderer().shm_formats());
 
     state.space.map_output(&output, (0, 0));
 
@@ -183,13 +193,10 @@ pub fn run_winit() -> anyhow::Result<()> {
         tracing::error!("Failed to start XWayland: {err}");
     }
 
-    let mut pointer_element = PointerElement::<GlesTexture>::new();
-
     let insert_ret =
         state
             .loop_handle
             .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
-                let display_handle = &mut data.display_handle;
                 let state = &mut data.state;
 
                 let result = winit_evt_loop.dispatch_new_events(|event| match event {
@@ -214,7 +221,9 @@ pub fn run_winit() -> anyhow::Result<()> {
                     WinitEvent::Input(input_evt) => {
                         state.process_input_event(input_evt);
                     }
-                    WinitEvent::Refresh => {}
+                    WinitEvent::Refresh => {
+                        state.render_window(&output);
+                    }
                 });
 
                 match result {
@@ -224,172 +233,10 @@ pub fn run_winit() -> anyhow::Result<()> {
                     }
                 };
 
-                if let CursorImageStatus::Surface(surface) = &state.cursor_status {
-                    if !surface.alive() {
-                        state.cursor_status = CursorImageStatus::default_named();
-                    }
-                }
-
-                let cursor_visible = !matches!(state.cursor_status, CursorImageStatus::Surface(_));
-
-                pointer_element.set_status(state.cursor_status.clone());
-
-                let pending_wins = state
-                    .windows
-                    .iter()
-                    .filter(|win| win.alive())
-                    .filter(|win| {
-                        let pending_size = if let WindowElement::Wayland(win) = win {
-                            let current_state = win.toplevel().current_state();
-                            win.toplevel()
-                                .with_pending_state(|state| state.size != current_state.size)
-                        } else {
-                            false
-                        };
-                        pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
-                    })
-                    .map(|win| {
-                        (
-                            win.class().unwrap_or("None".to_string()),
-                            win.title().unwrap_or("None".to_string()),
-                            win.with_state(|state| state.loc_request_state.clone()),
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                if !pending_wins.is_empty() {
-                    // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
-                    let op_clone = output.clone();
-                    state.loop_handle.insert_idle(move |dt| {
-                        for win in dt.state.windows.iter() {
-                            win.send_frame(
-                                &op_clone,
-                                dt.state.clock.now(),
-                                Some(Duration::ZERO),
-                                surface_primary_scanout_output,
-                            );
-                        }
-                    });
-
-                    state.space.refresh();
-                    state.popup_manager.cleanup();
-                    display_handle
-                        .flush_clients()
-                        .expect("failed to flush client buffers");
-
-                    // TODO: still draw the cursor here
-
-                    return TimeoutAction::ToDuration(Duration::from_millis(1));
-                }
-
-                let Backend::Winit(backend) = &mut state.backend else {
-                    unreachable!()
-                };
-                let full_redraw = &mut backend.full_redraw;
-                *full_redraw = full_redraw.saturating_sub(1);
-
-                state.focus_state.fix_up_focus(&mut state.space);
-
-                let output_render_elements = crate::render::generate_render_elements(
-                    &output,
-                    backend.backend.renderer(),
-                    &state.space,
-                    &state.focus_state.focus_stack,
-                    &state.override_redirect_windows,
-                    state.pointer_location,
-                    &mut state.cursor_status,
-                    state.dnd_icon.as_ref(),
-                    // state.seat.input_method(),
-                    &mut pointer_element,
-                    None,
-                );
-
-                let render_res = backend.backend.bind().and_then(|_| {
-                    let age = if *full_redraw > 0 {
-                        0
-                    } else {
-                        backend.backend.buffer_age().unwrap_or(0)
-                    };
-
-                    let renderer = backend.backend.renderer();
-
-                    backend
-                        .damage_tracker
-                        .render_output(renderer, age, &output_render_elements, [0.6, 0.6, 0.6, 1.0])
-                        .map_err(|err| match err {
-                            damage::Error::Rendering(err) => err.into(),
-                            damage::Error::OutputNoMode(_) => todo!(),
-                        })
-                });
-
-                match render_res {
-                    Ok(render_output_result) => {
-                        let has_rendered = render_output_result.damage.is_some();
-                        if let Some(damage) = render_output_result.damage {
-                            // tracing::debug!("damage rects are {damage:?}");
-                            if let Err(err) = backend.backend.submit(Some(&damage)) {
-                                tracing::warn!("{}", err);
-                            }
-                        }
-
-                        backend.backend.window().set_cursor_visible(cursor_visible);
-
-                        let time = state.clock.now();
-
-                        // Send frames to the cursor surface so it updates correctly
-                        if let CursorImageStatus::Surface(surf) = &state.cursor_status {
-                            if let Some(op) = state.focus_state.focused_output.as_ref() {
-                                send_frames_surface_tree(
-                                    surf,
-                                    op,
-                                    time,
-                                    Some(Duration::ZERO),
-                                    |_, _| None,
-                                );
-                            }
-                        }
-
-                        super::post_repaint(
-                            &output,
-                            &render_output_result.states,
-                            &state.space,
-                            None,
-                            time.into(),
-                        );
-
-                        if has_rendered {
-                            let mut output_presentation_feedback = take_presentation_feedback(
-                                &output,
-                                &state.space,
-                                &render_output_result.states,
-                            );
-                            output_presentation_feedback.presented(
-                                time,
-                                output
-                                    .current_mode()
-                                    .map(|mode| {
-                                        Duration::from_secs_f64(1000f64 / mode.refresh as f64)
-                                    })
-                                    .unwrap_or_default(),
-                                0,
-                                wp_presentation_feedback::Kind::Vsync,
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        tracing::warn!("{}", err);
-                    }
-                }
-
-                state.space.refresh();
-                state.popup_manager.cleanup();
-                display_handle
-                    .flush_clients()
-                    .expect("failed to flush client buffers");
+                state.render_window(&output);
 
                 TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
             });
-
     if let Err(err) = insert_ret {
         anyhow::bail!("Failed to insert winit events into event loop: {err}");
     }
@@ -400,10 +247,170 @@ pub fn run_winit() -> anyhow::Result<()> {
             display_handle,
             state,
         },
-        |_data| {
-            // println!("{}", _data.state.space.elements().count());
+        |data| {
+            data.state.space.refresh();
+            data.state.popup_manager.cleanup();
+            data.display_handle
+                .flush_clients()
+                .expect("failed to flush client buffers");
         },
     )?;
 
     Ok(())
+}
+
+impl State {
+    fn render_window(&mut self, output: &Output) {
+        let winit = self.backend.winit_mut();
+
+        let pending_wins = self
+            .windows
+            .iter()
+            .filter(|win| win.alive())
+            .filter(|win| {
+                let pending_size = if let WindowElement::Wayland(win) = win {
+                    let current_state = win.toplevel().current_state();
+                    win.toplevel()
+                        .with_pending_state(|state| state.size != current_state.size)
+                } else {
+                    false
+                };
+                pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+            })
+            .filter(|win| {
+                if let WindowElement::Wayland(win) = win {
+                    !win.toplevel()
+                        .current_state()
+                        .states
+                        .contains(xdg_toplevel::State::Resizing)
+                } else {
+                    true
+                }
+            })
+            .map(|win| {
+                (
+                    win.class().unwrap_or("None".to_string()),
+                    win.title().unwrap_or("None".to_string()),
+                    win.with_state(|state| state.loc_request_state.clone()),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        if !pending_wins.is_empty() {
+            // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+            let op_clone = output.clone();
+            self.loop_handle.insert_idle(move |dt| {
+                for win in dt.state.windows.iter() {
+                    win.send_frame(
+                        &op_clone,
+                        dt.state.clock.now(),
+                        Some(Duration::ZERO),
+                        surface_primary_scanout_output,
+                    );
+                }
+            });
+
+            // TODO: still draw the cursor here
+
+            return;
+        }
+        let full_redraw = &mut winit.full_redraw;
+        *full_redraw = full_redraw.saturating_sub(1);
+
+        self.focus_state.fix_up_focus(&mut self.space);
+
+        if let CursorImageStatus::Surface(surface) = &self.cursor_status {
+            if !surface.alive() {
+                self.cursor_status = CursorImageStatus::default_named();
+            }
+        }
+
+        let cursor_visible = !matches!(self.cursor_status, CursorImageStatus::Surface(_));
+
+        let mut pointer_element = PointerElement::<GlesTexture>::new();
+        pointer_element.set_status(self.cursor_status.clone());
+
+        let output_render_elements = crate::render::generate_render_elements(
+            output,
+            winit.backend.renderer(),
+            &self.space,
+            &self.focus_state.focus_stack,
+            &self.override_redirect_windows,
+            self.pointer_location,
+            &mut self.cursor_status,
+            self.dnd_icon.as_ref(),
+            // self.seat.input_method(),
+            &mut pointer_element,
+            None,
+        );
+
+        let render_res = winit.backend.bind().and_then(|_| {
+            let age = if *full_redraw > 0 {
+                0
+            } else {
+                winit.backend.buffer_age().unwrap_or(0)
+            };
+
+            let renderer = winit.backend.renderer();
+
+            winit
+                .damage_tracker
+                .render_output(renderer, age, &output_render_elements, [0.6, 0.6, 0.6, 1.0])
+                .map_err(|err| match err {
+                    damage::Error::Rendering(err) => err.into(),
+                    damage::Error::OutputNoMode(_) => todo!(),
+                })
+        });
+
+        match render_res {
+            Ok(render_output_result) => {
+                let has_rendered = render_output_result.damage.is_some();
+                if let Some(damage) = render_output_result.damage {
+                    // tracing::debug!("damage rects are {damage:?}");
+                    if let Err(err) = winit.backend.submit(Some(&damage)) {
+                        tracing::warn!("{}", err);
+                    }
+                }
+
+                winit.backend.window().set_cursor_visible(cursor_visible);
+
+                let time = self.clock.now();
+
+                // Send frames to the cursor surface so it updates correctly
+                if let CursorImageStatus::Surface(surf) = &self.cursor_status {
+                    if let Some(op) = self.focus_state.focused_output.as_ref() {
+                        send_frames_surface_tree(surf, op, time, Some(Duration::ZERO), |_, _| None);
+                    }
+                }
+
+                super::post_repaint(
+                    output,
+                    &render_output_result.states,
+                    &self.space,
+                    None,
+                    time.into(),
+                );
+
+                if has_rendered {
+                    let mut output_presentation_feedback = take_presentation_feedback(
+                        output,
+                        &self.space,
+                        &render_output_result.states,
+                    );
+                    output_presentation_feedback.presented(
+                        time,
+                        output
+                            .current_mode()
+                            .map(|mode| Duration::from_secs_f64(1000f64 / mode.refresh as f64))
+                            .unwrap_or_default(),
+                        0,
+                        wp_presentation_feedback::Kind::Vsync,
+                    );
+                }
+            }
+            Err(err) => {
+                tracing::warn!("{}", err);
+            }
+        }
+    }
 }

@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod utils;
-
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Context;
+use calloop::Idle;
 use smithay::{
     backend::{
         allocator::{
@@ -28,10 +27,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             damage::{self},
-            element::{
-                surface::WaylandSurfaceRenderElement, texture::TextureBuffer, RenderElement,
-                RenderElementStates,
-            },
+            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
@@ -53,10 +49,7 @@ use smithay::{
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
-        calloop::{
-            timer::{TimeoutAction, Timer},
-            EventLoop, LoopHandle, RegistrationToken,
-        },
+        calloop::{EventLoop, LoopHandle, RegistrationToken},
         drm::{
             self,
             control::{connector, crtc, ModeTypeFlags},
@@ -88,7 +81,7 @@ use crate::{
         ConnectorSavedState,
     },
     output::OutputName,
-    render::{pointer::PointerElement, take_presentation_feedback, CustomRenderElements},
+    render::{pointer::PointerElement, take_presentation_feedback},
     state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
@@ -128,6 +121,44 @@ pub struct Udev {
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
+
+    last_vblank_time: Instant,
+}
+
+impl Backend {
+    fn udev(&self) -> &Udev {
+        let Backend::Udev(udev) = self else { unreachable!() };
+        udev
+    }
+
+    fn udev_mut(&mut self) -> &mut Udev {
+        let Backend::Udev(udev) = self else { unreachable!() };
+        udev
+    }
+}
+
+impl Udev {
+    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            return;
+        };
+        // tracing::debug!(state = ?surface.render_state, "scheduling render");
+
+        match &surface.render_state {
+            RenderState::Idle => {
+                let output = output.clone();
+                let token = loop_handle.insert_idle(move |data| {
+                    data.state.render_surface(&output);
+                });
+
+                surface.render_state = RenderState::Scheduled(token);
+            }
+            RenderState::Scheduled(_) => (),
+            RenderState::WaitingForVblank { dirty: _ } => {
+                surface.render_state = RenderState::WaitingForVblank { dirty: true }
+            }
+        }
+    }
 }
 
 impl BackendData for Udev {
@@ -193,6 +224,8 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_image: crate::cursor::Cursor::load(),
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
+
+        last_vblank_time: Instant::now(),
     };
 
     let display_handle = display.handle();
@@ -217,9 +250,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         }
     }
 
-    let Backend::Udev(udev) = &mut state.backend else {
-        unreachable!()
-    };
+    let udev = state.backend.udev_mut();
 
     event_loop
         .handle()
@@ -272,9 +303,8 @@ pub fn run_udev() -> anyhow::Result<()> {
     event_loop
         .handle()
         .insert_source(notifier, move |event, _, data| {
-            let Backend::Udev(udev) = &mut data.state.backend else {
-                unreachable!()
-            };
+            let udev = data.state.backend.udev_mut();
+
             match event {
                 session::Event::PauseSession => {
                     libinput_context.suspend();
@@ -290,11 +320,7 @@ pub fn run_udev() -> anyhow::Result<()> {
                     if let Err(err) = libinput_context.resume() {
                         tracing::error!("Failed to resume libinput context: {:?}", err);
                     }
-                    for (node, backend) in udev
-                        .backends
-                        .iter_mut()
-                        .map(|(handle, backend)| (*handle, backend))
-                    {
+                    for backend in udev.backends.values_mut() {
                         backend.drm.activate();
                         for surface in backend.surfaces.values_mut() {
                             if let Err(err) = surface.compositor.surface().reset_state() {
@@ -306,9 +332,13 @@ pub fn run_udev() -> anyhow::Result<()> {
                             // otherwise
                             surface.compositor.reset_buffers();
                         }
-                        data.state
-                            .loop_handle
-                            .insert_idle(move |data| data.state.render(node, None));
+                    }
+
+                    for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
+                        data.state.schedule_render(&output);
+                        // data.state
+                        //     .loop_handle
+                        //     .insert_idle(move |data| data.state.render_surface(&output));
                     }
                 }
             }
@@ -429,6 +459,8 @@ pub fn run_udev() -> anyhow::Result<()> {
             data.display_handle
                 .flush_clients()
                 .expect("failed to flush_clients");
+
+            data.state.focus_state.fix_up_focus(&mut data.state.space);
         },
     )?;
 
@@ -436,7 +468,7 @@ pub fn run_udev() -> anyhow::Result<()> {
 }
 
 struct UdevBackendData {
-    surfaces: HashMap<crtc::Handle, SurfaceData>,
+    surfaces: HashMap<crtc::Handle, RenderSurface>,
     gbm: GbmDevice<DrmDeviceFd>,
     drm: DrmDevice,
     drm_scanner: DrmScanner,
@@ -525,17 +557,47 @@ struct DrmSurfaceDmabufFeedback {
     scanout_feedback: DmabufFeedback,
 }
 
-/// Data associated with a crtc.
-struct SurfaceData {
-    global: Option<GlobalId>,
-    display_handle: DisplayHandle,
-    device_id: DrmNode,
-    render_node: DrmNode,
-    compositor: GbmDrmCompositor,
-    dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
+/// The state of a [`RenderSurface`].
+#[derive(Debug)]
+enum RenderState {
+    /// No render is scheduled.
+    Idle,
+    /// A render has been queued.
+    Scheduled(
+        /// The idle token from a render being scheduled.
+        /// This is used to cancel renders if, for example,
+        /// the output being rendered is removed.
+        Idle<'static>,
+    ),
+    /// A frame was rendered and scheduled and we are waiting for vblank.
+    WaitingForVblank {
+        /// A render was scheduled while waiting for vblank.
+        /// In this case, another render will be scheduled once vblank happens.
+        dirty: bool,
+    },
 }
 
-impl Drop for SurfaceData {
+/// Render surface for an output.
+struct RenderSurface {
+    /// The output global id.
+    global: Option<GlobalId>,
+    /// A display handle used to remove the global on drop.
+    display_handle: DisplayHandle,
+    /// The node from `connector_connected`.
+    device_id: DrmNode,
+    /// The node rendering to the screen? idk
+    ///
+    /// If this is equal to the primary gpu node then it does the rendering operations.
+    /// If it's not it is the node the composited buffer ends up on.
+    render_node: DrmNode,
+    /// The thing rendering elements and queueing frames.
+    compositor: GbmDrmCompositor,
+    dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
+    render_state: RenderState,
+}
+
+impl Drop for RenderSurface {
+    // Stop advertising this output to clients on drop.
     fn drop(&mut self) {
         if let Some(global) = self.global.take() {
             self.display_handle.remove_global::<State>(global);
@@ -550,13 +612,15 @@ type GbmDrmCompositor = DrmCompositor<
     DrmDeviceFd,
 >;
 
-/// The result of a frame render from `GbmDrmCompositor::render_frame`.
+/// The result of a frame render from `render_frame`.
 struct SurfaceCompositorRenderResult {
     rendered: bool,
     states: RenderElementStates,
 }
 
 /// Render a frame with the given elements.
+///
+/// This frame needs to be queued for scanout afterwards.
 fn render_frame<R, E, Target>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut R,
@@ -569,6 +633,8 @@ where
     <R as Renderer>::Error: Into<SwapBuffersError>,
     E: RenderElement<R>,
 {
+    use smithay::backend::drm::compositor::RenderFrameError;
+
     compositor
         .render_frame(renderer, elements, clear_color)
         .map(|render_frame_result| {
@@ -581,10 +647,8 @@ where
             }
         })
         .map_err(|err| match err {
-            smithay::backend::drm::compositor::RenderFrameError::PrepareFrame(err) => err.into(),
-            smithay::backend::drm::compositor::RenderFrameError::RenderFrame(
-                damage::Error::Rendering(err),
-            ) => err.into(),
+            RenderFrameError::PrepareFrame(err) => err.into(),
+            RenderFrameError::RenderFrame(damage::Error::Rendering(err)) => err.into(),
             _ => unreachable!(),
         })
 }
@@ -592,9 +656,7 @@ where
 impl State {
     /// A GPU was plugged in.
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         // Try to open the device
         let fd = udev
@@ -613,17 +675,22 @@ impl State {
 
         let registration_token = self
             .loop_handle
-            .insert_source(
-                notifier,
-                move |event, metadata, data: &mut CalloopData| match event {
-                    DrmEvent::VBlank(crtc) => {
-                        data.state.frame_finish(node, crtc, metadata);
-                    }
-                    DrmEvent::Error(error) => {
-                        tracing::error!("{:?}", error);
-                    }
-                },
-            )
+            .insert_source(notifier, move |event, metadata, data| match event {
+                DrmEvent::VBlank(crtc) => {
+                    // { TODO:
+                    //     let udev = data.state.backend.udev_mut();
+                    //     let then = udev.last_vblank_time;
+                    //     let now = Instant::now();
+                    //     let diff = now.duration_since(then);
+                    //     // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
+                    //     udev.last_vblank_time = now;
+                    // }
+                    data.state.on_vblank(node, crtc, metadata);
+                }
+                DrmEvent::Error(error) => {
+                    tracing::error!("{:?}", error);
+                }
+            })
             .expect("failed to insert drm notifier into event loop");
 
         let render_node = EGLDevice::device_for_display(
@@ -663,9 +730,7 @@ impl State {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -845,18 +910,17 @@ impl State {
             &compositor,
         );
 
-        let surface = SurfaceData {
+        let surface = RenderSurface {
             display_handle: udev.display_handle.clone(),
             device_id: node,
             render_node: device.render_node,
             global: Some(global),
             compositor,
             dmabuf_feedback,
+            render_state: RenderState::Idle,
         };
 
         device.surfaces.insert(crtc, surface);
-
-        self.schedule_initial_render(node, crtc, self.loop_handle.clone());
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
@@ -911,9 +975,7 @@ impl State {
     ) {
         tracing::debug!(?crtc, "connector_disconnected");
 
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -948,9 +1010,7 @@ impl State {
     }
 
     fn device_changed(&mut self, node: DrmNode) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let device = if let Some(device) = udev.backends.get_mut(&node) {
             device
@@ -980,11 +1040,9 @@ impl State {
     /// A GPU was unplugged.
     fn device_removed(&mut self, node: DrmNode) {
         let crtcs = {
-            let Backend::Udev(udev) = &mut self.backend else {
-                unreachable!()
-            };
+            let udev = self.backend.udev();
 
-            let Some(device) = udev.backends.get_mut(&node) else {
+            let Some(device) = udev.backends.get(&node) else {
                 return;
             };
 
@@ -1001,9 +1059,7 @@ impl State {
 
         tracing::debug!("Surfaces dropped");
 
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         // drop the backends on this side
         if let Some(backend_data) = udev.backends.remove(&node) {
@@ -1018,15 +1074,13 @@ impl State {
     }
 
     /// Mark [`OutputPresentationFeedback`]s as presented and schedule a new render on idle.
-    fn frame_finish(
+    fn on_vblank(
         &mut self,
         dev_id: DrmNode,
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+        let udev = self.backend.udev_mut();
 
         let Some(surface) = udev
             .backends
@@ -1047,7 +1101,7 @@ impl State {
             return;
         };
 
-        let schedule_render = match surface
+        match surface
             .compositor
             .frame_submitted()
             .map_err(SwapBuffersError::from)
@@ -1084,82 +1138,42 @@ impl State {
                         flags,
                     );
                 }
-
-                true
             }
             Err(err) => {
                 tracing::warn!("Error during rendering: {:?}", err);
-                match err {
-                    SwapBuffersError::AlreadySwapped => true,
-                    // If the device has been deactivated do not reschedule, this will be done
-                    // by session resume
-                    SwapBuffersError::TemporaryFailure(err)
-                        if matches!(
-                            err.downcast_ref::<DrmError>(),
-                            Some(&DrmError::DeviceInactive)
-                        ) =>
-                    {
-                        false
-                    }
-                    SwapBuffersError::TemporaryFailure(err) => matches!(
-                        err.downcast_ref::<DrmError>(),
-                        Some(&DrmError::Access {
-                            source: drm::SystemError::PermissionDenied,
-                            ..
-                        })
-                    ),
-                    SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
+                if let SwapBuffersError::ContextLost(err) = err {
+                    panic!("Rendering loop lost: {}", err)
                 }
             }
         };
 
-        if schedule_render {
-            // Anvil had some stuff here about delaying a render to reduce latency,
-            // but it introduces visible hitching when scrolling, so I'm removing it here.
-            //
-            // If latency is a problem then future me can deal with it :)
-            self.loop_handle.insert_idle(move |data| {
-                data.state.render(dev_id, Some(crtc));
-            });
+        let RenderState::WaitingForVblank { dirty } = surface.render_state else {
+            unreachable!();
+        };
+
+        surface.render_state = RenderState::Idle;
+
+        if dirty {
+            self.schedule_render(&output);
+        } else {
+            for window in self.windows.iter() {
+                window.send_frame(&output, self.clock.now(), Some(Duration::ZERO), |_, _| {
+                    Some(output.clone())
+                });
+            }
         }
     }
 
-    /// Render using the gpu on `node` to the provided `crtc`, or all available crtcs if `None`.
-    fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
+    /// Render to the [`RenderSurface`] associated with the given `output`.
+    #[tracing::instrument(level = "debug", skip(self), fields(output = output.name()))]
+    fn render_surface(&mut self, output: &Output) {
+        let udev = self.backend.udev_mut();
 
-        let device_backend = match udev.backends.get_mut(&node) {
-            Some(backend) => backend,
-            None => {
-                tracing::error!("Trying to render on non-existent backend {}", node);
-                return;
-            }
-        };
-
-        if let Some(crtc) = crtc {
-            self.render_surface(node, crtc);
-        } else {
-            let crtcs: Vec<_> = device_backend.surfaces.keys().copied().collect();
-            for crtc in crtcs {
-                self.render_surface(node, crtc);
-            }
-        };
-    }
-
-    fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
-
-        let Some(surface) = udev
-            .backends
-            .get_mut(&node)
-            .and_then(|device| device.surfaces.get_mut(&crtc))
-        else {
+        let Some(surface) = render_surface_for_output(output, &mut udev.backends) else {
             return;
         };
+
+        assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
         let frame = udev.pointer_image.get_image(
@@ -1219,17 +1233,6 @@ impl State {
                 texture
             });
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
-            let udev_op_data = o.user_data().get::<UdevOutputData>();
-            udev_op_data
-                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
-        }) {
-            output.clone()
-        } else {
-            // somehow we got called with an invalid output
-            return;
-        };
-
         let windows = self
             .focus_state
             .focus_stack
@@ -1239,137 +1242,65 @@ impl State {
             .collect::<Vec<_>>();
 
         let result = render_surface(
-            &mut self.cursor_status,
+            surface,
+            &mut renderer,
+            output,
             &self.space,
             &windows,
             &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
-            surface,
-            &mut renderer,
-            &output,
-            // self.seat.input_method(),
+            &mut self.cursor_status,
             &pointer_image,
             &mut udev.pointer_element,
             self.pointer_location,
             &self.clock,
         );
 
-        let reschedule = match &result {
-            Ok(has_rendered) => !has_rendered,
-            Err(err) => {
-                tracing::warn!("Error during rendering: {:?}", err);
-                match err {
-                    SwapBuffersError::AlreadySwapped => false,
-                    SwapBuffersError::TemporaryFailure(err) => !matches!(
-                        err.downcast_ref::<DrmError>(),
-                        Some(&DrmError::DeviceInactive)
-                            | Some(&DrmError::Access {
-                                source: drm::SystemError::PermissionDenied,
-                                ..
-                            })
-                    ),
-                    SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
-                }
-            }
-        };
-
-        if reschedule {
-            let Some(data) = output.user_data().get::<UdevOutputData>() else {
-                unreachable!()
-            };
-
-            // Literally no idea if this refresh time calculation is doing anything, but we're
-            // gonna keep it here because I already added the stuff for it
-            let refresh_time = if let Some(mode) = data.mode {
-                self::utils::refresh_time(mode)
-            } else {
-                let output_refresh = match output.current_mode() {
-                    Some(mode) => mode.refresh,
-                    None => {
-                        return;
-                    }
-                };
-                Duration::from_millis((1_000_000f32 / output_refresh as f32) as u64)
-            };
-
-            // If reschedule is true we either hit a temporary failure or more likely rendering
-            // did not cause any damage on the output. In this case we just re-schedule a repaint
-            // after approx. one frame to re-test for damage.
-            tracing::trace!(
-                "reschedule repaint timer with delay {:?} on {:?}",
-                refresh_time,
-                crtc,
-            );
-            let timer = Timer::from_duration(refresh_time);
-            self.loop_handle
-                .insert_source(timer, move |_, _, data| {
-                    data.state.render(node, Some(crtc));
-                    TimeoutAction::Drop
-                })
-                .expect("failed to schedule frame timer");
-        }
-    }
-
-    fn schedule_initial_render(
-        &mut self,
-        node: DrmNode,
-        crtc: crtc::Handle,
-        evt_handle: LoopHandle<'static, CalloopData>,
-    ) {
-        let Backend::Udev(udev) = &mut self.backend else {
-            unreachable!()
-        };
-
-        let Some(surface) = udev
-            .backends
-            .get_mut(&node)
-            .and_then(|device| device.surfaces.get_mut(&crtc))
-        else {
-            return;
-        };
-
-        let node = surface.render_node;
-        let result = {
-            let mut renderer = udev
-                .gpu_manager
-                .single_renderer(&node)
-                .expect("failed to create MultiRenderer");
-            initial_render(surface, &mut renderer)
-        };
-
-        if let Err(err) = result {
-            match err {
-                SwapBuffersError::AlreadySwapped => {}
-                SwapBuffersError::TemporaryFailure(err) => {
-                    // TODO dont reschedule after 3(?) retries
-                    tracing::warn!("Failed to submit page_flip: {}", err);
-                    let handle = evt_handle.clone();
-                    evt_handle.insert_idle(move |data| {
-                        data.state.schedule_initial_render(node, crtc, handle)
-                    });
-                }
-                SwapBuffersError::ContextLost(err) => panic!("Rendering loop lost: {}", err),
-            }
+        match result {
+            Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
+            Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
         }
     }
 }
 
+fn render_surface_for_output<'a>(
+    output: &Output,
+    backends: &'a mut HashMap<DrmNode, UdevBackendData>,
+) -> Option<&'a mut RenderSurface> {
+    let UdevOutputData {
+        device_id,
+        crtc,
+        mode: _,
+    } = output.user_data().get()?;
+
+    backends
+        .get_mut(device_id)
+        .and_then(|device| device.surfaces.get_mut(crtc))
+}
+
+/// Render windows, layers, and everything else needed to the given [`RenderSurface`].
+/// Also queues the frame for scanout.
 #[allow(clippy::too_many_arguments)]
-fn render_surface<'a>(
-    cursor_status: &mut CursorImageStatus,
+fn render_surface(
+    surface: &mut RenderSurface,
+    renderer: &mut UdevRenderer<'_, '_>,
+    output: &Output,
+
     space: &Space<WindowElement>,
     windows: &[WindowElement],
     override_redirect_windows: &[X11Surface],
+
     dnd_icon: Option<&WlSurface>,
-    surface: &'a mut SurfaceData,
-    renderer: &mut UdevRenderer<'a, '_>,
-    output: &Output,
-    // input_method: &InputMethodHandle,
+    cursor_status: &mut CursorImageStatus,
+
     pointer_image: &TextureBuffer<MultiTexture>,
     pointer_element: &mut PointerElement<MultiTexture>,
     pointer_location: Point<f64, Logical>,
+
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
+    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+
     let pending_wins = windows
         .iter()
         .filter(|win| win.alive())
@@ -1382,6 +1313,16 @@ fn render_surface<'a>(
                 false
             };
             pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+        })
+        .filter(|win| {
+            if let WindowElement::Wayland(win) = win {
+                !win.toplevel()
+                    .current_state()
+                    .states
+                    .contains(xdg_toplevel::State::Resizing)
+            } else {
+                true
+            }
         })
         .map(|win| {
             (
@@ -1405,7 +1346,10 @@ fn render_surface<'a>(
             .queue_frame(None)
             .map_err(Into::<SwapBuffersError>::into)?;
 
+        tracing::debug!("queued no frame");
+
         // TODO: still draw the cursor here
+        surface.render_state = RenderState::WaitingForVblank { dirty: false };
 
         return Ok(true);
     }
@@ -1433,7 +1377,6 @@ fn render_surface<'a>(
 
     let time = clock.now();
 
-    // Send frames to the cursor surface to get it to update correctly
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
@@ -1461,20 +1404,4 @@ fn render_surface<'a>(
     }
 
     Ok(res.rendered)
-}
-
-fn initial_render(
-    surface: &mut SurfaceData,
-    renderer: &mut UdevRenderer<'_, '_>,
-) -> Result<(), SwapBuffersError> {
-    render_frame::<_, CustomRenderElements<_, WaylandSurfaceRenderElement<_>>, GlesTexture>(
-        &mut surface.compositor,
-        renderer,
-        &[],
-        [0.6, 0.6, 0.6, 1.0],
-    )?;
-    surface.compositor.queue_frame(None)?;
-    surface.compositor.reset_buffers();
-
-    Ok(())
 }

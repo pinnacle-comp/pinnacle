@@ -113,6 +113,7 @@ impl State {
                 window.change_geometry(Rectangle::from_loc_and_size(window_loc, window_size));
                 if let Some(output) = window.output(self) {
                     self.update_windows(&output);
+                    self.schedule_render(&output);
                 }
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
@@ -123,7 +124,7 @@ impl State {
                 });
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
-                // self.re_layout(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -139,7 +140,7 @@ impl State {
 
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
-                // self.re_layout(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleFloating { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -147,6 +148,12 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+
+                // Sometimes toggling won't change the window size,
+                // causing no commit.
+                //
+                // Schedule a render in case the window moves.
+                self.schedule_render(&output);
             }
             Msg::ToggleFullscreen { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -154,6 +161,7 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleMaximized { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -161,6 +169,7 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+                self.schedule_render(&output);
             }
             Msg::AddWindowRule { cond, rule } => {
                 self.config.window_rules.push((cond, rule));
@@ -251,6 +260,7 @@ impl State {
                     if let Some(output) = tag.output(self) {
                         self.update_windows(&output);
                         self.update_focus(&output);
+                        self.schedule_render(&output);
                     }
                 }
             }
@@ -265,6 +275,7 @@ impl State {
                 });
                 self.update_windows(&output);
                 self.update_focus(&output);
+                self.schedule_render(&output);
             }
             Msg::AddTags {
                 output_name,

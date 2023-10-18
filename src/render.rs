@@ -31,7 +31,11 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::{state::WithState, window::WindowElement};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+    window::WindowElement,
+};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -399,4 +403,13 @@ pub fn take_presentation_feedback(
     }
 
     output_presentation_feedback
+}
+
+impl State {
+    pub fn schedule_render(&mut self, output: &Output) {
+        // I'm relegating winit to render every frame because it's not my priority right now
+        if let Backend::Udev(udev) = &mut self.backend {
+            udev.schedule_render(&self.loop_handle, output);
+        }
+    }
 }
