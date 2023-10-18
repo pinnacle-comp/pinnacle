@@ -80,7 +80,6 @@ impl State {
                         }
                     }
                 }
-                self.schedule_render(&output);
             }
 
             Msg::Spawn {
