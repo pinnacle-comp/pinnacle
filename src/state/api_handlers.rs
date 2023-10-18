@@ -113,8 +113,8 @@ impl State {
                 window.change_geometry(Rectangle::from_loc_and_size(window_loc, window_size));
                 if let Some(output) = window.output(self) {
                     self.update_windows(&output);
+                    self.schedule_render(&output);
                 }
-                self.schedule_render(&output);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };

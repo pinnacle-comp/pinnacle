@@ -677,14 +677,14 @@ impl State {
             .loop_handle
             .insert_source(notifier, move |event, metadata, data| match event {
                 DrmEvent::VBlank(crtc) => {
-                    {
-                        let udev = data.state.backend.udev_mut();
-                        let then = udev.last_vblank_time;
-                        let now = Instant::now();
-                        let diff = now.duration_since(then);
-                        // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
-                        udev.last_vblank_time = now;
-                    }
+                    // { TODO:
+                    //     let udev = data.state.backend.udev_mut();
+                    //     let then = udev.last_vblank_time;
+                    //     let now = Instant::now();
+                    //     let diff = now.duration_since(then);
+                    //     // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
+                    //     udev.last_vblank_time = now;
+                    // }
                     data.state.on_vblank(node, crtc, metadata);
                 }
                 DrmEvent::Error(error) => {
