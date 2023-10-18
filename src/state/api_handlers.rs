@@ -80,6 +80,7 @@ impl State {
                         }
                     }
                 }
+                self.schedule_render(&output);
             }
 
             Msg::Spawn {
@@ -114,6 +115,7 @@ impl State {
                 if let Some(output) = window.output(self) {
                     self.update_windows(&output);
                 }
+                self.schedule_render(&output);
             }
             Msg::MoveWindowToTag { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -123,7 +125,7 @@ impl State {
                 });
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
-                // self.re_layout(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleTagOnWindow { window_id, tag_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -139,7 +141,7 @@ impl State {
 
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
-                // self.re_layout(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleFloating { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -160,6 +162,7 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+                self.schedule_render(&output);
             }
             Msg::ToggleMaximized { window_id } => {
                 let Some(window) = window_id.window(self) else { return };
@@ -167,6 +170,7 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
+                self.schedule_render(&output);
             }
             Msg::AddWindowRule { cond, rule } => {
                 self.config.window_rules.push((cond, rule));
