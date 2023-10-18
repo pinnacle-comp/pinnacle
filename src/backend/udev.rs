@@ -161,6 +161,61 @@ impl Udev {
     }
 }
 
+impl State {
+    /// Switch the tty.
+    ///
+    /// This will first clear the overlay plane to prevent any lingering artifacts,
+    /// then switch the vt.
+    ///
+    /// Yells at you when called on the winit backend. Bad developer. Very bad.
+    pub fn switch_vt(&mut self, vt: i32) {
+        match &mut self.backend {
+            Backend::Winit(_) => tracing::error!("Called `switch_vt` on winit"),
+            Backend::Udev(udev) => {
+                for backend in udev.backends.values_mut() {
+                    for surface in backend.surfaces.values_mut() {
+                        // Clear the overlay planes on tty switch.
+                        //
+                        // On my machine, switching a tty would leave the topmost window on the
+                        // screen. Smithay will render the topmost window on the overlay plane,
+                        // so we clear it here.
+                        let planes = surface.compositor.surface().planes().clone();
+                        tracing::debug!("Clearing overlay planes");
+                        for overlay_plane in planes.overlay {
+                            if let Err(err) = surface
+                                .compositor
+                                .surface()
+                                .clear_plane(overlay_plane.handle)
+                            {
+                                tracing::warn!("Failed to clear overlay planes: {err}");
+                            }
+                        }
+                    }
+                }
+
+                // Wait for the clear to commit before switching
+                self.schedule(
+                    |data| {
+                        let udev = data.state.backend.udev();
+                        !udev
+                            .backends
+                            .values()
+                            .flat_map(|backend| backend.surfaces.values())
+                            .map(|surface| surface.compositor.surface())
+                            .any(|drm_surf| drm_surf.commit_pending())
+                    },
+                    move |data| {
+                        let udev = data.state.backend.udev_mut();
+                        if let Err(err) = udev.session.change_vt(vt) {
+                            tracing::error!("Failed to switch to vt {vt}: {err}");
+                        }
+                    },
+                );
+            }
+        }
+    }
+}
+
 impl BackendData for Udev {
     fn seat_name(&self) -> String {
         self.session.seat()
@@ -336,9 +391,6 @@ pub fn run_udev() -> anyhow::Result<()> {
 
                     for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
                         data.state.schedule_render(&output);
-                        // data.state
-                        //     .loop_handle
-                        //     .insert_idle(move |data| data.state.render_surface(&output));
                     }
                 }
             }
@@ -562,6 +614,7 @@ struct DrmSurfaceDmabufFeedback {
 enum RenderState {
     /// No render is scheduled.
     Idle,
+    // TODO: remove the token on tty switch or output unplug
     /// A render has been queued.
     Scheduled(
         /// The idle token from a render being scheduled.
