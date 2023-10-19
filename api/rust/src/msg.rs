@@ -1,0 +1,319 @@
+use std::num::NonZeroU32;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
+pub struct CallbackId(pub u32);
+
+#[derive(Debug, Hash, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum MouseEdge {
+    Press,
+    Release,
+}
+
+/// A unique identifier for each window.
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum WindowId {
+    /// A config API returned an invalid window. It should be using this variant.
+    None,
+    /// A valid window id.
+    #[serde(untagged)]
+    Some(u32),
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum TagId {
+    None,
+    #[serde(untagged)]
+    Some(u32),
+}
+
+/// A unique identifier for an output.
+///
+/// An empty string represents an invalid output.
+#[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct OutputName(pub String);
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum Layout {
+    MasterStack,
+    Dwindle,
+    Spiral,
+    CornerTopLeft,
+    CornerTopRight,
+    CornerBottomLeft,
+    CornerBottomRight,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
+pub enum AccelProfile {
+    Flat,
+    Adaptive,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
+pub enum ClickMethod {
+    ButtonAreas,
+    Clickfinger,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
+pub enum ScrollMethod {
+    NoScroll,
+    TwoFinger,
+    Edge,
+    OnButtonDown,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
+pub enum TapButtonMap {
+    LeftRightMiddle,
+    LeftMiddleRight,
+}
+
+#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
+pub enum LibinputSetting {
+    AccelProfile(AccelProfile),
+    AccelSpeed(f64),
+    CalibrationMatrix([f32; 6]),
+    ClickMethod(ClickMethod),
+    DisableWhileTypingEnabled(bool),
+    LeftHanded(bool),
+    MiddleEmulationEnabled(bool),
+    RotationAngle(u32),
+    ScrollMethod(ScrollMethod),
+    NaturalScrollEnabled(bool),
+    ScrollButton(u32),
+    TapButtonMap(TapButtonMap),
+    TapDragEnabled(bool),
+    TapDragLockEnabled(bool),
+    TapEnabled(bool),
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct RequestId(u32);
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WindowRuleCondition {
+    /// This condition is met when any of the conditions provided is met.
+    #[serde(default)]
+    cond_any: Option<Vec<WindowRuleCondition>>,
+    /// This condition is met when all of the conditions provided are met.
+    #[serde(default)]
+    cond_all: Option<Vec<WindowRuleCondition>>,
+    /// This condition is met when the class matches.
+    #[serde(default)]
+    class: Option<Vec<String>>,
+    /// This condition is met when the title matches.
+    #[serde(default)]
+    title: Option<Vec<String>>,
+    /// This condition is met when the tag matches.
+    #[serde(default)]
+    tag: Option<Vec<TagId>>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize)]
+pub enum FloatingOrTiled {
+    Floating,
+    Tiled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum FullscreenOrMaximized {
+    Neither,
+    Fullscreen,
+    Maximized,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct WindowRule {
+    /// Set the output the window will open on.
+    #[serde(default)]
+    pub output: Option<OutputName>,
+    /// Set the tags the output will have on open.
+    #[serde(default)]
+    pub tags: Option<Vec<TagId>>,
+    /// Set the window to floating or tiled on open.
+    #[serde(default)]
+    pub floating_or_tiled: Option<FloatingOrTiled>,
+    /// Set the window to fullscreen, maximized, or force it to neither.
+    #[serde(default)]
+    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
+    /// Set the window's initial size.
+    #[serde(default)]
+    pub size: Option<(NonZeroU32, NonZeroU32)>,
+    /// Set the window's initial location. If the window is tiled, it will snap to this position
+    /// when set to floating.
+    #[serde(default)]
+    pub location: Option<(i32, i32)>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub(crate) enum Msg {
+    // Input
+    SetKeybind {
+        key: KeyIntOrString,
+        modifiers: Vec<Modifier>,
+        callback_id: CallbackId,
+    },
+    SetMousebind {
+        modifiers: Vec<Modifier>,
+        button: u32,
+        edge: MouseEdge,
+        callback_id: CallbackId,
+    },
+
+    // Window management
+    CloseWindow {
+        window_id: WindowId,
+    },
+    SetWindowSize {
+        window_id: WindowId,
+        #[serde(default)]
+        width: Option<i32>,
+        #[serde(default)]
+        height: Option<i32>,
+    },
+    MoveWindowToTag {
+        window_id: WindowId,
+        tag_id: TagId,
+    },
+    ToggleTagOnWindow {
+        window_id: WindowId,
+        tag_id: TagId,
+    },
+    ToggleFloating {
+        window_id: WindowId,
+    },
+    ToggleFullscreen {
+        window_id: WindowId,
+    },
+    ToggleMaximized {
+        window_id: WindowId,
+    },
+    AddWindowRule {
+        cond: WindowRuleCondition,
+        rule: WindowRule,
+    },
+    WindowMoveGrab {
+        button: u32,
+    },
+    WindowResizeGrab {
+        button: u32,
+    },
+
+    // Tag management
+    ToggleTag {
+        tag_id: TagId,
+    },
+    SwitchToTag {
+        tag_id: TagId,
+    },
+    AddTags {
+        /// The name of the output you want these tags on.
+        output_name: OutputName,
+        tag_names: Vec<String>,
+    },
+    RemoveTags {
+        /// The name of the output you want these tags removed from.
+        tag_ids: Vec<TagId>,
+    },
+    SetLayout {
+        tag_id: TagId,
+        layout: Layout,
+    },
+
+    // Output management
+    ConnectForAllOutputs {
+        callback_id: CallbackId,
+    },
+    SetOutputLocation {
+        output_name: OutputName,
+        #[serde(default)]
+        x: Option<i32>,
+        #[serde(default)]
+        y: Option<i32>,
+    },
+
+    // Process management
+    /// Spawn a program with an optional callback.
+    Spawn {
+        command: Vec<String>,
+        #[serde(default)]
+        callback_id: Option<CallbackId>,
+    },
+    SetEnv {
+        key: String,
+        value: String,
+    },
+
+    // Pinnacle management
+    /// Quit the compositor.
+    Quit,
+
+    // Input management
+    SetXkbConfig {
+        #[serde(default)]
+        rules: Option<String>,
+        #[serde(default)]
+        variant: Option<String>,
+        #[serde(default)]
+        layout: Option<String>,
+        #[serde(default)]
+        model: Option<String>,
+        #[serde(default)]
+        options: Option<String>,
+    },
+
+    SetLibinputSetting(LibinputSetting),
+
+    Request {
+        request_id: RequestId,
+        request: Request,
+    },
+}
+
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+/// Messages that require a server response, usually to provide some data.
+pub enum Request {
+    // Windows
+    GetWindows,
+    GetWindowProps { window_id: WindowId },
+    // Outputs
+    GetOutputs,
+    GetOutputProps { output_name: String },
+    // Tags
+    GetTags,
+    GetTagProps { tag_id: TagId },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum KeyIntOrString {
+    Int(u32),
+    String(String),
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
+pub enum Modifier {
+    Shift,
+    Ctrl,
+    Alt,
+    Super,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum Args {
+    /// Send a message with lines from the spawned process.
+    Spawn {
+        #[serde(default)]
+        stdout: Option<String>,
+        #[serde(default)]
+        stderr: Option<String>,
+        #[serde(default)]
+        exit_code: Option<i32>,
+        #[serde(default)]
+        exit_msg: Option<String>,
+    },
+    ConnectForAllOutputs {
+        output_name: String,
+    },
+}

@@ -1,0 +1,13 @@
+[package]
+name = "pinnacle_api"
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0.188", features = ["derive"] }
+rmp = { version = "0.8.12" }
+rmp-serde = { version = "1.1.2" }
+anyhow = { version = "1.0.75", features = ["backtrace"] }
+lazy_static = "1.4.0"
