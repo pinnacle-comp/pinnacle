@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use crate::{
-    backend::Backend,
     config::api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
     focus::FocusTarget,
     state::WithState,
@@ -16,7 +15,6 @@ use smithay::{
             KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
         },
         libinput::LibinputInputBackend,
-        session::Session,
     },
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{

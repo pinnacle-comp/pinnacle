@@ -61,14 +61,14 @@
 ---@field Spawn { stdout: string?, stderr: string?, exit_code: integer?, exit_msg: string? }?
 ---@field ConnectForAllOutputs { output_name: string }?
 
----@alias WindowId integer
+---@alias WindowId integer | "None"
 ---@alias TagId integer
 ---@alias RequestId integer
 ---@alias OutputName string
 
 ---@class RequestResponse
 --Windows
----@field Window { window_id: WindowId|nil }?
+---@field Window { window_id: WindowId }?
 ---@field Windows { window_ids: WindowId[] }?
 ---@field WindowProps { size: integer[]?, loc: integer[]?, class: string?, title: string?, focused: boolean?, floating: boolean?, fullscreen_or_maximized: FullscreenOrMaximized? }?
 --Outputs

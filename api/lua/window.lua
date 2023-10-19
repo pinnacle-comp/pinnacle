@@ -20,7 +20,7 @@ local window = {
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---@classmod
 ---@class WindowHandle
----@field private _id integer The internal id of this window
+---@field private _id WindowId The internal id of this window
 local window_handle = {}
 
 ---@param window_id WindowId
@@ -225,7 +225,7 @@ function window.get_by_title(title)
 end
 
 ---Get the currently focused window.
----@return WindowHandle|nil
+---@return WindowHandle
 function window.get_focused()
     -- TODO: get focused on output
     local windows = window.get_all()
@@ -236,7 +236,7 @@ function window.get_focused()
         end
     end
 
-    return nil
+    return create_window("None")
 end
 
 ---Get all windows.
