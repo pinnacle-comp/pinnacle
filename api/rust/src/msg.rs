@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
+#[derive(Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
 
 #[derive(Debug, Hash, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -88,8 +88,8 @@ pub enum LibinputSetting {
     TapEnabled(bool),
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct RequestId(u32);
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RequestId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowRuleCondition {
@@ -116,7 +116,7 @@ pub enum FloatingOrTiled {
     Tiled,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FullscreenOrMaximized {
     Neither,
     Fullscreen,
@@ -300,7 +300,7 @@ pub enum Modifier {
     Super,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub enum Args {
     /// Send a message with lines from the spawned process.
     Spawn {
@@ -315,5 +315,68 @@ pub enum Args {
     },
     ConnectForAllOutputs {
         output_name: String,
+    },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum IncomingMsg {
+    CallCallback {
+        callback_id: CallbackId,
+        #[serde(default)]
+        args: Option<Args>,
+    },
+    RequestResponse {
+        request_id: RequestId,
+        response: RequestResponse,
+    },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum RequestResponse {
+    Window {
+        window_id: Option<WindowId>,
+    },
+    Windows {
+        window_ids: Vec<WindowId>,
+    },
+    WindowProps {
+        size: Option<(i32, i32)>,
+        loc: Option<(i32, i32)>,
+        class: Option<String>,
+        title: Option<String>,
+        focused: Option<bool>,
+        floating: Option<bool>,
+        fullscreen_or_maximized: Option<FullscreenOrMaximized>,
+    },
+    Output {
+        output_name: Option<String>,
+    },
+    Outputs {
+        output_names: Vec<String>,
+    },
+    OutputProps {
+        /// The make of the output.
+        make: Option<String>,
+        /// The model of the output.
+        model: Option<String>,
+        /// The location of the output in the space.
+        loc: Option<(i32, i32)>,
+        /// The resolution of the output.
+        res: Option<(i32, i32)>,
+        /// The refresh rate of the output.
+        refresh_rate: Option<i32>,
+        /// The size of the output, in millimeters.
+        physical_size: Option<(i32, i32)>,
+        /// Whether the output is focused or not.
+        focused: Option<bool>,
+        tag_ids: Option<Vec<TagId>>,
+    },
+    Tags {
+        tag_ids: Vec<TagId>,
+    },
+    TagProps {
+        active: Option<bool>,
+        name: Option<String>,
+        output_name: Option<String>,
     },
 }

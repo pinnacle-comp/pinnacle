@@ -19,13 +19,13 @@ impl Process {
     where
         F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>) + Send + 'static,
     {
-        let args_callback = move |args: Args| {
-            if let Args::Spawn {
+        let args_callback = move |args: Option<Args>| {
+            if let Some(Args::Spawn {
                 stdout,
                 stderr,
                 exit_code,
                 exit_msg,
-            } = args
+            }) = args
             {
                 callback(stdout, stderr, exit_code, exit_msg);
             }
