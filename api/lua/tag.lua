@@ -17,22 +17,22 @@
 ---       This is helpful if you, say, want to reference a browser window while coding; you toggle your
 ---       browser's tag and temporarily reference it while you work without having to change screens.
 ---
----Many of the functions in this module take Tag|TagTable|TagTableNamed|string.
----This is a convenience so you don't have to get a tag object every time you want to do
+---Many of the functions in this module take `TagConstructor`.
+---This is a convenience so you don't have to get a tag handle every time you want to do
 ---something with tags.
 ---
 ---Instead, you can pass in either:
 ---
 --- - A string of the tag's name (ex. "1")
 ---     - This will get the first tag with that name on the focused output.
---- - A table where [1] is the name and [2] is the output (or its name) (ex. { "1", output.get_by_name("DP-1") })
+--- - A table where `name` is the name and `output` is the output (or its name) (ex. { name = "1", output = "DP-1" })
 ---     - This will get the first tag with that name on the specified output.
---- - The same table as above, but keyed with `name` and `output` (ex. { name = "1", output = "DP-1" })
----     - This is simply for those who want more clarity in their config.
+--- - A tag handle itself
+---     - If you already have a tag handle, it will be used directly.
 ---
 ---If you need to get tags beyond the first with the same name, use a `get` function and find what you need.
----@class TagModule
-local tag_module = {}
+---@class Tag
+local tag = {}
 
 ---@alias Layout
 ---| "MasterStack" # One master window on the left with all other windows stacked to the right.
@@ -43,27 +43,29 @@ local tag_module = {}
 ---| "CornerBottomLeft" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
 ---| "CornerBottomRight" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
----@alias TagTable { name: string, output: (string|Output)? }
+---@alias TagTable { name: string, output: (string|OutputHandle)? }
 
----@alias TagConstructor Tag|TagTable|string
+---@alias TagConstructor TagHandle|TagTable|string
 
----A tag object.
+---A tag handle.
 ---
----This can be retrieved through the various `get` functions in the `TagModule`.
+---This is a handle to a tag that can be passed to windows and such.
+---
+---This can be retrieved through the various `get` functions in the `Tag` module.
 ---@classmod
----@class Tag
----@field private _id integer The internal id of this tag.
-local tag = {}
+---@class TagHandle
+---@field private _id TagId The internal id of this tag.
+local tag_handle = {}
 
 ---Create a tag from an id.
 ---The id is the unique identifier for each tag.
 ---@param id TagId
----@return Tag
+---@return TagHandle
 local function create_tag(id)
-    ---@type Tag
+    ---@type TagHandle
     local t = { _id = id }
     -- Copy functions over
-    for k, v in pairs(tag) do
+    for k, v in pairs(tag_handle) do
         t[k] = v
     end
 
@@ -72,49 +74,49 @@ end
 
 ---Get this tag's internal id.
 ---***You probably won't need to use this.***
----@return integer
-function tag:id()
+---@return TagId
+function tag_handle:id()
     return self._id
 end
 
 ---Get this tag's active status.
 ---@return boolean|nil active `true` if the tag is active, `false` if not, and `nil` if the tag doesn't exist.
----@see TagModule.active — The corresponding module function
-function tag:active()
-    return tag_module.active(self)
+---@see Tag.active — The corresponding module function
+function tag_handle:active()
+    return tag.active(self)
 end
 
 ---Get this tag's name.
 ---@return string|nil name The name of this tag, or nil if it doesn't exist.
----@see TagModule.name — The corresponding module function
-function tag:name()
-    return tag_module.name(self)
+---@see Tag.name — The corresponding module function
+function tag_handle:name()
+    return tag.name(self)
 end
 
 ---Get this tag's output.
----@return Output|nil output The output this tag is on, or nil if the tag doesn't exist.
----@see TagModule.output — The corresponding module function
-function tag:output()
-    return tag_module.output(self)
+---@return OutputHandle output The output this tag is on, or a dummy handle if the tag doesn't exist.
+---@see Tag.output — The corresponding module function
+function tag_handle:output()
+    return tag.output(self)
 end
 
 ---Switch to this tag.
----@see TagModule.switch_to — The corresponding module function
-function tag:switch_to()
-    tag_module.switch_to(self)
+---@see Tag.switch_to — The corresponding module function
+function tag_handle:switch_to()
+    tag.switch_to(self)
 end
 
 ---Toggle this tag.
----@see TagModule.toggle — The corresponding module function
-function tag:toggle()
-    tag_module.toggle(self)
+---@see Tag.toggle — The corresponding module function
+function tag_handle:toggle()
+    tag.toggle(self)
 end
 
 ---Set this tag's layout.
 ---@param layout Layout
----@see TagModule.set_layout — The corresponding module function
-function tag:set_layout(layout)
-    tag_module.set_layout(self, layout)
+---@see Tag.set_layout — The corresponding module function
+function tag_handle:set_layout(layout)
+    tag.set_layout(self, layout)
 end
 
 -----------------------------------------------------------
@@ -127,16 +129,16 @@ end
 ---if op ~= nil then
 ---    tag.add(op, "1", "2", "3", "4", "5") -- Add tags with names 1-5
 ---end
---
+---
 --- -- You can also pass in a table.
 ---local tags = {"Terminal", "Browser", "Code", "Potato", "Email"}
 ---tag.add(op, tags)
 ---```
----@param output Output The output you want these tags to be added to.
+---@param output OutputHandle The output you want these tags to be added to.
 ---@param ... string The names of the new tags you want to add.
----@overload fun(output: Output, tag_names: string[])
----@see Output.add_tags — The corresponding object method
-function tag_module.add(output, ...)
+---@overload fun(output: OutputHandle, tag_names: string[])
+---@see OutputHandle.add_tags — The corresponding object method
+function tag.add(output, ...)
     local varargs = { ... }
     if type(varargs[1]) == "string" then
         local tag_names = varargs
@@ -172,14 +174,14 @@ end
 ---tag.toggle({ name = "1", output = "DP-1" }) -- Toggle tag 1 on "DP-1"
 ---tag.toggle({ name = "1", output = op })     -- Same as above
 ---
---- -- Using a tag object
----local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
+--- -- Using a tag handle
+---local t = tag.get("1") -- `t` is the tag with the name "1" on the focused output
 ---tag.toggle(t)
 ---```
 ---@param t TagConstructor
----@see Tag.toggle — The corresponding object method
-function tag_module.toggle(t)
-    local t = tag_module.get(t)
+---@see TagHandle.toggle — The corresponding object method
+function tag.toggle(t)
+    local t = tag.get(t)
 
     if t then
         SendMsg({
@@ -204,14 +206,14 @@ end
 ---tag.switch_to({ name = "1", output = "DP-1" }) -- Switch to tag 1 on "DP-1"
 ---tag.switch_to({ name = "1", output = op })     -- Same as above
 ---
---- -- Using a tag object
+--- -- Using a tag handle
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.switch_to(t)
 ---```
 ---@param t TagConstructor
----@see Tag.switch_to — The corresponding object method
-function tag_module.switch_to(t)
-    local t = tag_module.get(t)
+---@see TagHandle.switch_to — The corresponding object method
+function tag.switch_to(t)
+    local t = tag.get(t)
 
     if t then
         SendMsg({
@@ -233,16 +235,16 @@ end
 ---tag.set_layout({ name = "1", output = "DP-1" }, "Dwindle") -- Set tag 1 on "DP-1" to "Dwindle"
 ---tag.set_layout({ name = "1", output = op }, "Dwindle")     -- Same as above
 ---
---- -- Using a tag object
+--- -- Using a tag handle
 ---local t = tag.get_by_name("1")[1] -- `t` is the first tag with the name "1"
 ---tag.set_layout(t, "Dwindle")
 ---```
 ---
 ---@param t TagConstructor
 ---@param layout Layout The layout.
----@see Tag.set_layout — The corresponding object method
-function tag_module.set_layout(t, layout)
-    local t = tag_module.get(t)
+---@see TagHandle.set_layout — The corresponding object method
+function tag.set_layout(t, layout)
+    local t = tag.get(t)
 
     if t then
         SendMsg({
@@ -265,7 +267,6 @@ end
 ---### Examples
 ---```lua
 ---local t = tag.get("1")
----local t = tag.get({ name = "3" })
 ---local t = tag.get({ name = "1", output = "HDMI-A-0" })
 ---
 ---local op = output.get_by_name("DP-2")
@@ -274,32 +275,32 @@ end
 ---end
 ---```
 ---@param params TagConstructor
----@return Tag|nil
+---@return TagHandle
 ---
----@see TagModule.get_on_output
----@see TagModule.get_by_name
----@see TagModule.get_all
-function tag_module.get(params)
+---@see Tag.get_on_output — Get all tags on an output
+---@see Tag.get_by_name — Get all tags with some name
+---@see Tag.get_all — Get all tags
+function tag.get(params)
     -- If creating from a tag object, just return the obj
     if params.id then
-        return params --[[@as Tag]]
+        return params --[[@as TagHandle]]
     end
 
     -- string passed in
     if type(params) == "string" then
         local op = require("output").get_focused()
         if op == nil then
-            return nil
+            return create_tag("None")
         end
 
-        local tags = tag_module.get_by_name(params)
+        local tags = tag.get_by_name(params)
         for _, t in pairs(tags) do
             if t:output() and t:output():name() == op:name() then
                 return t
             end
         end
 
-        return nil
+        return create_tag("None")
     end
 
     -- TagTable was passed in
@@ -310,25 +311,25 @@ function tag_module.get(params)
     if op == nil then
         local o = require("output").get_focused()
         if o == nil then
-            return nil
+            return create_tag("None")
         end
         op = o
     elseif type(op) == "string" then
         local o = require("output").get_by_name(op)
         if o == nil then
-            return nil
+            return create_tag("None")
         end
         op = o
     end
 
-    local tags = tag_module.get_by_name(tag_name)
+    local tags = tag.get_by_name(tag_name)
     for _, t in pairs(tags) do
         if t:output() and t:output():name() == op:name() then
             return t
         end
     end
 
-    return nil
+    return create_tag("None")
 end
 
 ---Get all tags on the specified output.
@@ -340,11 +341,11 @@ end
 ---    local tags = tag.get_on_output(op) -- All tags on the focused output
 ---end
 ---```
----@param output Output
----@return Tag[]
+---@param output OutputHandle
+---@return TagHandle[]
 ---
 ---@see Output.tags — The corresponding object method
-function tag_module.get_on_output(output)
+function tag.get_on_output(output)
     local response = Request({
         GetOutputProps = {
             output_name = output:name(),
@@ -353,7 +354,7 @@ function tag_module.get_on_output(output)
 
     local tag_ids = response.RequestResponse.response.OutputProps.tag_ids
 
-    ---@type Tag[]
+    ---@type TagHandle[]
     local tags = {}
 
     if tag_ids == nil then
@@ -378,11 +379,11 @@ end
 --- -- ...will have `no_tags` be empty.
 ---```
 ---@param name string The name of the tag(s) you want.
----@return Tag[]
-function tag_module.get_by_name(name)
-    local t_s = tag_module.get_all()
+---@return TagHandle[]
+function tag.get_by_name(name)
+    local t_s = tag.get_all()
 
-    ---@type Tag[]
+    ---@type TagHandle[]
     local tags = {}
 
     for _, t in pairs(t_s) do
@@ -402,13 +403,13 @@ end
 ---local tags = tag.get_all()
 --- -- ...`tags` should have 10 tags, with 5 pairs of those names across both outputs.
 ---```
----@return Tag[]
-function tag_module.get_all()
+---@return TagHandle[]
+function tag.get_all()
     local response = Request("GetTags")
 
     local tag_ids = response.RequestResponse.response.Tags.tag_ids
 
-    ---@type Tag[]
+    ---@type TagHandle[]
     local tags = {}
 
     for _, tag_id in pairs(tag_ids) do
@@ -426,10 +427,10 @@ end
 ---print(tag.name(tag.get_by_name("Terminal")[1]))
 --- -- ...should print `Terminal`.
 ---```
----@param t Tag
+---@param t TagHandle
 ---@return string|nil
----@see Tag.name — The corresponding object method
-function tag_module.name(t)
+---@see TagHandle.name — The corresponding object method
+function tag.name(t)
     local response = Request({
         GetTagProps = {
             tag_id = t:id(),
@@ -440,10 +441,10 @@ function tag_module.name(t)
 end
 
 ---Get whether or not the specified tag is active.
----@param t Tag
+---@param t TagHandle
 ---@return boolean|nil
----@see Tag.active — The corresponding object method
-function tag_module.active(t)
+---@see TagHandle.active — The corresponding object method
+function tag.active(t)
     local response = Request({
         GetTagProps = {
             tag_id = t:id(),
@@ -454,34 +455,36 @@ function tag_module.active(t)
 end
 
 ---Get the output the specified tag is on.
----@param t Tag
----@return Output|nil
----@see OutputModule.get_for_tag — The called function
----@see Tag.output — The corresponding object method
-function tag_module.output(t)
+---@param t TagHandle
+---@return OutputHandle
+---@see Output.get_for_tag — The called function
+---@see TagHandle.output — The corresponding object method
+function tag.output(t)
     return require("output").get_for_tag(t)
 end
 
 ---@class LayoutCycler
----@field next fun(output: (Output|OutputName)?) Change the first active tag on `output` to its next layout. If `output` is empty, the focused output is used.
----@field prev fun(output: (Output|OutputName)?) Change the first active tag on `output` to its previous layout. If `output` is empty, the focused output is used.
+---@field next fun(output: (OutputHandle|OutputName)?) Change the first active tag on `output` to its next layout. If `output` is empty, the focused output is used.
+---@field prev fun(output: (OutputHandle|OutputName)?) Change the first active tag on `output` to its previous layout. If `output` is empty, the focused output is used.
 
----Given an array of layouts, this will create two functions; one will cycle forward the layout
----for the provided tag, and one will cycle backward.
+---Create a `LayoutCycler` to cycle layouts on tags.
+---
+---Given an array of layouts, this will create a table with two functions;
+---one will cycle forward the layout for the active tag, and one will cycle backward.
 ---
 --- ### Example
 ---```lua
 ---local layout_cycler = tag.layout_cycler({ "Dwindle", "Spiral", "MasterStack" })
 ---
----layout_cycler.next() -- Go to the next layout on the first tag of the focused output
----layout_cycler.prev() -- Go to the previous layout on the first tag of the focused output
+---layout_cycler.next() -- Go to the next layout on the first active tag of the focused output
+---layout_cycler.prev() -- Go to the previous layout on the first active tag of the focused output
 ---
 ---layout_cycler.next("DP-1") -- Do the above but on "DP-1" instead
----layout_cycler.prev(output.get_by_name("DP-1")) -- With an output object
+---layout_cycler.prev(output.get_by_name("DP-1")) -- With an output handle
 ---```
 ---@param layouts Layout[] The available layouts.
 ---@return LayoutCycler layout_cycler A table with the functions `next` and `prev`, which will cycle layouts for the given tag.
-function tag_module.layout_cycler(layouts)
+function tag.layout_cycler(layouts)
     local indices = {}
 
     -- Return empty functions if layouts is empty
@@ -493,7 +496,7 @@ function tag_module.layout_cycler(layouts)
     end
 
     return {
-        ---@param output (Output|OutputName)?
+        ---@param output (OutputHandle|OutputName)?
         next = function(output)
             if type(output) == "string" then
                 output = require("output").get_by_name(output)
@@ -531,7 +534,7 @@ function tag_module.layout_cycler(layouts)
             end
         end,
 
-        ---@param output (Output|OutputName)?
+        ---@param output (OutputHandle|OutputName)?
         prev = function(output)
             if type(output) == "string" then
                 output = require("output").get_by_name(output)
@@ -571,4 +574,4 @@ function tag_module.layout_cycler(layouts)
     }
 end
 
-return tag_module
+return tag

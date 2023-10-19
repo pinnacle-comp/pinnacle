@@ -110,7 +110,16 @@ impl State {
                 if let Some(height) = height {
                     window_size.h = height;
                 }
-                window.change_geometry(Rectangle::from_loc_and_size(window_loc, window_size));
+                use crate::window::window_state::FloatingOrTiled;
+
+                let rect = Rectangle::from_loc_and_size(window_loc, window_size);
+                window.change_geometry(rect);
+                window.with_state(|state| {
+                    state.floating_or_tiled = match state.floating_or_tiled {
+                        FloatingOrTiled::Floating(_) => FloatingOrTiled::Floating(rect),
+                        FloatingOrTiled::Tiled(_) => FloatingOrTiled::Tiled(Some(rect)),
+                    }
+                });
                 if let Some(output) = window.output(self) {
                     self.update_windows(&output);
                     self.schedule_render(&output);

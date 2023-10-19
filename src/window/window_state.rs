@@ -18,14 +18,22 @@ use crate::{
 
 use super::WindowElement;
 
+/// A unique identifier for each window.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct WindowId(u32);
+pub enum WindowId {
+    /// A config API returned an invalid window. It should be using this variant.
+    None,
+    /// A valid window id.
+    #[serde(untagged)]
+    Some(u32),
+}
 
 static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WindowId {
+    /// Get the next available window id. This always starts at 0.
     pub fn next() -> Self {
-        Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+        Self::Some(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Get the window that has this WindowId.
@@ -314,13 +322,6 @@ impl FullscreenOrMaximized {
     #[must_use]
     pub fn is_maximized(&self) -> bool {
         matches!(self, Self::Maximized)
-    }
-}
-
-impl WindowElementState {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        Default::default()
     }
 }
 

@@ -17,11 +17,15 @@ use crate::{
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub struct TagId(u32);
+pub enum TagId {
+    None,
+    #[serde(untagged)]
+    Some(u32),
+}
 
 impl TagId {
     fn next() -> Self {
-        Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+        Self::Some(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     pub fn tag(&self, state: &State) -> Option<Tag> {

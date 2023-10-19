@@ -4,29 +4,32 @@
 ---
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
----@class WindowModule
-local window_module = {
+---@class Window
+local window = {
     ---Window rules.
     rules = require("window_rules"),
 }
 
----A window object.
+---A window handle.
 ---
----This is a representation of an application window to the config process.
+---This is a handle to an application window that allows manipulation of the window.
 ---
----You can retrieve windows through the various `get` function in the `WindowModule`.
+---If the window is destroyed, the handle will become invalid and may not do
+---what you want it to.
+---
+---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---@classmod
----@class Window
----@field private _id integer The internal id of this window
-local window = {}
+---@class WindowHandle
+---@field private _id WindowId The internal id of this window
+local window_handle = {}
 
 ---@param window_id WindowId
----@return Window
+---@return WindowHandle
 local function create_window(window_id)
-    ---@type Window
+    ---@type WindowHandle
     local w = { _id = window_id }
     -- Copy functions over
-    for k, v in pairs(window) do
+    for k, v in pairs(window_handle) do
         w[k] = v
     end
 
@@ -37,39 +40,39 @@ end
 ---
 ---***You will probably not need to use this.***
 ---@return WindowId
-function window:id()
+function window_handle:id()
     return self._id
 end
 
 ---Set this window's size.
 ---
----See `WindowModule.set_size` for examples.
+---See `Window.set_size` for examples.
 ---
 ---@param size { w: integer?, h: integer? }
----@see WindowModule.set_size — The corresponding module function
-function window:set_size(size)
-    window_module.set_size(self, size)
+---@see Window.set_size — The corresponding module function
+function window_handle:set_size(size)
+    window.set_size(self, size)
 end
 
 ---Move this window to a tag, removing all other ones.
 ---
----See `WindowModule.move_to_tag` for examples.
+---See `Window.move_to_tag` for examples.
 ---
 ---@param t TagConstructor
----@see WindowModule.move_to_tag — The corresponding module function
-function window:move_to_tag(t)
-    window_module.move_to_tag(self, t)
+---@see Window.move_to_tag — The corresponding module function
+function window_handle:move_to_tag(t)
+    window.move_to_tag(self, t)
 end
 
 ---Toggle the specified tag for this window.
 ---
 ---Note: toggling off all tags currently makes a window not respond to layouting.
 ---
----See `WindowModule.toggle_tag` for examples.
+---See `Window.toggle_tag` for examples.
 ---@param t TagConstructor
----@see WindowModule.toggle_tag — The corresponding module function
-function window:toggle_tag(t)
-    window_module.toggle_tag(self, t)
+---@see Window.toggle_tag — The corresponding module function
+function window_handle:toggle_tag(t)
+    window.toggle_tag(self, t)
 end
 
 ---Close this window.
@@ -77,19 +80,19 @@ end
 ---This only sends a close *event* to the window and is the same as just clicking the X button in the titlebar.
 ---This will trigger save prompts in applications like GIMP.
 ---
----See `WindowModule.close` for examples.
----@see WindowModule.close — The corresponding module function
-function window:close()
-    window_module.close(self)
+---See `Window.close` for examples.
+---@see Window.close — The corresponding module function
+function window_handle:close()
+    window.close(self)
 end
 
 ---Get this window's size.
 ---
----See `WindowModule.size` for examples.
+---See `Window.size` for examples.
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
----@see WindowModule.size — The corresponding module function
-function window:size()
-    return window_module.size(self)
+---@see Window.size — The corresponding module function
+function window_handle:size()
+    return window.size(self)
 end
 
 ---Get this window's location in the global space.
@@ -100,50 +103,50 @@ end
 ---If you don't set the location of your monitors, they will start at (0, 0)
 ---and extend rightward with their tops aligned.
 ---
----See `WindowModule.loc` for examples.
+---See `Window.loc` for examples.
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
----@see WindowModule.loc — The corresponding module function
-function window:loc()
-    return window_module.loc(self)
+---@see Window.loc — The corresponding module function
+function window_handle:loc()
+    return window.loc(self)
 end
 
 ---Get this window's class. This is usually the name of the application.
 ---
----See `WindowModule.class` for examples.
+---See `Window.class` for examples.
 ---@return string|nil class This window's class, or nil if it doesn't exist.
----@see WindowModule.class — The corresponding module function
-function window:class()
-    return window_module.class(self)
+---@see Window.class — The corresponding module function
+function window_handle:class()
+    return window.class(self)
 end
 
 ---Get this window's title.
 ---
----See `WindowModule.title` for examples.
+---See `Window.title` for examples.
 ---@return string|nil title This window's title, or nil if it doesn't exist.
----@see WindowModule.title — The corresponding module function
-function window:title()
-    return window_module.title(self)
+---@see Window.title — The corresponding module function
+function window_handle:title()
+    return window.title(self)
 end
 
 ---Get this window's floating status.
 ---@return boolean|nil
----@see WindowModule.floating — The corresponding module function
-function window:floating()
-    return window_module.floating(self)
+---@see Window.floating — The corresponding module function
+function window_handle:floating()
+    return window.floating(self)
 end
 
 ---Get this window's fullscreen status.
 ---@return boolean|nil
----@see WindowModule.fullscreen — The corresponding module function
-function window:fullscreen()
-    return window_module.fullscreen(self)
+---@see Window.fullscreen — The corresponding module function
+function window_handle:fullscreen()
+    return window.fullscreen(self)
 end
 
 ---Get this window's maximized status.
 ---@return boolean|nil
----@see WindowModule.maximized — The corresponding module function
-function window:maximized()
-    return window_module.maximized(self)
+---@see Window.maximized — The corresponding module function
+function window_handle:maximized()
+    return window.maximized(self)
 end
 
 ---Toggle this window's floating status.
@@ -152,8 +155,8 @@ end
 ---
 ---When used on a fullscreen or maximized window, this will still change its
 ---underlying floating/tiled status.
-function window:toggle_floating()
-    window_module.toggle_floating(self)
+function window_handle:toggle_floating()
+    window.toggle_floating(self)
 end
 
 ---Toggle this window's fullscreen status.
@@ -162,8 +165,8 @@ end
 ---floating or tiled.
 ---
 ---When used on a non-fullscreen window, it becomes fullscreen.
-function window:toggle_fullscreen()
-    window_module.toggle_fullscreen(self)
+function window_handle:toggle_fullscreen()
+    window.toggle_fullscreen(self)
 end
 
 ---Toggle this window's maximized status.
@@ -172,28 +175,28 @@ end
 ---floating or tiled.
 ---
 ---When used on a non-maximized window, it becomes maximized.
-function window:toggle_maximized()
-    window_module.toggle_maximized(self)
+function window_handle:toggle_maximized()
+    window.toggle_maximized(self)
 end
 
 ---Get whether or not this window is focused.
 ---
----See `WindowModule.focused` for examples.
+---See `Window.focused` for examples.
 ---@return boolean|nil
----@see WindowModule.focused — The corresponding module function
-function window:focused()
-    return window_module.focused(self)
+---@see Window.focused — The corresponding module function
+function window_handle:focused()
+    return window.focused(self)
 end
 
 -------------------------------------------------------------------
 
 ---Get all windows with the specified class (usually the name of the application).
 ---@param class string The class. For example, Alacritty's class is "Alacritty".
----@return Window[]
-function window_module.get_by_class(class)
-    local windows = window_module.get_all()
+---@return WindowHandle[]
+function window.get_by_class(class)
+    local windows = window.get_all()
 
-    ---@type Window[]
+    ---@type WindowHandle[]
     local windows_ret = {}
     for _, w in pairs(windows) do
         if w:class() == class then
@@ -206,11 +209,11 @@ end
 
 ---Get all windows with the specified title.
 ---@param title string The title.
----@return Window[]
-function window_module.get_by_title(title)
-    local windows = window_module.get_all()
+---@return WindowHandle[]
+function window.get_by_title(title)
+    local windows = window.get_all()
 
-    ---@type Window[]
+    ---@type WindowHandle[]
     local windows_ret = {}
     for _, w in pairs(windows) do
         if w:title() == title then
@@ -222,10 +225,11 @@ function window_module.get_by_title(title)
 end
 
 ---Get the currently focused window.
----@return Window|nil
-function window_module.get_focused()
+---
+---@return WindowHandle handle A handle to the currently focused window. If there are none, this returns a dummy handle that can still be used but will be ignored by the compositor.
+function window.get_focused()
     -- TODO: get focused on output
-    local windows = window_module.get_all()
+    local windows = window.get_all()
 
     for _, w in pairs(windows) do
         if w:focused() then
@@ -233,15 +237,15 @@ function window_module.get_focused()
         end
     end
 
-    return nil
+    return create_window("None")
 end
 
 ---Get all windows.
----@return Window[]
-function window_module.get_all()
+---@return WindowHandle[]
+function window.get_all()
     local window_ids = Request("GetWindows").RequestResponse.response.Windows.window_ids
 
-    ---@type Window[]
+    ---@type WindowHandle[]
     local windows = {}
 
     for _, window_id in pairs(window_ids) do
@@ -253,10 +257,10 @@ end
 
 ---Toggle the tag with the given name and (optional) output for the specified window.
 ---
----@param w Window
+---@param w WindowHandle
 ---@param t TagConstructor
----@see Window.toggle_tag — The corresponding object method
-function window_module.toggle_tag(w, t)
+---@see WindowHandle.toggle_tag — The corresponding object method
+function window.toggle_tag(w, t)
     local t = require("tag").get(t)
 
     if t then
@@ -271,10 +275,10 @@ end
 
 ---Move the specified window to the tag with the given name and (optional) output.
 ---
----@param w Window
+---@param w WindowHandle
 ---@param t TagConstructor
----@see Window.move_to_tag — The corresponding object method
-function window_module.move_to_tag(w, t)
+---@see WindowHandle.move_to_tag — The corresponding object method
+function window.move_to_tag(w, t)
     local t = require("tag").get(t)
 
     if t then
@@ -293,8 +297,8 @@ end
 ---
 ---When used on a fullscreen or maximized window, this will still change its
 ---underlying floating/tiled status.
----@param win Window
-function window_module.toggle_floating(win)
+---@param win WindowHandle
+function window.toggle_floating(win)
     SendMsg({
         ToggleFloating = {
             window_id = win:id(),
@@ -308,8 +312,8 @@ end
 ---floating or tiled.
 ---
 ---When used on a non-fullscreen window, it becomes fullscreen.
----@param win Window
-function window_module.toggle_fullscreen(win)
+---@param win WindowHandle
+function window.toggle_fullscreen(win)
     SendMsg({
         ToggleFullscreen = {
             window_id = win:id(),
@@ -323,8 +327,8 @@ end
 ---floating or tiled.
 ---
 ---When used on a non-maximized window, it becomes maximized.
----@param win Window
-function window_module.toggle_maximized(win)
+---@param win WindowHandle
+function window.toggle_maximized(win)
     SendMsg({
         ToggleMaximized = {
             window_id = win:id(),
@@ -343,10 +347,10 @@ end
 ---    window.set_size(win, {})                   -- do absolutely nothing useful
 ---end
 ---```
----@param win Window
+---@param win WindowHandle
 ---@param size { w: integer?, h: integer? }
----@see Window.set_size — The corresponding object method
-function window_module.set_size(win, size)
+---@see WindowHandle.set_size — The corresponding object method
+function window.set_size(win, size)
     SendMsg({
         SetWindowSize = {
             window_id = win:id(),
@@ -368,9 +372,9 @@ end
 ---    window.close(win) -- close the currently focused window
 ---end
 ---```
----@param win Window
----@see Window.close — The corresponding object method
-function window_module.close(win)
+---@param win WindowHandle
+---@see WindowHandle.close — The corresponding object method
+function window.close(win)
     SendMsg({
         CloseWindow = {
             window_id = win:id(),
@@ -386,10 +390,10 @@ end
 ---local size = window.size(win)
 --- -- ...should have size equal to `{ w = 3840, h = 2160 }`.
 ---```
----@param win Window
+---@param win WindowHandle
 ---@return { w: integer, h: integer }|nil size The size of the window, or nil if it doesn't exist.
----@see Window.size — The corresponding object method
-function window_module.size(win)
+---@see WindowHandle.size — The corresponding object method
+function window.size(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -421,10 +425,10 @@ end
 ---local loc = window.loc(win)
 --- -- ...should have loc equal to `{ x = 1920, y = 0 }`.
 ---```
----@param win Window
+---@param win WindowHandle
 ---@return { x: integer, y: integer }|nil loc The location of the window, or nil if it's not on-screen or alive.
----@see Window.loc — The corresponding object method
-function window_module.loc(win)
+---@see WindowHandle.loc — The corresponding object method
+function window.loc(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -452,10 +456,10 @@ end
 ---end
 --- -- ...should print "Alacritty".
 ---```
----@param win Window
+---@param win WindowHandle
 ---@return string|nil class This window's class, or nil if it doesn't exist.
----@see Window.class — The corresponding object method
-function window_module.class(win)
+---@see WindowHandle.class — The corresponding object method
+function window.class(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -476,10 +480,10 @@ end
 ---end
 --- -- ...should print the directory Alacritty is in or what it's running (what's in its title bar).
 ---```
----@param win Window
+---@param win WindowHandle
 ---@return string|nil title This window's title, or nil if it doesn't exist.
----@see Window.title — The corresponding object method
-function window_module.title(win)
+---@see WindowHandle.title — The corresponding object method
+function window.title(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -490,10 +494,10 @@ function window_module.title(win)
 end
 
 ---Get this window's floating status.
----@param win Window
+---@param win WindowHandle
 ---@return boolean|nil
----@see Window.floating — The corresponding object method
-function window_module.floating(win)
+---@see WindowHandle.floating — The corresponding object method
+function window.floating(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -504,10 +508,10 @@ function window_module.floating(win)
 end
 
 ---Get this window's fullscreen status.
----@param win Window
+---@param win WindowHandle
 ---@return boolean|nil
----@see Window.fullscreen — The corresponding object method
-function window_module.fullscreen(win)
+---@see WindowHandle.fullscreen — The corresponding object method
+function window.fullscreen(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -518,10 +522,10 @@ function window_module.fullscreen(win)
 end
 
 ---Get this window's maximized status.
----@param win Window
+---@param win WindowHandle
 ---@return boolean|nil
----@see Window.maximized — The corresponding object method
-function window_module.maximized(win)
+---@see WindowHandle.maximized — The corresponding object method
+function window.maximized(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -540,10 +544,10 @@ end
 ---    print(window.focused(win)) -- Should print `true`
 ---end
 ---```
----@param win Window
+---@param win WindowHandle
 ---@return boolean|nil
----@see Window.focused — The corresponding object method
-function window_module.focused(win)
+---@see WindowHandle.focused — The corresponding object method
+function window.focused(win)
     local response = Request({
         GetWindowProps = {
             window_id = win:id(),
@@ -558,7 +562,7 @@ end
 ---This will start a window move grab with the provided button on the window the pointer
 ---is currently hovering over. Once `button` is let go, the move will end.
 ---@param button MouseButton The button you want to trigger the move.
-function window_module.begin_move(button)
+function window.begin_move(button)
     SendMsg({
         WindowMoveGrab = {
             button = button,
@@ -571,7 +575,7 @@ end
 ---This will start a window resize grab with the provided button on the window the
 ---pointer is currently hovering over. Once `button` is let go, the resize will end.
 ---@param button MouseButton
-function window_module.begin_resize(button)
+function window.begin_resize(button)
     SendMsg({
         WindowResizeGrab = {
             button = button,
@@ -579,4 +583,4 @@ function window_module.begin_resize(button)
     })
 end
 
-return window_module
+return window

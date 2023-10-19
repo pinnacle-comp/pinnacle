@@ -60,13 +60,7 @@ require("pinnacle").setup(function(pinnacle)
 
     -- mod_key + Alt + c closes the focused window
     input.keybind({ mod_key, "Alt" }, keys.c, function()
-        -- The commented out line may crash the config process if you have no windows open.
-        -- There is no nil warning here due to limitations in Lua LS type checking, so check for nil as shown below.
-        -- window.get_focused():close()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:close()
-        end
+        window.get_focused():close()
     end)
 
     -- mod_key + return spawns a terminal
@@ -78,26 +72,17 @@ require("pinnacle").setup(function(pinnacle)
 
     -- mod_key + Alt + Space toggle floating on the focused window
     input.keybind({ mod_key, "Alt" }, keys.space, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:toggle_floating()
-        end
+        window.get_focused():toggle_floating()
     end)
 
     -- mod_key + f toggles fullscreen on the focused window
     input.keybind({ mod_key }, keys.f, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:toggle_fullscreen()
-        end
+        window.get_focused():toggle_fullscreen()
     end)
 
     -- mod_key + m toggles maximized on the focused window
     input.keybind({ mod_key }, keys.m, function()
-        local win = window.get_focused()
-        if win ~= nil then
-            win:toggle_maximized()
-        end
+        window.get_focused():toggle_maximized()
     end)
 
     -- Tags ---------------------------------------------------------------------------
@@ -161,11 +146,11 @@ require("pinnacle").setup(function(pinnacle)
         end)
         -- mod_key + Alt + 1-5 moves windows to tags
         input.keybind({ mod_key, "Alt" }, tag_name, function()
-            local _ = window.get_focused() and window:get_focused():move_to_tag(tag_name)
+            window:get_focused():move_to_tag(tag_name)
         end)
         -- mod_key + Shift + Alt + 1-5 toggles tags on windows
         input.keybind({ mod_key, "Shift", "Alt" }, tag_name, function()
-            local _ = window.get_focused() and window.get_focused():toggle_tag(tag_name)
+            window.get_focused():toggle_tag(tag_name)
         end)
     end
 end)
