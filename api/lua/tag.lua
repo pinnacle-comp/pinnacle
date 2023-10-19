@@ -54,7 +54,7 @@ local tag = {}
 ---This can be retrieved through the various `get` functions in the `Tag` module.
 ---@classmod
 ---@class TagHandle
----@field private _id integer The internal id of this tag.
+---@field private _id TagId The internal id of this tag.
 local tag_handle = {}
 
 ---Create a tag from an id.
@@ -74,7 +74,7 @@ end
 
 ---Get this tag's internal id.
 ---***You probably won't need to use this.***
----@return integer
+---@return TagId
 function tag_handle:id()
     return self._id
 end
@@ -275,7 +275,7 @@ end
 ---end
 ---```
 ---@param params TagConstructor
----@return TagHandle|nil
+---@return TagHandle
 ---
 ---@see Tag.get_on_output — Get all tags on an output
 ---@see Tag.get_by_name — Get all tags with some name
@@ -290,7 +290,7 @@ function tag.get(params)
     if type(params) == "string" then
         local op = require("output").get_focused()
         if op == nil then
-            return nil
+            return create_tag("None")
         end
 
         local tags = tag.get_by_name(params)
@@ -300,7 +300,7 @@ function tag.get(params)
             end
         end
 
-        return nil
+        return create_tag("None")
     end
 
     -- TagTable was passed in
@@ -311,13 +311,13 @@ function tag.get(params)
     if op == nil then
         local o = require("output").get_focused()
         if o == nil then
-            return nil
+            return create_tag("None")
         end
         op = o
     elseif type(op) == "string" then
         local o = require("output").get_by_name(op)
         if o == nil then
-            return nil
+            return create_tag("None")
         end
         op = o
     end
@@ -329,7 +329,7 @@ function tag.get(params)
         end
     end
 
-    return nil
+    return create_tag("None")
 end
 
 ---Get all tags on the specified output.

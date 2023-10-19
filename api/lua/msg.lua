@@ -62,7 +62,7 @@
 ---@field ConnectForAllOutputs { output_name: string }?
 
 ---@alias WindowId integer | "None"
----@alias TagId integer
+---@alias TagId integer | "None"
 ---@alias RequestId integer
 ---@alias OutputName string
 
