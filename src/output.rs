@@ -9,6 +9,9 @@ use crate::{
     tag::Tag,
 };
 
+/// A unique identifier for an output.
+///
+/// An empty string represents an invalid output.
 #[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct OutputName(pub String);
 

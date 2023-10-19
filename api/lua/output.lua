@@ -19,11 +19,11 @@ local output = {}
 ---This can be retrieved through the various `get` functions in the `Output` module.
 ---@classmod
 ---@class OutputHandle A handle to a display.
----@field private _name string The name of this output (or rather, of its connector).
+---@field private _name OutputName The name of this output (or rather, of its connector).
 local output_handle = {}
 
 ---@param params OutputHandle|string
----@return OutputHandle|nil
+---@return OutputHandle
 local function create_output_from_params(params)
     if type(params) == "table" then
         return params
@@ -307,7 +307,7 @@ end
 ---print(monitor:name()) -- should print `DP-1`
 ---```
 ---@param name string The name of the output.
----@return OutputHandle|nil output The output, or nil if none have the provided name.
+---@return OutputHandle output The output. If it doesn't exist, a dummy handle with the name "" will be returned.
 function output.get_by_name(name)
     local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
@@ -318,7 +318,7 @@ function output.get_by_name(name)
         end
     end
 
-    return nil
+    return create_output("")
 end
 
 ---Get outputs by their model.
@@ -370,24 +370,8 @@ end
 
 ---Get the currently focused output. This is currently implemented as the one with the cursor on it.
 ---
----This function may return nil, which means you may get a warning if you try to use it without checking for nil.
----Usually this function will not be nil unless you unplug all monitors, so instead of checking,
----you can ignore the warning by either forcing the type to be non-nil with an inline comment:
----```lua
----local op = output.get_focused() --[[@as Output]]
----```
----or by disabling nil check warnings for the line:
----```lua
----local op = output.get_focused()
-------@diagnostic disable-next-line:need-check-nil
----local tags_on_output = op:tags()
----```
----Type checking done by Lua LS isn't perfect.
----Note that directly using the result of this function inline will *not* raise a warning, so be careful.
----```lua
----local tags = output.get_focused():tags() -- will NOT warn for nil
----```
----@return OutputHandle|nil output The output, or nil if none are focused.
+---If you have no outputs plugged in, this will return a dummy `OutputHandle` with the name "".
+---@return OutputHandle output The output, or a dummy handle if none are focused.
 function output.get_focused()
     local response = Request("GetOutputs")
     local output_names = response.RequestResponse.response.Outputs.output_names
@@ -399,7 +383,7 @@ function output.get_focused()
         end
     end
 
-    return nil
+    return create_output("")
 end
 
 ---Connect a function to be run on all current and future outputs.
@@ -431,7 +415,7 @@ end
 
 ---Get the output the specified tag is on.
 ---@param tag TagHandle
----@return OutputHandle|nil
+---@return OutputHandle
 ---@see Tag.output — A global method for fully qualified syntax (for you Rustaceans out there)
 ---@see TagHandle.output — The corresponding object method
 function output.get_for_tag(tag)
@@ -442,11 +426,7 @@ function output.get_for_tag(tag)
     })
     local output_name = response.RequestResponse.response.TagProps.output_name
 
-    if output_name == nil then
-        return nil
-    else
-        return create_output(output_name)
-    end
+    return create_output(output_name or "")
 end
 
 ---------Fully-qualified functions
@@ -457,10 +437,6 @@ end
 ---@see OutputHandle.make — The corresponding object method
 function output.make(op)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return nil
-    end
 
     local response = Request({
         GetOutputProps = {
@@ -478,10 +454,6 @@ end
 function output.model(op)
     local op = create_output_from_params(op)
 
-    if op == nil then
-        return nil
-    end
-
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -497,10 +469,6 @@ end
 ---@see OutputHandle.loc — The corresponding object method
 function output.loc(op)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return nil
-    end
 
     local response = Request({
         GetOutputProps = {
@@ -521,10 +489,6 @@ end
 ---@see OutputHandle.res — The corresponding object method
 function output.res(op)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return nil
-    end
 
     local response = Request({
         GetOutputProps = {
@@ -547,10 +511,6 @@ end
 function output.refresh_rate(op)
     local op = create_output_from_params(op)
 
-    if op == nil then
-        return nil
-    end
-
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -566,10 +526,6 @@ end
 ---@see OutputHandle.physical_size — The corresponding object method
 function output.physical_size(op)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return nil
-    end
 
     local response = Request({
         GetOutputProps = {
@@ -591,10 +547,6 @@ end
 function output.focused(op)
     local op = create_output_from_params(op)
 
-    if op == nil then
-        return nil
-    end
-
     local response = Request({
         GetOutputProps = {
             output_name = op:name(),
@@ -612,10 +564,6 @@ end
 function output.tags(op)
     local op = create_output_from_params(op)
 
-    if op == nil then
-        return {}
-    end
-
     return require("tag").get_on_output(op)
 end
 
@@ -627,10 +575,6 @@ end
 ---@see OutputHandle.add_tags — The corresponding object method
 function output.add_tags(op, ...)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return
-    end
 
     require("tag").add(op, ...)
 end
@@ -659,10 +603,6 @@ end
 ---@param loc { x: integer?, y: integer? }
 function output.set_loc(op, loc)
     local op = create_output_from_params(op)
-
-    if op == nil then
-        return
-    end
 
     SendMsg({
         SetOutputLocation = {

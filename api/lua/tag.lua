@@ -94,7 +94,7 @@ function tag_handle:name()
 end
 
 ---Get this tag's output.
----@return OutputHandle|nil output The output this tag is on, or nil if the tag doesn't exist.
+---@return OutputHandle output The output this tag is on, or a dummy handle if the tag doesn't exist.
 ---@see Tag.output — The corresponding module function
 function tag_handle:output()
     return tag.output(self)
@@ -456,7 +456,7 @@ end
 
 ---Get the output the specified tag is on.
 ---@param t TagHandle
----@return OutputHandle|nil
+---@return OutputHandle
 ---@see Output.get_for_tag — The called function
 ---@see TagHandle.output — The corresponding object method
 function tag.output(t)

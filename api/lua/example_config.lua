@@ -55,6 +55,10 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Keybinds ----------------------------------------------------------------------
 
+    input.keybind({ mod_key }, keys.t, function()
+        output.get_by_name("lkhewtlkhtwe"):add_tags("nut", "dsa")
+    end)
+
     -- mod_key + Alt + q quits the compositor
     input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
