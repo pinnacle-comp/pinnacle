@@ -225,7 +225,8 @@ function window.get_by_title(title)
 end
 
 ---Get the currently focused window.
----@return WindowHandle
+---
+---@return WindowHandle handle A handle to the currently focused window. If there are none, this returns a dummy handle that can still be used but will be ignored by the compositor.
 function window.get_focused()
     -- TODO: get focused on output
     local windows = window.get_all()
