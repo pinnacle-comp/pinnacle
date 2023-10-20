@@ -56,6 +56,19 @@ impl Output {
             .find(|op| op.properties().focused == Some(true))
     }
 
+    /// Connect a function to be run on all current and future outputs.
+    ///
+    /// When called, `connect_for_all` will run `func` with all currently connected outputs.
+    /// If a new output is connected, `func` will also be called with it.
+    ///
+    /// This will *not* be called if it has already been called for a given connector.
+    /// This means turning your monitor off and on or unplugging and replugging it *to the same port*
+    /// won't trigger `func`. Plugging it in to a new port *will* trigger `func`.
+    /// This is intended to prevent duplicate setup.
+    ///
+    /// Please note: this function will be run *after* Pinnacle processes your entire config.
+    /// For example, if you define tags in `func` but toggle them directly after `connect_for_all`,
+    /// nothing will happen as the tags haven't been added yet.
     pub fn connect_for_all<F>(&self, mut func: F)
     where
         F: FnMut(OutputHandle) + Send + 'static,
@@ -247,16 +260,24 @@ enum LeftOrRight {
     Right,
 }
 
+/// Horizontal alignment.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AlignmentHorizontal {
+    /// Align the outputs such that the left edges are in line.
     Left,
+    /// Center the outputs horizontally.
     Center,
+    /// Align the outputs such that the right edges are in line.
     Right,
 }
 
+/// Vertical alignment.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AlignmentVertical {
+    /// Align the outputs such that the top edges are in line.
     Top,
+    /// Center the outputs vertically.
     Center,
+    /// Align the outputs such that the bottom edges are in line.
     Bottom,
 }

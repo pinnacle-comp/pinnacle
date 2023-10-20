@@ -52,6 +52,10 @@ impl Input {
         send_msg(msg).unwrap();
     }
 
+    /// Set a mousebind. If called with an already existing mousebind, it gets replaced.
+    ///
+    /// The mousebind can happen either on button press or release, so you must
+    /// specify which edge you desire.
     pub fn mousebind<F>(
         &self,
         modifiers: &[Modifier],

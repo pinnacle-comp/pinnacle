@@ -3,10 +3,16 @@ use crate::{
     send_msg, CALLBACK_VEC,
 };
 
+/// Process management.
 #[derive(Clone, Copy)]
 pub struct Process;
 
 impl Process {
+    /// Spawn a process.
+    ///
+    /// This will use Rust's (more specifically `async_process`'s) `Command` to spawn the provided
+    /// arguments. If you are using any shell syntax like `~`, you may need to spawn a shell
+    /// instead. If so, you may *also* need to correctly escape the input.
     pub fn spawn(&self, command: Vec<&str>) -> anyhow::Result<()> {
         let msg = Msg::Spawn {
             command: command.into_iter().map(|s| s.to_string()).collect(),
@@ -16,6 +22,13 @@ impl Process {
         send_msg(msg)
     }
 
+    /// Spawn a process with an optional callback for its stdout, stderr, and exit information.
+    ///
+    /// `callback` has the following parameters:
+    ///  - `0`: The process's stdout printed this line.
+    ///  - `1`: The process's stderr printed this line.
+    ///  - `2`: The process exited with this code.
+    ///  - `3`: The process exited with this message.
     pub fn spawn_with_callback<F>(&self, command: Vec<&str>, mut callback: F) -> anyhow::Result<()>
     where
         F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>) + Send + 'static,

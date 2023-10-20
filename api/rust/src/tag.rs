@@ -6,6 +6,7 @@ use crate::{
     request, send_msg,
 };
 
+/// Tag management.
 #[derive(Clone, Copy)]
 pub struct Tag;
 
@@ -48,6 +49,15 @@ impl Tag {
         send_msg(msg).unwrap();
     }
 
+    /// Create a `LayoutCycler` to cycle layouts on tags.
+    ///
+    /// Given a slice of layouts, this will create a `LayoutCycler` with two methods;
+    /// one will cycle forward the layout for the active tag, and one will cycle backward.
+    ///
+    /// # Example
+    /// ```
+    /// todo!()
+    /// ```
     pub fn layout_cycler(&self, layouts: &[Layout]) -> LayoutCycler {
         let mut indices = HashMap::<TagId, usize>::new();
         let layouts = layouts.to_vec();
@@ -174,13 +184,21 @@ impl TagHandle {
     }
 }
 
+/// Layouts for tags.
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
+    /// One master window on the left with all other windows stacked to the right.
     MasterStack,
+    /// Windows split in half towards the bottom right corner.
     Dwindle,
+    /// Windows split in half in a spiral
     Spiral,
+    /// One main corner window in the top left with a column of windows on the right and a row on the bottom.
     CornerTopLeft,
+    /// One main corner window in the top right with a column of windows on the left and a row on the bottom.
     CornerTopRight,
+    /// One main corner window in the bottom left with a column of windows on the right and a row on the top.
     CornerBottomLeft,
+    /// One main corner window in the bottom right with a column of windows on the left and a row on the top.
     CornerBottomRight,
 }

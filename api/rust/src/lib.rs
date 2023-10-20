@@ -25,6 +25,7 @@ pub use xkbcommon;
 /// To that end, you can do `use pinnacle_api::prelude::*` to
 /// prevent your config file from being cluttered with imports.
 pub mod prelude {
+    pub use crate::input::libinput::*;
     pub use crate::input::Modifier;
     pub use crate::input::MouseButton;
     pub use crate::input::MouseEdge;
@@ -226,6 +227,7 @@ pub struct Pinnacle {
 }
 
 impl Pinnacle {
+    /// Quit Pinnacle.
     pub fn quit(&self) {
         send_msg(Msg::Quit).unwrap();
     }
