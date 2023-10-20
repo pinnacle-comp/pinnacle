@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    msg::{Layout, Msg, OutputName, Request, RequestResponse, TagId},
-    output::{Output, OutputHandle},
+    msg::{Msg, Request, RequestResponse},
+    output::{Output, OutputHandle, OutputName},
     request, send_msg,
 };
 
@@ -115,6 +115,13 @@ impl LayoutCycler {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum TagId {
+    None,
+    #[serde(untagged)]
+    Some(u32),
+}
+
 pub struct TagHandle(pub TagId);
 
 pub struct TagProperties {
@@ -159,4 +166,15 @@ impl TagHandle {
 
         send_msg(msg).unwrap()
     }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub enum Layout {
+    MasterStack,
+    Dwindle,
+    Spiral,
+    CornerTopLeft,
+    CornerTopRight,
+    CornerBottomLeft,
+    CornerBottomRight,
 }

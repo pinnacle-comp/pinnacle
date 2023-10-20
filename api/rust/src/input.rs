@@ -1,7 +1,7 @@
 use xkbcommon::xkb::Keysym;
 
 use crate::{
-    msg::{Args, CallbackId, KeyIntOrString, Modifier, MouseEdge, Msg},
+    msg::{Args, CallbackId, KeyIntOrString, Msg},
     send_msg, CALLBACK_VEC,
 };
 
@@ -69,15 +69,32 @@ impl Input {
     }
 }
 
+/// A mouse button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseButton {
+    /// The left mouse button.
     Left = 0x110,
+    /// The right mouse button.
     Right,
+    /// The middle mouse button, pressed usually by clicking the scroll wheel.
     Middle,
+    ///
     Side,
+    ///
     Extra,
+    ///
     Forward,
+    ///
     Back,
+}
+
+/// The edge on which you want things to trigger.
+#[derive(Debug, Hash, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum MouseEdge {
+    /// Actions will be triggered on button press.
+    Press,
+    /// Actions will be triggered on button release.
+    Release,
 }
 
 impl From<char> for KeyIntOrString {
@@ -96,4 +113,19 @@ impl From<Keysym> for KeyIntOrString {
     fn from(value: Keysym) -> Self {
         Self::Int(value.raw())
     }
+}
+
+/// A modifier key.
+#[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
+pub enum Modifier {
+    /// The shift key.
+    Shift,
+    /// The control key.
+    Ctrl,
+    /// The alt key.
+    Alt,
+    /// The super key.
+    ///
+    /// This is also known as the Windows key, meta, or Mod4 for those coming from Xorg.
+    Super,
 }

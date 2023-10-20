@@ -1,9 +1,19 @@
 use crate::{
-    msg::{FullscreenOrMaximized, Msg, Request, RequestResponse, WindowId},
+    msg::{Msg, Request, RequestResponse},
     request, send_msg,
     tag::TagHandle,
     MouseButton,
 };
+
+/// A unique identifier for each window.
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum WindowId {
+    /// A config API returned an invalid window. It should be using this variant.
+    None,
+    /// A valid window id.
+    #[serde(untagged)]
+    Some(u32),
+}
 
 pub struct Window;
 
@@ -124,4 +134,17 @@ impl WindowHandle {
 
         send_msg(msg).unwrap();
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize)]
+pub enum FloatingOrTiled {
+    Floating,
+    Tiled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum FullscreenOrMaximized {
+    Neither,
+    Fullscreen,
+    Maximized,
 }

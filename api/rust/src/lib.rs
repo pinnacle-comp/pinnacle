@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+//! The Rust implementation of the Pinnacle API.
+
 mod input;
 mod msg;
 mod output;
@@ -6,9 +10,9 @@ mod tag;
 mod window;
 
 use input::Input;
+pub use input::Modifier;
 pub use input::MouseButton;
-pub use msg::Modifier;
-pub use msg::MouseEdge;
+pub use input::MouseEdge;
 use output::Output;
 use tag::Tag;
 use window::Window;
@@ -172,10 +176,18 @@ fn request(request: Request) -> RequestResponse {
     response
 }
 
+/// The entry to configuration.
+///
+/// This struct houses every submodule you'll need to configure Pinnacle.
 pub struct Pinnacle {
+    /// Process management.
     pub process: Process,
+    /// Window management.
     pub window: Window,
+    /// Input management.
     pub input: Input,
+    /// Output management.
     pub output: Output,
+    /// Tag management.
     pub tag: Tag,
 }

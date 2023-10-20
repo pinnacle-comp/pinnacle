@@ -1,47 +1,14 @@
 use std::num::NonZeroU32;
 
+use crate::{
+    output::OutputName,
+    tag::{Layout, TagId},
+    window::{FloatingOrTiled, FullscreenOrMaximized, WindowId},
+    Modifier, MouseEdge,
+};
+
 #[derive(Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
-
-#[derive(Debug, Hash, serde::Serialize, serde::Deserialize, Clone, Copy, PartialEq, Eq)]
-pub enum MouseEdge {
-    Press,
-    Release,
-}
-
-/// A unique identifier for each window.
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum WindowId {
-    /// A config API returned an invalid window. It should be using this variant.
-    None,
-    /// A valid window id.
-    #[serde(untagged)]
-    Some(u32),
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum TagId {
-    None,
-    #[serde(untagged)]
-    Some(u32),
-}
-
-/// A unique identifier for an output.
-///
-/// An empty string represents an invalid output.
-#[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct OutputName(pub String);
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum Layout {
-    MasterStack,
-    Dwindle,
-    Spiral,
-    CornerTopLeft,
-    CornerTopRight,
-    CornerBottomLeft,
-    CornerBottomRight,
-}
 
 #[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
 pub enum AccelProfile {
@@ -108,19 +75,6 @@ pub struct WindowRuleCondition {
     /// This condition is met when the tag matches.
     #[serde(default)]
     tag: Option<Vec<TagId>>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize)]
-pub enum FloatingOrTiled {
-    Floating,
-    Tiled,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum FullscreenOrMaximized {
-    Neither,
-    Fullscreen,
-    Maximized,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -290,14 +244,6 @@ pub enum Request {
 pub enum KeyIntOrString {
     Int(u32),
     String(String),
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub enum Modifier {
-    Shift,
-    Ctrl,
-    Alt,
-    Super,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

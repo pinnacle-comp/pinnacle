@@ -1,9 +1,15 @@
 use crate::{
-    msg::{Args, CallbackId, Msg, OutputName, Request, RequestResponse},
+    msg::{Args, CallbackId, Msg, Request, RequestResponse},
     request, send_msg,
     tag::{Tag, TagHandle},
     CALLBACK_VEC,
 };
+
+/// A unique identifier for an output.
+///
+/// An empty string represents an invalid output.
+#[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct OutputName(pub String);
 
 /// Output management.
 pub struct Output;
