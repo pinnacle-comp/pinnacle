@@ -56,4 +56,18 @@ impl Process {
 
         send_msg(msg)
     }
+
+    /// Set an environment variable for Pinnacle. All future processes spawned will have this env set.
+    ///
+    /// Note that this will only set the variable for the compositor, not the running config process.
+    /// If you need to set an environment variable for this config, place them in the `metaconfig.toml` file instead
+    /// or use [`std::env::set_var`].
+    pub fn set_env(&self, key: &str, value: &str) {
+        let msg = Msg::SetEnv {
+            key: key.to_string(),
+            value: value.to_string(),
+        };
+
+        send_msg(msg).unwrap();
+    }
 }

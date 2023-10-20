@@ -128,7 +128,7 @@ impl WindowRuleCondition {
     /// This condition requires that the window's is opened on the given tags.
     ///
     /// When used in a top level condition or inside of [`WindowRuleCondition::all`],
-    /// the window must opne on *all* given tags.
+    /// the window must open on *all* given tags.
     ///
     /// When used in [`WindowRuleCondition::any`], the window must open on at least
     /// one of the given tags.

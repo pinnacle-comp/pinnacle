@@ -82,6 +82,30 @@ impl Input {
 
         send_msg(msg).unwrap();
     }
+
+    /// Set the xkbconfig for your keyboard.
+    ///
+    /// Parameters set to `None` will be set to their default values.
+    ///
+    /// Read `xkeyboard-config(7)` for more information.
+    pub fn set_xkb_config(
+        &self,
+        rules: Option<&str>,
+        model: Option<&str>,
+        layout: Option<&str>,
+        variant: Option<&str>,
+        options: Option<&str>,
+    ) {
+        let msg = Msg::SetXkbConfig {
+            rules: rules.map(|s| s.to_string()),
+            variant: variant.map(|s| s.to_string()),
+            layout: layout.map(|s| s.to_string()),
+            model: model.map(|s| s.to_string()),
+            options: options.map(|s| s.to_string()),
+        };
+
+        send_msg(msg).unwrap();
+    }
 }
 
 /// A mouse button.
