@@ -1,23 +1,19 @@
+//! Window rules.
+
 use std::num::NonZeroU32;
 
 use crate::{msg::Msg, output::OutputHandle, send_msg, tag::TagHandle};
 
 use super::{FloatingOrTiled, FullscreenOrMaximized};
 
-/// Window rules.
-#[derive(Clone, Copy)]
-pub struct WindowRules;
+/// Add a window rule.
+pub fn add(cond: WindowRuleCondition, rule: WindowRule) {
+    let msg = Msg::AddWindowRule {
+        cond: cond.0,
+        rule: rule.0,
+    };
 
-impl WindowRules {
-    /// Add a window rule.
-    pub fn add(&self, cond: WindowRuleCondition, rule: WindowRule) {
-        let msg = Msg::AddWindowRule {
-            cond: cond.0,
-            rule: rule.0,
-        };
-
-        send_msg(msg).unwrap();
-    }
+    send_msg(msg).unwrap();
 }
 
 /// A window rule.

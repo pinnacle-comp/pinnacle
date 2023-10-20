@@ -1,71 +1,66 @@
 use pinnacle_api::prelude::*;
+use pinnacle_api::*;
 
 fn main() {
-    pinnacle_api::setup(|pinnacle| {
-        let input = pinnacle.input;
-        let window = pinnacle.window;
-        let process = pinnacle.process;
-        let tag = pinnacle.tag;
-        let output = pinnacle.output;
-
+    pinnacle::setup(|| {
         let mod_key = Modifier::Ctrl;
 
         let terminal = "alacritty";
 
-        // TODO: set env
+        process::set_env("MOZ_ENABLE_WAYLAND", "1");
 
-        input.mousebind(&[mod_key], MouseButton::Left, MouseEdge::Press, move || {
-            window.begin_move(MouseButton::Left);
+        input::mousebind(&[mod_key], MouseButton::Left, MouseEdge::Press, move || {
+            window::begin_move(MouseButton::Left);
         });
 
-        input.mousebind(
+        input::mousebind(
             &[mod_key],
             MouseButton::Right,
             MouseEdge::Press,
             move || {
-                window.begin_resize(MouseButton::Right);
+                window::begin_resize(MouseButton::Right);
             },
         );
 
-        input.keybind(&[mod_key, Modifier::Alt], 'q', move || pinnacle.quit());
+        input::keybind(&[mod_key, Modifier::Alt], 'q', pinnacle::quit);
 
-        input.keybind(&[mod_key, Modifier::Alt], 'c', move || {
-            if let Some(window) = window.get_focused() {
+        input::keybind(&[mod_key, Modifier::Alt], 'c', move || {
+            if let Some(window) = window::get_focused() {
                 window.close();
             }
         });
 
-        input.keybind(&[mod_key], xkbcommon::xkb::keysyms::KEY_Return, move || {
-            process.spawn(vec![terminal]).unwrap();
+        input::keybind(&[mod_key], xkbcommon::xkb::keysyms::KEY_Return, move || {
+            process::spawn(vec![terminal]).unwrap();
         });
 
-        input.keybind(
+        input::keybind(
             &[mod_key, Modifier::Alt],
             xkbcommon::xkb::keysyms::KEY_space,
             move || {
-                if let Some(window) = window.get_focused() {
+                if let Some(window) = window::get_focused() {
                     window.toggle_floating();
                 }
             },
         );
 
-        input.keybind(&[mod_key], 'f', move || {
-            if let Some(window) = window.get_focused() {
+        input::keybind(&[mod_key], 'f', move || {
+            if let Some(window) = window::get_focused() {
                 window.toggle_fullscreen();
             }
         });
 
-        input.keybind(&[mod_key], 'm', move || {
-            if let Some(window) = window.get_focused() {
+        input::keybind(&[mod_key], 'm', move || {
+            if let Some(window) = window::get_focused() {
                 window.toggle_maximized();
             }
         });
 
         let tags = ["1", "2", "3", "4", "5"];
 
-        output.connect_for_all(move |output| {
-            tag.add(&output, tags.as_slice());
-            tag.get("1", Some(&output)).unwrap().toggle();
+        output::connect_for_all(move |output| {
+            tag::add(&output, tags.as_slice());
+            tag::get("1", Some(&output)).unwrap().toggle();
         });
 
         // let layout_cycler = tag.layout_cycler(&[
@@ -84,35 +79,34 @@ fn main() {
 
         for tag_name in tags.iter().map(|t| t.to_string()) {
             let t = tag_name.clone();
-            input.keybind(&[mod_key], tag_name.chars().next().unwrap(), move || {
-                println!("tag name is {t}");
-                tag.get(&t, None).unwrap().switch_to();
+            input::keybind(&[mod_key], tag_name.chars().next().unwrap(), move || {
+                tag::get(&t, None).unwrap().switch_to();
             });
             let t = tag_name.clone();
-            input.keybind(
+            input::keybind(
                 &[mod_key, Modifier::Shift],
                 tag_name.chars().next().unwrap(),
                 move || {
-                    tag.get(&t, None).unwrap().toggle();
+                    tag::get(&t, None).unwrap().toggle();
                 },
             );
             let t = tag_name.clone();
-            input.keybind(
+            input::keybind(
                 &[mod_key, Modifier::Alt],
                 tag_name.chars().next().unwrap(),
                 move || {
-                    if let Some(window) = window.get_focused() {
-                        window.move_to_tag(&tag.get(&t, None).unwrap());
+                    if let Some(window) = window::get_focused() {
+                        window.move_to_tag(&tag::get(&t, None).unwrap());
                     }
                 },
             );
             let t = tag_name.clone();
-            input.keybind(
+            input::keybind(
                 &[mod_key, Modifier::Shift, Modifier::Alt],
                 tag_name.chars().next().unwrap(),
                 move || {
-                    if let Some(window) = window.get_focused() {
-                        window.toggle_tag(&tag.get(&t, None).unwrap());
+                    if let Some(window) = window::get_focused() {
+                        window.toggle_tag(&tag::get(&t, None).unwrap());
                     }
                 },
             );

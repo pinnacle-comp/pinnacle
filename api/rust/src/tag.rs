@@ -1,106 +1,99 @@
+//! Tag management.
+
 use std::collections::HashMap;
 
 use crate::{
     msg::{Msg, Request, RequestResponse},
-    output::{Output, OutputHandle, OutputName},
+    output::{OutputHandle, OutputName},
     request, send_msg,
 };
 
-/// Tag management.
-#[derive(Clone, Copy)]
-pub struct Tag;
-
-impl Tag {
-    /// Get a tag by its name and output. If `output` is `None`, the currently focused output will
-    /// be used instead.
-    ///
-    /// If multiple tags have the same name, this returns the first one.
-    pub fn get(&self, name: &str, output: Option<&OutputHandle>) -> Option<TagHandle> {
-        self.get_all()
-            .filter(|tag| {
-                tag.properties().output.is_some_and(|op| match output {
-                    Some(output) => &op == output,
-                    None => Some(op) == Output.get_focused(),
-                })
+/// Get a tag by its name and output. If `output` is `None`, the currently focused output will
+/// be used instead.
+///
+/// If multiple tags have the same name, this returns the first one.
+pub fn get(name: &str, output: Option<&OutputHandle>) -> Option<TagHandle> {
+    get_all()
+        .filter(|tag| {
+            tag.properties().output.is_some_and(|op| match output {
+                Some(output) => &op == output,
+                None => Some(op) == crate::output::get_focused(),
             })
-            .find(|tag| tag.properties().name.is_some_and(|s| s == name))
-    }
-
-    /// Get all tags.
-    pub fn get_all(&self) -> impl Iterator<Item = TagHandle> {
-        let RequestResponse::Tags { tag_ids } = request(Request::GetTags) else {
-            unreachable!()
-        };
-
-        tag_ids.into_iter().map(|t| {
-            println!("got tag id {t:?}");
-            TagHandle(t)
         })
-    }
+        .find(|tag| tag.properties().name.is_some_and(|s| s == name))
+}
 
-    // TODO: return taghandles here
-    /// Add tags with the names from `names` to `output`.
-    pub fn add(&self, output: &OutputHandle, names: &[&str]) {
-        let msg = Msg::AddTags {
-            output_name: output.0.clone(),
-            tag_names: names.iter().map(|s| s.to_string()).collect(),
+/// Get all tags.
+pub fn get_all() -> impl Iterator<Item = TagHandle> {
+    let RequestResponse::Tags { tag_ids } = request(Request::GetTags) else {
+        unreachable!()
+    };
+
+    tag_ids.into_iter().map(TagHandle)
+}
+
+// TODO: return taghandles here
+/// Add tags with the names from `names` to `output`.
+pub fn add(output: &OutputHandle, names: &[&str]) {
+    let msg = Msg::AddTags {
+        output_name: output.0.clone(),
+        tag_names: names.iter().map(|s| s.to_string()).collect(),
+    };
+
+    send_msg(msg).unwrap();
+}
+
+/// Create a `LayoutCycler` to cycle layouts on tags.
+///
+/// Given a slice of layouts, this will create a `LayoutCycler` with two methods;
+/// one will cycle forward the layout for the active tag, and one will cycle backward.
+///
+/// # Example
+/// ```
+/// todo!()
+/// ```
+pub fn layout_cycler(layouts: &[Layout]) -> LayoutCycler {
+    let mut indices = HashMap::<TagId, usize>::new();
+    let layouts = layouts.to_vec();
+    let len = layouts.len();
+    let cycle = move |cycle: Cycle, output: Option<&OutputHandle>| {
+        let Some(output) = output.cloned().or_else(crate::output::get_focused) else {
+            return;
         };
 
-        send_msg(msg).unwrap();
-    }
+        let Some(tag) = output
+            .properties()
+            .tags
+            .into_iter()
+            .find(|tag| tag.properties().active == Some(true))
+        else {
+            return;
+        };
 
-    /// Create a `LayoutCycler` to cycle layouts on tags.
-    ///
-    /// Given a slice of layouts, this will create a `LayoutCycler` with two methods;
-    /// one will cycle forward the layout for the active tag, and one will cycle backward.
-    ///
-    /// # Example
-    /// ```
-    /// todo!()
-    /// ```
-    pub fn layout_cycler(&self, layouts: &[Layout]) -> LayoutCycler {
-        let mut indices = HashMap::<TagId, usize>::new();
-        let layouts = layouts.to_vec();
-        let len = layouts.len();
-        let cycle = move |cycle: Cycle, output: Option<&OutputHandle>| {
-            let Some(output) = output.cloned().or_else(|| Output.get_focused()) else {
-                return;
-            };
+        let index = indices.entry(tag.0).or_insert(0);
 
-            let Some(tag) = output
-                .properties()
-                .tags
-                .into_iter()
-                .find(|tag| tag.properties().active == Some(true))
-            else {
-                return;
-            };
-
-            let index = indices.entry(tag.0).or_insert(0);
-
-            match cycle {
-                Cycle::Forward => {
-                    if *index + 1 >= len {
-                        *index = 0;
-                    } else {
-                        *index += 1;
-                    }
-                }
-                Cycle::Backward => {
-                    if index.wrapping_sub(1) == usize::MAX {
-                        *index = len - 1;
-                    } else {
-                        *index -= 1;
-                    }
+        match cycle {
+            Cycle::Forward => {
+                if *index + 1 >= len {
+                    *index = 0;
+                } else {
+                    *index += 1;
                 }
             }
-
-            tag.set_layout(layouts[*index]);
-        };
-
-        LayoutCycler {
-            cycle: Box::new(cycle),
+            Cycle::Backward => {
+                if index.wrapping_sub(1) == usize::MAX {
+                    *index = len - 1;
+                } else {
+                    *index -= 1;
+                }
+            }
         }
+
+        tag.set_layout(layouts[*index]);
+    };
+
+    LayoutCycler {
+        cycle: Box::new(cycle),
     }
 }
 
@@ -121,32 +114,42 @@ pub struct LayoutCycler {
 }
 
 impl LayoutCycler {
+    /// Cycle to the next layout for the first active tag on `output`.
+    /// If `output` is `None`, the currently focused output is used.
     pub fn next(&mut self, output: Option<&OutputHandle>) {
         (self.cycle)(Cycle::Forward, output);
     }
 
+    /// Cycle to the previous layout for the first active tag on `output`.
+    /// If `output` is `None`, the currently focused output is used.
     pub fn prev(&mut self, output: Option<&OutputHandle>) {
         (self.cycle)(Cycle::Backward, output);
     }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum TagId {
+pub(crate) enum TagId {
     None,
     #[serde(untagged)]
     Some(u32),
 }
 
-pub struct TagHandle(pub TagId);
+/// A handle to a tag.
+pub struct TagHandle(pub(crate) TagId);
 
+/// Properties of a tag, retrieved through [`TagHandle::properties`].
 #[derive(Debug)]
 pub struct TagProperties {
+    /// Whether or not the tag is active.
     active: Option<bool>,
+    /// The tag's name.
     name: Option<String>,
+    /// The output the tag is on.
     output: Option<OutputHandle>,
 }
 
 impl TagHandle {
+    /// Get this tag's [`TagProperties`].
     pub fn properties(&self) -> TagProperties {
         let RequestResponse::TagProps {
             active,
@@ -164,16 +167,19 @@ impl TagHandle {
         }
     }
 
+    /// Toggle this tag.
     pub fn toggle(&self) {
         let msg = Msg::ToggleTag { tag_id: self.0 };
         send_msg(msg).unwrap();
     }
 
+    /// Switch to this tag, deactivating all others on its output.
     pub fn switch_to(&self) {
         let msg = Msg::SwitchToTag { tag_id: self.0 };
         send_msg(msg).unwrap();
     }
 
+    /// Set this tag's [`Layout`].
     pub fn set_layout(&self, layout: Layout) {
         let msg = Msg::SetLayout {
             tag_id: self.0,

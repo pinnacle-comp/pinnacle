@@ -1,20 +1,14 @@
+//! The Rust implementation of API for Pinnacle, a Wayland compositor.
+
 #![warn(missing_docs)]
 
-//! The Rust implementation of the Pinnacle API.
-
-mod input;
+pub mod input;
 mod msg;
-mod output;
-mod process;
-mod tag;
-mod window;
-
-use input::libinput::Libinput;
-use input::Input;
-use output::Output;
-use tag::Tag;
-use window::rules::WindowRules;
-use window::Window;
+pub mod output;
+pub mod pinnacle;
+pub mod process;
+pub mod tag;
+pub mod window;
 
 /// The xkbcommon crate, re-exported for your convenience.
 pub use xkbcommon;
@@ -38,30 +32,14 @@ pub mod prelude {
     pub use crate::window::FullscreenOrMaximized;
 }
 
-/// Re-exports of every config struct.
-///
-/// Usually you can just use the [`Pinnacle`][crate::Pinnacle] struct passed into
-/// the `setup` function, but if you need access to these elsewhere, here they are.
-pub mod modules {
-    pub use crate::input::libinput::Libinput;
-    pub use crate::input::Input;
-    pub use crate::output::Output;
-    pub use crate::process::Process;
-    pub use crate::tag::Tag;
-    pub use crate::window::rules::WindowRules;
-    pub use crate::window::Window;
-}
-
 use std::{
     collections::HashMap,
     io::{Read, Write},
     os::unix::net::UnixStream,
-    path::PathBuf,
     sync::{atomic::AtomicU32, Mutex, OnceLock},
 };
 
 use msg::{Args, CallbackId, IncomingMsg, Msg, Request, RequestResponse};
-use process::Process;
 
 use crate::msg::RequestId;
 
@@ -74,58 +52,6 @@ lazy_static::lazy_static! {
 }
 
 static REQUEST_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// Setup Pinnacle.
-pub fn setup(config_func: impl FnOnce(Pinnacle)) -> anyhow::Result<()> {
-    STREAM
-        .set(Mutex::new(UnixStream::connect(PathBuf::from(
-            std::env::var("PINNACLE_SOCKET").unwrap_or("/tmp/pinnacle_socket".to_string()),
-        ))?))
-        .unwrap();
-
-    let pinnacle = Pinnacle {
-        process: Process,
-        input: Input { libinput: Libinput },
-        window: Window { rules: WindowRules },
-        output: Output,
-        tag: Tag,
-    };
-
-    config_func(pinnacle);
-
-    loop {
-        let mut unread_callback_msgs = UNREAD_CALLBACK_MSGS.lock().unwrap();
-        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-        let mut to_remove = vec![];
-        for (cb_id, incoming_msg) in unread_callback_msgs.iter() {
-            let IncomingMsg::CallCallback { callback_id, args } = incoming_msg else {
-                continue;
-            };
-            let Some(f) = callback_vec.get_mut(callback_id.0 as usize) else {
-                continue;
-            };
-            f(args.clone());
-            to_remove.push(*cb_id);
-        }
-        for id in to_remove {
-            unread_callback_msgs.remove(&id);
-        }
-
-        let incoming_msg = read_msg(None);
-
-        assert!(matches!(incoming_msg, IncomingMsg::CallCallback { .. }));
-
-        let IncomingMsg::CallCallback { callback_id, args } = incoming_msg else {
-            unreachable!()
-        };
-
-        let Some(f) = callback_vec.get_mut(callback_id.0 as usize) else {
-            continue;
-        };
-
-        f(args);
-    }
-}
 
 fn send_msg(msg: Msg) -> anyhow::Result<()> {
     let mut msg = rmp_serde::encode::to_vec_named(&msg)?;
@@ -207,28 +133,4 @@ fn request(request: Request) -> RequestResponse {
     };
 
     response
-}
-
-/// The entry to configuration.
-///
-/// This struct houses every submodule you'll need to configure Pinnacle.
-#[derive(Clone, Copy)]
-pub struct Pinnacle {
-    /// Process management.
-    pub process: Process,
-    /// Window management.
-    pub window: Window,
-    /// Input management.
-    pub input: Input,
-    /// Output management.
-    pub output: Output,
-    /// Tag management.
-    pub tag: Tag,
-}
-
-impl Pinnacle {
-    /// Quit Pinnacle.
-    pub fn quit(&self) {
-        send_msg(Msg::Quit).unwrap();
-    }
 }

@@ -1,3 +1,5 @@
+//! Input management.
+
 pub mod libinput;
 
 use xkbcommon::xkb::Keysym;
@@ -7,105 +9,86 @@ use crate::{
     send_msg, CALLBACK_VEC,
 };
 
-use self::libinput::Libinput;
+/// Set a keybind.
+///
+/// This function takes in three parameters:
+/// - `modifiers`: A slice of the modifiers you want held for the keybind to trigger.
+/// - `key`: The key that needs to be pressed. This takes `impl Into<KeyIntOrString>` and can
+///   take the following three types:
+///     - [`char`]: A character of the key you want. This can be `a`, `~`, `@`, and so on.
+///     - [`u32`]: The key in numeric form. You can use the keys defined in
+///     [`xkbcommon::xkb::keysyms`] for this.
+///     - [`Keysym`]: The key in `Keysym` form, from [xkbcommon::xkb::Keysym].
+pub fn keybind<F>(modifiers: &[Modifier], key: impl Into<KeyIntOrString>, mut action: F)
+where
+    F: FnMut() + Send + 'static,
+{
+    let args_callback = move |_: Option<Args>| {
+        action();
+    };
 
-/// Input management.
-#[derive(Clone, Copy)]
-pub struct Input {
-    /// Libinput settings.
-    ///
-    /// Here you can set stuff like pointer acceleration.
-    pub libinput: Libinput,
+    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+    let len = callback_vec.len();
+    callback_vec.push(Box::new(args_callback));
+
+    let key = key.into();
+
+    let msg = Msg::SetKeybind {
+        key,
+        modifiers: modifiers.to_vec(),
+        callback_id: CallbackId(len as u32),
+    };
+
+    send_msg(msg).unwrap();
 }
 
-impl Input {
-    /// Set a keybind.
-    ///
-    /// This function takes in three parameters:
-    /// - `modifiers`: A slice of the modifiers you want held for the keybind to trigger.
-    /// - `key`: The key that needs to be pressed. This takes `impl Into<KeyIntOrString>` and can
-    ///   take the following three types:
-    ///     - [`char`]: A character of the key you want. This can be `a`, `~`, `@`, and so on.
-    ///     - [`u32`]: The key in numeric form. You can use the keys defined in
-    ///     [`xkbcommon::xkb::keysyms`] for this.
-    ///     - [`Keysym`]: The key in `Keysym` form, from [xkbcommon::xkb::Keysym].
-    pub fn keybind<F>(&self, modifiers: &[Modifier], key: impl Into<KeyIntOrString>, mut action: F)
-    where
-        F: FnMut() + Send + 'static,
-    {
-        let args_callback = move |_: Option<Args>| {
-            action();
-        };
+/// Set a mousebind. If called with an already existing mousebind, it gets replaced.
+///
+/// The mousebind can happen either on button press or release, so you must
+/// specify which edge you desire.
+pub fn mousebind<F>(modifiers: &[Modifier], button: MouseButton, edge: MouseEdge, mut action: F)
+where
+    F: FnMut() + Send + 'static,
+{
+    let args_callback = move |_: Option<Args>| {
+        action();
+    };
 
-        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-        let len = callback_vec.len();
-        callback_vec.push(Box::new(args_callback));
+    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+    let len = callback_vec.len();
+    callback_vec.push(Box::new(args_callback));
 
-        let key = key.into();
+    let msg = Msg::SetMousebind {
+        modifiers: modifiers.to_vec(),
+        button: button as u32,
+        edge,
+        callback_id: CallbackId(len as u32),
+    };
 
-        let msg = Msg::SetKeybind {
-            key,
-            modifiers: modifiers.to_vec(),
-            callback_id: CallbackId(len as u32),
-        };
+    send_msg(msg).unwrap();
+}
 
-        send_msg(msg).unwrap();
-    }
+/// Set the xkbconfig for your keyboard.
+///
+/// Parameters set to `None` will be set to their default values.
+///
+/// Read `xkeyboard-config(7)` for more information.
+pub fn set_xkb_config(
+    rules: Option<&str>,
+    model: Option<&str>,
+    layout: Option<&str>,
+    variant: Option<&str>,
+    options: Option<&str>,
+) {
+    let msg = Msg::SetXkbConfig {
+        rules: rules.map(|s| s.to_string()),
+        variant: variant.map(|s| s.to_string()),
+        layout: layout.map(|s| s.to_string()),
+        model: model.map(|s| s.to_string()),
+        options: options.map(|s| s.to_string()),
+    };
 
-    /// Set a mousebind. If called with an already existing mousebind, it gets replaced.
-    ///
-    /// The mousebind can happen either on button press or release, so you must
-    /// specify which edge you desire.
-    pub fn mousebind<F>(
-        &self,
-        modifiers: &[Modifier],
-        button: MouseButton,
-        edge: MouseEdge,
-        mut action: F,
-    ) where
-        F: FnMut() + Send + 'static,
-    {
-        let args_callback = move |_: Option<Args>| {
-            action();
-        };
-
-        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-        let len = callback_vec.len();
-        callback_vec.push(Box::new(args_callback));
-
-        let msg = Msg::SetMousebind {
-            modifiers: modifiers.to_vec(),
-            button: button as u32,
-            edge,
-            callback_id: CallbackId(len as u32),
-        };
-
-        send_msg(msg).unwrap();
-    }
-
-    /// Set the xkbconfig for your keyboard.
-    ///
-    /// Parameters set to `None` will be set to their default values.
-    ///
-    /// Read `xkeyboard-config(7)` for more information.
-    pub fn set_xkb_config(
-        &self,
-        rules: Option<&str>,
-        model: Option<&str>,
-        layout: Option<&str>,
-        variant: Option<&str>,
-        options: Option<&str>,
-    ) {
-        let msg = Msg::SetXkbConfig {
-            rules: rules.map(|s| s.to_string()),
-            variant: variant.map(|s| s.to_string()),
-            layout: layout.map(|s| s.to_string()),
-            model: model.map(|s| s.to_string()),
-            options: options.map(|s| s.to_string()),
-        };
-
-        send_msg(msg).unwrap();
-    }
+    send_msg(msg).unwrap();
 }
 
 /// A mouse button.

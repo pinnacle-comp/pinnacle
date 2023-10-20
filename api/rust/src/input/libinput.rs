@@ -1,19 +1,13 @@
+//! Libinput settings.
+
 use crate::{msg::Msg, send_msg};
 
-/// Libinput settings.
+/// Set a libinput setting.
 ///
-/// Here you can set things like pointer acceleration.
-#[derive(Clone, Copy)]
-pub struct Libinput;
-
-impl Libinput {
-    /// Set a libinput setting.
-    ///
-    /// This takes a [`LibinputSetting`] containing what you want set.
-    pub fn set(&self, setting: LibinputSetting) {
-        let msg = Msg::SetLibinputSetting(setting);
-        send_msg(msg).unwrap();
-    }
+/// This takes a [`LibinputSetting`] containing what you want set.
+pub fn set(setting: LibinputSetting) {
+    let msg = Msg::SetLibinputSetting(setting);
+    send_msg(msg).unwrap();
 }
 
 /// The acceleration profile.

@@ -8,10 +8,10 @@ use crate::{
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Clone, Copy)]
-pub struct CallbackId(pub u32);
+pub(crate) struct CallbackId(pub u32);
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct WindowRuleCondition {
+pub(crate) struct WindowRuleCondition {
     /// This condition is met when any of the conditions provided is met.
     #[serde(default)]
     pub cond_any: Option<Vec<WindowRuleCondition>>,
@@ -30,7 +30,7 @@ pub struct WindowRuleCondition {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct WindowRule {
+pub(crate) struct WindowRule {
     /// Set the output the window will open on.
     #[serde(default)]
     pub output: Option<OutputName>,
@@ -184,7 +184,7 @@ pub(crate) enum Msg {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 /// Messages that require a server response, usually to provide some data.
-pub enum Request {
+pub(crate) enum Request {
     // Windows
     GetWindows,
     GetWindowProps { window_id: WindowId },
@@ -221,7 +221,7 @@ pub enum Args {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum IncomingMsg {
+pub(crate) enum IncomingMsg {
     CallCallback {
         callback_id: CallbackId,
         #[serde(default)]
@@ -234,7 +234,7 @@ pub enum IncomingMsg {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum RequestResponse {
+pub(crate) enum RequestResponse {
     Window {
         window_id: Option<WindowId>,
     },

@@ -1,7 +1,9 @@
+//! Output management.
+
 use crate::{
     msg::{Args, CallbackId, Msg, Request, RequestResponse},
     request, send_msg,
-    tag::{Tag, TagHandle},
+    tag::TagHandle,
     CALLBACK_VEC,
 };
 
@@ -9,86 +11,80 @@ use crate::{
 ///
 /// An empty string represents an invalid output.
 #[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct OutputName(pub String);
+pub(crate) struct OutputName(pub String);
 
-/// Output management.
-#[derive(Clone, Copy)]
-pub struct Output;
+/// Get an [`OutputHandle`] by its name.
+///
+/// `name` is the name of the port the output is plugged in to.
+/// This is something like `HDMI-1` or `eDP-0`.
+pub fn get_by_name(name: &str) -> Option<OutputHandle> {
+    let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
+        unreachable!()
+    };
 
-impl Output {
-    /// Get an [`OutputHandle`] by its name.
-    ///
-    /// `name` is the name of the port the output is plugged in to.
-    /// This is something like `HDMI-1` or `eDP-0`.
-    pub fn get_by_name(&self, name: &str) -> Option<OutputHandle> {
-        let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
-            unreachable!()
-        };
+    output_names
+        .into_iter()
+        .find(|s| s == name)
+        .map(|s| OutputHandle(OutputName(s)))
+}
 
-        output_names
-            .into_iter()
-            .find(|s| s == name)
-            .map(|s| OutputHandle(OutputName(s)))
-    }
+/// Get a handle to all connected outputs.
+pub fn get_all() -> impl Iterator<Item = OutputHandle> {
+    let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
+        unreachable!()
+    };
 
-    /// Get a handle to all connected outputs.
-    pub fn get_all(&self) -> impl Iterator<Item = OutputHandle> {
-        let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
-            unreachable!()
-        };
+    output_names
+        .into_iter()
+        .map(|name| OutputHandle(OutputName(name)))
+}
 
-        output_names
-            .into_iter()
-            .map(|name| OutputHandle(OutputName(name)))
-    }
+/// Get the currently focused output.
+///
+/// This is currently defined as the one with the cursor on it.
+pub fn get_focused() -> Option<OutputHandle> {
+    let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
+        unreachable!()
+    };
 
-    /// Get the currently focused output.
-    ///
-    /// This is currently defined as the one with the cursor on it.
-    pub fn get_focused(&self) -> Option<OutputHandle> {
-        let RequestResponse::Outputs { output_names } = request(Request::GetOutputs) else {
-            unreachable!()
-        };
+    output_names
+        .into_iter()
+        .map(|s| OutputHandle(OutputName(s)))
+        .find(|op| op.properties().focused == Some(true))
+}
 
-        output_names
-            .into_iter()
-            .map(|s| OutputHandle(OutputName(s)))
-            .find(|op| op.properties().focused == Some(true))
-    }
+/// Connect a function to be run on all current and future outputs.
+///
+/// When called, `connect_for_all` will run `func` with all currently connected outputs.
+/// If a new output is connected, `func` will also be called with it.
+///
+/// This will *not* be called if it has already been called for a given connector.
+/// This means turning your monitor off and on or unplugging and replugging it *to the same port*
+/// won't trigger `func`. Plugging it in to a new port *will* trigger `func`.
+/// This is intended to prevent duplicate setup.
+///
+/// Please note: this function will be run *after* Pinnacle processes your entire config.
+/// For example, if you define tags in `func` but toggle them directly after `connect_for_all`,
+/// nothing will happen as the tags haven't been added yet.
+pub fn connect_for_all<F>(mut func: F)
+where
+    F: FnMut(OutputHandle) + Send + 'static,
+{
+    let args_callback = move |args: Option<Args>| {
+        if let Some(Args::ConnectForAllOutputs { output_name }) = args {
+            func(OutputHandle(OutputName(output_name)));
+        }
+    };
 
-    /// Connect a function to be run on all current and future outputs.
-    ///
-    /// When called, `connect_for_all` will run `func` with all currently connected outputs.
-    /// If a new output is connected, `func` will also be called with it.
-    ///
-    /// This will *not* be called if it has already been called for a given connector.
-    /// This means turning your monitor off and on or unplugging and replugging it *to the same port*
-    /// won't trigger `func`. Plugging it in to a new port *will* trigger `func`.
-    /// This is intended to prevent duplicate setup.
-    ///
-    /// Please note: this function will be run *after* Pinnacle processes your entire config.
-    /// For example, if you define tags in `func` but toggle them directly after `connect_for_all`,
-    /// nothing will happen as the tags haven't been added yet.
-    pub fn connect_for_all<F>(&self, mut func: F)
-    where
-        F: FnMut(OutputHandle) + Send + 'static,
-    {
-        let args_callback = move |args: Option<Args>| {
-            if let Some(Args::ConnectForAllOutputs { output_name }) = args {
-                func(OutputHandle(OutputName(output_name)));
-            }
-        };
+    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+    let len = callback_vec.len();
+    callback_vec.push(Box::new(args_callback));
 
-        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-        let len = callback_vec.len();
-        callback_vec.push(Box::new(args_callback));
+    let msg = Msg::ConnectForAllOutputs {
+        callback_id: CallbackId(len as u32),
+    };
 
-        let msg = Msg::ConnectForAllOutputs {
-            callback_id: CallbackId(len as u32),
-        };
-
-        send_msg(msg).unwrap();
-    }
+    send_msg(msg).unwrap();
 }
 
 /// An output handle.
@@ -97,7 +93,7 @@ impl Output {
 /// It serves to make it easier to deal with them, defining methods for getting properties and
 /// helpers for things like positioning multiple monitors.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct OutputHandle(pub OutputName);
+pub struct OutputHandle(pub(crate) OutputName);
 
 /// Properties of an output.
 pub struct OutputProperties {
@@ -126,6 +122,11 @@ pub struct OutputProperties {
 }
 
 impl OutputHandle {
+    /// Get this output's name.
+    pub fn name(&self) -> String {
+        self.0 .0.clone()
+    }
+
     // TODO: Make OutputProperties an option, make non null fields not options
     /// Get all properties of this output.
     pub fn properties(&self) -> OutputProperties {
@@ -161,10 +162,12 @@ impl OutputHandle {
         }
     }
 
+    /// Add tags with the given `names` to this output.
     pub fn add_tags(&self, names: &[&str]) {
-        Tag.add(self, names);
+        crate::tag::add(self, names);
     }
 
+    /// Set this output's location in the global space.
     pub fn set_loc(&self, x: Option<i32>, y: Option<i32>) {
         let msg = Msg::SetOutputLocation {
             output_name: self.0.clone(),
@@ -175,18 +178,30 @@ impl OutputHandle {
         send_msg(msg).unwrap();
     }
 
+    /// Set this output's location to the right of `other`.
+    ///
+    /// It will be aligned vertically based on the given `alignment`.
     pub fn set_loc_right_of(&self, other: &OutputHandle, alignment: AlignmentVertical) {
         self.set_loc_horizontal(other, LeftOrRight::Right, alignment);
     }
 
+    /// Set this output's location to the left of `other`.
+    ///
+    /// It will be aligned vertically based on the given `alignment`.
     pub fn set_loc_left_of(&self, other: &OutputHandle, alignment: AlignmentVertical) {
         self.set_loc_horizontal(other, LeftOrRight::Left, alignment);
     }
 
+    /// Set this output's location to the top of `other`.
+    ///
+    /// It will be aligned horizontally based on the given `alignment`.
     pub fn set_loc_top_of(&self, other: &OutputHandle, alignment: AlignmentHorizontal) {
         self.set_loc_vertical(other, TopOrBottom::Top, alignment);
     }
 
+    /// Set this output's location to the bottom of `other`.
+    ///
+    /// It will be aligned horizontally based on the given `alignment`.
     pub fn set_loc_bottom_of(&self, other: &OutputHandle, alignment: AlignmentHorizontal) {
         self.set_loc_vertical(other, TopOrBottom::Bottom, alignment);
     }
