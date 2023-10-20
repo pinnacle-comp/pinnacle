@@ -1,5 +1,6 @@
 use crate::{msg::Msg, send_msg};
 
+#[derive(Clone, Copy)]
 pub struct Libinput;
 
 impl Libinput {

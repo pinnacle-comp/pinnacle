@@ -11,15 +11,45 @@ mod window;
 
 use input::libinput::Libinput;
 use input::Input;
-pub use input::Modifier;
-pub use input::MouseButton;
-pub use input::MouseEdge;
 use output::Output;
 use tag::Tag;
 use window::rules::WindowRules;
 use window::Window;
-pub use xkbcommon::xkb::keysyms;
-pub use xkbcommon::xkb::Keysym;
+
+/// The xkbcommon crate, re-exported for your convenience.
+pub use xkbcommon;
+
+/// The prelude for the Pinnacle API.
+///
+/// This contains useful imports that you will likely need.
+/// To that end, you can do `use pinnacle_api::prelude::*` to
+/// prevent your config file from being cluttered with imports.
+pub mod prelude {
+    pub use crate::input::Modifier;
+    pub use crate::input::MouseButton;
+    pub use crate::input::MouseEdge;
+    pub use crate::output::AlignmentHorizontal;
+    pub use crate::output::AlignmentVertical;
+    pub use crate::tag::Layout;
+    pub use crate::window::rules::WindowRule;
+    pub use crate::window::rules::WindowRuleCondition;
+    pub use crate::window::FloatingOrTiled;
+    pub use crate::window::FullscreenOrMaximized;
+}
+
+/// Re-exports of every config struct.
+///
+/// Usually you can just use the [`Pinnacle`][crate::Pinnacle] struct passed into
+/// the `setup` function, but if you need access to these elsewhere, here they are.
+pub mod modules {
+    pub use crate::input::libinput::Libinput;
+    pub use crate::input::Input;
+    pub use crate::output::Output;
+    pub use crate::process::Process;
+    pub use crate::tag::Tag;
+    pub use crate::window::rules::WindowRules;
+    pub use crate::window::Window;
+}
 
 use std::{
     collections::HashMap,
@@ -181,6 +211,7 @@ fn request(request: Request) -> RequestResponse {
 /// The entry to configuration.
 ///
 /// This struct houses every submodule you'll need to configure Pinnacle.
+#[derive(Clone, Copy)]
 pub struct Pinnacle {
     /// Process management.
     pub process: Process,
@@ -192,4 +223,10 @@ pub struct Pinnacle {
     pub output: Output,
     /// Tag management.
     pub tag: Tag,
+}
+
+impl Pinnacle {
+    pub fn quit(&self) {
+        send_msg(Msg::Quit).unwrap();
+    }
 }

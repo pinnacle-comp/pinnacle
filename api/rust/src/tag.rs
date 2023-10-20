@@ -6,6 +6,7 @@ use crate::{
     request, send_msg,
 };
 
+#[derive(Clone, Copy)]
 pub struct Tag;
 
 impl Tag {
@@ -16,9 +17,10 @@ impl Tag {
     pub fn get(&self, name: &str, output: Option<&OutputHandle>) -> Option<TagHandle> {
         self.get_all()
             .filter(|tag| {
-                tag.properties()
-                    .output
-                    .is_some_and(|op| Some(&op) == output)
+                tag.properties().output.is_some_and(|op| match output {
+                    Some(output) => &op == output,
+                    None => Some(op) == Output.get_focused(),
+                })
             })
             .find(|tag| tag.properties().name.is_some_and(|s| s == name))
     }
@@ -29,7 +31,10 @@ impl Tag {
             unreachable!()
         };
 
-        tag_ids.into_iter().map(TagHandle)
+        tag_ids.into_iter().map(|t| {
+            println!("got tag id {t:?}");
+            TagHandle(t)
+        })
     }
 
     // TODO: return taghandles here
@@ -124,6 +129,7 @@ pub enum TagId {
 
 pub struct TagHandle(pub TagId);
 
+#[derive(Debug)]
 pub struct TagProperties {
     active: Option<bool>,
     name: Option<String>,

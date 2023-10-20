@@ -1,10 +1,10 @@
 pub mod rules;
 
 use crate::{
+    input::MouseButton,
     msg::{Msg, Request, RequestResponse},
     request, send_msg,
     tag::TagHandle,
-    MouseButton,
 };
 
 use self::rules::WindowRules;
@@ -19,6 +19,7 @@ pub enum WindowId {
     Some(u32),
 }
 
+#[derive(Clone, Copy)]
 pub struct Window {
     pub rules: WindowRules,
 }

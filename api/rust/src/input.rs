@@ -9,7 +9,12 @@ use crate::{
 
 use self::libinput::Libinput;
 
+/// Input management.
+#[derive(Clone, Copy)]
 pub struct Input {
+    /// Libinput settings.
+    ///
+    /// Here you can set stuff like pointer acceleration.
     pub libinput: Libinput,
 }
 

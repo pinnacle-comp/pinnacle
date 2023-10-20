@@ -3,6 +3,7 @@ use crate::{
     send_msg, CALLBACK_VEC,
 };
 
+#[derive(Clone, Copy)]
 pub struct Process;
 
 impl Process {

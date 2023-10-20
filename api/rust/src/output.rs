@@ -12,6 +12,7 @@ use crate::{
 pub struct OutputName(pub String);
 
 /// Output management.
+#[derive(Clone, Copy)]
 pub struct Output;
 
 impl Output {
@@ -246,12 +247,14 @@ enum LeftOrRight {
     Right,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AlignmentHorizontal {
     Left,
     Center,
     Right,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AlignmentVertical {
     Top,
     Center,

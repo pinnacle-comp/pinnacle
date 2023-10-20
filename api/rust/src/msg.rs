@@ -1,11 +1,10 @@
 use std::num::NonZeroU32;
 
 use crate::{
-    input::libinput::LibinputSetting,
+    input::{libinput::LibinputSetting, Modifier, MouseEdge},
     output::OutputName,
     tag::{Layout, TagId},
     window::{FloatingOrTiled, FullscreenOrMaximized, WindowId},
-    Modifier, MouseEdge,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Clone, Copy)]

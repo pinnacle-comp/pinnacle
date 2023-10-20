@@ -4,6 +4,7 @@ use crate::{msg::Msg, output::OutputHandle, send_msg, tag::TagHandle};
 
 use super::{FloatingOrTiled, FullscreenOrMaximized};
 
+#[derive(Clone, Copy)]
 pub struct WindowRules;
 
 impl WindowRules {
