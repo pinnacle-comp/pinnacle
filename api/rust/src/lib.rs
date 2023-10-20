@@ -2,6 +2,7 @@ mod input;
 mod msg;
 mod output;
 mod process;
+mod tag;
 mod window;
 
 use input::Input;
@@ -9,6 +10,7 @@ pub use input::MouseButton;
 pub use msg::Modifier;
 pub use msg::MouseEdge;
 use output::Output;
+use tag::Tag;
 use window::Window;
 pub use xkbcommon::xkb::keysyms;
 pub use xkbcommon::xkb::Keysym;
@@ -49,6 +51,7 @@ pub fn setup(config_func: impl FnOnce(Pinnacle)) -> anyhow::Result<()> {
         input: Input,
         window: Window,
         output: Output,
+        tag: Tag,
     };
 
     config_func(pinnacle);
@@ -174,4 +177,5 @@ pub struct Pinnacle {
     pub window: Window,
     pub input: Input,
     pub output: Output,
+    pub tag: Tag,
 }

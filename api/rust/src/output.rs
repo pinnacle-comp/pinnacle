@@ -1,6 +1,8 @@
 use crate::{
-    msg::{OutputName, Request, RequestResponse},
-    request,
+    msg::{Args, CallbackId, Msg, OutputName, Request, RequestResponse},
+    request, send_msg,
+    tag::TagHandle,
+    CALLBACK_VEC,
 };
 
 /// Output management.
@@ -46,6 +48,27 @@ impl Output {
             .map(|s| OutputHandle(OutputName(s)))
             .find(|op| op.properties().focused == Some(true))
     }
+
+    pub fn connect_for_all<F>(&self, mut func: F)
+    where
+        F: FnMut(OutputHandle) + Send + 'static,
+    {
+        let args_callback = move |args: Option<Args>| {
+            if let Some(Args::ConnectForAllOutputs { output_name }) = args {
+                func(OutputHandle(OutputName(output_name)));
+            }
+        };
+
+        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+        let len = callback_vec.len();
+        callback_vec.push(Box::new(args_callback));
+
+        let msg = Msg::ConnectForAllOutputs {
+            callback_id: CallbackId(len as u32),
+        };
+
+        send_msg(msg).unwrap();
+    }
 }
 
 /// An output handle.
@@ -53,31 +76,33 @@ impl Output {
 /// This is a handle to one of your monitors.
 /// It serves to make it easier to deal with them, defining methods for getting properties and
 /// helpers for things like positioning multiple monitors.
-pub struct OutputHandle(OutputName);
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct OutputHandle(pub OutputName);
 
 /// Properties of an output.
 pub struct OutputProperties {
     /// The make.
-    make: Option<String>,
+    pub make: Option<String>,
     /// The model.
     ///
     /// This is something like `27GL850` or whatever gibberish monitor manufacturers name their
     /// displays.
-    model: Option<String>,
+    pub model: Option<String>,
     /// The location of the output in the global space.
-    loc: Option<(i32, i32)>,
+    pub loc: Option<(i32, i32)>,
     /// The resolution of the output in pixels, where `res.0` is the width and `res.1` is the
     /// height.
-    res: Option<(i32, i32)>,
+    pub res: Option<(i32, i32)>,
     /// The refresh rate of the output in millihertz.
     ///
     /// For example, 60Hz is returned as 60000.
-    refresh_rate: Option<i32>,
+    pub refresh_rate: Option<i32>,
     /// The physical size of the output in millimeters.
-    physical_size: Option<(i32, i32)>,
+    pub physical_size: Option<(i32, i32)>,
     /// Whether or not the output is focused.
-    focused: Option<bool>,
-    // TODO: tags
+    pub focused: Option<bool>,
+    /// The tags on this output.
+    pub tags: Vec<TagHandle>,
 }
 
 impl OutputHandle {
@@ -108,6 +133,11 @@ impl OutputHandle {
             refresh_rate,
             physical_size,
             focused,
+            tags: tag_ids
+                .unwrap_or(vec![])
+                .into_iter()
+                .map(TagHandle)
+                .collect(),
         }
     }
 }
