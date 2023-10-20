@@ -1,6 +1,8 @@
 use crate::{
     msg::{FullscreenOrMaximized, Msg, Request, RequestResponse, WindowId},
     request, send_msg,
+    tag::TagHandle,
+    MouseButton,
 };
 
 pub struct Window;
@@ -22,6 +24,22 @@ impl Window {
         };
 
         window_ids.into_iter().map(WindowHandle)
+    }
+
+    pub fn begin_move(&self, button: MouseButton) {
+        let msg = Msg::WindowMoveGrab {
+            button: button as u32,
+        };
+
+        send_msg(msg).unwrap();
+    }
+
+    pub fn begin_resize(&self, button: MouseButton) {
+        let msg = Msg::WindowResizeGrab {
+            button: button as u32,
+        };
+
+        send_msg(msg).unwrap();
     }
 }
 
@@ -87,5 +105,23 @@ impl WindowHandle {
             floating,
             fullscreen_or_maximized,
         }
+    }
+
+    pub fn toggle_tag(&self, tag: &TagHandle) {
+        let msg = Msg::ToggleTagOnWindow {
+            window_id: self.0,
+            tag_id: tag.0,
+        };
+
+        send_msg(msg).unwrap();
+    }
+
+    pub fn move_to_tag(&self, tag: &TagHandle) {
+        let msg = Msg::MoveWindowToTag {
+            window_id: self.0,
+            tag_id: tag.0,
+        };
+
+        send_msg(msg).unwrap();
     }
 }
