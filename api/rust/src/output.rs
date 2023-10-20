@@ -1,7 +1,7 @@
 use crate::{
     msg::{Args, CallbackId, Msg, OutputName, Request, RequestResponse},
     request, send_msg,
-    tag::TagHandle,
+    tag::{Tag, TagHandle},
     CALLBACK_VEC,
 };
 
@@ -140,4 +140,114 @@ impl OutputHandle {
                 .collect(),
         }
     }
+
+    pub fn add_tags(&self, names: &[&str]) {
+        Tag.add(self, names);
+    }
+
+    pub fn set_loc(&self, x: Option<i32>, y: Option<i32>) {
+        let msg = Msg::SetOutputLocation {
+            output_name: self.0.clone(),
+            x,
+            y,
+        };
+
+        send_msg(msg).unwrap();
+    }
+
+    pub fn set_loc_right_of(&self, other: &OutputHandle, alignment: AlignmentVertical) {
+        self.set_loc_horizontal(other, LeftOrRight::Right, alignment);
+    }
+
+    pub fn set_loc_left_of(&self, other: &OutputHandle, alignment: AlignmentVertical) {
+        self.set_loc_horizontal(other, LeftOrRight::Left, alignment);
+    }
+
+    pub fn set_loc_top_of(&self, other: &OutputHandle, alignment: AlignmentHorizontal) {
+        self.set_loc_vertical(other, TopOrBottom::Top, alignment);
+    }
+
+    pub fn set_loc_bottom_of(&self, other: &OutputHandle, alignment: AlignmentHorizontal) {
+        self.set_loc_vertical(other, TopOrBottom::Bottom, alignment);
+    }
+
+    fn set_loc_horizontal(
+        &self,
+        other: &OutputHandle,
+        left_or_right: LeftOrRight,
+        alignment: AlignmentVertical,
+    ) {
+        let op1_props = self.properties();
+        let op2_props = other.properties();
+
+        let (Some(_self_loc), Some(self_res), Some(other_loc), Some(other_res)) =
+            (op1_props.loc, op1_props.res, op2_props.loc, op2_props.res)
+        else {
+            return;
+        };
+
+        let x = match left_or_right {
+            LeftOrRight::Left => other_loc.0 - self_res.0,
+            LeftOrRight::Right => other_loc.0 + self_res.0,
+        };
+
+        let y = match alignment {
+            AlignmentVertical::Top => other_loc.1,
+            AlignmentVertical::Center => other_loc.1 + (other_res.1 - self_res.1) / 2,
+            AlignmentVertical::Bottom => other_loc.1 + (other_res.1 - self_res.1),
+        };
+
+        self.set_loc(Some(x), Some(y));
+    }
+
+    fn set_loc_vertical(
+        &self,
+        other: &OutputHandle,
+        top_or_bottom: TopOrBottom,
+        alignment: AlignmentHorizontal,
+    ) {
+        let op1_props = self.properties();
+        let op2_props = other.properties();
+
+        let (Some(_self_loc), Some(self_res), Some(other_loc), Some(other_res)) =
+            (op1_props.loc, op1_props.res, op2_props.loc, op2_props.res)
+        else {
+            return;
+        };
+
+        let y = match top_or_bottom {
+            TopOrBottom::Top => other_loc.1 - self_res.1,
+            TopOrBottom::Bottom => other_loc.1 + other_res.1,
+        };
+
+        let x = match alignment {
+            AlignmentHorizontal::Left => other_loc.0,
+            AlignmentHorizontal::Center => other_loc.0 + (other_res.0 - self_res.0) / 2,
+            AlignmentHorizontal::Right => other_loc.0 + (other_res.0 - self_res.0),
+        };
+
+        self.set_loc(Some(x), Some(y));
+    }
+}
+
+enum TopOrBottom {
+    Top,
+    Bottom,
+}
+
+enum LeftOrRight {
+    Left,
+    Right,
+}
+
+pub enum AlignmentHorizontal {
+    Left,
+    Center,
+    Right,
+}
+
+pub enum AlignmentVertical {
+    Top,
+    Center,
+    Bottom,
 }
