@@ -1,3 +1,5 @@
+pub mod libinput;
+
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -5,7 +7,11 @@ use crate::{
     send_msg, CALLBACK_VEC,
 };
 
-pub struct Input;
+use self::libinput::Libinput;
+
+pub struct Input {
+    pub libinput: Libinput,
+}
 
 impl Input {
     /// Set a keybind.

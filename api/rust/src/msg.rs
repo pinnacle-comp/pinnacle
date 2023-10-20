@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
 use crate::{
+    input::libinput::LibinputSetting,
     output::OutputName,
     tag::{Layout, TagId},
     window::{FloatingOrTiled, FullscreenOrMaximized, WindowId},
@@ -50,51 +51,6 @@ pub struct WindowRule {
     /// when set to floating.
     #[serde(default)]
     pub location: Option<(i32, i32)>,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
-pub enum AccelProfile {
-    Flat,
-    Adaptive,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
-pub enum ClickMethod {
-    ButtonAreas,
-    Clickfinger,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
-pub enum ScrollMethod {
-    NoScroll,
-    TwoFinger,
-    Edge,
-    OnButtonDown,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
-pub enum TapButtonMap {
-    LeftRightMiddle,
-    LeftMiddleRight,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
-pub enum LibinputSetting {
-    AccelProfile(AccelProfile),
-    AccelSpeed(f64),
-    CalibrationMatrix([f32; 6]),
-    ClickMethod(ClickMethod),
-    DisableWhileTypingEnabled(bool),
-    LeftHanded(bool),
-    MiddleEmulationEnabled(bool),
-    RotationAngle(u32),
-    ScrollMethod(ScrollMethod),
-    NaturalScrollEnabled(bool),
-    ScrollButton(u32),
-    TapButtonMap(TapButtonMap),
-    TapDragEnabled(bool),
-    TapDragLockEnabled(bool),
-    TapEnabled(bool),
 }
 
 #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -166,6 +122,7 @@ pub(crate) enum Msg {
         output_name: OutputName,
         tag_names: Vec<String>,
     },
+    // TODO:
     RemoveTags {
         /// The name of the output you want these tags removed from.
         tag_ids: Vec<TagId>,

@@ -9,6 +9,7 @@ mod process;
 mod tag;
 mod window;
 
+use input::libinput::Libinput;
 use input::Input;
 pub use input::Modifier;
 pub use input::MouseButton;
@@ -53,7 +54,7 @@ pub fn setup(config_func: impl FnOnce(Pinnacle)) -> anyhow::Result<()> {
 
     let pinnacle = Pinnacle {
         process: Process,
-        input: Input,
+        input: Input { libinput: Libinput },
         window: Window { rules: WindowRules },
         output: Output,
         tag: Tag,
