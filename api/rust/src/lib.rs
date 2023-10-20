@@ -33,9 +33,11 @@ pub mod prelude {
 }
 
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
+    convert::Infallible,
     io::{Read, Write},
     os::unix::net::UnixStream,
+    path::PathBuf,
     sync::{atomic::AtomicU32, Mutex, OnceLock},
 };
 
@@ -133,4 +135,57 @@ fn request(request: Request) -> RequestResponse {
     };
 
     response
+}
+
+/// Connect to Pinnacle. This needs to be called before you begin calling config functions.
+///
+/// This will open up a connection to the Unix socket at `$PINNACLE_SOCKET`,
+/// which should be set when you start the compositor.
+pub fn connect() -> anyhow::Result<()> {
+    STREAM
+        .set(Mutex::new(
+            UnixStream::connect(PathBuf::from(
+                std::env::var("PINNACLE_SOCKET").unwrap_or("/tmp/pinnacle_socket".to_string()),
+            ))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    Ok(())
+}
+
+/// Begin listening for messages coming from Pinnacle.
+///
+/// This needs to be called at the very end of your `setup` function.
+pub fn listen() -> Infallible {
+    loop {
+        let mut unread_callback_msgs = UNREAD_CALLBACK_MSGS.lock().unwrap();
+
+        for cb_id in unread_callback_msgs.keys().copied().collect::<Vec<_>>() {
+            let Entry::Occupied(entry) = unread_callback_msgs.entry(cb_id) else {
+                unreachable!();
+            };
+            let IncomingMsg::CallCallback { callback_id, args } = entry.remove() else {
+                unreachable!();
+            };
+            let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+            let Some(callback) = callback_vec.get_mut(callback_id.0 as usize) else {
+                unreachable!();
+            };
+            callback(args);
+        }
+
+        let incoming_msg = read_msg(None);
+
+        let IncomingMsg::CallCallback { callback_id, args } = incoming_msg else {
+            unreachable!();
+        };
+
+        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
+        let Some(callback) = callback_vec.get_mut(callback_id.0 as usize) else {
+            unreachable!();
+        };
+
+        callback(args);
+    }
 }

@@ -16,8 +16,7 @@ use crate::{
 /// - `key`: The key that needs to be pressed. This takes `impl Into<KeyIntOrString>` and can
 ///   take the following three types:
 ///     - [`char`]: A character of the key you want. This can be `a`, `~`, `@`, and so on.
-///     - [`u32`]: The key in numeric form. You can use the keys defined in
-///     [`xkbcommon::xkb::keysyms`] for this.
+///     - [`u32`]: The key in numeric form. You can use the keys defined in [`xkbcommon::xkb::keysyms`] for this.
 ///     - [`Keysym`]: The key in `Keysym` form, from [xkbcommon::xkb::Keysym].
 pub fn keybind<F>(modifiers: &[Modifier], key: impl Into<KeyIntOrString>, mut action: F)
 where
