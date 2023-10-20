@@ -1,9 +1,13 @@
+pub mod rules;
+
 use crate::{
     msg::{Msg, Request, RequestResponse},
     request, send_msg,
     tag::TagHandle,
     MouseButton,
 };
+
+use self::rules::WindowRules;
 
 /// A unique identifier for each window.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -15,7 +19,9 @@ pub enum WindowId {
     Some(u32),
 }
 
-pub struct Window;
+pub struct Window {
+    pub rules: WindowRules,
+}
 
 impl Window {
     pub fn get_by_class<'a>(&self, class: &'a str) -> impl Iterator<Item = WindowHandle> + 'a {

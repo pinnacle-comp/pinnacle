@@ -15,6 +15,7 @@ pub use input::MouseButton;
 pub use input::MouseEdge;
 use output::Output;
 use tag::Tag;
+use window::rules::WindowRules;
 use window::Window;
 pub use xkbcommon::xkb::keysyms;
 pub use xkbcommon::xkb::Keysym;
@@ -53,7 +54,7 @@ pub fn setup(config_func: impl FnOnce(Pinnacle)) -> anyhow::Result<()> {
     let pinnacle = Pinnacle {
         process: Process,
         input: Input,
-        window: Window,
+        window: Window { rules: WindowRules },
         output: Output,
         tag: Tag,
     };

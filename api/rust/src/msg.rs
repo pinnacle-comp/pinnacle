@@ -10,6 +10,48 @@ use crate::{
 #[derive(Debug, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);
 
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WindowRuleCondition {
+    /// This condition is met when any of the conditions provided is met.
+    #[serde(default)]
+    pub cond_any: Option<Vec<WindowRuleCondition>>,
+    /// This condition is met when all of the conditions provided are met.
+    #[serde(default)]
+    pub cond_all: Option<Vec<WindowRuleCondition>>,
+    /// This condition is met when the class matches.
+    #[serde(default)]
+    pub class: Option<Vec<String>>,
+    /// This condition is met when the title matches.
+    #[serde(default)]
+    pub title: Option<Vec<String>>,
+    /// This condition is met when the tag matches.
+    #[serde(default)]
+    pub tag: Option<Vec<TagId>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct WindowRule {
+    /// Set the output the window will open on.
+    #[serde(default)]
+    pub output: Option<OutputName>,
+    /// Set the tags the output will have on open.
+    #[serde(default)]
+    pub tags: Option<Vec<TagId>>,
+    /// Set the window to floating or tiled on open.
+    #[serde(default)]
+    pub floating_or_tiled: Option<FloatingOrTiled>,
+    /// Set the window to fullscreen, maximized, or force it to neither.
+    #[serde(default)]
+    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
+    /// Set the window's initial size.
+    #[serde(default)]
+    pub size: Option<(NonZeroU32, NonZeroU32)>,
+    /// Set the window's initial location. If the window is tiled, it will snap to this position
+    /// when set to floating.
+    #[serde(default)]
+    pub location: Option<(i32, i32)>,
+}
+
 #[derive(Debug, PartialEq, Copy, Clone, serde::Serialize)]
 pub enum AccelProfile {
     Flat,
@@ -57,48 +99,6 @@ pub enum LibinputSetting {
 
 #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RequestId(pub u32);
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct WindowRuleCondition {
-    /// This condition is met when any of the conditions provided is met.
-    #[serde(default)]
-    cond_any: Option<Vec<WindowRuleCondition>>,
-    /// This condition is met when all of the conditions provided are met.
-    #[serde(default)]
-    cond_all: Option<Vec<WindowRuleCondition>>,
-    /// This condition is met when the class matches.
-    #[serde(default)]
-    class: Option<Vec<String>>,
-    /// This condition is met when the title matches.
-    #[serde(default)]
-    title: Option<Vec<String>>,
-    /// This condition is met when the tag matches.
-    #[serde(default)]
-    tag: Option<Vec<TagId>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct WindowRule {
-    /// Set the output the window will open on.
-    #[serde(default)]
-    pub output: Option<OutputName>,
-    /// Set the tags the output will have on open.
-    #[serde(default)]
-    pub tags: Option<Vec<TagId>>,
-    /// Set the window to floating or tiled on open.
-    #[serde(default)]
-    pub floating_or_tiled: Option<FloatingOrTiled>,
-    /// Set the window to fullscreen, maximized, or force it to neither.
-    #[serde(default)]
-    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
-    /// Set the window's initial size.
-    #[serde(default)]
-    pub size: Option<(NonZeroU32, NonZeroU32)>,
-    /// Set the window's initial location. If the window is tiled, it will snap to this position
-    /// when set to floating.
-    #[serde(default)]
-    pub location: Option<(i32, i32)>,
-}
 
 #[derive(Debug, serde::Serialize)]
 pub(crate) enum Msg {
