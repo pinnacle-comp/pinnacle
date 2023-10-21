@@ -139,11 +139,11 @@ pub struct TagHandle(pub(crate) TagId);
 #[derive(Debug)]
 pub struct TagProperties {
     /// Whether or not the tag is active.
-    active: Option<bool>,
+    pub active: Option<bool>,
     /// The tag's name.
-    name: Option<String>,
+    pub name: Option<String>,
     /// The output the tag is on.
-    output: Option<OutputHandle>,
+    pub output: Option<OutputHandle>,
 }
 
 impl TagHandle {
