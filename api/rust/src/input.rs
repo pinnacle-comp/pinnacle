@@ -11,13 +11,15 @@ use crate::{
 
 /// Set a keybind.
 ///
-/// This function takes in three parameters:
+/// This function takes in four parameters:
 /// - `modifiers`: A slice of the modifiers you want held for the keybind to trigger.
 /// - `key`: The key that needs to be pressed. This takes `impl Into<KeyIntOrString>` and can
 ///   take the following three types:
 ///     - [`char`]: A character of the key you want. This can be `a`, `~`, `@`, and so on.
 ///     - [`u32`]: The key in numeric form. You can use the keys defined in [`xkbcommon::xkb::keysyms`] for this.
 ///     - [`Keysym`]: The key in `Keysym` form, from [xkbcommon::xkb::Keysym].
+/// - `action`: What you want to run.
+/// - `callback_vec`: Your [`CallbackVec`] to insert `action` into.
 ///
 /// `action` takes in a `&mut `[`CallbackVec`] for use in the closure.
 pub fn keybind<'a, F>(

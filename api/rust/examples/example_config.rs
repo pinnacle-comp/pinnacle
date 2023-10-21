@@ -1,7 +1,10 @@
+// You should glob import these to prevent your config from getting cluttered.
 use pinnacle_api::prelude::*;
 use pinnacle_api::*;
 
 fn main() {
+    // Connect to the Pinnacle server.
+    // This needs to be called before you start calling any config functions.
     pinnacle_api::connect().unwrap();
 
     let mod_key = Modifier::Ctrl;
@@ -10,7 +13,16 @@ fn main() {
 
     process::set_env("MOZ_ENABLE_WAYLAND", "1");
 
+    // You must create a callback_vec to hold your callbacks.
+    // Rust is not Lua, so it takes a bit more work to get captures working.
+    //
+    // Anything that requires a callback will also require a mut reference to this struct.
+    //
+    // Additionally, all callbacks also take in `&mut CallbackVec`.
+    // This allows you to call functions that need callbacks within other callbacks.
     let mut callback_vec = CallbackVec::new();
+
+    // Keybinds.
 
     input::mousebind(
         &[mod_key],
@@ -102,19 +114,35 @@ fn main() {
         &mut callback_vec,
     );
 
-    // let layout_cycler = tag.layout_cycler(&[
-    //     Layout::MasterStack,
-    //     Layout::Dwindle,
-    //     Layout::Spiral,
-    //     Layout::CornerTopLeft,
-    //     Layout::CornerTopRight,
-    //     Layout::CornerBottomLeft,
-    //     Layout::CornerBottomRight,
-    // ]);
-    //
-    // input.keybind(&[mod_key], xkbcommon::xkb::keysyms::KEY_space, move || {
-    //     layout_cycler.next(None);
-    // });
+    let mut layout_cycler = tag::layout_cycler(&[
+        Layout::MasterStack,
+        Layout::Dwindle,
+        Layout::Spiral,
+        Layout::CornerTopLeft,
+        Layout::CornerTopRight,
+        Layout::CornerBottomLeft,
+        Layout::CornerBottomRight,
+    ]);
+
+    input::keybind(
+        &[mod_key],
+        xkbcommon::xkb::keysyms::KEY_space,
+        move |_| {
+            (layout_cycler.next)(None);
+        },
+        &mut callback_vec,
+    );
+
+    input::keybind(
+        &[mod_key, Modifier::Shift],
+        xkbcommon::xkb::keysyms::KEY_space,
+        move |_| {
+            (layout_cycler.prev)(None);
+        },
+        &mut callback_vec,
+    );
+
+    // Keybinds for tags
 
     for tag_name in tags.iter().map(|t| t.to_string()) {
         let t = tag_name.clone();
@@ -159,5 +187,9 @@ fn main() {
         );
     }
 
+    // At the very end of your config, you will need to start listening to Pinnacle in order for
+    // your callbacks to be correctly called.
+    //
+    // This will not return unless an error occurs.
     pinnacle_api::listen(callback_vec);
 }

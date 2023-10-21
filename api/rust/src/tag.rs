@@ -53,10 +53,12 @@ pub fn add(output: &OutputHandle, names: &[&str]) {
 /// todo!()
 /// ```
 pub fn layout_cycler(layouts: &[Layout]) -> LayoutCycler {
-    let mut indices = HashMap::<TagId, usize>::new();
+    let indices = std::rc::Rc::new(std::cell::RefCell::new(HashMap::<TagId, usize>::new()));
+    let indices_clone = indices.clone();
     let layouts = layouts.to_vec();
+    let layouts_clone = layouts.clone();
     let len = layouts.len();
-    let cycle = move |cycle: Cycle, output: Option<&OutputHandle>| {
+    let next = move |output: Option<&OutputHandle>| {
         let Some(output) = output.cloned().or_else(crate::output::get_focused) else {
             return;
         };
@@ -70,61 +72,57 @@ pub fn layout_cycler(layouts: &[Layout]) -> LayoutCycler {
             return;
         };
 
+        let mut indices = indices.borrow_mut();
         let index = indices.entry(tag.0).or_insert(0);
 
-        match cycle {
-            Cycle::Forward => {
-                if *index + 1 >= len {
-                    *index = 0;
-                } else {
-                    *index += 1;
-                }
-            }
-            Cycle::Backward => {
-                if index.wrapping_sub(1) == usize::MAX {
-                    *index = len - 1;
-                } else {
-                    *index -= 1;
-                }
-            }
+        if *index + 1 >= len {
+            *index = 0;
+        } else {
+            *index += 1;
         }
 
         tag.set_layout(layouts[*index]);
     };
+    let prev = move |output: Option<&OutputHandle>| {
+        let Some(output) = output.cloned().or_else(crate::output::get_focused) else {
+            return;
+        };
+
+        let Some(tag) = output
+            .properties()
+            .tags
+            .into_iter()
+            .find(|tag| tag.properties().active == Some(true))
+        else {
+            return;
+        };
+
+        let mut indices = indices_clone.borrow_mut();
+        let index = indices.entry(tag.0).or_insert(0);
+
+        if index.wrapping_sub(1) == usize::MAX {
+            *index = len - 1;
+        } else {
+            *index -= 1;
+        }
+
+        tag.set_layout(layouts_clone[*index]);
+    };
 
     LayoutCycler {
-        cycle: Box::new(cycle),
+        next: Box::new(next),
+        prev: Box::new(prev),
     }
-}
-
-/// Which direction to cycle layouts.
-#[derive(Debug, Clone, Copy)]
-enum Cycle {
-    /// Cycle layouts forward.
-    Forward,
-    /// Cycle layouts backward.
-    Backward,
 }
 
 /// A layout cycler that keeps track of tags and their layouts and provides methods to cycle
 /// layouts on them.
 #[allow(clippy::type_complexity)]
 pub struct LayoutCycler {
-    cycle: Box<dyn FnMut(Cycle, Option<&OutputHandle>)>,
-}
-
-impl LayoutCycler {
-    /// Cycle to the next layout for the first active tag on `output`.
-    /// If `output` is `None`, the currently focused output is used.
-    pub fn next(&mut self, output: Option<&OutputHandle>) {
-        (self.cycle)(Cycle::Forward, output);
-    }
-
-    /// Cycle to the previous layout for the first active tag on `output`.
-    /// If `output` is `None`, the currently focused output is used.
-    pub fn prev(&mut self, output: Option<&OutputHandle>) {
-        (self.cycle)(Cycle::Backward, output);
-    }
+    /// Cycle to the next layout on the given output, or the focused output if `None`.
+    pub next: Box<dyn FnMut(Option<&OutputHandle>)>,
+    /// Cycle to the previous layout on the given output, or the focused output if `None`.
+    pub prev: Box<dyn FnMut(Option<&OutputHandle>)>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
