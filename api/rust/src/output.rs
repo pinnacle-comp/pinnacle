@@ -4,7 +4,7 @@ use crate::{
     msg::{Args, CallbackId, Msg, Request, RequestResponse},
     request, send_msg,
     tag::TagHandle,
-    CALLBACK_VEC,
+    CallbackVec,
 };
 
 /// A unique identifier for an output.
@@ -58,6 +58,10 @@ pub fn get_focused() -> Option<OutputHandle> {
 /// When called, `connect_for_all` will run `func` with all currently connected outputs.
 /// If a new output is connected, `func` will also be called with it.
 ///
+/// `func` takes in two parameters:
+/// - `0`: An [`OutputHandle`] you can act on.
+/// - `1`: A `&mut `[`CallbackVec`] for use in the closure.
+///
 /// This will *not* be called if it has already been called for a given connector.
 /// This means turning your monitor off and on or unplugging and replugging it *to the same port*
 /// won't trigger `func`. Plugging it in to a new port *will* trigger `func`.
@@ -66,19 +70,18 @@ pub fn get_focused() -> Option<OutputHandle> {
 /// Please note: this function will be run *after* Pinnacle processes your entire config.
 /// For example, if you define tags in `func` but toggle them directly after `connect_for_all`,
 /// nothing will happen as the tags haven't been added yet.
-pub fn connect_for_all<F>(mut func: F)
+pub fn connect_for_all<'a, F>(mut func: F, callback_vec: &mut CallbackVec<'a>)
 where
-    F: FnMut(OutputHandle) + Send + 'static,
+    F: FnMut(OutputHandle, &mut CallbackVec) + 'a,
 {
-    let args_callback = move |args: Option<Args>| {
+    let args_callback = move |args: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
         if let Some(Args::ConnectForAllOutputs { output_name }) = args {
-            func(OutputHandle(OutputName(output_name)));
+            func(OutputHandle(OutputName(output_name)), callback_vec);
         }
     };
 
-    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-    let len = callback_vec.len();
-    callback_vec.push(Box::new(args_callback));
+    let len = callback_vec.callbacks.len();
+    callback_vec.callbacks.push(Box::new(args_callback));
 
     let msg = Msg::ConnectForAllOutputs {
         callback_id: CallbackId(len as u32),

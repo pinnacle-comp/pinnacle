@@ -46,8 +46,6 @@ use msg::{Args, CallbackId, IncomingMsg, Msg, Request, RequestResponse};
 use crate::msg::RequestId;
 
 static STREAM: OnceLock<Mutex<UnixStream>> = OnceLock::new();
-#[allow(clippy::type_complexity)]
-static CALLBACK_VEC: Mutex<Vec<Box<dyn FnMut(Option<Args>) + Send>>> = Mutex::new(Vec::new());
 lazy_static::lazy_static! {
     static ref UNREAD_CALLBACK_MSGS: Mutex<HashMap<CallbackId, IncomingMsg>> = Mutex::new(HashMap::new());
     static ref UNREAD_REQUEST_MSGS: Mutex<HashMap<RequestId, IncomingMsg>> = Mutex::new(HashMap::new());
@@ -157,7 +155,7 @@ pub fn connect() -> anyhow::Result<()> {
 /// Begin listening for messages coming from Pinnacle.
 ///
 /// This needs to be called at the very end of your `setup` function.
-pub fn listen() -> Infallible {
+pub fn listen(mut callback_vec: CallbackVec) -> Infallible {
     loop {
         let mut unread_callback_msgs = UNREAD_CALLBACK_MSGS.lock().unwrap();
 
@@ -168,11 +166,18 @@ pub fn listen() -> Infallible {
             let IncomingMsg::CallCallback { callback_id, args } = entry.remove() else {
                 unreachable!();
             };
-            let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-            let Some(callback) = callback_vec.get_mut(callback_id.0 as usize) else {
-                unreachable!();
-            };
-            callback(args);
+
+            // Take the callback out and replace it with a dummy callback
+            // to allow callback_vec to be used mutably below.
+            let mut callback = std::mem::replace(
+                &mut callback_vec.callbacks[callback_id.0 as usize],
+                Box::new(|_, _| {}),
+            );
+
+            callback(args, &mut callback_vec);
+
+            // Put it back.
+            callback_vec.callbacks[callback_id.0 as usize] = callback;
         }
 
         let incoming_msg = read_msg(None);
@@ -181,11 +186,43 @@ pub fn listen() -> Infallible {
             unreachable!();
         };
 
-        let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-        let Some(callback) = callback_vec.get_mut(callback_id.0 as usize) else {
-            unreachable!();
-        };
+        let mut callback = std::mem::replace(
+            &mut callback_vec.callbacks[callback_id.0 as usize],
+            Box::new(|_, _| {}),
+        );
 
-        callback(args);
+        callback(args, &mut callback_vec);
+
+        callback_vec.callbacks[callback_id.0 as usize] = callback;
+    }
+}
+
+/// A wrapper around a vector that holds all of your callbacks.
+///
+/// You will need to create this before you can start calling config functions
+/// that require callbacks.
+///
+/// Because your callbacks can capture things, we need a non-static way to hold them.
+/// That's where this struct comes in.
+///
+/// Every function that needs you to provide a callback will also need you to
+/// provide a `&mut CallbackVec`. This will insert the callback for use in [`listen`].
+///
+/// Additionally, all callbacks will also take in `&mut CallbackVec`. This is so you can
+/// call functions that need it inside of other callbacks.
+///
+/// At the end of your config, you will need to call [`listen`] to begin listening for
+/// messages from Pinnacle that will call your callbacks. Here, you must in pass your
+/// `CallbackVec`.
+#[derive(Default)]
+pub struct CallbackVec<'a> {
+    #[allow(clippy::type_complexity)]
+    pub(crate) callbacks: Vec<Box<dyn FnMut(Option<Args>, &mut CallbackVec) + 'a>>,
+}
+
+impl<'a> CallbackVec<'a> {
+    /// Create a new, empty `CallbackVec`.
+    pub fn new() -> Self {
+        Default::default()
     }
 }

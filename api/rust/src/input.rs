@@ -6,7 +6,7 @@ use xkbcommon::xkb::Keysym;
 
 use crate::{
     msg::{Args, CallbackId, KeyIntOrString, Msg},
-    send_msg, CALLBACK_VEC,
+    send_msg, CallbackVec,
 };
 
 /// Set a keybind.
@@ -18,17 +18,22 @@ use crate::{
 ///     - [`char`]: A character of the key you want. This can be `a`, `~`, `@`, and so on.
 ///     - [`u32`]: The key in numeric form. You can use the keys defined in [`xkbcommon::xkb::keysyms`] for this.
 ///     - [`Keysym`]: The key in `Keysym` form, from [xkbcommon::xkb::Keysym].
-pub fn keybind<F>(modifiers: &[Modifier], key: impl Into<KeyIntOrString>, mut action: F)
-where
-    F: FnMut() + Send + 'static,
+///
+/// `action` takes in a `&mut `[`CallbackVec`] for use in the closure.
+pub fn keybind<'a, F>(
+    modifiers: &[Modifier],
+    key: impl Into<KeyIntOrString>,
+    mut action: F,
+    callback_vec: &mut CallbackVec<'a>,
+) where
+    F: FnMut(&mut CallbackVec) + 'a,
 {
-    let args_callback = move |_: Option<Args>| {
-        action();
+    let args_callback = move |_: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
+        action(callback_vec);
     };
 
-    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-    let len = callback_vec.len();
-    callback_vec.push(Box::new(args_callback));
+    let len = callback_vec.callbacks.len();
+    callback_vec.callbacks.push(Box::new(args_callback));
 
     let key = key.into();
 
@@ -45,17 +50,23 @@ where
 ///
 /// The mousebind can happen either on button press or release, so you must
 /// specify which edge you desire.
-pub fn mousebind<F>(modifiers: &[Modifier], button: MouseButton, edge: MouseEdge, mut action: F)
-where
-    F: FnMut() + Send + 'static,
+///
+/// `action` takes in a `&mut `[`CallbackVec`] for use in the closure.
+pub fn mousebind<'a, F>(
+    modifiers: &[Modifier],
+    button: MouseButton,
+    edge: MouseEdge,
+    mut action: F,
+    callback_vec: &mut CallbackVec<'a>,
+) where
+    F: FnMut(&mut CallbackVec) + 'a,
 {
-    let args_callback = move |_: Option<Args>| {
-        action();
+    let args_callback = move |_: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
+        action(callback_vec);
     };
 
-    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-    let len = callback_vec.len();
-    callback_vec.push(Box::new(args_callback));
+    let len = callback_vec.callbacks.len();
+    callback_vec.callbacks.push(Box::new(args_callback));
 
     let msg = Msg::SetMousebind {
         modifiers: modifiers.to_vec(),

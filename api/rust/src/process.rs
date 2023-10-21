@@ -2,7 +2,7 @@
 
 use crate::{
     msg::{Args, CallbackId, Msg},
-    send_msg, CALLBACK_VEC,
+    send_msg, CallbackVec,
 };
 
 /// Spawn a process.
@@ -26,11 +26,18 @@ pub fn spawn(command: Vec<&str>) -> anyhow::Result<()> {
 ///  - `1`: The process's stderr printed this line.
 ///  - `2`: The process exited with this code.
 ///  - `3`: The process exited with this message.
-pub fn spawn_with_callback<F>(command: Vec<&str>, mut callback: F) -> anyhow::Result<()>
+///  - `4`: A `&mut `[`CallbackVec`] for use inside the closure.
+///
+/// You must also pass in a mutable reference to a [`CallbackVec`] in order to store your callback.
+pub fn spawn_with_callback<'a, F>(
+    command: Vec<&str>,
+    mut callback: F,
+    callback_vec: &mut CallbackVec<'a>,
+) -> anyhow::Result<()>
 where
-    F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>) + Send + 'static,
+    F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>, &mut CallbackVec) + 'a,
 {
-    let args_callback = move |args: Option<Args>| {
+    let args_callback = move |args: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
         if let Some(Args::Spawn {
             stdout,
             stderr,
@@ -38,13 +45,12 @@ where
             exit_msg,
         }) = args
         {
-            callback(stdout, stderr, exit_code, exit_msg);
+            callback(stdout, stderr, exit_code, exit_msg, callback_vec);
         }
     };
 
-    let mut callback_vec = CALLBACK_VEC.lock().unwrap();
-    let len = callback_vec.len();
-    callback_vec.push(Box::new(args_callback));
+    let len = callback_vec.callbacks.len();
+    callback_vec.callbacks.push(Box::new(args_callback));
 
     let msg = Msg::Spawn {
         command: command.into_iter().map(|s| s.to_string()).collect(),
