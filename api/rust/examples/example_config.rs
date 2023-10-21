@@ -7,7 +7,7 @@ fn main() {
     // This needs to be called before you start calling any config functions.
     pinnacle_api::connect().unwrap();
 
-    let mod_key = Modifier::Ctrl;
+    let mod_key = Modifier::Ctrl; // This is set to Ctrl to not conflict with your WM/DE keybinds.
 
     let terminal = "alacritty";
 
@@ -22,7 +22,7 @@ fn main() {
     // This allows you to call functions that need callbacks within other callbacks.
     let mut callback_vec = CallbackVec::new();
 
-    // Keybinds.
+    // Keybinds ------------------------------------------------------
 
     input::mousebind(
         &[mod_key],
@@ -104,6 +104,8 @@ fn main() {
         &mut callback_vec,
     );
 
+    // Output stuff -------------------------------------------------------
+
     let tags = ["1", "2", "3", "4", "5"];
 
     output::connect_for_all(
@@ -114,6 +116,9 @@ fn main() {
         &mut callback_vec,
     );
 
+    // Layouts -----------------------------------------------------------
+
+    // Create a `LayoutCycler` to cycle your layouts.
     let mut layout_cycler = tag::layout_cycler(&[
         Layout::MasterStack,
         Layout::Dwindle,
@@ -124,6 +129,7 @@ fn main() {
         Layout::CornerBottomRight,
     ]);
 
+    // Cycle forward.
     input::keybind(
         &[mod_key],
         xkbcommon::xkb::keysyms::KEY_space,
@@ -133,6 +139,7 @@ fn main() {
         &mut callback_vec,
     );
 
+    // Cycle backward.
     input::keybind(
         &[mod_key, Modifier::Shift],
         xkbcommon::xkb::keysyms::KEY_space,
@@ -142,31 +149,37 @@ fn main() {
         &mut callback_vec,
     );
 
-    // Keybinds for tags
+    // Keybinds for tags ------------------------------------------
 
     for tag_name in tags.iter().map(|t| t.to_string()) {
+        // mod_key + 1-5 to switch to tag
         let t = tag_name.clone();
+        let num = tag_name.chars().next().unwrap();
         input::keybind(
             &[mod_key],
-            tag_name.chars().next().unwrap(),
+            num,
             move |_| {
                 tag::get(&t, None).unwrap().switch_to();
             },
             &mut callback_vec,
         );
+
+        // mod_key + Shift + 1-5 to toggle tag
         let t = tag_name.clone();
         input::keybind(
             &[mod_key, Modifier::Shift],
-            tag_name.chars().next().unwrap(),
+            num,
             move |_| {
                 tag::get(&t, None).unwrap().toggle();
             },
             &mut callback_vec,
         );
+
+        // mod_key + Alt + 1-5 to move focused window to tag
         let t = tag_name.clone();
         input::keybind(
             &[mod_key, Modifier::Alt],
-            tag_name.chars().next().unwrap(),
+            num,
             move |_| {
                 if let Some(window) = window::get_focused() {
                     window.move_to_tag(&tag::get(&t, None).unwrap());
@@ -174,10 +187,12 @@ fn main() {
             },
             &mut callback_vec,
         );
+
+        // mod_key + Shift + Alt + 1-5 to toggle tag on focused window
         let t = tag_name.clone();
         input::keybind(
             &[mod_key, Modifier::Shift, Modifier::Alt],
-            tag_name.chars().next().unwrap(),
+            num,
             move |_| {
                 if let Some(window) = window::get_focused() {
                     window.toggle_tag(&tag::get(&t, None).unwrap());
