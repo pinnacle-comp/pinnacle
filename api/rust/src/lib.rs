@@ -1,11 +1,12 @@
-//! The Rust implementation of API for Pinnacle, a Wayland compositor.
+//! The Rust implementation of the configuration API for Pinnacle,
+//! a [Smithay](https://github.com/Smithay/smithay)-based Wayland compositor
+//! inspired by [AwesomeWM](https://github.com/awesomeWM/awesome).
 
 #![warn(missing_docs)]
 
 pub mod input;
 mod msg;
 pub mod output;
-pub mod pinnacle;
 pub mod process;
 pub mod tag;
 pub mod window;
@@ -195,6 +196,11 @@ pub fn listen(mut callback_vec: CallbackVec) -> Infallible {
 
         callback_vec.callbacks[callback_id.0 as usize] = callback;
     }
+}
+
+/// Quit Pinnacle.
+pub fn quit() {
+    send_msg(Msg::Quit).unwrap();
 }
 
 /// A wrapper around a vector that holds all of your callbacks.

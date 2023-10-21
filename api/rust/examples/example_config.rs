@@ -47,7 +47,7 @@ fn main() {
     input::keybind(
         &[mod_key, Modifier::Alt],
         'q',
-        |_| pinnacle::quit(),
+        |_| pinnacle_api::quit(),
         &mut callback_vec,
     );
 
