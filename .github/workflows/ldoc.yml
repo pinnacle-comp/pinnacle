@@ -1,7 +1,7 @@
 # From https://github.com/lunarmodules/ldoc/blob/master/.github/workflows/doc.yml
 
 # Based on https://gist.github.com/domenic/ec8b0fc8ab45f39403dd
-name: Build Docs
+name: Build Lua Docs
 on:
   pull_request:
     branches:
@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Get ldoc_gen
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: Ottatop/ldoc_gen
           path: ./ldoc_gen
@@ -47,4 +47,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./ldoc_gen/.ldoc_gen/doc
-          destination_dir: ${{ env.BRANCH_NAME }}
+          destination_dir: ${{ env.BRANCH_NAME }}/lua
