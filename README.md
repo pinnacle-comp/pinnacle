@@ -27,7 +27,7 @@ It sports high configurability through a (soon to be) extensive Lua API, with pl
 
 ### Features
 - Tag system
-- Left master stack, corner, dwindle, spiral layouts from Awesome
+- Left master stack, corner, dwindle, and spiral layouts from Awesome
 - XWayland support
 - Layer-shell support
 - Configurable in Lua or Rust
@@ -91,7 +91,7 @@ Pinnacle is configured in your choice of Lua or Rust.
 
 ## Out-of-the-box configurations
 If you just want to test Pinnacle out without copying stuff to your config directory,
-run either of the follow in the crate root:
+run either of the following in the crate root:
 ```sh
 # For a Lua configuration
 PINNACLE_CONFIG_DIR="./api/lua" cargo run
@@ -162,7 +162,7 @@ reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
 kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 ```
 4. Copy the contents from [`example_config.rs`](api/rust/examples/example_config.rs) to `src/main.rs`.
-5. Run Pinnacle!
+5. Run Pinnacle! (You may want to run `cargo build` beforehand so you don't have to wait for your config to compile.)
 
 
 ### API Documentation
