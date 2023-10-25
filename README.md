@@ -2,6 +2,27 @@
 
 https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7a6639b0c9
 
+# Table of Contents
+- [Info](#info)
+    - [What is Pinnacle?](#what-is-pinnacle)
+    - [Features](#features)
+    - [Roadmap](#roadmap)
+- [Dependencies](#dependencies)
+- [Building](#building)
+- [Running](#running)
+- [Configuration](#configuration)
+    - [Out-of-the-box configurations](#out-of-the-box-configurations)
+    - [Custom configuration](#custom-configuration)
+        - [Lua](#lua)
+            - [:information_source: Using the Lua Language Server](#information_source-using-the-lua-language-server)
+                - [For VS Code](#for-vs-code)
+                - [For Neovim](#for-neovim)
+        - [Rust](#rust)
+        - [API Documentation](#api-documentation)
+- [Controls](#controls)
+- [Feature Requests, Bug Reports, Contributions, and Questions](#feature-requests-bug-reports-contributions-and-questions)
+- [Changelog](#changelog)
+
 # Info
 ### What is Pinnacle?
 Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.com/Smithay/smithay).
