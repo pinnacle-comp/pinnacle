@@ -101,6 +101,14 @@ PINNACLE_CONFIG_DIR="./api/rust" cargo run
 ```
 
 ## Custom configuration
+
+> [!IMPORTANT]
+> Pinnacle is under heavy development, and there *will* be major breaking changes to these APIs
+> until I release version 0.1, at which point there will be an API stability spec in place.
+>
+> Until then, I recommend you either use the out-of-the-box configs above or prepare for
+> your config to break every now and then.
+
 Pinnacle will search for a `metaconfig.toml` file in the following directories, from top to bottom:
 ```sh
 $PINNACLE_CONFIG_DIR
