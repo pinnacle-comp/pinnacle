@@ -1,5 +1,20 @@
 # Changelog
 
+## [4ba2732](https://github.com/pinnacle-comp/pinnacle/commit/4ba27324cfdc100ba81d396dd5a8ea4585af5593) [(#107)](https://github.com/pinnacle-comp/pinnacle/pull/107) (20 Oct 2023)
+This update brings a preliminary implementation of the Rust API!
+
+You can now configure Pinnacle using Rust. To get started, follow the steps in the README.
+
+> [!IMPORTANT]
+> Please note that Pinnacle is still under heavy development.
+> There *will* be breaking changes and even complete rewrites of the APIs,
+> so if you want to run a custom config, make sure to specify the git commit.
+>
+> Alternatively, you can just use the included configs, which will be updated in tandem with Pinnacle.
+
+### Changes
+- Add preliminary Rust API
+
 ## [a109c70](https://github.com/pinnacle-comp/pinnacle/commit/a109c704ec371640829e375bf787db13540330d1) [(#96)](https://github.com/pinnacle-comp/pinnacle/pull/96) (28 Sep 2023)
 There are now API options for xkeyboard and libinput settings.
 
