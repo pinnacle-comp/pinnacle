@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
+    backend::renderer::utils::with_renderer_surface_state,
     desktop::layer_map_for_output,
     output::Output,
-    utils::{IsAlive, Logical, Point, Rectangle, Size},
+    reexports::wayland_server::Resource,
+    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
+    wayland::compositor::{self, CompositorHandler},
 };
 
 use crate::{
     state::{State, WithState},
     window::{
+        blocker::TiledWindowBlocker,
         window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
         WindowElement,
     },
@@ -117,7 +121,7 @@ impl State {
             }
         }
 
-        let mut pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
+        let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
         let mut non_pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
 
         // TODO: completely refactor how tracking state changes works
@@ -143,7 +147,7 @@ impl State {
                                 let serial = win.toplevel().send_configure();
                                 state.loc_request_state =
                                     LocationRequestState::Requested(serial, loc);
-                                pending_wins.push((loc, window.clone()));
+                                pending_wins.push((window.clone(), serial));
                             }
                         }
                         WindowElement::X11(surface) => {
@@ -165,12 +169,51 @@ impl State {
             });
         }
 
+        let tiling_blocker = TiledWindowBlocker::new(pending_wins.clone());
+
+        for (win, _) in pending_wins.iter() {
+            if let Some(surface) = win.wl_surface() {
+                compositor::add_blocker(&surface, tiling_blocker.clone());
+            }
+        }
+
+        let pending_wins_clone = pending_wins.clone();
+        let pending_wins_clone2 = pending_wins.clone();
+        self.schedule(
+            move |_dt| {
+                tiling_blocker.ready()
+                    && pending_wins_clone2.iter().all(|(win, _)| {
+                        if let Some(surface) = win.wl_surface() {
+                            with_renderer_surface_state(&surface, |state| state.buffer().is_some())
+                        } else {
+                            true
+                        }
+                    })
+            },
+            move |data| {
+                for (win, _) in pending_wins_clone {
+                    let Some(surface) = win.wl_surface() else {
+                        continue;
+                    };
+
+                    let client = surface
+                        .client()
+                        .expect("Surface has no client/is no longer alive");
+                    data.state
+                        .client_compositor_state(&client)
+                        .blocker_cleared(&mut data.state, &data.display_handle);
+
+                    tracing::debug!("blocker cleared");
+                }
+            },
+        );
+
         self.schedule(
             move |_dt| {
                 let all_idle = pending_wins
                     .iter()
-                    .filter(|(_, win)| win.alive())
-                    .all(|(_, win)| win.with_state(|state| state.loc_request_state.is_idle()));
+                    .filter(|(win, _)| win.alive())
+                    .all(|(win, _)| win.with_state(|state| state.loc_request_state.is_idle()));
 
                 all_idle
             },

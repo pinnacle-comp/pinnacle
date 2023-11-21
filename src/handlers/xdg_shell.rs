@@ -88,6 +88,7 @@ impl XdgShellHandler for State {
                 if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
                     data.state.update_windows(&focused_output);
                 }
+
                 data.state.loop_handle.insert_idle(move |data| {
                     data.state
                         .seat

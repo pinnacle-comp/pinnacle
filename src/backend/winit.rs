@@ -264,57 +264,57 @@ impl State {
     fn render_winit_window(&mut self, output: &Output) {
         let winit = self.backend.winit_mut();
 
-        let pending_wins = self
-            .windows
-            .iter()
-            .filter(|win| win.alive())
-            .filter(|win| {
-                let pending_size = if let WindowElement::Wayland(win) = win {
-                    let current_state = win.toplevel().current_state();
-                    win.toplevel()
-                        .with_pending_state(|state| state.size != current_state.size)
-                } else {
-                    false
-                };
-                pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
-            })
-            .filter(|win| {
-                if let WindowElement::Wayland(win) = win {
-                    !win.toplevel()
-                        .current_state()
-                        .states
-                        .contains(xdg_toplevel::State::Resizing)
-                } else {
-                    true
-                }
-            })
-            .map(|win| {
-                (
-                    win.class().unwrap_or("None".to_string()),
-                    win.title().unwrap_or("None".to_string()),
-                    win.with_state(|state| state.loc_request_state.clone()),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        if !pending_wins.is_empty() {
-            // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
-            let op_clone = output.clone();
-            self.loop_handle.insert_idle(move |dt| {
-                for win in dt.state.windows.iter() {
-                    win.send_frame(
-                        &op_clone,
-                        dt.state.clock.now(),
-                        Some(Duration::ZERO),
-                        surface_primary_scanout_output,
-                    );
-                }
-            });
-
-            // TODO: still draw the cursor here
-
-            return;
-        }
+        // let pending_wins = self
+        //     .windows
+        //     .iter()
+        //     .filter(|win| win.alive())
+        //     .filter(|win| {
+        //         let pending_size = if let WindowElement::Wayland(win) = win {
+        //             let current_state = win.toplevel().current_state();
+        //             win.toplevel()
+        //                 .with_pending_state(|state| state.size != current_state.size)
+        //         } else {
+        //             false
+        //         };
+        //         pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
+        //     })
+        //     .filter(|win| {
+        //         if let WindowElement::Wayland(win) = win {
+        //             !win.toplevel()
+        //                 .current_state()
+        //                 .states
+        //                 .contains(xdg_toplevel::State::Resizing)
+        //         } else {
+        //             true
+        //         }
+        //     })
+        //     .map(|win| {
+        //         (
+        //             win.class().unwrap_or("None".to_string()),
+        //             win.title().unwrap_or("None".to_string()),
+        //             win.with_state(|state| state.loc_request_state.clone()),
+        //         )
+        //     })
+        //     .collect::<Vec<_>>();
+        //
+        // if !pending_wins.is_empty() {
+        //     // tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
+        //     let op_clone = output.clone();
+        //     self.loop_handle.insert_idle(move |dt| {
+        //         for win in dt.state.windows.iter() {
+        //             win.send_frame(
+        //                 &op_clone,
+        //                 dt.state.clock.now(),
+        //                 Some(Duration::ZERO),
+        //                 surface_primary_scanout_output,
+        //             );
+        //         }
+        //     });
+        //
+        //     // TODO: still draw the cursor here
+        //
+        //     return;
+        // }
         let full_redraw = &mut winit.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
