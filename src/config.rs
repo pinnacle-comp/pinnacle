@@ -4,6 +4,7 @@ use crate::{
     config::api::{msg::ModifierMask, PinnacleSocketSource},
     output::OutputName,
     tag::Tag,
+    window::rules::{WindowRule, WindowRuleCondition},
 };
 use std::{
     collections::HashMap,
@@ -26,10 +27,7 @@ use crate::{
     tag::TagId,
 };
 
-use self::api::msg::{
-    window_rules::{WindowRule, WindowRuleCondition},
-    CallbackId,
-};
+use self::api::msg::CallbackId;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Metaconfig {

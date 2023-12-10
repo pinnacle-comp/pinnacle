@@ -3,8 +3,6 @@
 // The MessagePack format for these is a one-element map where the element's key is the enum name and its
 // value is a map of the enum's values
 
-pub mod window_rules;
-
 use smithay::input::keyboard::ModifiersState;
 
 use crate::{
@@ -12,10 +10,11 @@ use crate::{
     layout::Layout,
     output::OutputName,
     tag::TagId,
-    window::window_state::{FullscreenOrMaximized, WindowId},
+    window::{
+        rules::{WindowRule, WindowRuleCondition},
+        window_state::{FullscreenOrMaximized, WindowId},
+    },
 };
-
-use self::window_rules::{WindowRule, WindowRuleCondition};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Copy)]
 pub struct CallbackId(pub u32);

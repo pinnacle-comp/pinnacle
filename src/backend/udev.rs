@@ -5,7 +5,7 @@ use std::{
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -121,8 +121,6 @@ pub struct Udev {
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
-
-    last_vblank_time: Instant,
 }
 
 impl Backend {
@@ -279,8 +277,6 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_image: crate::cursor::Cursor::load(),
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
-
-        last_vblank_time: Instant::now(),
     };
 
     let display_handle = display.handle();

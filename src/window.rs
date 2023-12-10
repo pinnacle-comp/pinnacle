@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, sync::atomic::AtomicU32, time::Duration};
+pub mod rules;
+
+use std::{cell::RefCell, time::Duration};
 
 use smithay::{
     backend::input::KeyState,
@@ -25,7 +27,7 @@ use smithay::{
     },
     utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
-        compositor::{self, Blocker, BlockerState, SurfaceData},
+        compositor::{self, SurfaceData},
         dmabuf::DmabufFeedback,
         seat::WaylandFocus,
         shell::xdg::XdgToplevelSurfaceData,
@@ -33,12 +35,9 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::{
-    config::api::msg::window_rules::{self, WindowRule},
-    state::{State, WithState},
-};
+use crate::state::{State, WithState};
 
-use self::window_state::{FloatingOrTiled, LocationRequestState, WindowElementState};
+use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
@@ -583,123 +582,5 @@ impl State {
                     .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
                     .cloned()
             })
-    }
-}
-
-pub struct WindowBlocker;
-pub static BLOCKER_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-impl Blocker for WindowBlocker {
-    fn state(&self) -> BlockerState {
-        if BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst) > 0 {
-            BlockerState::Pending
-        } else {
-            BlockerState::Released
-        }
-    }
-}
-
-impl State {
-    pub fn apply_window_rules(&mut self, window: &WindowElement) {
-        tracing::debug!("Applying window rules");
-        for (cond, rule) in self.config.window_rules.iter() {
-            if cond.is_met(self, window) {
-                let WindowRule {
-                    output,
-                    tags,
-                    floating_or_tiled,
-                    fullscreen_or_maximized,
-                    size,
-                    location,
-                } = rule;
-
-                // TODO: If both `output` and `tags` are specified, `tags` will apply over
-                // |     `output`.
-
-                if let Some(output_name) = output {
-                    if let Some(output) = output_name.output(self) {
-                        let tags = output
-                            .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
-
-                        window.with_state(|state| state.tags = tags.clone());
-                    }
-                }
-
-                if let Some(tag_ids) = tags {
-                    let tags = tag_ids
-                        .iter()
-                        .filter_map(|tag_id| tag_id.tag(self))
-                        .collect::<Vec<_>>();
-
-                    window.with_state(|state| state.tags = tags.clone());
-                }
-
-                if let Some(floating_or_tiled) = floating_or_tiled {
-                    match floating_or_tiled {
-                        window_rules::FloatingOrTiled::Floating => {
-                            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-                                window.toggle_floating();
-                            }
-                        }
-                        window_rules::FloatingOrTiled::Tiled => {
-                            if window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                                window.toggle_floating();
-                            }
-                        }
-                    }
-                }
-
-                if let Some(fs_or_max) = fullscreen_or_maximized {
-                    window.with_state(|state| state.fullscreen_or_maximized = *fs_or_max);
-                }
-
-                if let Some((w, h)) = size {
-                    let mut window_size = window.geometry().size;
-                    window_size.w = u32::from(*w) as i32;
-                    window_size.h = u32::from(*h) as i32;
-
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        FloatingOrTiled::Floating(mut rect) => {
-                            rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Floating(rect)
-                            });
-                        }
-                        FloatingOrTiled::Tiled(mut rect) => {
-                            if let Some(rect) = rect.as_mut() {
-                                rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            }
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Tiled(rect)
-                            });
-                        }
-                    }
-                }
-
-                if let Some(loc) = location {
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        FloatingOrTiled::Floating(mut rect) => {
-                            rect.loc = (*loc).into();
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Floating(rect)
-                            });
-                            self.space.map_element(window.clone(), *loc, false);
-                        }
-                        FloatingOrTiled::Tiled(rect) => {
-                            // If the window is tiled, don't set the size. Instead, set
-                            // what the size will be when it gets set to floating.
-                            let rect = rect.unwrap_or_else(|| {
-                                let size = window.geometry().size;
-                                Rectangle::from_loc_and_size(Point::from(*loc), size)
-                            });
-
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Tiled(Some(rect))
-                            });
-                        }
-                    }
-                }
-            }
-        }
     }
 }
