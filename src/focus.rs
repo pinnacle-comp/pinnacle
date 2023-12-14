@@ -25,7 +25,8 @@ pub struct FocusState {
 }
 
 impl State {
-    /// Get the currently focused window on `output`, if any.
+    /// Get the currently focused window on `output`
+    /// that isn't an override redirect window, if any.
     pub fn focused_window(&mut self, output: &Output) -> Option<WindowElement> {
         self.focus_state.focus_stack.retain(|win| win.alive());
 

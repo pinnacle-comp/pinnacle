@@ -38,17 +38,8 @@ impl XwmHandler for CalloopData {
 
     fn map_window_request(&mut self, _xwm: XwmId, window: X11Surface) {
         tracing::trace!("map_window_request");
-        let win_type = window.window_type();
-        tracing::debug!("window type is {win_type:?}");
 
-        // INFO: This check is here because it happened while launching Ori and the Will of the Wisps
-        if window.is_override_redirect() {
-            tracing::warn!("Dealt with override redirect window in map_window_request");
-            let loc = window.geometry().loc;
-            let window = WindowElement::X11(window);
-            self.state.space.map_element(window, loc, true);
-            return;
-        }
+        assert!(!window.is_override_redirect());
 
         let window = WindowElement::X11(window);
         self.state.space.map_element(window.clone(), (0, 0), true);
@@ -87,9 +78,10 @@ impl XwmHandler for CalloopData {
         let WindowElement::X11(surface) = &window else {
             unreachable!()
         };
-        surface.set_mapped(true).expect("failed to map x11 window");
 
         self.state.space.map_element(window.clone(), loc, true);
+        surface.set_mapped(true).expect("failed to map x11 window");
+
         let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
 
         tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
@@ -121,10 +113,6 @@ impl XwmHandler for CalloopData {
             self.state.update_windows(&output);
         }
 
-        if let WindowElement::X11(s) = &window {
-            tracing::debug!("new x11 win geo is {:?}", s.geometry());
-        }
-
         self.state.loop_handle.insert_idle(move |data| {
             data.state
                     .seat
@@ -139,11 +127,11 @@ impl XwmHandler for CalloopData {
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::debug!("mapped override redirect window");
-        let win_type = window.window_type();
-        tracing::debug!("window type is {win_type:?}");
+        tracing::trace!("mapped_override_redirect_window");
+
+        assert!(window.is_override_redirect());
+
         let loc = window.geometry().loc;
-        tracing::debug!("or win geo is {:?}", window.geometry());
 
         let window = WindowElement::X11OverrideRedirect(window);
         self.state.windows.push(window.clone());
@@ -155,35 +143,38 @@ impl XwmHandler for CalloopData {
             window.place_on_output(output);
         }
 
-        // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);
         self.state.focus_state.set_focus(window);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        tracing::debug!("UNMAPPED WINDOW");
         self.state.focus_state.focus_stack.retain(|win| {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())
         });
+
         let win = self
             .state
             .space
             .elements()
             .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
             .cloned();
+
         if let Some(win) = win {
             self.state.space.unmap_elem(&win);
+
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
+
                 let focus = self.state.focused_window(&output).map(FocusTarget::Window);
+
                 if let Some(FocusTarget::Window(win)) = &focus {
-                    tracing::debug!("Focusing on prev win");
                     self.state.space.raise_element(win, true);
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }
                 }
+
                 self.state
                     .seat
                     .get_keyboard()
@@ -193,6 +184,7 @@ impl XwmHandler for CalloopData {
                 self.state.schedule_render(&output);
             }
         }
+
         if !window.is_override_redirect() {
             tracing::debug!("set mapped to false");
             window.set_mapped(false).expect("failed to unmap x11 win");
@@ -204,31 +196,37 @@ impl XwmHandler for CalloopData {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())
         });
+
         let win = self
             .state
             .windows
             .iter()
             .find(|elem| {
-                matches!(elem, WindowElement::X11(surface) if surface.wl_surface() == window.wl_surface())
+                matches!(
+                    elem,
+                    WindowElement::X11(surface)
+                    | WindowElement::X11OverrideRedirect(surface)
+                        if surface.wl_surface() == window.wl_surface()
+                )
             })
             .cloned();
-        tracing::debug!("{win:?}");
+
         if let Some(win) = win {
             tracing::debug!("removing x11 window from windows");
-            self.state
-                .windows
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
+            self.state.windows.retain(|elem| &win != elem);
 
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
+
                 let focus = self.state.focused_window(&output).map(FocusTarget::Window);
+
                 if let Some(FocusTarget::Window(win)) = &focus {
-                    tracing::debug!("Focusing on prev win");
                     self.state.space.raise_element(win, true);
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }
                 }
+
                 self.state
                     .seat
                     .get_keyboard()
@@ -258,7 +256,7 @@ impl XwmHandler for CalloopData {
         if let Some(h) = h {
             geo.size.h = h as i32;
         }
-        tracing::debug!("configure_request with geo {geo:?}");
+
         if let Err(err) = window.configure(geo) {
             tracing::error!("Failed to configure x11 win: {err}");
         }
@@ -280,7 +278,7 @@ impl XwmHandler for CalloopData {
         else {
             return;
         };
-        tracing::debug!("configure notify with geo: {geometry:?}");
+
         self.state.space.map_element(win, geometry.loc, true);
     }
 
@@ -288,7 +286,11 @@ impl XwmHandler for CalloopData {
         window
             .set_maximized(true)
             .expect("failed to set x11 win to maximized");
-        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+
+        let Some(window) = window
+            .wl_surface()
+            .and_then(|surf| self.state.window_for_surface(&surf))
+        else {
             return;
         };
 
@@ -301,7 +303,11 @@ impl XwmHandler for CalloopData {
         window
             .set_maximized(false)
             .expect("failed to set x11 win to maximized");
-        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+
+        let Some(window) = window
+            .wl_surface()
+            .and_then(|surf| self.state.window_for_surface(&surf))
+        else {
             return;
         };
 
@@ -314,8 +320,11 @@ impl XwmHandler for CalloopData {
         window
             .set_fullscreen(true)
             .expect("failed to set x11 win to fullscreen");
-        // TODO: fix this mess
-        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+
+        let Some(window) = window
+            .wl_surface()
+            .and_then(|surf| self.state.window_for_surface(&surf))
+        else {
             return;
         };
 
@@ -328,7 +337,11 @@ impl XwmHandler for CalloopData {
         window
             .set_fullscreen(false)
             .expect("failed to set x11 win to unfullscreen");
-        let Some(window) = (|| self.state.window_for_surface(&window.wl_surface()?))() else {
+
+        let Some(window) = window
+            .wl_surface()
+            .and_then(|surf| self.state.window_for_surface(&surf))
+        else {
             return;
         };
 
