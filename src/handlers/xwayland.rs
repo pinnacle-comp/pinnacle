@@ -163,9 +163,9 @@ impl XwmHandler for CalloopData {
         let loc = window.geometry().loc;
         tracing::debug!("or win geo is {:?}", window.geometry());
 
-        self.state.override_redirect_windows.push(window.clone());
+        let window = WindowElement::X11OverrideRedirect(window);
+        self.state.windows.push(window.clone());
 
-        let window = WindowElement::X11(window);
         window.with_state(|state| {
             state.tags = match (
                 &self.state.focus_state.focused_output,
@@ -187,6 +187,7 @@ impl XwmHandler for CalloopData {
 
         // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);
+        self.state.focus_state.set_focus(window);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -229,12 +230,6 @@ impl XwmHandler for CalloopData {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        if window.is_override_redirect() {
-            self.state
-                .override_redirect_windows
-                .retain(|win| win != &window);
-        }
-
         self.state.focus_state.focus_stack.retain(|win| {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())

@@ -178,6 +178,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
                     .configure(Rectangle::from_loc_and_size(loc, self.last_window_size))
                     .expect("failed to configure x11 win");
             }
+            WindowElement::X11OverrideRedirect(_) => (),
         }
     }
 
@@ -233,6 +234,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab<State> {
                         };
                     });
                 }
+                WindowElement::X11OverrideRedirect(_) => (),
             }
         }
     }

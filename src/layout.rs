@@ -63,9 +63,15 @@ impl State {
         let (windows_on_foc_tags, mut windows_not_on_foc_tags): (Vec<_>, _) =
             output.with_state(|state| {
                 let focused_tags = state.focused_tags().collect::<Vec<_>>();
-                self.windows.iter().cloned().partition(|win| {
-                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
-                })
+                self.windows
+                    .iter()
+                    .filter(|win| !win.is_x11_override_redirect())
+                    .cloned()
+                    .partition(|win| {
+                        win.with_state(|state| {
+                            state.tags.iter().any(|tg| focused_tags.contains(&tg))
+                        })
+                    })
             });
 
         // Don't unmap windows that aren't on `output` (that would clear all other monitors)
@@ -152,6 +158,10 @@ impl State {
                                 .expect("failed to set x11 win to mapped");
                             state.loc_request_state = LocationRequestState::Idle;
                             non_pending_wins.push((loc, window.clone()));
+                        }
+                        WindowElement::X11OverrideRedirect(_) => {
+                            // filtered out up there somewhere
+                            unreachable!();
                         }
                     }
                 }

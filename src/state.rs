@@ -43,7 +43,7 @@ use smithay::{
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
     },
-    xwayland::{X11Surface, X11Wm, XWayland, XWaylandEvent},
+    xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
 
 use crate::input::InputState;
@@ -96,7 +96,6 @@ pub struct State {
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
-    pub override_redirect_windows: Vec<X11Surface>,
 }
 
 impl State {
@@ -280,7 +279,6 @@ impl State {
             xwayland,
             xwm: None,
             xdisplay: None,
-            override_redirect_windows: vec![],
         })
     }
 

@@ -39,7 +39,7 @@ impl State {
                 .any(|win_tag| output_tags.iter().any(|op_tag| win_tag == op_tag))
         });
 
-        windows.next().cloned()
+        windows.find(|win| !win.is_x11_override_redirect()).cloned()
     }
 
     /// Update the focus. This will raise the current focus and activate it,
@@ -48,6 +48,8 @@ impl State {
         let current_focus = self.focused_window(output);
 
         if let Some(win) = &current_focus {
+            assert!(!win.is_x11_override_redirect());
+
             self.space.raise_element(win, true);
             if let WindowElement::Wayland(w) = win {
                 w.toplevel().send_configure();
@@ -363,7 +365,9 @@ impl WaylandFocus for FocusTarget {
     ) -> bool {
         match self {
             FocusTarget::Window(WindowElement::Wayland(window)) => window.same_client_as(object_id),
-            FocusTarget::Window(WindowElement::X11(surface)) => surface.same_client_as(object_id),
+            FocusTarget::Window(
+                WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface),
+            ) => surface.same_client_as(object_id),
             FocusTarget::Popup(popup) => popup.wl_surface().id().same_client_as(object_id),
             FocusTarget::LayerSurface(surf) => surf.wl_surface().id().same_client_as(object_id),
         }

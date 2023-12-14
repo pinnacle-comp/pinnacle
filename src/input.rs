@@ -455,8 +455,10 @@ impl State {
 
                 // TODO: use update_keyboard_focus from anvil
 
-                if !matches!(&focus, FocusTarget::Window(WindowElement::X11(surf)) if surf.is_override_redirect())
-                {
+                if !matches!(
+                    &focus,
+                    FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
+                ) {
                     keyboard.set_focus(self, Some(focus.clone()), serial);
                 }
 
@@ -481,6 +483,7 @@ impl State {
                             .expect("failed to deactivate x11 win");
                         // INFO: do i need to configure this?
                     }
+                    WindowElement::X11OverrideRedirect(_) => (),
                 });
                 keyboard.set_focus(self, None, serial);
             }

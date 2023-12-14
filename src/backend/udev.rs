@@ -67,7 +67,6 @@ use smithay::{
     },
     utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
-    xwayland::X11Surface,
 };
 use smithay_drm_extras::{
     drm_scanner::{DrmScanEvent, DrmScanner},
@@ -1316,7 +1315,6 @@ impl State {
             output,
             &self.space,
             &windows,
-            &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
             &mut self.cursor_status,
             &pointer_image,
@@ -1357,7 +1355,6 @@ fn render_surface(
 
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-    override_redirect_windows: &[X11Surface],
 
     dnd_icon: Option<&WlSurface>,
     cursor_status: &mut CursorImageStatus,
@@ -1428,7 +1425,6 @@ fn render_surface(
         renderer,
         space,
         windows,
-        override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,

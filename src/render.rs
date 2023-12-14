@@ -28,7 +28,6 @@ use smithay::{
     render_elements,
     utils::{IsAlive, Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
-    xwayland::X11Surface,
 };
 
 use crate::{
@@ -73,7 +72,7 @@ where
             WindowElement::Wayland(window) => {
                 window.render_elements(renderer, location, scale, alpha)
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.render_elements(renderer, location, scale, alpha)
             }
         }
@@ -181,7 +180,6 @@ pub fn generate_render_elements<R, T>(
     renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-    override_redirect_windows: &[X11Surface],
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
@@ -200,6 +198,12 @@ where
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut custom_render_elements: Vec<CustomRenderElements<_, _>> = Vec::new();
+
+    let (windows, override_redirect_windows) = windows
+        .iter()
+        .cloned()
+        .partition::<Vec<_>, _>(|win| !win.is_x11_override_redirect());
+
     // // draw input method surface if any
     // let rectangle = input_method.coordinates();
     // let position = Point::from((
@@ -270,7 +274,7 @@ where
         surf.render_elements::<WaylandSurfaceRenderElement<R>>(
             renderer,
             space
-                .element_location(&WindowElement::X11(surf.clone()))
+                .element_location(surf)
                 .unwrap_or((0, 0).into())
                 .to_physical_precise_round(scale),
             scale,
@@ -329,7 +333,7 @@ where
                 overlay,
             } = layer_render_elements(output, renderer, scale);
 
-            let window_render_elements = tag_render_elements::<R>(windows, space, renderer, scale);
+            let window_render_elements = tag_render_elements::<R>(&windows, space, renderer, scale);
 
             let mut output_render_elements =
                 Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();

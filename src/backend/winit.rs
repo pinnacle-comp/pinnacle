@@ -335,7 +335,6 @@ impl State {
             winit.backend.renderer(),
             &self.space,
             &self.focus_state.focus_stack,
-            &self.override_redirect_windows,
             self.pointer_location,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
