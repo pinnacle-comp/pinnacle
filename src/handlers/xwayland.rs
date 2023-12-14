@@ -98,30 +98,12 @@ impl XwmHandler for CalloopData {
             .expect("failed to configure x11 window");
         // TODO: ssd
 
-        window.with_state(|state| {
-            state.tags = match (
-                &self.state.focus_state.focused_output,
-                self.state.space.outputs().next(),
-            ) {
-                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-                    if !output_tags.is_empty() {
-                        output_tags
-                    } else if let Some(first_tag) = state.tags.first() {
-                        vec![first_tag.clone()]
-                    } else {
-                        vec![]
-                    }
-                }),
-                (None, None) => vec![],
-            };
-
-            tracing::debug!("new window, tags are {:?}", state.tags);
-        });
-
-        let WindowElement::X11(surface) = &window else {
-            unreachable!()
-        };
+        if let (Some(output), _) | (None, Some(output)) = (
+            &self.state.focus_state.focused_output,
+            self.state.space.outputs().next(),
+        ) {
+            window.place_on_output(output);
+        }
 
         if should_float(surface) {
             window.with_state(|state| {
@@ -166,24 +148,12 @@ impl XwmHandler for CalloopData {
         let window = WindowElement::X11OverrideRedirect(window);
         self.state.windows.push(window.clone());
 
-        window.with_state(|state| {
-            state.tags = match (
-                &self.state.focus_state.focused_output,
-                self.state.space.outputs().next(),
-            ) {
-                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-                    if !output_tags.is_empty() {
-                        output_tags
-                    } else if let Some(first_tag) = state.tags.first() {
-                        vec![first_tag.clone()]
-                    } else {
-                        vec![]
-                    }
-                }),
-                (None, None) => vec![],
-            };
-        });
+        if let (Some(output), _) | (None, Some(output)) = (
+            &self.state.focus_state.focused_output,
+            self.state.space.outputs().next(),
+        ) {
+            window.place_on_output(output);
+        }
 
         // tracing::debug!("mapped_override_redirect_window to loc {loc:?}");
         self.state.space.map_element(window.clone(), loc, true);

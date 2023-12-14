@@ -47,26 +47,12 @@ impl XdgShellHandler for State {
 
         let window = WindowElement::Wayland(Window::new(surface.clone()));
 
-        window.with_state(|state| {
-            state.tags = match (
-                &self.focus_state.focused_output,
-                self.space.outputs().next(),
-            ) {
-                (Some(output), _) | (None, Some(output)) => output.with_state(|state| {
-                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-                    if !output_tags.is_empty() {
-                        output_tags
-                    } else if let Some(first_tag) = state.tags.first() {
-                        vec![first_tag.clone()]
-                    } else {
-                        vec![]
-                    }
-                }),
-                (None, None) => vec![],
-            };
-
-            tracing::debug!("new window, tags are {:?}", state.tags);
-        });
+        if let (Some(output), _) | (None, Some(output)) = (
+            &self.focus_state.focused_output,
+            self.space.outputs().next(),
+        ) {
+            window.place_on_output(output);
+        }
 
         // note to self: don't reorder this
         // TODO: fix it so that reordering this doesn't break stuff

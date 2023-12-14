@@ -276,6 +276,30 @@ impl WindowElement {
         })
     }
 
+    /// Place this window on the given output, giving it the output's focused tags.
+    ///
+    /// RefCell Safety: Uses refcells on both the window and the output.
+    pub fn place_on_output(&self, output: &Output) {
+        self.with_state(|state| {
+            state.tags = output.with_state(|state| {
+                let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                if !output_tags.is_empty() {
+                    output_tags
+                } else if let Some(first_tag) = state.tags.first() {
+                    vec![first_tag.clone()]
+                } else {
+                    vec![]
+                }
+            });
+
+            tracing::debug!(
+                "Placed window on {} with tags {:?}",
+                output.name(),
+                state.tags
+            );
+        });
+    }
+
     /// Returns `true` if the window element is [`Wayland`].
     ///
     /// [`Wayland`]: WindowElement::Wayland
