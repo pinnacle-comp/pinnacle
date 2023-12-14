@@ -213,7 +213,12 @@ impl XwmHandler for CalloopData {
 
         if let Some(win) = win {
             tracing::debug!("removing x11 window from windows");
-            self.state.windows.retain(|elem| &win != elem);
+
+            // INFO: comparing the windows doesn't work so wlsurface it is
+            // self.state.windows.retain(|elem| &win != elem);
+            self.state
+                .windows
+                .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             if let Some(output) = win.output(&self.state) {
                 self.state.update_windows(&output);
