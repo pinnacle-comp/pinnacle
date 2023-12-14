@@ -6,7 +6,7 @@
 use smithay::input::keyboard::ModifiersState;
 
 use crate::{
-    input::LibinputSetting,
+    input::libinput::LibinputSetting,
     layout::Layout,
     output::OutputName,
     tag::TagId,
