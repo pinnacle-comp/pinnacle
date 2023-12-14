@@ -1347,6 +1347,8 @@ fn render_surface_for_output<'a>(
 
 /// Render windows, layers, and everything else needed to the given [`RenderSurface`].
 /// Also queues the frame for scanout.
+///
+/// `windows` should be provided in the order of z-rendering, top to bottom.
 #[allow(clippy::too_many_arguments)]
 fn render_surface(
     surface: &mut RenderSurface,

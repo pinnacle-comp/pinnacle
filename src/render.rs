@@ -5,14 +5,16 @@ use std::sync::Mutex;
 use smithay::{
     backend::renderer::{
         element::{
-            self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer,
-            utils::CropRenderElement, AsRenderElements, RenderElementStates, Wrap,
+            surface::WaylandSurfaceRenderElement,
+            texture::TextureBuffer,
+            utils::{CropRenderElement, RelocateRenderElement, RescaleRenderElement},
+            AsRenderElements, RenderElementStates, Wrap,
         },
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
         layer_map_for_output,
-        space::{SpaceElement, SpaceRenderElements},
+        space::SpaceElement,
         utils::{
             surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
             OutputPresentationFeedback,
@@ -41,17 +43,18 @@ use self::pointer::{PointerElement, PointerRenderElement};
 pub mod pointer;
 
 render_elements! {
-    pub CustomRenderElements<R, E> where R: ImportAll + ImportMem;
-    Pointer = PointerRenderElement<R>,
-    Surface = WaylandSurfaceRenderElement<R>,
+    pub TransformRenderElement<R, E>;
     Crop = CropRenderElement<E>,
+    Relocate = RelocateRenderElement<E>,
+    Rescale = RescaleRenderElement<E>,
 }
 
 render_elements! {
     pub OutputRenderElements<R, E> where R: ImportAll + ImportMem;
-    Space=SpaceRenderElements<R, E>,
-    Window=Wrap<E>,
-    Custom=CustomRenderElements<R, E>,
+    Custom = Wrap<E>,
+    Surface = WaylandSurfaceRenderElement<R>,
+    Pointer = PointerRenderElement<R>,
+    Transform = TransformRenderElement<R, E>,
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -144,7 +147,7 @@ fn tag_render_elements<R>(
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> Vec<CustomRenderElements<R, WaylandSurfaceRenderElement<R>>>
+) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
@@ -164,9 +167,9 @@ where
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {
                         CropRenderElement::from_element(elem, scale, rect.to_physical_precise_down(scale))
-                    }).map(CustomRenderElements::from).collect::<Vec<_>>()
+                    }).map(TransformRenderElement::from).map(OutputRenderElements::from).collect::<Vec<_>>()
                 },
-                None => elems.into_iter().map(CustomRenderElements::from).collect(),
+                None => elems.into_iter().map(OutputRenderElements::from).collect(),
             }
         })
         .collect::<Vec<_>>();
@@ -174,6 +177,10 @@ where
     elements
 }
 
+/// Generate render elements for the given output.
+///
+/// Render elements will be pulled from the provided windows,
+/// with the first window being at the top and subsequent ones beneath.
 #[allow(clippy::too_many_arguments)]
 pub fn generate_render_elements<R, T>(
     output: &Output,
@@ -197,7 +204,7 @@ where
         .expect("called output_geometry on an unmapped output");
     let scale = Scale::from(output.current_scale().fractional_scale());
 
-    let mut custom_render_elements: Vec<CustomRenderElements<_, _>> = Vec::new();
+    let mut output_render_elements: Vec<OutputRenderElements<_, _>> = Vec::new();
 
     let (windows, override_redirect_windows) = windows
         .iter()
@@ -234,6 +241,7 @@ where
         } else {
             (0, 0).into()
         };
+
         let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
         let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round();
 
@@ -252,7 +260,7 @@ where
 
         pointer_element.set_status(cursor_status.clone());
 
-        custom_render_elements.extend(pointer_element.render_elements(
+        output_render_elements.extend(pointer_element.render_elements(
             renderer,
             cursor_pos_scaled,
             scale,
@@ -260,7 +268,7 @@ where
         ));
 
         if let Some(dnd_icon) = dnd_icon {
-            custom_render_elements.extend(AsRenderElements::render_elements(
+            output_render_elements.extend(AsRenderElements::render_elements(
                 &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
                 renderer,
                 cursor_pos_scaled,
@@ -282,95 +290,71 @@ where
         )
     });
 
-    custom_render_elements.extend(o_r_elements.map(CustomRenderElements::from));
+    // TODO: don't unconditionally render OR windows above fullscreen ones,
+    // |     base it on if it's a descendant or not
+    output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
 
-    let output_render_elements = {
-        let top_fullscreen_window = windows.iter().rev().find(|win| {
-            win.with_state(|state| {
-                let is_wayland_actually_fullscreen = {
-                    if let WindowElement::Wayland(window) = win {
-                        window
-                            .toplevel()
-                            .current_state()
-                            .states
-                            .contains(xdg_toplevel::State::Fullscreen)
-                    } else {
-                        true
-                    }
-                };
-                state.fullscreen_or_maximized.is_fullscreen()
-                    && state.tags.iter().any(|tag| tag.active())
-                    && is_wayland_actually_fullscreen
-            })
-        });
+    let top_fullscreen_window = windows.iter().rev().find(|win| {
+        win.with_state(|state| {
+            let is_wayland_actually_fullscreen = {
+                if let WindowElement::Wayland(window) = win {
+                    window
+                        .toplevel()
+                        .current_state()
+                        .states
+                        .contains(xdg_toplevel::State::Fullscreen)
+                } else {
+                    true
+                }
+            };
+            state.fullscreen_or_maximized.is_fullscreen()
+                && state.tags.iter().any(|tag| tag.active())
+                && is_wayland_actually_fullscreen
+        })
+    });
 
-        // If fullscreen windows exist, render only the topmost one
-        if let Some(window) = top_fullscreen_window {
-            let mut output_render_elements =
-                Vec::<OutputRenderElements<_, WaylandSurfaceRenderElement<_>>>::new();
+    // If fullscreen windows exist, render only the topmost one
+    if let Some(window) = top_fullscreen_window {
+        let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
+            window.render_elements(renderer, (0, 0).into(), scale, 1.0);
 
-            let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
-                window.render_elements(renderer, (0, 0).into(), scale, 1.0);
+        output_render_elements.extend(
+            window_render_elements
+                .into_iter()
+                .map(OutputRenderElements::from),
+        );
+    } else {
+        let LayerRenderElements {
+            background,
+            bottom,
+            top,
+            overlay,
+        } = layer_render_elements(output, renderer, scale);
 
-            output_render_elements.extend(
-                custom_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
+        let window_render_elements = tag_render_elements::<R>(&windows, space, renderer, scale);
 
-            output_render_elements.extend(
-                window_render_elements
-                    .into_iter()
-                    .map(|elem| OutputRenderElements::Window(element::Wrap::from(elem))),
-            );
+        // Elements render from top to bottom
 
-            output_render_elements
-        } else {
-            let LayerRenderElements {
-                background,
-                bottom,
-                top,
-                overlay,
-            } = layer_render_elements(output, renderer, scale);
+        output_render_elements.extend(
+            overlay
+                .into_iter()
+                .chain(top)
+                .map(OutputRenderElements::from),
+        );
 
-            let window_render_elements = tag_render_elements::<R>(&windows, space, renderer, scale);
+        output_render_elements.extend(
+            window_render_elements
+                .into_iter()
+                .map(OutputRenderElements::from),
+        );
 
-            let mut output_render_elements =
-                Vec::<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>::new();
-
-            // Elements render from top to bottom
-
-            output_render_elements.extend(
-                custom_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-
-            output_render_elements.extend(
-                overlay
-                    .into_iter()
-                    .chain(top)
-                    .map(CustomRenderElements::from)
-                    .map(OutputRenderElements::from),
-            );
-
-            output_render_elements.extend(
-                window_render_elements
-                    .into_iter()
-                    .map(OutputRenderElements::from),
-            );
-
-            output_render_elements.extend(
-                bottom
-                    .into_iter()
-                    .chain(background)
-                    .map(CustomRenderElements::from)
-                    .map(OutputRenderElements::from),
-            );
-
-            output_render_elements
-        }
-    };
+        output_render_elements.extend(
+            bottom
+                .into_iter()
+                .chain(background)
+                .map(OutputRenderElements::from),
+        );
+    }
 
     output_render_elements
 }
@@ -410,8 +394,8 @@ pub fn take_presentation_feedback(
 }
 
 impl State {
+    /// Schedule a new render. This does nothing on the winit backend.
     pub fn schedule_render(&mut self, output: &Output) {
-        // I'm relegating winit to render every frame because it's not my priority right now
         if let Backend::Udev(udev) = &mut self.backend {
             udev.schedule_render(&self.loop_handle, output);
         }
