@@ -74,11 +74,9 @@ use smithay_drm_extras::{
 };
 
 use crate::{
+    api::msg::{Args, OutgoingMsg},
     backend::Backend,
-    config::{
-        api::msg::{Args, OutgoingMsg},
-        ConnectorSavedState,
-    },
+    config::ConnectorSavedState,
     output::OutputName,
     render::{pointer::PointerElement, take_presentation_feedback},
     state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
@@ -1015,10 +1013,10 @@ impl State {
                         .api_state
                         .stream
                         .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                        .expect("stream doesn't exist");
+                    let mut stream = stream.lock().expect("couldn't lock stream");
                     for callback_id in dt.state.config.output_callback_ids.iter() {
-                        crate::config::api::send_to_client(
+                        crate::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
                                 callback_id: *callback_id,

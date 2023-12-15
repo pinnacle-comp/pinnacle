@@ -23,7 +23,6 @@ require("pinnacle").setup(function(pinnacle)
 
     ---@type Modifier
     local mod_key = "Ctrl" -- This is set to `Ctrl` instead of `Super` to not conflict with your WM/DE keybinds
-    -- ^ Add type annotations for that sweet, sweet autocomplete
 
     local terminal = "alacritty"
 
@@ -43,49 +42,55 @@ require("pinnacle").setup(function(pinnacle)
 
     -- Mousebinds --------------------------------------------------------------------
 
-    input.mousebind({"Ctrl"}, buttons.left, "Press",
-                    function() window.begin_move(buttons.left) end)
-    input.mousebind({"Ctrl"}, buttons.right, "Press",
-                    function() window.begin_resize(buttons.right) end)
+    input.mousebind({ "Ctrl" }, buttons.left, "Press", function()
+        window.begin_move(buttons.left)
+    end)
+    input.mousebind({ "Ctrl" }, buttons.right, "Press", function()
+        window.begin_resize(buttons.right)
+    end)
 
     -- Keybinds ----------------------------------------------------------------------
 
     -- mod_key + Alt + q quits the compositor
-    input.keybind({mod_key, "Alt"}, keys.q, pinnacle.quit)
+    input.keybind({ mod_key, "Alt" }, keys.q, pinnacle.quit)
 
     -- mod_key + Alt + c closes the focused window
-    input.keybind({mod_key, "Alt"}, keys.c,
-                  function() window.get_focused():close() end)
+    input.keybind({ mod_key, "Alt" }, keys.c, function()
+        window.get_focused():close()
+    end)
 
     -- mod_key + return spawns a terminal
-    input.keybind({mod_key}, keys.Return, function()
+    input.keybind({ mod_key }, keys.Return, function()
         process.spawn(terminal, function(stdout, stderr, exit_code, exit_msg)
             -- do something with the output here
         end)
     end)
 
     -- mod_key + Alt + Space toggle floating on the focused window
-    input.keybind({mod_key, "Alt"}, keys.space,
-                  function() window.get_focused():toggle_floating() end)
+    input.keybind({ mod_key, "Alt" }, keys.space, function()
+        window.get_focused():toggle_floating()
+    end)
 
     -- mod_key + f toggles fullscreen on the focused window
-    input.keybind({mod_key}, keys.f,
-                  function() window.get_focused():toggle_fullscreen() end)
+    input.keybind({ mod_key }, keys.f, function()
+        window.get_focused():toggle_fullscreen()
+    end)
 
     -- mod_key + m toggles maximized on the focused window
-    input.keybind({mod_key}, keys.m,
-                  function() window.get_focused():toggle_maximized() end)
+    input.keybind({ mod_key }, keys.m, function()
+        window.get_focused():toggle_maximized()
+    end)
 
     -- Tags ---------------------------------------------------------------------------
 
-    local tags = {"1", "2", "3", "4", "5"}
+    local tags = { "1", "2", "3", "4", "5" }
 
     output.connect_for_all(function(op)
         -- Add tags 1, 2, 3, 4 and 5 on all monitors, and toggle tag 1 active by default
 
         op:add_tags(tags)
         -- Same as tag.add(op, "1", "2", "3", "4", "5")
-        tag.toggle({name = "1", output = op})
+        tag.toggle({ name = "1", output = op })
 
         -- Window rules
         -- Add your own window rules here. Below is an example.
@@ -112,30 +117,35 @@ require("pinnacle").setup(function(pinnacle)
     -- Create a layout cycler to cycle your tag layouts. This will store which layout each tag has
     -- and change to the next or previous one in the array when the respective function is called.
     local layout_cycler = tag.layout_cycler({
-        "MasterStack", "Dwindle", "Spiral", "CornerTopLeft", "CornerTopRight",
-        "CornerBottomLeft", "CornerBottomRight"
+        "MasterStack",
+        "Dwindle",
+        "Spiral",
+        "CornerTopLeft",
+        "CornerTopRight",
+        "CornerBottomLeft",
+        "CornerBottomRight",
     })
 
-    input.keybind({mod_key}, keys.space, layout_cycler.next)
-    input.keybind({mod_key, "Shift"}, keys.space, layout_cycler.prev)
+    input.keybind({ mod_key }, keys.space, layout_cycler.next)
+    input.keybind({ mod_key, "Shift" }, keys.space, layout_cycler.prev)
 
     -- Tag manipulation
 
     for _, tag_name in pairs(tags) do
         -- mod_key + 1-5 switches tags
-        input.keybind({mod_key}, tag_name,
-                      function() tag.switch_to(tag_name) end)
+        input.keybind({ mod_key }, tag_name, function()
+            tag.switch_to(tag_name)
+        end)
         -- mod_key + Shift + 1-5 toggles tags
-        input.keybind({mod_key, "Shift"}, tag_name,
-                      function() tag.toggle(tag_name) end)
+        input.keybind({ mod_key, "Shift" }, tag_name, function()
+            tag.toggle(tag_name)
+        end)
         -- mod_key + Alt + 1-5 moves windows to tags
-        input.keybind({mod_key, "Alt"}, tag_name,
-                      function()
+        input.keybind({ mod_key, "Alt" }, tag_name, function()
             window:get_focused():move_to_tag(tag_name)
         end)
         -- mod_key + Shift + Alt + 1-5 toggles tags on windows
-        input.keybind({mod_key, "Shift", "Alt"}, tag_name,
-                      function()
+        input.keybind({ mod_key, "Shift", "Alt" }, tag_name, function()
             window.get_focused():toggle_tag(tag_name)
         end)
     end

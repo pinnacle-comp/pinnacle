@@ -1,7 +1,5 @@
-pub mod api;
-
 use crate::{
-    config::api::{msg::ModifierMask, PinnacleSocketSource},
+    api::{msg::ModifierMask, PinnacleSocketSource},
     output::OutputName,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
@@ -19,7 +17,7 @@ use smithay::{
 };
 use toml::Table;
 
-use api::msg::Modifier;
+use crate::api::msg::{CallbackId, Modifier};
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -27,7 +25,7 @@ use crate::{
     tag::TagId,
 };
 
-use self::api::msg::CallbackId;
+const DEFAULT_SOCKET_DIR: &str = "/tmp";
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Metaconfig {
@@ -226,7 +224,7 @@ impl State {
             crate::XDG_BASE_DIRS
                 .get_runtime_directory()
                 .cloned()
-                .unwrap_or(PathBuf::from(crate::config::api::DEFAULT_SOCKET_DIR))
+                .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
         };
 
         let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)

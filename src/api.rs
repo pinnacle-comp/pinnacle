@@ -34,6 +34,7 @@
 //!
 //! For an example, look at the Lua implementation in the repository.
 
+pub mod handlers;
 pub mod msg;
 
 use std::{
@@ -52,7 +53,6 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
 
 use self::msg::{Msg, OutgoingMsg};
 
-pub const DEFAULT_SOCKET_DIR: &str = "/tmp";
 pub const SOCKET_NAME: &str = "pinnacle_socket";
 
 fn handle_client(
@@ -159,7 +159,8 @@ pub fn send_to_client(
     stream: &mut UnixStream,
     msg: &OutgoingMsg,
 ) -> Result<(), rmp_serde::encode::Error> {
-    // tracing::debug!("Sending {msg:?}");
+    tracing::trace!("Sending {msg:?}");
+
     let msg = rmp_serde::to_vec_named(msg)?;
     let msg_len = msg.len() as u32;
     let bytes = msg_len.to_ne_bytes();
@@ -201,11 +202,13 @@ impl EventSource for PinnacleSocketSource {
             .process_events(readiness, token, |_readiness, listener| {
                 while let Ok((stream, _sock_addr)) = listener.accept() {
                     let sender = self.sender.clone();
-                    let callback_stream = match stream.try_clone() {
-                        Ok(callback_stream) => callback_stream,
-                        Err(err) => return Err(err),
-                    };
+                    let callback_stream = stream.try_clone()?;
+
                     callback(callback_stream, &mut ());
+
+                    // Handle the client in another thread as to not block the main one.
+                    //
+                    // No idea if this is even needed or if it's premature optimization.
                     std::thread::spawn(move || {
                         if let Err(err) = handle_client(stream, sender) {
                             tracing::error!("handle_client errored: {err}");

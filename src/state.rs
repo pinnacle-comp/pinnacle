@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod api_handlers;
-
 use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use crate::{
+    api::{msg::Msg, ApiState},
     backend::Backend,
-    config::{
-        api::{msg::Msg, ApiState},
-        Config,
-    },
+    config::Config,
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
@@ -77,8 +73,11 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub layer_shell_state: WlrLayerShellState,
 
+    /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
+    /// The state holding stuff dealing with the api, like the stream
     pub api_state: ApiState,
+    /// Keeps track of the focus stack and focused output
     pub focus_state: FocusState,
 
     pub popup_manager: PopupManager,
@@ -87,12 +86,15 @@ pub struct State {
     pub pointer_location: Point<f64, Logical>,
     pub dnd_icon: Option<WlSurface>,
 
+    /// The main window vec
     pub windows: Vec<WindowElement>,
 
     pub config: Config,
 
+    /// A scheduler for futures
     pub async_scheduler: Scheduler<()>,
 
+    // xwayland stuff
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
