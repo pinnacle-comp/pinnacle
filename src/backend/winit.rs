@@ -12,10 +12,7 @@ use smithay::{
         },
         winit::{WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{
-        layer_map_for_output,
-        utils::{send_frames_surface_tree, surface_primary_scanout_output},
-    },
+    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
     input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
     reexports::{
@@ -23,10 +20,7 @@ use smithay::{
             timer::{TimeoutAction, Timer},
             EventLoop,
         },
-        wayland_protocols::{
-            wp::presentation_time::server::wp_presentation_feedback,
-            xdg::shell::server::xdg_toplevel,
-        },
+        wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
         winit::platform::pump_events::PumpStatus,
     },
@@ -36,8 +30,7 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{CalloopData, State, WithState},
-    window::WindowElement,
+    state::{CalloopData, State},
 };
 
 use super::{Backend, BackendData};

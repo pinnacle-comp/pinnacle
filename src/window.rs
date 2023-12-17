@@ -3,7 +3,7 @@
 pub mod blocker;
 pub mod rules;
 
-use std::{cell::RefCell, sync::atomic::AtomicU32, time::Duration};
+use std::{cell::RefCell, time::Duration};
 
 use smithay::{
     backend::input::KeyState,
