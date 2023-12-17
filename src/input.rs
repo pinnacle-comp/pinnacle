@@ -38,7 +38,9 @@ pub struct InputState {
     pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
     pub reload_keybind: Option<(ModifierMask, Keysym)>,
     pub kill_keybind: Option<(ModifierMask, Keysym)>,
+    /// User defined libinput settings that will be applied
     pub libinput_settings: Vec<LibinputSetting>,
+    /// All libinput devices that have been connected
     pub libinput_devices: Vec<input::Device>,
 }
 
@@ -50,6 +52,7 @@ impl InputState {
 
 #[derive(Debug)]
 enum KeyAction {
+    /// Call a callback from a config process
     CallCallback(CallbackId),
     Quit,
     SwitchVt(i32),
@@ -101,58 +104,46 @@ impl State {
             })
         });
 
-        // I think I'm going a bit too far with the functional stuff
+        if let Some(window) = top_fullscreen_window {
+            Some((FocusTarget::from(window.clone()), output_geo.loc))
+        } else if let (Some(layer), _) | (None, Some(layer)) = (
+            layers.layer_under(wlr_layer::Layer::Overlay, point),
+            layers.layer_under(wlr_layer::Layer::Top, point),
+        ) {
+            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+        } else if let Some(ret) = self
+            .space
+            .elements()
+            .rev()
+            .filter(|win| win.is_on_active_tag(self.space.outputs()))
+            .find_map(|win| {
+                let loc = self
+                    .space
+                    .element_location(win)
+                    .expect("called elem loc on unmapped win")
+                    - win.geometry().loc;
 
-        // The topmost fullscreen window
-        top_fullscreen_window
-            .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
-            .or_else(|| {
-                // The topmost layer surface in Overlay or Top
-                layers
-                    .layer_under(wlr_layer::Layer::Overlay, point)
-                    .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
-                    .map(|layer| {
-                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
-                    })
+                win.is_in_input_region(&(point - loc.to_f64()))
+                    .then(|| (win.clone().into(), loc))
             })
-            .or_else(|| {
-                // The topmost window
-                self.space
-                    .elements()
-                    .rev()
-                    .filter(|win| win.is_on_active_tag(self.space.outputs()))
-                    .find_map(|win| {
-                        let loc = self
-                            .space
-                            .element_location(win)
-                            .expect("called elem loc on unmapped win")
-                            - win.geometry().loc;
-
-                        if win.is_in_input_region(&(point - loc.to_f64())) {
-                            Some((win.clone().into(), loc))
-                        } else {
-                            None
-                        }
-                    })
-            })
-            .or_else(|| {
-                // The topmost layer surface in Bottom or Background
-                layers
-                    .layer_under(wlr_layer::Layer::Bottom, point)
-                    .or_else(|| layers.layer_under(wlr_layer::Layer::Background, point))
-                    .map(|layer| {
-                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
-                    })
-            })
+        {
+            Some(ret)
+        } else if let (Some(layer), _) | (None, Some(layer)) = (
+            layers.layer_under(wlr_layer::Layer::Overlay, point),
+            layers.layer_under(wlr_layer::Layer::Top, point),
+        ) {
+            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+        } else {
+            None
+        }
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
-        let mut move_mode = false;
 
         let reload_keybind = self.input_state.reload_keybind;
         let kill_keybind = self.input_state.kill_keybind;
@@ -196,16 +187,15 @@ impl State {
                         modifier_mask.push(Modifier::Super);
                     }
                     let modifier_mask = ModifierMask::from(modifier_mask);
+
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
                     let cb_id_mod = state.input_state.keybinds.get(&(modifier_mask, mod_sym));
 
-                    let cb_id_raw = if let Some(raw_sym) = raw_sym {
+                    let cb_id_raw = raw_sym.and_then(|raw_sym| {
                         state.input_state.keybinds.get(&(modifier_mask, *raw_sym))
-                    } else {
-                        None
-                    };
+                    });
 
                     match (cb_id_mod, cb_id_raw) {
                         (Some(cb_id), _) | (None, Some(cb_id)) => {
@@ -214,9 +204,9 @@ impl State {
                         (None, None) => (),
                     }
 
-                    if Some((modifier_mask, mod_sym)) == kill_keybind {
+                    if kill_keybind == Some((modifier_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::Quit);
-                    } else if Some((modifier_mask, mod_sym)) == reload_keybind {
+                    } else if reload_keybind == Some((modifier_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::ReloadConfig);
                     } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
                         ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
@@ -227,16 +217,6 @@ impl State {
                     }
                 }
 
-                if keysym.modified_sym() == Keysym::Control_L {
-                    match press_state {
-                        KeyState::Pressed => {
-                            move_mode = true;
-                        }
-                        KeyState::Released => {
-                            move_mode = false;
-                        }
-                    }
-                }
                 FilterResult::Forward
             },
         );
@@ -256,18 +236,17 @@ impl State {
                 }
             }
             Some(KeyAction::SwitchVt(vt)) => {
-                if self.backend.is_udev() {
-                    self.switch_vt(vt);
-                }
+                self.switch_vt(vt);
             }
             Some(KeyAction::Quit) => {
+                tracing::info!("Quitting Pinnacle");
                 self.loop_signal.stop();
             }
             Some(KeyAction::ReloadConfig) => {
                 self.start_config(crate::config::get_config_dir())
                     .expect("failed to restart config");
             }
-            None => {}
+            None => (),
         }
     }
 
@@ -283,17 +262,17 @@ impl State {
 
         let pointer_loc = pointer.current_location();
 
-        let edge = match button_state {
+        let mouse_edge = match button_state {
             ButtonState::Released => MouseEdge::Release,
             ButtonState::Pressed => MouseEdge::Press,
         };
         let modifier_mask = ModifierMask::from(keyboard.modifier_state());
 
         // If any mousebinds are detected, call the config's callback and return.
-        if let Some(&callback_id) = self
-            .input_state
-            .mousebinds
-            .get(&(modifier_mask, button, edge))
+        if let Some(&callback_id) =
+            self.input_state
+                .mousebinds
+                .get(&(modifier_mask, button, mouse_edge))
         {
             if let Some(stream) = self.api_state.stream.as_ref() {
                 crate::api::send_to_client(
@@ -310,22 +289,20 @@ impl State {
 
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
-        if ButtonState::Pressed == button_state {
+        if button_state == ButtonState::Pressed {
             if let Some((focus, _)) = self.surface_under(pointer_loc) {
                 // Move window to top of stack.
                 if let FocusTarget::Window(window) = &focus {
                     self.space.raise_element(window, true);
                     if let WindowElement::X11(surface) = &window {
-                        if !surface.is_override_redirect() {
-                            self.xwm
-                                .as_mut()
-                                .expect("no xwm")
-                                .raise_window(surface)
-                                .expect("failed to raise x11 win");
-                            surface
-                                .set_activated(true)
-                                .expect("failed to set x11 win to activated");
-                        }
+                        self.xwm
+                            .as_mut()
+                            .expect("no xwm")
+                            .raise_window(surface)
+                            .expect("failed to raise x11 win");
+                        surface
+                            .set_activated(true)
+                            .expect("failed to set x11 win to activated");
                     }
                 }
 
@@ -371,7 +348,6 @@ impl State {
             }
         };
 
-        // Send the button event to the client.
         pointer.button(
             self,
             &ButtonEvent {
@@ -391,13 +367,9 @@ impl State {
             .amount(Axis::Horizontal)
             .unwrap_or_else(|| event.amount_discrete(Axis::Horizontal).unwrap_or(0.0) * 3.0);
 
-        let mut vertical_amount = event
+        let vertical_amount = event
             .amount(Axis::Vertical)
             .unwrap_or_else(|| event.amount_discrete(Axis::Vertical).unwrap_or(0.0) * 3.0);
-
-        if self.backend.is_winit() {
-            vertical_amount = -vertical_amount;
-        }
 
         let horizontal_amount_discrete = event.amount_discrete(Axis::Horizontal);
         let vertical_amount_discrete = event.amount_discrete(Axis::Vertical);
@@ -422,18 +394,15 @@ impl State {
             frame = frame.stop(Axis::Vertical);
         }
 
-        // tracing::debug!(
-        //     "axis on current focus: {:?}",
-        //     self.seat.get_pointer().unwrap().current_focus()
-        // );
-
         let pointer = self.seat.get_pointer().expect("Seat has no pointer");
 
         pointer.axis(self, frame);
         pointer.frame(self);
     }
 
-    /// Clamp pointer coordinates inside outputs
+    /// Clamp pointer coordinates inside outputs.
+    ///
+    /// This returns the nearest point inside an output.
     fn clamp_coords(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
         if self.space.outputs().next().is_none() {
             return pos;
@@ -467,6 +436,7 @@ impl State {
         let Some(output) = self.space.outputs().next() else {
             return;
         };
+
         let output_geo = self
             .space
             .output_geometry(output)
@@ -474,8 +444,6 @@ impl State {
         let pointer_loc = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
         let serial = SERIAL_COUNTER.next_serial();
         let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
-
-        // tracing::info!("pointer_loc: {:?}", pointer_loc);
 
         self.pointer_location = pointer_loc;
 
@@ -495,13 +463,9 @@ impl State {
             }
         }
 
-        let surface_under_pointer = self.surface_under(pointer_loc);
-
-        // tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
-        // tracing::debug!("pointer focus: {:?}", pointer.current_focus());
         pointer.motion(
             self,
-            surface_under_pointer,
+            self.surface_under(pointer_loc),
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -537,7 +501,6 @@ impl State {
 
         let surface_under = self.surface_under(self.pointer_location);
 
-        // tracing::info!("{:?}", self.pointer_location);
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.motion(
                 self,

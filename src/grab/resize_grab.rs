@@ -44,8 +44,8 @@ impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
     }
 }
 
-pub struct ResizeSurfaceGrab<S: SeatHandler> {
-    start_data: GrabStartData<S>,
+pub struct ResizeSurfaceGrab {
+    start_data: GrabStartData<State>,
     window: WindowElement,
 
     edges: ResizeEdge,
@@ -56,9 +56,9 @@ pub struct ResizeSurfaceGrab<S: SeatHandler> {
     button_used: u32,
 }
 
-impl<S: SeatHandler> ResizeSurfaceGrab<S> {
+impl ResizeSurfaceGrab {
     pub fn start(
-        start_data: GrabStartData<S>,
+        start_data: GrabStartData<State>,
         window: WindowElement,
         edges: ResizeEdge,
         initial_window_rect: Rectangle<i32, Logical>,
@@ -82,7 +82,7 @@ impl<S: SeatHandler> ResizeSurfaceGrab<S> {
     }
 }
 
-impl PointerGrab<State> for ResizeSurfaceGrab<State> {
+impl PointerGrab<State> for ResizeSurfaceGrab {
     fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
         handle.frame(data);
     }
@@ -427,6 +427,7 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
     Some(())
 }
 
+/// The application requests a resize e.g. when you drag the edges of a window.
 pub fn resize_request_client(
     state: &mut State,
     surface: &WlSurface,
@@ -476,6 +477,7 @@ pub fn resize_request_client(
     }
 }
 
+/// The compositor requested a resize e.g. you hold the mod key and right-click drag.
 pub fn resize_request_server(
     state: &mut State,
     surface: &WlSurface,

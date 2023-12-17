@@ -23,8 +23,10 @@ use crate::{
 use crate::state::{State, WithState};
 
 impl State {
+    /// Handle a client message.
     pub fn handle_msg(&mut self, msg: Msg) {
-        // tracing::debug!("Got {msg:?}");
+        tracing::trace!("Got {msg:?}");
+
         match msg {
             Msg::SetKeybind {
                 key,
@@ -452,6 +454,7 @@ impl State {
         }
     }
 
+    /// Handle a client request.
     fn handle_request(&mut self, request_id: RequestId, request: Request) {
         let stream = self
             .api_state
@@ -663,6 +666,8 @@ impl State {
         }
     }
 
+    // Welcome to indentation hell
+    /// Handle a received spawn command by spawning the command and hooking up any callbacks.
     pub fn handle_spawn(&self, command: Vec<String>, callback_id: Option<CallbackId>) {
         let mut command = command.into_iter();
         let Some(program) = command.next() else {
@@ -700,7 +705,7 @@ impl State {
         else {
             // TODO: notify user that program doesn't exist
             tracing::warn!(
-                "tried to run {}, but it doesn't exist",
+                "Tried to run {}, but it doesn't exist",
                 program.to_string_lossy()
             );
             return;
@@ -720,17 +725,19 @@ impl State {
                     while let Some(line) = reader.next().await {
                         match line {
                             Ok(line) => {
+                                let msg = OutgoingMsg::CallCallback {
+                                    callback_id,
+                                    args: Some(Args::Spawn {
+                                        stdout: Some(line),
+                                        stderr: None,
+                                        exit_code: None,
+                                        exit_msg: None,
+                                    }),
+                                };
+
                                 crate::api::send_to_client(
                                     &mut stream_out.lock().expect("Couldn't lock stream"),
-                                    &OutgoingMsg::CallCallback {
-                                        callback_id,
-                                        args: Some(Args::Spawn {
-                                            stdout: Some(line),
-                                            stderr: None,
-                                            exit_code: None,
-                                            exit_msg: None,
-                                        }),
-                                    },
+                                    &msg,
                                 )
                                 .expect("Send to client failed"); // TODO: notify instead of crash
                             }
@@ -752,17 +759,19 @@ impl State {
                     while let Some(line) = reader.next().await {
                         match line {
                             Ok(line) => {
+                                let msg = OutgoingMsg::CallCallback {
+                                    callback_id,
+                                    args: Some(Args::Spawn {
+                                        stdout: None,
+                                        stderr: Some(line),
+                                        exit_code: None,
+                                        exit_msg: None,
+                                    }),
+                                };
+
                                 crate::api::send_to_client(
                                     &mut stream_err.lock().expect("Couldn't lock stream"),
-                                    &OutgoingMsg::CallCallback {
-                                        callback_id,
-                                        args: Some(Args::Spawn {
-                                            stdout: None,
-                                            stderr: Some(line),
-                                            exit_code: None,
-                                            exit_msg: None,
-                                        }),
-                                    },
+                                    &msg,
                                 )
                                 .expect("Send to client failed"); // TODO: notify instead of crash
                             }
@@ -779,17 +788,19 @@ impl State {
             let future = async move {
                 match child.status().await {
                     Ok(exit_status) => {
+                        let msg = OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::Spawn {
+                                stdout: None,
+                                stderr: None,
+                                exit_code: exit_status.code(),
+                                exit_msg: Some(exit_status.to_string()),
+                            }),
+                        };
+
                         crate::api::send_to_client(
                             &mut stream_exit.lock().expect("Couldn't lock stream"),
-                            &OutgoingMsg::CallCallback {
-                                callback_id,
-                                args: Some(Args::Spawn {
-                                    stdout: None,
-                                    stderr: None,
-                                    exit_code: exit_status.code(),
-                                    exit_msg: Some(exit_status.to_string()),
-                                }),
-                            },
+                            &msg,
                         )
                         .expect("Send to client failed"); // TODO: notify instead of crash
                     }

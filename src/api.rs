@@ -55,6 +55,10 @@ use self::msg::{Msg, OutgoingMsg};
 
 pub const SOCKET_NAME: &str = "pinnacle_socket";
 
+/// Handle a config process.
+///
+/// `stream` is the incoming stream where messages will be received,
+/// and `sender` sends decoded messages to the main state's handler.
 fn handle_client(
     mut stream: UnixStream,
     sender: Sender<Msg>,
@@ -85,13 +89,16 @@ fn handle_client(
     }
 }
 
+/// A socket source for an event loop that will listen for config processes.
 pub struct PinnacleSocketSource {
+    /// The socket listener
     socket: Generic<UnixListener>,
+    /// The sender that will send messages from clients to the main event loop.
     sender: Sender<Msg>,
 }
 
 impl PinnacleSocketSource {
-    /// Create a loop source that listens for connections to the provided socket_dir.
+    /// Create a loop source that listens for connections to the provided `socket_dir`.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
     pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
         tracing::debug!("Creating socket source for dir {socket_dir:?}");
@@ -128,7 +135,7 @@ impl PinnacleSocketSource {
                 }
             }
         } else {
-            // If there are, remove them all
+            // If there aren't, remove them all
             for file in std::fs::read_dir(socket_dir)?
                 .filter_map(|entry| entry.ok())
                 .filter(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
@@ -155,6 +162,7 @@ impl PinnacleSocketSource {
     }
 }
 
+/// Send a message to a client.
 pub fn send_to_client(
     stream: &mut UnixStream,
     msg: &OutgoingMsg,
@@ -171,12 +179,14 @@ pub fn send_to_client(
             return Ok(()); // TODO:
         }
     }
+
     if let Err(err) = stream.write_all(msg.as_slice()) {
         if err.kind() == io::ErrorKind::BrokenPipe {
             // TODO: something
             return Ok(()); // TODO:
         }
-    };
+    }
+
     Ok(())
 }
 

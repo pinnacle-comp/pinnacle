@@ -99,7 +99,8 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // tracing::debug!("commit on surface {surface:?}");
+        tracing::trace!("commit on surface {surface:?}");
+
         X11Wm::commit_hook::<CalloopData>(surface);
 
         utils::on_commit_buffer_handler::<Self>(surface);
@@ -112,7 +113,6 @@ impl CompositorHandler for State {
 
         if !compositor::is_sync_subsurface(surface) {
             if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
-                // tracing::debug!("window commit thing {:?}", win.class());
                 window.on_commit();
                 win.with_state(|state| {
                     if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
@@ -130,37 +130,37 @@ impl CompositorHandler for State {
 
         crate::grab::resize_grab::handle_commit(self, surface);
 
-        // `surface` is a root window
-        let Some(output) = self
+        let output = if let Some(output) = self
             .window_for_surface(surface)
             .and_then(|win| win.output(self))
-            .or_else(|| {
-                // `surface` is a descendant of a root window
-                self.window_for_surface(&root)
-                    .and_then(|win| win.output(self))
+        {
+            output // surface is a window
+        } else if let Some(output) = self
+            .window_for_surface(&root)
+            .and_then(|win| win.output(self))
+        {
+            output // root is a window
+        } else if let Some(output) = self
+            .popup_manager
+            .find_popup(surface)
+            .and_then(|popup| find_popup_root_surface(&popup).ok())
+            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|win| win.output(self))
+        {
+            output // surface is a popup
+        } else if let Some(output) = self
+            .space
+            .outputs()
+            .find(|op| {
+                let layer_map = layer_map_for_output(op);
+                layer_map
+                    .layer_for_surface(surface, WindowSurfaceType::ALL)
+                    .is_some()
             })
-            .or_else(|| {
-                // `surface` is a popup
-                self.popup_manager
-                    .find_popup(surface)
-                    .and_then(|popup| find_popup_root_surface(&popup).ok())
-                    .and_then(|surf| self.window_for_surface(&surf))
-                    .and_then(|win| win.output(self))
-            })
-            .or_else(|| {
-                // `surface` is a layer surface
-                self.space
-                    .outputs()
-                    .find(|op| {
-                        let layer_map = layer_map_for_output(op);
-                        layer_map
-                            .layer_for_surface(surface, WindowSurfaceType::ALL)
-                            .is_some()
-                    })
-                    .cloned()
-            })
-        // TODO: cursor surface and dnd icon
-        else {
+            .cloned()
+        {
+            output // surface is a layer surface
+        } else {
             return;
         };
 
@@ -355,6 +355,7 @@ delegate_viewporter!(State);
 
 impl FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
+        // comment yanked from anvil
         // Here we can set the initial fractional scale
         //
         // First we look if the surface already has a primary scan-out output, if not

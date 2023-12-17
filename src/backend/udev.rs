@@ -51,7 +51,6 @@ use smithay::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{EventLoop, LoopHandle, RegistrationToken},
         drm::{
-            self,
             control::{connector, crtc, ModeTypeFlags},
             Device,
         },
@@ -104,9 +103,9 @@ struct UdevOutputData {
     device_id: DrmNode,
     /// The [Crtc][crtc::Handle] the output is pushing to
     crtc: crtc::Handle,
-    mode: Option<drm::control::Mode>,
 }
 
+// TODO: document desperately
 pub struct Udev {
     pub session: LibSeatSession,
     display_handle: DisplayHandle,
@@ -133,11 +132,11 @@ impl Backend {
 }
 
 impl Udev {
+    /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
-        // tracing::debug!(state = ?surface.render_state, "scheduling render");
 
         match &surface.render_state {
             RenderState::Idle => {
@@ -162,10 +161,10 @@ impl State {
     /// This will first clear the overlay plane to prevent any lingering artifacts,
     /// then switch the vt.
     ///
-    /// Yells at you when called on the winit backend. Bad developer. Very bad.
+    /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         match &mut self.backend {
-            Backend::Winit(_) => tracing::error!("Called `switch_vt` on winit"),
+            Backend::Winit(_) => (),
             Backend::Udev(udev) => {
                 for backend in udev.backends.values_mut() {
                     for surface in backend.surfaces.values_mut() {
@@ -532,6 +531,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: document desperately
 struct UdevBackendData {
     surfaces: HashMap<crtc::Handle, RenderSurface>,
     gbm: GbmDevice<DrmDeviceFd>,
@@ -888,29 +888,9 @@ impl State {
         output.change_current_state(Some(wl_mode), None, None, Some(position));
         self.space.map_output(&output, position);
 
-        // The preferred mode with the highest refresh rate
-        // Logic from niri
-        let mode = connector
-            .modes()
-            .iter()
-            .max_by(|mode1, mode2| {
-                let mode1_preferred = mode1.mode_type().contains(ModeTypeFlags::PREFERRED);
-                let mode2_preferred = mode2.mode_type().contains(ModeTypeFlags::PREFERRED);
-
-                use std::cmp::Ordering;
-
-                match (mode1_preferred, mode2_preferred) {
-                    (true, false) => Ordering::Greater,
-                    (false, true) => Ordering::Less,
-                    _ => mode1.vrefresh().cmp(&mode2.vrefresh()),
-                }
-            })
-            .copied();
-
         output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
             device_id: node,
-            mode,
         });
 
         let allocator = GbmAllocator::new(
@@ -1332,11 +1312,7 @@ fn render_surface_for_output<'a>(
     output: &Output,
     backends: &'a mut HashMap<DrmNode, UdevBackendData>,
 ) -> Option<&'a mut RenderSurface> {
-    let UdevOutputData {
-        device_id,
-        crtc,
-        mode: _,
-    } = output.user_data().get()?;
+    let UdevOutputData { device_id, crtc } = output.user_data().get()?;
 
     backends
         .get_mut(device_id)

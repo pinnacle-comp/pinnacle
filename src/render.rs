@@ -141,7 +141,7 @@ where
     }
 }
 
-/// Get the render_elements for the provided tags.
+/// Get render elements for windows on active tags.
 fn tag_render_elements<R>(
     windows: &[WindowElement],
     space: &Space<WindowElement>,
@@ -250,6 +250,7 @@ where
             pointer_element.set_texture(pointer_image.clone());
         }
 
+        // TODO: why is updating the cursor texture in generate_render_elements?
         // draw the cursor as relevant and
         // reset the cursor if the surface is no longer alive
         if let CursorImageStatus::Surface(surface) = &*cursor_status {
@@ -342,11 +343,7 @@ where
                 .map(OutputRenderElements::from),
         );
 
-        output_render_elements.extend(
-            window_render_elements
-                .into_iter()
-                .map(OutputRenderElements::from),
-        );
+        output_render_elements.extend(window_render_elements);
 
         output_render_elements.extend(
             bottom

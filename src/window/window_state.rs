@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{
-    cell::RefCell,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use smithay::{
-    desktop::{space::SpaceElement, Window},
+    desktop::space::SpaceElement,
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Point, Rectangle, Serial},
 };
@@ -46,26 +43,7 @@ impl WindowId {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct WindowState {
-    pub minimized: bool,
-}
-
-impl WithState for Window {
-    type State = WindowState;
-
-    fn with_state<F, T>(&self, func: F) -> T
-    where
-        F: FnOnce(&mut Self::State) -> T,
-    {
-        let state = self
-            .user_data()
-            .get_or_insert(RefCell::<Self::State>::default);
-
-        func(&mut state.borrow_mut())
-    }
-}
-
+/// State of a [`WindowElement`]
 #[derive(Debug)]
 pub struct WindowElementState {
     /// The id of this window.
@@ -106,7 +84,7 @@ impl LocationRequestState {
 }
 
 impl WindowElement {
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window.
     pub fn toggle_floating(&self) {
         match self.with_state(|state| state.floating_or_tiled) {
             FloatingOrTiled::Floating(current_rect) => {
@@ -129,7 +107,7 @@ impl WindowElement {
         }
     }
 
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window.
     pub fn toggle_fullscreen(&self) {
         match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Maximized => {
@@ -175,7 +153,7 @@ impl WindowElement {
         }
     }
 
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window.
     pub fn toggle_maximized(&self) {
         match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Fullscreen => {
@@ -221,6 +199,8 @@ impl WindowElement {
         }
     }
 
+    /// Unsets maximized and fullscreen states for both wayland and xwayland windows
+    /// and unsets tiled states for wayland windows.
     fn set_floating_states(&self) {
         match self {
             WindowElement::Wayland(window) => {
@@ -245,6 +225,8 @@ impl WindowElement {
         }
     }
 
+    /// Unsets maximized and fullscreen states for both wayland and xwayland windows
+    /// and sets tiled states for wayland windows.
     fn set_tiled_states(&self) {
         match self {
             WindowElement::Wayland(window) => {
@@ -270,11 +252,15 @@ impl WindowElement {
     }
 }
 
-// You know what they say, the two hardest things in computer science are
-// cache invalidation and naming things (and off by one errors).
+/// Whether a window is floating or tiled
 #[derive(Debug, Clone, Copy)]
 pub enum FloatingOrTiled {
+    /// The window is floating with the specified geometry.
     Floating(Rectangle<i32, Logical>),
+    /// The window is tiled.
+    ///
+    /// The previous geometry it had when it was floating is stored here.
+    /// This is so when it becomes floating again, it returns to this geometry.
     Tiled(Option<Rectangle<i32, Logical>>),
 }
 
@@ -329,8 +315,8 @@ impl FullscreenOrMaximized {
     }
 }
 
-impl Default for WindowElementState {
-    fn default() -> Self {
+impl WindowElementState {
+    pub fn new() -> Self {
         Self {
             id: WindowId::next(),
             loc_request_state: LocationRequestState::Idle,

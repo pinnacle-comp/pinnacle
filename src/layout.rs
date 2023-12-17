@@ -17,8 +17,6 @@ use crate::{
 impl State {
     /// Compute the positions and sizes of tiled windows on
     /// `output` according to the provided [`Layout`].
-    ///
-    /// This will call `request_size_change` on tiled windows.
     fn tile_windows(&self, output: &Output, windows: Vec<WindowElement>, layout: Layout) {
         let Some(rect) = self.space.output_geometry(output).map(|op_geo| {
             let map = layer_map_for_output(output);
@@ -50,7 +48,7 @@ impl State {
         }
     }
 
-    /// Compute tiled window locations and sizes, size maximized and fullscreen windows correctly,
+    /// Compute tiled window locations and sizes, resize maximized and fullscreen windows correctly,
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
         tracing::debug!("Updating windows");
@@ -97,7 +95,7 @@ impl State {
                 }
                 FullscreenOrMaximized::Maximized => {
                     let map = layer_map_for_output(output);
-                    let geo = if map.layers().peekable().peek().is_none() {
+                    let geo = if map.layers().next().is_none() {
                         // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
                         // |     output res, even when there are no layer surfaces mapped. In this case, we
                         // |     just return the output geometry.
@@ -122,6 +120,7 @@ impl State {
         let mut pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
         let mut non_pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
 
+        // TODO: completely refactor how tracking state changes works
         for window in windows_on_foc_tags.iter() {
             window.with_state(|state| {
                 if let LocationRequestState::Sent(loc) = state.loc_request_state {
@@ -133,9 +132,7 @@ impl State {
                             let is_pending = win
                                 .toplevel()
                                 .with_pending_state(|state| state.size != current_state.size);
-                            // for whatever reason vscode on wayland likes to have pending state
-                            // (like tiled states) but not commit, so we check for just the size
-                            // here
+
                             if !is_pending {
                                 tracing::debug!("No pending changes, mapping window");
                                 // TODO: map win here, not down there
@@ -168,7 +165,6 @@ impl State {
             });
         }
 
-        // schedule on all idle
         self.schedule(
             move |_dt| {
                 let all_idle = pending_wins
@@ -301,9 +297,9 @@ fn spiral(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
     let size = rect.size;
     let loc = rect.loc;
 
-    let mut iter = windows.windows(2).peekable();
+    let mut window_pairs = windows.windows(2).peekable();
 
-    if iter.peek().is_none() {
+    if window_pairs.peek().is_none() {
         if let Some(window) = windows.first() {
             window.change_geometry(Rectangle::from_loc_and_size(loc, size));
         }
@@ -311,7 +307,7 @@ fn spiral(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
         let mut win1_loc = loc;
         let mut win1_size = size;
 
-        for (i, wins) in iter.enumerate() {
+        for (i, wins) in window_pairs.enumerate() {
             let win1 = &wins[0];
             let win2 = &wins[1];
 
@@ -490,6 +486,7 @@ fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Log
 }
 
 impl State {
+    /// Swaps two windows in the main window vec and updates all windows.
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
         let win1_index = self.windows.iter().position(|win| win == win1);
         let win2_index = self.windows.iter().position(|win| win == win2);

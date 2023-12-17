@@ -20,7 +20,9 @@ use crate::{
 
 #[derive(Default)]
 pub struct FocusState {
+    /// The ordering of window focus
     pub focus_stack: Vec<WindowElement>,
+    /// The focused output, currently defined to be the one the pointer is on.
     pub focused_output: Option<Output>,
 }
 
@@ -89,6 +91,7 @@ impl FocusState {
     }
 }
 
+/// Different focusable objects.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FocusTarget {
     Window(WindowElement),

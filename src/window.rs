@@ -10,10 +10,10 @@ use smithay::{
         space::SpaceElement,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
-            take_presentation_feedback_surface_tree, under_from_surface_tree,
-            with_surfaces_surface_tree, OutputPresentationFeedback,
+            take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
+            OutputPresentationFeedback,
         },
-        Window, WindowSurfaceType,
+        Window,
     },
     input::{
         keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
@@ -41,29 +41,18 @@ use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
+/// The different types of windows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WindowElement {
+    /// This is a native Wayland window.
     Wayland(Window),
+    /// This is an Xwayland window.
     X11(X11Surface),
+    /// This is an Xwayland override redirect window, which should not be messed with.
     X11OverrideRedirect(X11Surface),
 }
 
 impl WindowElement {
-    pub fn surface_under(
-        &self,
-        location: Point<f64, Logical>,
-        window_type: WindowSurfaceType,
-    ) -> Option<(WlSurface, Point<i32, Logical>)> {
-        match self {
-            WindowElement::Wayland(window) => window.surface_under(location, window_type),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.wl_surface().and_then(|wl_surf| {
-                    under_from_surface_tree(&wl_surf, location, (0, 0), window_type)
-                })
-            }
-        }
-    }
-
     pub fn with_surfaces<F>(&self, processor: F)
     where
         F: FnMut(&WlSurface, &SurfaceData) + Copy,
@@ -189,7 +178,7 @@ impl WindowElement {
     ///
     /// Xwayland windows will still receive a configure.
     ///
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window.
     // TODO: ^ does that make things flicker?
     pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
         match self {
@@ -256,11 +245,13 @@ impl WindowElement {
     ///
     /// This method gets the first tag the window has and returns its output.
     ///
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window and every mapped output.
     pub fn output(&self, state: &State) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
     }
 
+    /// Returns whether or not this window has an active tag.
+    ///
     /// RefCell Safety: This uses RefCells on both `self` and everything in `outputs`.
     pub fn is_on_active_tag<'a>(&self, outputs: impl IntoIterator<Item = &'a Output>) -> bool {
         let tags = outputs
@@ -643,7 +634,7 @@ impl WithState for WindowElement {
     {
         let state = self
             .user_data()
-            .get_or_insert(RefCell::<Self::State>::default);
+            .get_or_insert(|| RefCell::new(WindowElementState::new()));
 
         func(&mut state.borrow_mut())
     }
