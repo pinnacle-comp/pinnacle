@@ -1,5 +1,4 @@
 -- SPDX-License-Identifier: MIT
-
 -- Just like in Awesome, if you want access to Luarocks packages, this needs to be called.
 -- NOTE: The loader doesn't load from the local Luarocks directory (probably in ~/.luarocks),
 -- |     so if you have any rocks installed with --local,
@@ -24,11 +23,8 @@ require("pinnacle").setup(function(pinnacle)
 
     ---@type Modifier
     local mod_key = "Ctrl" -- This is set to `Ctrl` instead of `Super` to not conflict with your WM/DE keybinds
-    -- ^ Add type annotations for that sweet, sweet autocomplete
 
     local terminal = "alacritty"
-
-    process.set_env("MOZ_ENABLE_WAYLAND", "1")
 
     -- Outputs -----------------------------------------------------------------------
     -- You can set your own monitor layout as I have done below for my monitors.

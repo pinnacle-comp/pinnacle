@@ -1,9 +1,8 @@
-pub mod api;
-
 use crate::{
-    config::api::{msg::ModifierMask, PinnacleSocketSource},
+    api::{msg::ModifierMask, PinnacleSocketSource},
     output::OutputName,
     tag::Tag,
+    window::rules::{WindowRule, WindowRuleCondition},
 };
 use std::{
     collections::HashMap,
@@ -18,7 +17,7 @@ use smithay::{
 };
 use toml::Table;
 
-use api::msg::Modifier;
+use crate::api::msg::{CallbackId, Modifier};
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -26,11 +25,10 @@ use crate::{
     tag::TagId,
 };
 
-use self::api::msg::{
-    window_rules::{WindowRule, WindowRuleCondition},
-    CallbackId,
-};
+const DEFAULT_SOCKET_DIR: &str = "/tmp";
 
+/// The metaconfig struct containing what to run, what envs to run it with, various keybinds, and
+/// the target socket directory.
 #[derive(serde::Deserialize, Debug)]
 pub struct Metaconfig {
     pub command: Vec<String>,
@@ -46,6 +44,7 @@ pub struct Keybind {
     pub key: Key,
 }
 
+// TODO: accept xkbcommon names instead
 #[derive(serde::Deserialize, Debug, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 #[repr(u32)]
@@ -120,10 +119,14 @@ pub enum Key {
     Escape = keysyms::KEY_Escape,
 }
 
+/// The current state of configuration.
 #[derive(Default, Debug)]
 pub struct Config {
+    /// Window rules and conditions on when those rules should apply
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
+    /// All callbacks that should be run when outputs are connected
     pub output_callback_ids: Vec<CallbackId>,
+    /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 }
 
@@ -131,7 +134,9 @@ pub struct Config {
 /// connector, the saved state will apply to restore its state.
 #[derive(Debug, Default, Clone)]
 pub struct ConnectorSavedState {
+    /// The old location
     pub loc: Point<i32, Logical>,
+    /// The output's previous tags
     pub tags: Vec<Tag>,
 }
 
@@ -177,8 +182,8 @@ impl State {
         self.input_state.libinput_settings.clear();
         self.config.window_rules.clear();
 
-        tracing::debug!("Killing old config");
         if let Some(channel) = self.api_state.kill_channel.as_ref() {
+            tracing::debug!("Killing old config");
             if let Err(err) = futures_lite::future::block_on(channel.send(())) {
                 tracing::warn!("failed to send kill ping to config future: {err}");
             }
@@ -228,7 +233,7 @@ impl State {
             crate::XDG_BASE_DIRS
                 .get_runtime_directory()
                 .cloned()
-                .unwrap_or(PathBuf::from(crate::config::api::DEFAULT_SOCKET_DIR))
+                .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
         };
 
         let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
@@ -239,13 +244,13 @@ impl State {
 
         let mut command = metaconfig.command.iter();
 
-        let arg1 = command
+        let arg0 = command
             .next()
             .context("command in metaconfig.toml was empty")?;
 
         let command = command.collect::<Vec<_>>();
 
-        tracing::debug!(arg1, ?command);
+        tracing::debug!(arg0, ?command);
 
         let envs = metaconfig
             .envs
@@ -272,7 +277,7 @@ impl State {
 
         tracing::debug!("Config envs are {envs:?}");
 
-        let mut child = async_process::Command::new(arg1)
+        let mut child = async_process::Command::new(arg0)
             .args(command)
             .envs(envs)
             .current_dir(config_dir)
@@ -309,6 +314,7 @@ impl State {
 
         self.input_state.reload_keybind = Some(reload_keybind);
         self.input_state.kill_keybind = Some(kill_keybind);
+
         self.api_state.socket_token = Some(socket_token);
 
         let (kill_channel, future_channel) = async_channel::unbounded::<()>();

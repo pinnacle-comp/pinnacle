@@ -16,6 +16,7 @@ use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
 
+mod api;
 mod backend;
 mod config;
 mod cursor;

@@ -34,6 +34,7 @@
 //!
 //! For an example, look at the Lua implementation in the repository.
 
+pub mod handlers;
 pub mod msg;
 
 use std::{
@@ -52,9 +53,12 @@ use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
 
 use self::msg::{Msg, OutgoingMsg};
 
-pub const DEFAULT_SOCKET_DIR: &str = "/tmp";
 pub const SOCKET_NAME: &str = "pinnacle_socket";
 
+/// Handle a config process.
+///
+/// `stream` is the incoming stream where messages will be received,
+/// and `sender` sends decoded messages to the main state's handler.
 fn handle_client(
     mut stream: UnixStream,
     sender: Sender<Msg>,
@@ -85,13 +89,16 @@ fn handle_client(
     }
 }
 
+/// A socket source for an event loop that will listen for config processes.
 pub struct PinnacleSocketSource {
+    /// The socket listener
     socket: Generic<UnixListener>,
+    /// The sender that will send messages from clients to the main event loop.
     sender: Sender<Msg>,
 }
 
 impl PinnacleSocketSource {
-    /// Create a loop source that listens for connections to the provided socket_dir.
+    /// Create a loop source that listens for connections to the provided `socket_dir`.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
     pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
         tracing::debug!("Creating socket source for dir {socket_dir:?}");
@@ -128,7 +135,7 @@ impl PinnacleSocketSource {
                 }
             }
         } else {
-            // If there are, remove them all
+            // If there aren't, remove them all
             for file in std::fs::read_dir(socket_dir)?
                 .filter_map(|entry| entry.ok())
                 .filter(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
@@ -155,11 +162,13 @@ impl PinnacleSocketSource {
     }
 }
 
+/// Send a message to a client.
 pub fn send_to_client(
     stream: &mut UnixStream,
     msg: &OutgoingMsg,
 ) -> Result<(), rmp_serde::encode::Error> {
-    // tracing::debug!("Sending {msg:?}");
+    tracing::trace!("Sending {msg:?}");
+
     let msg = rmp_serde::to_vec_named(msg)?;
     let msg_len = msg.len() as u32;
     let bytes = msg_len.to_ne_bytes();
@@ -170,12 +179,14 @@ pub fn send_to_client(
             return Ok(()); // TODO:
         }
     }
+
     if let Err(err) = stream.write_all(msg.as_slice()) {
         if err.kind() == io::ErrorKind::BrokenPipe {
             // TODO: something
             return Ok(()); // TODO:
         }
-    };
+    }
+
     Ok(())
 }
 
@@ -201,11 +212,13 @@ impl EventSource for PinnacleSocketSource {
             .process_events(readiness, token, |_readiness, listener| {
                 while let Ok((stream, _sock_addr)) = listener.accept() {
                     let sender = self.sender.clone();
-                    let callback_stream = match stream.try_clone() {
-                        Ok(callback_stream) => callback_stream,
-                        Err(err) => return Err(err),
-                    };
+                    let callback_stream = stream.try_clone()?;
+
                     callback(callback_stream, &mut ());
+
+                    // Handle the client in another thread as to not block the main one.
+                    //
+                    // No idea if this is even needed or if it's premature optimization.
                     std::thread::spawn(move || {
                         if let Err(err) = handle_client(stream, sender) {
                             tracing::error!("handle_client errored: {err}");

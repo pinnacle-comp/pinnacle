@@ -1,13 +1,18 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+use smithay::{
+    desktop::space::SpaceElement,
+    utils::{Point, Rectangle},
+};
+
+use crate::{
+    state::{State, WithState},
+    window::window_state,
+};
+
+use super::WindowElement;
 
 use std::num::NonZeroU32;
 
-use crate::{
-    output::OutputName,
-    state::{State, WithState},
-    tag::TagId,
-    window::{window_state::FullscreenOrMaximized, WindowElement},
-};
+use crate::{output::OutputName, tag::TagId, window::window_state::FullscreenOrMaximized};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WindowRuleCondition {
@@ -160,4 +165,112 @@ pub struct WindowRule {
 pub enum FloatingOrTiled {
     Floating,
     Tiled,
+}
+
+impl State {
+    pub fn apply_window_rules(&mut self, window: &WindowElement) {
+        tracing::debug!("Applying window rules");
+        for (cond, rule) in self.config.window_rules.iter() {
+            if cond.is_met(self, window) {
+                let WindowRule {
+                    output,
+                    tags,
+                    floating_or_tiled,
+                    fullscreen_or_maximized,
+                    size,
+                    location,
+                } = rule;
+
+                // TODO: If both `output` and `tags` are specified, `tags` will apply over
+                // |     `output`.
+
+                if let Some(output_name) = output {
+                    if let Some(output) = output_name.output(self) {
+                        let tags = output
+                            .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
+
+                        window.with_state(|state| state.tags = tags.clone());
+                    }
+                }
+
+                if let Some(tag_ids) = tags {
+                    let tags = tag_ids
+                        .iter()
+                        .filter_map(|tag_id| tag_id.tag(self))
+                        .collect::<Vec<_>>();
+
+                    window.with_state(|state| state.tags = tags.clone());
+                }
+
+                if let Some(floating_or_tiled) = floating_or_tiled {
+                    match floating_or_tiled {
+                        FloatingOrTiled::Floating => {
+                            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+                                window.toggle_floating();
+                            }
+                        }
+                        FloatingOrTiled::Tiled => {
+                            if window.with_state(|state| state.floating_or_tiled.is_floating()) {
+                                window.toggle_floating();
+                            }
+                        }
+                    }
+                }
+
+                if let Some(fs_or_max) = fullscreen_or_maximized {
+                    window.with_state(|state| state.fullscreen_or_maximized = *fs_or_max);
+                }
+
+                if let Some((w, h)) = size {
+                    let mut window_size = window.geometry().size;
+                    window_size.w = u32::from(*w) as i32;
+                    window_size.h = u32::from(*h) as i32;
+
+                    match window.with_state(|state| state.floating_or_tiled) {
+                        window_state::FloatingOrTiled::Floating(mut rect) => {
+                            rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
+                            window.with_state(|state| {
+                                state.floating_or_tiled =
+                                    window_state::FloatingOrTiled::Floating(rect)
+                            });
+                        }
+                        window_state::FloatingOrTiled::Tiled(mut rect) => {
+                            if let Some(rect) = rect.as_mut() {
+                                rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
+                            }
+                            window.with_state(|state| {
+                                state.floating_or_tiled = window_state::FloatingOrTiled::Tiled(rect)
+                            });
+                        }
+                    }
+                }
+
+                if let Some(loc) = location {
+                    match window.with_state(|state| state.floating_or_tiled) {
+                        window_state::FloatingOrTiled::Floating(mut rect) => {
+                            rect.loc = (*loc).into();
+                            window.with_state(|state| {
+                                state.floating_or_tiled =
+                                    window_state::FloatingOrTiled::Floating(rect)
+                            });
+                            self.space.map_element(window.clone(), *loc, false);
+                        }
+                        window_state::FloatingOrTiled::Tiled(rect) => {
+                            // If the window is tiled, don't set the size. Instead, set
+                            // what the size will be when it gets set to floating.
+                            let rect = rect.unwrap_or_else(|| {
+                                let size = window.geometry().size;
+                                Rectangle::from_loc_and_size(Point::from(*loc), size)
+                            });
+
+                            window.with_state(|state| {
+                                state.floating_or_tiled =
+                                    window_state::FloatingOrTiled::Tiled(Some(rect))
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

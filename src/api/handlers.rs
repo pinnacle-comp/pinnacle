@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 
 use async_process::Stdio;
-use futures_lite::AsyncBufReadExt;
+use futures_lite::{AsyncBufReadExt, StreamExt};
 use smithay::{
     desktop::space::SpaceElement,
     input::keyboard::XkbConfig,
@@ -11,22 +11,22 @@ use smithay::{
 };
 
 use crate::{
-    config::{
-        api::msg::{
-            Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
-        },
-        ConnectorSavedState,
+    api::msg::{
+        Args, CallbackId, KeyIntOrString, Msg, OutgoingMsg, Request, RequestId, RequestResponse,
     },
+    config::ConnectorSavedState,
     focus::FocusTarget,
     tag::Tag,
     window::WindowElement,
 };
 
-use super::{State, WithState};
+use crate::state::{State, WithState};
 
 impl State {
+    /// Handle a client message.
     pub fn handle_msg(&mut self, msg: Msg) {
-        // tracing::debug!("Got {msg:?}");
+        tracing::trace!("Got {msg:?}");
+
         match msg {
             Msg::SetKeybind {
                 key,
@@ -78,6 +78,7 @@ impl State {
                         WindowElement::X11(surface) => {
                             surface.close().expect("failed to close x11 win");
                         }
+                        WindowElement::X11OverrideRedirect(_) => (),
                     }
                 }
             }
@@ -360,10 +361,10 @@ impl State {
                     .stream
                     .as_ref()
                     .expect("stream doesn't exist");
-                let mut stream = stream.lock().expect("couldn't lock stream");
+
                 for output in self.space.outputs() {
-                    crate::config::api::send_to_client(
-                        &mut stream,
+                    crate::api::send_to_client(
+                        &mut stream.lock().expect("couldn't lock stream"),
                         &OutgoingMsg::CallCallback {
                             callback_id,
                             args: Some(Args::ConnectForAllOutputs {
@@ -373,6 +374,7 @@ impl State {
                     )
                     .expect("Send to client failed");
                 }
+
                 self.config.output_callback_ids.push(callback_id);
             }
             Msg::SetOutputLocation { output_name, x, y } => {
@@ -452,14 +454,15 @@ impl State {
         }
     }
 
+    /// Handle a client request.
     fn handle_request(&mut self, request_id: RequestId, request: Request) {
         let stream = self
             .api_state
             .stream
-            .as_ref()
-            .expect("Stream doesn't exist")
-            .clone();
+            .clone() // clone due to use of self below
+            .expect("Stream doesn't exist");
         let mut stream = stream.lock().expect("Couldn't lock stream");
+
         match request {
             Request::GetWindows => {
                 let window_ids = self
@@ -468,8 +471,7 @@ impl State {
                     .map(|win| win.with_state(|state| state.id))
                     .collect::<Vec<_>>();
 
-                // FIXME: figure out what to do if error
-                crate::config::api::send_to_client(
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -480,13 +482,16 @@ impl State {
             }
             Request::GetWindowProps { window_id } => {
                 let window = window_id.window(self);
+
                 let size = window
                     .as_ref()
                     .map(|win| (win.geometry().size.w, win.geometry().size.h));
+
                 let loc = window
                     .as_ref()
                     .and_then(|win| self.space.element_location(win))
                     .map(|loc| (loc.x, loc.y));
+
                 let (class, title) = window.as_ref().map_or((None, None), |win| match &win {
                     WindowElement::Wayland(_) => {
                         if let Some(wl_surf) = win.wl_surface() {
@@ -503,19 +508,25 @@ impl State {
                             (None, None)
                         }
                     }
-                    WindowElement::X11(surface) => (Some(surface.class()), Some(surface.title())),
+                    WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                        (Some(surface.class()), Some(surface.title()))
+                    }
                 });
+
                 let focused = window.as_ref().and_then(|win| {
                     let output = win.output(self)?;
                     self.focused_window(&output).map(|foc_win| win == &foc_win)
                 });
+
                 let floating = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.floating_or_tiled.is_floating()));
+
                 let fullscreen_or_maximized = window
                     .as_ref()
                     .map(|win| win.with_state(|state| state.fullscreen_or_maximized));
-                crate::config::api::send_to_client(
+
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -538,7 +549,8 @@ impl State {
                     .outputs()
                     .map(|output| output.name())
                     .collect::<Vec<_>>();
-                crate::config::api::send_to_client(
+
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -552,38 +564,47 @@ impl State {
                     .space
                     .outputs()
                     .find(|output| output.name() == output_name);
+
                 let res = output.as_ref().and_then(|output| {
                     output.current_mode().map(|mode| (mode.size.w, mode.size.h))
                 });
+
                 let refresh_rate = output
                     .as_ref()
                     .and_then(|output| output.current_mode().map(|mode| mode.refresh));
+
                 let model = output
                     .as_ref()
                     .map(|output| output.physical_properties().model);
+
                 let physical_size = output.as_ref().map(|output| {
                     (
                         output.physical_properties().size.w,
                         output.physical_properties().size.h,
                     )
                 });
+
                 let make = output
                     .as_ref()
                     .map(|output| output.physical_properties().make);
+
                 let loc = output
                     .as_ref()
                     .map(|output| (output.current_location().x, output.current_location().y));
+
                 let focused = self
                     .focus_state
                     .focused_output
                     .as_ref()
                     .and_then(|foc_op| output.map(|op| op == foc_op));
+
                 let tag_ids = output.as_ref().map(|output| {
                     output.with_state(|state| {
                         state.tags.iter().map(|tag| tag.id()).collect::<Vec<_>>()
                     })
                 });
-                crate::config::api::send_to_client(
+
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -608,8 +629,8 @@ impl State {
                     .flat_map(|op| op.with_state(|state| state.tags.clone()))
                     .map(|tag| tag.id())
                     .collect::<Vec<_>>();
-                tracing::debug!("GetTags: {:?}", tag_ids);
-                crate::config::api::send_to_client(
+
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -620,13 +641,16 @@ impl State {
             }
             Request::GetTagProps { tag_id } => {
                 let tag = tag_id.tag(self);
+
                 let output_name = tag
                     .as_ref()
                     .and_then(|tag| tag.output(self))
                     .map(|output| output.name());
+
                 let active = tag.as_ref().map(|tag| tag.active());
                 let name = tag.as_ref().map(|tag| tag.name());
-                crate::config::api::send_to_client(
+
+                crate::api::send_to_client(
                     &mut stream,
                     &OutgoingMsg::RequestResponse {
                         request_id,
@@ -642,10 +666,13 @@ impl State {
         }
     }
 
+    // Welcome to indentation hell
+    /// Handle a received spawn command by spawning the command and hooking up any callbacks.
     pub fn handle_spawn(&self, command: Vec<String>, callback_id: Option<CallbackId>) {
         let mut command = command.into_iter();
         let Some(program) = command.next() else {
             // TODO: notify that command was nothing
+            tracing::warn!("got an empty command");
             return;
         };
 
@@ -678,7 +705,7 @@ impl State {
         else {
             // TODO: notify user that program doesn't exist
             tracing::warn!(
-                "tried to run {}, but it doesn't exist",
+                "Tried to run {}, but it doesn't exist",
                 program.to_string_lossy()
             );
             return;
@@ -687,43 +714,35 @@ impl State {
         if let Some(callback_id) = callback_id {
             let stdout = child.stdout.take();
             let stderr = child.stderr.take();
-            let stream_out = self
-                .api_state
-                .stream
-                .as_ref()
-                .expect("Stream doesn't exist")
-                .clone();
+
+            let stream_out = self.api_state.stream.clone().expect("Stream doesn't exist");
             let stream_err = stream_out.clone();
             let stream_exit = stream_out.clone();
 
             if let Some(stdout) = stdout {
                 let future = async move {
-                    // TODO: use BufReader::new().lines()
-                    let mut reader = futures_lite::io::BufReader::new(stdout);
-                    loop {
-                        let mut buf = String::new();
-                        match reader.read_line(&mut buf).await {
-                            Ok(0) => break,
-                            Ok(_) => {
-                                let mut stream = stream_out.lock().expect("Couldn't lock stream");
-                                crate::config::api::send_to_client(
-                                    &mut stream,
-                                    &OutgoingMsg::CallCallback {
-                                        callback_id,
-                                        args: Some(Args::Spawn {
-                                            stdout: Some(buf.trim_end_matches('\n').to_string()),
-                                            stderr: None,
-                                            exit_code: None,
-                                            exit_msg: None,
-                                        }),
-                                    },
+                    let mut reader = futures_lite::io::BufReader::new(stdout).lines();
+                    while let Some(line) = reader.next().await {
+                        match line {
+                            Ok(line) => {
+                                let msg = OutgoingMsg::CallCallback {
+                                    callback_id,
+                                    args: Some(Args::Spawn {
+                                        stdout: Some(line),
+                                        stderr: None,
+                                        exit_code: None,
+                                        exit_msg: None,
+                                    }),
+                                };
+
+                                crate::api::send_to_client(
+                                    &mut stream_out.lock().expect("Couldn't lock stream"),
+                                    &msg,
                                 )
                                 .expect("Send to client failed"); // TODO: notify instead of crash
                             }
-                            Err(err) => {
-                                tracing::warn!("child read err: {err}");
-                                break;
-                            }
+                            // TODO: possibly break on err?
+                            Err(err) => tracing::warn!("read err: {err}"),
                         }
                     }
                 };
@@ -733,36 +752,34 @@ impl State {
                     tracing::error!("Failed to schedule future: {err}");
                 }
             }
+
             if let Some(stderr) = stderr {
                 let future = async move {
-                    let mut reader = futures_lite::io::BufReader::new(stderr);
-                    loop {
-                        let mut buf = String::new();
-                        match reader.read_line(&mut buf).await {
-                            Ok(0) => break,
-                            Ok(_) => {
-                                let mut stream = stream_err.lock().expect("Couldn't lock stream");
-                                crate::config::api::send_to_client(
-                                    &mut stream,
-                                    &OutgoingMsg::CallCallback {
-                                        callback_id,
-                                        args: Some(Args::Spawn {
-                                            stdout: None,
-                                            stderr: Some(buf.trim_end_matches('\n').to_string()),
-                                            exit_code: None,
-                                            exit_msg: None,
-                                        }),
-                                    },
+                    let mut reader = futures_lite::io::BufReader::new(stderr).lines();
+                    while let Some(line) = reader.next().await {
+                        match line {
+                            Ok(line) => {
+                                let msg = OutgoingMsg::CallCallback {
+                                    callback_id,
+                                    args: Some(Args::Spawn {
+                                        stdout: None,
+                                        stderr: Some(line),
+                                        exit_code: None,
+                                        exit_msg: None,
+                                    }),
+                                };
+
+                                crate::api::send_to_client(
+                                    &mut stream_err.lock().expect("Couldn't lock stream"),
+                                    &msg,
                                 )
                                 .expect("Send to client failed"); // TODO: notify instead of crash
                             }
-                            Err(err) => {
-                                tracing::warn!("child read err: {err}");
-                                break;
-                            }
+                            Err(err) => tracing::warn!("read err: {err}"),
                         }
                     }
                 };
+
                 if let Err(err) = self.async_scheduler.schedule(future) {
                     tracing::error!("Failed to schedule future: {err}");
                 }
@@ -771,18 +788,19 @@ impl State {
             let future = async move {
                 match child.status().await {
                     Ok(exit_status) => {
-                        let mut stream = stream_exit.lock().expect("Couldn't lock stream");
-                        crate::config::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::CallCallback {
-                                callback_id,
-                                args: Some(Args::Spawn {
-                                    stdout: None,
-                                    stderr: None,
-                                    exit_code: exit_status.code(),
-                                    exit_msg: Some(exit_status.to_string()),
-                                }),
-                            },
+                        let msg = OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::Spawn {
+                                stdout: None,
+                                stderr: None,
+                                exit_code: exit_status.code(),
+                                exit_msg: Some(exit_status.to_string()),
+                            }),
+                        };
+
+                        crate::api::send_to_client(
+                            &mut stream_exit.lock().expect("Couldn't lock stream"),
+                            &msg,
                         )
                         .expect("Send to client failed"); // TODO: notify instead of crash
                     }
@@ -791,6 +809,7 @@ impl State {
                     }
                 }
             };
+
             if let Err(err) = self.async_scheduler.schedule(future) {
                 tracing::error!("Failed to schedule future: {err}");
             }

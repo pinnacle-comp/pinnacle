@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, sync::atomic::AtomicU32, time::Duration};
+pub mod rules;
+
+use std::{cell::RefCell, time::Duration};
 
 use smithay::{
     backend::input::KeyState,
@@ -8,10 +10,10 @@ use smithay::{
         space::SpaceElement,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
-            take_presentation_feedback_surface_tree, under_from_surface_tree,
-            with_surfaces_surface_tree, OutputPresentationFeedback,
+            take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
+            OutputPresentationFeedback,
         },
-        Window, WindowSurfaceType,
+        Window,
     },
     input::{
         keyboard::{KeyboardTarget, KeysymHandle, ModifiersState},
@@ -25,7 +27,7 @@ use smithay::{
     },
     utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
-        compositor::{self, Blocker, BlockerState, SurfaceData},
+        compositor::{self, SurfaceData},
         dmabuf::DmabufFeedback,
         seat::WaylandFocus,
         shell::xdg::XdgToplevelSurfaceData,
@@ -33,42 +35,31 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::{
-    config::api::msg::window_rules::{self, WindowRule},
-    state::{State, WithState},
-};
+use crate::state::{State, WithState};
 
-use self::window_state::{FloatingOrTiled, LocationRequestState, WindowElementState};
+use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
+/// The different types of windows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WindowElement {
+    /// This is a native Wayland window.
     Wayland(Window),
+    /// This is an Xwayland window.
     X11(X11Surface),
+    /// This is an Xwayland override redirect window, which should not be messed with.
+    X11OverrideRedirect(X11Surface),
 }
 
 impl WindowElement {
-    pub fn surface_under(
-        &self,
-        location: Point<f64, Logical>,
-        window_type: WindowSurfaceType,
-    ) -> Option<(WlSurface, Point<i32, Logical>)> {
-        match self {
-            WindowElement::Wayland(window) => window.surface_under(location, window_type),
-            WindowElement::X11(surface) => surface.wl_surface().and_then(|wl_surf| {
-                under_from_surface_tree(&wl_surf, location, (0, 0), window_type)
-            }),
-        }
-    }
-
     pub fn with_surfaces<F>(&self, processor: F)
     where
         F: FnMut(&WlSurface, &SurfaceData) + Copy,
     {
         match self {
             WindowElement::Wayland(window) => window.with_surfaces(processor),
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 if let Some(surface) = surface.wl_surface() {
                     with_surfaces_surface_tree(&surface, processor);
                 }
@@ -90,7 +81,7 @@ impl WindowElement {
             WindowElement::Wayland(window) => {
                 window.send_frame(output, time, throttle, primary_scan_out_output)
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 if let Some(surface) = surface.wl_surface() {
                     send_frames_surface_tree(
                         &surface,
@@ -121,7 +112,7 @@ impl WindowElement {
                     select_dmabuf_feedback,
                 );
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 if let Some(surface) = surface.wl_surface() {
                     send_dmabuf_feedback_surface_tree(
                         &surface,
@@ -151,7 +142,7 @@ impl WindowElement {
                     presentation_feedback_flags,
                 );
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 if let Some(surface) = surface.wl_surface() {
                     take_presentation_feedback_surface_tree(
                         &surface,
@@ -167,14 +158,18 @@ impl WindowElement {
     pub fn wl_surface(&self) -> Option<WlSurface> {
         match self {
             WindowElement::Wayland(window) => window.wl_surface(),
-            WindowElement::X11(surface) => surface.wl_surface(),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                surface.wl_surface()
+            }
         }
     }
 
     pub fn user_data(&self) -> &UserDataMap {
         match self {
             WindowElement::Wayland(window) => window.user_data(),
-            WindowElement::X11(surface) => surface.user_data(),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                surface.user_data()
+            }
         }
     }
 
@@ -183,7 +178,7 @@ impl WindowElement {
     ///
     /// Xwayland windows will still receive a configure.
     ///
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window.
     // TODO: ^ does that make things flicker?
     pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
         match self {
@@ -192,10 +187,13 @@ impl WindowElement {
                     state.size = Some(new_geo.size);
                 });
             }
-            WindowElement::X11(surface) => {
-                surface
-                    .configure(new_geo)
-                    .expect("failed to configure x11 win");
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                // TODO: maybe move this check elsewhere idk
+                if !surface.is_override_redirect() {
+                    surface
+                        .configure(new_geo)
+                        .expect("failed to configure x11 win");
+                }
             }
         }
         self.with_state(|state| {
@@ -217,7 +215,9 @@ impl WindowElement {
                         .clone()
                 })
             }
-            WindowElement::X11(surface) => Some(surface.class()),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                Some(surface.class())
+            }
         }
     }
 
@@ -235,7 +235,9 @@ impl WindowElement {
                         .clone()
                 })
             }
-            WindowElement::X11(surface) => Some(surface.title()),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                Some(surface.title())
+            }
         }
     }
 
@@ -243,11 +245,13 @@ impl WindowElement {
     ///
     /// This method gets the first tag the window has and returns its output.
     ///
-    /// This method uses a [`RefCell`].
+    /// RefCell Safety: This method uses a [`RefCell`] on this window and every mapped output.
     pub fn output(&self, state: &State) -> Option<Output> {
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
     }
 
+    /// Returns whether or not this window has an active tag.
+    ///
     /// RefCell Safety: This uses RefCells on both `self` and everything in `outputs`.
     pub fn is_on_active_tag<'a>(&self, outputs: impl IntoIterator<Item = &'a Output>) -> bool {
         let tags = outputs
@@ -261,6 +265,30 @@ impl WindowElement {
                 .iter()
                 .any(|tag| tags.iter().any(|tag2| tag == tag2))
         })
+    }
+
+    /// Place this window on the given output, giving it the output's focused tags.
+    ///
+    /// RefCell Safety: Uses refcells on both the window and the output.
+    pub fn place_on_output(&self, output: &Output) {
+        self.with_state(|state| {
+            state.tags = output.with_state(|state| {
+                let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                if !output_tags.is_empty() {
+                    output_tags
+                } else if let Some(first_tag) = state.tags.first() {
+                    vec![first_tag.clone()]
+                } else {
+                    vec![]
+                }
+            });
+
+            tracing::debug!(
+                "Placed window on {} with tags {:?}",
+                output.name(),
+                state.tags
+            );
+        });
     }
 
     /// Returns `true` if the window element is [`Wayland`].
@@ -278,13 +306,23 @@ impl WindowElement {
     pub fn is_x11(&self) -> bool {
         matches!(self, Self::X11(..))
     }
+
+    /// Returns `true` if the window element is [`X11OverrideRedirect`].
+    ///
+    /// [`X11OverrideRedirect`]: WindowElement::X11OverrideRedirect
+    #[must_use]
+    pub fn is_x11_override_redirect(&self) -> bool {
+        matches!(self, Self::X11OverrideRedirect(..))
+    }
 }
 
 impl IsAlive for WindowElement {
     fn alive(&self) -> bool {
         match self {
             WindowElement::Wayland(window) => window.alive(),
-            WindowElement::X11(surface) => surface.alive(),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                surface.alive()
+            }
         }
     }
 }
@@ -293,7 +331,9 @@ impl PointerTarget<State> for WindowElement {
     fn frame(&self, seat: &Seat<State>, data: &mut State) {
         match self {
             WindowElement::Wayland(window) => window.frame(seat, data),
-            WindowElement::X11(surface) => surface.frame(seat, data),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                surface.frame(seat, data)
+            }
         }
     }
 
@@ -301,7 +341,9 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::enter(window, seat, data, event),
-            WindowElement::X11(surface) => PointerTarget::enter(surface, seat, data, event),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                PointerTarget::enter(surface, seat, data, event)
+            }
         }
     }
 
@@ -309,7 +351,9 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::motion(window, seat, data, event),
-            WindowElement::X11(surface) => PointerTarget::motion(surface, seat, data, event),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                PointerTarget::motion(surface, seat, data, event)
+            }
         }
     }
 
@@ -324,7 +368,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::Wayland(window) => {
                 PointerTarget::relative_motion(window, seat, data, event);
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::relative_motion(surface, seat, data, event);
             }
         }
@@ -339,7 +383,9 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::button(window, seat, data, event),
-            WindowElement::X11(surface) => PointerTarget::button(surface, seat, data, event),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                PointerTarget::button(surface, seat, data, event)
+            }
         }
     }
 
@@ -347,7 +393,9 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => PointerTarget::axis(window, seat, data, frame),
-            WindowElement::X11(surface) => PointerTarget::axis(surface, seat, data, frame),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                PointerTarget::axis(surface, seat, data, frame)
+            }
         }
     }
 
@@ -357,7 +405,9 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::Wayland(window) => {
                 PointerTarget::leave(window, seat, data, serial, time);
             }
-            WindowElement::X11(surface) => PointerTarget::leave(surface, seat, data, serial, time),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                PointerTarget::leave(surface, seat, data, serial, time)
+            }
         }
     }
 
@@ -446,14 +496,18 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::Wayland(window) => {
                 KeyboardTarget::enter(window, seat, data, keys, serial);
             }
-            WindowElement::X11(surface) => KeyboardTarget::enter(surface, seat, data, keys, serial),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                KeyboardTarget::enter(surface, seat, data, keys, serial)
+            }
         }
     }
 
     fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial) {
         match self {
             WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, data, serial),
-            WindowElement::X11(surface) => KeyboardTarget::leave(surface, seat, data, serial),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                KeyboardTarget::leave(surface, seat, data, serial)
+            }
         }
     }
 
@@ -470,7 +524,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::Wayland(window) => {
                 KeyboardTarget::key(window, seat, data, key, state, serial, time);
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::key(surface, seat, data, key, state, serial, time);
             }
         }
@@ -487,7 +541,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::Wayland(window) => {
                 KeyboardTarget::modifiers(window, seat, data, modifiers, serial);
             }
-            WindowElement::X11(surface) => {
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::modifiers(surface, seat, data, modifiers, serial);
             }
         }
@@ -499,7 +553,9 @@ impl SpaceElement for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => SpaceElement::geometry(window),
-            WindowElement::X11(surface) => SpaceElement::geometry(surface),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::geometry(surface)
+            }
         }
     }
 
@@ -507,7 +563,9 @@ impl SpaceElement for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => SpaceElement::bbox(window),
-            WindowElement::X11(surface) => SpaceElement::bbox(surface),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::bbox(surface)
+            }
         }
     }
 
@@ -515,42 +573,54 @@ impl SpaceElement for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => SpaceElement::is_in_input_region(window, point),
-            WindowElement::X11(surface) => SpaceElement::is_in_input_region(surface, point),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::is_in_input_region(surface, point)
+            }
         }
     }
 
     fn z_index(&self) -> u8 {
         match self {
             WindowElement::Wayland(window) => SpaceElement::z_index(window),
-            WindowElement::X11(surface) => SpaceElement::z_index(surface),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::z_index(surface)
+            }
         }
     }
 
     fn set_activate(&self, activated: bool) {
         match self {
             WindowElement::Wayland(window) => SpaceElement::set_activate(window, activated),
-            WindowElement::X11(surface) => SpaceElement::set_activate(surface, activated),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::set_activate(surface, activated)
+            }
         }
     }
 
     fn output_enter(&self, output: &Output, overlap: Rectangle<i32, Logical>) {
         match self {
             WindowElement::Wayland(window) => SpaceElement::output_enter(window, output, overlap),
-            WindowElement::X11(surface) => SpaceElement::output_enter(surface, output, overlap),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::output_enter(surface, output, overlap)
+            }
         }
     }
 
     fn output_leave(&self, output: &Output) {
         match self {
             WindowElement::Wayland(window) => SpaceElement::output_leave(window, output),
-            WindowElement::X11(surface) => SpaceElement::output_leave(surface, output),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::output_leave(surface, output)
+            }
         }
     }
 
     fn refresh(&self) {
         match self {
             WindowElement::Wayland(window) => SpaceElement::refresh(window),
-            WindowElement::X11(surface) => SpaceElement::refresh(surface),
+            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                SpaceElement::refresh(surface)
+            }
         }
     }
 }
@@ -564,7 +634,7 @@ impl WithState for WindowElement {
     {
         let state = self
             .user_data()
-            .get_or_insert(RefCell::<Self::State>::default);
+            .get_or_insert(|| RefCell::new(WindowElementState::new()));
 
         func(&mut state.borrow_mut())
     }
@@ -583,123 +653,5 @@ impl State {
                     .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
                     .cloned()
             })
-    }
-}
-
-pub struct WindowBlocker;
-pub static BLOCKER_COUNTER: AtomicU32 = AtomicU32::new(0);
-
-impl Blocker for WindowBlocker {
-    fn state(&self) -> BlockerState {
-        if BLOCKER_COUNTER.load(std::sync::atomic::Ordering::SeqCst) > 0 {
-            BlockerState::Pending
-        } else {
-            BlockerState::Released
-        }
-    }
-}
-
-impl State {
-    pub fn apply_window_rules(&mut self, window: &WindowElement) {
-        tracing::debug!("Applying window rules");
-        for (cond, rule) in self.config.window_rules.iter() {
-            if cond.is_met(self, window) {
-                let WindowRule {
-                    output,
-                    tags,
-                    floating_or_tiled,
-                    fullscreen_or_maximized,
-                    size,
-                    location,
-                } = rule;
-
-                // TODO: If both `output` and `tags` are specified, `tags` will apply over
-                // |     `output`.
-
-                if let Some(output_name) = output {
-                    if let Some(output) = output_name.output(self) {
-                        let tags = output
-                            .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
-
-                        window.with_state(|state| state.tags = tags.clone());
-                    }
-                }
-
-                if let Some(tag_ids) = tags {
-                    let tags = tag_ids
-                        .iter()
-                        .filter_map(|tag_id| tag_id.tag(self))
-                        .collect::<Vec<_>>();
-
-                    window.with_state(|state| state.tags = tags.clone());
-                }
-
-                if let Some(floating_or_tiled) = floating_or_tiled {
-                    match floating_or_tiled {
-                        window_rules::FloatingOrTiled::Floating => {
-                            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-                                window.toggle_floating();
-                            }
-                        }
-                        window_rules::FloatingOrTiled::Tiled => {
-                            if window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                                window.toggle_floating();
-                            }
-                        }
-                    }
-                }
-
-                if let Some(fs_or_max) = fullscreen_or_maximized {
-                    window.with_state(|state| state.fullscreen_or_maximized = *fs_or_max);
-                }
-
-                if let Some((w, h)) = size {
-                    let mut window_size = window.geometry().size;
-                    window_size.w = u32::from(*w) as i32;
-                    window_size.h = u32::from(*h) as i32;
-
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        FloatingOrTiled::Floating(mut rect) => {
-                            rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Floating(rect)
-                            });
-                        }
-                        FloatingOrTiled::Tiled(mut rect) => {
-                            if let Some(rect) = rect.as_mut() {
-                                rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            }
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Tiled(rect)
-                            });
-                        }
-                    }
-                }
-
-                if let Some(loc) = location {
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        FloatingOrTiled::Floating(mut rect) => {
-                            rect.loc = (*loc).into();
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Floating(rect)
-                            });
-                            self.space.map_element(window.clone(), *loc, false);
-                        }
-                        FloatingOrTiled::Tiled(rect) => {
-                            // If the window is tiled, don't set the size. Instead, set
-                            // what the size will be when it gets set to floating.
-                            let rect = rect.unwrap_or_else(|| {
-                                let size = window.geometry().size;
-                                Rectangle::from_loc_and_size(Point::from(*loc), size)
-                            });
-
-                            window.with_state(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Tiled(Some(rect))
-                            });
-                        }
-                    }
-                }
-            }
-        }
     }
 }

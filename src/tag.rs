@@ -16,18 +16,22 @@ use crate::{
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
+/// A unique id for a [`Tag`].
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum TagId {
+    /// The tag given was invalid/nonexistent
     None,
     #[serde(untagged)]
     Some(u32),
 }
 
 impl TagId {
+    /// Get the next available `TagId`.
     fn next() -> Self {
         Self::Some(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
+    /// Get the tag associated with this id.
     pub fn tag(&self, state: &State) -> Option<Tag> {
         state
             .space
@@ -65,6 +69,10 @@ impl PartialEq for TagInner {
 
 impl Eq for TagInner {}
 
+/// A marker for windows.
+///
+/// A window may have 0 or more tags, and you can display 0 or more tags
+/// on each output at a time.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag(Rc<RefCell<TagInner>>);
 
@@ -105,6 +113,9 @@ impl Tag {
         })))
     }
 
+    /// Get the output this tag is on.
+    ///
+    /// RefCell Safety: This uses RefCells on every mapped output.
     pub fn output(&self, state: &State) -> Option<Output> {
         state
             .space

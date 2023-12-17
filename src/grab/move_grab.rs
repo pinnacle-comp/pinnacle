@@ -24,14 +24,17 @@ use crate::{
     },
 };
 
-pub struct MoveSurfaceGrab<S: SeatHandler> {
-    pub start_data: GrabStartData<S>,
+/// Data for moving a window.
+pub struct MoveSurfaceGrab {
+    pub start_data: GrabStartData<State>,
+    /// The window being moved
     pub window: WindowElement,
     pub initial_window_loc: Point<i32, Logical>,
+    /// Which button initiated the grab
     pub button_used: u32,
 }
 
-impl PointerGrab<State> for MoveSurfaceGrab<State> {
+impl PointerGrab<State> for MoveSurfaceGrab {
     fn frame(&mut self, data: &mut State, handle: &mut PointerInnerHandle<'_, State>) {
         handle.frame(data);
     }
@@ -60,14 +63,11 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
                 .expect("failed to raise x11 win");
         }
 
-        // tracing::info!("window geo is: {:?}", self.window.geometry());
-        // tracing::info!("loc is: {:?}", data.space.element_location(&self.window));
-
-        let tiled = self
+        let is_tiled = self
             .window
             .with_state(|state| state.floating_or_tiled.is_tiled());
 
-        if tiled {
+        if is_tiled {
             // INFO: this is being used instead of space.element_under(event.location) because that
             // |     uses the bounding box, which is different from the actual geometry
             let window_under = state
@@ -258,6 +258,7 @@ impl PointerGrab<State> for MoveSurfaceGrab<State> {
     }
 }
 
+/// The application initiated a move grab e.g. when you drag a titlebar.
 pub fn move_request_client(
     state: &mut State,
     surface: &WlSurface,
@@ -290,6 +291,7 @@ pub fn move_request_client(
     }
 }
 
+/// The compositor initiated a move grab e.g. you hold the mod key and drag.
 pub fn move_request_server(
     state: &mut State,
     surface: &WlSurface,

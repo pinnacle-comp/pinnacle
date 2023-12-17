@@ -12,6 +12,7 @@ use crate::{
 /// A unique identifier for an output.
 ///
 /// An empty string represents an invalid output.
+// TODO: maybe encode that in the type
 #[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct OutputName(pub String);
 
@@ -26,6 +27,7 @@ impl OutputName {
     }
 }
 
+/// The state of an output
 #[derive(Default)]
 pub struct OutputState {
     pub tags: Vec<Tag>,

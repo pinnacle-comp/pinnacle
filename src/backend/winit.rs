@@ -222,7 +222,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                         state.process_input_event(input_evt);
                     }
                     WinitEvent::Refresh => {
-                        state.render_window(&output);
+                        state.render_winit_window(&output);
                     }
                 });
 
@@ -233,7 +233,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     }
                 };
 
-                state.render_window(&output);
+                state.render_winit_window(&output);
 
                 TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
             });
@@ -260,7 +260,7 @@ pub fn run_winit() -> anyhow::Result<()> {
 }
 
 impl State {
-    fn render_window(&mut self, output: &Output) {
+    fn render_winit_window(&mut self, output: &Output) {
         let winit = self.backend.winit_mut();
 
         let pending_wins = self
@@ -335,7 +335,6 @@ impl State {
             winit.backend.renderer(),
             &self.space,
             &self.focus_state.focus_stack,
-            &self.override_redirect_windows,
             self.pointer_location,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),

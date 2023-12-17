@@ -85,6 +85,8 @@ pub trait BackendData: 'static {
     fn early_import(&mut self, surface: &WlSurface);
 }
 
+/// Update surface primary scanout outputs and send frames and dmabuf feedback to visible windows
+/// and layers.
 pub fn post_repaint(
     output: &Output,
     render_element_states: &RenderElementStates,

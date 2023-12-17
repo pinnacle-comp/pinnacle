@@ -5,7 +5,7 @@ use std::{
     ffi::OsString,
     os::fd::FromRawFd,
     path::Path,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -51,7 +51,6 @@ use smithay::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{EventLoop, LoopHandle, RegistrationToken},
         drm::{
-            self,
             control::{connector, crtc, ModeTypeFlags},
             Device,
         },
@@ -67,7 +66,6 @@ use smithay::{
     },
     utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
-    xwayland::X11Surface,
 };
 use smithay_drm_extras::{
     drm_scanner::{DrmScanEvent, DrmScanner},
@@ -75,11 +73,9 @@ use smithay_drm_extras::{
 };
 
 use crate::{
+    api::msg::{Args, OutgoingMsg},
     backend::Backend,
-    config::{
-        api::msg::{Args, OutgoingMsg},
-        ConnectorSavedState,
-    },
+    config::ConnectorSavedState,
     output::OutputName,
     render::{pointer::PointerElement, take_presentation_feedback},
     state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
@@ -107,9 +103,9 @@ struct UdevOutputData {
     device_id: DrmNode,
     /// The [Crtc][crtc::Handle] the output is pushing to
     crtc: crtc::Handle,
-    mode: Option<drm::control::Mode>,
 }
 
+// TODO: document desperately
 pub struct Udev {
     pub session: LibSeatSession,
     display_handle: DisplayHandle,
@@ -121,8 +117,6 @@ pub struct Udev {
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
-
-    last_vblank_time: Instant,
 }
 
 impl Backend {
@@ -138,11 +132,11 @@ impl Backend {
 }
 
 impl Udev {
+    /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
-        // tracing::debug!(state = ?surface.render_state, "scheduling render");
 
         match &surface.render_state {
             RenderState::Idle => {
@@ -167,10 +161,10 @@ impl State {
     /// This will first clear the overlay plane to prevent any lingering artifacts,
     /// then switch the vt.
     ///
-    /// Yells at you when called on the winit backend. Bad developer. Very bad.
+    /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         match &mut self.backend {
-            Backend::Winit(_) => tracing::error!("Called `switch_vt` on winit"),
+            Backend::Winit(_) => (),
             Backend::Udev(udev) => {
                 for backend in udev.backends.values_mut() {
                     for surface in backend.surfaces.values_mut() {
@@ -279,8 +273,6 @@ pub fn run_udev() -> anyhow::Result<()> {
         pointer_image: crate::cursor::Cursor::load(),
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
-
-        last_vblank_time: Instant::now(),
     };
 
     let display_handle = display.handle();
@@ -539,6 +531,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: document desperately
 struct UdevBackendData {
     surfaces: HashMap<crtc::Handle, RenderSurface>,
     gbm: GbmDevice<DrmDeviceFd>,
@@ -895,29 +888,9 @@ impl State {
         output.change_current_state(Some(wl_mode), None, None, Some(position));
         self.space.map_output(&output, position);
 
-        // The preferred mode with the highest refresh rate
-        // Logic from niri
-        let mode = connector
-            .modes()
-            .iter()
-            .max_by(|mode1, mode2| {
-                let mode1_preferred = mode1.mode_type().contains(ModeTypeFlags::PREFERRED);
-                let mode2_preferred = mode2.mode_type().contains(ModeTypeFlags::PREFERRED);
-
-                use std::cmp::Ordering;
-
-                match (mode1_preferred, mode2_preferred) {
-                    (true, false) => Ordering::Greater,
-                    (false, true) => Ordering::Less,
-                    _ => mode1.vrefresh().cmp(&mode2.vrefresh()),
-                }
-            })
-            .copied();
-
         output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
             device_id: node,
-            mode,
         });
 
         let allocator = GbmAllocator::new(
@@ -1020,10 +993,10 @@ impl State {
                         .api_state
                         .stream
                         .as_ref()
-                        .expect("Stream doesn't exist");
-                    let mut stream = stream.lock().expect("Couldn't lock stream");
+                        .expect("stream doesn't exist");
+                    let mut stream = stream.lock().expect("couldn't lock stream");
                     for callback_id in dt.state.config.output_callback_ids.iter() {
-                        crate::config::api::send_to_client(
+                        crate::api::send_to_client(
                             &mut stream,
                             &OutgoingMsg::CallCallback {
                                 callback_id: *callback_id,
@@ -1320,7 +1293,6 @@ impl State {
             output,
             &self.space,
             &windows,
-            &self.override_redirect_windows,
             self.dnd_icon.as_ref(),
             &mut self.cursor_status,
             &pointer_image,
@@ -1340,11 +1312,7 @@ fn render_surface_for_output<'a>(
     output: &Output,
     backends: &'a mut HashMap<DrmNode, UdevBackendData>,
 ) -> Option<&'a mut RenderSurface> {
-    let UdevOutputData {
-        device_id,
-        crtc,
-        mode: _,
-    } = output.user_data().get()?;
+    let UdevOutputData { device_id, crtc } = output.user_data().get()?;
 
     backends
         .get_mut(device_id)
@@ -1353,6 +1321,8 @@ fn render_surface_for_output<'a>(
 
 /// Render windows, layers, and everything else needed to the given [`RenderSurface`].
 /// Also queues the frame for scanout.
+///
+/// `windows` should be provided in the order of z-rendering, top to bottom.
 #[allow(clippy::too_many_arguments)]
 fn render_surface(
     surface: &mut RenderSurface,
@@ -1361,7 +1331,6 @@ fn render_surface(
 
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-    override_redirect_windows: &[X11Surface],
 
     dnd_icon: Option<&WlSurface>,
     cursor_status: &mut CursorImageStatus,
@@ -1432,7 +1401,6 @@ fn render_surface(
         renderer,
         space,
         windows,
-        override_redirect_windows,
         pointer_location,
         cursor_status,
         dnd_icon,

@@ -1,33 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod libinput;
+
 use std::collections::HashMap;
 
 use crate::{
-    config::api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
+    api::msg::{CallbackId, Modifier, ModifierMask, MouseEdge, OutgoingMsg},
     focus::FocusTarget,
     state::WithState,
     window::WindowElement,
 };
 use smithay::{
-    backend::{
-        input::{
-            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-            KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
-        },
-        libinput::LibinputInputBackend,
+    backend::input::{
+        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+        KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{
         keyboard::{keysyms, FilterResult},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
-    reexports::input::{self, AccelProfile, ClickMethod, Led, ScrollMethod, TapButtonMap},
+    reexports::input::{self, Led},
     utils::{Logical, Point, SERIAL_COUNTER},
     wayland::{seat::WaylandFocus, shell::wlr_layer},
 };
 use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
+
+use self::libinput::LibinputSetting;
 
 #[derive(Default, Debug)]
 pub struct InputState {
@@ -37,7 +38,9 @@ pub struct InputState {
     pub mousebinds: HashMap<(ModifierMask, u32, MouseEdge), CallbackId>,
     pub reload_keybind: Option<(ModifierMask, Keysym)>,
     pub kill_keybind: Option<(ModifierMask, Keysym)>,
+    /// User defined libinput settings that will be applied
     pub libinput_settings: Vec<LibinputSetting>,
+    /// All libinput devices that have been connected
     pub libinput_devices: Vec<input::Device>,
 }
 
@@ -49,131 +52,14 @@ impl InputState {
 
 #[derive(Debug)]
 enum KeyAction {
+    /// Call a callback from a config process
     CallCallback(CallbackId),
     Quit,
     SwitchVt(i32),
     ReloadConfig,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(remote = "AccelProfile")]
-enum AccelProfileDef {
-    Flat,
-    Adaptive,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(remote = "ClickMethod")]
-enum ClickMethodDef {
-    ButtonAreas,
-    Clickfinger,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(remote = "ScrollMethod")]
-enum ScrollMethodDef {
-    NoScroll,
-    TwoFinger,
-    Edge,
-    OnButtonDown,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(remote = "TapButtonMap")]
-enum TapButtonMapDef {
-    LeftRightMiddle,
-    LeftMiddleRight,
-}
-
-#[derive(Debug, PartialEq, Copy, Clone, serde::Deserialize)]
-pub enum LibinputSetting {
-    #[serde(with = "AccelProfileDef")]
-    AccelProfile(AccelProfile),
-    AccelSpeed(f64),
-    CalibrationMatrix([f32; 6]),
-    #[serde(with = "ClickMethodDef")]
-    ClickMethod(ClickMethod),
-    DisableWhileTypingEnabled(bool),
-    LeftHanded(bool),
-    MiddleEmulationEnabled(bool),
-    RotationAngle(u32),
-    #[serde(with = "ScrollMethodDef")]
-    ScrollMethod(ScrollMethod),
-    NaturalScrollEnabled(bool),
-    ScrollButton(u32),
-    #[serde(with = "TapButtonMapDef")]
-    TapButtonMap(TapButtonMap),
-    TapDragEnabled(bool),
-    TapDragLockEnabled(bool),
-    TapEnabled(bool),
-}
-
-impl LibinputSetting {
-    pub fn apply_to_device(&self, device: &mut input::Device) {
-        let _ = match self {
-            LibinputSetting::AccelProfile(profile) => device.config_accel_set_profile(*profile),
-            LibinputSetting::AccelSpeed(speed) => device.config_accel_set_speed(*speed),
-            LibinputSetting::CalibrationMatrix(matrix) => {
-                device.config_calibration_set_matrix(*matrix)
-            }
-            LibinputSetting::ClickMethod(method) => device.config_click_set_method(*method),
-            LibinputSetting::DisableWhileTypingEnabled(enabled) => {
-                device.config_dwt_set_enabled(*enabled)
-            }
-            LibinputSetting::LeftHanded(enabled) => device.config_left_handed_set(*enabled),
-            LibinputSetting::MiddleEmulationEnabled(enabled) => {
-                device.config_middle_emulation_set_enabled(*enabled)
-            }
-            LibinputSetting::RotationAngle(angle) => device.config_rotation_set_angle(*angle),
-            LibinputSetting::ScrollMethod(method) => device.config_scroll_set_method(*method),
-            LibinputSetting::NaturalScrollEnabled(enabled) => {
-                device.config_scroll_set_natural_scroll_enabled(*enabled)
-            }
-            LibinputSetting::ScrollButton(button) => device.config_scroll_set_button(*button),
-            LibinputSetting::TapButtonMap(map) => device.config_tap_set_button_map(*map),
-            LibinputSetting::TapDragEnabled(enabled) => {
-                device.config_tap_set_drag_enabled(*enabled)
-            }
-            LibinputSetting::TapDragLockEnabled(enabled) => {
-                device.config_tap_set_drag_lock_enabled(*enabled)
-            }
-            LibinputSetting::TapEnabled(enabled) => device.config_tap_set_enabled(*enabled),
-        };
-    }
-}
-
-// We want to completely replace old settings, so we hash only the discriminant.
-impl std::hash::Hash for LibinputSetting {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        core::mem::discriminant(self).hash(state);
-    }
-}
-
 impl State {
-    /// Apply current libinput settings to new devices.
-    pub fn apply_libinput_settings(&mut self, event: &InputEvent<LibinputInputBackend>) {
-        let mut device = match event {
-            InputEvent::DeviceAdded { device } => device.clone(),
-            InputEvent::DeviceRemoved { device } => {
-                self.input_state
-                    .libinput_devices
-                    .retain(|dev| dev != device);
-                return;
-            }
-            _ => return,
-        };
-
-        if self.input_state.libinput_devices.contains(&device) {
-            return;
-        }
-
-        for setting in self.input_state.libinput_settings.iter() {
-            setting.apply_to_device(&mut device);
-        }
-
-        self.input_state.libinput_devices.push(device);
-    }
-
     pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
         match event {
             // TODO: rest of input events
@@ -218,58 +104,46 @@ impl State {
             })
         });
 
-        // I think I'm going a bit too far with the functional stuff
+        if let Some(window) = top_fullscreen_window {
+            Some((FocusTarget::from(window.clone()), output_geo.loc))
+        } else if let (Some(layer), _) | (None, Some(layer)) = (
+            layers.layer_under(wlr_layer::Layer::Overlay, point),
+            layers.layer_under(wlr_layer::Layer::Top, point),
+        ) {
+            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+        } else if let Some(ret) = self
+            .space
+            .elements()
+            .rev()
+            .filter(|win| win.is_on_active_tag(self.space.outputs()))
+            .find_map(|win| {
+                let loc = self
+                    .space
+                    .element_location(win)
+                    .expect("called elem loc on unmapped win")
+                    - win.geometry().loc;
 
-        // The topmost fullscreen window
-        top_fullscreen_window
-            .map(|window| (FocusTarget::from(window.clone()), output_geo.loc))
-            .or_else(|| {
-                // The topmost layer surface in Overlay or Top
-                layers
-                    .layer_under(wlr_layer::Layer::Overlay, point)
-                    .or_else(|| layers.layer_under(wlr_layer::Layer::Top, point))
-                    .map(|layer| {
-                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
-                    })
+                win.is_in_input_region(&(point - loc.to_f64()))
+                    .then(|| (win.clone().into(), loc))
             })
-            .or_else(|| {
-                // The topmost window
-                self.space
-                    .elements()
-                    .rev()
-                    .filter(|win| win.is_on_active_tag(self.space.outputs()))
-                    .find_map(|win| {
-                        let loc = self
-                            .space
-                            .element_location(win)
-                            .expect("called elem loc on unmapped win")
-                            - win.geometry().loc;
-
-                        if win.is_in_input_region(&(point - loc.to_f64())) {
-                            Some((win.clone().into(), loc))
-                        } else {
-                            None
-                        }
-                    })
-            })
-            .or_else(|| {
-                // The topmost layer surface in Bottom or Background
-                layers
-                    .layer_under(wlr_layer::Layer::Bottom, point)
-                    .or_else(|| layers.layer_under(wlr_layer::Layer::Background, point))
-                    .map(|layer| {
-                        let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-                        (FocusTarget::from(layer.clone()), output_geo.loc + layer_loc)
-                    })
-            })
+        {
+            Some(ret)
+        } else if let (Some(layer), _) | (None, Some(layer)) = (
+            layers.layer_under(wlr_layer::Layer::Overlay, point),
+            layers.layer_under(wlr_layer::Layer::Top, point),
+        ) {
+            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
+            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+        } else {
+            None
+        }
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
-        let mut move_mode = false;
 
         let reload_keybind = self.input_state.reload_keybind;
         let kill_keybind = self.input_state.kill_keybind;
@@ -313,16 +187,15 @@ impl State {
                         modifier_mask.push(Modifier::Super);
                     }
                     let modifier_mask = ModifierMask::from(modifier_mask);
+
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
                     let cb_id_mod = state.input_state.keybinds.get(&(modifier_mask, mod_sym));
 
-                    let cb_id_raw = if let Some(raw_sym) = raw_sym {
+                    let cb_id_raw = raw_sym.and_then(|raw_sym| {
                         state.input_state.keybinds.get(&(modifier_mask, *raw_sym))
-                    } else {
-                        None
-                    };
+                    });
 
                     match (cb_id_mod, cb_id_raw) {
                         (Some(cb_id), _) | (None, Some(cb_id)) => {
@@ -331,9 +204,9 @@ impl State {
                         (None, None) => (),
                     }
 
-                    if Some((modifier_mask, mod_sym)) == kill_keybind {
+                    if kill_keybind == Some((modifier_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::Quit);
-                    } else if Some((modifier_mask, mod_sym)) == reload_keybind {
+                    } else if reload_keybind == Some((modifier_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::ReloadConfig);
                     } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
                         ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
@@ -344,16 +217,6 @@ impl State {
                     }
                 }
 
-                if keysym.modified_sym() == Keysym::Control_L {
-                    match press_state {
-                        KeyState::Pressed => {
-                            move_mode = true;
-                        }
-                        KeyState::Released => {
-                            move_mode = false;
-                        }
-                    }
-                }
                 FilterResult::Forward
             },
         );
@@ -361,7 +224,7 @@ impl State {
         match action {
             Some(KeyAction::CallCallback(callback_id)) => {
                 if let Some(stream) = self.api_state.stream.as_ref() {
-                    if let Err(err) = crate::config::api::send_to_client(
+                    if let Err(err) = crate::api::send_to_client(
                         &mut stream.lock().expect("Could not lock stream mutex"),
                         &OutgoingMsg::CallCallback {
                             callback_id,
@@ -373,18 +236,17 @@ impl State {
                 }
             }
             Some(KeyAction::SwitchVt(vt)) => {
-                if self.backend.is_udev() {
-                    self.switch_vt(vt);
-                }
+                self.switch_vt(vt);
             }
             Some(KeyAction::Quit) => {
+                tracing::info!("Quitting Pinnacle");
                 self.loop_signal.stop();
             }
             Some(KeyAction::ReloadConfig) => {
                 self.start_config(crate::config::get_config_dir())
                     .expect("failed to restart config");
             }
-            None => {}
+            None => (),
         }
     }
 
@@ -400,22 +262,21 @@ impl State {
 
         let pointer_loc = pointer.current_location();
 
-        let edge = match button_state {
+        let mouse_edge = match button_state {
             ButtonState::Released => MouseEdge::Release,
             ButtonState::Pressed => MouseEdge::Press,
         };
         let modifier_mask = ModifierMask::from(keyboard.modifier_state());
 
         // If any mousebinds are detected, call the config's callback and return.
-        if let Some(&callback_id) = self
-            .input_state
-            .mousebinds
-            .get(&(modifier_mask, button, edge))
+        if let Some(&callback_id) =
+            self.input_state
+                .mousebinds
+                .get(&(modifier_mask, button, mouse_edge))
         {
-            if let Some(stream) = self.api_state.stream.clone() {
-                let mut stream = stream.lock().expect("failed to lock api stream");
-                crate::config::api::send_to_client(
-                    &mut stream,
+            if let Some(stream) = self.api_state.stream.as_ref() {
+                crate::api::send_to_client(
+                    &mut stream.lock().expect("failed to lock api stream"),
                     &OutgoingMsg::CallCallback {
                         callback_id,
                         args: None,
@@ -428,22 +289,20 @@ impl State {
 
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
-        if ButtonState::Pressed == button_state {
+        if button_state == ButtonState::Pressed {
             if let Some((focus, _)) = self.surface_under(pointer_loc) {
                 // Move window to top of stack.
                 if let FocusTarget::Window(window) = &focus {
                     self.space.raise_element(window, true);
                     if let WindowElement::X11(surface) = &window {
-                        if !surface.is_override_redirect() {
-                            self.xwm
-                                .as_mut()
-                                .expect("no xwm")
-                                .raise_window(surface)
-                                .expect("failed to raise x11 win");
-                            surface
-                                .set_activated(true)
-                                .expect("failed to set x11 win to activated");
-                        }
+                        self.xwm
+                            .as_mut()
+                            .expect("no xwm")
+                            .raise_window(surface)
+                            .expect("failed to raise x11 win");
+                        surface
+                            .set_activated(true)
+                            .expect("failed to set x11 win to activated");
                     }
                 }
 
@@ -455,8 +314,10 @@ impl State {
 
                 // TODO: use update_keyboard_focus from anvil
 
-                if !matches!(&focus, FocusTarget::Window(WindowElement::X11(surf)) if surf.is_override_redirect())
-                {
+                if !matches!(
+                    &focus,
+                    FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
+                ) {
                     keyboard.set_focus(self, Some(focus.clone()), serial);
                 }
 
@@ -481,12 +342,12 @@ impl State {
                             .expect("failed to deactivate x11 win");
                         // INFO: do i need to configure this?
                     }
+                    WindowElement::X11OverrideRedirect(_) => (),
                 });
                 keyboard.set_focus(self, None, serial);
             }
         };
 
-        // Send the button event to the client.
         pointer.button(
             self,
             &ButtonEvent {
@@ -506,13 +367,9 @@ impl State {
             .amount(Axis::Horizontal)
             .unwrap_or_else(|| event.amount_discrete(Axis::Horizontal).unwrap_or(0.0) * 3.0);
 
-        let mut vertical_amount = event
+        let vertical_amount = event
             .amount(Axis::Vertical)
             .unwrap_or_else(|| event.amount_discrete(Axis::Vertical).unwrap_or(0.0) * 3.0);
-
-        if self.backend.is_winit() {
-            vertical_amount = -vertical_amount;
-        }
 
         let horizontal_amount_discrete = event.amount_discrete(Axis::Horizontal);
         let vertical_amount_discrete = event.amount_discrete(Axis::Vertical);
@@ -537,18 +394,15 @@ impl State {
             frame = frame.stop(Axis::Vertical);
         }
 
-        // tracing::debug!(
-        //     "axis on current focus: {:?}",
-        //     self.seat.get_pointer().unwrap().current_focus()
-        // );
-
         let pointer = self.seat.get_pointer().expect("Seat has no pointer");
 
         pointer.axis(self, frame);
         pointer.frame(self);
     }
 
-    /// Clamp pointer coordinates inside outputs
+    /// Clamp pointer coordinates inside outputs.
+    ///
+    /// This returns the nearest point inside an output.
     fn clamp_coords(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
         if self.space.outputs().next().is_none() {
             return pos;
@@ -582,6 +436,7 @@ impl State {
         let Some(output) = self.space.outputs().next() else {
             return;
         };
+
         let output_geo = self
             .space
             .output_geometry(output)
@@ -589,8 +444,6 @@ impl State {
         let pointer_loc = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
         let serial = SERIAL_COUNTER.next_serial();
         let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
-
-        // tracing::info!("pointer_loc: {:?}", pointer_loc);
 
         self.pointer_location = pointer_loc;
 
@@ -610,13 +463,9 @@ impl State {
             }
         }
 
-        let surface_under_pointer = self.surface_under(pointer_loc);
-
-        // tracing::debug!("surface_under_pointer: {surface_under_pointer:?}");
-        // tracing::debug!("pointer focus: {:?}", pointer.current_focus());
         pointer.motion(
             self,
-            surface_under_pointer,
+            self.surface_under(pointer_loc),
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -652,7 +501,6 @@ impl State {
 
         let surface_under = self.surface_under(self.pointer_location);
 
-        // tracing::info!("{:?}", self.pointer_location);
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.motion(
                 self,
