@@ -64,7 +64,7 @@ You'll also need the following packages, as specified by [Smithay](https://githu
 `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`.
 - Arch:
     ```
-    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xwayland
+    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
     ```
 - Debian:
     ```
