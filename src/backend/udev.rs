@@ -55,7 +55,7 @@ use smithay::{
             Device,
         },
         input::Libinput,
-        nix::fcntl::OFlag,
+        rustix::fs::OFlags,
         wayland_protocols::wp::{
             linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1,
             presentation_time::server::wp_presentation_feedback,
@@ -729,11 +729,11 @@ impl State {
             .session
             .open(
                 path,
-                OFlag::O_RDWR | OFlag::O_CLOEXEC | OFlag::O_NOCTTY | OFlag::O_NONBLOCK,
+                OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
             )
             .map_err(DeviceAddError::DeviceOpen)?;
 
-        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from_raw_fd(fd) });
+        let fd = DrmDeviceFd::new(DeviceFd::from(fd));
 
         let (drm, notifier) =
             DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;

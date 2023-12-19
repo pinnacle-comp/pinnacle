@@ -49,7 +49,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.motion(state, None, event);
 
         if !self.window.alive() {
-            handle.unset_grab(state, event.serial, event.time);
+            handle.unset_grab(state, event.serial, event.time, true);
             return;
         }
 
@@ -168,7 +168,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.button(data, event);
 
         if !handle.current_pressed().contains(&self.button_used) {
-            handle.unset_grab(data, event.serial, event.time);
+            handle.unset_grab(data, event.serial, event.time, true);
         }
     }
 

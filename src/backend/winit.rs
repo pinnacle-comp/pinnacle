@@ -10,7 +10,7 @@ use smithay::{
             gles::{GlesRenderer, GlesTexture},
             ImportDma, ImportEgl, ImportMemWl,
         },
-        winit::{WinitError, WinitEvent, WinitGraphicsBackend},
+        winit::{WinitEvent, WinitGraphicsBackend},
     },
     desktop::{
         layer_map_for_output,
@@ -28,6 +28,7 @@ use smithay::{
             xdg::shell::server::xdg_toplevel,
         },
         wayland_server::{protocol::wl_surface::WlSurface, Display},
+        winit::platform::pump_events::PumpStatus,
     },
     utils::{IsAlive, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
@@ -83,7 +84,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         };
 
     let mode = smithay::output::Mode {
-        size: winit_backend.window_size().physical_size,
+        size: winit_backend.window_size(),
         refresh: 144_000,
     };
 
@@ -199,7 +200,7 @@ pub fn run_winit() -> anyhow::Result<()> {
             .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
                 let state = &mut data.state;
 
-                let result = winit_evt_loop.dispatch_new_events(|event| match event {
+                let status = winit_evt_loop.dispatch_new_events(|event| match event {
                     WinitEvent::Resized {
                         size,
                         scale_factor: _,
@@ -221,17 +222,17 @@ pub fn run_winit() -> anyhow::Result<()> {
                     WinitEvent::Input(input_evt) => {
                         state.process_input_event(input_evt);
                     }
-                    WinitEvent::Refresh => {
+                    WinitEvent::Redraw => {
                         state.render_winit_window(&output);
+                    }
+                    WinitEvent::CloseRequested => {
+                        state.loop_signal.stop();
                     }
                 });
 
-                match result {
-                    Ok(_) => {}
-                    Err(WinitError::WindowClosed) => {
-                        state.loop_signal.stop();
-                    }
-                };
+                if let PumpStatus::Exit(_) = status {
+                    state.loop_signal.stop();
+                }
 
                 state.render_winit_window(&output);
 

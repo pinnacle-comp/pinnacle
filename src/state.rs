@@ -124,8 +124,8 @@ impl State {
         // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
         // environment, I *think* this is ok.
         tracing::info!("Trying to raise file descriptor limit...");
-        if let Err(err) = smithay::reexports::nix::sys::resource::setrlimit(
-            smithay::reexports::nix::sys::resource::Resource::RLIMIT_NOFILE,
+        if let Err(err) = nix::sys::resource::setrlimit(
+            nix::sys::resource::Resource::RLIMIT_NOFILE,
             65536,
             65536 * 2,
         ) {
@@ -237,7 +237,7 @@ impl State {
             loop_signal,
             loop_handle,
             display_handle: display_handle.clone(),
-            clock: Clock::<Monotonic>::new()?,
+            clock: Clock::<Monotonic>::new(),
             compositor_state: CompositorState::new::<Self>(&display_handle),
             data_device_state: DataDeviceState::new::<Self>(&display_handle),
             seat_state,

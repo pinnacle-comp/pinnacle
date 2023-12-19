@@ -365,21 +365,21 @@ impl State {
 
         let horizontal_amount = event
             .amount(Axis::Horizontal)
-            .unwrap_or_else(|| event.amount_discrete(Axis::Horizontal).unwrap_or(0.0) * 3.0);
+            .unwrap_or_else(|| event.amount_v120(Axis::Horizontal).unwrap_or(0.0) * 3.0 / 120.);
 
         let vertical_amount = event
             .amount(Axis::Vertical)
-            .unwrap_or_else(|| event.amount_discrete(Axis::Vertical).unwrap_or(0.0) * 3.0);
+            .unwrap_or_else(|| event.amount_v120(Axis::Vertical).unwrap_or(0.0) * 3.0 / 120.);
 
-        let horizontal_amount_discrete = event.amount_discrete(Axis::Horizontal);
-        let vertical_amount_discrete = event.amount_discrete(Axis::Vertical);
+        let horizontal_amount_discrete = event.amount_v120(Axis::Horizontal);
+        let vertical_amount_discrete = event.amount_v120(Axis::Vertical);
 
         let mut frame = AxisFrame::new(event.time_msec()).source(source);
 
         if horizontal_amount != 0.0 {
             frame = frame.value(Axis::Horizontal, horizontal_amount);
             if let Some(discrete) = horizontal_amount_discrete {
-                frame = frame.discrete(Axis::Horizontal, discrete as i32);
+                frame = frame.v120(Axis::Horizontal, discrete as i32);
             }
         } else if source == AxisSource::Finger {
             frame = frame.stop(Axis::Horizontal);
@@ -388,7 +388,7 @@ impl State {
         if vertical_amount != 0.0 {
             frame = frame.value(Axis::Vertical, vertical_amount);
             if let Some(discrete) = vertical_amount_discrete {
-                frame = frame.discrete(Axis::Vertical, discrete as i32);
+                frame = frame.v120(Axis::Vertical, discrete as i32);
             }
         } else if source == AxisSource::Finger {
             frame = frame.stop(Axis::Vertical);

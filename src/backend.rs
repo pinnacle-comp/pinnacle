@@ -22,7 +22,7 @@ use smithay::{
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     wayland::{
-        dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError},
+        dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
         fractional_scale::with_fractional_scale,
     },
 };
@@ -187,20 +187,27 @@ impl DmabufHandler for State {
         &mut self,
         _global: &DmabufGlobal,
         dmabuf: Dmabuf,
-    ) -> Result<(), ImportError> {
-        match &mut self.backend {
+        notifier: ImportNotifier,
+    ) {
+        let res = match &mut self.backend {
             Backend::Winit(winit) => winit
                 .backend
                 .renderer()
                 .import_dmabuf(&dmabuf, None)
                 .map(|_| ())
-                .map_err(|_| ImportError::Failed),
+                .map_err(|_| ()),
             Backend::Udev(udev) => udev
                 .gpu_manager
                 .single_renderer(&udev.primary_gpu)
                 .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
                 .map(|_| ())
-                .map_err(|_| ImportError::Failed),
+                .map_err(|_| ()),
+        };
+
+        if let Ok(_) = res {
+            let _ = notifier.successful::<State>();
+        } else {
+            notifier.failed();
         }
     }
 }
