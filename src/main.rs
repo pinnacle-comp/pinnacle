@@ -15,6 +15,7 @@ use clap::Parser;
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
+use nix::unistd::Uid;
 
 mod api;
 mod backend;
@@ -83,7 +84,7 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    if smithay::reexports::nix::unistd::Uid::effective().is_root() && !args.allow_root {
+    if Uid::effective().is_root() && !args.allow_root {
         println!("You are trying to run Pinnacle as root.\nThis is NOT recommended.\nTo run Pinnacle as root, pass in the --allow-root flag. Again, this is NOT recommended.");
         return Ok(());
     }
