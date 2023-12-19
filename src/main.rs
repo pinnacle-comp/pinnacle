@@ -12,10 +12,10 @@
 #![warn(clippy::unwrap_used)]
 
 use clap::Parser;
+use nix::unistd::Uid;
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
-use nix::unistd::Uid;
 
 mod api;
 mod backend;

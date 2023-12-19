@@ -55,13 +55,14 @@ use smithay::{
             Device,
         },
         input::Libinput,
+        rustix::fs::OFlags,
         wayland_protocols::wp::{
             linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1,
             presentation_time::server::wp_presentation_feedback,
         },
         wayland_server::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
-        }, rustix::fs::OFlags,
+        },
     },
     utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},

@@ -187,8 +187,8 @@ impl DmabufHandler for State {
         &mut self,
         _global: &DmabufGlobal,
         dmabuf: Dmabuf,
-        notifier: ImportNotifier
-    )  {
+        notifier: ImportNotifier,
+    ) {
         let res = match &mut self.backend {
             Backend::Winit(winit) => winit
                 .backend
@@ -209,7 +209,6 @@ impl DmabufHandler for State {
         } else {
             notifier.failed();
         }
-
     }
 }
 delegate_dmabuf!(State);

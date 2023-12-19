@@ -27,7 +27,8 @@ use smithay::{
             wp::presentation_time::server::wp_presentation_feedback,
             xdg::shell::server::xdg_toplevel,
         },
-        wayland_server::{protocol::wl_surface::WlSurface, Display}, winit::platform::pump_events::PumpStatus,
+        wayland_server::{protocol::wl_surface::WlSurface, Display},
+        winit::platform::pump_events::PumpStatus,
     },
     utils::{IsAlive, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
@@ -226,7 +227,7 @@ pub fn run_winit() -> anyhow::Result<()> {
                     }
                     WinitEvent::CloseRequested => {
                         state.loop_signal.stop();
-                    },
+                    }
                 });
 
                 if let PumpStatus::Exit(_) = status {
