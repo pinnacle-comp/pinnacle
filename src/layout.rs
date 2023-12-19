@@ -258,8 +258,6 @@ fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
         let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();
         master.change_geometry(Rectangle::from_loc_and_size(loc, new_master_size));
 
-        let stack_count = stack_count;
-
         let height = size.h as f32 / stack_count as f32;
         let mut y_s = vec![];
         for i in 0..stack_count {

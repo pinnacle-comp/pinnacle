@@ -3,7 +3,6 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    os::fd::FromRawFd,
     path::Path,
     time::Duration,
 };
@@ -243,7 +242,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     let (session, notifier) = LibSeatSession::new()?;
 
     // Get the primary gpu
-    let primary_gpu = udev::primary_gpu(&session.seat())
+    let primary_gpu = udev::primary_gpu(session.seat())
         .context("unable to get primary gpu path")?
         .and_then(|x| {
             DrmNode::from_path(x)
