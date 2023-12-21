@@ -57,6 +57,11 @@ impl State {
     /// Compute tiled window locations and sizes, resize maximized and fullscreen windows correctly,
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
+        // HACK: With the blocker implementation, if I opened up a bunch of windows quickly they
+        // |     would freeze up.
+        // |     So instead of being smart and figuring something out I instead decided "f*** it"
+        // |     and stuck a static here to detect if update_windows was called again, causing
+        // |     previous blockers to be unblocked.
         static UPDATE_COUNT: AtomicU32 = AtomicU32::new(0);
         UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let current_update_count = UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed);
