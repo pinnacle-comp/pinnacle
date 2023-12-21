@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::sync::atomic::AtomicU32;
+
 use smithay::{
     backend::renderer::utils::with_renderer_surface_state,
     desktop::layer_map_for_output,
@@ -55,6 +57,10 @@ impl State {
     /// Compute tiled window locations and sizes, resize maximized and fullscreen windows correctly,
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
+        static UPDATE_COUNT: AtomicU32 = AtomicU32::new(0);
+        UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let current_update_count = UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed);
+
         tracing::debug!("Updating windows");
         let Some(layout) =
             output.with_state(|state| state.focused_tags().next().map(|tag| tag.layout()))
@@ -173,14 +179,38 @@ impl State {
 
         for (win, _) in pending_wins.iter() {
             if let Some(surface) = win.wl_surface() {
+                let client = surface
+                    .client()
+                    .expect("Surface has no client/is no longer alive");
+                self.client_compositor_state(&client)
+                    .blocker_cleared(self, &self.display_handle.clone());
+
+                tracing::debug!("blocker cleared");
                 compositor::add_blocker(&surface, tiling_blocker.clone());
             }
         }
 
         let pending_wins_clone = pending_wins.clone();
         let pending_wins_clone2 = pending_wins.clone();
+
         self.schedule(
-            move |_dt| {
+            move |data| {
+                if UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed) > current_update_count {
+                    for (win, _) in pending_wins_clone2.iter() {
+                        let Some(surface) = win.wl_surface() else {
+                            continue;
+                        };
+
+                        let client = surface
+                            .client()
+                            .expect("Surface has no client/is no longer alive");
+                        data.state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(&mut data.state, &data.display_handle);
+
+                        tracing::debug!("blocker cleared");
+                    }
+                }
                 tiling_blocker.ready()
                     && pending_wins_clone2.iter().all(|(win, _)| {
                         if let Some(surface) = win.wl_surface() {
@@ -205,21 +235,9 @@ impl State {
 
                     tracing::debug!("blocker cleared");
                 }
-            },
-        );
 
-        self.schedule(
-            move |_dt| {
-                let all_idle = pending_wins
-                    .iter()
-                    .filter(|(win, _)| win.alive())
-                    .all(|(win, _)| win.with_state(|state| state.loc_request_state.is_idle()));
-
-                all_idle
-            },
-            move |dt| {
                 for (loc, win) in non_pending_wins {
-                    dt.state.space.map_element(win, loc, false);
+                    data.state.space.map_element(win, loc, false);
                 }
             },
         );
