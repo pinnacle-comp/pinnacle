@@ -353,6 +353,8 @@ impl State {
                 tag.set_layout(layout);
                 let Some(output) = tag.output(self) else { return };
                 self.update_windows(&output);
+
+                self.schedule_render(&output);
             }
 
             Msg::ConnectForAllOutputs { callback_id } => {
