@@ -73,16 +73,6 @@ pub enum LocationRequestState {
     Acknowledged(Point<i32, Logical>),
 }
 
-impl LocationRequestState {
-    /// Returns `true` if the location request state is [`Idle`].
-    ///
-    /// [`Idle`]: LocationRequestState::Idle
-    #[must_use]
-    pub fn is_idle(&self) -> bool {
-        matches!(self, Self::Idle)
-    }
-}
-
 impl WindowElement {
     /// RefCell Safety: This method uses a [`RefCell`] on this window.
     pub fn toggle_floating(&self) {
