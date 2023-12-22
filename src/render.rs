@@ -117,7 +117,7 @@ where
         .map(|(surface, loc)| {
             let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
                 renderer,
-                loc.to_physical((scale.x.round() as i32, scale.x.round() as i32)),
+                loc.to_physical((scale.x.round() as i32, scale.y.round() as i32)),
                 scale,
                 1.0,
             );
@@ -143,6 +143,7 @@ where
 
 /// Get render elements for windows on active tags.
 fn tag_render_elements<R>(
+    output: &Output,
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
@@ -155,13 +156,25 @@ where
     let elements = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
-        .filter(|win| win.is_on_active_tag(space.outputs()))
+        .filter(|win| {
+            let output_tags = output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
+            let win_tags = win.with_state(|state| state.tags.clone());
+
+            output_tags.into_iter().any(|tag| win_tags.iter().any(|tg| &tag == tg))
+
+            // win.is_on_active_tag(space.outputs())
+        })
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
-            let loc = (space.element_location(win).unwrap_or((0, 0).into())
-                - win.geometry().loc)
+            let loc = (space.element_location(win).unwrap_or((0, 0).into()) - win.geometry().loc - output.current_location())
                 .to_physical((scale.x.round() as i32, scale.x.round() as i32));
-            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), space.element_geometry(win))
+
+            let elem_geo = space.element_geometry(win).map(|mut geo| {
+                geo.loc -= output.current_location();
+                geo
+            });
+
+            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
         }).flat_map(|(elems, rect)| {
             match rect {
                 Some(rect) => {
@@ -173,6 +186,8 @@ where
             }
         })
         .collect::<Vec<_>>();
+
+    tracing::debug!(elem_count = elements.len());
 
     elements
 }
@@ -208,6 +223,15 @@ where
 
     let (windows, override_redirect_windows) = windows
         .iter()
+        // TODO: copy pasted from tag_render_elements
+        .filter(|win| {
+            let output_tags = output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
+            let win_tags = win.with_state(|state| state.tags.clone());
+
+            output_tags.into_iter().any(|tag| win_tags.iter().any(|tg| &tag == tg))
+
+            // win.is_on_active_tag(space.outputs())
+        })
         .cloned()
         .partition::<Vec<_>, _>(|win| !win.is_x11_override_redirect());
 
@@ -332,7 +356,8 @@ where
             overlay,
         } = layer_render_elements(output, renderer, scale);
 
-        let window_render_elements = tag_render_elements::<R>(&windows, space, renderer, scale);
+        let window_render_elements =
+            tag_render_elements::<R>(output, &windows, space, renderer, scale);
 
         // Elements render from top to bottom
 

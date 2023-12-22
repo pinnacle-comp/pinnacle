@@ -133,6 +133,8 @@ impl Backend {
 impl Udev {
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
+        // tracing::debug!("schedule_render on output {}", output.name());
+
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
