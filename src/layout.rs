@@ -7,7 +7,7 @@ use smithay::{
     desktop::layer_map_for_output,
     output::Output,
     reexports::wayland_server::Resource,
-    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
+    utils::{Logical, Point, Rectangle, Serial, Size},
     wayland::compositor::{self, CompositorHandler},
 };
 
