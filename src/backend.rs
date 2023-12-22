@@ -204,7 +204,7 @@ impl DmabufHandler for State {
                 .map_err(|_| ()),
         };
 
-        if let Ok(_) = res {
+        if res.is_ok() {
             let _ = notifier.successful::<State>();
         } else {
             notifier.failed();

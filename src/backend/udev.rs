@@ -3,7 +3,6 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    os::fd::FromRawFd,
     path::Path,
     time::Duration,
 };
@@ -243,7 +242,7 @@ pub fn run_udev() -> anyhow::Result<()> {
     let (session, notifier) = LibSeatSession::new()?;
 
     // Get the primary gpu
-    let primary_gpu = udev::primary_gpu(&session.seat())
+    let primary_gpu = udev::primary_gpu(session.seat())
         .context("unable to get primary gpu path")?
         .and_then(|x| {
             DrmNode::from_path(x)
@@ -1341,61 +1340,6 @@ fn render_surface(
 
     clock: &Clock<Monotonic>,
 ) -> Result<bool, SwapBuffersError> {
-    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
-
-    let pending_wins = windows
-        .iter()
-        .filter(|win| win.alive())
-        .filter(|win| {
-            let pending_size = if let WindowElement::Wayland(win) = win {
-                let current_state = win.toplevel().current_state();
-                win.toplevel()
-                    .with_pending_state(|state| state.size != current_state.size)
-            } else {
-                false
-            };
-            pending_size || win.with_state(|state| !state.loc_request_state.is_idle())
-        })
-        .filter(|win| {
-            if let WindowElement::Wayland(win) = win {
-                !win.toplevel()
-                    .current_state()
-                    .states
-                    .contains(xdg_toplevel::State::Resizing)
-            } else {
-                true
-            }
-        })
-        .map(|win| {
-            (
-                win.class().unwrap_or("None".to_string()),
-                win.title().unwrap_or("None".to_string()),
-                win.with_state(|state| state.loc_request_state.clone()),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    if !pending_wins.is_empty() {
-        tracing::debug!("Skipping frame, waiting on {pending_wins:?}");
-        for win in windows.iter() {
-            win.send_frame(output, clock.now(), Some(Duration::ZERO), |_, _| {
-                Some(output.clone())
-            });
-        }
-
-        surface
-            .compositor
-            .queue_frame(None)
-            .map_err(Into::<SwapBuffersError>::into)?;
-
-        tracing::debug!("queued no frame");
-
-        // TODO: still draw the cursor here
-        surface.render_state = RenderState::WaitingForVblank { dirty: false };
-
-        return Ok(true);
-    }
-
     let output_render_elements = crate::render::generate_render_elements(
         output,
         renderer,

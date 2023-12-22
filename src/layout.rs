@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::sync::atomic::AtomicU32;
+
 use smithay::{
+    backend::renderer::utils::with_renderer_surface_state,
     desktop::layer_map_for_output,
     output::Output,
-    utils::{IsAlive, Logical, Point, Rectangle, Size},
+    reexports::wayland_server::Resource,
+    utils::{Logical, Point, Rectangle, Serial, Size},
+    wayland::compositor::{self, CompositorHandler},
 };
 
 use crate::{
     state::{State, WithState},
     window::{
+        blocker::TiledWindowBlocker,
         window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
         WindowElement,
     },
@@ -51,6 +57,15 @@ impl State {
     /// Compute tiled window locations and sizes, resize maximized and fullscreen windows correctly,
     /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
+        // HACK: With the blocker implementation, if I opened up a bunch of windows quickly they
+        // |     would freeze up.
+        // |     So instead of being smart and figuring something out I instead decided "f*** it"
+        // |     and stuck a static here to detect if update_windows was called again, causing
+        // |     previous blockers to be unblocked.
+        static UPDATE_COUNT: AtomicU32 = AtomicU32::new(0);
+        UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let current_update_count = UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed);
+
         tracing::debug!("Updating windows");
         let Some(layout) =
             output.with_state(|state| state.focused_tags().next().map(|tag| tag.layout()))
@@ -117,7 +132,7 @@ impl State {
             }
         }
 
-        let mut pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
+        let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
         let mut non_pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
 
         // TODO: completely refactor how tracking state changes works
@@ -143,7 +158,7 @@ impl State {
                                 let serial = win.toplevel().send_configure();
                                 state.loc_request_state =
                                     LocationRequestState::Requested(serial, loc);
-                                pending_wins.push((loc, window.clone()));
+                                pending_wins.push((window.clone(), serial));
                             }
                         }
                         WindowElement::X11(surface) => {
@@ -165,18 +180,69 @@ impl State {
             });
         }
 
-        self.schedule(
-            move |_dt| {
-                let all_idle = pending_wins
-                    .iter()
-                    .filter(|(_, win)| win.alive())
-                    .all(|(_, win)| win.with_state(|state| state.loc_request_state.is_idle()));
+        let tiling_blocker = TiledWindowBlocker::new(pending_wins.clone());
 
-                all_idle
+        for (win, _) in pending_wins.iter() {
+            if let Some(surface) = win.wl_surface() {
+                let client = surface
+                    .client()
+                    .expect("Surface has no client/is no longer alive");
+                self.client_compositor_state(&client)
+                    .blocker_cleared(self, &self.display_handle.clone());
+
+                tracing::debug!("blocker cleared");
+                compositor::add_blocker(&surface, tiling_blocker.clone());
+            }
+        }
+
+        let pending_wins_clone = pending_wins.clone();
+        let pending_wins_clone2 = pending_wins.clone();
+
+        self.schedule(
+            move |data| {
+                if UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed) > current_update_count {
+                    for (win, _) in pending_wins_clone2.iter() {
+                        let Some(surface) = win.wl_surface() else {
+                            continue;
+                        };
+
+                        let client = surface
+                            .client()
+                            .expect("Surface has no client/is no longer alive");
+                        data.state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(&mut data.state, &data.display_handle);
+
+                        tracing::debug!("blocker cleared");
+                    }
+                }
+                tiling_blocker.ready()
+                    && pending_wins_clone2.iter().all(|(win, _)| {
+                        if let Some(surface) = win.wl_surface() {
+                            with_renderer_surface_state(&surface, |state| state.buffer().is_some())
+                        } else {
+                            true
+                        }
+                    })
             },
-            move |dt| {
+            move |data| {
+                for (win, _) in pending_wins_clone {
+                    let Some(surface) = win.wl_surface() else {
+                        continue;
+                    };
+
+                    let client = surface
+                        .client()
+                        .expect("Surface has no client/is no longer alive");
+                    data.state
+                        .client_compositor_state(&client)
+                        .blocker_cleared(&mut data.state, &data.display_handle);
+
+                    tracing::debug!("blocker cleared");
+                }
+
                 for (loc, win) in non_pending_wins {
-                    dt.state.space.map_element(win, loc, false);
+                    data.state.space.map_element(win, loc, false);
                 }
             },
         );
@@ -214,8 +280,6 @@ fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
         let loc: Point<i32, Logical> = (loc.x, loc.y).into();
         let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();
         master.change_geometry(Rectangle::from_loc_and_size(loc, new_master_size));
-
-        let stack_count = stack_count;
 
         let height = size.h as f32 / stack_count as f32;
         let mut y_s = vec![];
