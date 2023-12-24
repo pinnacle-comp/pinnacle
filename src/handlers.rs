@@ -10,7 +10,7 @@ use smithay::{
     delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
     delegate_output, delegate_presentation, delegate_primary_selection, delegate_relative_pointer,
     delegate_seat, delegate_shm, delegate_viewporter,
-    desktop::{self, find_popup_root_surface, layer_map_for_output, PopupKind, WindowSurfaceType},
+    desktop::{self, layer_map_for_output, PopupKind, WindowSurfaceType},
     input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
@@ -130,24 +130,33 @@ impl CompositorHandler for State {
 
         crate::grab::resize_grab::handle_commit(self, surface);
 
-        let output = if let Some(output) = self
-            .window_for_surface(surface)
-            .and_then(|win| win.output(self))
-        {
-            output // surface is a window
-        } else if let Some(output) = self
-            .window_for_surface(&root)
-            .and_then(|win| win.output(self))
-        {
-            output // root is a window
-        } else if let Some(output) = self
-            .popup_manager
-            .find_popup(surface)
-            .and_then(|popup| find_popup_root_surface(&popup).ok())
-            .and_then(|surf| self.window_for_surface(&surf))
-            .and_then(|win| win.output(self))
-        {
-            output // surface is a popup
+        let outputs = if let Some(window) = self.window_for_surface(surface) {
+            let mut outputs = self.space.outputs_for_element(&window);
+
+            // When the window hasn't been mapped `outputs` is empty,
+            // so also trigger a render using the window's tags' output
+            if let Some(output) = window.output(self) {
+                outputs.push(output);
+            }
+            outputs // surface is a window
+        } else if let Some(window) = self.window_for_surface(&root) {
+            let mut outputs = self.space.outputs_for_element(&window);
+            if let Some(output) = window.output(self) {
+                outputs.push(output);
+            }
+            outputs // surface is a root window
+        } else if let Some(PopupKind::Xdg(surf)) = self.popup_manager.find_popup(surface) {
+            let geo = surf.with_pending_state(|state| state.geometry);
+            let outputs = self
+                .space
+                .outputs()
+                .filter_map(|output| {
+                    let op_geo = self.space.output_geometry(output);
+                    op_geo.and_then(|op_geo| op_geo.overlaps_or_touches(geo).then_some(output))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            outputs
         } else if let Some(output) = self
             .space
             .outputs()
@@ -159,12 +168,14 @@ impl CompositorHandler for State {
             })
             .cloned()
         {
-            output // surface is a layer surface
+            vec![output] // surface is a layer surface
         } else {
             return;
         };
 
-        self.schedule_render(&output);
+        for output in outputs {
+            self.schedule_render(&output);
+        }
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

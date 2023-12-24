@@ -157,12 +157,7 @@ where
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .filter(|win| {
-            let output_tags = output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
-            let win_tags = win.with_state(|state| state.tags.clone());
-
-            output_tags.into_iter().any(|tag| win_tags.iter().any(|tg| &tag == tg))
-
-            // win.is_on_active_tag(space.outputs())
+            win.is_on_active_tag(space.outputs())
         })
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
@@ -176,6 +171,7 @@ where
 
             (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
         }).flat_map(|(elems, rect)| {
+            // elems.into_iter().map(OutputRenderElements::from).collect::<Vec<_>>()
             match rect {
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {
@@ -186,8 +182,6 @@ where
             }
         })
         .collect::<Vec<_>>();
-
-    tracing::debug!(elem_count = elements.len());
 
     elements
 }
@@ -223,15 +217,6 @@ where
 
     let (windows, override_redirect_windows) = windows
         .iter()
-        // TODO: copy pasted from tag_render_elements
-        .filter(|win| {
-            let output_tags = output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
-            let win_tags = win.with_state(|state| state.tags.clone());
-
-            output_tags.into_iter().any(|tag| win_tags.iter().any(|tg| &tag == tg))
-
-            // win.is_on_active_tag(space.outputs())
-        })
         .cloned()
         .partition::<Vec<_>, _>(|win| !win.is_x11_override_redirect());
 
@@ -320,22 +305,26 @@ where
     output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
 
     let top_fullscreen_window = windows.iter().rev().find(|win| {
+        let is_wayland_actually_fullscreen = {
+            if let WindowElement::Wayland(window) = win {
+                window
+                    .toplevel()
+                    .current_state()
+                    .states
+                    .contains(xdg_toplevel::State::Fullscreen)
+            } else {
+                true
+            }
+        };
+
         win.with_state(|state| {
-            let is_wayland_actually_fullscreen = {
-                if let WindowElement::Wayland(window) = win {
-                    window
-                        .toplevel()
-                        .current_state()
-                        .states
-                        .contains(xdg_toplevel::State::Fullscreen)
-                } else {
-                    true
-                }
-            };
             state.fullscreen_or_maximized.is_fullscreen()
-                && state.tags.iter().any(|tag| tag.active())
-                && is_wayland_actually_fullscreen
-        })
+                && output.with_state(|op_state| {
+                    op_state
+                        .focused_tags()
+                        .any(|op_tag| state.tags.contains(op_tag))
+                })
+        }) && is_wayland_actually_fullscreen
     });
 
     // If fullscreen windows exist, render only the topmost one

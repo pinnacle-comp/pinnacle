@@ -146,6 +146,11 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     .configure(new_geo)
                     .expect("failed to configure x11 win");
             }
+
+            let outputs = state.space.outputs_for_element(&self.window);
+            for output in outputs {
+                state.schedule_render(&output);
+            }
         }
     }
 

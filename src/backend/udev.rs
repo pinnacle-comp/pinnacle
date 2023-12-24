@@ -402,9 +402,9 @@ pub fn run_udev() -> anyhow::Result<()> {
                             data.state.connector_connected(node, connector, crtc);
                         }
                     }
-                    // for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
-                    //     data.state.schedule_render(&output);
-                    // }
+                    for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
+                        data.state.schedule_render(&output);
+                    }
                 }
             }
         })
