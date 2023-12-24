@@ -179,6 +179,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                     .expect("failed to configure x11 win");
             }
             WindowElement::X11OverrideRedirect(_) => (),
+            _ => unreachable!(),
         }
     }
 
@@ -235,6 +236,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                     });
                 }
                 WindowElement::X11OverrideRedirect(_) => (),
+                _ => unreachable!(),
             }
         }
     }

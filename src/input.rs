@@ -347,6 +347,7 @@ impl State {
                         // INFO: do i need to configure this?
                     }
                     WindowElement::X11OverrideRedirect(_) => (),
+                    _ => unreachable!(),
                 });
                 keyboard.set_focus(self, None, serial);
             }

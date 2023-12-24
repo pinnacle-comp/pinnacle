@@ -175,6 +175,7 @@ impl State {
                             // filtered out up there somewhere
                             unreachable!();
                         }
+                        _ => unreachable!(),
                     }
                 }
             });

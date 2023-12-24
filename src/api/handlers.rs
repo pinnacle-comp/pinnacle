@@ -79,6 +79,7 @@ impl State {
                             surface.close().expect("failed to close x11 win");
                         }
                         WindowElement::X11OverrideRedirect(_) => (),
+                        _ => unreachable!(),
                     }
                 }
             }
@@ -508,6 +509,7 @@ impl State {
                     WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                         (Some(surface.class()), Some(surface.title()))
                     }
+                    _ => unreachable!(),
                 });
 
                 let focused = window.as_ref().and_then(|win| {

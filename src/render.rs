@@ -78,6 +78,7 @@ where
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.render_elements(renderer, location, scale, alpha)
             }
+            _ => unreachable!(),
         }
         .into_iter()
         .map(C::from)
