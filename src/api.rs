@@ -44,14 +44,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use self::msg::{Msg, OutgoingMsg};
 use anyhow::Context;
 use calloop::RegistrationToken;
 use smithay::reexports::calloop::{
     self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
 };
-use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
-
-use self::msg::{Msg, OutgoingMsg};
 
 pub const SOCKET_NAME: &str = "pinnacle_socket";
 
@@ -100,15 +98,15 @@ pub struct PinnacleSocketSource {
 impl PinnacleSocketSource {
     /// Create a loop source that listens for connections to the provided `socket_dir`.
     /// This will also set PINNACLE_SOCKET for use in API implementations.
-    pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
+    pub fn new(
+        sender: Sender<Msg>,
+        socket_dir: &Path,
+        multiple_instances: bool,
+    ) -> anyhow::Result<Self> {
         tracing::debug!("Creating socket source for dir {socket_dir:?}");
 
-        let system = sysinfo::System::new_with_specifics(
-            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-        );
-
         // Test if you are running multiple instances of Pinnacle
-        let multiple_instances = system.processes_by_exact_name("pinnacle").count() > 1;
+        // let multiple_instances = system.processes_by_exact_name("pinnacle").count() > 1;
 
         // If you are, append a suffix to the socket name
         let socket_name = if multiple_instances {

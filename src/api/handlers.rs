@@ -9,6 +9,7 @@ use smithay::{
     utils::{Point, Rectangle, SERIAL_COUNTER},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
+use sysinfo::{PidExt, ProcessExt, ProcessRefreshKind, SystemExt};
 
 use crate::{
     api::msg::{
@@ -89,6 +90,31 @@ impl State {
                 callback_id,
             } => {
                 self.handle_spawn(command, callback_id);
+            }
+            Msg::SpawnOnce {
+                command,
+                callback_id,
+            } => {
+                self.system_processes
+                    .refresh_processes_specifics(ProcessRefreshKind::new());
+
+                let Some(arg0) = command.first() else {
+                    tracing::warn!("No command specified for `SpawnOnce`");
+                    return;
+                };
+
+                let compositor_pid = std::process::id();
+                let already_running =
+                    self.system_processes
+                        .processes_by_exact_name(arg0)
+                        .any(|proc| {
+                            proc.parent()
+                                .is_some_and(|parent_pid| parent_pid.as_u32() == compositor_pid)
+                        });
+
+                if !already_running {
+                    self.handle_spawn(command, callback_id);
+                }
             }
             Msg::SetEnv { key, value } => std::env::set_var(key, value),
 

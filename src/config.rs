@@ -15,6 +15,7 @@ use smithay::{
     input::keyboard::keysyms,
     utils::{Logical, Point},
 };
+use sysinfo::{ProcessRefreshKind, SystemExt};
 use toml::Table;
 
 use crate::api::msg::{CallbackId, Modifier};
@@ -236,7 +237,16 @@ impl State {
                 .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
         };
 
-        let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir)
+        self.system_processes
+            .refresh_processes_specifics(ProcessRefreshKind::new());
+
+        let multiple_instances = self
+            .system_processes
+            .processes_by_exact_name("pinnacle")
+            .count()
+            > 1;
+
+        let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir, multiple_instances)
             .context("Failed to create socket source")?;
 
         let reload_keybind = metaconfig.reload_keybind;

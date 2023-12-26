@@ -13,6 +13,7 @@
 
 use clap::Parser;
 use nix::unistd::Uid;
+use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
@@ -35,6 +36,10 @@ mod window;
 lazy_static::lazy_static! {
     pub static ref XDG_BASE_DIRS: BaseDirectories =
         BaseDirectories::with_prefix("pinnacle").expect("couldn't create xdg BaseDirectories");
+    pub static ref SYSTEM_PROCESSES: sysinfo::System =
+        sysinfo::System::new_with_specifics(
+            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+        );
 }
 
 #[derive(clap::Args, Debug)]

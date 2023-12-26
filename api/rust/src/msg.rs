@@ -150,6 +150,12 @@ pub(crate) enum Msg {
         #[serde(default)]
         callback_id: Option<CallbackId>,
     },
+    /// Spawn a program with an optional callback only if it isn't running.
+    SpawnOnce {
+        command: Vec<String>,
+        #[serde(default)]
+        callback_id: Option<CallbackId>,
+    },
     SetEnv {
         key: String,
         value: String,
