@@ -52,6 +52,7 @@ impl TiledWindowBlocker {
                 })
             }
             WindowElement::X11(_) | WindowElement::X11OverrideRedirect(_) => true,
+            _ => unreachable!(),
         });
 
         tracing::debug!(

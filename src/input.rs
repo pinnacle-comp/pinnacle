@@ -77,7 +77,7 @@ impl State {
     }
 
     /// Get the [`FocusTarget`] under `point`.
-    pub fn surface_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
+    pub fn focus_target_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
     {
@@ -100,7 +100,11 @@ impl State {
         let top_fullscreen_window = self.focus_state.focus_stack.iter().rev().find(|win| {
             win.with_state(|state| {
                 state.fullscreen_or_maximized.is_fullscreen()
-                    && state.tags.iter().any(|tag| tag.active())
+                    && output.with_state(|op_state| {
+                        op_state
+                            .focused_tags()
+                            .any(|op_tag| state.tags.contains(op_tag))
+                    })
             })
         });
 
@@ -290,7 +294,7 @@ impl State {
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
         if button_state == ButtonState::Pressed {
-            if let Some((focus, _)) = self.surface_under(pointer_loc) {
+            if let Some((focus, _)) = self.focus_target_under(pointer_loc) {
                 // Move window to top of stack.
                 if let FocusTarget::Window(window) = &focus {
                     self.space.raise_element(window, true);
@@ -343,6 +347,7 @@ impl State {
                         // INFO: do i need to configure this?
                     }
                     WindowElement::X11OverrideRedirect(_) => (),
+                    _ => unreachable!(),
                 });
                 keyboard.set_focus(self, None, serial);
             }
@@ -465,7 +470,7 @@ impl State {
 
         pointer.motion(
             self,
-            self.surface_under(pointer_loc),
+            self.focus_target_under(pointer_loc),
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -499,7 +504,7 @@ impl State {
             }
         }
 
-        let surface_under = self.surface_under(self.pointer_location);
+        let surface_under = self.focus_target_under(self.pointer_location);
 
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.motion(

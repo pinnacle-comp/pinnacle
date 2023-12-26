@@ -374,6 +374,7 @@ impl WaylandFocus for FocusTarget {
             ) => surface.same_client_as(object_id),
             FocusTarget::Popup(popup) => popup.wl_surface().id().same_client_as(object_id),
             FocusTarget::LayerSurface(surf) => surf.wl_surface().id().same_client_as(object_id),
+            _ => unreachable!(),
         }
     }
 }

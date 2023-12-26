@@ -8,7 +8,6 @@ use std::{cell::RefCell, time::Duration};
 use smithay::{
     backend::input::KeyState,
     desktop::{
-        space::SpaceElement,
         utils::{
             send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
             take_presentation_feedback_surface_tree, with_surfaces_surface_tree,
@@ -26,7 +25,8 @@ use smithay::{
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::protocol::wl_surface::WlSurface,
     },
-    utils::{user_data::UserDataMap, IsAlive, Logical, Point, Rectangle, Serial},
+    space_elements,
+    utils::{user_data::UserDataMap, Logical, Rectangle, Serial},
     wayland::{
         compositor::{self, SurfaceData},
         dmabuf::DmabufFeedback,
@@ -42,15 +42,16 @@ use self::window_state::{LocationRequestState, WindowElementState};
 
 pub mod window_state;
 
-/// The different types of windows.
-#[derive(Debug, Clone, PartialEq)]
-pub enum WindowElement {
+space_elements! {
+    /// The different types of windows.
+    #[derive(Debug, Clone, PartialEq)]
+    pub WindowElement;
     /// This is a native Wayland window.
-    Wayland(Window),
+    Wayland = Window,
     /// This is an Xwayland window.
-    X11(X11Surface),
+    X11 = X11Surface,
     /// This is an Xwayland override redirect window, which should not be messed with.
-    X11OverrideRedirect(X11Surface),
+    X11OverrideRedirect = X11Surface,
 }
 
 impl WindowElement {
@@ -65,6 +66,7 @@ impl WindowElement {
                     with_surfaces_surface_tree(&surface, processor);
                 }
             }
+            _ => unreachable!(),
         }
     }
 
@@ -93,6 +95,7 @@ impl WindowElement {
                     );
                 }
             }
+            _ => unreachable!(),
         }
     }
 
@@ -123,6 +126,7 @@ impl WindowElement {
                     );
                 }
             }
+            _ => unreachable!(),
         }
     }
 
@@ -153,6 +157,7 @@ impl WindowElement {
                     );
                 }
             }
+            _ => unreachable!(),
         }
     }
 
@@ -162,6 +167,7 @@ impl WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.wl_surface()
             }
+            _ => unreachable!(),
         }
     }
 
@@ -171,6 +177,7 @@ impl WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.user_data()
             }
+            _ => unreachable!(),
         }
     }
 
@@ -196,6 +203,7 @@ impl WindowElement {
                         .expect("failed to configure x11 win");
                 }
             }
+            _ => unreachable!(),
         }
         self.with_state(|state| {
             state.loc_request_state = LocationRequestState::Sent(new_geo.loc);
@@ -219,6 +227,7 @@ impl WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 Some(surface.class())
             }
+            _ => unreachable!(),
         }
     }
 
@@ -239,6 +248,7 @@ impl WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 Some(surface.title())
             }
+            _ => unreachable!(),
         }
     }
 
@@ -317,17 +327,6 @@ impl WindowElement {
     }
 }
 
-impl IsAlive for WindowElement {
-    fn alive(&self) -> bool {
-        match self {
-            WindowElement::Wayland(window) => window.alive(),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.alive()
-            }
-        }
-    }
-}
-
 impl PointerTarget<State> for WindowElement {
     fn frame(&self, seat: &Seat<State>, data: &mut State) {
         match self {
@@ -335,6 +334,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.frame(seat, data)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -345,6 +345,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::enter(surface, seat, data, event)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -355,6 +356,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::motion(surface, seat, data, event)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -372,6 +374,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::relative_motion(surface, seat, data, event);
             }
+            _ => unreachable!(),
         }
     }
 
@@ -387,6 +390,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::button(surface, seat, data, event)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -397,6 +401,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::axis(surface, seat, data, frame)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -409,6 +414,7 @@ impl PointerTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::leave(surface, seat, data, serial, time)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -500,6 +506,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::enter(surface, seat, data, keys, serial)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -509,6 +516,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::leave(surface, seat, data, serial)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -528,6 +536,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::key(surface, seat, data, key, state, serial, time);
             }
+            _ => unreachable!(),
         }
     }
 
@@ -545,83 +554,7 @@ impl KeyboardTarget<State> for WindowElement {
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::modifiers(surface, seat, data, modifiers, serial);
             }
-        }
-    }
-}
-
-impl SpaceElement for WindowElement {
-    fn geometry(&self) -> Rectangle<i32, Logical> {
-        // TODO: ssd
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::geometry(window),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::geometry(surface)
-            }
-        }
-    }
-
-    fn bbox(&self) -> Rectangle<i32, Logical> {
-        // TODO: ssd
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::bbox(window),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::bbox(surface)
-            }
-        }
-    }
-
-    fn is_in_input_region(&self, point: &Point<f64, Logical>) -> bool {
-        // TODO: ssd
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::is_in_input_region(window, point),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::is_in_input_region(surface, point)
-            }
-        }
-    }
-
-    fn z_index(&self) -> u8 {
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::z_index(window),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::z_index(surface)
-            }
-        }
-    }
-
-    fn set_activate(&self, activated: bool) {
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::set_activate(window, activated),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::set_activate(surface, activated)
-            }
-        }
-    }
-
-    fn output_enter(&self, output: &Output, overlap: Rectangle<i32, Logical>) {
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::output_enter(window, output, overlap),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::output_enter(surface, output, overlap)
-            }
-        }
-    }
-
-    fn output_leave(&self, output: &Output) {
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::output_leave(window, output),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::output_leave(surface, output)
-            }
-        }
-    }
-
-    fn refresh(&self) {
-        match self {
-            WindowElement::Wayland(window) => SpaceElement::refresh(window),
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                SpaceElement::refresh(surface)
-            }
+            _ => unreachable!(),
         }
     }
 }

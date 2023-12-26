@@ -79,6 +79,7 @@ impl State {
                             surface.close().expect("failed to close x11 win");
                         }
                         WindowElement::X11OverrideRedirect(_) => (),
+                        _ => unreachable!(),
                     }
                 }
             }
@@ -121,7 +122,8 @@ impl State {
                         FloatingOrTiled::Tiled(_) => FloatingOrTiled::Tiled(Some(rect)),
                     }
                 });
-                if let Some(output) = window.output(self) {
+
+                for output in self.space.outputs_for_element(&window) {
                     self.update_windows(&output);
                     self.schedule_render(&output);
                 }
@@ -158,11 +160,6 @@ impl State {
 
                 let Some(output) = window.output(self) else { return };
                 self.update_windows(&output);
-
-                // Sometimes toggling won't change the window size,
-                // causing no commit.
-                //
-                // Schedule a render in case the window moves.
                 self.schedule_render(&output);
             }
             Msg::ToggleFullscreen { window_id } => {
@@ -185,9 +182,8 @@ impl State {
                 self.config.window_rules.push((cond, rule));
             }
             Msg::WindowMoveGrab { button } => {
-                // TODO: in the future, there may be movable layer surfaces
                 let Some((FocusTarget::Window(window), _)) =
-                    self.surface_under(self.pointer_location)
+                    self.focus_target_under(self.pointer_location)
                 else {
                     return;
                 };
@@ -208,7 +204,7 @@ impl State {
                 // TODO: in the future, there may be movable layer surfaces
                 let pointer_loc = self.pointer_location;
                 let Some((FocusTarget::Window(window), window_loc)) =
-                    self.surface_under(pointer_loc)
+                    self.focus_target_under(pointer_loc)
                 else {
                     return;
                 };
@@ -513,6 +509,7 @@ impl State {
                     WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                         (Some(surface.class()), Some(surface.title()))
                     }
+                    _ => unreachable!(),
                 });
 
                 let focused = window.as_ref().and_then(|win| {
@@ -749,7 +746,6 @@ impl State {
                     }
                 };
 
-                // This is not important enough to crash on error, so just print the error instead
                 if let Err(err) = self.async_scheduler.schedule(future) {
                     tracing::error!("Failed to schedule future: {err}");
                 }

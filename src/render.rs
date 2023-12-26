@@ -78,6 +78,7 @@ where
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.render_elements(renderer, location, scale, alpha)
             }
+            _ => unreachable!(),
         }
         .into_iter()
         .map(C::from)
@@ -117,7 +118,7 @@ where
         .map(|(surface, loc)| {
             let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
                 renderer,
-                loc.to_physical((scale.x.round() as i32, scale.x.round() as i32)),
+                loc.to_physical((scale.x.round() as i32, scale.y.round() as i32)),
                 scale,
                 1.0,
             );
@@ -143,6 +144,7 @@ where
 
 /// Get render elements for windows on active tags.
 fn tag_render_elements<R>(
+    output: &Output,
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
@@ -155,14 +157,22 @@ where
     let elements = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
-        .filter(|win| win.is_on_active_tag(space.outputs()))
+        .filter(|win| {
+            win.is_on_active_tag(space.outputs())
+        })
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
-            let loc = (space.element_location(win).unwrap_or((0, 0).into())
-                - win.geometry().loc)
+            let loc = (space.element_location(win).unwrap_or((0, 0).into()) - win.geometry().loc - output.current_location())
                 .to_physical((scale.x.round() as i32, scale.x.round() as i32));
-            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), space.element_geometry(win))
+
+            let elem_geo = space.element_geometry(win).map(|mut geo| {
+                geo.loc -= output.current_location();
+                geo
+            });
+
+            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
         }).flat_map(|(elems, rect)| {
+            // elems.into_iter().map(OutputRenderElements::from).collect::<Vec<_>>()
             match rect {
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {
@@ -296,22 +306,26 @@ where
     output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
 
     let top_fullscreen_window = windows.iter().rev().find(|win| {
+        let is_wayland_actually_fullscreen = {
+            if let WindowElement::Wayland(window) = win {
+                window
+                    .toplevel()
+                    .current_state()
+                    .states
+                    .contains(xdg_toplevel::State::Fullscreen)
+            } else {
+                true
+            }
+        };
+
         win.with_state(|state| {
-            let is_wayland_actually_fullscreen = {
-                if let WindowElement::Wayland(window) = win {
-                    window
-                        .toplevel()
-                        .current_state()
-                        .states
-                        .contains(xdg_toplevel::State::Fullscreen)
-                } else {
-                    true
-                }
-            };
             state.fullscreen_or_maximized.is_fullscreen()
-                && state.tags.iter().any(|tag| tag.active())
-                && is_wayland_actually_fullscreen
-        })
+                && output.with_state(|op_state| {
+                    op_state
+                        .focused_tags()
+                        .any(|op_tag| state.tags.contains(op_tag))
+                })
+        }) && is_wayland_actually_fullscreen
     });
 
     // If fullscreen windows exist, render only the topmost one
@@ -332,7 +346,8 @@ where
             overlay,
         } = layer_render_elements(output, renderer, scale);
 
-        let window_render_elements = tag_render_elements::<R>(&windows, space, renderer, scale);
+        let window_render_elements =
+            tag_render_elements::<R>(output, &windows, space, renderer, scale);
 
         // Elements render from top to bottom
 

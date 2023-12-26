@@ -125,6 +125,7 @@ impl WindowElement {
                             .expect("failed to set x11 win to not fullscreen");
                     }
                     WindowElement::X11OverrideRedirect(_) => (),
+                    _ => unreachable!(),
                 }
             }
             FullscreenOrMaximized::Fullscreen => {
@@ -170,7 +171,8 @@ impl WindowElement {
                             .set_fullscreen(false)
                             .expect("failed to set x11 win to not fullscreen");
                     }
-                    Self::X11OverrideRedirect(_) => (),
+                    WindowElement::X11OverrideRedirect(_) => (),
+                    _ => unreachable!(),
                 }
             }
             FullscreenOrMaximized::Maximized => {
@@ -211,7 +213,8 @@ impl WindowElement {
                     .set_fullscreen(false)
                     .expect("failed to set x11 win to not fullscreen");
             }
-            Self::X11OverrideRedirect(_) => (),
+            WindowElement::X11OverrideRedirect(_) => (),
+            _ => unreachable!(),
         }
     }
 
@@ -238,6 +241,7 @@ impl WindowElement {
                     .expect("failed to set x11 win to not fullscreen");
             }
             WindowElement::X11OverrideRedirect(_) => (),
+            _ => unreachable!(),
         }
     }
 }
