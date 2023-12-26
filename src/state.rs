@@ -41,6 +41,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
+use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
 
 use crate::input::InputState;
 
@@ -98,6 +99,8 @@ pub struct State {
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
+
+    pub system_processes: sysinfo::System,
 }
 
 impl State {
@@ -281,6 +284,10 @@ impl State {
             xwayland,
             xwm: None,
             xdisplay: None,
+
+            system_processes: sysinfo::System::new_with_specifics(
+                RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+            ),
         })
     }
 

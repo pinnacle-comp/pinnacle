@@ -125,6 +125,11 @@ pub enum Msg {
         #[serde(default)]
         callback_id: Option<CallbackId>,
     },
+    SpawnOnce {
+        command: Vec<String>,
+        #[serde(default)]
+        callback_id: Option<CallbackId>,
+    },
     SetEnv {
         key: String,
         value: String,

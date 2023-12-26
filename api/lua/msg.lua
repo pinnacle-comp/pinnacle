@@ -18,6 +18,7 @@
 ---@field WindowResizeGrab { button: integer }?
 --
 ---@field Spawn { command: string[], callback_id: integer? }?
+---@field SpawnOnce { command: string[], callback_id: integer? }?
 ---@field SetEnv { key: string, value: string }?
 --Tags
 ---@field ToggleTag { tag_id: TagId }?

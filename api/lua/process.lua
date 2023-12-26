@@ -8,17 +8,10 @@
 ---@class ProcessModule
 local process_module = {}
 
----Spawn a process with an optional callback for its stdout, stderr, and exit information.
----
----`callback` has the following parameters:
----
---- - `stdout` - The process's stdout printed this line.
---- - `stderr` - The process's stderr printed this line.
---- - `exit_code` - The process exited with this code.
---- - `exit_msg` - The process exited with this message.
----@param command string|string[] The command as one whole string or a table of each of its arguments
+---@param command string|string[]
 ---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
-function process_module.spawn(command, callback)
+---@param spawn_once boolean
+local function spawn_inner(command, callback, spawn_once)
     ---@type integer|nil
     local callback_id = nil
 
@@ -40,14 +33,38 @@ function process_module.spawn(command, callback)
         command_arr = command
     end
 
-    SendMsg({
-        Spawn = {
-            command = command_arr,
-            callback_id = callback_id,
-        },
-    })
+    if spawn_once then
+        SendMsg({
+            SpawnOnce = {
+                command = command_arr,
+                callback_id = callback_id,
+            },
+        })
+    else
+        SendMsg({
+            Spawn = {
+                command = command_arr,
+                callback_id = callback_id,
+            },
+        })
+    end
 end
 
+---Spawn a process with an optional callback for its stdout, stderr, and exit information.
+---
+---`callback` has the following parameters:
+---
+--- - `stdout` - The process's stdout printed this line.
+--- - `stderr` - The process's stderr printed this line.
+--- - `exit_code` - The process exited with this code.
+--- - `exit_msg` - The process exited with this message.
+---@param command string|string[] The command as one whole string or a table of each of its arguments
+---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
+function process_module.spawn(command, callback)
+    spawn_inner(command, callback, false)
+end
+
+-- PERF: callback is stored regardless if cmd was actually spawned
 ---Spawn a process only if it isn't already running, with an optional callback for its stdout, stderr, and exit information.
 ---
 ---`callback` has the following parameters:
@@ -61,19 +78,7 @@ end
 ---@param command string|string[] The command as one whole string or a table of each of its arguments
 ---@param callback fun(stdout: string|nil, stderr: string|nil, exit_code: integer|nil, exit_msg: string|nil)? A callback to do something whenever the process's stdout or stderr print a line, or when the process exits.
 function process_module.spawn_once(command, callback)
-    local proc = ""
-    if type(command) == "string" then
-        proc = command:match("%S+")
-    else
-        proc = command[1]
-    end
-
-    ---@type string
-    local procs = io.popen("pgrep -f " .. proc):read("*a")
-    if procs:len() ~= 0 then -- if process exists, return
-        return
-    end
-    process_module.spawn(command, callback)
+    spawn_inner(command, callback, true)
 end
 
 ---Set an environment variable for Pinnacle. All future processes spawned will have this env set.
