@@ -54,17 +54,6 @@ space_elements! {
     X11OverrideRedirect = X11Surface,
 }
 
-// /// The different types of windows.
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum WindowElement {
-//     /// This is a native Wayland window.
-//     Wayland(Window),
-//     /// This is an Xwayland window.
-//     X11(X11Surface),
-//     /// This is an Xwayland override redirect window, which should not be messed with.
-//     X11OverrideRedirect(X11Surface),
-// }
-
 impl WindowElement {
     pub fn with_surfaces<F>(&self, processor: F)
     where
