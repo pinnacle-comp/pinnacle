@@ -9,7 +9,7 @@ use smithay::{
     utils::{Point, Rectangle, SERIAL_COUNTER},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
-use sysinfo::{PidExt, ProcessExt, ProcessRefreshKind, SystemExt};
+use sysinfo::ProcessRefreshKind;
 
 use crate::{
     api::msg::{

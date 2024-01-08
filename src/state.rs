@@ -41,7 +41,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
-use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
+use sysinfo::{ProcessRefreshKind, RefreshKind};
 
 use crate::input::InputState;
 

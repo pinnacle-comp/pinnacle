@@ -15,7 +15,7 @@ use smithay::{
     input::keyboard::keysyms,
     utils::{Logical, Point},
 };
-use sysinfo::{ProcessRefreshKind, SystemExt};
+use sysinfo::ProcessRefreshKind;
 use toml::Table;
 
 use crate::api::msg::{CallbackId, Modifier};

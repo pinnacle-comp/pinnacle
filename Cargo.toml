@@ -13,8 +13,8 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
-smithay = { git = "https://github.com/Smithay/smithay", rev = "56b6441a14600593d13229b9584058ec19e3e18b", default-features = false, features = ["desktop", "wayland_frontend"] }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "56b6441a14600593d13229b9584058ec19e3e18b", optional = true }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "77686d7", default-features = false, features = ["desktop", "wayland_frontend"] }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "77686d7", optional = true }
 thiserror = "1"
 xcursor = { version = "0.3", optional = true }
 image = { version = "0.24", default-features = false, optional = true }
@@ -33,7 +33,7 @@ clap = { version = "4.4", features = ["derive"] }
 xkbcommon = "0.7"
 xdg = "2.5.2"
 lazy_static = "1.4"
-sysinfo = "0.29"
+sysinfo = "0.30.5"
 nix = { version = "0.27", features = ["user", "resource"] }
 
 [features]

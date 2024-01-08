@@ -13,7 +13,7 @@
 
 use clap::Parser;
 use nix::unistd::Uid;
-use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
+use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
