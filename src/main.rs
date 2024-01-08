@@ -11,13 +11,8 @@
 // #![deny(unused_imports)] // gonna force myself to keep stuff clean
 #![warn(clippy::unwrap_used)]
 
-use std::path::Path;
-
 use clap::Parser;
 use nix::unistd::Uid;
-use sysinfo::{ProcessRefreshKind, RefreshKind};
-use tokio::net::UnixListener;
-use tokio_stream::wrappers::UnixListenerStream;
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
 use xdg::BaseDirectories;
@@ -40,10 +35,6 @@ mod window;
 lazy_static::lazy_static! {
     pub static ref XDG_BASE_DIRS: BaseDirectories =
         BaseDirectories::with_prefix("pinnacle").expect("couldn't create xdg BaseDirectories");
-    pub static ref SYSTEM_PROCESSES: sysinfo::System =
-        sysinfo::System::new_with_specifics(
-            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-        );
 }
 
 #[derive(clap::Args, Debug)]
@@ -70,24 +61,24 @@ struct Args {
     force: bool,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let p = Path::new("/tmp/pinnacle/grpc.sock");
-    let _ = std::fs::remove_file(p);
-    std::fs::create_dir_all(p.parent().unwrap())?;
-    let uds = UnixListener::bind(p)?;
-    let uds_stream = UnixListenerStream::new(uds);
-
-    tonic::transport::Server::builder()
-        .add_service(
-            api::protocol::request::command_service_server::CommandServiceServer::new(
-                crate::api::protocol::CommandServer,
-            ),
-        )
-        .serve_with_incoming(uds_stream)
-        // .serve("127.0.0.1:8080".parse().unwrap())
-        .await
-        .unwrap();
+    // let p = Path::new("/tmp/pinnacle/grpc.sock");
+    // let _ = std::fs::remove_file(p);
+    // std::fs::create_dir_all(p.parent().unwrap())?;
+    // let uds = UnixListener::bind(p)?;
+    // let uds_stream = UnixListenerStream::new(uds);
+    //
+    // tonic::transport::Server::builder()
+    //     .add_service(
+    //         api::protocol::request::command_service_server::CommandServiceServer::new(
+    //             crate::api::protocol::CommandServer,
+    //         ),
+    //     )
+    //     .serve_with_incoming(uds_stream)
+    //     // .serve("127.0.0.1:8080".parse().unwrap())
+    //     .await
+    //     .unwrap();
 
     let xdg_state_dir = XDG_BASE_DIRS.get_state_home();
 

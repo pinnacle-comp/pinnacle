@@ -8,7 +8,6 @@ use std::{
 };
 
 use anyhow::Context;
-use calloop::Idle;
 use smithay::{
     backend::{
         allocator::{
@@ -48,7 +47,7 @@ use smithay::{
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
-        calloop::{EventLoop, LoopHandle, RegistrationToken},
+        calloop::{EventLoop, Idle, LoopHandle, RegistrationToken},
         drm::{
             control::{connector, crtc, ModeTypeFlags},
             Device,

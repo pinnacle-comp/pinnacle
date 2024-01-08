@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, os::unix::net::UnixStream, path::Path, sync::Arc, time::Duration};
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use crate::{
-    api::{msg::Msg, protocol::request::command_service_server::CommandServiceServer, ApiState},
+    api::{msg::Msg, ApiState},
     backend::Backend,
     config::Config,
     cursor::Cursor,
@@ -11,7 +11,6 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
-use calloop::futures::Scheduler;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -42,9 +41,6 @@ use smithay::{
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind};
-use tokio::net::UnixListener;
-use tokio_stream::wrappers::UnixListenerStream;
-use tonic::transport::Server;
 
 use crate::input::InputState;
 
@@ -95,15 +91,14 @@ pub struct State {
 
     pub config: Config,
 
-    /// A scheduler for futures
-    pub async_scheduler: Scheduler<()>,
-
     // xwayland stuff
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
     pub system_processes: sysinfo::System,
+
+    pub config_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl State {
@@ -169,17 +164,6 @@ impl State {
                 panic!("failed to start config: {err}");
             }
         });
-
-        let (executor, sched) = calloop::futures::executor::<()>()?;
-
-        if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
-            anyhow::bail!("Failed to insert async executor into event loop: {err}");
-        }
-
-        // TODO:
-        {
-            sched.schedule(async move {}).expect("TODO");
-        }
 
         let mut seat_state = SeatState::new();
 
@@ -270,8 +254,6 @@ impl State {
                 stream: None,
                 socket_token: None,
                 tx_channel,
-                kill_channel: None,
-                future_channel: None,
             },
             focus_state: FocusState::new(),
 
@@ -285,8 +267,6 @@ impl State {
 
             popup_manager: PopupManager::default(),
 
-            async_scheduler: sched,
-
             windows: vec![],
 
             xwayland,
@@ -296,6 +276,8 @@ impl State {
             system_processes: sysinfo::System::new_with_specifics(
                 RefreshKind::new().with_processes(ProcessRefreshKind::new()),
             ),
+
+            config_join_handle: None,
         })
     }
 

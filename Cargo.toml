@@ -21,11 +21,11 @@ image = { version = "0.24", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 rmp = { version = "0.8.12" }
 rmp-serde = { version = "1.1.2" }
-calloop = { version = "0.12.2", features = ["executor", "futures-io"] }
-futures-lite = { version = "2" }
-async-process = { version = "2" }
-async-channel = "2"
-async-net = "2.0.0"
+# calloop = { version = "0.12.2", features = ["executor", "futures-io"] }
+# futures-lite = { version = "2" }
+# async-process = { version = "2" }
+# async-channel = "2"
+# async-net = "2.0.0"
 x11rb = { version = "0.13", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
 toml = "0.8"
@@ -40,7 +40,7 @@ prost = "0.12.3"
 prost-types = "0.12.3"
 tonic = "0.10.2"
 tokio-stream = { version = "0.1.14", features = ["net"] }
-tokio = { version = "1.35.1", features = ["macros"]}
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process", "io-util"]}
 
 [build-dependencies]
 tonic-build = "0.10.2"

@@ -7,6 +7,7 @@ use crate::{
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    process::Stdio,
     sync::{Arc, Mutex},
 };
 
@@ -183,11 +184,9 @@ impl State {
         self.input_state.libinput_settings.clear();
         self.config.window_rules.clear();
 
-        if let Some(channel) = self.api_state.kill_channel.as_ref() {
+        if let Some(config_join_handle) = self.config_join_handle.take() {
             tracing::debug!("Killing old config");
-            if let Err(err) = futures_lite::future::block_on(channel.send(())) {
-                tracing::warn!("failed to send kill ping to config future: {err}");
-            }
+            config_join_handle.abort();
         }
 
         if let Some(token) = self.api_state.socket_token {
@@ -287,12 +286,12 @@ impl State {
 
         tracing::debug!("Config envs are {envs:?}");
 
-        let mut child = async_process::Command::new(arg0)
+        let mut child = tokio::process::Command::new(arg0)
             .args(command)
             .envs(envs)
             .current_dir(config_dir)
-            .stdout(async_process::Stdio::inherit())
-            .stderr(async_process::Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
             .context("failed to spawn config")?;
@@ -327,43 +326,9 @@ impl State {
 
         self.api_state.socket_token = Some(socket_token);
 
-        let (kill_channel, future_channel) = async_channel::unbounded::<()>();
-
-        self.api_state.kill_channel = Some(kill_channel);
-        self.api_state.future_channel = Some(future_channel.clone());
-
-        let loop_handle = self.loop_handle.clone();
-
-        enum Either {
-            First,
-            Second,
-        }
-
-        // We can't get at the child while it's in the executor, so in order to kill it we need a
-        // channel that, when notified, will cause the child to be dropped and terminated.
-        self.async_scheduler.schedule(async move {
-            let which = futures_lite::future::race(
-                async move {
-                    let _ = child.status().await;
-                    Either::First
-                },
-                async move {
-                    let _ = future_channel.recv().await;
-                    Either::Second
-                },
-            )
-            .await;
-
-            if let Either::First = which {
-                tracing::warn!("Config crashed, loading default");
-
-                loop_handle.insert_idle(|data| {
-                    data.state
-                        .start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
-                        .expect("failed to load default config");
-                });
-            }
-        })?;
+        self.config_join_handle = Some(tokio::spawn(async move {
+            let _ = child.wait().await;
+        }));
 
         Ok(())
     }

@@ -224,8 +224,4 @@ pub struct ApiState {
     pub socket_token: Option<RegistrationToken>,
     /// The sending channel used to send API messages received from the socket source to a handler.
     pub tx_channel: Sender<Msg>,
-    /// A channel used to ping the future in the event loop to drop and kill the child.
-    pub kill_channel: Option<async_channel::Sender<()>>,
-    /// A receiving channel that will cause the config process to be dropped and thus killed.
-    pub future_channel: Option<async_channel::Receiver<()>>,
 }
