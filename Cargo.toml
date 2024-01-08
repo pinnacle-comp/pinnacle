@@ -25,6 +25,7 @@ calloop = { version = "0.12.2", features = ["executor", "futures-io"] }
 futures-lite = { version = "2" }
 async-process = { version = "2" }
 async-channel = "2"
+async-net = "2.0.0"
 x11rb = { version = "0.13", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
 toml = "0.8"
@@ -35,6 +36,14 @@ xdg = "2.5.2"
 lazy_static = "1.4"
 sysinfo = "0.30.5"
 nix = { version = "0.27", features = ["user", "resource"] }
+prost = "0.12.3"
+prost-types = "0.12.3"
+tonic = "0.10.2"
+tokio-stream = { version = "0.1.14", features = ["net"] }
+tokio = { version = "1.35.1", features = ["macros"]}
+
+[build-dependencies]
+tonic-build = "0.10.2"
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]

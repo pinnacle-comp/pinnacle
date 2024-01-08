@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, sync::Arc, time::Duration};
+use std::{cell::RefCell, os::unix::net::UnixStream, path::Path, sync::Arc, time::Duration};
 
 use crate::{
-    api::{msg::Msg, ApiState},
+    api::{msg::Msg, protocol::request::command_service_server::CommandServiceServer, ApiState},
     backend::Backend,
     config::Config,
     cursor::Cursor,
@@ -42,6 +42,9 @@ use smithay::{
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind};
+use tokio::net::UnixListener;
+use tokio_stream::wrappers::UnixListenerStream;
+use tonic::transport::Server;
 
 use crate::input::InputState;
 
@@ -171,6 +174,11 @@ impl State {
 
         if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
             anyhow::bail!("Failed to insert async executor into event loop: {err}");
+        }
+
+        // TODO:
+        {
+            sched.schedule(async move {}).expect("TODO");
         }
 
         let mut seat_state = SeatState::new();
