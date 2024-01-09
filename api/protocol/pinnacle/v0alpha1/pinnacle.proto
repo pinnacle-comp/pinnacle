@@ -1,0 +1,18 @@
+syntax = "proto2";
+
+package pinnacle.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+message Geometry {
+  optional int32 x = 1;
+  optional int32 y = 2;
+  optional int32 width = 3;
+  optional int32 height = 4;
+}
+
+message QuitRequest {}
+
+service PinnacleService {
+  rpc Quit(QuitRequest) returns (google.protobuf.Empty);
+}

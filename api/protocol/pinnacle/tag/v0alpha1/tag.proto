@@ -1,0 +1,67 @@
+syntax = "proto2";
+
+package pinnacle.tag.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+message SetActiveRequest {
+  oneof set_or_toggle {
+    bool set = 1;
+    google.protobuf.Empty toggle = 2;
+  }
+}
+
+message SwitchToRequest {
+  optional uint32 tag_id = 1;
+}
+
+message AddRequest {
+  optional string output_name = 1;
+  repeated string tag_names = 2;
+}
+message AddResponse {
+  repeated uint32 tag_ids = 1;
+}
+
+message RemoveRequest {
+  repeated uint32 tag_ids = 1;
+}
+
+message SetLayoutRequest {
+  optional uint32 tag_id = 1;
+  enum Layout {
+    LAYOUT_UNSPECIFIED = 0;
+    LAYOUT_MASTER_STACK = 1;
+    LAYOUT_DWINDLE = 2;
+    LAYOUT_SPIRAL = 3;
+    LAYOUT_CORNER_TOP_LEFT = 4;
+    LAYOUT_CORNER_TOP_RIGHT = 5;
+    LAYOUT_CORNER_BOTTOM_LEFT = 6;
+    LAYOUT_CORNER_BOTTOM_RIGHT = 7;
+  }
+  optional Layout layout = 2;
+}
+
+message GetRequest {}
+message GetResponse {
+  repeated uint32 tag_ids = 1;
+}
+
+message GetPropertiesRequest {
+  optional uint32 tag_id = 1;
+}
+message GetPropertiesResponse {
+  optional bool active = 1;
+  optional string name = 2;
+  optional string output_name = 3;
+}
+
+service TagService {
+  rpc SetActive(SetActiveRequest) returns (google.protobuf.Empty);
+  rpc SwitchTo(SwitchToRequest) returns (google.protobuf.Empty);
+  rpc Add(AddRequest) returns (AddResponse);
+  rpc Remove(RemoveRequest) returns (google.protobuf.Empty);
+  rpc SetLayout(SetLayoutRequest) returns (google.protobuf.Empty);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
+}

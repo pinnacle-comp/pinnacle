@@ -44,6 +44,7 @@ tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process"
 
 [build-dependencies]
 tonic-build = "0.10.2"
+const_format = "0.2.32"
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]

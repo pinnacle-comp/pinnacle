@@ -1,0 +1,47 @@
+syntax = "proto2";
+
+package pinnacle.output.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+message SetLocationRequest {
+  optional string output_name = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+}
+
+message ConnectForAllRequest {}
+message ConnectForAllResponse {
+  optional string output_name = 1;
+}
+
+message GetRequest {}
+message GetResponse {
+  repeated string output_names = 1;
+}
+
+message GetPropertiesRequest {
+  optional string output_name = 1;
+}
+message GetPropertiesResponse {
+  optional string make = 1;
+  optional string model = 2;
+  optional int32 x = 3;
+  optional int32 y = 4;
+  optional uint32 pixel_width = 5;
+  optional uint32 pixel_height = 6;
+  optional uint32 refresh_rate = 7;
+  // In millimeters
+  optional uint32 physical_width = 8;
+  // In millimeters
+  optional uint32 physical_height = 9;
+  optional bool focused = 10;
+  repeated uint32 tag_ids = 11;
+}
+
+service OutputService {
+  rpc SetLocation(SetLocationRequest) returns (google.protobuf.Empty);
+  rpc ConnectForAll(ConnectForAllRequest) returns (stream ConnectForAllResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
+}

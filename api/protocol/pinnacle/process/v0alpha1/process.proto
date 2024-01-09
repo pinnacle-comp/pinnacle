@@ -1,0 +1,23 @@
+syntax = "proto2";
+
+package pinnacle.input.v0alpha1;
+
+message SpawnRequest {
+  repeated string args = 1;
+  // Whether or not to spawn `args` if it is already running.
+  //
+  // `false` for yes, `true` for no
+  optional bool once = 2;
+  optional bool has_callback = 3;
+}
+
+message SpawnResponse {
+  optional string stdout = 1;
+  optional string stderr = 2;
+  optional int32 exit_code = 3;
+  optional string exit_message = 4;
+}
+
+service ProcessService {
+  rpc Spawn(SpawnRequest) returns (stream SpawnResponse);
+}

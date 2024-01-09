@@ -1,0 +1,37 @@
+syntax = "proto2";
+
+package pinnacle.window.rules.v0alpha1;
+
+enum FullscreenOrMaximized {
+  FULLSCREEN_OR_MAXIMIZED_UNSPECIFIED = 0;
+  FULLSCREEN_OR_MAXIMIZED_NEITHER = 1;
+  FULLSCREEN_OR_MAXIMIZED_FULLSCREEN = 2;
+  FULLSCREEN_OR_MAXIMIZED_MAXIMIZED = 3;
+}
+
+message AddWindowRuleRequest {
+  optional WindowRuleCondition cond = 1;
+  optional WindowRule rule = 2;
+}
+
+message WindowRuleCondition {
+  repeated WindowRuleCondition any = 1;
+  repeated WindowRuleCondition all = 2;
+  repeated string classes = 3;
+  repeated string titles = 4;
+  repeated uint32 tags = 5;
+}
+
+message WindowRule {
+  optional string output = 1;
+  repeated uint32 tags = 2;
+  // `true` for floating, `false` for tiled
+  optional bool floating = 3;
+
+  optional FullscreenOrMaximized fullscreen_or_maximized = 4;
+
+  optional int32 x = 5;
+  optional int32 y = 6;
+  optional int32 width = 7;
+  optional int32 height = 8;
+}
