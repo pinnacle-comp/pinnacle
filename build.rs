@@ -9,8 +9,6 @@ fn main() {
         .spawn()
         .unwrap();
 
-    tonic_build::compile_protos("api/protocol/request.proto").unwrap();
-
     const VERSION: &str = "v0alpha1";
     const PROTOS: &[&str] = &[
         formatcp!("api/protocol/pinnacle/{VERSION}/pinnacle.proto"),
