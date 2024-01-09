@@ -1,4 +1,5 @@
 pub mod pinnacle {
+
     pub mod v0alpha1 {
         tonic::include_proto!("pinnacle.v0alpha1");
     }
@@ -39,3 +40,5 @@ pub mod pinnacle {
         }
     }
 }
+
+pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("pinnacle");

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use const_format::formatcp;
 
 fn main() {
@@ -21,7 +23,10 @@ fn main() {
         formatcp!("api/protocol/pinnacle/window/rules/{VERSION}/rules.proto"),
     ];
 
+    let descriptor_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("pinnacle.bin");
+
     tonic_build::configure()
+        .file_descriptor_set_path(descriptor_path)
         .compile(PROTOS, &["api/protocol"])
         .unwrap();
 }
