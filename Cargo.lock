@@ -1548,11 +1548,12 @@ name = "pinnacle"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "bitflags 2.4.1",
  "clap",
- "const_format",
  "image",
  "lazy_static",
  "nix 0.27.1",
+ "pinnacle-api-defs",
  "prost",
  "prost-types",
  "rmp",
@@ -1567,7 +1568,6 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
- "tonic-build",
  "tonic-reflection",
  "tracing",
  "tracing-appender",
@@ -1576,6 +1576,16 @@ dependencies = [
  "xcursor",
  "xdg",
  "xkbcommon",
+]
+
+[[package]]
+name = "pinnacle-api-defs"
+version = "0.0.1"
+dependencies = [
+ "const_format",
+ "prost",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]

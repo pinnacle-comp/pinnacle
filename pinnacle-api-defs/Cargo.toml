@@ -1,0 +1,13 @@
+[package]
+name = "pinnacle-api-defs"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+tonic = "0.10.2"
+prost = "0.12.3"
+# prost-types = "0.12.3"
+
+[build-dependencies]
+tonic-build = "0.10.2"
+const_format = "0.2.32"

@@ -9,7 +9,8 @@ enum Modifier {
   MODIFIER_UNSPECIFIED = 0;
   MODIFIER_SHIFT = 1;
   MODIFIER_CTRL = 2;
-  MODIFIER_SUPER = 3;
+  MODIFIER_ALT = 3;
+  MODIFIER_SUPER = 4;
 }
 
 message SetKeybindRequest {

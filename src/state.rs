@@ -3,7 +3,14 @@
 use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use crate::{
-    api::{msg::Msg, ApiState},
+    api::{
+        msg::Msg,
+        protocol::{
+            pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer, InputService,
+            PinnacleService,
+        },
+        ApiState,
+    },
     backend::Backend,
     config::Config,
     cursor::Cursor,
@@ -11,6 +18,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
+use pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputServiceServer;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -226,6 +234,42 @@ impl State {
             xwayland
         };
         tracing::debug!("xwayland set up");
+
+        let (grpc_sender, grpc_receiver) =
+            calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
+
+        loop_handle.insert_idle(|data| {
+            data.state
+                .loop_handle
+                .insert_source(grpc_receiver, |msg, _, data| match msg {
+                    Event::Msg(f) => f(&mut data.state),
+                    Event::Closed => panic!("grpc receiver was closed"),
+                })
+                .expect("failed to insert grpc_receiver into loop");
+        });
+
+        let pinnacle_service = PinnacleService {
+            sender: grpc_sender.clone(),
+        };
+        let input_service = InputService {
+            sender: grpc_sender.clone(),
+        };
+
+        let refl_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(crate::api::protocol::FILE_DESCRIPTOR_SET)
+            .build()?;
+
+        let addr = "127.0.0.1:8080".parse()?;
+
+        tokio::spawn(async move {
+            tonic::transport::Server::builder()
+                .add_service(refl_service)
+                .add_service(PinnacleServiceServer::new(pinnacle_service))
+                .add_service(InputServiceServer::new(input_service))
+                .serve(addr)
+                .await
+                .expect("failed to serve grpc");
+        });
 
         Ok(Self {
             backend,

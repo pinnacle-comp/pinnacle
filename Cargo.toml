@@ -21,11 +21,6 @@ image = { version = "0.24", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 rmp = { version = "0.8.12" }
 rmp-serde = { version = "1.1.2" }
-# calloop = { version = "0.12.2", features = ["executor", "futures-io"] }
-# futures-lite = { version = "2" }
-# async-process = { version = "2" }
-# async-channel = "2"
-# async-net = "2.0.0"
 x11rb = { version = "0.13", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
 toml = "0.8"
@@ -42,10 +37,9 @@ tonic = "0.10.2"
 tonic-reflection = "0.10.2"
 tokio-stream = { version = "0.1.14", features = ["net"] }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process", "io-util"]}
+bitflags = "2.4.1"
+pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 
-[build-dependencies]
-tonic-build = "0.10.2"
-const_format = "0.2.32"
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]
@@ -66,3 +60,6 @@ udev = [
 ]
 winit = ["smithay/backend_winit", "smithay/backend_drm"]
 xwayland = ["smithay/xwayland", "x11rb", "smithay/x11rb_event_source", "xcursor"]
+
+[workspace]
+members = ["pinnacle-api-defs"]
