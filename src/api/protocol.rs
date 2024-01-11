@@ -1,16 +1,30 @@
-use std::{ffi::OsString, pin::Pin, process::Stdio};
+use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
     input::libinput::v0alpha1::set_libinput_setting_request::{
         AccelProfile, ClickMethod, ScrollMethod, TapButtonMap,
     },
+    output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
     tag::v0alpha1::{
         AddRequest, AddResponse, RemoveRequest, SetActiveRequest, SetLayoutRequest, SwitchToRequest,
     },
+    v0alpha1::Geometry,
+    window::{
+        rules::v0alpha1::{
+            AddWindowRuleRequest, FullscreenOrMaximized, WindowRule, WindowRuleCondition,
+        },
+        v0alpha1::{
+            CloseRequest, MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
+        },
+    },
 };
 use smithay::{
+    desktop::space::SpaceElement,
     input::keyboard::XkbConfig,
-    reexports::{calloop, input as libinput},
+    reexports::{calloop, input as libinput, wayland_protocols::xdg::shell::server},
+    utils::{Point, Rectangle, SERIAL_COUNTER},
+    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 use sysinfo::ProcessRefreshKind;
 use tokio::io::AsyncBufReadExt;
@@ -18,10 +32,17 @@ use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
 use crate::{
+    config::ConnectorSavedState,
+    focus::FocusTarget,
     input::ModifierMask,
     output::OutputName,
     state::{State, WithState},
     tag::{Tag, TagId},
+    window::{
+        rules::FloatingOrTiled,
+        window_state::{FloatingOrTiled, WindowId},
+        WindowElement,
+    },
 };
 
 use self::pinnacle::{
@@ -596,7 +617,7 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
                 .ok_or_else(|| Status::invalid_argument("no output specified"))?,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Vec<u32>>();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<AddResponse>();
 
         let f = Box::new(move |state: &mut State| {
             let new_tags = request
@@ -614,7 +635,7 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
                 })
                 .collect::<Vec<_>>();
 
-            let _ = sender.send(tag_ids);
+            let _ = sender.send(AddResponse { tag_ids });
 
             if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
                 let mut tags = saved_state.tags.clone();
@@ -660,33 +681,1093 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
             .send(f)
             .map_err(|_| Status::internal("internal state was not running"))?;
 
-        let ids = receiver
+        let response = receiver
             .recv()
             .await
             .ok_or_else(|| Status::internal("internal state was not running"))?;
 
-        Ok(Response::new(AddResponse { tag_ids: ids }))
+        Ok(Response::new(response))
     }
 
+    // TODO: test
     async fn remove(&self, request: Request<RemoveRequest>) -> Result<Response<()>, Status> {
-        todo!()
+        let request = request.into_inner();
+
+        let tag_ids = request.tag_ids.into_iter().map(TagId::Some);
+
+        let f = Box::new(move |state: &mut State| {
+            let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
+
+            for output in state.space.outputs() {
+                // TODO: seriously, convert state.tags into a hashset
+                output.with_state(|state| {
+                    for tag_to_remove in tags_to_remove.iter() {
+                        state.tags.retain(|tag| tag != tag_to_remove);
+                    }
+                });
+
+                state.update_windows(&output);
+                state.schedule_render(&output);
+            }
+
+            for conn_saved_state in state.config.connector_saved_states.values_mut() {
+                for tag_to_remove in tags_to_remove.iter() {
+                    conn_saved_state.tags.retain(|tag| tag != tag_to_remove);
+                }
+            }
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
     }
 
     async fn set_layout(&self, request: Request<SetLayoutRequest>) -> Result<Response<()>, Status> {
-        todo!()
+        let request = request.into_inner();
+
+        let tag_id = TagId::Some(
+            request
+                .tag_id
+                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
+        );
+
+        use pinnacle::tag::v0alpha1::set_layout_request::Layout;
+
+        // TODO: from impl
+        let layout = match request.layout() {
+            Layout::Unspecified => return Err(Status::invalid_argument("unspecified layout")),
+            Layout::MasterStack => crate::layout::Layout::MasterStack,
+            Layout::Dwindle => crate::layout::Layout::Dwindle,
+            Layout::Spiral => crate::layout::Layout::Spiral,
+            Layout::CornerTopLeft => crate::layout::Layout::CornerTopLeft,
+            Layout::CornerTopRight => crate::layout::Layout::CornerTopRight,
+            Layout::CornerBottomLeft => crate::layout::Layout::CornerBottomLeft,
+            Layout::CornerBottomRight => crate::layout::Layout::CornerBottomRight,
+        };
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(tag) = tag_id.tag(state) else { return };
+
+            tag.set_layout(layout);
+
+            let Some(output) = tag.output(state) else { return };
+
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
     }
 
     async fn get(
         &self,
-        request: Request<pinnacle::tag::v0alpha1::GetRequest>,
+        _request: Request<pinnacle::tag::v0alpha1::GetRequest>,
     ) -> Result<Response<pinnacle::tag::v0alpha1::GetResponse>, Status> {
-        todo!()
+        let (sender, mut receiver) =
+            tokio::sync::mpsc::unbounded_channel::<pinnacle::tag::v0alpha1::GetResponse>();
+
+        let f = Box::new(move |state: &mut State| {
+            let tag_ids = state
+                .space
+                .outputs()
+                .flat_map(|op| op.with_state(|state| state.tags.clone()))
+                .map(|tag| tag.id())
+                .map(|id| match id {
+                    TagId::None => unreachable!(),
+                    TagId::Some(id) => id,
+                })
+                .collect::<Vec<_>>();
+
+            let _ = sender.send(pinnacle::tag::v0alpha1::GetResponse { tag_ids });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
     }
 
     async fn get_properties(
         &self,
         request: Request<pinnacle::tag::v0alpha1::GetPropertiesRequest>,
     ) -> Result<Response<pinnacle::tag::v0alpha1::GetPropertiesResponse>, Status> {
-        todo!()
+        let request = request.into_inner();
+
+        let tag_id = TagId::Some(
+            request
+                .tag_id
+                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
+        );
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle::tag::v0alpha1::GetPropertiesResponse,
+        >();
+
+        let f = Box::new(move |state: &mut State| {
+            let tag = tag_id.tag(state);
+
+            let output_name = tag
+                .as_ref()
+                .and_then(|tag| tag.output(state))
+                .map(|output| output.name());
+            let active = tag.as_ref().map(|tag| tag.active());
+            let name = tag.as_ref().map(|tag| tag.name());
+
+            let _ = sender.send(pinnacle::tag::v0alpha1::GetPropertiesResponse {
+                active,
+                name,
+                output_name,
+            });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
+    }
+}
+
+pub struct OutputService {
+    pub sender: StateFnSender,
+}
+
+#[tonic::async_trait]
+impl pinnacle::output::v0alpha1::output_service_server::OutputService for OutputService {
+    type ConnectForAllStream = ResponseStream<ConnectForAllResponse>;
+
+    async fn set_location(
+        &self,
+        request: Request<SetLocationRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let output_name = OutputName(
+            request
+                .output_name
+                .ok_or_else(|| Status::invalid_argument("no output specified"))?,
+        );
+
+        let x = request.x;
+        let y = request.y;
+
+        let f = Box::new(move |state: &mut State| {
+            if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
+                if let Some(x) = x {
+                    saved_state.loc.x = x;
+                }
+                if let Some(y) = y {
+                    saved_state.loc.y = y;
+                }
+            } else {
+                state.config.connector_saved_states.insert(
+                    output_name.clone(),
+                    ConnectorSavedState {
+                        loc: (x.unwrap_or_default(), y.unwrap_or_default()).into(),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            let Some(output) = output_name.output(state) else {
+                return;
+            };
+            let mut loc = output.current_location();
+            if let Some(x) = x {
+                loc.x = x;
+            }
+            if let Some(y) = y {
+                loc.y = y;
+            }
+            output.change_current_state(None, None, None, Some(loc));
+            state.space.map_output(&output, loc);
+            tracing::debug!("Mapping output {} to {loc:?}", output.name());
+            state.update_windows(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn connect_for_all(
+        &self,
+        _request: Request<ConnectForAllRequest>,
+    ) -> Result<Response<Self::ConnectForAllStream>, Status> {
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<Result<ConnectForAllResponse, Status>>();
+
+        let f = Box::new(move |state: &mut State| {
+            for output in state.space.outputs() {
+                let _ = sender.send(Ok(ConnectForAllResponse {
+                    output_name: Some(output.name()),
+                }));
+            }
+
+            state.config.grpc_output_callback_senders.push(sender);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+
+        Ok(Response::new(Box::pin(receiver_stream)))
+    }
+
+    async fn get(
+        &self,
+        _request: Request<pinnacle::output::v0alpha1::GetRequest>,
+    ) -> Result<Response<pinnacle::output::v0alpha1::GetResponse>, Status> {
+        let (sender, mut receiver) =
+            tokio::sync::mpsc::unbounded_channel::<pinnacle::output::v0alpha1::GetResponse>();
+
+        let f = Box::new(move |state: &mut State| {
+            let output_names = state
+                .space
+                .outputs()
+                .map(|output| output.name())
+                .collect::<Vec<_>>();
+
+            let _ = sender.send(pinnacle::output::v0alpha1::GetResponse { output_names });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
+    }
+
+    async fn get_properties(
+        &self,
+        request: Request<pinnacle::output::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<pinnacle::output::v0alpha1::GetPropertiesResponse>, Status> {
+        let request = request.into_inner();
+
+        let output_name = OutputName(
+            request
+                .output_name
+                .ok_or_else(|| Status::invalid_argument("no output specified"))?,
+        );
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle::output::v0alpha1::GetPropertiesResponse,
+        >();
+
+        let f = Box::new(move |state: &mut State| {
+            let output = output_name.output(state);
+
+            let pixel_width = output
+                .as_ref()
+                .and_then(|output| output.current_mode().map(|mode| mode.size.w as u32));
+
+            let pixel_height = output
+                .as_ref()
+                .and_then(|output| output.current_mode().map(|mode| mode.size.h as u32));
+
+            let refresh_rate = output
+                .as_ref()
+                .and_then(|output| output.current_mode().map(|mode| mode.refresh as u32));
+
+            let model = output
+                .as_ref()
+                .map(|output| output.physical_properties().model);
+
+            let physical_width = output
+                .as_ref()
+                .map(|output| output.physical_properties().size.w as u32);
+
+            let physical_height = output
+                .as_ref()
+                .map(|output| output.physical_properties().size.h as u32);
+
+            let make = output
+                .as_ref()
+                .map(|output| output.physical_properties().make);
+
+            let x = output.as_ref().map(|output| output.current_location().x);
+
+            let y = output.as_ref().map(|output| output.current_location().y);
+
+            let focused = state
+                .focus_state
+                .focused_output
+                .as_ref()
+                .and_then(|foc_op| output.as_ref().map(|op| op == foc_op));
+
+            let tag_ids = output
+                .as_ref()
+                .map(|output| {
+                    output.with_state(|state| {
+                        state
+                            .tags
+                            .iter()
+                            .map(|tag| match tag.id() {
+                                TagId::None => unreachable!(),
+                                TagId::Some(id) => id,
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .unwrap_or_default();
+
+            let _ = sender.send(pinnacle::output::v0alpha1::GetPropertiesResponse {
+                make,
+                model,
+                x,
+                y,
+                pixel_width,
+                pixel_height,
+                refresh_rate,
+                physical_width,
+                physical_height,
+                focused,
+                tag_ids,
+            });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
+    }
+}
+
+pub struct WindowService {
+    pub sender: StateFnSender,
+}
+
+#[tonic::async_trait]
+impl pinnacle::window::v0alpha1::window_service_server::WindowService for WindowService {
+    async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else { return };
+
+            match window {
+                WindowElement::Wayland(window) => window.toplevel().send_close(),
+                WindowElement::X11(surface) => surface.close().expect("failed to close x11 win"),
+                WindowElement::X11OverrideRedirect(_) => {
+                    tracing::warn!("tried to close override redirect window");
+                }
+                _ => unreachable!(),
+            }
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn set_geometry(
+        &self,
+        request: Request<SetGeometryRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let geometry = request.geometry.unwrap_or_default();
+        let x = geometry.x;
+        let y = geometry.y;
+        let width = geometry.width;
+        let height = geometry.height;
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else { return };
+
+            // TODO: with no x or y, defaults unmapped windows to 0, 0
+            let mut window_loc = state
+                .space
+                .element_location(&window)
+                .unwrap_or((x.unwrap_or_default(), y.unwrap_or_default()).into());
+            window_loc.x = x.unwrap_or(window_loc.x);
+            window_loc.y = y.unwrap_or(window_loc.y);
+
+            let mut window_size = window.geometry().size;
+            window_size.w = width.unwrap_or(window_size.w);
+            window_size.h = height.unwrap_or(window_size.h);
+
+            let rect = Rectangle::from_loc_and_size(window_loc, window_size);
+            window.change_geometry(rect);
+            window.with_state(|state| {
+                use crate::window::window_state::FloatingOrTiled;
+                state.floating_or_tiled = match state.floating_or_tiled {
+                    FloatingOrTiled::Floating(_) => FloatingOrTiled::Floating(rect),
+                    FloatingOrTiled::Tiled(_) => FloatingOrTiled::Tiled(Some(rect)),
+                }
+            });
+
+            for output in state.space.outputs_for_element(&window) {
+                state.update_windows(&output);
+                state.schedule_render(&output);
+            }
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn set_fullscreen(
+        &self,
+        request: Request<SetFullscreenRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let set_or_toggle = match request.set_or_toggle {
+            Some(pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => {
+                Some(set)
+            }
+            Some(pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => {
+                None
+            }
+            None => return Err(Status::invalid_argument("unspecified set or toggle")),
+        };
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else {
+                return;
+            };
+            match set_or_toggle {
+                Some(set) => {
+                    let is_fullscreen =
+                        window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen());
+                    if set != is_fullscreen {
+                        window.toggle_fullscreen();
+                    }
+                }
+                None => window.toggle_fullscreen(),
+            }
+
+            let Some(output) = window.output(state) else {
+                return;
+            };
+
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn set_maximized(
+        &self,
+        request: Request<SetMaximizedRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let set_or_toggle = match request.set_or_toggle {
+            Some(pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => {
+                Some(set)
+            }
+            Some(pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
+            None => return Err(Status::invalid_argument("unspecified set or toggle")),
+        };
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else {
+                return;
+            };
+            match set_or_toggle {
+                Some(set) => {
+                    let is_maximized =
+                        window.with_state(|state| state.fullscreen_or_maximized.is_maximized());
+                    if set != is_maximized {
+                        window.toggle_maximized();
+                    }
+                }
+                None => window.toggle_maximized(),
+            }
+
+            let Some(output) = window.output(state) else {
+                return;
+            };
+
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn set_floating(
+        &self,
+        request: Request<SetFloatingRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let set_or_toggle = match request.set_or_toggle {
+            Some(pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => {
+                Some(set)
+            }
+            Some(pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
+            None => return Err(Status::invalid_argument("unspecified set or toggle")),
+        };
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else {
+                return;
+            };
+            match set_or_toggle {
+                Some(set) => {
+                    let is_floating =
+                        window.with_state(|state| state.floating_or_tiled.is_floating());
+                    if set != is_floating {
+                        window.toggle_floating();
+                    }
+                }
+                None => window.toggle_floating(),
+            }
+
+            let Some(output) = window.output(state) else {
+                return;
+            };
+
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn move_to_tag(
+        &self,
+        request: Request<MoveToTagRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let tag_id = TagId::Some(
+            request
+                .tag_id
+                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
+        );
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else { return };
+            let Some(tag) = tag_id.tag(state) else { return };
+            window.with_state(|state| {
+                state.tags = vec![tag.clone()];
+            });
+            let Some(output) = tag.output(state) else { return };
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn set_tag(&self, request: Request<SetTagRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let tag_id = TagId::Some(
+            request
+                .tag_id
+                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
+        );
+
+        let set_or_toggle = match request.set_or_toggle {
+            Some(pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Set(set)) => Some(set),
+            Some(pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Toggle(_)) => None,
+            None => return Err(Status::invalid_argument("unspecified set or toggle")),
+        };
+
+        let f = Box::new(move |state: &mut State| {
+            let Some(window) = window_id.window(state) else { return };
+            let Some(tag) = tag_id.tag(state) else { return };
+
+            // TODO: turn state.tags into a hashset
+            window.with_state(|state| state.tags.retain(|tg| tg != &tag));
+            match set_or_toggle {
+                Some(set) => {
+                    if set {
+                        window.with_state(|state| {
+                            state.tags.push(tag.clone());
+                        })
+                    }
+                }
+                None => window.with_state(|state| {
+                    if !state.tags.contains(&tag) {
+                        state.tags.push(tag.clone());
+                    }
+                }),
+            }
+
+            let Some(output) = tag.output(state) else { return };
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn move_grab(&self, request: Request<MoveGrabRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let button = request
+            .button
+            .ok_or_else(|| Status::invalid_argument("no button specified"))?;
+
+        let f = Box::new(move |state: &mut State| {
+            let Some((FocusTarget::Window(window), _)) =
+                state.focus_target_under(state.pointer_location)
+            else {
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else { return };
+            let seat = state.seat.clone();
+
+            // We use the server one and not the client because windows like Steam don't provide
+            // GrabStartData, so we need to create it ourselves.
+            crate::grab::move_grab::move_request_server(
+                state,
+                &wl_surf,
+                &seat,
+                SERIAL_COUNTER.next_serial(),
+                button,
+            );
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn resize_grab(
+        &self,
+        request: Request<ResizeGrabRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let button = request
+            .button
+            .ok_or_else(|| Status::invalid_argument("no button specified"))?;
+
+        let f = Box::new(move |state: &mut State| {
+            let pointer_loc = state.pointer_location;
+            let Some((FocusTarget::Window(window), window_loc)) =
+                state.focus_target_under(pointer_loc)
+            else {
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else { return };
+
+            let window_geometry = window.geometry();
+            let window_x = window_loc.x as f64;
+            let window_y = window_loc.y as f64;
+            let window_width = window_geometry.size.w as f64;
+            let window_height = window_geometry.size.h as f64;
+            let half_width = window_x + window_width / 2.0;
+            let half_height = window_y + window_height / 2.0;
+            let full_width = window_x + window_width;
+            let full_height = window_y + window_height;
+
+            let edges = match pointer_loc {
+                Point { x, y, .. }
+                    if (window_x..=half_width).contains(&x)
+                        && (window_y..=half_height).contains(&y) =>
+                {
+                    server::xdg_toplevel::ResizeEdge::TopLeft
+                }
+                Point { x, y, .. }
+                    if (half_width..=full_width).contains(&x)
+                        && (window_y..=half_height).contains(&y) =>
+                {
+                    server::xdg_toplevel::ResizeEdge::TopRight
+                }
+                Point { x, y, .. }
+                    if (window_x..=half_width).contains(&x)
+                        && (half_height..=full_height).contains(&y) =>
+                {
+                    server::xdg_toplevel::ResizeEdge::BottomLeft
+                }
+                Point { x, y, .. }
+                    if (half_width..=full_width).contains(&x)
+                        && (half_height..=full_height).contains(&y) =>
+                {
+                    server::xdg_toplevel::ResizeEdge::BottomRight
+                }
+                _ => server::xdg_toplevel::ResizeEdge::None,
+            };
+
+            crate::grab::resize_grab::resize_request_server(
+                state,
+                &wl_surf,
+                &state.seat.clone(),
+                SERIAL_COUNTER.next_serial(),
+                edges.into(),
+                button,
+            );
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn get(
+        &self,
+        _request: Request<pinnacle::window::v0alpha1::GetRequest>,
+    ) -> Result<Response<pinnacle::window::v0alpha1::GetResponse>, Status> {
+        let (sender, mut receiver) =
+            tokio::sync::mpsc::unbounded_channel::<pinnacle::window::v0alpha1::GetResponse>();
+
+        let f = Box::new(move |state: &mut State| {
+            let window_ids = state
+                .windows
+                .iter()
+                .map(|win| {
+                    win.with_state(|state| match state.id {
+                        WindowId::None => unreachable!(),
+                        WindowId::Some(id) => id,
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            let _ = sender.send(pinnacle::window::v0alpha1::GetResponse { window_ids });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
+    }
+
+    async fn get_properties(
+        &self,
+        request: Request<pinnacle::window::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<pinnacle::window::v0alpha1::GetPropertiesResponse>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId::Some(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle::window::v0alpha1::GetPropertiesResponse,
+        >();
+
+        let f = Box::new(move |state: &mut State| {
+            let window = window_id.window(state);
+
+            let width = window.as_ref().map(|win| win.geometry().size.w);
+
+            let height = window.as_ref().map(|win| win.geometry().size.h);
+
+            let x = window
+                .as_ref()
+                .and_then(|win| state.space.element_location(win))
+                .map(|loc| loc.x);
+
+            let y = window
+                .as_ref()
+                .and_then(|win| state.space.element_location(win))
+                .map(|loc| loc.y);
+
+            let geometry = if width.is_none() && height.is_none() && x.is_none() && y.is_none() {
+                None
+            } else {
+                Some(Geometry {
+                    x,
+                    y,
+                    width,
+                    height,
+                })
+            };
+
+            let (class, title) = window.as_ref().map_or((None, None), |win| match &win {
+                WindowElement::Wayland(_) => {
+                    if let Some(wl_surf) = win.wl_surface() {
+                        compositor::with_states(&wl_surf, |states| {
+                            let lock = states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                .lock()
+                                .expect("failed to acquire lock");
+                            (lock.app_id.clone(), lock.title.clone())
+                        })
+                    } else {
+                        (None, None)
+                    }
+                }
+                WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
+                    (Some(surface.class()), Some(surface.title()))
+                }
+                _ => unreachable!(),
+            });
+
+            let focused = window.as_ref().and_then(|win| {
+                let output = win.output(state)?;
+                state.focused_window(&output).map(|foc_win| win == &foc_win)
+            });
+
+            let floating = window
+                .as_ref()
+                .map(|win| win.with_state(|state| state.floating_or_tiled.is_floating()));
+
+            let fullscreen_or_maximized = window
+                .as_ref()
+                .map(|win| win.with_state(|state| state.fullscreen_or_maximized))
+                .map(|fs_or_max| match fs_or_max {
+                    // TODO: from impl
+                    crate::window::window_state::FullscreenOrMaximized::Neither => {
+                        FullscreenOrMaximized::Neither
+                    }
+                    crate::window::window_state::FullscreenOrMaximized::Fullscreen => {
+                        FullscreenOrMaximized::Fullscreen
+                    }
+                    crate::window::window_state::FullscreenOrMaximized::Maximized => {
+                        FullscreenOrMaximized::Maximized
+                    }
+                } as i32);
+
+            let _ = sender.send(pinnacle::window::v0alpha1::GetPropertiesResponse {
+                geometry,
+                class,
+                title,
+                focused,
+                floating,
+                fullscreen_or_maximized,
+            });
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let response = receiver
+            .recv()
+            .await
+            .ok_or_else(|| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(response))
+    }
+
+    async fn add_window_rule(
+        &self,
+        request: Request<AddWindowRuleRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let cond = request
+            .cond
+            .ok_or_else(|| Status::invalid_argument("no condition specified"))?
+            .into();
+
+        let rule = request
+            .rule
+            .ok_or_else(|| Status::invalid_argument("no rule specified"))?
+            .into();
+
+        let f = Box::new(move |state: &mut State| {
+            state.config.window_rules.push((cond, rule));
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+}
+
+impl From<WindowRuleCondition> for crate::window::rules::WindowRuleCondition {
+    fn from(cond: WindowRuleCondition) -> Self {
+        let cond_any = match cond.any.is_empty() {
+            true => None,
+            false => Some(
+                cond.any
+                    .into_iter()
+                    .map(crate::window::rules::WindowRuleCondition::from)
+                    .collect::<Vec<_>>(),
+            ),
+        };
+
+        let cond_all = match cond.all.is_empty() {
+            true => None,
+            false => Some(
+                cond.all
+                    .into_iter()
+                    .map(crate::window::rules::WindowRuleCondition::from)
+                    .collect::<Vec<_>>(),
+            ),
+        };
+
+        let class = match cond.classes.is_empty() {
+            true => None,
+            false => Some(cond.classes),
+        };
+
+        let title = match cond.titles.is_empty() {
+            true => None,
+            false => Some(cond.titles),
+        };
+
+        let tag = match cond.tags.is_empty() {
+            true => None,
+            false => Some(cond.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
+        };
+
+        crate::window::rules::WindowRuleCondition {
+            cond_any,
+            cond_all,
+            class,
+            title,
+            tag,
+        }
+    }
+}
+
+impl From<WindowRule> for crate::window::rules::WindowRule {
+    fn from(rule: WindowRule) -> Self {
+        let output = rule.output.map(OutputName);
+        let tags = match rule.tags.is_empty() {
+            true => None,
+            false => Some(rule.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
+        };
+        let floating_or_tiled = rule.floating.map(|floating| match floating {
+            true => crate::window::rules::FloatingOrTiled::Floating,
+            false => crate::window::rules::FloatingOrTiled::Tiled,
+        });
+        let fullscreen_or_maximized = match rule.fullscreen_or_maximized() {
+            FullscreenOrMaximized::Unspecified => None,
+            FullscreenOrMaximized::Neither => {
+                Some(crate::window::window_state::FullscreenOrMaximized::Neither)
+            }
+            FullscreenOrMaximized::Fullscreen => {
+                Some(crate::window::window_state::FullscreenOrMaximized::Fullscreen)
+            }
+            FullscreenOrMaximized::Maximized => {
+                Some(crate::window::window_state::FullscreenOrMaximized::Maximized)
+            }
+        };
+        let size = rule.width.and_then(|w| {
+            rule.height.and_then(|h| {
+                Some((
+                    NonZeroU32::try_from(w as u32).ok()?,
+                    NonZeroU32::try_from(h as u32).ok()?,
+                ))
+            })
+        });
+        let location = rule.x.and_then(|x| rule.y.map(|y| (x, y)));
+
+        crate::window::rules::WindowRule {
+            output,
+            tags,
+            floating_or_tiled,
+            fullscreen_or_maximized,
+            size,
+            location,
+        }
     }
 }

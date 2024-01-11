@@ -12,6 +12,7 @@ use std::{
 };
 
 use anyhow::Context;
+use pinnacle_api_defs::pinnacle::output::v0alpha1::ConnectForAllResponse;
 use smithay::{
     input::keyboard::keysyms,
     utils::{Logical, Point},
@@ -128,6 +129,8 @@ pub struct Config {
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
     /// All callbacks that should be run when outputs are connected
     pub output_callback_ids: Vec<CallbackId>,
+    pub grpc_output_callback_senders:
+        Vec<tokio::sync::mpsc::UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 }

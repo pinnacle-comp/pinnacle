@@ -17,23 +17,26 @@ message SetGeometryRequest {
 }
 
 message SetFullscreenRequest {
+  optional uint32 window_id = 1;
   oneof set_or_toggle {
-    bool set = 1;
-    google.protobuf.Empty toggle = 2;
+    bool set = 2;
+    google.protobuf.Empty toggle = 3;
   }
 }
 
 message SetMaximizedRequest {
+  optional uint32 window_id = 1;
   oneof set_or_toggle {
-    bool set = 1;
-    google.protobuf.Empty toggle = 2;
+    bool set = 2;
+    google.protobuf.Empty toggle = 3;
   }
 }
 
 message SetFloatingRequest {
+  optional uint32 window_id = 1;
   oneof set_or_toggle {
-    bool set = 1;
-    google.protobuf.Empty toggle = 2;
+    bool set = 2;
+    google.protobuf.Empty toggle = 3;
   }
 }
 

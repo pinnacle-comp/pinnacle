@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::Context;
+use pinnacle_api_defs::pinnacle::output::v0alpha1::ConnectForAllResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -1006,6 +1007,11 @@ impl State {
                             },
                         )
                         .expect("Send to client failed");
+                    }
+                    for grpc_sender in dt.state.config.grpc_output_callback_senders.iter() {
+                        let _ = grpc_sender.send(Ok(ConnectForAllResponse {
+                            output_name: Some(clone.name()),
+                        }));
                     }
                 },
             );
