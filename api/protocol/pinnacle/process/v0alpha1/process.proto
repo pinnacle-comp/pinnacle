@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package pinnacle.input.v0alpha1;
+package pinnacle.process.v0alpha1;
 
 message SpawnRequest {
   repeated string args = 1;

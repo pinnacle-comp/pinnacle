@@ -2,7 +2,7 @@
 
 pub mod libinput;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::Discriminant};
 
 use crate::{
     api::msg::{CallbackId, Modifier, MouseEdge, OutgoingMsg},
@@ -10,7 +10,10 @@ use crate::{
     state::WithState,
     window::WindowElement,
 };
-use pinnacle_api_defs::pinnacle::input::v0alpha1::SetKeybindResponse;
+use pinnacle_api_defs::pinnacle::input::{
+    libinput::v0alpha1::set_libinput_setting_request::Setting,
+    v0alpha1::{SetKeybindResponse, SetMousebindResponse},
+};
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
@@ -42,7 +45,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
     pub keybinds: HashMap<(crate::api::msg::ModifierMask, Keysym), CallbackId>,
@@ -57,6 +60,25 @@ pub struct InputState {
 
     pub grpc_keybinds:
         HashMap<(ModifierMask, Keysym), UnboundedSender<Result<SetKeybindResponse, tonic::Status>>>,
+    pub grpc_mousebinds:
+        HashMap<(ModifierMask, u32), UnboundedSender<Result<SetMousebindResponse, tonic::Status>>>,
+    pub grpc_libinput_settings:
+        HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
+}
+
+impl std::fmt::Debug for InputState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InputState")
+            .field("keybinds", &self.keybinds)
+            .field("mousebinds", &self.mousebinds)
+            .field("reload_keybind", &self.reload_keybind)
+            .field("kill_keybind", &self.kill_keybind)
+            .field("libinput_settings", &self.libinput_settings)
+            .field("libinput_devices", &self.libinput_devices)
+            .field("grpc_keybinds", &self.grpc_keybinds)
+            .field("grpc_libinput_settings", &"...")
+            .finish()
+    }
 }
 
 impl InputState {
@@ -227,6 +249,7 @@ impl State {
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
+                    // TODO: check both modsym and rawsym
                     if state.input_state.grpc_keybinds.get(&(grpc_modifiers, keysym.modified_sym())).is_some() {
                         return FilterResult::Intercept(KeyAction::CallGrpcCallback(grpc_modifiers, keysym.modified_sym()));
                     }

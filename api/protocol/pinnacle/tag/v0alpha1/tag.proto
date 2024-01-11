@@ -5,9 +5,10 @@ package pinnacle.tag.v0alpha1;
 import "google/protobuf/empty.proto";
 
 message SetActiveRequest {
+  optional uint32 tag_id = 1;
   oneof set_or_toggle {
-    bool set = 1;
-    google.protobuf.Empty toggle = 2;
+    bool set = 2;
+    google.protobuf.Empty toggle = 3;
   }
 }
 

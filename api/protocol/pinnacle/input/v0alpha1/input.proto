@@ -43,8 +43,10 @@ message SetXkbConfigRequest {
   optional string options = 5;
 }
 
-message SetXkbRepeatRequest {
+message SetRepeatRateRequest {
+  // How often the key should repeat, in milliseconds
   optional int32 rate = 1;
+  // How long the key has to be held down before repeating, in milliseconds
   optional int32 delay = 2;
 }
 
@@ -53,7 +55,7 @@ service InputService {
   rpc SetMousebind(SetMousebindRequest) returns (stream SetMousebindResponse);
 
   rpc SetXkbConfig(SetXkbConfigRequest) returns (google.protobuf.Empty);
-  rpc SetXkbRepeat(SetXkbRepeatRequest) returns (google.protobuf.Empty);
+  rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);
 
   rpc SetLibinputSetting(.pinnacle.input.libinput.v0alpha1.SetLibinputSettingRequest) returns (google.protobuf.Empty);
 }

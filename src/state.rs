@@ -7,7 +7,7 @@ use crate::{
         msg::Msg,
         protocol::{
             pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer, InputService,
-            PinnacleService,
+            PinnacleService, ProcessService, TagService,
         },
         ApiState,
     },
@@ -18,7 +18,11 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
-use pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputServiceServer;
+use pinnacle_api_defs::pinnacle::{
+    input::v0alpha1::input_service_server::InputServiceServer,
+    process::v0alpha1::process_service_server::ProcessServiceServer,
+    tag::v0alpha1::tag_service_server::TagServiceServer,
+};
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -254,6 +258,12 @@ impl State {
         let input_service = InputService {
             sender: grpc_sender.clone(),
         };
+        let process_service = ProcessService {
+            sender: grpc_sender.clone(),
+        };
+        let tag_service = TagService {
+            sender: grpc_sender.clone(),
+        };
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(crate::api::protocol::FILE_DESCRIPTOR_SET)
@@ -266,6 +276,8 @@ impl State {
                 .add_service(refl_service)
                 .add_service(PinnacleServiceServer::new(pinnacle_service))
                 .add_service(InputServiceServer::new(input_service))
+                .add_service(ProcessServiceServer::new(process_service))
+                .add_service(TagServiceServer::new(tag_service))
                 .serve(addr)
                 .await
                 .expect("failed to serve grpc");
