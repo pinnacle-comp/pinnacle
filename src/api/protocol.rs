@@ -38,11 +38,7 @@ use crate::{
     output::OutputName,
     state::{State, WithState},
     tag::{Tag, TagId},
-    window::{
-        rules::FloatingOrTiled,
-        window_state::{FloatingOrTiled, WindowId},
-        WindowElement,
-    },
+    window::{window_state::WindowId, WindowElement},
 };
 
 use self::pinnacle::{
@@ -698,7 +694,7 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
         let f = Box::new(move |state: &mut State| {
             let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
 
-            for output in state.space.outputs() {
+            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
                 // TODO: seriously, convert state.tags into a hashset
                 output.with_state(|state| {
                     for tag_to_remove in tags_to_remove.iter() {
@@ -1730,15 +1726,6 @@ impl From<WindowRuleCondition> for crate::window::rules::WindowRuleCondition {
 
 impl From<WindowRule> for crate::window::rules::WindowRule {
     fn from(rule: WindowRule) -> Self {
-        let output = rule.output.map(OutputName);
-        let tags = match rule.tags.is_empty() {
-            true => None,
-            false => Some(rule.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
-        };
-        let floating_or_tiled = rule.floating.map(|floating| match floating {
-            true => crate::window::rules::FloatingOrTiled::Floating,
-            false => crate::window::rules::FloatingOrTiled::Tiled,
-        });
         let fullscreen_or_maximized = match rule.fullscreen_or_maximized() {
             FullscreenOrMaximized::Unspecified => None,
             FullscreenOrMaximized::Neither => {
@@ -1751,6 +1738,15 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
                 Some(crate::window::window_state::FullscreenOrMaximized::Maximized)
             }
         };
+        let output = rule.output.map(OutputName);
+        let tags = match rule.tags.is_empty() {
+            true => None,
+            false => Some(rule.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
+        };
+        let floating_or_tiled = rule.floating.map(|floating| match floating {
+            true => crate::window::rules::FloatingOrTiled::Floating,
+            false => crate::window::rules::FloatingOrTiled::Tiled,
+        });
         let size = rule.width.and_then(|w| {
             rule.height.and_then(|h| {
                 Some((
