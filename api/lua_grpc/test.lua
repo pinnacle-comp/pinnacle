@@ -1,0 +1,10 @@
+local pinnacle = require("pinnacle")
+
+pinnacle.setup(function(pinnacle)
+    pinnacle.input:set_keybind({ 1 }, "A", function()
+        print("hi from grpc keybind")
+    end)
+    pinnacle.input:set_keybind({ 1 }, "Q", function()
+        pinnacle:quit()
+    end)
+end)
