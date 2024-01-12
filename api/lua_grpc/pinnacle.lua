@@ -1,14 +1,14 @@
 local cqueues = require("cqueues")
 
----@type ClientModule
 local client = require("pinnacle.grpc.client")
 
 ---@class PinnacleModule
-local pinnacle = {}
+local pinnacle = {
+    version = "v0alpha1",
+}
 
 ---@class Pinnacle
 ---@field private config_client Client
----@field private loop CqueuesLoop
 ---@field input Input
 local Pinnacle = {}
 
@@ -25,21 +25,21 @@ end
 ---@param config_fn fun(pinnacle: Pinnacle)
 function pinnacle.setup(config_fn)
     require("pinnacle.grpc.protobuf").build_protos()
+
     local loop = cqueues.new()
-    ---@type Client
+
     local config_client = client.new(loop)
 
     ---@type Pinnacle
     local self = {
         config_client = config_client,
-        loop = loop,
         input = require("pinnacle.input").new(config_client),
     }
     setmetatable(self, { __index = Pinnacle })
 
     config_fn(self)
 
-    self.loop:loop()
+    loop:loop()
 end
 
 return pinnacle

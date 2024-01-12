@@ -26,19 +26,17 @@ local client = {}
 ---@field loop CqueuesLoop
 local Client = {}
 
----@return H2Stream stream An http2 stream
-function Client:new_stream()
-    return self.conn:new_stream()
-end
-
 ---@class GrpcRequestParams
 ---@field service string
 ---@field method string
----@field request_type string
+---@field request_type string?
 ---@field response_type string?
 ---@field data table
 
 ---Send a synchronous unary request to the compositor.
+---
+---If `request_type` is not specified then it will default to
+---`method` .. "Request".
 ---
 ---If `response_type` is not specified then it will default to
 ---`google.protobuf.Empty`.
@@ -49,7 +47,7 @@ function Client:unary_request(grpc_request_params)
 
     local service = grpc_request_params.service
     local method = grpc_request_params.method
-    local request_type = grpc_request_params.request_type
+    local request_type = grpc_request_params.request_type or method .. "Request"
     local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
     local data = grpc_request_params.data
 
@@ -129,6 +127,7 @@ function client.new(loop)
         loop = loop,
     }
     setmetatable(self, { __index = Client })
+
     return self
 end
 
