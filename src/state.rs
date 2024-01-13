@@ -7,7 +7,7 @@ use crate::{
         msg::Msg,
         protocol::{
             pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer, InputService,
-            PinnacleService, ProcessService, TagService,
+            OutputService, PinnacleService, ProcessService, TagService, WindowService,
         },
         ApiState,
     },
@@ -17,11 +17,14 @@ use crate::{
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
+    XDG_BASE_DIRS,
 };
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
+    output::v0alpha1::output_service_server::OutputServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
     tag::v0alpha1::tag_service_server::TagServiceServer,
+    window::v0alpha1::window_service_server::WindowServiceServer,
 };
 use smithay::{
     desktop::{PopupManager, Space},
@@ -239,6 +242,13 @@ impl State {
         };
         tracing::debug!("xwayland set up");
 
+        // gRPC stuff
+
+        std::env::set_var(
+            "PINNACLE_PROTO_DIR",
+            XDG_BASE_DIRS.get_data_file("protobuf"),
+        );
+
         let (grpc_sender, grpc_receiver) =
             calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
 
@@ -264,6 +274,12 @@ impl State {
         let tag_service = TagService {
             sender: grpc_sender.clone(),
         };
+        let output_service = OutputService {
+            sender: grpc_sender.clone(),
+        };
+        let window_service = WindowService {
+            sender: grpc_sender.clone(),
+        };
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(crate::api::protocol::FILE_DESCRIPTOR_SET)
@@ -271,16 +287,17 @@ impl State {
 
         let addr = "127.0.0.1:8080".parse()?;
 
+        let grpc_server = tonic::transport::Server::builder()
+            .add_service(refl_service)
+            .add_service(PinnacleServiceServer::new(pinnacle_service))
+            .add_service(InputServiceServer::new(input_service))
+            .add_service(ProcessServiceServer::new(process_service))
+            .add_service(TagServiceServer::new(tag_service))
+            .add_service(OutputServiceServer::new(output_service))
+            .add_service(WindowServiceServer::new(window_service));
+
         tokio::spawn(async move {
-            tonic::transport::Server::builder()
-                .add_service(refl_service)
-                .add_service(PinnacleServiceServer::new(pinnacle_service))
-                .add_service(InputServiceServer::new(input_service))
-                .add_service(ProcessServiceServer::new(process_service))
-                .add_service(TagServiceServer::new(tag_service))
-                .serve(addr)
-                .await
-                .expect("failed to serve grpc");
+            grpc_server.serve(addr).await.expect("failed to serve grpc");
         });
 
         Ok(Self {

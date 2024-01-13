@@ -40,6 +40,8 @@ tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process"
 bitflags = "2.4.1"
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 
+[build-dependencies]
+xdg = "2.5.2"
 
 [features]
 default = ["egl", "winit", "udev", "xwayland"]

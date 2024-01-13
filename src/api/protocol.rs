@@ -401,6 +401,7 @@ impl pinnacle::process::v0alpha1::process_service_server::ProcessService for Pro
         &self,
         request: Request<SpawnRequest>,
     ) -> Result<Response<Self::SpawnStream>, Status> {
+        tracing::debug!("ProcessService.spawn");
         let request = request.into_inner();
 
         let once = request.once();
@@ -937,6 +938,7 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
         &self,
         _request: Request<ConnectForAllRequest>,
     ) -> Result<Response<Self::ConnectForAllStream>, Status> {
+        tracing::error!("OutputService.connect_for_all");
         let (sender, receiver) =
             tokio::sync::mpsc::unbounded_channel::<Result<ConnectForAllResponse, Status>>();
 
@@ -945,6 +947,7 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
                 let _ = sender.send(Ok(ConnectForAllResponse {
                     output_name: Some(output.name()),
                 }));
+                tracing::debug!(name = output.name(), "sent connect_for_all");
             }
 
             state.config.grpc_output_callback_senders.push(sender);

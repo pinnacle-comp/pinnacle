@@ -81,6 +81,8 @@ async fn main() -> anyhow::Result<()> {
     //     .unwrap();
 
     let xdg_state_dir = XDG_BASE_DIRS.get_state_home();
+    // println!("{:?}", XDG_BASE_DIRS.create_config_directory("test"));
+    // std::process::exit(0);
 
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(Rotation::HOURLY)

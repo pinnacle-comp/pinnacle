@@ -98,6 +98,7 @@ end
 ---@param callback fun(output: OutputHandle)
 function Output:connect_for_all(callback)
     self.config_client:server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
+        print("GOT OUTPUT NAME", response.output_name)
         local output_name = response.output_name
         local handle = output_handle.new(self.config_client, output_name)
         callback(handle)

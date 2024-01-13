@@ -209,6 +209,11 @@ impl State {
         );
         std::env::set_var("PINNACLE_LIB_DIR", data_home);
 
+        std::env::set_var(
+            "PINNACLE_LUA_GRPC_DIR",
+            crate::XDG_BASE_DIRS.get_data_file("lua_grpc"),
+        );
+
         tracing::debug!("config dir is {:?}", config_dir);
 
         let metaconfig = match parse(config_dir) {

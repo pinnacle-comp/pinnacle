@@ -92,7 +92,15 @@ function Client:server_streaming_request(grpc_request_params, callback)
     local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
     local data = grpc_request_params.data
 
-    local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
+    local success, obj = pcall(pb.encode, request_type, data)
+    if not success then
+        print("failed to encode:", obj)
+        os.exit(1)
+    end
+
+    local encoded_protobuf = obj
+
+    -- local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
 
     local packed_prefix = string.pack("I1", 0)
     local payload_len = string.pack(">I4", encoded_protobuf:len())
@@ -103,6 +111,9 @@ function Client:server_streaming_request(grpc_request_params, callback)
     stream:write_chunk(body, true)
 
     local response_headers = stream:get_headers()
+    for name, value, never_index in response_headers:each() do
+        print(name, value, never_index)
+    end
     -- local chunk = stream:get_next_chunk()
     -- print(chunk, chunk:len())
     -- TODO: check headers for errors

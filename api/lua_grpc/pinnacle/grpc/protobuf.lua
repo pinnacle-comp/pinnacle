@@ -2,20 +2,22 @@ local pb = require("pb")
 
 local protobuf = {}
 
+local PINNACLE_PROTO_DIR = os.getenv("PINNACLE_PROTO_DIR")
+
 function protobuf.build_protos()
     local version = "v0alpha1"
     local proto_file_paths = {
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/tag/" .. version .. "/tag.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/input/" .. version .. "/input.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/input/libinput/" .. version .. "/libinput.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/" .. version .. "/pinnacle.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/output/" .. version .. "/output.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/process/" .. version .. "/process.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/window/" .. version .. "/window.proto",
-        "/home/jason/projects/pinnacle/api/protocol/pinnacle/window/rules/" .. version .. "/rules.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/tag/" .. version .. "/tag.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/input/" .. version .. "/input.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/input/libinput/" .. version .. "/libinput.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/" .. version .. "/pinnacle.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/output/" .. version .. "/output.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/process/" .. version .. "/process.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/window/rules/" .. version .. "/rules.proto",
     }
 
-    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=/home/jason/projects/pinnacle/api/protocol/ "
+    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "
 
     for _, file_path in pairs(proto_file_paths) do
         cmd = cmd .. file_path .. " "

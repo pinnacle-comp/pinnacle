@@ -214,7 +214,7 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
-                tracing::debug!(keysym = ?keysym, raw_keysyms = ?keysym.raw_syms(), modified_syms = ?keysym.modified_syms());
+                // tracing::debug!(keysym = ?keysym, raw_keysyms = ?keysym.raw_syms(), modified_syms = ?keysym.modified_syms());
                 if press_state == KeyState::Pressed {
                     let mut modifier_mask = Vec::<Modifier>::new();
                     if modifiers.alt {
@@ -245,13 +245,20 @@ impl State {
                         grpc_modifiers |= ModifierMask::SUPER;
                     }
 
-
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
                     // TODO: check both modsym and rawsym
-                    if state.input_state.grpc_keybinds.get(&(grpc_modifiers, keysym.modified_sym())).is_some() {
-                        return FilterResult::Intercept(KeyAction::CallGrpcCallback(grpc_modifiers, keysym.modified_sym()));
+                    if state
+                        .input_state
+                        .grpc_keybinds
+                        .get(&(grpc_modifiers, keysym.modified_sym()))
+                        .is_some()
+                    {
+                        return FilterResult::Intercept(KeyAction::CallGrpcCallback(
+                            grpc_modifiers,
+                            keysym.modified_sym(),
+                        ));
                     }
 
                     let cb_id_mod = state.input_state.keybinds.get(&(modifier_mask, mod_sym));
