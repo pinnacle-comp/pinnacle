@@ -42,7 +42,7 @@ use crate::{
     window::{window_state::WindowId, WindowElement},
 };
 
-use self::pinnacle::{
+use pinnacle_api_defs::pinnacle::{
     input::{
         libinput::v0alpha1::SetLibinputSettingRequest,
         v0alpha1::{
@@ -54,9 +54,6 @@ use self::pinnacle::{
     v0alpha1::QuitRequest,
 };
 
-pub use pinnacle_api_defs::pinnacle;
-pub use pinnacle_api_defs::FILE_DESCRIPTOR_SET;
-
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
 
@@ -65,7 +62,9 @@ pub struct PinnacleService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::v0alpha1::pinnacle_service_server::PinnacleService for PinnacleService {
+impl pinnacle_api_defs::pinnacle::v0alpha1::pinnacle_service_server::PinnacleService
+    for PinnacleService
+{
     async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
         tracing::trace!("PinnacleService.quit");
         let f = Box::new(|state: &mut State| {
@@ -83,7 +82,9 @@ pub struct InputService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::input::v0alpha1::input_service_server::InputService for InputService {
+impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputService
+    for InputService
+{
     type SetKeybindStream = ResponseStream<SetKeybindResponse>;
     type SetMousebindStream = ResponseStream<SetMousebindResponse>;
 
@@ -99,17 +100,25 @@ impl pinnacle::input::v0alpha1::input_service_server::InputService for InputServ
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
-                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
-                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
-                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
+                    acc | ModifierMask::SHIFT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
+                    acc | ModifierMask::CTRL
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
+                    acc | ModifierMask::ALT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
+                    acc | ModifierMask::SUPER
+                }
             });
         let key = request
             .key
             .ok_or_else(|| Status::invalid_argument("no key specified"))?;
 
-        use pinnacle::input::v0alpha1::set_keybind_request::Key;
+        use pinnacle_api_defs::pinnacle::input::v0alpha1::set_keybind_request::Key;
         let keysym = match key {
             Key::RawCode(num) => {
                 tracing::info!("set keybind: {:?}, raw {}", modifiers, num);
@@ -157,11 +166,19 @@ impl pinnacle::input::v0alpha1::input_service_server::InputService for InputServ
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
-                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
-                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
-                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
+                    acc | ModifierMask::SHIFT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
+                    acc | ModifierMask::CTRL
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
+                    acc | ModifierMask::ALT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
+                    acc | ModifierMask::SUPER
+                }
             });
         let button = request
             .button
@@ -249,7 +266,7 @@ impl pinnacle::input::v0alpha1::input_service_server::InputService for InputServ
 
         let discriminant = std::mem::discriminant(&setting);
 
-        use pinnacle::input::libinput::v0alpha1::set_libinput_setting_request::Setting;
+        use pinnacle_api_defs::pinnacle::input::libinput::v0alpha1::set_libinput_setting_request::Setting;
         let apply_setting: Box<dyn Fn(&mut libinput::Device) + Send> = match setting {
             Setting::AccelProfile(profile) => {
                 let profile = AccelProfile::try_from(profile).unwrap_or(AccelProfile::Unspecified);
@@ -394,7 +411,9 @@ pub struct ProcessService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::process::v0alpha1::process_service_server::ProcessService for ProcessService {
+impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::ProcessService
+    for ProcessService
+{
     type SpawnStream = ResponseStream<SpawnResponse>;
 
     async fn spawn(
@@ -560,7 +579,7 @@ pub struct TagService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
+impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
     async fn set_active(&self, request: Request<SetActiveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
@@ -571,8 +590,16 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Set(set)) => Some(set),
-            Some(pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Toggle(_)) => None,
+            Some(
+                pinnacle_api_defs::pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Set(
+                    set,
+                ),
+            ) => Some(set),
+            Some(
+                pinnacle_api_defs::pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Toggle(
+                    _,
+                ),
+            ) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
@@ -758,7 +785,7 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        use pinnacle::tag::v0alpha1::set_layout_request::Layout;
+        use pinnacle_api_defs::pinnacle::tag::v0alpha1::set_layout_request::Layout;
 
         // TODO: from impl
         let layout = match request.layout() {
@@ -792,10 +819,11 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
 
     async fn get(
         &self,
-        _request: Request<pinnacle::tag::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle::tag::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) =
-            tokio::sync::mpsc::unbounded_channel::<pinnacle::tag::v0alpha1::GetResponse>();
+        _request: Request<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetRequest>,
+    ) -> Result<Response<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse>, Status> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse,
+        >();
 
         let f = Box::new(move |state: &mut State| {
             let tag_ids = state
@@ -809,7 +837,8 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
                 })
                 .collect::<Vec<_>>();
 
-            let _ = sender.send(pinnacle::tag::v0alpha1::GetResponse { tag_ids });
+            let _ =
+                sender.send(pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse { tag_ids });
         });
 
         self.sender
@@ -826,8 +855,9 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle::tag::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<pinnacle::tag::v0alpha1::GetPropertiesResponse>, Status> {
+        request: Request<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse>, Status>
+    {
         let request = request.into_inner();
 
         let tag_id = TagId::Some(
@@ -837,7 +867,7 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
         );
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle::tag::v0alpha1::GetPropertiesResponse,
+            pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse,
         >();
 
         let f = Box::new(move |state: &mut State| {
@@ -850,11 +880,13 @@ impl pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
             let active = tag.as_ref().map(|tag| tag.active());
             let name = tag.as_ref().map(|tag| tag.name());
 
-            let _ = sender.send(pinnacle::tag::v0alpha1::GetPropertiesResponse {
-                active,
-                name,
-                output_name,
-            });
+            let _ = sender.send(
+                pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse {
+                    active,
+                    name,
+                    output_name,
+                },
+            );
         });
 
         self.sender
@@ -875,7 +907,9 @@ pub struct OutputService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::output::v0alpha1::output_service_server::OutputService for OutputService {
+impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::OutputService
+    for OutputService
+{
     type ConnectForAllStream = ResponseStream<ConnectForAllResponse>;
 
     async fn set_location(
@@ -964,10 +998,11 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
 
     async fn get(
         &self,
-        _request: Request<pinnacle::output::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle::output::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) =
-            tokio::sync::mpsc::unbounded_channel::<pinnacle::output::v0alpha1::GetResponse>();
+        _request: Request<pinnacle_api_defs::pinnacle::output::v0alpha1::GetRequest>,
+    ) -> Result<Response<pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse>, Status> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse,
+        >();
 
         let f = Box::new(move |state: &mut State| {
             let output_names = state
@@ -976,7 +1011,8 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
-            let _ = sender.send(pinnacle::output::v0alpha1::GetResponse { output_names });
+            let _ = sender
+                .send(pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse { output_names });
         });
 
         self.sender
@@ -993,8 +1029,11 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle::output::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<pinnacle::output::v0alpha1::GetPropertiesResponse>, Status> {
+        request: Request<pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<
+        Response<pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse>,
+        Status,
+    > {
         let request = request.into_inner();
 
         let output_name = OutputName(
@@ -1004,7 +1043,7 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
         );
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle::output::v0alpha1::GetPropertiesResponse,
+            pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse,
         >();
 
         let f = Box::new(move |state: &mut State| {
@@ -1064,19 +1103,21 @@ impl pinnacle::output::v0alpha1::output_service_server::OutputService for Output
                 })
                 .unwrap_or_default();
 
-            let _ = sender.send(pinnacle::output::v0alpha1::GetPropertiesResponse {
-                make,
-                model,
-                x,
-                y,
-                pixel_width,
-                pixel_height,
-                refresh_rate,
-                physical_width,
-                physical_height,
-                focused,
-                tag_ids,
-            });
+            let _ = sender.send(
+                pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse {
+                    make,
+                    model,
+                    x,
+                    y,
+                    pixel_width,
+                    pixel_height,
+                    refresh_rate,
+                    physical_width,
+                    physical_height,
+                    focused,
+                    tag_ids,
+                },
+            );
         });
 
         self.sender
@@ -1097,7 +1138,9 @@ pub struct WindowService {
 }
 
 #[tonic::async_trait]
-impl pinnacle::window::v0alpha1::window_service_server::WindowService for WindowService {
+impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::WindowService
+    for WindowService
+{
     async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
@@ -1196,10 +1239,10 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => {
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => {
                 Some(set)
             }
-            Some(pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => {
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => {
                 None
             }
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
@@ -1248,10 +1291,10 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => {
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => {
                 Some(set)
             }
-            Some(pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
@@ -1298,10 +1341,10 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => {
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => {
                 Some(set)
             }
-            Some(pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
+            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
@@ -1387,8 +1430,16 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Set(set)) => Some(set),
-            Some(pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Toggle(_)) => None,
+            Some(
+                pinnacle_api_defs::pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Set(
+                    set,
+                ),
+            ) => Some(set),
+            Some(
+                pinnacle_api_defs::pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Toggle(
+                    _,
+                ),
+            ) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
@@ -1535,10 +1586,11 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
 
     async fn get(
         &self,
-        _request: Request<pinnacle::window::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle::window::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) =
-            tokio::sync::mpsc::unbounded_channel::<pinnacle::window::v0alpha1::GetResponse>();
+        _request: Request<pinnacle_api_defs::pinnacle::window::v0alpha1::GetRequest>,
+    ) -> Result<Response<pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse>, Status> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
+            pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse,
+        >();
 
         let f = Box::new(move |state: &mut State| {
             let window_ids = state
@@ -1552,7 +1604,8 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
                 })
                 .collect::<Vec<_>>();
 
-            let _ = sender.send(pinnacle::window::v0alpha1::GetResponse { window_ids });
+            let _ = sender
+                .send(pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse { window_ids });
         });
 
         self.sender
@@ -1569,8 +1622,11 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle::window::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<pinnacle::window::v0alpha1::GetPropertiesResponse>, Status> {
+        request: Request<pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<
+        Response<pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse>,
+        Status,
+    > {
         let request = request.into_inner();
 
         let window_id = WindowId::Some(
@@ -1580,7 +1636,7 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
         );
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle::window::v0alpha1::GetPropertiesResponse,
+            pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse,
         >();
 
         let f = Box::new(move |state: &mut State| {
@@ -1658,14 +1714,16 @@ impl pinnacle::window::v0alpha1::window_service_server::WindowService for Window
                     }
                 } as i32);
 
-            let _ = sender.send(pinnacle::window::v0alpha1::GetPropertiesResponse {
-                geometry,
-                class,
-                title,
-                focused,
-                floating,
-                fullscreen_or_maximized,
-            });
+            let _ = sender.send(
+                pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse {
+                    geometry,
+                    class,
+                    title,
+                    focused,
+                    floating,
+                    fullscreen_or_maximized,
+                },
+            );
         });
 
         self.sender

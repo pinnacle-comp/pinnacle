@@ -1,0 +1,5 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "workspace.library": ["~/.local/share/pinnacle/lua_grpc"],
+    "runtime.version": "Lua 5.4",
+}

@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, sync::Arc, time::Duration};
-
 use crate::{
     api::{
         msg::Msg,
         protocol::{
-            pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer, InputService,
-            OutputService, PinnacleService, ProcessService, TagService, WindowService,
+            InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
         },
         ApiState,
     },
@@ -19,6 +16,7 @@ use crate::{
     window::WindowElement,
     XDG_BASE_DIRS,
 };
+use pinnacle_api_defs::pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
     output::v0alpha1::output_service_server::OutputServiceServer,
@@ -55,6 +53,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
+use std::{cell::RefCell, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 
 use crate::input::InputState;
@@ -282,7 +281,7 @@ impl State {
         };
 
         let refl_service = tonic_reflection::server::Builder::configure()
-            .register_encoded_file_descriptor_set(crate::api::protocol::FILE_DESCRIPTOR_SET)
+            .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
             .build()?;
 
         let addr = "127.0.0.1:8080".parse()?;
