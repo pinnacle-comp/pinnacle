@@ -29,7 +29,7 @@ local function build_grpc_request_params(method, data)
     return {
         service = service,
         method = method,
-        request_type = req_type and prefix .. req_type,
+        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
         response_type = resp_type and prefix .. resp_type,
         data = data,
     }

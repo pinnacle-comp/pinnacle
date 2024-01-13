@@ -2,6 +2,8 @@ syntax = "proto2";
 
 package pinnacle.process.v0alpha1;
 
+import "google/protobuf/empty.proto";
+
 message SpawnRequest {
   repeated string args = 1;
   // Whether or not to spawn `args` if it is already running.
@@ -18,6 +20,12 @@ message SpawnResponse {
   optional string exit_message = 4;
 }
 
+message SetEnvRequest {
+  optional string key = 1;
+  optional string value = 2;
+}
+
 service ProcessService {
   rpc Spawn(SpawnRequest) returns (stream SpawnResponse);
+  rpc SetEnv(SetEnvRequest) returns (google.protobuf.Empty);
 }

@@ -10,6 +10,10 @@ local pinnacle = {
 ---@class Pinnacle
 ---@field private config_client Client
 ---@field input Input
+---@field output Output
+---@field process Process
+---@field tag Tag
+---@field window Window
 local Pinnacle = {}
 
 function Pinnacle:quit()
@@ -34,6 +38,10 @@ function pinnacle.setup(config_fn)
     local self = {
         config_client = config_client,
         input = require("pinnacle.input").new(config_client),
+        process = require("pinnacle.process").new(config_client),
+        window = require("pinnacle.window").new(config_client),
+        output = require("pinnacle.output").new(config_client),
+        tag = require("pinnacle.tag").new(config_client),
     }
     setmetatable(self, { __index = Pinnacle })
 

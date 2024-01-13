@@ -29,7 +29,7 @@ local Client = {}
 ---@class GrpcRequestParams
 ---@field service string
 ---@field method string
----@field request_type string?
+---@field request_type string
 ---@field response_type string?
 ---@field data table
 
@@ -43,44 +43,6 @@ local Client = {}
 ---@param grpc_request_params GrpcRequestParams
 ---@return table
 function Client:unary_request(grpc_request_params)
-    local stream = self.conn:new_stream()
-
-    local service = grpc_request_params.service
-    local method = grpc_request_params.method
-    local request_type = grpc_request_params.request_type or method .. "Request"
-    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
-    local data = grpc_request_params.data
-
-    local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
-
-    local packed_prefix = string.pack("I1", 0)
-    local payload_len = string.pack(">I4", encoded_protobuf:len())
-
-    local body = packed_prefix .. payload_len .. encoded_protobuf
-
-    stream:write_headers(create_request_headers(service, method), false)
-    stream:write_chunk(body, true)
-
-    local response_headers = stream:get_headers()
-    -- TODO: check headers for errors
-
-    local response_body = stream:get_next_chunk()
-    local response = pb.decode(response_type, response_body)
-
-    print(inspect(response))
-
-    return response
-end
-
----Send a async server streaming request to the compositor.
----
----`callback` will be called with every streamed response.
----
----If `response_type` is not specified then it will default to
----`google.protobuf.Empty`.
----@param grpc_request_params GrpcRequestParams
----@param callback fun(response: table)
-function Client:server_streaming_request(grpc_request_params, callback)
     local stream = self.conn:new_stream()
 
     local service = grpc_request_params.service
@@ -102,9 +64,61 @@ function Client:server_streaming_request(grpc_request_params, callback)
     local response_headers = stream:get_headers()
     -- TODO: check headers for errors
 
+    local response_body = stream:get_next_chunk()
+    -- Skip the 1-byte compressed flag and the 4-byte message length
+    local response_body = response_body:sub(6)
+    local response = pb.decode(response_type, response_body)
+
+    print(inspect(response))
+
+    return response
+end
+
+---Send a async server streaming request to the compositor.
+---
+---`callback` will be called with every streamed response.
+---
+---If `response_type` is not specified then it will default to
+---`google.protobuf.Empty`.
+---@param grpc_request_params GrpcRequestParams
+---@param callback fun(response: table)
+function Client:server_streaming_request(grpc_request_params, callback)
+    -- print(inspect(grpc_request_params))
+    local stream = self.conn:new_stream()
+
+    local service = grpc_request_params.service
+    local method = grpc_request_params.method
+    local request_type = grpc_request_params.request_type
+    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
+    local data = grpc_request_params.data
+
+    local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
+
+    local packed_prefix = string.pack("I1", 0)
+    local payload_len = string.pack(">I4", encoded_protobuf:len())
+
+    local body = packed_prefix .. payload_len .. encoded_protobuf
+
+    stream:write_headers(create_request_headers(service, method), false)
+    stream:write_chunk(body, true)
+
+    local response_headers = stream:get_headers()
+    -- local chunk = stream:get_next_chunk()
+    -- print(chunk, chunk:len())
+    -- TODO: check headers for errors
+
     self.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            local response = pb.decode(response_type, response_body)
+            -- Skip the 1-byte compressed flag and the 4-byte message length
+            local response_body = response_body:sub(6)
+
+            local success, obj = pcall(pb.decode, response_type, response_body)
+            if not success then
+                print(obj)
+                os.exit(1)
+            end
+
+            local response = obj
             callback(response)
         end
     end)

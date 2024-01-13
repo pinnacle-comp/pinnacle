@@ -5,6 +5,7 @@ use pinnacle_api_defs::pinnacle::{
         AccelProfile, ClickMethod, ScrollMethod, TapButtonMap,
     },
     output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
+    process::v0alpha1::SetEnvRequest,
     tag::v0alpha1::{
         AddRequest, AddResponse, RemoveRequest, SetActiveRequest, SetLayoutRequest, SwitchToRequest,
     },
@@ -523,6 +524,33 @@ impl pinnacle::process::v0alpha1::process_service_server::ProcessService for Pro
         let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
 
         Ok(Response::new(Box::pin(receiver_stream)))
+    }
+
+    async fn set_env(&self, request: Request<SetEnvRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let key = request
+            .key
+            .ok_or_else(|| Status::invalid_argument("no key specified"))?;
+        let value = request
+            .value
+            .ok_or_else(|| Status::invalid_argument("no value specified"))?;
+
+        if key.is_empty() {
+            return Err(Status::invalid_argument("key was empty"));
+        }
+
+        if key.contains(['\0', '=']) {
+            return Err(Status::invalid_argument("key contained NUL or ="));
+        }
+
+        if value.contains('\0') {
+            return Err(Status::invalid_argument("value contained NUL"));
+        }
+
+        std::env::set_var(key, value);
+
+        Ok(Response::new(()))
     }
 }
 
