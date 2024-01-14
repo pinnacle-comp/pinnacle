@@ -34,16 +34,16 @@ local function build_grpc_request_params(method, data)
     }
 end
 
----@enum Modifier
-local modifier = {
-    SHIFT = 1,
-    CTRL = 2,
-    ALT = 3,
-    SUPER = 4,
+---@enum (key) Modifier
+local modifier_values = {
+    shift = 1,
+    ctrl = 2,
+    alt = 3,
+    super = 4,
 }
 
----@enum MouseButton
-local mouse_button = {
+---@enum (key) MouseButton
+local mouse_button_values = {
     --- Left
     [1] = 0x110,
     --- Right
@@ -67,25 +67,25 @@ local mouse_button = {
     back = 0x116,
 }
 
----@enum MouseEdge
-local mouse_edge = {
-    PRESS = 1,
-    RELEASE = 2,
+---@enum (key) MouseEdge
+local mouse_edge_values = {
+    press = 1,
+    release = 2,
 }
 
 ---@class InputModule
+---@field private btn table
 local input = {}
+input.btn = mouse_button_values
 
 ---@class Input
 ---@field private config_client Client
 local Input = {
-    mod = modifier,
-    btn = mouse_button,
-    edge = mouse_edge,
+    key = require("pinnacle.input.keys"),
 }
 
----@param mods Modifier[] TODO: accept strings of mods
----@param key integer | string
+---@param mods Modifier[]
+---@param key Key | string
 ---@param action fun()
 function Input:set_keybind(mods, key, action)
     local raw_code = nil
@@ -97,9 +97,14 @@ function Input:set_keybind(mods, key, action)
         xkb_name = key
     end
 
+    local mod_values = {}
+    for _, mod in ipairs(mods) do
+        table.insert(mod_values, modifier_values[mod])
+    end
+
     self.config_client:server_streaming_request(
         build_grpc_request_params("SetKeybind", {
-            modifiers = mods,
+            modifiers = mod_values,
             raw_code = raw_code,
             xkb_name = xkb_name,
         }),
@@ -111,20 +116,20 @@ end
 ---
 ---@param mods Modifier[]
 ---@param button MouseButton
----@param edge MouseEdge|"press"|"release"
+---@param edge MouseEdge
 ---@param action fun()
 function Input:set_mousebind(mods, button, edge, action)
-    local edge = edge
-    if edge == "press" then
-        edge = mouse_edge.PRESS
-    elseif edge == "release" then
-        edge = mouse_edge.RELEASE
+    local edge = mouse_edge_values[edge]
+
+    local mod_values = {}
+    for _, mod in ipairs(mods) do
+        table.insert(mod_values, modifier_values[mod])
     end
 
     self.config_client:server_streaming_request(
         build_grpc_request_params("SetMousebind", {
-            modifiers = mods,
-            button = button,
+            modifiers = mod_values,
+            button = mouse_button_values[button],
             edge = edge,
         }),
         action

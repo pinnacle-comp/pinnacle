@@ -479,6 +479,8 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
             };
 
             if !has_callback {
+                drop(sender);
+                tracing::info!("NO CALLBACKKKKKKK");
                 return;
             }
 
@@ -498,7 +500,13 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
                         });
 
                         // TODO: handle error
-                        let _ = sender.send(response);
+                        match sender.send(response) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                tracing::error!(err = ?err);
+                                break;
+                            }
+                        }
                     }
                 });
             }
@@ -516,7 +524,13 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
                         });
 
                         // TODO: handle error
-                        let _ = sender.send(response);
+                        match sender.send(response) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                tracing::error!(err = ?err);
+                                break;
+                            }
+                        }
                     }
                 });
             }
@@ -968,21 +982,22 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
         Ok(Response::new(()))
     }
 
+    // TODO: remove this and integrate it into a signal/event system
     async fn connect_for_all(
         &self,
         _request: Request<ConnectForAllRequest>,
     ) -> Result<Response<Self::ConnectForAllStream>, Status> {
-        tracing::error!("OutputService.connect_for_all");
+        tracing::trace!("OutputService.connect_for_all");
         let (sender, receiver) =
             tokio::sync::mpsc::unbounded_channel::<Result<ConnectForAllResponse, Status>>();
 
         let f = Box::new(move |state: &mut State| {
-            for output in state.space.outputs() {
-                let _ = sender.send(Ok(ConnectForAllResponse {
-                    output_name: Some(output.name()),
-                }));
-                tracing::debug!(name = output.name(), "sent connect_for_all");
-            }
+            // for output in state.space.outputs() {
+            //     let _ = sender.send(Ok(ConnectForAllResponse {
+            //         output_name: Some(output.name()),
+            //     }));
+            //     tracing::debug!(name = output.name(), "sent connect_for_all");
+            // }
 
             state.config.grpc_output_callback_senders.push(sender);
         });

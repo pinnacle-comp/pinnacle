@@ -61,7 +61,7 @@ function Output:get_all()
     ---@type OutputHandle[]
     local handles = {}
 
-    for _, output_name in pairs(response.output_names) do
+    for _, output_name in ipairs(response.output_names or {}) do
         table.insert(handles, output_handle.new(self.config_client, output_name))
     end
 
@@ -73,7 +73,7 @@ end
 function Output:get_by_name(name)
     local handles = self:get_all()
 
-    for _, handle in pairs(handles) do
+    for _, handle in ipairs(handles) do
         if handle.name == name then
             return handle
         end
@@ -86,7 +86,7 @@ end
 function Output:get_focused()
     local handles = self:get_all()
 
-    for _, handle in pairs(handles) do
+    for _, handle in ipairs(handles) do
         if handle:props().focused then
             return handle
         end
@@ -97,8 +97,12 @@ end
 
 ---@param callback fun(output: OutputHandle)
 function Output:connect_for_all(callback)
+    local handles = self:get_all()
+    for _, handle in ipairs(handles) do
+        callback(handle)
+    end
+
     self.config_client:server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
-        print("GOT OUTPUT NAME", response.output_name)
         local output_name = response.output_name
         local handle = output_handle.new(self.config_client, output_name)
         callback(handle)
@@ -112,6 +116,80 @@ function OutputHandle:set_location(loc)
         x = loc.x,
         y = loc.y,
     }))
+end
+
+---@alias Alignment
+---| "top_align_left"
+---| "top_align_center"
+---| "top_align_right"
+---| "bottom_align_left"
+---| "bottom_align_center"
+---| "bottom_align_right"
+---| "left_align_top"
+---| "left_align_center"
+---| "left_align_bottom"
+---| "right_align_top"
+---| "right_align_center"
+---| "right_align_bottom"
+
+---@param other OutputHandle
+---@param alignment Alignment
+function OutputHandle:set_loc_adj_to(other, alignment)
+    local self_props = self:props()
+    local other_props = other:props()
+
+    if not self_props.x or not other_props.x then
+        -- TODO: notify
+        return
+    end
+
+    local alignment_parts = {}
+
+    for str in alignment:gmatch("%a+") do
+        table.insert(alignment_parts, str)
+    end
+
+    ---@type "top"|"bottom"|"left"|"right"
+    local dir = alignment_parts[1]
+    ---@type "top"|"bottom"|"center"|"left"|"right"
+    local align = alignment_parts[3]
+
+    ---@type integer
+    local x
+    ---@type integer
+    local y
+
+    if dir == "top" or dir == "bottom" then
+        if dir == "top" then
+            y = other_props.y - self_props.pixel_height
+        else
+            y = other_props.y + other_props.pixel_height
+        end
+
+        if align == "left" then
+            x = other_props.x
+        elseif align == "center" then
+            x = other_props.x + math.floor((other_props.pixel_width - self_props.pixel_width) / 2)
+        elseif align == "bottom" then
+            x = other_props.x + (other_props.pixel_width - self_props.pixel_width)
+        end
+    else
+        if dir == "left" then
+            x = other_props.x - self_props.pixel_width
+        else
+            x = other_props.x + other_props.pixel_width
+        end
+
+        if align == "top" then
+            y = other_props.y
+        elseif align == "center" then
+            y = other_props.y + math.floor((other_props.pixel_height - self_props.pixel_height) / 2)
+        elseif align == "bottom" then
+            y = other_props.y + (other_props.pixel_height - self_props.pixel_height)
+        end
+    end
+
+    self:set_location({ x = x, y = y })
 end
 
 ---@class OutputProperties

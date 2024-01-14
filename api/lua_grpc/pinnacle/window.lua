@@ -1,5 +1,5 @@
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.prefix." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.window." .. require("pinnacle").version .. "."
 local service = prefix .. "WindowService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -64,20 +64,35 @@ local Window = {}
 function Window:get_all()
     local response = self.config_client:unary_request(build_grpc_request_params("Get", {}))
 
-    local handles = window_handle.new_from_table(self.config_client, response.window_ids)
+    local handles = window_handle.new_from_table(self.config_client, response.window_ids or {})
 
     return handles
+end
+
+---@return WindowHandle | nil
+function Window:get_focused()
+    local handles = self:get_all()
+
+    for _, handle in ipairs(handles) do
+        if handle:props().focused then
+            return handle
+        end
+    end
+
+    return nil
 end
 
 --- TODO: docs
 ---@param button MouseButton
 function Window:begin_move(button)
+    local button = require("pinnacle.input").btn[button]
     self.config_client:unary_request(build_grpc_request_params("MoveGrab", { button = button }))
 end
 
 --- TODO: docs
 ---@param button MouseButton
 function Window:begin_resize(button)
+    local button = require("pinnacle.input").btn[button]
     self.config_client:unary_request(build_grpc_request_params("ResizeGrab", { button = button }))
 end
 
@@ -115,7 +130,7 @@ local _fullscreen_or_maximized_keys = {
 function Window:add_window_rule(rule)
     if rule.cond.tags then
         local ids = {}
-        for _, tg in pairs(rule.cond.tags) do
+        for _, tg in ipairs(rule.cond.tags) do
             table.insert(ids, tg.id)
         end
         rule.cond.tags = ids
@@ -127,7 +142,7 @@ function Window:add_window_rule(rule)
 
     if rule.rule.tags then
         local ids = {}
-        for _, tg in pairs(rule.cond.tags) do
+        for _, tg in ipairs(rule.cond.tags) do
             table.insert(ids, tg.id)
         end
         rule.cond.tags = ids
@@ -258,7 +273,7 @@ function window_handle.new_from_table(config_client, window_ids)
     ---@type WindowHandle[]
     local handles = {}
 
-    for _, id in pairs(window_ids) do
+    for _, id in ipairs(window_ids) do
         table.insert(handles, window_handle.new(config_client, id))
     end
 

@@ -19,7 +19,7 @@ function protobuf.build_protos()
 
     local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "
 
-    for _, file_path in pairs(proto_file_paths) do
+    for _, file_path in ipairs(proto_file_paths) do
         cmd = cmd .. file_path .. " "
     end
 

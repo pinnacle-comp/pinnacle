@@ -284,7 +284,16 @@ impl State {
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
             .build()?;
 
-        let addr = "127.0.0.1:8080".parse()?;
+        let p = std::path::Path::new("/tmp/pinnacle/grpc.sock");
+        let _ = std::fs::remove_file(p);
+        std::fs::create_dir_all(p.parent().unwrap())?;
+        let uds = tokio::net::UnixListener::bind(p)?;
+        let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
+        //     .serve_with_incoming(uds_stream)
+        //     // .serve("127.0.0.1:8080".parse().unwrap())
+        //     .await
+        //     .unwrap();
+        // let addr = "127.0.0.1:8080".parse()?;
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)
@@ -296,7 +305,10 @@ impl State {
             .add_service(WindowServiceServer::new(window_service));
 
         tokio::spawn(async move {
-            grpc_server.serve(addr).await.expect("failed to serve grpc");
+            grpc_server
+                .serve_with_incoming(uds_stream)
+                .await
+                .expect("failed to serve grpc");
         });
 
         Ok(Self {

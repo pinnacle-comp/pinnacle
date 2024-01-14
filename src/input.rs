@@ -91,7 +91,7 @@ impl InputState {
 enum KeyAction {
     /// Call a callback from a config process
     CallCallback(CallbackId),
-    CallGrpcCallback(ModifierMask, Keysym),
+    CallGrpcCallback(UnboundedSender<Result<SetKeybindResponse, tonic::Status>>),
     Quit,
     SwitchVt(i32),
     ReloadConfig,
@@ -248,16 +248,20 @@ impl State {
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
-                    // TODO: check both modsym and rawsym
-                    if state
-                        .input_state
-                        .grpc_keybinds
-                        .get(&(grpc_modifiers, keysym.modified_sym()))
-                        .is_some()
-                    {
+                    if let (Some(sender), _) | (None, Some(sender)) = (
+                        state
+                            .input_state
+                            .grpc_keybinds
+                            .get(&(grpc_modifiers, mod_sym)),
+                        raw_sym.and_then(|raw_sym| {
+                            state
+                                .input_state
+                                .grpc_keybinds
+                                .get(&(grpc_modifiers, *raw_sym))
+                        }),
+                    ) {
                         return FilterResult::Intercept(KeyAction::CallGrpcCallback(
-                            grpc_modifiers,
-                            keysym.modified_sym(),
+                            sender.clone(),
                         ));
                     }
 
@@ -305,10 +309,8 @@ impl State {
                     }
                 }
             }
-            Some(KeyAction::CallGrpcCallback(mods, keysym)) => {
-                if let Some(sender) = self.input_state.grpc_keybinds.get(&(mods, keysym)) {
-                    let _ = sender.send(Ok(SetKeybindResponse {}));
-                }
+            Some(KeyAction::CallGrpcCallback(sender)) => {
+                let _ = sender.send(Ok(SetKeybindResponse {}));
             }
             Some(KeyAction::SwitchVt(vt)) => {
                 self.switch_vt(vt);

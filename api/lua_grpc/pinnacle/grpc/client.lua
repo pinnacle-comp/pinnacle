@@ -18,6 +18,13 @@ local function create_request_headers(service, method)
     return req_headers
 end
 
+---@param body string
+---@return boolean compressed
+---@return integer length
+---@return string message
+---@return integer total_length
+local function read_length_prefixed_message(body) end
+
 ---@class ClientModule
 local client = {}
 
@@ -61,15 +68,33 @@ function Client:unary_request(grpc_request_params)
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
 
+    -- for chunk in stream:each_chunk() do
+    --     print(chunk, ":", pb.tohex(chunk))
+    --     os.exit(1)
+    -- end
+
     local response_headers = stream:get_headers()
     -- TODO: check headers for errors
 
     local response_body = stream:get_next_chunk()
+    print("unary body", response_body, "end")
+    print(pb.tohex(response_body))
+    print("--------------------------------")
+
+    local trailers = stream:get_headers()
+    print("trailers", trailers)
+    print("------------------------------")
+    if trailers then
+        for name, value, never_index in trailers:each() do
+            print(name, value, never_index)
+        end
+    end
+
+    -- stream:shutdown()
+
     -- Skip the 1-byte compressed flag and the 4-byte message length
     local response_body = response_body:sub(6)
     local response = pb.decode(response_type, response_body)
-
-    print(inspect(response))
 
     return response
 end
@@ -94,13 +119,11 @@ function Client:server_streaming_request(grpc_request_params, callback)
 
     local success, obj = pcall(pb.encode, request_type, data)
     if not success then
-        print("failed to encode:", obj)
+        print("failed to encode:", obj, "for", service, method, request_type, response_type)
         os.exit(1)
     end
 
     local encoded_protobuf = obj
-
-    -- local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
 
     local packed_prefix = string.pack("I1", 0)
     local payload_len = string.pack(">I4", encoded_protobuf:len())
@@ -120,6 +143,9 @@ function Client:server_streaming_request(grpc_request_params, callback)
 
     self.loop:wrap(function()
         for response_body in stream:each_chunk() do
+            print("stream chunk", response_body, "end")
+            print(pb.tohex(response_body))
+            print("-----------------------------------")
             -- Skip the 1-byte compressed flag and the 4-byte message length
             local response_body = response_body:sub(6)
 
@@ -132,14 +158,22 @@ function Client:server_streaming_request(grpc_request_params, callback)
             local response = obj
             callback(response)
         end
+
+        local trailers = stream:get_headers()
+        if trailers then
+            for name, value, never_index in trailers:each() do
+                print(name, value, never_index)
+            end
+        end
     end)
 end
 
 ---@return Client
 function client.new(loop)
     local sock = socket.connect({
-        host = "127.0.0.1",
-        port = "8080",
+        -- host = "127.0.0.1",
+        -- port = "8080",
+        path = "/tmp/pinnacle/grpc.sock",
     })
     sock:connect()
 

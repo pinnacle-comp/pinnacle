@@ -36,9 +36,11 @@ local process = {}
 ---@field private config_client Client
 local Process = {}
 
+---@param config_client Client
 ---@param args string[]
 ---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
-function Process:spawn(args, callbacks)
+---@param once boolean
+local function spawn_inner(config_client, args, callbacks, once)
     local callback = function() end
 
     if callbacks then
@@ -55,14 +57,34 @@ function Process:spawn(args, callbacks)
         end
     end
 
-    self.config_client:server_streaming_request(
+    config_client:server_streaming_request(
         build_grpc_request_params("Spawn", {
             args = args,
-            once = false,
+            once = once,
             has_callback = callbacks ~= nil,
         }),
         callback
     )
+end
+
+---@param args string | string[]
+---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
+function Process:spawn(args, callbacks)
+    if type(args) == "string" then
+        args = { args }
+    end
+
+    spawn_inner(self.config_client, args, callbacks, false)
+end
+
+---@param args string | string[]
+---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
+function Process:spawn_once(args, callbacks)
+    if type(args) == "string" then
+        args = { args }
+    end
+
+    spawn_inner(self.config_client, args, callbacks, true)
 end
 
 function process.new(config_client)

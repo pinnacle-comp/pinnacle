@@ -1,5 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-changed=api/lua");
+    println!("cargo:rerun-if-changed=api/lua_grpc");
     println!("cargo:rerun-if-changed=api/protocol");
 
     let xdg = xdg::BaseDirectories::with_prefix("pinnacle").unwrap();

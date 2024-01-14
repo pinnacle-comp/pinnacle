@@ -64,11 +64,33 @@ function Tag:get_all()
     ---@type TagHandle[]
     local handles = {}
 
-    for _, id in pairs(response.tag_ids) do
+    for _, id in ipairs(response.tag_ids or {}) do
         table.insert(handles, tag_handle.new(self.config_client, id))
     end
 
     return handles
+end
+
+---@param name string
+---@param output OutputHandle?
+---@return TagHandle | nil
+function Tag:get(name, output)
+    output = output or require("pinnacle.output").new(self.config_client):get_focused()
+
+    if not output then
+        return
+    end
+
+    local handles = self:get_all()
+
+    for _, handle in ipairs(handles) do
+        local props = handle:props()
+        if props.output and props.output.name == output.name and props.name == name then
+            return handle
+        end
+    end
+
+    return nil
 end
 
 ---Add tags with the given names to the specified output.
@@ -80,7 +102,7 @@ end
 ---
 ---@return TagHandle[]
 ---
----@overload fun(output: OutputHandle, tag_names: string[])
+---@overload fun(self: self, output: OutputHandle, tag_names: string[])
 function Tag:add(output, ...)
     local tag_names = { ... }
     if type(tag_names[1]) == "table" then
@@ -95,7 +117,7 @@ function Tag:add(output, ...)
     ---@type TagHandle[]
     local handles = {}
 
-    for _, id in pairs(response.tag_ids) do
+    for _, id in ipairs(response.tag_ids) do
         table.insert(handles, tag_handle.new(self.config_client, id))
     end
 
@@ -109,7 +131,7 @@ function Tag:remove(tags)
     ---@type integer[]
     local ids = {}
 
-    for _, tg in pairs(tags) do
+    for _, tg in ipairs(tags) do
         table.insert(ids, tg.id)
     end
 
@@ -139,7 +161,7 @@ function Tag:new_layout_cycler(layouts)
         next = function(output)
             local tags = output:props().tags
 
-            for _, tg in pairs(tags) do
+            for _, tg in ipairs(tags) do
                 if tg:props().active then
                     local id = tg.id
                     if #layouts == 1 then
@@ -162,7 +184,7 @@ function Tag:new_layout_cycler(layouts)
         prev = function(output)
             local tags = output:props().tags
 
-            for _, tg in pairs(tags) do
+            for _, tg in ipairs(tags) do
                 if tg:props().active then
                     local id = tg.id
 
@@ -279,7 +301,7 @@ function tag_handle.new_from_table(config_client, tag_ids)
     ---@type TagHandle[]
     local handles = {}
 
-    for _, id in pairs(tag_ids) do
+    for _, id in ipairs(tag_ids) do
         table.insert(handles, tag_handle.new(config_client, id))
     end
 
