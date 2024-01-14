@@ -90,7 +90,7 @@ function Client:unary_request(grpc_request_params)
         end
     end
 
-    -- stream:shutdown()
+    stream:shutdown()
 
     -- Skip the 1-byte compressed flag and the 4-byte message length
     local response_body = response_body:sub(6)

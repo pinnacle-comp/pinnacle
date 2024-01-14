@@ -316,8 +316,7 @@ impl State {
                 self.switch_vt(vt);
             }
             Some(KeyAction::Quit) => {
-                tracing::info!("Quitting Pinnacle");
-                self.loop_signal.stop();
+                self.shutdown();
             }
             Some(KeyAction::ReloadConfig) => {
                 self.start_config(crate::config::get_config_dir())

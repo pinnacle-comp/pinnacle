@@ -68,7 +68,7 @@ impl pinnacle_api_defs::pinnacle::v0alpha1::pinnacle_service_server::PinnacleSer
     async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
         tracing::trace!("PinnacleService.quit");
         let f = Box::new(|state: &mut State| {
-            state.loop_signal.stop();
+            state.shutdown();
         });
         // Expect is ok here, if it panics then the state was dropped beforehand
         self.sender.send(f).expect("failed to send f");
@@ -479,8 +479,6 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
             };
 
             if !has_callback {
-                drop(sender);
-                tracing::info!("NO CALLBACKKKKKKK");
                 return;
             }
 

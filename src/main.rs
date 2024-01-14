@@ -63,26 +63,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // let p = Path::new("/tmp/pinnacle/grpc.sock");
-    // let _ = std::fs::remove_file(p);
-    // std::fs::create_dir_all(p.parent().unwrap())?;
-    // let uds = UnixListener::bind(p)?;
-    // let uds_stream = UnixListenerStream::new(uds);
-    //
-    // tonic::transport::Server::builder()
-    //     .add_service(
-    //         api::protocol::request::command_service_server::CommandServiceServer::new(
-    //             crate::api::protocol::CommandServer,
-    //         ),
-    //     )
-    //     .serve_with_incoming(uds_stream)
-    //     // .serve("127.0.0.1:8080".parse().unwrap())
-    //     .await
-    //     .unwrap();
-
     let xdg_state_dir = XDG_BASE_DIRS.get_state_home();
-    // println!("{:?}", XDG_BASE_DIRS.create_config_directory("test"));
-    // std::process::exit(0);
 
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(Rotation::HOURLY)

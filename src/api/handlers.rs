@@ -435,7 +435,7 @@ impl State {
 
             Msg::Quit => {
                 tracing::info!("Quitting Pinnacle");
-                self.loop_signal.stop();
+                self.shutdown();
             }
 
             Msg::SetXkbConfig {

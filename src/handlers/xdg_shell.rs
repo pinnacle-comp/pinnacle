@@ -759,7 +759,7 @@ impl XdgShellHandler for State {
             .and_then(Output::from_resource)
             .or_else(|| {
                 self.window_for_surface(wl_surface)
-                    .and_then(|window| self.space.outputs_for_element(&window).get(0).cloned())
+                    .and_then(|window| self.space.outputs_for_element(&window).first().cloned())
             });
 
         if let Some(output) = output {

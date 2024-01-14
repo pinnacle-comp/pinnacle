@@ -1228,13 +1228,9 @@ impl State {
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = udev.pointer_image.get_image(
-            1, /*scale*/
-            self.clock
-                .now()
-                .try_into()
-                .expect("failed to convert time into duration"),
-        );
+        let frame = udev
+            .pointer_image
+            .get_image(1 /*scale*/, self.clock.now().into());
 
         let render_node = surface.render_node;
         let primary_gpu = udev.primary_gpu;

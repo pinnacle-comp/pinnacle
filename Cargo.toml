@@ -36,7 +36,7 @@ prost-types = "0.12.3"
 tonic = "0.10.2"
 tonic-reflection = "0.10.2"
 tokio-stream = { version = "0.1.14", features = ["net"] }
-tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process", "io-util"]}
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process", "io-util", "signal"]}
 bitflags = "2.4.1"
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 

@@ -219,12 +219,12 @@ pub fn run_winit() -> anyhow::Result<()> {
                         state.render_winit_window(&output);
                     }
                     WinitEvent::CloseRequested => {
-                        state.loop_signal.stop();
+                        state.shutdown();
                     }
                 });
 
                 if let PumpStatus::Exit(_) = status {
-                    state.loop_signal.stop();
+                    state.shutdown();
                 }
 
                 state.render_winit_window(&output);
