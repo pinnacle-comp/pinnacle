@@ -250,6 +250,7 @@ impl State {
         let multiple_instances = self
             .system_processes
             .processes_by_exact_name("pinnacle")
+            .filter(|proc| proc.thread_kind().is_none())
             .count()
             > 1;
 
