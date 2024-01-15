@@ -246,6 +246,93 @@ function Input:set_repeat_rate(rate, delay)
     }))
 end
 
+local accel_profile_values = {
+    flat = 1,
+    adaptive = 2,
+}
+---@alias AccelProfile
+---| "flat" No pointer acceleration
+---| "adaptive" Pointer acceleration
+
+local click_method_values = {
+    button_areas = 1,
+    click_finger = 2,
+}
+---@alias ClickMethod
+---| "button_areas" Button presses are generated according to where on the device the click occurs
+---| "click_finger" Button presses are generated according to the number of fingers used
+
+local scroll_method_values = {
+    no_scroll = 1,
+    two_finger = 2,
+    edge = 3,
+    on_button_down = 4,
+}
+---@alias ScrollMethod
+---| "no_scroll" Never send scroll events instead of pointer motion events
+---| "two_finger" Send scroll events when two fingers are logically down on the device
+---| "edge" Send scroll events when a finger moves along the bottom or right edge of a device
+---| "on_button_down" Send scroll events when a button is down and the device moves along a scroll-capable axis
+
+local tap_button_map_values = {
+    left_right_middle = 1,
+    left_middle_right = 2,
+}
+---@alias TapButtonMap
+---| "left_right_middle" 1/2/3 finger tap maps to left/right/middle
+---| "left_middle_right" 1/2/3 finger tap maps to left/middle/right
+
+---@class LibinputSettings
+---@field accel_profile AccelProfile? Set pointer acceleration
+---@field accel_speed number? Set pointer acceleration speed
+---@field calibration_matrix integer[]?
+---@field click_method ClickMethod?
+---@field disable_while_typing boolean? Set whether or not to disable the pointing device while typing
+---@field left_handed boolean? Set device left-handedness
+---@field middle_emulation boolean?
+---@field rotation_angle integer?
+---@field scroll_button integer? Set the scroll button
+---@field scroll_button_lock boolean? Set whether or not the scroll button is a hold or toggle
+---@field scroll_method ScrollMethod?
+---@field natural_scroll boolean? Set whether or not natural scroll is enabled, which reverses scroll direction
+---@field tap_button_map TapButtonMap?
+---@field tap_drag boolean?
+---@field tap_drag_lock boolean?
+---@field tap boolean?
+
+---Set a libinput setting.
+---
+---This includes settings for pointer devices, like acceleration profiles, natural scroll, and more.
+---
+---@param settings LibinputSettings
+function Input:set_libinput_settings(settings)
+    for setting, value in pairs(settings) do
+        if setting == "accel_profile" then
+            self.config_client:unary_request(
+                build_grpc_request_params("SetLibinputSetting", { [setting] = accel_profile_values[value] })
+            )
+        elseif setting == "calibration_matrix" then
+            self.config_client:unary_request(
+                build_grpc_request_params("SetLibinputSetting", { [setting] = { matrix = value } })
+            )
+        elseif setting == "click_method" then
+            self.config_client:unary_request(
+                build_grpc_request_params("SetLibinputSetting", { [setting] = click_method_values[value] })
+            )
+        elseif setting == "scroll_method" then
+            self.config_client:unary_request(
+                build_grpc_request_params("SetLibinputSetting", { [setting] = scroll_method_values[value] })
+            )
+        elseif setting == "tap_button_map" then
+            self.config_client:unary_request(
+                build_grpc_request_params("SetLibinputSetting", { [setting] = tap_button_map_values[value] })
+            )
+        else
+            self.config_client:unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = value }))
+        end
+    end
+end
+
 function input.new(config_client)
     ---@type Input
     local self = {
