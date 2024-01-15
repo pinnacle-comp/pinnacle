@@ -10,9 +10,9 @@ use crate::{
     state::WithState,
     window::WindowElement,
 };
-use pinnacle_api_defs::pinnacle::input::{
-    libinput::v0alpha1::set_libinput_setting_request::Setting,
-    v0alpha1::{set_mousebind_request, SetKeybindResponse, SetMousebindResponse},
+use pinnacle_api_defs::pinnacle::input::v0alpha1::{
+    set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
+    SetMousebindResponse,
 };
 use smithay::{
     backend::input::{

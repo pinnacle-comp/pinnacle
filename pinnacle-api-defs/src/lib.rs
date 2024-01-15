@@ -8,12 +8,6 @@ pub mod pinnacle {
         pub mod v0alpha1 {
             tonic::include_proto!("pinnacle.input.v0alpha1");
         }
-
-        pub mod libinput {
-            pub mod v0alpha1 {
-                tonic::include_proto!("pinnacle.input.libinput.v0alpha1");
-            }
-        }
     }
 
     pub mod output {
@@ -31,12 +25,6 @@ pub mod pinnacle {
     pub mod window {
         pub mod v0alpha1 {
             tonic::include_proto!("pinnacle.window.v0alpha1");
-        }
-
-        pub mod rules {
-            pub mod v0alpha1 {
-                tonic::include_proto!("pinnacle.window.rules.v0alpha1");
-            }
         }
     }
 

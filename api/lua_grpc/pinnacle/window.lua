@@ -281,10 +281,10 @@ function Window:add_window_rule(rule)
 
     if rule.rule.tags then
         local ids = {}
-        for _, tg in ipairs(rule.cond.tags) do
+        for _, tg in ipairs(rule.rule.tags) do
             table.insert(ids, tg.id)
         end
-        rule.cond.tags = ids
+        rule.rule.tags = ids
     end
 
     if rule.rule.fullscreen_or_maximized then

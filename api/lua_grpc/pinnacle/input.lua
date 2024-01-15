@@ -36,6 +36,7 @@ end
 
 -- This is an @enum and not an @alias because with an @alias the completion replaces tables with a string,
 -- which is annoying
+
 ---@enum (key) Modifier
 local modifier_values = {
     shift = 1,

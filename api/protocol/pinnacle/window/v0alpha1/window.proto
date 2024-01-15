@@ -4,7 +4,6 @@ package pinnacle.window.v0alpha1;
 
 import "google/protobuf/empty.proto";
 import "pinnacle/v0alpha1/pinnacle.proto";
-import "pinnacle/window/rules/v0alpha1/rules.proto";
 
 message CloseRequest {
   optional uint32 window_id = 1;
@@ -76,8 +75,42 @@ message GetPropertiesResponse {
   optional string title = 3;
   optional bool focused = 4;
   optional bool floating = 5;
-  optional .pinnacle.window.rules.v0alpha1.FullscreenOrMaximized fullscreen_or_maximized = 6;
+  optional FullscreenOrMaximized fullscreen_or_maximized = 6;
   repeated uint32 tag_ids = 7;
+}
+
+enum FullscreenOrMaximized {
+  FULLSCREEN_OR_MAXIMIZED_UNSPECIFIED = 0;
+  FULLSCREEN_OR_MAXIMIZED_NEITHER = 1;
+  FULLSCREEN_OR_MAXIMIZED_FULLSCREEN = 2;
+  FULLSCREEN_OR_MAXIMIZED_MAXIMIZED = 3;
+}
+
+message AddWindowRuleRequest {
+  optional WindowRuleCondition cond = 1;
+  optional WindowRule rule = 2;
+}
+
+message WindowRuleCondition {
+  repeated WindowRuleCondition any = 1;
+  repeated WindowRuleCondition all = 2;
+  repeated string classes = 3;
+  repeated string titles = 4;
+  repeated uint32 tags = 5;
+}
+
+message WindowRule {
+  optional string output = 1;
+  repeated uint32 tags = 2;
+  // `true` for floating, `false` for tiled
+  optional bool floating = 3;
+
+  optional FullscreenOrMaximized fullscreen_or_maximized = 4;
+
+  optional int32 x = 5;
+  optional int32 y = 6;
+  optional int32 width = 7;
+  optional int32 height = 8;
 }
 
 service WindowService {
@@ -94,5 +127,5 @@ service WindowService {
   rpc Get(GetRequest) returns (GetResponse);
   rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
 
-  rpc AddWindowRule(.pinnacle.window.rules.v0alpha1.AddWindowRuleRequest) returns (google.protobuf.Empty);
+  rpc AddWindowRule(AddWindowRuleRequest) returns (google.protobuf.Empty);
 }

@@ -9,12 +9,10 @@ function protobuf.build_protos()
     local proto_file_paths = {
         PINNACLE_PROTO_DIR .. "/pinnacle/tag/" .. version .. "/tag.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/input/" .. version .. "/input.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/input/libinput/" .. version .. "/libinput.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/" .. version .. "/pinnacle.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/output/" .. version .. "/output.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/process/" .. version .. "/process.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/window/rules/" .. version .. "/rules.proto",
     }
 
     local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "

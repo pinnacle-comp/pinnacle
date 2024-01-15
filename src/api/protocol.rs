@@ -1,26 +1,22 @@
 use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
-    input::{
-        libinput::v0alpha1::set_libinput_setting_request::{
-            AccelProfile, ClickMethod, ScrollMethod, TapButtonMap,
-        },
-        v0alpha1::set_mousebind_request::MouseEdge,
+    input::v0alpha1::{
+        set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
+        set_mousebind_request::MouseEdge,
+        SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
+        SetMousebindResponse, SetRepeatRateRequest, SetXkbConfigRequest,
     },
     output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
-    process::v0alpha1::SetEnvRequest,
+    process::v0alpha1::{SetEnvRequest, SpawnRequest, SpawnResponse},
     tag::v0alpha1::{
         AddRequest, AddResponse, RemoveRequest, SetActiveRequest, SetLayoutRequest, SwitchToRequest,
     },
-    v0alpha1::Geometry,
-    window::{
-        rules::v0alpha1::{
-            AddWindowRuleRequest, FullscreenOrMaximized, WindowRule, WindowRuleCondition,
-        },
-        v0alpha1::{
-            CloseRequest, MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
-            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
-        },
+    v0alpha1::{Geometry, QuitRequest},
+    window::v0alpha1::{
+        AddWindowRuleRequest, CloseRequest, FullscreenOrMaximized, MoveGrabRequest,
+        MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest, SetFullscreenRequest,
+        SetGeometryRequest, SetMaximizedRequest, SetTagRequest, WindowRule, WindowRuleCondition,
     },
 };
 use smithay::{
@@ -43,18 +39,6 @@ use crate::{
     state::{State, WithState},
     tag::{Tag, TagId},
     window::{window_state::WindowId, WindowElement},
-};
-
-use pinnacle_api_defs::pinnacle::{
-    input::{
-        libinput::v0alpha1::SetLibinputSettingRequest,
-        v0alpha1::{
-            SetKeybindRequest, SetKeybindResponse, SetMousebindRequest, SetMousebindResponse,
-            SetRepeatRateRequest, SetXkbConfigRequest,
-        },
-    },
-    process::v0alpha1::{SpawnRequest, SpawnResponse},
-    v0alpha1::QuitRequest,
 };
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
@@ -275,7 +259,7 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
 
         let discriminant = std::mem::discriminant(&setting);
 
-        use pinnacle_api_defs::pinnacle::input::libinput::v0alpha1::set_libinput_setting_request::Setting;
+        use pinnacle_api_defs::pinnacle::input::v0alpha1::set_libinput_setting_request::Setting;
         let apply_setting: Box<dyn Fn(&mut libinput::Device) + Send> = match setting {
             Setting::AccelProfile(profile) => {
                 let profile = AccelProfile::try_from(profile).unwrap_or(AccelProfile::Unspecified);

@@ -1,3 +1,5 @@
+local inspect = require("inspect")
+
 require("pinnacle").setup(function(Pinnacle)
     local Input = Pinnacle.input
     local Process = Pinnacle.process
@@ -12,104 +14,111 @@ require("pinnacle").setup(function(Pinnacle)
 
     local terminal = "alacritty"
 
-    Input:mousebind({ mod_key }, "btn_left", "press", function()
-        Window:begin_move("btn_left")
-    end)
-
-    Input:mousebind({ mod_key }, "btn_right", "press", function()
-        Window:begin_resize("btn_right")
-    end)
-
-    ------
-
-    Input:keybind({ mod_key, "alt" }, "q", function()
-        Pinnacle:quit()
-    end)
-
-    Input:keybind({ mod_key, "alt" }, "c", function()
-        local focused = Window:get_focused()
-        if focused then
-            focused:close()
-        end
-    end)
-
-    Input:keybind({ mod_key }, key.Return, function()
-        Process:spawn(terminal)
-    end)
-
-    Input:keybind({ mod_key, "alt" }, key.space, function()
-        local focused = Window:get_focused()
-        if focused then
-            focused:toggle_floating()
-        end
-    end)
-
-    Input:keybind({ mod_key }, "f", function()
-        local focused = Window:get_focused()
-        if focused then
-            focused:toggle_fullscreen()
-        end
-    end)
-
-    Input:keybind({ mod_key }, "m", function()
-        local focused = Window:get_focused()
-        if focused then
-            focused:toggle_maximized()
-        end
-    end)
-
-    local tag_names = { "1", "2", "3", "4", "5" }
-
-    Output:connect_for_all(function(op)
-        local tags = Tag:add(op, tag_names)
+    Output:connect_for_all(function(output)
+        local tags = Tag:add(output, "1", "2", "3", "4", "5")
         tags[1]:set_active(true)
     end)
 
-    Process:spawn_once("foot")
+    local output = Output:get_all()[1]
 
-    local layout_cycler = Tag:new_layout_cycler({
-        "master_stack",
-        "dwindle",
-        "spiral",
-        "corner_top_left",
-        "corner_top_right",
-        "corner_bottom_left",
-        "corner_bottom_right",
-    })
+    Process:spawn("alacritty")
 
-    Input:keybind({ mod_key }, key.space, function()
-        local focused_op = Output:get_focused()
-        if focused_op then
-            layout_cycler.next(focused_op)
+    Input:keybind({}, "q", function()
+        print("Keybind: q")
+    end)
+    Input:keybind({ "shift" }, "q", function()
+        -- Should not happen, overridden by shift Q
+        print("Keybind: shift q")
+    end)
+    Input:keybind({}, "Q", function()
+        print("Keybind: Q")
+    end)
+    Input:keybind({ "shift" }, "Q", function()
+        print("Keybind: shift Q")
+    end)
+    Input:keybind({}, "@", function()
+        -- Should not happen, can't get @ without shift
+        print("Keybind: @")
+    end)
+    Input:keybind({ "ctrl" }, "@", function()
+        --- Should not happen, same as above
+        print("Keybind: ctrl @")
+    end)
+
+    Input:keybind({ "shift" }, "a", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_fullscreen(true)
+        end
+    end)
+    Input:keybind({ "shift" }, "s", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_fullscreen(false)
+        end
+    end)
+    Input:keybind({ "shift" }, "d", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_maximized(true)
+        end
+    end)
+    Input:keybind({ "shift" }, "f", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_maximized(false)
+        end
+    end)
+    Input:keybind({ "shift" }, "g", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_floating(true)
+        end
+    end)
+    Input:keybind({ "shift" }, "h", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_floating(false)
+        end
+    end)
+    Input:keybind({ "shift" }, "j", function()
+        local win = Window:get_focused()
+        if win then
+            win:toggle_fullscreen()
+        end
+    end)
+    Input:keybind({ "shift" }, "k", function()
+        local win = Window:get_focused()
+        if win then
+            win:toggle_maximized()
+        end
+    end)
+    Input:keybind({ "shift" }, "l", function()
+        local win = Window:get_focused()
+        if win then
+            win:toggle_floating()
         end
     end)
 
-    Input:keybind({ mod_key, "shift" }, key.space, function()
-        local focused_op = Output:get_focused()
-        if focused_op then
-            layout_cycler.prev(focused_op)
+    Input:keybind({ "shift" }, "z", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_geometry({ x = 100, y = 200, width = 500, height = 200 })
+        end
+    end)
+    Input:keybind({ "ctrl" }, "z", function()
+        local win = Window:get_focused()
+        if win then
+            win:set_geometry({ width = 500, height = 200 })
         end
     end)
 
-    for _, tag_name in ipairs(tag_names) do
-        -- nil-safety: tags are guaranteed to be on the outputs due to connect_for_all above
-        Input:keybind({ mod_key }, tag_name, function()
-            Tag:get(tag_name):switch_to()
-        end)
-        Input:keybind({ mod_key, "shift" }, tag_name, function()
-            Tag:get(tag_name):toggle_active()
-        end)
-        Input:keybind({ mod_key, "alt" }, tag_name, function()
-            local focused = Window:get_focused()
-            if focused then
-                focused:move_to_tag(Tag:get(tag_name) --[[@as TagHandle]])
-            end
-        end)
-        Input:keybind({ mod_key, "shift", "alt" }, tag_name, function()
-            local focused = Window:get_focused()
-            if focused then
-                focused:toggle_tag(Tag:get(tag_name) --[[@as TagHandle]])
-            end
-        end)
-    end
+    Input:keybind({ "ctrl" }, key.Return, function()
+        Process:spawn("alacritty")
+    end)
+    Input:keybind({ "shift" }, "x", function()
+        print(inspect(Output:get_focused():props()))
+        print(inspect(Window:get_focused():props()))
+        print(inspect(Tag:get("1"):props()))
+    end)
 end)

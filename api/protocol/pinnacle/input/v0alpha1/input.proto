@@ -3,7 +3,6 @@ syntax = "proto2";
 package pinnacle.input.v0alpha1;
 
 import "google/protobuf/empty.proto";
-import "pinnacle/input/libinput/v0alpha1/libinput.proto";
 
 enum Modifier {
   MODIFIER_UNSPECIFIED = 0;
@@ -50,6 +49,84 @@ message SetRepeatRateRequest {
   optional int32 delay = 2;
 }
 
+message SetLibinputSettingRequest {
+  // Pointer acceleration profile
+  enum AccelProfile {
+    ACCEL_PROFILE_UNSPECIFIED = 0;
+    // No acceleration
+    ACCEL_PROFILE_FLAT = 1;
+    // Acceleration
+    ACCEL_PROFILE_ADAPTIVE = 2;
+  }
+
+  message CalibrationMatrix {
+    // Exactly 6 floats
+    repeated float matrix = 1;
+  }
+
+  // The click method defines when to generate software-emulated
+  // buttons, usually on a device that does not have a specific
+  // physical button available.
+  enum ClickMethod {
+    CLICK_METHOD_UNSPECIFIED = 0;
+    CLICK_METHOD_BUTTON_AREAS = 1;
+    CLICK_METHOD_CLICK_FINGER = 2;
+  }
+
+  // The scroll method of a device selects when to generate scroll axis
+  // events instead of pointer motion events.
+  enum ScrollMethod {
+    SCROLL_METHOD_UNSPECIFIED = 0;
+    SCROLL_METHOD_NO_SCROLL = 1;
+    SCROLL_METHOD_TWO_FINGER = 2;
+    SCROLL_METHOD_EDGE = 3;
+    SCROLL_METHOD_ON_BUTTON_DOWN = 4;
+  }
+
+  // Map 1/2/3 finger taps to buttons
+  enum TapButtonMap {
+    TAP_BUTTON_MAP_UNSPECIFIED = 0;
+    // 1 tap = left mouse, 2 = right, 3 = middle
+    TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE = 1;
+    // 1 tap = left mouse, 2 = middle, 3 = right
+    TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT = 2;
+  }
+
+  oneof setting {
+    AccelProfile accel_profile = 1;
+    double accel_speed = 2;
+    CalibrationMatrix calibration_matrix = 3;
+    ClickMethod click_method = 4;
+    // When `true`, the device will be disabled while typing
+    // and for a short period after.
+    bool disable_while_typing = 5;
+    bool left_handed = 6;
+    bool middle_emulation = 7;
+    uint32 rotation_angle = 8;
+    // When the scroll method is set to `SCROLL_METHOD_ON_BUTTON_DOWN`,
+    // pointer motion will become scroll motion and
+    // the specified button will also not have any press/release events
+    // generated.
+    uint32 scroll_button = 9;
+    // Only applies when the scroll method is `SCROLL_METHOD_ON_BUTTON_DOWN`.
+    // When `false`, the scroll button must be held down to button scroll.
+    // When `true`, the scroll button toggles scrolling instead.
+    bool scroll_button_lock = 10;
+    ScrollMethod scroll_method = 11;
+    // When `true`, the direction of scrolling will be reversed.
+    // Useful for eg. trackpads.
+    bool natural_scroll = 12;
+    TapButtonMap tap_button_map = 13;
+    // Enable or disable double-tap dragging
+    bool tap_drag = 14;
+    // Enable or disable a timeout that allows tap-drags to continue
+    // when the finger is lifted and placed back during a tap-drag
+    bool tap_drag_lock = 15;
+    // Enable or disable tap-to-click
+    bool tap = 16;
+  }
+}
+
 service InputService {
   rpc SetKeybind(SetKeybindRequest) returns (stream SetKeybindResponse);
   rpc SetMousebind(SetMousebindRequest) returns (stream SetMousebindResponse);
@@ -57,5 +134,5 @@ service InputService {
   rpc SetXkbConfig(SetXkbConfigRequest) returns (google.protobuf.Empty);
   rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);
 
-  rpc SetLibinputSetting(.pinnacle.input.libinput.v0alpha1.SetLibinputSettingRequest) returns (google.protobuf.Empty);
+  rpc SetLibinputSetting(SetLibinputSettingRequest) returns (google.protobuf.Empty);
 }

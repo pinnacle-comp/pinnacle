@@ -186,7 +186,6 @@ impl State {
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
 
-        // TODO: update from config
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
         loop_handle.insert_idle(|data| {
@@ -231,6 +230,8 @@ impl State {
 
                     data.state.xwm = Some(wm);
                     data.state.xdisplay = Some(display);
+
+                    std::env::set_var("DISPLAY", format!(":{display}"));
                 }
                 XWaylandEvent::Exited => {
                     data.state.xwm.take();
@@ -319,14 +320,7 @@ impl State {
             loop_signal_clone.stop();
         });
 
-        tokio::spawn(async move {
-            grpc_server
-                .serve_with_incoming_shutdown(uds_stream, ping_rx_future)
-                .await
-                .expect("failed to serve grpc");
-        });
-
-        Ok(Self {
+        let state = Self {
             backend,
             loop_signal,
             loop_handle,
@@ -378,7 +372,21 @@ impl State {
 
             config_join_handle: None,
             grpc_kill_pinger: ping_tx,
-        })
+        };
+
+        state.schedule(
+            |data| data.state.xdisplay.is_some(),
+            move |_| {
+                tokio::spawn(async move {
+                    grpc_server
+                        .serve_with_incoming_shutdown(uds_stream, ping_rx_future)
+                        .await
+                        .expect("failed to serve grpc");
+                });
+            },
+        );
+
+        Ok(state)
     }
 
     /// Schedule `run` to run when `condition` returns true.
