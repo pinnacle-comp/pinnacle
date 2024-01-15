@@ -41,20 +41,34 @@ local function build_grpc_request_params(method, data)
     }
 end
 
+---@nodoc
 ---@class WindowHandleModule
 local window_handle = {}
 
+---A window handle.
+---
+---This is a handle to an application window that allows manipulation of the window.
+---
+---If the window is destroyed, the handle will become invalid and may not do
+---what you want it to.
+---
+---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---@classmod
 ---@class WindowHandle
 ---@field private config_client Client
 ---@field id integer
 local WindowHandle = {}
 
+---@nodoc
 ---@class WindowModule
 ---@field private handle WindowHandleModule
 local window = {}
 window.handle = window_handle
 
+---Window management.
+---
+---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
+---moving them between tags, and various other actions.
 ---@class Window
 ---@field private config_client Client
 local Window = {}

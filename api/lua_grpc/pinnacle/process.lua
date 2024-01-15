@@ -29,9 +29,13 @@ local function build_grpc_request_params(method, data)
     }
 end
 
+---@nodoc
 ---@class ProcessModule
 local process = {}
 
+---Process management.
+---
+---This module provides utilities to spawn processes and capture their output.
 ---@class Process
 ---@field private config_client Client
 local Process = {}

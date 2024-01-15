@@ -25,9 +25,11 @@ end
 ---@return integer total_length
 local function read_length_prefixed_message(body) end
 
+---@nodoc
 ---@class ClientModule
 local client = {}
 
+---@nodoc
 ---@class Client
 ---@field conn H2Connection
 ---@field loop CqueuesLoop

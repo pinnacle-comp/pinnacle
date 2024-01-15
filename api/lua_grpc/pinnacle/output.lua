@@ -35,20 +35,34 @@ local function build_grpc_request_params(method, data)
     }
 end
 
+---@nodoc
 ---@class OutputHandleModule
 local output_handle = {}
 
+---An output handle.
+---
+---This is a handle to one of your monitors.
+---It serves to make it easier to deal with them, defining methods for getting properties and
+---helpers for things like positioning multiple monitors.
+---
+---This can be retrieved through the various `get` functions in the `Output` module.
 ---@classmod
 ---@class OutputHandle
 ---@field private config_client Client
 ---@field name string The unique name of this output
 local OutputHandle = {}
 
+---@nodoc
 ---@class OutputModule
 ---@field private handle OutputHandleModule
 local output = {}
 output.handle = output_handle
 
+---Output management.
+---
+---An output is what you would call a monitor. It presents windows, your cursor, and other UI elements.
+---
+---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---@class Output
 ---@field private config_client Client
 local Output = {}

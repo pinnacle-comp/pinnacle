@@ -2,12 +2,18 @@ local cqueues = require("cqueues")
 
 local client = require("pinnacle.grpc.client")
 
+---The entry point to configuration.
+---
+---This module contains one function: `setup`, which is how you'll access all the ways to configure Pinnacle.
 ---@class PinnacleModule
 local pinnacle = {
     version = "v0alpha1",
 }
 
----@classmod
+---The Pinnacle module.
+---
+---This module holds all the other configuration modules (Window, Input, etc.), and allows you to
+---quit the compositor using the `quit` method.
 ---@class Pinnacle
 ---@field private config_client Client
 ---@field input Input

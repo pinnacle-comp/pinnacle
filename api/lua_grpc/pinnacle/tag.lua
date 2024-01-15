@@ -41,6 +41,11 @@ end
 ---@class TagHandleModule
 local tag_handle = {}
 
+---A tag handle.
+---
+---This is a handle that allows manipulation of a tag.
+---
+---This can be retrieved through the various `get` functions in the `Tag` module.
 ---@classmod
 ---@class TagHandle
 ---@field private config_client Client
@@ -52,6 +57,21 @@ local TagHandle = {}
 local tag = {}
 tag.handle = tag_handle
 
+---Tag management.
+---
+---This module provides utilities for creating and manipulating tags.
+---
+---A tag is a sort of marker for each of your windows. It allows you to present windows in ways that
+---traditional workspaces cannot.
+---
+---More specifically:
+---
+--- - A window can have multiple tags.
+---   - This means that you can have one window show up across multiple "workspaces" if you come something like i3.
+--- - An output can display multiple tags at once.
+---   - This allows you to toggle a tag and have windows on both tags display at once. This is helpful if you, say, want to reference a browser window while coding; you toggle your browser's tag and temporarily reference it while you work without having to change screens.
+---
+---If you need to get tags beyond the first with the same name, use the `get` method and find what you need.
 ---@class Tag
 ---@field private config_client Client
 local Tag = {}

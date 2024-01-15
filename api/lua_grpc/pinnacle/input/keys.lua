@@ -1,3 +1,4 @@
+---@nodoc
 ---@enum Key
 local keys = {
     NoSymbol = 0x00000000,

@@ -92,11 +92,15 @@ local mouse_edge_values = {
 ---| "press" Trigger on mouse button press
 ---| "release" Trigger on mouse button release
 
+---@nodoc
 ---@class InputModule
 ---@field private btn table
 local input = {}
 input.btn = mouse_button_values
 
+---Input management.
+---
+---This module provides utilities to set key- and mousebinds as well as change keyboard settings.
 ---@class Input
 ---@field private config_client Client
 local Input = {
