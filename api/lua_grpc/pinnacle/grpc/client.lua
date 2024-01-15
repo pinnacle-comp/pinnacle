@@ -156,9 +156,7 @@ end
 ---@return Client
 function client.new(loop)
     local sock = socket.connect({
-        -- host = "127.0.0.1",
-        -- port = "8080",
-        path = "/tmp/pinnacle/grpc.sock",
+        path = os.getenv("PINNACLE_GRPC_SOCKET"),
     })
     sock:connect()
 
