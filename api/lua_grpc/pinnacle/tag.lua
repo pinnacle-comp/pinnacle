@@ -38,6 +38,7 @@ local function build_grpc_request_params(method, data)
     }
 end
 
+---@nodoc
 ---@class TagHandleModule
 local tag_handle = {}
 
@@ -52,6 +53,7 @@ local tag_handle = {}
 ---@field id integer
 local TagHandle = {}
 
+---@nodoc
 ---@class TagModule
 ---@field private handle TagHandleModule
 local tag = {}
