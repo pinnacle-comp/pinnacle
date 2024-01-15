@@ -71,8 +71,24 @@ function Tag:get_all()
     return handles
 end
 
+---Get the tag with the given name and output.
+---
+---If `output` is not specified, this uses the focused output.
+---
+---If an output has more than one tag with the same name, this returns the first.
+---
+---### Example
+---```lua
+--- -- Get tags on the focused output
+---local tag = Tag:get("Tag")
+---
+--- -- Get tags on a specific output
+---local tag_on_hdmi1 = Tag:get("Tag", Output:get_by_name("HDMI-1"))
+---```
+---
 ---@param name string
 ---@param output OutputHandle?
+---
 ---@return TagHandle | nil
 function Tag:get(name, output)
     output = output or require("pinnacle.output").new(self.config_client):get_focused()
@@ -97,10 +113,19 @@ end
 ---
 ---Returns handles to the created tags.
 ---
+---### Example
+---```lua
+---local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---
+--- -- With a table
+---local tag_names = { "1", "2", "Buckle", "Shoe" }
+---local tags = Tag:add(Output:get_by_name("HDMI-1"), tag_names)
+---```
+---
 ---@param output OutputHandle
 ---@param ... string
 ---
----@return TagHandle[]
+---@return TagHandle[] tags Handles to the created tags
 ---
 ---@overload fun(self: self, output: OutputHandle, tag_names: string[])
 function Tag:add(output, ...)
@@ -126,6 +151,13 @@ end
 
 ---Remove the given tags.
 ---
+---### Example
+---```lua
+---local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---
+---Tag:remove(tags) -- "HDMI-1" no longer has those tags
+---```
+---
 ---@param tags TagHandle[]
 function Tag:remove(tags)
     ---@type integer[]
@@ -139,10 +171,44 @@ function Tag:remove(tags)
 end
 
 ---@class LayoutCycler
----@field next fun(output: OutputHandle)
----@field prev fun(output: OutputHandle)
+---@field next fun(output: OutputHandle?)
+---@field prev fun(output: OutputHandle?)
 
---- TODO: docs
+---Create a layout cycler that will cycle layouts on the given output.
+---
+---This returns a `LayoutCycler` table with two fields, both functions that take in an optional `OutputHandle`:
+--- - `next`: Cycle to the next layout on the given output
+--- - `prev`: Cycle to the previous layout on the given output
+---
+---If the output isn't specified then the focused one will be used.
+---
+---Internally, this will only change the layout of the first active tag on the output
+---because that is the one that determines the layout.
+---
+---### Example
+---```lua
+--- ---@type LayoutCycler[]
+---local layouts = {
+---    "master_stack",
+---    "dwindle",
+---    "corner_top_left",
+---    "corner_top_right".
+---} -- Only cycle between these four layouts
+---
+---local layout_cycler = Tag:new_layout_cycler()
+---
+--- -- Assume the focused output starts with the "master_stack" layout
+---layout_cycler.next() -- Layout is now "dwindle"
+---layout_cycler.next() -- Layout is now "corner_top_left"
+---layout_cycler.next() -- Layout is now "corner_top_right"
+---layout_cycler.next() -- Layout is now "dwindle"
+---layout_cycler.next() -- Layout is now "corner_top_right"
+---
+--- -- Cycling on another output
+---layout_cycler.next(Output:get_by_name("eDP-1"))
+---layout_cycler.prev(Output:get_by_name("HDMI-1"))
+---```
+---
 ---@param layouts Layout[]
 ---
 ---@return LayoutCycler
@@ -159,6 +225,11 @@ function Tag:new_layout_cycler(layouts)
     ---@type LayoutCycler
     return {
         next = function(output)
+            local output = output or require("pinnacle.output").new(self.config_client):get_focused()
+            if not output then
+                return
+            end
+
             local tags = output:props().tags
 
             for _, tg in ipairs(tags) do
@@ -182,6 +253,11 @@ function Tag:new_layout_cycler(layouts)
             end
         end,
         prev = function(output)
+            local output = output or require("pinnacle.output").new(self.config_client):get_focused()
+            if not output then
+                return
+            end
+
             local tags = output:props().tags
 
             for _, tg in ipairs(tags) do
@@ -209,11 +285,19 @@ function Tag:new_layout_cycler(layouts)
 end
 
 ---Remove this tag.
+---
+---### Example
+---```lua
+---local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---
+---tags[2]:remove()
+---tags[4]:remove()
+--- -- "HDMI-1" now only has tags "1" and "Buckle"
+---```
 function TagHandle:remove()
     self.config_client:unary_request(build_grpc_request_params("Remove", { tag_ids = { self.id } }))
 end
 
----@enum (key) Layout
 local _layouts = {
     master_stack = 1,
     dwindle = 2,
@@ -223,7 +307,25 @@ local _layouts = {
     corner_bottom_left = 6,
     corner_bottom_right = 7,
 }
+---@alias Layout
+---| "master_stack" # One master window on the left with all other windows stacked to the right.
+---| "dwindle" # Windows split in half towards the bottom right corner.
+---| "spiral" # Windows split in half in a spiral.
+---| "corner_top_left" # One main corner window in the top left with a column of windows on the right and a row on the bottom.
+---| "corner_top_right" # One main corner window in the top right with a column of windows on the left and a row on the bottom.
+---| "corner_bottom_left" # One main corner window in the bottom left with a column of windows on the right and a row on the top.
+---| "corner_bottom_right" # One main corner window in the bottom right with a column of windows on the left and a row on the top.
 
+---Set this tag's layout.
+---
+---If this is the first active tag on its output, its layout will be used to tile windows.
+---
+---### Example
+---```lua
+--- -- Assume the focused output has tag "Tag"
+---Tag:get("Tag"):set_layout("dwindle")
+---```
+---
 ---@param layout Layout
 function TagHandle:set_layout(layout)
     local layout = _layouts[layout]
@@ -235,11 +337,32 @@ function TagHandle:set_layout(layout)
 end
 
 ---Activate this tag and deactivate all other ones on the same output.
+---
+---### Example
+---```lua
+--- -- Assume the focused output has the following inactive tags and windows:
+--- --  - "1": Alacritty
+--- --  - "2": Firefox, Discord
+--- --  - "3": Steam
+---Tag:get("2"):switch_to() -- Displays Firefox and Discord
+---Tag:get("3"):switch_to() -- Displays Steam
+---```
 function TagHandle:switch_to()
     self.config_client:unary_request(build_grpc_request_params("SwitchTo", { tag_id = self.id }))
 end
 
 ---Set whether or not this tag is active.
+---
+---### Example
+---```lua
+--- -- Assume the focused output has the following inactive tags and windows:
+--- --  - "1": Alacritty
+--- --  - "2": Firefox, Discord
+--- --  - "3": Steam
+---Tag:get("2"):set_active(true)  -- Displays Firefox and Discord
+---Tag:get("3"):set_active(true)  -- Displays Firefox, Discord, and Steam
+---Tag:get("2"):set_active(false) -- Displays Steam
+---```
 ---
 ---@param active boolean
 function TagHandle:set_active(active)
@@ -247,14 +370,24 @@ function TagHandle:set_active(active)
 end
 
 ---Toggle this tag's active state.
+---
+---### Example
+---```lua
+--- -- Assume the focused output has the following inactive tags and windows:
+--- --  - "1": Alacritty
+--- --  - "2": Firefox, Discord
+--- --  - "3": Steam
+---Tag:get("2"):toggle_active() -- Displays Firefox and Discord
+---Tag:get("2"):toggle_active() -- Displays nothing
+---```
 function TagHandle:toggle_active()
     self.config_client:unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, toggle = {} }))
 end
 
 ---@class TagProperties
----@field active boolean?
----@field name string?
----@field output OutputHandle?
+---@field active boolean? Whether or not the tag is currently being displayed
+---@field name string? The name of the tag
+---@field output OutputHandle? The output the tag is on
 
 ---Get all properties of this tag.
 ---
@@ -268,6 +401,33 @@ function TagHandle:props()
         output = response.output_name
             and require("pinnacle.output").handle.new(self.config_client, response.output_name),
     }
+end
+
+---Get whether or not this tag is being displayed.
+---
+---Shorthand for `handle:props().active`.
+---
+---@return boolean?
+function TagHandle:active()
+    return self:props().active
+end
+
+---Get this tag's name.
+---
+---Shorthand for `handle:props().name`.
+---
+---@return string?
+function TagHandle:name()
+    return self:props().name
+end
+
+---Get the output this tag is on.
+---
+---Shorthand for `handle:props().output`.
+---
+---@return OutputHandle?
+function TagHandle:output()
+    return self:props().output
 end
 
 ---@return Tag

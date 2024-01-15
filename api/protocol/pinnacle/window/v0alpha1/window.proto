@@ -77,6 +77,7 @@ message GetPropertiesResponse {
   optional bool focused = 4;
   optional bool floating = 5;
   optional .pinnacle.window.rules.v0alpha1.FullscreenOrMaximized fullscreen_or_maximized = 6;
+  repeated uint32 tag_ids = 7;
 }
 
 service WindowService {

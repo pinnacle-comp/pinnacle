@@ -68,23 +68,13 @@ function Client:unary_request(grpc_request_params)
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
 
-    -- for chunk in stream:each_chunk() do
-    --     print(chunk, ":", pb.tohex(chunk))
-    --     os.exit(1)
-    -- end
-
     local response_headers = stream:get_headers()
     -- TODO: check headers for errors
 
     local response_body = stream:get_next_chunk()
-    print("unary body", response_body, "end")
-    print(pb.tohex(response_body))
-    print("--------------------------------")
 
     local trailers = stream:get_headers()
-    print("trailers", trailers)
-    print("------------------------------")
-    if trailers then
+    if trailers then -- idk if im big dummy or not but there are never any trailers
         for name, value, never_index in trailers:each() do
             print(name, value, never_index)
         end
@@ -134,18 +124,10 @@ function Client:server_streaming_request(grpc_request_params, callback)
     stream:write_chunk(body, true)
 
     local response_headers = stream:get_headers()
-    for name, value, never_index in response_headers:each() do
-        print(name, value, never_index)
-    end
-    -- local chunk = stream:get_next_chunk()
-    -- print(chunk, chunk:len())
     -- TODO: check headers for errors
 
     self.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            print("stream chunk", response_body, "end")
-            print(pb.tohex(response_body))
-            print("-----------------------------------")
             -- Skip the 1-byte compressed flag and the 4-byte message length
             local response_body = response_body:sub(6)
 

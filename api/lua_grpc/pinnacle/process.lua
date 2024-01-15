@@ -67,8 +67,21 @@ local function spawn_inner(config_client, args, callbacks, once)
     )
 end
 
----@param args string | string[]
----@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
+---Spawn a program with optional callbacks for its stdout, stderr, and exit information.
+---
+---`callbacks` is an optional table with the following optional fields:
+--- - `stdout`: function(line: string)
+--- - `stderr`: function(line: string)
+--- - `exit`:   function(code: integer, msg: string)
+---
+---Note: if `args` is a string then it will be wrapped in a table and sent to the compositor.
+---If you need multiple arguments, use a string array instead.
+---
+---Note 2: If you spawn a window before tags are added it will spawn without any tags and
+---won't be displayed in the compositor. TODO: Do what awesome does and display on all tags instead
+---
+---@param args string | string[] The program arguments; a string instead of an array should be for only 1 argument
+---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }? Callbacks that will be run whenever the program outputs to stdout, stderr, or exits.
 function Process:spawn(args, callbacks)
     if type(args) == "string" then
         args = { args }
@@ -77,8 +90,12 @@ function Process:spawn(args, callbacks)
     spawn_inner(self.config_client, args, callbacks, false)
 end
 
+---Like `Process:spawn` but will only spawn the program if it isn't already running.
+---
 ---@param args string | string[]
 ---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
+---
+---@see Process.spawn
 function Process:spawn_once(args, callbacks)
     if type(args) == "string" then
         args = { args }

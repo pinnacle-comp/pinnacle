@@ -1217,7 +1217,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             window_size.h = height.unwrap_or(window_size.h);
 
             let rect = Rectangle::from_loc_and_size(window_loc, window_size);
-            window.change_geometry(rect);
+            // window.change_geometry(rect);
             window.with_state(|state| {
                 use crate::window::window_state::FloatingOrTiled;
                 state.floating_or_tiled = match state.floating_or_tiled {
@@ -1727,6 +1727,22 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                     }
                 } as i32);
 
+            let tag_ids = window
+                .as_ref()
+                .map(|win| {
+                    win.with_state(|state| {
+                        state
+                            .tags
+                            .iter()
+                            .map(|tag| match tag.id() {
+                                TagId::Some(id) => id,
+                                TagId::None => unreachable!(),
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .unwrap_or_default();
+
             let _ = sender.send(
                 pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse {
                     geometry,
@@ -1735,6 +1751,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                     focused,
                     floating,
                     fullscreen_or_maximized,
+                    tag_ids,
                 },
             );
         });

@@ -32,6 +32,8 @@ function protobuf.build_protos()
     pinnacle_pb:close()
 
     assert(pb.load(pinnacle_pb_data), "failed to load .pb file")
+
+    pb.option("enum_as_value")
 end
 
 return protobuf
