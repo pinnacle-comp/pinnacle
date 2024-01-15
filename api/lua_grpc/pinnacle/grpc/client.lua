@@ -4,6 +4,7 @@ local h2_connection = require("http.h2_connection")
 local pb = require("pb")
 local inspect = require("inspect")
 
+---@nodoc
 ---Create appropriate headers for a gRPC request.
 ---@param service string The desired service
 ---@param method string The desired method within the service

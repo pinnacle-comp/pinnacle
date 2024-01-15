@@ -1,8 +1,11 @@
 use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
-    input::libinput::v0alpha1::set_libinput_setting_request::{
-        AccelProfile, ClickMethod, ScrollMethod, TapButtonMap,
+    input::{
+        libinput::v0alpha1::set_libinput_setting_request::{
+            AccelProfile, ClickMethod, ScrollMethod, TapButtonMap,
+        },
+        v0alpha1::set_mousebind_request::MouseEdge,
     },
     output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
     process::v0alpha1::SetEnvRequest,
@@ -184,6 +187,12 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
             .button
             .ok_or_else(|| Status::invalid_argument("no key specified"))?;
 
+        let edge = request.edge();
+
+        if let MouseEdge::Unspecified = edge {
+            return Err(Status::invalid_argument("press or release not specified"));
+        }
+
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
         self.sender
@@ -191,7 +200,7 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
                 state
                     .input_state
                     .grpc_mousebinds
-                    .insert((modifiers, button), sender);
+                    .insert((modifiers, button, edge), sender);
             }))
             .map_err(|_| Status::internal("internal state was not running"))?;
 

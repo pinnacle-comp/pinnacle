@@ -12,7 +12,7 @@ use crate::{
 };
 use pinnacle_api_defs::pinnacle::input::{
     libinput::v0alpha1::set_libinput_setting_request::Setting,
-    v0alpha1::{SetKeybindResponse, SetMousebindResponse},
+    v0alpha1::{set_mousebind_request, SetKeybindResponse, SetMousebindResponse},
 };
 use smithay::{
     backend::input::{
@@ -21,7 +21,7 @@ use smithay::{
     },
     desktop::{layer_map_for_output, space::SpaceElement},
     input::{
-        keyboard::{keysyms, FilterResult},
+        keyboard::{keysyms, FilterResult, ModifiersState},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
     reexports::input::{self, Led},
@@ -45,6 +45,44 @@ bitflags::bitflags! {
     }
 }
 
+impl From<ModifiersState> for ModifierMask {
+    fn from(modifiers: ModifiersState) -> Self {
+        let mut mask = ModifierMask::empty();
+        if modifiers.alt {
+            mask |= ModifierMask::ALT;
+        }
+        if modifiers.shift {
+            mask |= ModifierMask::SHIFT;
+        }
+        if modifiers.ctrl {
+            mask |= ModifierMask::CTRL;
+        }
+        if modifiers.logo {
+            mask |= ModifierMask::SUPER;
+        }
+        mask
+    }
+}
+
+impl From<&ModifiersState> for ModifierMask {
+    fn from(modifiers: &ModifiersState) -> Self {
+        let mut mask = ModifierMask::empty();
+        if modifiers.alt {
+            mask |= ModifierMask::ALT;
+        }
+        if modifiers.shift {
+            mask |= ModifierMask::SHIFT;
+        }
+        if modifiers.ctrl {
+            mask |= ModifierMask::CTRL;
+        }
+        if modifiers.logo {
+            mask |= ModifierMask::SUPER;
+        }
+        mask
+    }
+}
+
 #[derive(Default)]
 pub struct InputState {
     /// A hashmap of modifier keys and keycodes to callback IDs
@@ -60,8 +98,10 @@ pub struct InputState {
 
     pub grpc_keybinds:
         HashMap<(ModifierMask, Keysym), UnboundedSender<Result<SetKeybindResponse, tonic::Status>>>,
-    pub grpc_mousebinds:
-        HashMap<(ModifierMask, u32), UnboundedSender<Result<SetMousebindResponse, tonic::Status>>>,
+    pub grpc_mousebinds: HashMap<
+        (ModifierMask, u32, set_mousebind_request::MouseEdge),
+        UnboundedSender<Result<SetMousebindResponse, tonic::Status>>,
+    >,
     pub grpc_libinput_settings:
         HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
 }
@@ -231,19 +271,7 @@ impl State {
                     }
                     let modifier_mask = crate::api::msg::ModifierMask::from(modifier_mask);
 
-                    let mut grpc_modifiers = ModifierMask::empty();
-                    if modifiers.alt {
-                        grpc_modifiers |= ModifierMask::ALT;
-                    }
-                    if modifiers.shift {
-                        grpc_modifiers |= ModifierMask::SHIFT;
-                    }
-                    if modifiers.ctrl {
-                        grpc_modifiers |= ModifierMask::CTRL;
-                    }
-                    if modifiers.logo {
-                        grpc_modifiers |= ModifierMask::SUPER;
-                    }
+                    let grpc_modifiers = ModifierMask::from(modifiers);
 
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
@@ -344,6 +372,8 @@ impl State {
         };
         let modifier_mask = crate::api::msg::ModifierMask::from(keyboard.modifier_state());
 
+        let grpc_modifier_mask = ModifierMask::from(keyboard.modifier_state());
+
         // If any mousebinds are detected, call the config's callback and return.
         if let Some(&callback_id) =
             self.input_state
@@ -361,6 +391,19 @@ impl State {
                 .expect("failed to call callback");
             }
             return;
+        }
+
+        let grpc_mouse_edge = match button_state {
+            ButtonState::Released => set_mousebind_request::MouseEdge::Release,
+            ButtonState::Pressed => set_mousebind_request::MouseEdge::Press,
+        };
+
+        if let Some(stream) =
+            self.input_state
+                .grpc_mousebinds
+                .get(&(grpc_modifier_mask, button, grpc_mouse_edge))
+        {
+            let _ = stream.send(Ok(SetMousebindResponse {}));
         }
 
         // If the button was clicked, focus on the window below if exists, else
