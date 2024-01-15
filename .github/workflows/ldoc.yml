@@ -8,11 +8,13 @@ on:
       - main
     paths:
       - "api/lua/**"
+      - "api/lua_grpc/**"
   push:
     branches:
       - main
     paths:
       - "api/lua/**"
+      - "api/lua_grpc/**"
   workflow_dispatch:
 
 env:
@@ -48,3 +50,32 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./ldoc_gen/.ldoc_gen/doc
           destination_dir: ${{ env.BRANCH_NAME }}/lua
+  build-grpc:
+    name: Build Lua gRPC docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Get ldoc_gen
+        uses: actions/checkout@v4
+        with:
+          repository: Ottatop/ldoc_gen
+          path: ./ldoc_gen
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+      - name: Setup Lua Rocks
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Setup dependencies
+        run: luarocks install ldoc
+      - name: Generate LDoc compatible code
+        run: cd ./ldoc_gen && cargo run -- -p ../api/lua_grpc
+      - name: Build docs
+        run: cd ./ldoc_gen/.ldoc_gen && cp ../../api/lua/ldoc.css ../../api/lua/config.ld . && ldoc . && cd ../..
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./ldoc_gen/.ldoc_gen/doc
+          destination_dir: ${{ env.BRANCH_NAME }}/lua_grpc
