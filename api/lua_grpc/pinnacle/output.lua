@@ -38,6 +38,7 @@ end
 ---@class OutputHandleModule
 local output_handle = {}
 
+---@classmod
 ---@class OutputHandle
 ---@field private config_client Client
 ---@field name string The unique name of this output

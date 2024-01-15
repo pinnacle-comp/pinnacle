@@ -41,6 +41,7 @@ end
 ---@class TagHandleModule
 local tag_handle = {}
 
+---@classmod
 ---@class TagHandle
 ---@field private config_client Client
 ---@field id integer

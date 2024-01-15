@@ -7,6 +7,7 @@ local pinnacle = {
     version = "v0alpha1",
 }
 
+---@classmod
 ---@class Pinnacle
 ---@field private config_client Client
 ---@field input Input
@@ -16,6 +17,7 @@ local pinnacle = {
 ---@field window Window
 local Pinnacle = {}
 
+---Quit Pinnacle.
 function Pinnacle:quit()
     self.config_client:unary_request({
         service = "pinnacle.v0alpha1.PinnacleService",

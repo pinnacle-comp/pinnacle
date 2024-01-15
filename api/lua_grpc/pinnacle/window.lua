@@ -44,6 +44,7 @@ end
 ---@class WindowHandleModule
 local window_handle = {}
 
+---@classmod
 ---@class WindowHandle
 ---@field private config_client Client
 ---@field id integer
