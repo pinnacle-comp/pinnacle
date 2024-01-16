@@ -8,9 +8,7 @@ fn main() {
     let data_dir = xdg.create_data_directory("").unwrap();
 
     let remove_protos = format!("rm -r {data_dir:?}/protobuf");
-    let remove_lua = format!("rm -r {data_dir:?}/lua_grpc");
     let copy_protos = format!("cp -r ./api/protocol {data_dir:?}/protobuf");
-    let copy_lua = format!("cp -r ./api/lua_grpc {data_dir:?}");
 
     std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -22,23 +20,7 @@ fn main() {
 
     std::process::Command::new("/bin/sh")
         .arg("-c")
-        .arg(&remove_lua)
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-
-    std::process::Command::new("/bin/sh")
-        .arg("-c")
         .arg(&copy_protos)
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-
-    std::process::Command::new("/bin/sh")
-        .arg("-c")
-        .arg(&copy_lua)
         .spawn()
         .unwrap()
         .wait()

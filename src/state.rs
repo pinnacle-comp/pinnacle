@@ -40,7 +40,6 @@ use smithay::{
 };
 use std::{cell::RefCell, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::input::InputState;
 
@@ -99,9 +98,9 @@ pub struct State {
     pub system_processes: sysinfo::System,
 
     pub config_join_handle: Option<tokio::task::JoinHandle<()>>,
-    pub grpc_kill_pinger: Option<UnboundedSender<()>>,
-    pub grpc_server_join_handle:
-        Option<tokio::task::JoinHandle<Result<(), tonic::transport::Error>>>,
+
+    // Currently only used to keep track of if the server has started
+    pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl State {
@@ -231,82 +230,6 @@ impl State {
         };
         tracing::debug!("xwayland set up");
 
-        // gRPC stuff
-
-        // std::env::set_var(
-        //     "PINNACLE_PROTO_DIR",
-        //     XDG_BASE_DIRS.get_data_file("protobuf"),
-        // );
-        //
-        // let (grpc_sender, grpc_receiver) =
-        //     calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
-        //
-        // loop_handle.insert_idle(|data| {
-        //     data.state
-        //         .loop_handle
-        //         .insert_source(grpc_receiver, |msg, _, data| match msg {
-        //             Event::Msg(f) => f(&mut data.state),
-        //             Event::Closed => panic!("grpc receiver was closed"),
-        //         })
-        //         .expect("failed to insert grpc_receiver into loop");
-        // });
-        //
-        // let pinnacle_service = PinnacleService {
-        //     sender: grpc_sender.clone(),
-        // };
-        // let input_service = InputService {
-        //     sender: grpc_sender.clone(),
-        // };
-        // let process_service = ProcessService {
-        //     sender: grpc_sender.clone(),
-        // };
-        // let tag_service = TagService {
-        //     sender: grpc_sender.clone(),
-        // };
-        // let output_service = OutputService {
-        //     sender: grpc_sender.clone(),
-        // };
-        // let window_service = WindowService {
-        //     sender: grpc_sender.clone(),
-        // };
-        //
-        // let refl_service = tonic_reflection::server::Builder::configure()
-        //     .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
-        //     .build()?;
-        //
-        // let p = std::path::Path::new("/tmp/pinnacle/grpc.sock");
-        // let _ = std::fs::remove_file(p);
-        // std::fs::create_dir_all(p.parent().unwrap())?;
-        // let uds = tokio::net::UnixListener::bind(p)?;
-        // let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
-        //
-        // let grpc_server = tonic::transport::Server::builder()
-        //     .add_service(refl_service)
-        //     .add_service(PinnacleServiceServer::new(pinnacle_service))
-        //     .add_service(InputServiceServer::new(input_service))
-        //     .add_service(ProcessServiceServer::new(process_service))
-        //     .add_service(TagServiceServer::new(tag_service))
-        //     .add_service(OutputServiceServer::new(output_service))
-        //     .add_service(WindowServiceServer::new(window_service));
-        //
-        // let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-        //
-        // let ping_rx_future = async move {
-        //     ping_rx.recv().await;
-        // };
-        //
-        // let ping_tx_clone = ping_tx.clone();
-        // let loop_signal_clone = loop_signal.clone();
-        // tokio::spawn(async move {
-        //     tokio::signal::ctrl_c()
-        //         .await
-        //         .expect("failed to listen for ctrl-c");
-        //     ping_tx_clone
-        //         .send(())
-        //         .expect("failed to send grpc shutdown ping");
-        //     loop_signal_clone.stop();
-        // });
-
         let state = Self {
             backend,
             loop_signal,
@@ -358,21 +281,8 @@ impl State {
             ),
 
             config_join_handle: None,
-            grpc_kill_pinger: None,
             grpc_server_join_handle: None,
         };
-
-        // state.schedule(
-        //     |data| data.state.xdisplay.is_some(),
-        //     move |_| {
-        //         tokio::spawn(async move {
-        //             grpc_server
-        //                 .serve_with_incoming_shutdown(uds_stream, ping_rx_future)
-        //                 .await
-        //                 .expect("failed to serve grpc");
-        //         });
-        //     },
-        // );
 
         Ok(state)
     }
@@ -408,9 +318,6 @@ impl State {
 
     pub fn shutdown(&self) {
         tracing::info!("Shutting down Pinnacle");
-        if let Some(pinger) = self.grpc_kill_pinger.as_ref() {
-            pinger.send(()).expect("failed to send grpc shutdown ping");
-        }
         self.loop_signal.stop();
     }
 }

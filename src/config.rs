@@ -425,7 +425,7 @@ impl State {
         self.loop_handle
             .insert_source(grpc_receiver, |msg, _, data| match msg {
                 Event::Msg(f) => f(&mut data.state),
-                Event::Closed => panic!("grpc receiver was closed"),
+                Event::Closed => tracing::debug!("grpc receiver was closed"),
             })
             .expect("failed to insert grpc_receiver into loop");
 
@@ -466,41 +466,21 @@ impl State {
             .add_service(OutputServiceServer::new(output_service))
             .add_service(WindowServiceServer::new(window_service));
 
-        let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-
-        let ping_rx_future = async move {
-            ping_rx.recv().await;
-        };
-
-        let ping_tx_clone = ping_tx.clone();
-        let loop_signal_clone = self.loop_signal.clone();
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("failed to listen for ctrl-c");
-            ping_tx_clone
-                .send(())
-                .expect("failed to send grpc shutdown ping");
-            loop_signal_clone.stop();
-        });
-
-        self.grpc_kill_pinger = Some(ping_tx);
-
         match self.xdisplay.as_ref() {
             Some(_) => {
                 self.grpc_server_join_handle = Some(tokio::spawn(async move {
-                    grpc_server
-                        .serve_with_incoming_shutdown(uds_stream, ping_rx_future)
-                        .await
+                    if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                        tracing::error!("gRPC server error: {err}");
+                    }
                 }));
             }
             None => self.schedule(
                 |data| data.state.xdisplay.is_some(),
                 move |data| {
                     data.state.grpc_server_join_handle = Some(tokio::spawn(async move {
-                        grpc_server
-                            .serve_with_incoming_shutdown(uds_stream, ping_rx_future)
-                            .await
+                        if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                            tracing::error!("gRPC server error: {err}");
+                        }
                     }));
                 },
             ),

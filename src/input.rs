@@ -102,6 +102,7 @@ pub struct InputState {
         (ModifierMask, u32, set_mousebind_request::MouseEdge),
         UnboundedSender<Result<SetMousebindResponse, tonic::Status>>,
     >,
+    #[allow(clippy::type_complexity)]
     pub grpc_libinput_settings:
         HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
 }

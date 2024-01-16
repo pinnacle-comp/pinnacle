@@ -2,7 +2,6 @@ local socket = require("cqueues.socket")
 local headers = require("http.headers")
 local h2_connection = require("http.h2_connection")
 local pb = require("pb")
-local inspect = require("inspect")
 
 ---@nodoc
 ---Create appropriate headers for a gRPC request.
@@ -18,13 +17,6 @@ local function create_request_headers(service, method)
     req_headers:append("content-type", "application/grpc")
     return req_headers
 end
-
----@param body string
----@return boolean compressed
----@return integer length
----@return string message
----@return integer total_length
-local function read_length_prefixed_message(body) end
 
 ---@nodoc
 ---@class ClientModule
@@ -101,7 +93,6 @@ end
 ---@param grpc_request_params GrpcRequestParams
 ---@param callback fun(response: table)
 function Client:server_streaming_request(grpc_request_params, callback)
-    -- print(inspect(grpc_request_params))
     local stream = self.conn:new_stream()
 
     local service = grpc_request_params.service
