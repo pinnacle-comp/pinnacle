@@ -14,9 +14,7 @@ https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7
     - [Out-of-the-box configurations](#out-of-the-box-configurations)
     - [Custom configuration](#custom-configuration)
         - [Lua](#lua)
-            - [:information_source: Using the Lua Language Server](#information_source-using-the-lua-language-server)
-                - [For VS Code](#for-vs-code)
-                - [For Neovim](#for-neovim)
+            - [Lua Language Server completion](#lua-language-server-completion)
         - [Rust](#rust)
         - [API Documentation](#api-documentation)
 - [Controls](#controls)
@@ -29,7 +27,7 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-It sports high configurability through a (soon to be) extensive Lua API, with plans for a Rust API in the future.
+It sports extensive configurability through either Lua or Rust, with the ability to add more languages in the future.
 
 > ### More video examples below!
 > <details>
@@ -49,7 +47,7 @@ It sports high configurability through a (soon to be) extensive Lua API, with pl
 ### Features
 - Tag system
 - Left master stack, corner, dwindle, and spiral layouts from Awesome
-- XWayland support
+- (Really scuffed) XWayland support
 - Layer-shell support
 - Configurable in Lua or Rust
 - Is very cool :thumbsup:
@@ -58,24 +56,36 @@ It sports high configurability through a (soon to be) extensive Lua API, with pl
 - TODO
 
 # Dependencies
-You will need Rust installed to compile this project and use the Rust API for configuration.
+You will need:
 
-You'll also need the following packages, as specified by [Smithay](https://github.com/Smithay/smithay):
-`libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`.
-- Arch:
-    ```
-    sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
-    ```
-- Debian:
-    ```
-    sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
-    ```
-- NixOS: Use the provided [`shell.nix`](shell.nix).
-- TODO: other distros.
+- [Rust](https://www.rust-lang.org/) 1.72 or newer, to build the project and use the Rust API
+- [Lua](https://www.lua.org/) 5.4 or newer, to use the Lua API
+- Packages for [Smithay](https://github.com/Smithay/smithay):
+`libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
+    - Arch:
+        ```sh
+        sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
+        ```
+    - Debian:
+        ```sh
+        sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
+        ```
+    - NixOS: There is a really old [`shell.nix`](shell.nix) that may or may not work :skull:
+- [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
+    - Arch:
+        ```sh
+        sudo pacman -S protobuf
+        ```
+- [LuaRocks](https://luarocks.org/), the Lua package manager, to use the Lua API
+    - Arch:
+        ```sh
+        sudo pacman -S luarocks
+        ```
+    - You must run `eval $(luarocks path --lua-version 5.4)` so that your config can find the API
+      library files. It is recommended to place this command in your shell's startup script.
 
-If you're configuring Pinnacle using Lua, you'll additionally need Lua 5.4 for configuration.
-**Older versions will not work.**
-Check with your package manager to see which version you have.
+TODO: other distros
+
 
 # Building
 Build the project with:
@@ -83,12 +93,11 @@ Build the project with:
 cargo build [--release]
 ```
 
-For NixOS users, there is a provided [`shell.nix`](shell.nix) file that you can use for `nix-shell`.
-<sup>flake soon:tm:</sup>
-
 > [!NOTE]
-> On build, [`install_libs.sh`](install_libs.sh) will run to copy the Lua API library to
-> `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`).
+> On build, [`build.rs`](build.rs) will: 
+> - Copy Protobuf definition files to `$XDG_DATA_HOME/pinnacle/protobuf`
+> - Copy the [default config](api/lua/examples/default) to `$XDG_DATA_HOME/pinnacle/default_config`
+> - `cd` into [`api/lua`](api/lua) and run `luarocks make` to install the Lua library to `~/.luarocks/share/lua/5.4`
 
 # Running
 > [!IMPORTANT]
@@ -110,12 +119,18 @@ See flags you can pass in by running `cargo run -- --help` (or `-h`).
 # Configuration
 Pinnacle is configured in your choice of Lua or Rust.
 
+> [!NOTE]
+> Pinnacle is currently in the process of migrating the configuration backend from MessagePack to gRPC.
+> The Lua library has already been rewritten, and the Rust API will be rewritten soon.
+
 ## Out-of-the-box configurations
 If you just want to test Pinnacle out without copying stuff to your config directory,
-run either of the following in the crate root:
+run one of the following in the crate root:
 ```sh
 # For a Lua configuration
-PINNACLE_CONFIG_DIR="./api/lua" cargo run
+PINNACLE_CONFIG_DIR="./api/lua/examples/default" cargo run
+# This should also have been copied to the directory below, so below will do the same
+PINNACLE_CONFIG_DIR="~/.local/share/pinnacle/default_config" cargo run
 
 # For a Rust configuration
 PINNACLE_CONFIG_DIR="./api/rust" cargo run
@@ -144,45 +159,29 @@ and any environment variables you want set. For more details, see the provided
 If no `metaconfig.toml` file is found, the default Lua config will be loaded.
 
 ### Lua
-For custom configuration in Lua, you can copy [`metaconfig.toml`](api/lua/metaconfig.toml) and 
-[`example_config.lua`](api/lua/example_config.lua) to `$XDG_CONFIG_HOME/pinnacle`
-(this will probably be `~/.config/pinnacle`).
+For custom configuration in Lua, copy the contents of `~/.local/share/pinnacle/default_config` to
+`~/.config/pinnacle` (or `$XDG_CONFIG_HOME/pinnacle`):
+```sh
+mkdir ~/.config/pinnacle
+cp -r ~/.local/share/pinnacle/default_config/. ~/.config/pinnacle
+```
+Note: there is a `.luarc.json` file that may not get copied if you do `cp <path>/* ~/.config/pinnacle`.
+The above command takes that into account.
 
-> If you rename `example_config.lua`, make sure `command` in your `metaconfig.toml` is updated to reflect that.
+> If you rename `default_config.lua`, make sure `command` in your `metaconfig.toml` is updated to reflect that.
 > If it isn't, the compositor will load the default config instead.
 
-#### :information_source: Using the Lua Language Server
-It is ***highly*** recommended to setup your [Lua language server](https://github.com/LuaLS/lua-language-server)
-installation to use the [`api/lua`](api/lua) directory as a library.
-This will provide documentation, autocomplete, and error checking.
-
-The Lua library should have been copied to `$XDG_DATA_HOME/pinnacle` (or `~/.local/share/pinnacle`).
-
-##### For VS Code:
-Install the [Lua](https://marketplace.visualstudio.com/items?itemName=sumneko.lua) plugin, then go into
-its settings and add the path above to the [`api/lua`](api/lua) directory to `Workspace: Library`.
-
-##### For Neovim:
-Pass this table into your Lua language server settings:
-```lua
-Lua = {
-    workspace = {
-        library = {
-            "$XDG_DATA_HOME/pinnacle/lua", -- Replace $XDG_DATA_HOME with the full path
-            -- OR
-            "$HOME/.local/share/pinnacle/lua", -- Replace $HOME with the full path
-        }
-    }
-}
-```
+#### Lua Language Server completion
+A [`.luarc.json`](api/lua/examples/default/.luarc.json) file is included with the default Lua config
+and will set the correct workspace library files for use with the
+[Lua language server](https://github.com/LuaLS/lua-language-server).
 
 ### Rust
 If you want to use Rust to configure Pinnacle, follow these steps:
 1. In `~/.config/pinnacle`, run `cargo init`.
 2. In the `Cargo.toml` file, add the following under `[dependencies]`:
 ```toml
-# rev is HIGHLY recommended to prevent breaking changes
-pinnacle_api = { git = "http://github.com/pinnacle-comp/pinnacle", rev = "..." }
+pinnacle_api = { git = "http://github.com/pinnacle-comp/pinnacle" }
 ```
 3. Create the file `metaconfig.toml` at the root. Add the following to the file:
 ```toml
@@ -193,7 +192,6 @@ kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 4. Copy the contents from [`example_config.rs`](api/rust/examples/example_config.rs) to `src/main.rs`.
 5. Run Pinnacle! (You may want to run `cargo build` beforehand so you don't have to wait for your config to compile.)
 
-
 ### API Documentation
 <b>Lua: https://pinnacle-comp.github.io/pinnacle/main/lua.<br>
 Rust: https://pinnacle-comp.github.io/pinnacle/main/rust.</b>
@@ -201,7 +199,7 @@ Rust: https://pinnacle-comp.github.io/pinnacle/main/rust.</b>
 > Documentation for other branches can be reached by replacing `main` with the branch you want.
 
 # Controls
-The following are the default controls in the [`example_config`](api/lua/example_config.lua).
+The following are the default controls in the [`default_config`](api/lua/examples/default/default_config.lua).
 | Binding                                      | Action                             |
 |----------------------------------------------|------------------------------------|
 | <kbd>Ctrl</kbd> + <kbd>Mouse left drag</kbd> | Move window                        |
