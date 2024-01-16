@@ -414,11 +414,6 @@ impl State {
             crate::XDG_BASE_DIRS.get_data_file("protobuf"),
         );
 
-        std::env::set_var(
-            "PINNACLE_LUA_GRPC_DIR",
-            crate::XDG_BASE_DIRS.get_data_file("lua_grpc"),
-        );
-
         let (grpc_sender, grpc_receiver) =
             calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
 

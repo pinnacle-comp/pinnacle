@@ -48,4 +48,3 @@ kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 #
 # Here, LUA_PATH and LUA_CPATH are used to tell Lua the path to the library.
 [envs]
-LUA_PATH = "$PINNACLE_LUA_GRPC_DIR/?.lua;$PINNACLE_LUA_GRPC_DIR/?/init.lua;$LUA_PATH"

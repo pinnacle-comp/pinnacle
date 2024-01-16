@@ -1,5 +1,5 @@
 fn main() {
-    println!("cargo:rerun-if-changed=api/lua_grpc");
+    println!("cargo:rerun-if-changed=api/lua");
     println!("cargo:rerun-if-changed=api/protocol");
 
     let xdg = xdg::BaseDirectories::with_prefix("pinnacle").unwrap();
@@ -11,7 +11,7 @@ fn main() {
 
     let remove_default_config = format!("rm -r {data_dir:?}/default_config");
     let copy_default_config =
-        format!("cp -r ./api/lua_grpc/examples/default {data_dir:?}/default_config");
+        format!("cp -r ./api/lua/examples/default {data_dir:?}/default_config");
 
     std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -52,7 +52,7 @@ fn main() {
         .wait()
         .unwrap();
 
-    std::env::set_current_dir("api/lua_grpc").unwrap();
+    std::env::set_current_dir("api/lua").unwrap();
     std::process::Command::new("luarocks")
         .arg("make")
         .arg("--local")

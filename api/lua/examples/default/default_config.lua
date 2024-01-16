@@ -84,7 +84,7 @@ require("pinnacle").setup(function(Pinnacle)
     end)
 
     -- Spawning must happen after you add tags, as Pinnacle currently doesn't render windows without tags.
-    Process:spawn(terminal)
+    Process:spawn_once(terminal)
 
     -- Create a layout cycler to cycle layouts on an output.
     local layout_cycler = Tag:new_layout_cycler({
