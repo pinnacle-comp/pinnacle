@@ -48,4 +48,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ../ldoc_gen/.ldoc_gen/doc
           destination_dir: ${{ env.BRANCH_NAME }}/lua
-          force_orphan: true
+          # force_orphan: true
