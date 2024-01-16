@@ -86,7 +86,6 @@ You will need:
 
 TODO: other distros
 
-
 # Building
 Build the project with:
 ```
@@ -154,7 +153,7 @@ $XDG_CONFIG_HOME/pinnacle
 
 The `metaconfig.toml` file provides information on what config to run, kill and reload keybinds,
 and any environment variables you want set. For more details, see the provided 
-[`metaconfig.toml`](api/lua/metaconfig.toml) file.
+[`metaconfig.toml`](api/lua/examples/default/metaconfig.toml) file.
 
 If no `metaconfig.toml` file is found, the default Lua config will be loaded.
 
