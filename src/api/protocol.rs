@@ -1454,18 +1454,24 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             let Some(tag) = tag_id.tag(state) else { return };
 
             // TODO: turn state.tags into a hashset
-            window.with_state(|state| state.tags.retain(|tg| tg != &tag));
             match set_or_toggle {
                 Some(set) => {
                     if set {
                         window.with_state(|state| {
+                            state.tags.retain(|tg| tg != &tag);
                             state.tags.push(tag.clone());
+                        })
+                    } else {
+                        window.with_state(|state| {
+                            state.tags.retain(|tg| tg != &tag);
                         })
                     }
                 }
                 None => window.with_state(|state| {
                     if !state.tags.contains(&tag) {
                         state.tags.push(tag.clone());
+                    } else {
+                        state.tags.retain(|tg| tg != &tag);
                     }
                 }),
             }

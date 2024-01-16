@@ -1,28 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::{
-        msg::Msg,
-        protocol::{
-            InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
-        },
-        ApiState,
-    },
+    api::{msg::Msg, ApiState},
     backend::Backend,
     config::Config,
     cursor::Cursor,
     focus::FocusState,
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
-    XDG_BASE_DIRS,
-};
-use pinnacle_api_defs::pinnacle::v0alpha1::pinnacle_service_server::PinnacleServiceServer;
-use pinnacle_api_defs::pinnacle::{
-    input::v0alpha1::input_service_server::InputServiceServer,
-    output::v0alpha1::output_service_server::OutputServiceServer,
-    process::v0alpha1::process_service_server::ProcessServiceServer,
-    tag::v0alpha1::tag_service_server::TagServiceServer,
-    window::v0alpha1::window_service_server::WindowServiceServer,
 };
 use smithay::{
     desktop::{PopupManager, Space},
