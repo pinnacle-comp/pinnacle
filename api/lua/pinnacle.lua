@@ -35,7 +35,10 @@ end
 
 ---Setup Pinnacle.
 ---
----You must pass in a function that takes in the `Pinnacle` module (it's more like a class but it's pretty much a module). The module is how you'll access the other config modules.
+---You must pass in a function that takes in the `Pinnacle` module object. The module is how you'll access the other config modules.
+---
+---Note: All the config modules are object instantiations, and their methods require you to use the colon operator
+---instead of the dot operator to call them.
 ---
 ---If you want to do a multi-file config, you should have other files return a function taking in necessary modules.
 ---Or you could cheat and stick the modules into globals :TrollFace:
