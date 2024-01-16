@@ -32,4 +32,12 @@ fn main() {
         .unwrap()
         .wait()
         .unwrap();
+
+    std::env::set_current_dir("api/lua_grpc").unwrap();
+    std::process::Command::new("/bin/sh")
+        .arg("luarocks")
+        .arg("make")
+        .arg("--local")
+        .spawn()
+        .expect("Luarocks is not installed");
 }
