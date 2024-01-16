@@ -1,5 +1,4 @@
 fn main() {
-    println!("cargo:rerun-if-changed=api/lua");
     println!("cargo:rerun-if-changed=api/lua_grpc");
     println!("cargo:rerun-if-changed=api/protocol");
 
@@ -9,6 +8,10 @@ fn main() {
 
     let remove_protos = format!("rm -r {data_dir:?}/protobuf");
     let copy_protos = format!("cp -r ./api/protocol {data_dir:?}/protobuf");
+
+    let remove_default_config = format!("rm -r {data_dir:?}/default_config");
+    let copy_default_config =
+        format!("cp -r ./api/lua_grpc/examples/default {data_dir:?}/default_config");
 
     std::process::Command::new("/bin/sh")
         .arg("-c")
@@ -27,6 +30,22 @@ fn main() {
         .unwrap();
 
     std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&remove_default_config)
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&copy_default_config)
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    std::process::Command::new("/bin/sh")
         .arg("install_libs.sh")
         .spawn()
         .unwrap()
@@ -34,8 +53,7 @@ fn main() {
         .unwrap();
 
     std::env::set_current_dir("api/lua_grpc").unwrap();
-    std::process::Command::new("/bin/sh")
-        .arg("luarocks")
+    std::process::Command::new("luarocks")
         .arg("make")
         .arg("--local")
         .spawn()

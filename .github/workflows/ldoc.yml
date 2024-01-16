@@ -7,13 +7,11 @@ on:
     branches:
       - main
     paths:
-      - "api/lua/**"
       - "api/lua_grpc/**"
   push:
     branches:
       - main
     paths:
-      - "api/lua/**"
       - "api/lua_grpc/**"
   workflow_dispatch:
 
@@ -43,7 +41,7 @@ jobs:
       - name: Generate LDoc compatible code
         run: mv ldoc_gen .. && cd ../ldoc_gen && cargo run -- -p ../pinnacle/api/lua_grpc
       - name: Build docs
-        run: cd ../ldoc_gen/.ldoc_gen && cp ../../pinnacle/api/lua/ldoc.css ../../pinnacle/api/lua/config.ld . && ldoc .
+        run: cd ../ldoc_gen/.ldoc_gen && cp ../../pinnacle/resources/ldoc.css ../../pinnacle/resources/config.ld . && ldoc .
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:

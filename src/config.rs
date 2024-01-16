@@ -189,7 +189,7 @@ impl State {
         let metaconfig = match parse(config_dir) {
             Ok(metaconfig) => metaconfig,
             Err(_) => {
-                self.start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))?;
+                self.start_config(crate::XDG_BASE_DIRS.get_data_home().join("default_config"))?;
                 return Ok(());
             }
         };
