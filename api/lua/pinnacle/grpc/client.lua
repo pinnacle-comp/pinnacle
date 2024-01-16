@@ -35,6 +35,7 @@ local Client = {}
 ---@field response_type string?
 ---@field data table
 
+---@nodoc
 ---Send a synchronous unary request to the compositor.
 ---
 ---If `request_type` is not specified then it will default to
@@ -84,6 +85,7 @@ function Client:unary_request(grpc_request_params)
     return response
 end
 
+---@nodoc
 ---Send a async server streaming request to the compositor.
 ---
 ---`callback` will be called with every streamed response.
@@ -144,6 +146,7 @@ function Client:server_streaming_request(grpc_request_params, callback)
     end)
 end
 
+---@nodoc
 ---@return Client
 function client.new(loop)
     local sock = socket.connect({

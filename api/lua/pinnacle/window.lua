@@ -583,6 +583,7 @@ function WindowHandle:tags()
     return self:props().tags
 end
 
+---@nodoc
 ---@param config_client Client
 ---@return Window
 function window.new(config_client)
@@ -594,6 +595,7 @@ function window.new(config_client)
     return self
 end
 
+---@nodoc
 ---Create a new `WindowHandle` from an id.
 ---@param config_client Client
 ---@param window_id integer
@@ -608,6 +610,7 @@ function window_handle.new(config_client, window_id)
     return self
 end
 
+---@nodoc
 ---@param config_client Client
 ---@param window_ids integer[]
 ---

@@ -453,6 +453,7 @@ function TagHandle:output()
     return self:props().output
 end
 
+---@nodoc
 ---@return Tag
 function tag.new(config_client)
     ---@type Tag
@@ -463,6 +464,7 @@ function tag.new(config_client)
     return self
 end
 
+---@nodoc
 ---Create a new `TagHandle` from an id.
 ---@param config_client Client
 ---@param tag_id integer
@@ -477,6 +479,7 @@ function tag_handle.new(config_client, tag_id)
     return self
 end
 
+---@nodoc
 ---@param config_client Client
 ---@param tag_ids integer[]
 ---@return TagHandle[]

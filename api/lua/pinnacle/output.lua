@@ -442,6 +442,7 @@ function OutputHandle:tags()
     return self:props().tags
 end
 
+---@nodoc
 ---@return Output
 function output.new(config_client)
     ---@type Output
@@ -452,6 +453,7 @@ function output.new(config_client)
     return self
 end
 
+---@nodoc
 ---Create a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(config_client, output_name)
