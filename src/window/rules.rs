@@ -18,19 +18,19 @@ use crate::{output::OutputName, tag::TagId, window::window_state::FullscreenOrMa
 pub struct WindowRuleCondition {
     /// This condition is met when any of the conditions provided is met.
     #[serde(default)]
-    cond_any: Option<Vec<WindowRuleCondition>>,
+    pub cond_any: Option<Vec<WindowRuleCondition>>,
     /// This condition is met when all of the conditions provided are met.
     #[serde(default)]
-    cond_all: Option<Vec<WindowRuleCondition>>,
+    pub cond_all: Option<Vec<WindowRuleCondition>>,
     /// This condition is met when the class matches.
     #[serde(default)]
-    class: Option<Vec<String>>,
+    pub class: Option<Vec<String>>,
     /// This condition is met when the title matches.
     #[serde(default)]
-    title: Option<Vec<String>>,
+    pub title: Option<Vec<String>>,
     /// This condition is met when the tag matches.
     #[serde(default)]
-    tag: Option<Vec<TagId>>,
+    pub tag: Option<Vec<TagId>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::Context;
-use calloop::Idle;
+use pinnacle_api_defs::pinnacle::output::v0alpha1::ConnectForAllResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -48,7 +48,7 @@ use smithay::{
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
-        calloop::{EventLoop, LoopHandle, RegistrationToken},
+        calloop::{EventLoop, Idle, LoopHandle, RegistrationToken},
         drm::{
             control::{connector, crtc, ModeTypeFlags},
             Device,
@@ -1008,6 +1008,11 @@ impl State {
                         )
                         .expect("Send to client failed");
                     }
+                    for grpc_sender in dt.state.config.grpc_output_callback_senders.iter() {
+                        let _ = grpc_sender.send(Ok(ConnectForAllResponse {
+                            output_name: Some(clone.name()),
+                        }));
+                    }
                 },
             );
         }
@@ -1223,13 +1228,9 @@ impl State {
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = udev.pointer_image.get_image(
-            1, /*scale*/
-            self.clock
-                .now()
-                .try_into()
-                .expect("failed to convert time into duration"),
-        );
+        let frame = udev
+            .pointer_image
+            .get_image(1 /*scale*/, self.clock.now().into());
 
         let render_node = surface.render_node;
         let primary_gpu = udev.primary_gpu;

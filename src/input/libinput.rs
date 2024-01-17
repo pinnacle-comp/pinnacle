@@ -120,6 +120,9 @@ impl State {
         for setting in self.input_state.libinput_settings.iter() {
             setting.apply_to_device(&mut device);
         }
+        for setting in self.input_state.grpc_libinput_settings.values() {
+            setting(&mut device);
+        }
 
         self.input_state.libinput_devices.push(device);
     }

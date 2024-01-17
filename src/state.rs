@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, sync::Arc, time::Duration};
-
 use crate::{
     api::{msg::Msg, ApiState},
     backend::Backend,
@@ -11,7 +9,6 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     window::WindowElement,
 };
-use calloop::futures::Scheduler;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -41,6 +38,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
+use std::{cell::RefCell, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 
 use crate::input::InputState;
@@ -92,15 +90,17 @@ pub struct State {
 
     pub config: Config,
 
-    /// A scheduler for futures
-    pub async_scheduler: Scheduler<()>,
-
     // xwayland stuff
     pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
     pub system_processes: sysinfo::System,
+
+    pub config_join_handle: Option<tokio::task::JoinHandle<()>>,
+
+    // Currently only used to keep track of if the server has started
+    pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl State {
@@ -167,18 +167,11 @@ impl State {
             }
         });
 
-        let (executor, sched) = calloop::futures::executor::<()>()?;
-
-        if let Err(err) = loop_handle.insert_source(executor, |_, _, _| {}) {
-            anyhow::bail!("Failed to insert async executor into event loop: {err}");
-        }
-
         let mut seat_state = SeatState::new();
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
         seat.add_pointer();
 
-        // TODO: update from config
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
         loop_handle.insert_idle(|data| {
@@ -223,6 +216,8 @@ impl State {
 
                     data.state.xwm = Some(wm);
                     data.state.xdisplay = Some(display);
+
+                    std::env::set_var("DISPLAY", format!(":{display}"));
                 }
                 XWaylandEvent::Exited => {
                     data.state.xwm.take();
@@ -235,7 +230,7 @@ impl State {
         };
         tracing::debug!("xwayland set up");
 
-        Ok(Self {
+        let state = Self {
             backend,
             loop_signal,
             loop_handle,
@@ -262,8 +257,6 @@ impl State {
                 stream: None,
                 socket_token: None,
                 tx_channel,
-                kill_channel: None,
-                future_channel: None,
             },
             focus_state: FocusState::new(),
 
@@ -277,8 +270,6 @@ impl State {
 
             popup_manager: PopupManager::default(),
 
-            async_scheduler: sched,
-
             windows: vec![],
 
             xwayland,
@@ -288,7 +279,12 @@ impl State {
             system_processes: sysinfo::System::new_with_specifics(
                 RefreshKind::new().with_processes(ProcessRefreshKind::new()),
             ),
-        })
+
+            config_join_handle: None,
+            grpc_server_join_handle: None,
+        };
+
+        Ok(state)
     }
 
     /// Schedule `run` to run when `condition` returns true.
@@ -318,6 +314,11 @@ impl State {
         }
 
         run(data);
+    }
+
+    pub fn shutdown(&self) {
+        tracing::info!("Shutting down Pinnacle");
+        self.loop_signal.stop();
     }
 }
 

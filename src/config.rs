@@ -1,5 +1,11 @@
 use crate::{
-    api::{msg::ModifierMask, PinnacleSocketSource},
+    api::{
+        msg::ModifierMask,
+        protocol::{
+            InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
+        },
+        PinnacleSocketSource,
+    },
     output::OutputName,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
@@ -7,12 +13,22 @@ use crate::{
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    process::Stdio,
     sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
+use pinnacle_api_defs::pinnacle::{
+    input::v0alpha1::input_service_server::InputServiceServer,
+    output::v0alpha1::{output_service_server::OutputServiceServer, ConnectForAllResponse},
+    process::v0alpha1::process_service_server::ProcessServiceServer,
+    tag::v0alpha1::tag_service_server::TagServiceServer,
+    v0alpha1::pinnacle_service_server::PinnacleServiceServer,
+    window::v0alpha1::window_service_server::WindowServiceServer,
+};
 use smithay::{
     input::keyboard::keysyms,
+    reexports::calloop::{self, channel::Event},
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
@@ -127,6 +143,8 @@ pub struct Config {
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
     /// All callbacks that should be run when outputs are connected
     pub output_callback_ids: Vec<CallbackId>,
+    pub grpc_output_callback_senders:
+        Vec<tokio::sync::mpsc::UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 }
@@ -168,6 +186,14 @@ impl State {
     pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
         let config_dir = config_dir.as_ref();
 
+        let metaconfig = match parse(config_dir) {
+            Ok(metaconfig) => metaconfig,
+            Err(_) => {
+                self.start_config(crate::XDG_BASE_DIRS.get_data_home().join("default_config"))?;
+                return Ok(());
+            }
+        };
+
         tracing::info!("Starting config");
         tracing::debug!("Clearing tags");
 
@@ -183,11 +209,9 @@ impl State {
         self.input_state.libinput_settings.clear();
         self.config.window_rules.clear();
 
-        if let Some(channel) = self.api_state.kill_channel.as_ref() {
+        if let Some(config_join_handle) = self.config_join_handle.take() {
             tracing::debug!("Killing old config");
-            if let Err(err) = futures_lite::future::block_on(channel.send(())) {
-                tracing::warn!("failed to send kill ping to config future: {err}");
-            }
+            config_join_handle.abort();
         }
 
         if let Some(token) = self.api_state.socket_token {
@@ -209,14 +233,6 @@ impl State {
 
         tracing::debug!("config dir is {:?}", config_dir);
 
-        let metaconfig = match parse(config_dir) {
-            Ok(metaconfig) => metaconfig,
-            Err(_) => {
-                self.start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))?;
-                return Ok(());
-            }
-        };
-
         // If a socket is provided in the metaconfig, use it.
         let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
             let socket_dir = shellexpand::full(socket_dir)?.to_string();
@@ -237,12 +253,15 @@ impl State {
                 .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
         };
 
+        self.start_grpc_server(socket_dir.as_path())?;
+
         self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
         let multiple_instances = self
             .system_processes
             .processes_by_exact_name("pinnacle")
+            .filter(|proc| proc.thread_kind().is_none())
             .count()
             > 1;
 
@@ -287,12 +306,12 @@ impl State {
 
         tracing::debug!("Config envs are {envs:?}");
 
-        let mut child = async_process::Command::new(arg0)
+        let mut child = tokio::process::Command::new(arg0)
             .args(command)
             .envs(envs)
             .current_dir(config_dir)
-            .stdout(async_process::Stdio::inherit())
-            .stderr(async_process::Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
             .context("failed to spawn config")?;
@@ -327,43 +346,140 @@ impl State {
 
         self.api_state.socket_token = Some(socket_token);
 
-        let (kill_channel, future_channel) = async_channel::unbounded::<()>();
+        self.config_join_handle = Some(tokio::spawn(async move {
+            let _ = child.wait().await;
+        }));
 
-        self.api_state.kill_channel = Some(kill_channel);
-        self.api_state.future_channel = Some(future_channel.clone());
+        Ok(())
+    }
 
-        let loop_handle = self.loop_handle.clone();
-
-        enum Either {
-            First,
-            Second,
+    pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
+        if self.grpc_server_join_handle.is_some() {
+            tracing::info!("gRPC server already started");
+            return Ok(());
         }
 
-        // We can't get at the child while it's in the executor, so in order to kill it we need a
-        // channel that, when notified, will cause the child to be dropped and terminated.
-        self.async_scheduler.schedule(async move {
-            let which = futures_lite::future::race(
-                async move {
-                    let _ = child.status().await;
-                    Either::First
-                },
-                async move {
-                    let _ = future_channel.recv().await;
-                    Either::Second
-                },
-            )
-            .await;
+        self.system_processes
+            .refresh_processes_specifics(ProcessRefreshKind::new());
 
-            if let Either::First = which {
-                tracing::warn!("Config crashed, loading default");
+        let multiple_instances = self
+            .system_processes
+            .processes_by_exact_name("pinnacle")
+            .filter(|proc| proc.thread_kind().is_none())
+            .count()
+            > 1;
 
-                loop_handle.insert_idle(|data| {
-                    data.state
-                        .start_config(crate::XDG_BASE_DIRS.get_data_home().join("lua"))
-                        .expect("failed to load default config");
-                });
+        std::fs::create_dir_all(socket_dir)?;
+
+        let socket_name = if multiple_instances {
+            let mut suffix: u8 = 1;
+            while let Ok(true) = socket_dir
+                .join(format!("pinnacle-grpc-{suffix}.sock"))
+                .try_exists()
+            {
+                suffix += 1;
             }
-        })?;
+            format!("pinnacle-grpc-{suffix}.sock")
+        } else {
+            "pinnacle-grpc.sock".to_string()
+        };
+
+        let socket_path = socket_dir.join(socket_name);
+
+        // If there are multiple instances, don't touch other sockets
+        if multiple_instances {
+            if let Ok(true) = socket_path.try_exists() {
+                std::fs::remove_file(&socket_path)
+                    .context(format!("Failed to remove old socket at {socket_path:?}"))?;
+            }
+        } else {
+            // If there aren't, remove them all
+            for file in std::fs::read_dir(socket_dir)?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with("pinnacle-grpc")
+                })
+            {
+                tracing::debug!("Removing socket at {:?}", file.path());
+                std::fs::remove_file(file.path())
+                    .context(format!("Failed to remove old socket at {:?}", file.path()))?;
+            }
+        }
+
+        std::env::set_var(
+            "PINNACLE_PROTO_DIR",
+            crate::XDG_BASE_DIRS.get_data_file("protobuf"),
+        );
+
+        let (grpc_sender, grpc_receiver) =
+            calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
+
+        self.loop_handle
+            .insert_source(grpc_receiver, |msg, _, data| match msg {
+                Event::Msg(f) => f(&mut data.state),
+                Event::Closed => tracing::debug!("grpc receiver was closed"),
+            })
+            .expect("failed to insert grpc_receiver into loop");
+
+        let pinnacle_service = PinnacleService {
+            sender: grpc_sender.clone(),
+        };
+        let input_service = InputService {
+            sender: grpc_sender.clone(),
+        };
+        let process_service = ProcessService {
+            sender: grpc_sender.clone(),
+        };
+        let tag_service = TagService {
+            sender: grpc_sender.clone(),
+        };
+        let output_service = OutputService {
+            sender: grpc_sender.clone(),
+        };
+        let window_service = WindowService {
+            sender: grpc_sender.clone(),
+        };
+
+        let refl_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
+            .build()?;
+
+        let uds = tokio::net::UnixListener::bind(&socket_path)?;
+        let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
+
+        std::env::set_var("PINNACLE_GRPC_SOCKET", socket_path);
+
+        let grpc_server = tonic::transport::Server::builder()
+            .add_service(refl_service)
+            .add_service(PinnacleServiceServer::new(pinnacle_service))
+            .add_service(InputServiceServer::new(input_service))
+            .add_service(ProcessServiceServer::new(process_service))
+            .add_service(TagServiceServer::new(tag_service))
+            .add_service(OutputServiceServer::new(output_service))
+            .add_service(WindowServiceServer::new(window_service));
+
+        match self.xdisplay.as_ref() {
+            Some(_) => {
+                self.grpc_server_join_handle = Some(tokio::spawn(async move {
+                    if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                        tracing::error!("gRPC server error: {err}");
+                    }
+                }));
+            }
+            None => self.schedule(
+                |data| data.state.xdisplay.is_some(),
+                move |data| {
+                    data.state.grpc_server_join_handle = Some(tokio::spawn(async move {
+                        if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                            tracing::error!("gRPC server error: {err}");
+                        }
+                    }));
+                },
+            ),
+        }
 
         Ok(())
     }

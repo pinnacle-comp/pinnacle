@@ -207,9 +207,8 @@ impl State {
                             continue;
                         };
 
-                        let client = surface
-                            .client()
-                            .expect("Surface has no client/is no longer alive");
+                        // INFO: pinnacle crashed when I pasted from one nvim instance to another in alacritty
+                        let Some(client) = surface.client() else { continue };
                         data.state
                             .client_compositor_state(&client)
                             .blocker_cleared(&mut data.state, &data.display_handle);

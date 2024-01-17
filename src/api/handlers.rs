@@ -1,7 +1,5 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, process::Stdio};
 
-use async_process::Stdio;
-use futures_lite::{AsyncBufReadExt, StreamExt};
 use smithay::{
     desktop::space::SpaceElement,
     input::keyboard::XkbConfig,
@@ -10,6 +8,7 @@ use smithay::{
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 use sysinfo::ProcessRefreshKind;
+use tokio::io::AsyncBufReadExt;
 
 use crate::{
     api::msg::{
@@ -436,7 +435,7 @@ impl State {
 
             Msg::Quit => {
                 tracing::info!("Quitting Pinnacle");
-                self.loop_signal.stop();
+                self.shutdown();
             }
 
             Msg::SetXkbConfig {
@@ -702,7 +701,7 @@ impl State {
         };
 
         let program = OsString::from(program);
-        let Ok(mut child) = async_process::Command::new(&program)
+        let Ok(mut child) = tokio::process::Command::new(&program)
             .envs(
                 [("WAYLAND_DISPLAY", self.socket_name.clone())]
                     .into_iter()
@@ -746,71 +745,56 @@ impl State {
 
             if let Some(stdout) = stdout {
                 let future = async move {
-                    let mut reader = futures_lite::io::BufReader::new(stdout).lines();
-                    while let Some(line) = reader.next().await {
-                        match line {
-                            Ok(line) => {
-                                let msg = OutgoingMsg::CallCallback {
-                                    callback_id,
-                                    args: Some(Args::Spawn {
-                                        stdout: Some(line),
-                                        stderr: None,
-                                        exit_code: None,
-                                        exit_msg: None,
-                                    }),
-                                };
+                    let mut reader = tokio::io::BufReader::new(stdout).lines();
+                    while let Ok(Some(line)) = reader.next_line().await {
+                        let msg = OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::Spawn {
+                                stdout: Some(line),
+                                stderr: None,
+                                exit_code: None,
+                                exit_msg: None,
+                            }),
+                        };
 
-                                crate::api::send_to_client(
-                                    &mut stream_out.lock().expect("Couldn't lock stream"),
-                                    &msg,
-                                )
-                                .expect("Send to client failed"); // TODO: notify instead of crash
-                            }
-                            // TODO: possibly break on err?
-                            Err(err) => tracing::warn!("read err: {err}"),
-                        }
+                        crate::api::send_to_client(
+                            &mut stream_out.lock().expect("Couldn't lock stream"),
+                            &msg,
+                        )
+                        .expect("Send to client failed"); // TODO: notify instead of crash
                     }
                 };
 
-                if let Err(err) = self.async_scheduler.schedule(future) {
-                    tracing::error!("Failed to schedule future: {err}");
-                }
+                tokio::spawn(future);
             }
 
             if let Some(stderr) = stderr {
                 let future = async move {
-                    let mut reader = futures_lite::io::BufReader::new(stderr).lines();
-                    while let Some(line) = reader.next().await {
-                        match line {
-                            Ok(line) => {
-                                let msg = OutgoingMsg::CallCallback {
-                                    callback_id,
-                                    args: Some(Args::Spawn {
-                                        stdout: None,
-                                        stderr: Some(line),
-                                        exit_code: None,
-                                        exit_msg: None,
-                                    }),
-                                };
+                    let mut reader = tokio::io::BufReader::new(stderr).lines();
+                    while let Ok(Some(line)) = reader.next_line().await {
+                        let msg = OutgoingMsg::CallCallback {
+                            callback_id,
+                            args: Some(Args::Spawn {
+                                stdout: None,
+                                stderr: Some(line),
+                                exit_code: None,
+                                exit_msg: None,
+                            }),
+                        };
 
-                                crate::api::send_to_client(
-                                    &mut stream_err.lock().expect("Couldn't lock stream"),
-                                    &msg,
-                                )
-                                .expect("Send to client failed"); // TODO: notify instead of crash
-                            }
-                            Err(err) => tracing::warn!("read err: {err}"),
-                        }
+                        crate::api::send_to_client(
+                            &mut stream_err.lock().expect("Couldn't lock stream"),
+                            &msg,
+                        )
+                        .expect("Send to client failed"); // TODO: notify instead of crash
                     }
                 };
 
-                if let Err(err) = self.async_scheduler.schedule(future) {
-                    tracing::error!("Failed to schedule future: {err}");
-                }
+                tokio::spawn(future);
             }
 
             let future = async move {
-                match child.status().await {
+                match child.wait().await {
                     Ok(exit_status) => {
                         let msg = OutgoingMsg::CallCallback {
                             callback_id,
@@ -834,9 +818,7 @@ impl State {
                 }
             };
 
-            if let Err(err) = self.async_scheduler.schedule(future) {
-                tracing::error!("Failed to schedule future: {err}");
-            }
+            tokio::spawn(future);
         }
     }
 }

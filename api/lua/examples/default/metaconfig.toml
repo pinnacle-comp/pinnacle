@@ -1,0 +1,46 @@
+# This metaconfig.toml file dictates what config Pinnacle will run.
+#
+# When running Pinnacle, the compositor will look in the following directories for a metaconfig.toml file,
+# in order from top to bottom:
+#     $PINNACLE_CONFIG_DIR
+#     $XDG_CONFIG_HOME/pinnacle/
+#     ~/.config/pinnacle/
+#
+# When Pinnacle finds a metaconfig.toml file, it will execute the command provided to `command`.
+# To use a Rust config, this should be changed to something like ["cargo", "run"].
+# 
+# Because configuration is done using an external process, if it ever crashes, you lose all of your keybinds.
+# The compositor will load the default config if that happens, but in the event that you don't have
+# the necessary dependencies for it to run, you may get softlocked.
+# In order prevent you from getting stuck in the compositor, you must define keybinds to reload your config
+# and kill Pinnacle.
+# 
+# More details on each setting can be found below.
+
+# The command Pinnacle will run on startup and when you reload your config.
+# Paths are relative to the directory the metaconfig.toml file is in.
+# This must be an array.
+command = ["lua", "default_config.lua"]
+
+### Keybinds ###
+# Each keybind takes in a table with two fields: `modifiers` and `key`.
+# - `modifiers` can be one of "Ctrl", "Alt", "Shift", or "Super".
+# - `key` can be a string of any lowercase letter, number,
+#   "numN" where N is a number for numpad keys, or "esc"/"escape".
+# Support for any xkbcommon key is planned for a future update.
+
+# The keybind that will reload your config.
+reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+# The keybind that will kill Pinnacle.
+kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+
+### Socket directory ###
+# Pinnacle will open a Unix socket at `$XDG_RUNTIME_DIR` by default, falling back to `/tmp` if it doesn't exist.
+# If you want/need to change this, use the `socket_dir` setting set to the directory of your choosing.
+#
+# socket_dir = "/your/dir/here/"
+
+### Environment Variables ###
+# If you need to spawn your config with any environment variables, list them here.
+[envs]
+# key = "value"

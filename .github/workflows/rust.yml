@@ -25,7 +25,13 @@ jobs:
       - name: Cache stuff maybe
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+      - name: Setup Lua Rocks
+        uses: leafo/gh-actions-luarocks@v4
       - name: Build
         run: cargo build --verbose
       - name: Run tests that don't exist

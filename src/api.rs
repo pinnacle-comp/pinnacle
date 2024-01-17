@@ -1,41 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Pinnacle's configuration API.
-//!
-//! The API works as follows:
-//!
-//! - All configuration is done through a Unix socket located at /tmp/pinnacle_socket.
-//! - Pinnacle is built with the intent of configuration in Lua (and possibly other languages in
-//!   the future). To achieve this, an always running process in the target language needs to be
-//!   spawned, known as the *client*. This allows Pinnacle, the *server*, to call into user-defined
-//!   state through callback functions.
-//! - The client must:
-//!     - Connect to the socket,
-//!     - send configuration messages through the socket, and finally
-//!     - listen to requests for callbacks,
-//!   in that order.
-//!
-//! You may be asking, "what messages am I supposed to send and receive?"
-//! Great question!
-//!
-//! Pinnacle uses [MessagePack](https://msgpack.org/index.html) as the message format.
-//! Messages should be serialized into MessagePack according to the [defined structs](msg::Msg).
-//!
-//! When Pinnacle needs to call a user-defined callback, for example from a keybind setting, it
-//! sends a [CallCallback](msg::OutgoingMsg::CallCallback) message to the client. This message
-//! contains a callback_id to identify what callback the client needs to run—but wait, where do you get that?
-//!
-//! The callback_id is created by the client to identify one of its callbacks. You will probably
-//! need to store all callbacks in some central data structure along with a way to associate an id with it.
-//! This could be an array and its indices or a hashmap and its keys (keep in mind the id needs to
-//! be an unsigned 32 bit int).
-//!
-//! TODO: expand
-//!
-//! For an example, look at the Lua implementation in the repository.
-
 pub mod handlers;
 pub mod msg;
+pub mod protocol;
 
 use std::{
     io::{self, Read, Write},
@@ -257,8 +224,4 @@ pub struct ApiState {
     pub socket_token: Option<RegistrationToken>,
     /// The sending channel used to send API messages received from the socket source to a handler.
     pub tx_channel: Sender<Msg>,
-    /// A channel used to ping the future in the event loop to drop and kill the child.
-    pub kill_channel: Option<async_channel::Sender<()>>,
-    /// A receiving channel that will cause the config process to be dropped and thus killed.
-    pub future_channel: Option<async_channel::Receiver<()>>,
 }

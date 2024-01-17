@@ -19,8 +19,8 @@ env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
-  build:
-    name: Build docs
+  build-docs:
+    name: Build Lua docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,12 +39,13 @@ jobs:
       - name: Setup dependencies
         run: luarocks install ldoc
       - name: Generate LDoc compatible code
-        run: cd ./ldoc_gen && cargo run -- -p ../api/lua
+        run: mv ldoc_gen .. && cd ../ldoc_gen && cargo run -- -p ../pinnacle/api/lua
       - name: Build docs
-        run: cd ./ldoc_gen/.ldoc_gen && cp ../../api/lua/ldoc.css ../../api/lua/config.ld . && ldoc . && cd ../..
+        run: cd ../ldoc_gen/.ldoc_gen && cp ../../pinnacle/resources/ldoc.css ../../pinnacle/resources/config.ld . && ldoc .
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./ldoc_gen/.ldoc_gen/doc
+          publish_dir: ../ldoc_gen/.ldoc_gen/doc
           destination_dir: ${{ env.BRANCH_NAME }}/lua
+          # force_orphan: true
