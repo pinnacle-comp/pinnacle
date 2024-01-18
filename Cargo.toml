@@ -65,3 +65,4 @@ xwayland = ["smithay/xwayland", "x11rb", "smithay/x11rb_event_source", "xcursor"
 
 [workspace]
 members = ["pinnacle-api-defs"]
+exclude = ["api/rust_grpc"]
