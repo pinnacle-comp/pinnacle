@@ -1,10 +1,11 @@
-use futures_lite::future::block_on;
+use futures::executor::block_on;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v0alpha1::{
-        input_service_client::InputServiceClient, SetKeybindRequest, SetMousebindRequest,
-        SetRepeatRateRequest,
+        input_service_client::InputServiceClient,
+        set_libinput_setting_request::{CalibrationMatrix, Setting},
+        SetKeybindRequest, SetLibinputSettingRequest, SetMousebindRequest, SetRepeatRateRequest,
     },
 };
 use tokio_stream::StreamExt;
@@ -12,6 +13,8 @@ use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
 
 pub use pinnacle_api_defs::pinnacle::input::v0alpha1::SetXkbConfigRequest as XkbConfig;
+
+use crate::FutSender;
 
 use self::libinput::LibinputSetting;
 pub mod libinput;
@@ -43,41 +46,45 @@ pub enum MouseEdge {
     Release,
 }
 
+#[derive(Debug, Clone)]
 pub struct Input {
     client: InputServiceClient<Channel>,
+    fut_sender: FutSender,
 }
 
 impl Input {
-    pub(crate) fn new(client: InputServiceClient<Channel>) -> Self {
-        Self { client }
+    pub fn new(client: InputServiceClient<Channel>, fut_sender: FutSender) -> Self {
+        Self { client, fut_sender }
     }
 
     pub fn keybind(
         &self,
         mods: impl IntoIterator<Item = Mod>,
         key: impl Key + Send + 'static,
-        mut action: impl FnMut() + 'static + Send,
+        mut action: impl FnMut() + Send + 'static,
     ) {
         let mut client = self.client.clone();
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
-        tokio::spawn(async move {
-            let mut stream = client
-                .set_keybind(SetKeybindRequest {
-                    modifiers,
-                    key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
-                        key.into_keysym().raw(),
-                    )),
-                })
-                .await
-                .unwrap()
-                .into_inner();
+        self.fut_sender
+            .send(Box::pin(async move {
+                let mut stream = client
+                    .set_keybind(SetKeybindRequest {
+                        modifiers,
+                        key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
+                            key.into_keysym().raw(),
+                        )),
+                    })
+                    .await
+                    .unwrap()
+                    .into_inner();
 
-            while let Some(Ok(_response)) = stream.next().await {
-                action();
-            }
-        });
+                while let Some(Ok(_response)) = stream.next().await {
+                    action();
+                }
+            }))
+            .unwrap();
     }
 
     pub fn mousebind(
@@ -124,8 +131,36 @@ impl Input {
         .unwrap();
     }
 
-    pub fn set_libinput_setting(setting: LibinputSetting) {
-        todo!()
+    pub fn set_libinput_setting(&self, setting: LibinputSetting) {
+        let mut client = self.client.clone();
+
+        let setting = match setting {
+            LibinputSetting::AccelProfile(profile) => Setting::AccelProfile(profile as i32),
+            LibinputSetting::AccelSpeed(speed) => Setting::AccelSpeed(speed),
+            LibinputSetting::CalibrationMatrix(matrix) => {
+                Setting::CalibrationMatrix(CalibrationMatrix {
+                    matrix: matrix.to_vec(),
+                })
+            }
+            LibinputSetting::ClickMethod(method) => Setting::ClickMethod(method as i32),
+            LibinputSetting::DisableWhileTyping(disable) => Setting::DisableWhileTyping(disable),
+            LibinputSetting::LeftHanded(enable) => Setting::LeftHanded(enable),
+            LibinputSetting::MiddleEmulation(enable) => Setting::MiddleEmulation(enable),
+            LibinputSetting::RotationAngle(angle) => Setting::RotationAngle(angle),
+            LibinputSetting::ScrollButton(button) => Setting::RotationAngle(button),
+            LibinputSetting::ScrollButtonLock(enable) => Setting::ScrollButtonLock(enable),
+            LibinputSetting::ScrollMethod(method) => Setting::ScrollMethod(method as i32),
+            LibinputSetting::NaturalScroll(enable) => Setting::NaturalScroll(enable),
+            LibinputSetting::TapButtonMap(map) => Setting::TapButtonMap(map as i32),
+            LibinputSetting::TapDrag(enable) => Setting::TapDrag(enable),
+            LibinputSetting::TapDragLock(enable) => Setting::TapDragLock(enable),
+            LibinputSetting::Tap(enable) => Setting::Tap(enable),
+        };
+
+        block_on(client.set_libinput_setting(SetLibinputSettingRequest {
+            setting: Some(setting),
+        }))
+        .unwrap();
     }
 }
 

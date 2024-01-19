@@ -5,10 +5,14 @@ edition = "2021"
 
 [dependencies]
 pinnacle-api-defs = { path = "../../pinnacle-api-defs" }
+pinnacle-api-macros = { path = "./pinnacle-api-macros" }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "net"] }
 tokio-stream = { version = "0.1.14", features = ["net"] }
 tonic = "0.10.2"
 tower = { version = "0.4.13", features = ["util"] }
-futures-lite = "2.2.0"
+futures = "0.3.30"
 num_enum = "0.7.2"
 xkbcommon = "0.7.0"
+
+[workspace]
+members = ["pinnacle-api-macros"]

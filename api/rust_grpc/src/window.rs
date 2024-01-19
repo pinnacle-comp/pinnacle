@@ -1,4 +1,4 @@
-use futures_lite::future::block_on;
+use futures::executor::block_on;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     tag::v0alpha1::tag_service_client::TagServiceClient,
@@ -24,7 +24,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub(crate) fn new(
+    pub fn new(
         client: WindowServiceClient<Channel>,
         tag_client: TagServiceClient<Channel>,
     ) -> Self {

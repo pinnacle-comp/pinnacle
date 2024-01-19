@@ -1,4 +1,4 @@
-use futures_lite::future::block_on;
+use futures::executor::block_on;
 use pinnacle_api_defs::pinnacle::{
     output::{
         self,
@@ -13,13 +13,14 @@ use tonic::transport::Channel;
 
 use crate::tag::TagHandle;
 
+#[derive(Debug, Clone)]
 pub struct Output {
     client: OutputServiceClient<Channel>,
     tag_client: TagServiceClient<Channel>,
 }
 
 impl Output {
-    pub(crate) fn new(
+    pub fn new(
         client: OutputServiceClient<Channel>,
         tag_client: TagServiceClient<Channel>,
     ) -> Self {
@@ -93,6 +94,10 @@ impl OutputHandle {
             y,
         }))
         .unwrap();
+    }
+
+    pub fn set_loc_adj_to(&self, other: &OutputHandle) {
+        todo!()
     }
 
     pub fn props(&self) -> OutputProperties {

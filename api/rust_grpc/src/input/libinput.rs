@@ -24,6 +24,7 @@ pub enum TapButtonMap {
     LeftMiddleRight,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LibinputSetting {
     AccelProfile(AccelProfile),
     AccelSpeed(f64),
@@ -34,7 +35,7 @@ pub enum LibinputSetting {
     MiddleEmulation(bool),
     RotationAngle(u32),
     ScrollButton(u32),
-    ScrollButtonLock(u32),
+    ScrollButtonLock(bool),
     ScrollMethod(ScrollMethod),
     NaturalScroll(bool),
     TapButtonMap(TapButtonMap),
