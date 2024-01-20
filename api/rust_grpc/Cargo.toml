@@ -7,10 +7,13 @@ edition = "2021"
 pinnacle-api-defs = { path = "../../pinnacle-api-defs" }
 pinnacle-api-macros = { path = "./pinnacle-api-macros" }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "net"] }
-tokio-stream = { version = "0.1.14", features = ["net"] }
+# tokio-stream = { version = "0.1.14", features = ["net"] }
+async-net = "2.0.0"
+async-compat = "0.2.3"
 tonic = "0.10.2"
 tower = { version = "0.4.13", features = ["util"] }
 futures = "0.3.30"
+# futures-lite = "2.2.0"
 num_enum = "0.7.2"
 xkbcommon = "0.7.0"
 

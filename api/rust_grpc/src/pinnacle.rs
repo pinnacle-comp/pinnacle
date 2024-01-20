@@ -6,16 +6,20 @@ use tonic::transport::Channel;
 
 #[derive(Debug, Clone)]
 pub struct Pinnacle {
-    client: PinnacleServiceClient<Channel>,
+    channel: Channel,
 }
 
 impl Pinnacle {
-    pub fn new(client: PinnacleServiceClient<Channel>) -> Self {
-        Self { client }
+    pub fn new(channel: Channel) -> Self {
+        Self { channel }
+    }
+
+    fn create_pinnacle_client(&self) -> PinnacleServiceClient<Channel> {
+        PinnacleServiceClient::new(self.channel.clone())
     }
 
     pub fn quit(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.create_pinnacle_client();
         block_on(client.quit(QuitRequest {})).unwrap();
     }
 }

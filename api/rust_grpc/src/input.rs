@@ -1,4 +1,6 @@
-use futures::executor::block_on;
+use futures::{
+    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
+};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
@@ -8,13 +10,10 @@ use pinnacle_api_defs::pinnacle::input::{
         SetKeybindRequest, SetLibinputSettingRequest, SetMousebindRequest, SetRepeatRateRequest,
     },
 };
-use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
 
 pub use pinnacle_api_defs::pinnacle::input::v0alpha1::SetXkbConfigRequest as XkbConfig;
-
-use crate::FutSender;
 
 use self::libinput::LibinputSetting;
 pub mod libinput;
@@ -48,13 +47,21 @@ pub enum MouseEdge {
 
 #[derive(Debug, Clone)]
 pub struct Input {
-    client: InputServiceClient<Channel>,
-    fut_sender: FutSender,
+    // client: InputServiceClient<Channel>,
+    channel: Channel,
+    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
 
 impl Input {
-    pub fn new(client: InputServiceClient<Channel>, fut_sender: FutSender) -> Self {
-        Self { client, fut_sender }
+    pub fn new(channel: Channel, fut_sender: UnboundedSender<BoxFuture<'static, ()>>) -> Self {
+        Self {
+            channel,
+            fut_sender,
+        }
+    }
+
+    fn create_input_client(&self) -> InputServiceClient<Channel> {
+        InputServiceClient::new(self.channel.clone())
     }
 
     pub fn keybind(
@@ -63,27 +70,30 @@ impl Input {
         key: impl Key + Send + 'static,
         mut action: impl FnMut() + Send + 'static,
     ) {
-        let mut client = self.client.clone();
+        let mut client = self.create_input_client();
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
         self.fut_sender
-            .send(Box::pin(async move {
-                let mut stream = client
-                    .set_keybind(SetKeybindRequest {
-                        modifiers,
-                        key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
-                            key.into_keysym().raw(),
-                        )),
-                    })
-                    .await
-                    .unwrap()
-                    .into_inner();
+            .unbounded_send(
+                async move {
+                    let mut stream = client
+                        .set_keybind(SetKeybindRequest {
+                            modifiers,
+                            key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
+                                key.into_keysym().raw(),
+                            )),
+                        })
+                        .await
+                        .unwrap()
+                        .into_inner();
 
-                while let Some(Ok(_response)) = stream.next().await {
-                    action();
+                    while let Some(Ok(_response)) = stream.next().await {
+                        action();
+                    }
                 }
-            }))
+                .boxed(),
+            )
             .unwrap();
     }
 
@@ -94,35 +104,40 @@ impl Input {
         edge: MouseEdge,
         mut action: impl FnMut() + 'static + Send,
     ) {
-        let mut client = self.client.clone();
+        let mut client = self.create_input_client();
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
-        tokio::spawn(async move {
-            let mut stream = client
-                .set_mousebind(SetMousebindRequest {
-                    modifiers,
-                    button: Some(button as u32),
-                    edge: Some(edge as i32),
-                })
-                .await
-                .unwrap()
-                .into_inner();
+        self.fut_sender
+            .unbounded_send(
+                async move {
+                    let mut stream = client
+                        .set_mousebind(SetMousebindRequest {
+                            modifiers,
+                            button: Some(button as u32),
+                            edge: Some(edge as i32),
+                        })
+                        .await
+                        .unwrap()
+                        .into_inner();
 
-            while let Some(Ok(_response)) = stream.next().await {
-                action();
-            }
-        });
+                    while let Some(Ok(_response)) = stream.next().await {
+                        action();
+                    }
+                }
+                .boxed(),
+            )
+            .unwrap();
     }
 
     pub fn set_xkb_config(&self, xkb_config: XkbConfig) {
-        let mut client = self.client.clone();
+        let mut client = self.create_input_client();
 
         block_on(client.set_xkb_config(xkb_config)).unwrap();
     }
 
     pub fn set_repeat_rate(&self, rate: i32, delay: i32) {
-        let mut client = self.client.clone();
+        let mut client = self.create_input_client();
 
         block_on(client.set_repeat_rate(SetRepeatRateRequest {
             rate: Some(rate),
@@ -132,7 +147,7 @@ impl Input {
     }
 
     pub fn set_libinput_setting(&self, setting: LibinputSetting) {
-        let mut client = self.client.clone();
+        let mut client = self.create_input_client();
 
         let setting = match setting {
             LibinputSetting::AccelProfile(profile) => Setting::AccelProfile(profile as i32),

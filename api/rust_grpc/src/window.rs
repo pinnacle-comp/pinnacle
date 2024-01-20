@@ -1,9 +1,10 @@
 use futures::executor::block_on;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
+    output::v0alpha1::output_service_client::OutputServiceClient,
     tag::v0alpha1::tag_service_client::TagServiceClient,
     window::v0alpha1::{
-        window_service_client::WindowServiceClient, MoveToTagRequest, SetTagRequest,
+        window_service_client::WindowServiceClient, CloseRequest, MoveToTagRequest, SetTagRequest,
     },
     window::{
         self,
@@ -19,22 +20,47 @@ use crate::{input::MouseButton, tag::TagHandle, util::Geometry};
 
 #[derive(Debug, Clone)]
 pub struct Window {
-    client: WindowServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
+    channel: Channel,
 }
 
 impl Window {
-    pub fn new(
-        client: WindowServiceClient<Channel>,
-        tag_client: TagServiceClient<Channel>,
-    ) -> Self {
-        Self { client, tag_client }
+    pub fn new(channel: Channel) -> Self {
+        Self { channel }
+    }
+
+    pub fn create_window_client(&self) -> WindowServiceClient<Channel> {
+        WindowServiceClient::new(self.channel.clone())
+    }
+
+    pub fn create_tag_client(&self) -> TagServiceClient<Channel> {
+        TagServiceClient::new(self.channel.clone())
+    }
+
+    pub fn create_output_client(&self) -> OutputServiceClient<Channel> {
+        OutputServiceClient::new(self.channel.clone())
+    }
+
+    pub fn begin_move(&self, button: MouseButton) {
+        let mut client = self.create_window_client();
+        block_on(client.move_grab(MoveGrabRequest {
+            button: Some(button as u32),
+        }))
+        .unwrap();
+    }
+
+    pub fn begin_resize(&self, button: MouseButton) {
+        let mut client = self.create_window_client();
+        block_on(client.resize_grab(ResizeGrabRequest {
+            button: Some(button as u32),
+        }))
+        .unwrap();
     }
 
     /// Get all windows.
     pub fn get_all(&self) -> impl Iterator<Item = WindowHandle> {
-        let mut client = self.client.clone();
-        let tag_client = self.tag_client.clone();
+        let mut client = self.create_window_client();
+        let tag_client = self.create_tag_client();
+        let output_client = self.create_output_client();
         block_on(client.get(GetRequest {}))
             .unwrap()
             .into_inner()
@@ -44,6 +70,7 @@ impl Window {
                 client: client.clone(),
                 id,
                 tag_client: tag_client.clone(),
+                output_client: output_client.clone(),
             })
     }
 
@@ -59,6 +86,7 @@ pub struct WindowHandle {
     pub(crate) client: WindowServiceClient<Channel>,
     pub(crate) id: u32,
     pub(crate) tag_client: TagServiceClient<Channel>,
+    pub(crate) output_client: OutputServiceClient<Channel>,
 }
 
 #[repr(i32)]
@@ -81,7 +109,14 @@ pub struct WindowProperties {
 }
 
 impl WindowHandle {
-    pub fn set_fullscreen(&mut self, set: bool) {
+    pub fn close(mut self) {
+        block_on(self.client.close(CloseRequest {
+            window_id: Some(self.id),
+        }))
+        .unwrap();
+    }
+
+    pub fn set_fullscreen(&self, set: bool) {
         let mut client = self.client.clone();
         block_on(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
@@ -92,7 +127,7 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn toggle_fullscreen(&mut self) {
+    pub fn toggle_fullscreen(&self) {
         let mut client = self.client.clone();
         block_on(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
@@ -101,7 +136,7 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn set_maximized(&mut self, set: bool) {
+    pub fn set_maximized(&self, set: bool) {
         let mut client = self.client.clone();
         block_on(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
@@ -112,7 +147,7 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn toggle_maximized(&mut self) {
+    pub fn toggle_maximized(&self) {
         let mut client = self.client.clone();
         block_on(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
@@ -121,7 +156,7 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn set_floating(&mut self, set: bool) {
+    pub fn set_floating(&self, set: bool) {
         let mut client = self.client.clone();
         block_on(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
@@ -132,7 +167,7 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn toggle_floating(&mut self) {
+    pub fn toggle_floating(&self) {
         let mut client = self.client.clone();
         block_on(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
@@ -175,22 +210,6 @@ impl WindowHandle {
         .unwrap();
     }
 
-    pub fn begin_move(&self, button: MouseButton) {
-        let mut client = self.client.clone();
-        block_on(client.move_grab(MoveGrabRequest {
-            button: Some(button as u32),
-        }))
-        .unwrap();
-    }
-
-    pub fn begin_resize(&self, button: MouseButton) {
-        let mut client = self.client.clone();
-        block_on(client.resize_grab(ResizeGrabRequest {
-            button: Some(button as u32),
-        }))
-        .unwrap();
-    }
-
     pub fn props(&self) -> WindowProperties {
         let mut client = self.client.clone();
         let tag_client = self.tag_client.clone();
@@ -227,6 +246,7 @@ impl WindowHandle {
                 .into_iter()
                 .map(|id| TagHandle {
                     client: tag_client.clone(),
+                    output_client: self.output_client.clone(),
                     id,
                 })
                 .collect(),

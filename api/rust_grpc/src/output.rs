@@ -1,4 +1,6 @@
-use futures::executor::block_on;
+use futures::{
+    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
+};
 use pinnacle_api_defs::pinnacle::{
     output::{
         self,
@@ -8,28 +10,37 @@ use pinnacle_api_defs::pinnacle::{
     },
     tag::v0alpha1::tag_service_client::TagServiceClient,
 };
-use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 
 use crate::tag::TagHandle;
 
 #[derive(Debug, Clone)]
 pub struct Output {
-    client: OutputServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
+    // client: OutputServiceClient<Channel>,
+    // tag_client: TagServiceClient<Channel>,
+    channel: Channel,
+    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
 
 impl Output {
-    pub fn new(
-        client: OutputServiceClient<Channel>,
-        tag_client: TagServiceClient<Channel>,
-    ) -> Self {
-        Self { client, tag_client }
+    pub fn new(channel: Channel, fut_sender: UnboundedSender<BoxFuture<'static, ()>>) -> Self {
+        Self {
+            channel,
+            fut_sender,
+        }
+    }
+
+    fn create_output_client(&self) -> OutputServiceClient<Channel> {
+        OutputServiceClient::new(self.channel.clone())
+    }
+
+    fn create_tag_client(&self) -> TagServiceClient<Channel> {
+        TagServiceClient::new(self.channel.clone())
     }
 
     pub fn get_all(&self) -> impl Iterator<Item = OutputHandle> {
-        let mut client = self.client.clone();
-        let tag_client = self.tag_client.clone();
+        let mut client = self.create_output_client();
+        let tag_client = self.create_tag_client();
         block_on(client.get(output::v0alpha1::GetRequest {}))
             .unwrap()
             .into_inner()
@@ -52,37 +63,43 @@ impl Output {
             for_all(output);
         }
 
-        let mut client = self.client.clone();
-        let tag_client = self.tag_client.clone();
+        let mut client = self.create_output_client();
+        let tag_client = self.create_tag_client();
 
-        tokio::spawn(async move {
-            let mut stream = client
-                .connect_for_all(ConnectForAllRequest {})
-                .await
-                .unwrap()
-                .into_inner();
+        self.fut_sender
+            .unbounded_send(
+                async move {
+                    let mut stream = client
+                        .connect_for_all(ConnectForAllRequest {})
+                        .await
+                        .unwrap()
+                        .into_inner();
 
-            while let Some(Ok(response)) = stream.next().await {
-                let Some(output_name) = response.output_name else {
-                    continue;
-                };
+                    while let Some(Ok(response)) = stream.next().await {
+                        let Some(output_name) = response.output_name else {
+                            continue;
+                        };
 
-                let output = OutputHandle {
-                    client: client.clone(),
-                    tag_client: tag_client.clone(),
-                    name: output_name,
-                };
+                        let output = OutputHandle {
+                            client: client.clone(),
+                            tag_client: tag_client.clone(),
+                            name: output_name,
+                        };
 
-                for_all(output);
-            }
-        });
+                        for_all(output);
+                    }
+                }
+                .boxed(),
+            )
+            .unwrap();
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct OutputHandle {
-    client: OutputServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
-    name: String,
+    pub(crate) client: OutputServiceClient<Channel>,
+    pub(crate) tag_client: TagServiceClient<Channel>,
+    pub(crate) name: String,
 }
 
 impl OutputHandle {
@@ -126,6 +143,7 @@ impl OutputHandle {
                 .into_iter()
                 .map(|id| TagHandle {
                     client: self.tag_client.clone(),
+                    output_client: self.client.clone(),
                     id,
                 })
                 .collect(),
