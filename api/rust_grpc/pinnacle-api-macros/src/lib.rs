@@ -20,7 +20,7 @@ pub fn config(
     quote! {
         #(#attrs)*
         #vis #sig {
-            let (#module_ident, __fut_receiver) = ::pinnacle_api::create_modules().unwrap();
+            let (#module_ident, __fut_receiver) = ::pinnacle_api::connect().unwrap();
 
             #(#stmts)*
 
