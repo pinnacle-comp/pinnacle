@@ -24,7 +24,7 @@ pub fn config(
 
             #(#stmts)*
 
-            ::pinnacle_api::listen(__fut_receiver);
+            ::pinnacle_api::listen(__fut_receiver).await;
         }
     }
     .into()

@@ -84,7 +84,8 @@ pub fn connect(
     Ok((modules, fut_recv))
 }
 
-pub fn listen(fut_recv: UnboundedReceiver<BoxFuture<()>>, // api_modules: ApiModules<'a>,
+pub async fn listen(
+    fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>, // api_modules: ApiModules<'a>,
 ) {
     let mut future_set = FuturesUnordered::<
         BoxFuture<(
@@ -98,24 +99,23 @@ pub fn listen(fut_recv: UnboundedReceiver<BoxFuture<()>>, // api_modules: ApiMod
         (fut, Some(stream))
     }));
 
-    block_on(async move {
-        while let Some((fut, stream)) = future_set.next().await {
-            if let Some(fut) = fut {
-                future_set.push(Box::pin(async move {
-                    fut.await;
-                    (None, None)
-                }));
-            }
-            if let Some(stream) = stream {
-                future_set.push(Box::pin(async move {
-                    let (fut, stream) = stream.into_future().await;
-                    (fut, Some(stream))
-                }))
-            }
+    while let Some((fut, stream)) = future_set.next().await {
+        if let Some(fut) = fut {
+            future_set.push(Box::pin(async move {
+                fut.await;
+                (None, None)
+            }));
         }
-    });
+        if let Some(stream) = stream {
+            future_set.push(Box::pin(async move {
+                let (fut, stream) = stream.into_future().await;
+                (fut, Some(stream))
+            }))
+        }
+    }
 }
 
 pub(crate) fn block_on<F: Future>(fut: F) -> F::Output {
-    tokio::task::block_in_place(|| futures::executor::block_on(fut))
+    futures::executor::block_on(fut)
+    // tokio::task::block_in_place(|| futures::executor::block_on(fut))
 }
