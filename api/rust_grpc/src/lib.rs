@@ -1,4 +1,15 @@
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
+
+//! The Rust implementation of [Pinnacle](https://github.com/pinnacle-comp/pinnacle)'s
+//! configuration API.
+//!
+//! This library allows to to interface with the Pinnacle compositor and configure various aspects
+//! like input and the tag system.
+//!
+//! # Configuration
+//!
+//! To create your own Rust config, create a Cargo project in `~/.config/pinnacle`.
+//! TODO:
 
 use std::sync::OnceLock;
 
@@ -14,12 +25,19 @@ use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
 
+/// Input management
 pub mod input;
+/// Output management
 pub mod output;
+/// Main compositor options
 pub mod pinnacle;
+/// Process management
 pub mod process;
+/// Tag management
 pub mod tag;
+/// Utilities
 pub mod util;
+/// Window management
 pub mod window;
 
 pub use pinnacle_api_macros::config;
@@ -32,6 +50,7 @@ static INPUT: OnceLock<Input> = OnceLock::new();
 static OUTPUT: OnceLock<Output> = OnceLock::new();
 static TAG: OnceLock<Tag> = OnceLock::new();
 
+/// A struct containing static references to all of the configuration structs.
 #[derive(Debug, Clone)]
 pub struct ApiModules {
     pub pinnacle: &'static Pinnacle,
@@ -42,6 +61,10 @@ pub struct ApiModules {
     pub tag: &'static Tag,
 }
 
+/// Connects to Pinnacle and builds the configuration structs.
+///
+/// This function is inserted at the top of your config through the [`config`] macro.
+/// You should use that macro instead of this function directly.
 pub async fn connect(
 ) -> Result<(ApiModules, UnboundedReceiver<BoxFuture<'static, ()>>), Box<dyn std::error::Error>> {
     let channel = Endpoint::try_from("http://[::]:50051")? // port doesn't matter, we use a unix socket
@@ -76,6 +99,13 @@ pub async fn connect(
     Ok((modules, fut_recv))
 }
 
+/// Listen to Pinnacle for incoming messages.
+///
+/// This will run all futures returned by configuration methods that take in callbacks in order to
+/// call them.
+///
+/// This function is inserted at the end of your config through the [`config`] macro.
+/// You should use the macro instead of this function directly.
 pub async fn listen(
     fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>, // api_modules: ApiModules<'a>,
 ) {

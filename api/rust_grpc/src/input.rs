@@ -8,43 +8,81 @@ use pinnacle_api_defs::pinnacle::input::{
         input_service_client::InputServiceClient,
         set_libinput_setting_request::{CalibrationMatrix, Setting},
         SetKeybindRequest, SetLibinputSettingRequest, SetMousebindRequest, SetRepeatRateRequest,
+        SetXkbConfigRequest,
     },
 };
 use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
 
-pub use pinnacle_api_defs::pinnacle::input::v0alpha1::SetXkbConfigRequest as XkbConfig;
-
 use self::libinput::LibinputSetting;
+
+/// Types for Libinput
 pub mod libinput;
 
+/// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum MouseButton {
+    /// The left mouse button
     Left = 0x110,
+    /// The right mouse button
     Right = 0x111,
+    /// The middle mouse button
     Middle = 0x112,
+    /// The side mouse button
     Side = 0x113,
+    /// The extra mouse button
     Extra = 0x114,
+    /// The forward mouse button
     Forward = 0x115,
+    /// The backward mouse button
     Back = 0x116,
 }
 
+/// Keyboard modifiers.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, TryFromPrimitive)]
 pub enum Mod {
+    /// The shift key
     Shift = 1,
+    /// The ctrl key
     Ctrl,
+    /// The alt key
     Alt,
+    /// The super key, aka meta, win, mod4
     Super,
 }
 
+/// Press or release.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
 pub enum MouseEdge {
+    /// Perform actions on button press
     Press = 1,
+    /// Perform actions on button release
     Release,
 }
 
+/// A struct that lets you define xkeyboard config options.
+///
+/// See `xkeyboard-config(7)` for more information.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct XkbConfig {
+    /// Files of rules to be used for keyboard mapping composition
+    pub rules: Option<&'static str>,
+    /// Name of the model of your keyboard type
+    pub model: Option<&'static str>,
+    /// Layout(s) you intend to use
+    pub layout: Option<&'static str>,
+    /// Variant(s) of the layout you intend to use
+    pub variant: Option<&'static str>,
+    /// Extra xkb configuration options
+    pub options: Option<&'static str>,
+}
+
+/// The `Input` struct.
+///
+/// This struct contains methods that allow you to set key- and mousebinds,
+/// change xkeyboard and libinput settings, and change the keyboard's repeat rate.
 #[derive(Debug, Clone)]
 pub struct Input {
     // client: InputServiceClient<Channel>,
@@ -53,7 +91,10 @@ pub struct Input {
 }
 
 impl Input {
-    pub fn new(channel: Channel, fut_sender: UnboundedSender<BoxFuture<'static, ()>>) -> Self {
+    pub(crate) fn new(
+        channel: Channel,
+        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
+    ) -> Self {
         Self {
             channel,
             fut_sender,
@@ -64,6 +105,33 @@ impl Input {
         InputServiceClient::new(self.channel.clone())
     }
 
+    /// Set a keybind.
+    ///
+    /// If called with an already set keybind, it gets replaced.
+    ///
+    /// You must supply:
+    /// - `mods`: A list of [`Mod`]s. These must be held down for the keybind to trigger.
+    /// - `key`: The key that needs to be pressed. This can be anything that implements the [Key] trait:
+    ///     - `char`
+    ///     - `&str` and `String`: These must be the xkeyboard key name without `XKB_`
+    ///     - `u32`
+    ///     - A [`keysym`][Keysym] from the [`xkbcommon`] re-export.
+    /// - `action`: A closure that will be run when the keybind is triggered.
+    ///     - Currently, any captures must be both `Send` and `'static`. If you want to mutate
+    ///       something, consider using channels or [`Box::leak`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::Mod;
+    ///
+    /// // Set `Super + Shift + c` to close the focused window
+    /// input.keybind([Mod::Super, Mod::Shift], 'c', || {
+    ///     if let Some(win) = window.get_focused() {
+    ///         win.close();
+    ///     }
+    /// });
+    /// ```
     pub fn keybind(
         &self,
         mods: impl IntoIterator<Item = Mod>,
@@ -97,6 +165,28 @@ impl Input {
             .unwrap();
     }
 
+    /// Set a mousebind.
+    ///
+    /// If called with an already set mousebind, it gets replaced.
+    ///
+    /// You must supply:
+    /// - `mods`: A list of [`Mod`]s. These must be held down for the keybind to trigger.
+    /// - `button`: A [`MouseButton`].
+    /// - `edge`: A [`MouseEdge`]. This allows you to trigger the bind on either mouse press or release.
+    /// - `action`: A closure that will be run when the mousebind is triggered.
+    ///     - Currently, any captures must be both `Send` and `'static`. If you want to mutate
+    ///       something, consider using channels or [`Box::leak`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
+    ///
+    /// // Set `Super + left click` to start moving a window
+    /// input.mousebind([Mod::Super], MouseButton::Left, MouseEdge::Press, || {
+    ///     window.begin_move(MouseButton::Press);
+    /// });
+    /// ```
     pub fn mousebind(
         &self,
         mods: impl IntoIterator<Item = Mod>,
@@ -130,12 +220,50 @@ impl Input {
             .unwrap();
     }
 
+    /// Set the xkeyboard config.
+    ///
+    /// This allows you to set several xkeyboard options like `layout` and `rules`.
+    ///
+    /// See `xkeyboard-config(7)` for more information.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::XkbConfig;
+    ///
+    /// input.set_xkb_config(Xkbconfig {
+    ///     layout: Some("us,fr,ge"),
+    ///     options: Some("ctrl:swapcaps,caps:shift"),
+    ///     ..Default::default()
+    /// });
+    /// ```
     pub fn set_xkb_config(&self, xkb_config: XkbConfig) {
         let mut client = self.create_input_client();
 
-        block_on(client.set_xkb_config(xkb_config)).unwrap();
+        block_on(client.set_xkb_config(SetXkbConfigRequest {
+            rules: xkb_config.rules.map(String::from),
+            variant: xkb_config.variant.map(String::from),
+            layout: xkb_config.layout.map(String::from),
+            model: xkb_config.model.map(String::from),
+            options: xkb_config.options.map(String::from),
+        }))
+        .unwrap();
     }
 
+    /// Set the keyboard's repeat rate.
+    ///
+    /// This allows you to set the time between holding down a key and it repeating
+    /// as well as the time between each repeat.
+    ///
+    /// Units are in milliseconds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Set keyboard to repeat after holding down for half a second,
+    /// // and repeat once every 25ms (40 times a second)
+    /// input.set_repeat_rate(25, 500);
+    /// ```
     pub fn set_repeat_rate(&self, rate: i32, delay: i32) {
         let mut client = self.create_input_client();
 
@@ -146,6 +274,30 @@ impl Input {
         .unwrap();
     }
 
+    /// Set a libinput setting.
+    ///
+    /// From [freedesktop.org][https://www.freedesktop.org/wiki/Software/libinput/]:
+    /// > libinput is a library to handle input devices in Wayland compositors
+    ///
+    /// As such, this method allows you to set various settings related to input devices.
+    /// This includes things like pointer acceleration and natural scrolling.
+    ///
+    /// See [`LibinputSetting`] for all the settings you can change.
+    ///
+    /// Note: currently Pinnacle applies anything set here to *every* device, regardless of what it
+    /// actually is. This will be fixed in the future.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::libinput::*;
+    ///
+    /// // Set pointer acceleration to flat
+    /// input.set_libinput_setting(LibinputSetting::AccelProfile(AccelProfile::Flat));
+    ///
+    /// // Enable natural scrolling (reverses scroll direction; usually used with trackpads)
+    /// input.set_libinput_setting(LibinputSetting::NaturalScroll(true));
+    /// ```
     pub fn set_libinput_setting(&self, setting: LibinputSetting) {
         let mut client = self.create_input_client();
 
@@ -179,7 +331,9 @@ impl Input {
     }
 }
 
+/// A trait that designates anything that can be converted into a [`Keysym`].
 pub trait Key {
+    /// Convert this into a [`Keysym`].
     fn into_keysym(self) -> Keysym;
 }
 
