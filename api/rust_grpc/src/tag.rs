@@ -1,4 +1,4 @@
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture};
+use futures::{channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
@@ -12,10 +12,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{
-    block_on,
-    output::{Output, OutputHandle},
-};
+use crate::output::{Output, OutputHandle};
 
 #[derive(Clone, Debug)]
 pub struct Tag {

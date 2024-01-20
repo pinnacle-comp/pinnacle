@@ -38,11 +38,9 @@ async fn main() {
         }
     });
 
-    println!("BEFORE KEYBIND");
     input.keybind([mod_key], keysyms::KEY_Return, || {
         process.spawn(["alacritty"]);
     });
-    println!("AFTER");
 
     input.keybind([mod_key, Mod::Alt], keysyms::KEY_space, || {
         if let Some(window) = window.get_focused() {

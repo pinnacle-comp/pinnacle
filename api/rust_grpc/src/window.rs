@@ -1,4 +1,4 @@
-use crate::block_on;
+use futures::executor::block_on;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,

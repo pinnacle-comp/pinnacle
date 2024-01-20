@@ -3,8 +3,7 @@
 use std::sync::OnceLock;
 
 use futures::{
-    channel::mpsc::UnboundedReceiver, future::BoxFuture, stream::FuturesUnordered, Future,
-    StreamExt,
+    channel::mpsc::UnboundedReceiver, future::BoxFuture, stream::FuturesUnordered, StreamExt,
 };
 use input::Input;
 use output::Output;
@@ -43,23 +42,16 @@ pub struct ApiModules {
     pub tag: &'static Tag,
 }
 
-pub fn connect(
+pub async fn connect(
 ) -> Result<(ApiModules, UnboundedReceiver<BoxFuture<'static, ()>>), Box<dyn std::error::Error>> {
-    println!("BEFORE CONNECT");
-    let channel = block_on(async {
-        Endpoint::try_from("http://[::]:50051")? // port doesn't matter, we use a unix socket
-            .connect_with_connector(service_fn(|_: Uri| {
-                println!("BEFORE UnixStream CONNECT");
-                tokio::net::UnixStream::connect(
-                    std::env::var("PINNACLE_GRPC_SOCKET")
-                        .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?"),
-                )
-                // .map(|stream| stream.map(|stream| stream.compat()))
-            }))
-            .await
-    })?;
-
-    println!("AFTER CONNECT");
+    let channel = Endpoint::try_from("http://[::]:50051")? // port doesn't matter, we use a unix socket
+        .connect_with_connector(service_fn(|_: Uri| {
+            tokio::net::UnixStream::connect(
+                std::env::var("PINNACLE_GRPC_SOCKET")
+                    .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?"),
+            )
+        }))
+        .await?;
 
     let (fut_sender, fut_recv) = futures::channel::mpsc::unbounded::<BoxFuture<()>>();
 
@@ -113,9 +105,4 @@ pub async fn listen(
             }))
         }
     }
-}
-
-pub(crate) fn block_on<F: Future>(fut: F) -> F::Output {
-    futures::executor::block_on(fut)
-    // tokio::task::block_in_place(|| futures::executor::block_on(fut))
 }

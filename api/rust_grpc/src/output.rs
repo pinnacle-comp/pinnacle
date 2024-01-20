@@ -1,4 +1,6 @@
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
+use futures::{
+    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
+};
 use pinnacle_api_defs::pinnacle::{
     output::{
         self,
@@ -10,7 +12,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{block_on, tag::TagHandle};
+use crate::tag::TagHandle;
 
 #[derive(Debug, Clone)]
 pub struct Output {

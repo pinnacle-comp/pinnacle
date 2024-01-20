@@ -1,4 +1,4 @@
-use crate::block_on;
+use futures::executor::block_on;
 use pinnacle_api_defs::pinnacle::v0alpha1::{
     pinnacle_service_client::PinnacleServiceClient, QuitRequest,
 };

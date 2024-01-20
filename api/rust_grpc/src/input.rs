@@ -1,4 +1,6 @@
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
+use futures::{
+    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
+};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
@@ -12,8 +14,6 @@ use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
 
 pub use pinnacle_api_defs::pinnacle::input::v0alpha1::SetXkbConfigRequest as XkbConfig;
-
-use crate::block_on;
 
 use self::libinput::LibinputSetting;
 pub mod libinput;
@@ -74,13 +74,9 @@ impl Input {
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
-        println!("BEFORE TOKIO SPAWN");
-
         self.fut_sender
             .unbounded_send(
                 async move {
-                    println!("TOP OF TOKIO SPAWN");
-
                     let mut stream = client
                         .set_keybind(SetKeybindRequest {
                             modifiers,
@@ -92,12 +88,8 @@ impl Input {
                         .unwrap()
                         .into_inner();
 
-                    println!("AFTER SET_KEYBIND AWAIT");
-
                     while let Some(Ok(_response)) = stream.next().await {
-                        println!("START OF STREAM LOOP");
                         action();
-                        println!("ACTION PERFORMED");
                     }
                 }
                 .boxed(),
