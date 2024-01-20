@@ -177,6 +177,18 @@ impl TagHandle {
             }),
         }
     }
+
+    pub fn active(&self) -> Option<bool> {
+        self.props().active
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.props().name
+    }
+
+    pub fn output(&self) -> Option<OutputHandle> {
+        self.props().output
+    }
 }
 
 pub struct TagProperties {

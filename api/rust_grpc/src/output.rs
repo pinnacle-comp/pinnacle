@@ -16,8 +16,6 @@ use crate::tag::TagHandle;
 
 #[derive(Debug, Clone)]
 pub struct Output {
-    // client: OutputServiceClient<Channel>,
-    // tag_client: TagServiceClient<Channel>,
     channel: Channel,
     fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
@@ -102,6 +100,22 @@ pub struct OutputHandle {
     pub(crate) name: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Alignment {
+    TopAlignLeft,
+    TopAlignCenter,
+    TopAlignRight,
+    BottomAlignLeft,
+    BottomAlignCenter,
+    BottomAlignRight,
+    LeftAlignTop,
+    LeftAlignCenter,
+    LeftAlignBottom,
+    RightAlignTop,
+    RightAlignCenter,
+    RightAlignBottom,
+}
+
 impl OutputHandle {
     pub fn set_location(&self, x: Option<i32>, y: Option<i32>) {
         let mut client = self.client.clone();
@@ -113,8 +127,67 @@ impl OutputHandle {
         .unwrap();
     }
 
-    pub fn set_loc_adj_to(&self, other: &OutputHandle) {
-        todo!()
+    pub fn set_loc_adj_to(&self, other: &OutputHandle, alignment: Alignment) {
+        let self_props = self.props();
+        let other_props = other.props();
+
+        let attempt_set_loc = || -> Option<()> {
+            let other_x = other_props.x?;
+            let other_y = other_props.y?;
+            let other_width = other_props.pixel_width? as i32;
+            let other_height = other_props.pixel_height? as i32;
+
+            let self_width = self_props.pixel_width? as i32;
+            let self_height = self_props.pixel_height? as i32;
+
+            use Alignment::*;
+
+            let x: i32;
+            let y: i32;
+
+            if let TopAlignLeft | TopAlignCenter | TopAlignRight | BottomAlignLeft
+            | BottomAlignCenter | BottomAlignRight = alignment
+            {
+                if let TopAlignLeft | TopAlignCenter | TopAlignRight = alignment {
+                    y = other_y - self_height;
+                } else {
+                    // bottom
+                    y = other_y + other_height;
+                }
+
+                match alignment {
+                    TopAlignLeft | BottomAlignLeft => x = other_x,
+                    TopAlignCenter | BottomAlignCenter => {
+                        x = other_x + (other_width - self_width) / 2;
+                    }
+                    TopAlignRight | BottomAlignRight => x = other_x + (other_width - self_width),
+                    _ => unreachable!(),
+                }
+            } else {
+                if let LeftAlignTop | LeftAlignCenter | LeftAlignBottom = alignment {
+                    x = other_x - self_width;
+                } else {
+                    x = other_x + other_width;
+                }
+
+                match alignment {
+                    LeftAlignTop | RightAlignTop => y = other_y,
+                    LeftAlignCenter | RightAlignCenter => {
+                        y = other_y + (other_height - self_height) / 2;
+                    }
+                    LeftAlignBottom | RightAlignBottom => {
+                        y = other_y + (other_height - self_height);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            self.set_location(Some(x), Some(y));
+
+            Some(())
+        };
+
+        attempt_set_loc();
     }
 
     pub fn props(&self) -> OutputProperties {
@@ -148,6 +221,52 @@ impl OutputHandle {
                 })
                 .collect(),
         }
+    }
+
+    // TODO: make a macro for the following or something
+
+    pub fn make(&self) -> Option<String> {
+        self.props().make
+    }
+
+    pub fn model(&self) -> Option<String> {
+        self.props().model
+    }
+
+    pub fn x(&self) -> Option<i32> {
+        self.props().x
+    }
+
+    pub fn y(&self) -> Option<i32> {
+        self.props().y
+    }
+
+    pub fn pixel_width(&self) -> Option<u32> {
+        self.props().pixel_width
+    }
+
+    pub fn pixel_height(&self) -> Option<u32> {
+        self.props().pixel_height
+    }
+
+    pub fn refresh_rate(&self) -> Option<u32> {
+        self.props().refresh_rate
+    }
+
+    pub fn physical_width(&self) -> Option<u32> {
+        self.props().physical_width
+    }
+
+    pub fn physical_height(&self) -> Option<u32> {
+        self.props().physical_height
+    }
+
+    pub fn focused(&self) -> Option<bool> {
+        self.props().focused
+    }
+
+    pub fn tags(&self) -> Vec<TagHandle> {
+        self.props().tags
     }
 }
 

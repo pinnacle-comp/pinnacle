@@ -252,4 +252,32 @@ impl WindowHandle {
                 .collect(),
         }
     }
+
+    pub fn geometry(&self) -> Option<Geometry> {
+        self.props().geometry
+    }
+
+    pub fn class(&self) -> Option<String> {
+        self.props().class
+    }
+
+    pub fn title(&self) -> Option<String> {
+        self.props().title
+    }
+
+    pub fn focused(&self) -> Option<bool> {
+        self.props().focused
+    }
+
+    pub fn floating(&self) -> Option<bool> {
+        self.props().floating
+    }
+
+    pub fn fullscreen_or_maximized(&self) -> Option<FullscreenOrMaximized> {
+        self.props().fullscreen_or_maximized
+    }
+
+    pub fn tags(&self) -> Vec<TagHandle> {
+        self.props().tags
+    }
 }
