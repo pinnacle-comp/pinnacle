@@ -198,7 +198,32 @@ impl Tag {
     /// # Examples
     ///
     /// ```
+    /// use pinnacle_api::tag::{Layout, LayoutCycler};
+    /// use pinnacle_api::xkbcommon::xkb::Keysym;
+    /// use pinnacle_api::input::Mod;
     ///
+    /// // Create a layout cycler that cycles through the listed layouts
+    /// let LayoutCycler {
+    ///     prev: layout_prev,
+    ///     next: layout_next,
+    /// } = tag.new_layout_cycler([
+    ///     Layout::MasterStack,
+    ///     Layout::Dwindle,
+    ///     Layout::Spiral,
+    ///     Layout::CornerTopLeft,
+    ///     Layout::CornerTopRight,
+    ///     Layout::CornerBottomLeft,
+    ///     Layout::CornerBottomRight,
+    /// ]);
+    ///
+    /// // Cycle layouts forward on the focused output
+    /// layout_next(None);
+    ///
+    /// // Cycle layouts backward on the focused output
+    /// layout_prev(None);
+    ///
+    /// // Cycle layouts forward on "eDP-1"
+    /// layout_next(output.get_by_name("eDP-1")?);
     /// ```
     pub fn new_layout_cycler(&self, layouts: impl IntoIterator<Item = Layout>) -> LayoutCycler {
         let indices = Arc::new(Mutex::new(HashMap::<u32, usize>::new()));

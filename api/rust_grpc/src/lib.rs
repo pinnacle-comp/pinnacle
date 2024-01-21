@@ -25,18 +25,12 @@ use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
 
-/// Input management
 pub mod input;
-/// Output management
 pub mod output;
-/// Main compositor options
 pub mod pinnacle;
-/// Process management
 pub mod process;
 pub mod tag;
-/// Utilities
 pub mod util;
-/// Window management
 pub mod window;
 
 pub use pinnacle_api_macros::config;
