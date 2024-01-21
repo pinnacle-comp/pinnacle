@@ -33,7 +33,6 @@ pub mod output;
 pub mod pinnacle;
 /// Process management
 pub mod process;
-/// Tag management
 pub mod tag;
 /// Utilities
 pub mod util;

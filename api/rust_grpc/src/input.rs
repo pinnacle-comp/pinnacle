@@ -1,3 +1,9 @@
+//! Input management.
+//!
+//! This module provides [`Input`], a struct that gives you several different
+//! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
+//! View the struct's documentation for more information.
+
 use futures::{
     channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
 };
@@ -85,7 +91,6 @@ pub struct XkbConfig {
 /// change xkeyboard and libinput settings, and change the keyboard's repeat rate.
 #[derive(Debug, Clone)]
 pub struct Input {
-    // client: InputServiceClient<Channel>,
     channel: Channel,
     fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
@@ -113,8 +118,10 @@ impl Input {
     /// - `mods`: A list of [`Mod`]s. These must be held down for the keybind to trigger.
     /// - `key`: The key that needs to be pressed. This can be anything that implements the [Key] trait:
     ///     - `char`
-    ///     - `&str` and `String`: These must be the xkeyboard key name without `XKB_`
-    ///     - `u32`
+    ///     - `&str` and `String`: This is any name from
+    ///       [xkbcommon-keysyms.h](https://xkbcommon.org/doc/current/xkbcommon-keysyms_8h.html)
+    ///       without the `XKB_KEY_` prefix.
+    ///     - `u32`: The numerical key code from the website above.
     ///     - A [`keysym`][Keysym] from the [`xkbcommon`] re-export.
     /// - `action`: A closure that will be run when the keybind is triggered.
     ///     - Currently, any captures must be both `Send` and `'static`. If you want to mutate
@@ -131,6 +138,15 @@ impl Input {
     ///         win.close();
     ///     }
     /// });
+    ///
+    /// // With a string key
+    /// input.keybind([], "BackSpace", || { /* ... */ });
+    ///
+    /// // With a numeric key
+    /// input.keybind([], 65, || { /* ... */ });    // 65 = 'A'
+    ///
+    /// // With a `Keysym`
+    /// input.keybind([], pinnacle_api::xkbcommon::xkb::Keysym::Return, || { /* ... */ });
     /// ```
     pub fn keybind(
         &self,
@@ -276,7 +292,7 @@ impl Input {
 
     /// Set a libinput setting.
     ///
-    /// From [freedesktop.org][https://www.freedesktop.org/wiki/Software/libinput/]:
+    /// From [freedesktop.org](https://www.freedesktop.org/wiki/Software/libinput/):
     /// > libinput is a library to handle input devices in Wayland compositors
     ///
     /// As such, this method allows you to set various settings related to input devices.
