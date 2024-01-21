@@ -344,6 +344,8 @@ impl OutputHandle {
     /// # Examples
     ///
     /// ```
+    /// use pinnacle_api::output::OutputProperties;
+    ///
     /// let OutputProperties {
     ///     make,
     ///     model,
