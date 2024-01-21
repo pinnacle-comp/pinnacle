@@ -1,8 +1,9 @@
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
+    tag::{Layout, LayoutCycler},
     ApiModules,
 };
-use xkbcommon::xkb::keysyms;
+use xkbcommon::xkb::Keysym;
 
 #[pinnacle_api::config(modules)]
 #[tokio::main]
@@ -38,11 +39,11 @@ async fn main() {
         }
     });
 
-    input.keybind([mod_key], keysyms::KEY_Return, || {
+    input.keybind([mod_key], Keysym::Return, || {
         process.spawn(["alacritty"]);
     });
 
-    input.keybind([mod_key, Mod::Alt], keysyms::KEY_space, || {
+    input.keybind([mod_key, Mod::Alt], Keysym::space, || {
         if let Some(window) = window.get_focused() {
             window.toggle_floating();
         }
@@ -70,6 +71,27 @@ async fn main() {
     });
 
     process.spawn_once(["alacritty"]);
+
+    let LayoutCycler {
+        prev: layout_prev,
+        next: layout_next,
+    } = tag.new_layout_cycler([
+        Layout::MasterStack,
+        Layout::Dwindle,
+        Layout::Spiral,
+        Layout::CornerTopLeft,
+        Layout::CornerTopRight,
+        Layout::CornerBottomLeft,
+        Layout::CornerBottomRight,
+    ]);
+
+    input.keybind([mod_key], Keysym::space, move || {
+        layout_next(None);
+    });
+
+    input.keybind([mod_key, Mod::Shift], Keysym::space, move || {
+        layout_prev(None);
+    });
 
     for tag_name in tag_names {
         input.keybind([mod_key], tag_name, move || {
