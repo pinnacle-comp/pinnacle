@@ -1,16 +1,21 @@
+//! Compositor management.
+//!
+//! This module provides [`Pinnacle`], which allows you to quit the compositor.
+
 use futures::executor::block_on;
 use pinnacle_api_defs::pinnacle::v0alpha1::{
     pinnacle_service_client::PinnacleServiceClient, QuitRequest,
 };
 use tonic::transport::Channel;
 
+/// A struct that allows you to quit the compositor.
 #[derive(Debug, Clone)]
 pub struct Pinnacle {
     channel: Channel,
 }
 
 impl Pinnacle {
-    pub fn new(channel: Channel) -> Self {
+    pub(crate) fn new(channel: Channel) -> Self {
         Self { channel }
     }
 
@@ -18,6 +23,14 @@ impl Pinnacle {
         PinnacleServiceClient::new(self.channel.clone())
     }
 
+    /// Quit Pinnacle.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Quits Pinnacle. What else were you expecting?
+    /// pinnacle.quit();
+    /// ```
     pub fn quit(&self) {
         let mut client = self.create_pinnacle_client();
         block_on(client.quit(QuitRequest {})).unwrap();

@@ -22,7 +22,6 @@ use xkbcommon::xkb::Keysym;
 
 use self::libinput::LibinputSetting;
 
-/// Types for Libinput
 pub mod libinput;
 
 /// A mouse button.

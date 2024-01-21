@@ -46,11 +46,17 @@ static TAG: OnceLock<Tag> = OnceLock::new();
 /// A struct containing static references to all of the configuration structs.
 #[derive(Debug, Clone)]
 pub struct ApiModules {
+    /// The [`Pinnacle`] struct
     pub pinnacle: &'static Pinnacle,
+    /// The [`Process`] struct
     pub process: &'static Process,
+    /// The [`Window`] struct
     pub window: &'static Window,
+    /// The [`Input`] struct
     pub input: &'static Input,
+    /// The [`Output`] struct
     pub output: &'static Output,
+    /// The [`Tag`] struct
     pub tag: &'static Tag,
 }
 
