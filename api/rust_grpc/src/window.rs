@@ -5,6 +5,8 @@
 //!
 //! [`WindowHandle`]s allow you to do things like resize and move windows, toggle them between
 //! floating and tiled, close them, and more.
+//!
+//! This module also allows you to set window rules; see the [rules] module for more information.
 
 use futures::executor::block_on;
 use num_enum::TryFromPrimitive;

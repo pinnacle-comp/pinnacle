@@ -6,7 +6,6 @@ use pinnacle_api::{
 use xkbcommon::xkb::Keysym;
 
 #[pinnacle_api::config(modules)]
-#[tokio::main]
 async fn main() {
     let ApiModules {
         pinnacle,

@@ -34,6 +34,7 @@ pub mod util;
 pub mod window;
 
 pub use pinnacle_api_macros::config;
+pub use tokio;
 pub use xkbcommon;
 
 static PINNACLE: OnceLock<Pinnacle> = OnceLock::new();
