@@ -10,8 +10,7 @@ use syn::{
 /// This will cause the function to connect to Pinnacle's gRPC server, run your configuration code,
 /// then await all necessary futures needed to call callbacks.
 ///
-/// If your config contains anything that has a callback, this function will not return unless an
-/// error occurs.
+/// This function will not return unless an error occurs.
 ///
 /// # Usage
 /// The function must be marked `async`, as this macro will insert the `#[tokio::main]` macro below
