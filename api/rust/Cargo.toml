@@ -1,14 +1,25 @@
 [package]
-name = "pinnacle_api"
-version = "0.0.1"
+name = "pinnacle-api"
+version = "0.0.2"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Ottatop <ottatop1227@gmail.com>"]
+description = "The Rust implementation of the Pinnacle compositor's configuration API"
+license = "MPL-2.0"
+repository = "https://github.com/pinnacle-comp/pinnacle"
+keywords = ["compositor", "pinnacle", "api", "config"]
+categories = ["api-bindings", "config"]
 
 [dependencies]
-serde = { version = "1.0.188", features = ["derive"] }
-rmp = { version = "0.8.12" }
-rmp-serde = { version = "1.1.2" }
-anyhow = { version = "1.0.75", features = ["backtrace"] }
-lazy_static = "1.4.0"
+pinnacle-api-defs = { path = "../../pinnacle-api-defs" }
+pinnacle-api-macros = { path = "./pinnacle-api-macros" }
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "net"] }
+async-net = "2.0.0"
+async-compat = "0.2.3"
+tonic = "0.10.2"
+tower = { version = "0.4.13", features = ["util"] }
+futures = "0.3.30"
+num_enum = "0.7.2"
 xkbcommon = "0.7.0"
+
+[workspace]
+members = ["pinnacle-api-macros"]

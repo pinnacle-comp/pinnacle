@@ -1,132 +1,178 @@
 //! Process management.
+//!
+//! This module provides [`Process`], which allows you to spawn processes and set environment
+//! variables.
 
-use crate::{
-    msg::{Args, CallbackId, Msg},
-    send_msg, CallbackVec,
+use futures::{
+    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
 };
+use pinnacle_api_defs::pinnacle::process::v0alpha1::{
+    process_service_client::ProcessServiceClient, SetEnvRequest, SpawnRequest,
+};
+use tonic::transport::Channel;
 
-/// Spawn a process.
-///
-/// This will use Rust's (more specifically `async_process`'s) `Command` to spawn the provided
-/// arguments. If you are using any shell syntax like `~`, you may need to spawn a shell
-/// instead. If so, you may *also* need to correctly escape the input.
-pub fn spawn(command: Vec<&str>) -> anyhow::Result<()> {
-    let msg = Msg::Spawn {
-        command: command.into_iter().map(|s| s.to_string()).collect(),
-        callback_id: None,
-    };
-
-    send_msg(msg)
+/// A struct containing methods to spawn processes with optional callbacks and set environment
+/// variables.
+#[derive(Debug, Clone)]
+pub struct Process {
+    channel: Channel,
+    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
 
-/// Spawn a process only if it isn't already running.
-///
-/// This will use Rust's (more specifically `async_process`'s) `Command` to spawn the provided
-/// arguments. If you are using any shell syntax like `~`, you may need to spawn a shell
-/// instead. If so, you may *also* need to correctly escape the input.
-pub fn spawn_once(command: Vec<&str>) -> anyhow::Result<()> {
-    let msg = Msg::SpawnOnce {
-        command: command.into_iter().map(|s| s.to_string()).collect(),
-        callback_id: None,
-    };
-
-    send_msg(msg)
+/// Optional callbacks to be run when a spawned process prints to stdout or stderr or exits.
+pub struct SpawnCallbacks {
+    /// A callback that will be run when a process prints to stdout with a line
+    pub stdout: Option<Box<dyn FnMut(String) + Send>>,
+    /// A callback that will be run when a process prints to stderr with a line
+    pub stderr: Option<Box<dyn FnMut(String) + Send>>,
+    /// A callback that will be run when a process exits with a status code and message
+    #[allow(clippy::type_complexity)]
+    pub exit: Option<Box<dyn FnMut(Option<i32>, String) + Send>>,
 }
 
-/// Spawn a process with an optional callback for its stdout, stderr, and exit information.
-///
-/// `callback` has the following parameters:
-///  - `0`: The process's stdout printed this line.
-///  - `1`: The process's stderr printed this line.
-///  - `2`: The process exited with this code.
-///  - `3`: The process exited with this message.
-///  - `4`: A `&mut `[`CallbackVec`] for use inside the closure.
-///
-/// You must also pass in a mutable reference to a [`CallbackVec`] in order to store your callback.
-pub fn spawn_with_callback<'a, F>(
-    command: Vec<&str>,
-    mut callback: F,
-    callback_vec: &mut CallbackVec<'a>,
-) -> anyhow::Result<()>
-where
-    F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>, &mut CallbackVec) + 'a,
-{
-    let args_callback = move |args: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
-        if let Some(Args::Spawn {
-            stdout,
-            stderr,
-            exit_code,
-            exit_msg,
-        }) = args
-        {
-            callback(stdout, stderr, exit_code, exit_msg, callback_vec);
+impl Process {
+    pub(crate) fn new(
+        channel: Channel,
+        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
+    ) -> Process {
+        Self {
+            channel,
+            fut_sender,
         }
-    };
+    }
 
-    let len = callback_vec.callbacks.len();
-    callback_vec.callbacks.push(Box::new(args_callback));
+    fn create_process_client(&self) -> ProcessServiceClient<Channel> {
+        ProcessServiceClient::new(self.channel.clone())
+    }
 
-    let msg = Msg::Spawn {
-        command: command.into_iter().map(|s| s.to_string()).collect(),
-        callback_id: Some(CallbackId(len as u32)),
-    };
+    /// Spawn a process.
+    ///
+    /// Note that windows spawned *before* tags are added will not be displayed.
+    /// This will be changed in the future to be more like Awesome, where windows with no tags are
+    /// displayed on every tag instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// process.spawn(["alacritty"]);
+    /// process.spawn(["bash", "-c", "swaybg -i ~/path_to_wallpaper"]);
+    /// ```
+    pub fn spawn(&self, args: impl IntoIterator<Item = impl Into<String>>) {
+        self.spawn_inner(args, false, None);
+    }
 
-    send_msg(msg)
-}
+    /// Spawn a process with callbacks for its stdout, stderr, and exit information.
+    ///
+    /// See [`SpawnCallbacks`] for the passed in struct.
+    ///
+    /// Note that windows spawned *before* tags are added will not be displayed.
+    /// This will be changed in the future to be more like Awesome, where windows with no tags are
+    /// displayed on every tag instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::process::SpawnCallbacks;
+    ///
+    /// process.spawn_with_callbacks(["alacritty"], SpawnCallbacks {
+    ///     stdout: Some(Box::new(|line| println!("stdout: {line}"))),
+    ///     stderr: Some(Box::new(|line| println!("stderr: {line}"))),
+    ///     stdout: Some(Box::new(|code, msg| println!("exit code: {code:?}, exit_msg: {msg}"))),
+    /// });
+    /// ```
+    pub fn spawn_with_callbacks(
+        &self,
+        args: impl IntoIterator<Item = impl Into<String>>,
+        callbacks: SpawnCallbacks,
+    ) {
+        self.spawn_inner(args, false, Some(callbacks));
+    }
 
-// TODO: literally copy pasted from above, but will be rewritten so meh
-/// Spawn a process with an optional callback for its stdout, stderr, and exit information,
-/// only if it isn't already running.
-///
-/// `callback` has the following parameters:
-///  - `0`: The process's stdout printed this line.
-///  - `1`: The process's stderr printed this line.
-///  - `2`: The process exited with this code.
-///  - `3`: The process exited with this message.
-///  - `4`: A `&mut `[`CallbackVec`] for use inside the closure.
-///
-/// You must also pass in a mutable reference to a [`CallbackVec`] in order to store your callback.
-pub fn spawn_once_with_callback<'a, F>(
-    command: Vec<&str>,
-    mut callback: F,
-    callback_vec: &mut CallbackVec<'a>,
-) -> anyhow::Result<()>
-where
-    F: FnMut(Option<String>, Option<String>, Option<i32>, Option<String>, &mut CallbackVec) + 'a,
-{
-    let args_callback = move |args: Option<Args>, callback_vec: &mut CallbackVec<'_>| {
-        if let Some(Args::Spawn {
-            stdout,
-            stderr,
-            exit_code,
-            exit_msg,
-        }) = args
-        {
-            callback(stdout, stderr, exit_code, exit_msg, callback_vec);
-        }
-    };
+    /// Spawn a process only if it isn't already running.
+    ///
+    /// This is useful for startup programs.
+    ///
+    /// See [`Process::spawn`] for details.
+    pub fn spawn_once(&self, args: impl IntoIterator<Item = impl Into<String>>) {
+        self.spawn_inner(args, true, None);
+    }
 
-    let len = callback_vec.callbacks.len();
-    callback_vec.callbacks.push(Box::new(args_callback));
+    /// Spawn a process only if it isn't already running with optional callbacks for its stdout,
+    /// stderr, and exit information.
+    ///
+    /// This is useful for startup programs.
+    ///
+    /// See [`Process::spawn_with_callbacks`] for details.
+    pub fn spawn_once_with_callbacks(
+        &self,
+        args: impl IntoIterator<Item = impl Into<String>>,
+        callbacks: SpawnCallbacks,
+    ) {
+        self.spawn_inner(args, true, Some(callbacks));
+    }
 
-    let msg = Msg::SpawnOnce {
-        command: command.into_iter().map(|s| s.to_string()).collect(),
-        callback_id: Some(CallbackId(len as u32)),
-    };
+    fn spawn_inner(
+        &self,
+        args: impl IntoIterator<Item = impl Into<String>>,
+        once: bool,
+        callbacks: Option<SpawnCallbacks>,
+    ) {
+        let mut client = self.create_process_client();
 
-    send_msg(msg)
-}
+        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
 
-/// Set an environment variable for Pinnacle. All future processes spawned will have this env set.
-///
-/// Note that this will only set the variable for the compositor, not the running config process.
-/// If you need to set an environment variable for this config, place them in the `metaconfig.toml` file instead
-/// or use [`std::env::set_var`].
-pub fn set_env(key: &str, value: &str) {
-    let msg = Msg::SetEnv {
-        key: key.to_string(),
-        value: value.to_string(),
-    };
+        let request = SpawnRequest {
+            args,
+            once: Some(once),
+            has_callback: Some(callbacks.is_some()),
+        };
 
-    send_msg(msg).unwrap();
+        self.fut_sender
+            .unbounded_send(
+                async move {
+                    let mut stream = client.spawn(request).await.unwrap().into_inner();
+                    let Some(mut callbacks) = callbacks else { return };
+                    while let Some(Ok(response)) = stream.next().await {
+                        if let Some(line) = response.stdout {
+                            if let Some(stdout) = callbacks.stdout.as_mut() {
+                                stdout(line);
+                            }
+                        }
+                        if let Some(line) = response.stderr {
+                            if let Some(stderr) = callbacks.stderr.as_mut() {
+                                stderr(line);
+                            }
+                        }
+                        if let Some(exit_msg) = response.exit_message {
+                            if let Some(exit) = callbacks.exit.as_mut() {
+                                exit(response.exit_code, exit_msg);
+                            }
+                        }
+                    }
+                }
+                .boxed(),
+            )
+            .unwrap();
+    }
+
+    /// Set an environment variable for the compositor.
+    /// This will cause any future spawned processes to have this environment variable.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// process.set_env("ENV", "a value lalala");
+    /// ```
+    pub fn set_env(&self, key: impl Into<String>, value: impl Into<String>) {
+        let key = key.into();
+        let value = value.into();
+
+        let mut client = self.create_process_client();
+
+        block_on(client.set_env(SetEnvRequest {
+            key: Some(key),
+            value: Some(value),
+        }))
+        .unwrap();
+    }
 }
