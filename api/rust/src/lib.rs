@@ -3,7 +3,7 @@
 //! The Rust implementation of [Pinnacle](https://github.com/pinnacle-comp/pinnacle)'s
 //! configuration API.
 //!
-//! This library allows to to interface with the Pinnacle compositor and configure various aspects
+//! This library allows you to interface with the Pinnacle compositor and configure various aspects
 //! like input and the tag system.
 //!
 //! # Configuration
