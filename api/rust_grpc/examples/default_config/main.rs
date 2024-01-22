@@ -1,9 +1,9 @@
+use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
     tag::{Layout, LayoutCycler},
     ApiModules,
 };
-use xkbcommon::xkb::Keysym;
 
 #[pinnacle_api::config(modules)]
 async fn main() {

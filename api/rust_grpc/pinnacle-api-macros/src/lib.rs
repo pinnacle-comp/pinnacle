@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{
-    parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Expr, ExprLit, Lit,
-    MetaNameValue, Path, Token,
+    parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Expr, Lit,
+    MetaNameValue, Token,
 };
 
 /// Transform the annotated function into one used to configure the Pinnacle compositor.

@@ -8,8 +8,72 @@
 //!
 //! # Configuration
 //!
+//! ## 1. Create a cargo project
 //! To create your own Rust config, create a Cargo project in `~/.config/pinnacle`.
-//! TODO:
+//!
+//! ## 2. Create `metaconfig.toml`
+//! Then, create a file named `metaconfig.toml`. This is the file Pinnacle will use to determine
+//! what to run, kill and reload-config keybinds, an optional socket directory, and any environment
+//! variables to give the config client.
+//!
+//! In `metaconfig.toml`, put the following:
+//! ```toml
+//! # `command` will tell Pinnacle to run `cargo run` in your config directory.
+//! # You can add stuff like "--release" here if you want to.
+//! command = ["cargo", "run"]
+//!
+//! # You must define a keybind to reload your config if it crashes, otherwise you'll get stuck if
+//! # the Lua config doesn't kick in properly.
+//! reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+//!
+//! # Similarly, you must define a keybind to kill Pinnacle.
+//! kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+//!
+//! # You can specify an optional socket directory if you need to place the socket Pinnacle will
+//! # use for configuration in a different place.
+//! # socket_dir = "your/dir/here"
+//!
+//! # If you need to set any environment variables for the config process, you can do so here if
+//! # you don't want to do it in the config itself.
+//! [envs]
+//! # key = "value"
+//! ```
+//!
+//! ## 3. Set up dependencies
+//! In your `Cargo.toml`, add a dependency to `pinnacle-api`:
+//!
+//! ```toml
+//! # Cargo.toml
+//!
+//! [dependencies]
+//! pinnacle-api = { git = "https://github.com/pinnacle-comp/pinnacle" }
+//! ```
+//!
+//! ## 4. Set up the main function
+//! In `main.rs`, change `fn main()` to `async fn main()` and annotate it with the
+//! [`pinnacle_api::config`][`crate::config`] macro. Pass in the identifier you want to bind the
+//! config modules to:
+//!
+//! ```
+//! use pinnacle_api::ApiModules;
+//!
+//! #[pinnacle_api::config(modules)]
+//! async fn main() {
+//!     // `modules` is now available in the function body.
+//!     // You can deconstruct `ApiModules` to get all the config structs.
+//!     let ApiModules {
+//!         pinnacle,
+//!         process,
+//!         window,
+//!         input,
+//!         output,
+//!         tag,
+//!     } = modules;
+//! }
+//! ```
+//!
+//! ## 5. Begin crafting your config!
+//! You can peruse the documentation for things to configure.
 
 use std::sync::OnceLock;
 
