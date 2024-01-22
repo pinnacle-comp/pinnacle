@@ -12,7 +12,8 @@ use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
     tag::v0alpha1::tag_service_client::TagServiceClient,
     window::v0alpha1::{
-        window_service_client::WindowServiceClient, CloseRequest, MoveToTagRequest, SetTagRequest,
+        window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
+        MoveToTagRequest, SetTagRequest,
     },
     window::{
         self,
@@ -25,6 +26,10 @@ use pinnacle_api_defs::pinnacle::{
 use tonic::transport::Channel;
 
 use crate::{input::MouseButton, tag::TagHandle, util::Geometry};
+
+use self::rules::{WindowRule, WindowRuleCondition};
+
+pub mod rules;
 
 /// A struct containing methods that get [`WindowHandle`]s and move windows with the mouse.
 ///
@@ -56,7 +61,7 @@ impl Window {
     /// This will begin moving the window under the pointer using the specified [`MouseButton`].
     /// The button must be held down at the time this method is called for the move to start.
     ///
-    /// This is intended to be used with [`Input::keybind`][pinnacle_api::input::Keybind].
+    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
     ///
     /// # Examples
     ///
@@ -81,7 +86,7 @@ impl Window {
     /// This will begin resizing the window under the pointer using the specified [`MouseButton`].
     /// The button must be held down at the time this method is called for the resize to start.
     ///
-    /// This is intended to be used with [`Input::keybind`][pinnacle_api::input::Keybind].
+    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
     ///
     /// # Examples
     ///
@@ -135,6 +140,22 @@ impl Window {
     pub fn get_focused(&self) -> Option<WindowHandle> {
         self.get_all()
             .find(|window| matches!(window.props().focused, Some(true)))
+    }
+
+    /// Add a window rule.
+    ///
+    /// A window rule is a set of criteria that a window must open with.
+    /// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
+    ///
+    /// TODO:
+    pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
+        let mut client = self.create_window_client();
+
+        block_on(client.add_window_rule(AddWindowRuleRequest {
+            cond: Some(cond.0),
+            rule: Some(rule.0),
+        }))
+        .unwrap();
     }
 }
 
