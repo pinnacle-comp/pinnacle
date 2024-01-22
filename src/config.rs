@@ -1,11 +1,8 @@
 use crate::{
     api::{
-        msg::ModifierMask,
-        protocol::{
-            InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
-        },
-        PinnacleSocketSource,
+        InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
     },
+    input::ModifierMask,
     output::OutputName,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
@@ -14,7 +11,6 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::{Arc, Mutex},
 };
 
 use anyhow::Context;
@@ -32,9 +28,9 @@ use smithay::{
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
+use tokio::sync::mpsc::UnboundedSender;
 use toml::Table;
 
-use crate::api::msg::{CallbackId, Modifier};
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -57,8 +53,34 @@ pub struct Metaconfig {
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Keybind {
-    pub modifiers: Vec<Modifier>,
-    pub key: Key,
+    modifiers: Vec<Modifier>,
+    key: Key,
+}
+
+#[derive(serde::Deserialize, Debug, Clone, Copy)]
+enum Modifier {
+    Shift,
+    Ctrl,
+    Alt,
+    Super,
+}
+
+// TODO: refactor metaconfig input
+impl From<Vec<self::Modifier>> for ModifierMask {
+    fn from(mods: Vec<self::Modifier>) -> Self {
+        let mut mask = ModifierMask::empty();
+
+        for m in mods {
+            match m {
+                Modifier::Shift => mask |= ModifierMask::SHIFT,
+                Modifier::Ctrl => mask |= ModifierMask::CTRL,
+                Modifier::Alt => mask |= ModifierMask::ALT,
+                Modifier::Super => mask |= ModifierMask::SUPER,
+            }
+        }
+
+        mask
+    }
 }
 
 // TODO: accept xkbcommon names instead
@@ -141,10 +163,7 @@ pub enum Key {
 pub struct Config {
     /// Window rules and conditions on when those rules should apply
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
-    /// All callbacks that should be run when outputs are connected
-    pub output_callback_ids: Vec<CallbackId>,
-    pub grpc_output_callback_senders:
-        Vec<tokio::sync::mpsc::UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
+    pub output_callback_senders: Vec<UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 }
@@ -214,13 +233,6 @@ impl State {
             config_join_handle.abort();
         }
 
-        if let Some(token) = self.api_state.socket_token {
-            // Should only happen if parsing the metaconfig failed
-            self.loop_handle.remove(token);
-        }
-
-        let tx_channel = self.api_state.tx_channel.clone();
-
         // Love that trailing slash
         let data_home = PathBuf::from(
             crate::XDG_BASE_DIRS
@@ -254,19 +266,6 @@ impl State {
         };
 
         self.start_grpc_server(socket_dir.as_path())?;
-
-        self.system_processes
-            .refresh_processes_specifics(ProcessRefreshKind::new());
-
-        let multiple_instances = self
-            .system_processes
-            .processes_by_exact_name("pinnacle")
-            .filter(|proc| proc.thread_kind().is_none())
-            .count()
-            > 1;
-
-        let socket_source = PinnacleSocketSource::new(tx_channel, &socket_dir, multiple_instances)
-            .context("Failed to create socket source")?;
 
         let reload_keybind = metaconfig.reload_keybind;
         let kill_keybind = metaconfig.kill_keybind;
@@ -324,27 +323,8 @@ impl State {
         let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
         let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
 
-        let socket_token = self
-            .loop_handle
-            .insert_source(socket_source, |stream, _, data| {
-                if let Some(old_stream) = data
-                    .state
-                    .api_state
-                    .stream
-                    .replace(Arc::new(Mutex::new(stream)))
-                {
-                    old_stream
-                        .lock()
-                        .expect("Couldn't lock old stream")
-                        .shutdown(std::net::Shutdown::Both)
-                        .expect("Couldn't shutdown old stream");
-                }
-            })?;
-
         self.input_state.reload_keybind = Some(reload_keybind);
         self.input_state.kill_keybind = Some(kill_keybind);
-
-        self.api_state.socket_token = Some(socket_token);
 
         self.config_join_handle = Some(tokio::spawn(async move {
             let _ = child.wait().await;

@@ -19,8 +19,6 @@ thiserror = "1"
 xcursor = { version = "0.3", optional = true }
 image = { version = "0.24", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
-rmp = { version = "0.8.12" }
-rmp-serde = { version = "1.1.2" }
 x11rb = { version = "0.13", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
 toml = "0.8"
