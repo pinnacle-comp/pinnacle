@@ -158,6 +158,13 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height.clamp(min_height, max_height),
         ));
 
+        // self.window.with_state(|state| {
+        //     if state.floating_or_tiled.is_floating() {
+        //         state.floating_or_tiled =
+        //             FloatingOrTiled::Floating(Rectangle::from_loc_and_size(new_loc, size));
+        //     }
+        // });
+
         match &self.window {
             WindowElement::Wayland(window) => {
                 let toplevel_surface = window.toplevel();
@@ -402,20 +409,21 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
         window_loc.y = new_y;
     }
 
+    let size = state
+        .space
+        .element_geometry(&window)
+        .expect("called element_geometry on unmapped window")
+        .size;
+
+    window.with_state(|state| {
+        if state.floating_or_tiled.is_floating() {
+            state.floating_or_tiled =
+                FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
+        }
+    });
+
     if new_loc.x.is_some() || new_loc.y.is_some() {
         state.space.map_element(window.clone(), window_loc, false);
-        let size = state
-            .space
-            .element_geometry(&window)
-            .expect("called element_geometry on unmapped window")
-            .size;
-
-        window.with_state(|state| {
-            if state.floating_or_tiled.is_floating() {
-                state.floating_or_tiled =
-                    FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
-            }
-        });
 
         if let WindowElement::X11(surface) = window {
             let geo = surface.geometry();
