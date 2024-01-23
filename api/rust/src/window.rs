@@ -172,6 +172,20 @@ pub struct WindowHandle {
     pub(crate) output_client: OutputServiceClient<Channel>,
 }
 
+impl PartialEq for WindowHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for WindowHandle {}
+
+impl std::hash::Hash for WindowHandle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 /// Whether a window is fullscreen, maximized, or neither.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]

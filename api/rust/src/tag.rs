@@ -131,40 +131,53 @@ impl Tag {
         })
     }
 
-    /// Get a handle to the first tag with the given name on `output`.
+    /// Get a handle to the first tag with the given name on the focused output.
     ///
-    /// If `output` is `None`, the focused output will be used.
+    /// If you need to get a tag on a specific output, see [`Tag::get_on_output`].
     ///
     /// # Examples
     ///
     /// ```
-    /// // Get tag "1" on output "HDMI-1"
-    /// if let Some(op) = output.get_by_name("HDMI-1") {
-    ///     let tg = tag.get("1", &op);
-    /// }
-    ///
     /// // Get tag "Thing" on the focused output
-    /// let tg = tag.get("Thing", None);
+    /// let tg = tag.get("Thing");
     /// ```
-    pub fn get<'a>(
-        &self,
-        name: impl Into<String>,
-        output: impl Into<Option<&'a OutputHandle>>,
-    ) -> Option<TagHandle> {
+    pub fn get(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
-        let output: Option<&OutputHandle> = output.into();
         let output_module = Output::new(self.channel.clone(), self.fut_sender.clone());
+        let focused_output = output_module.get_focused();
 
         self.get_all().find(|tag| {
             let props = tag.props();
 
             let same_tag_name = props.name.as_ref() == Some(&name);
-            let same_output = props.output.is_some_and(|op| {
-                Some(op.name)
-                    == output
-                        .map(|o| o.name.clone())
-                        .or_else(|| output_module.get_focused().map(|o| o.name))
-            });
+            let same_output = props.output.is_some_and(|op| Some(op) == focused_output);
+
+            same_tag_name && same_output
+        })
+    }
+
+    /// Get a handle to the first tag with the given name on the specified output.
+    ///
+    /// If you just need to get a tag on the focused output, see [`Tag::get`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Get tag "Thing" on "HDMI-1"
+    /// let tg = tag.get_on_output("Thing", output.get_by_name("HDMI-2")?);
+    /// ```
+    pub fn get_on_output(
+        &self,
+        name: impl Into<String>,
+        output: &OutputHandle,
+    ) -> Option<TagHandle> {
+        let name = name.into();
+
+        self.get_all().find(|tag| {
+            let props = tag.props();
+
+            let same_tag_name = props.name.as_ref() == Some(&name);
+            let same_output = props.output.is_some_and(|op| &op == output);
 
             same_tag_name && same_output
         })
@@ -316,6 +329,20 @@ pub struct TagHandle {
     pub(crate) client: TagServiceClient<Channel>,
     pub(crate) output_client: OutputServiceClient<Channel>,
     pub(crate) id: u32,
+}
+
+impl PartialEq for TagHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for TagHandle {}
+
+impl std::hash::Hash for TagHandle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 /// Various static layouts.

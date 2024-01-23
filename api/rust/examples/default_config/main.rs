@@ -94,19 +94,19 @@ async fn main() {
 
     for tag_name in tag_names {
         input.keybind([mod_key], tag_name, move || {
-            if let Some(tg) = tag.get(tag_name, None) {
+            if let Some(tg) = tag.get(tag_name) {
                 tg.switch_to();
             }
         });
 
         input.keybind([mod_key, Mod::Shift], tag_name, move || {
-            if let Some(tg) = tag.get(tag_name, None) {
+            if let Some(tg) = tag.get(tag_name) {
                 tg.toggle_active();
             }
         });
 
         input.keybind([mod_key, Mod::Alt], tag_name, move || {
-            if let Some(tg) = tag.get(tag_name, None) {
+            if let Some(tg) = tag.get(tag_name) {
                 if let Some(win) = window.get_focused() {
                     win.move_to_tag(&tg);
                 }
@@ -114,7 +114,7 @@ async fn main() {
         });
 
         input.keybind([mod_key, Mod::Shift, Mod::Alt], tag_name, move || {
-            if let Some(tg) = tag.get(tag_name, None) {
+            if let Some(tg) = tag.get(tag_name) {
                 if let Some(win) = window.get_focused() {
                     win.toggle_tag(&tg);
                 }

@@ -166,6 +166,20 @@ pub struct OutputHandle {
     pub(crate) name: String,
 }
 
+impl PartialEq for OutputHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for OutputHandle {}
+
+impl std::hash::Hash for OutputHandle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
 /// The alignment to use for [`OutputHandle::set_loc_adj_to`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Alignment {
