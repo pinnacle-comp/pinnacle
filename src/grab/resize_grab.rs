@@ -158,13 +158,6 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height.clamp(min_height, max_height),
         ));
 
-        // self.window.with_state(|state| {
-        //     if state.floating_or_tiled.is_floating() {
-        //         state.floating_or_tiled =
-        //             FloatingOrTiled::Floating(Rectangle::from_loc_and_size(new_loc, size));
-        //     }
-        // });
-
         match &self.window {
             WindowElement::Wayland(window) => {
                 let toplevel_surface = window.toplevel();
