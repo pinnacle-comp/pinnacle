@@ -13,8 +13,8 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
-smithay = { git = "https://github.com/Smithay/smithay", rev = "77686d7", default-features = false, features = ["desktop", "wayland_frontend"] }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "77686d7", optional = true }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "810df89", default-features = false, features = ["desktop", "wayland_frontend"] }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "810df89", optional = true }
 thiserror = "1"
 xcursor = { version = "0.3", optional = true }
 image = { version = "0.24", default-features = false, optional = true }
@@ -63,4 +63,4 @@ xwayland = ["smithay/xwayland", "x11rb", "smithay/x11rb_event_source", "xcursor"
 
 [workspace]
 members = ["pinnacle-api-defs"]
-exclude = ["api/rust_grpc", "api/rust"]
+exclude = ["api/rust"]
