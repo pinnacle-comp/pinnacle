@@ -368,7 +368,9 @@ pub fn run_udev() -> anyhow::Result<()> {
                         tracing::error!("Failed to resume libinput context: {:?}", err);
                     }
                     for backend in udev.backends.values_mut() {
-                        backend.drm.activate();
+                        // TODO: this is false because i'm too lazy to remove the code directly
+                        // |     below it
+                        backend.drm.activate(false).expect("failed to activate drm");
                         for surface in backend.surfaces.values_mut() {
                             if let Err(err) = surface.compositor.surface().reset_state() {
                                 tracing::warn!("Failed to reset drm surface state: {}", err);

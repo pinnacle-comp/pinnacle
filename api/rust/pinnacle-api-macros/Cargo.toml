@@ -1,9 +1,11 @@
 [package]
 name = "pinnacle-api-macros"
-version = "0.1.0"
+version = "0.0.2"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Ottatop <ottatop1227@gmail.com>"]
+description = "Macros for `pinnacle-api`"
+license = "MPL-2.0"
+repository = "https://github.com/pinnacle-comp/pinnacle"
 
 [dependencies]
 quote = "1.0.35"
