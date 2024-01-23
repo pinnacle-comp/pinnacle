@@ -170,9 +170,7 @@ pub async fn connect(
 ///
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
-pub async fn listen(
-    fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>, // api_modules: ApiModules<'a>,
-) {
+pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
     let mut future_set = FuturesUnordered::<
         BoxFuture<(
             Option<BoxFuture<()>>,

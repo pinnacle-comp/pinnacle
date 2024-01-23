@@ -2,7 +2,7 @@ use proc_macro2::{Ident, Span};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Expr, Lit,
-    MetaNameValue, Token,
+    MetaNameValue, ReturnType, Stmt, Token,
 };
 
 /// Transform the annotated function into one used to configure the Pinnacle compositor.
@@ -55,7 +55,14 @@ pub fn config(
 
     if sig.asyncness.is_none() {
         return quote_spanned! {sig.fn_token.span()=>
-            compile_error!("This function must be marked `async` to run a Pinnacle config");
+            compile_error!("this function must be marked `async` to run a Pinnacle config");
+        }
+        .into();
+    }
+
+    if let ReturnType::Type(_, ty) = sig.output {
+        return quote_spanned! {ty.span()=>
+            compile_error!("this function must not have a return type");
         }
         .into();
     }
@@ -63,6 +70,12 @@ pub fn config(
     let attrs = item.attrs;
 
     let stmts = item.block.stmts;
+
+    if let Some(ret @ Stmt::Expr(Expr::Return(_), _)) = stmts.last() {
+        return quote_spanned! {ret.span()=>
+            compile_error!("this function must not return, as it awaits futures after the end of this statement");
+        }.into();
+    }
 
     let module_ident = macro_input.ident;
 
@@ -106,7 +119,7 @@ pub fn config(
 
     let tokio_attr = internal_tokio.then(|| {
         quote! {
-            #[::pinnacle_api::tokio::main]
+            #[::pinnacle_api::tokio::main(crate = "::pinnacle_api::tokio")]
         }
     });
 
