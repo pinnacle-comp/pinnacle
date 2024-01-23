@@ -313,6 +313,7 @@ impl State {
             .get(&(mod_mask, button, mouse_edge))
         {
             let _ = stream.send(Ok(SetMousebindResponse {}));
+            return;
         }
 
         // If the button was clicked, focus on the window below if exists, else
