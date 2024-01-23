@@ -108,6 +108,18 @@ function Process:spawn_once(args, callbacks)
     spawn_inner(self.config_client, args, callbacks, true)
 end
 
+---Set an environment variable for the compositor.
+---This will cause any future spawned processes to have this environment variable.
+---
+---@param key string The environment variable key
+---@param value string The environment variable value
+function Process:set_env(key, value)
+    self.config_client:unary_request(build_grpc_request_params("SetEnv", {
+        key = key,
+        value = value,
+    }))
+end
+
 function process.new(config_client)
     ---@type Process
     local self = { config_client = config_client }

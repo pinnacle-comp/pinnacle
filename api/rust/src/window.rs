@@ -1,206 +1,544 @@
 //! Window management.
+//!
+//! This module provides [`Window`], which allows you to get [`WindowHandle`]s and move and resize
+//! windows using the mouse.
+//!
+//! [`WindowHandle`]s allow you to do things like resize and move windows, toggle them between
+//! floating and tiled, close them, and more.
+//!
+//! This module also allows you to set window rules; see the [rules] module for more information.
+
+use futures::executor::block_on;
+use num_enum::TryFromPrimitive;
+use pinnacle_api_defs::pinnacle::{
+    output::v0alpha1::output_service_client::OutputServiceClient,
+    tag::v0alpha1::tag_service_client::TagServiceClient,
+    window::v0alpha1::{
+        window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
+        MoveToTagRequest, SetTagRequest,
+    },
+    window::{
+        self,
+        v0alpha1::{
+            GetRequest, MoveGrabRequest, ResizeGrabRequest, SetFloatingRequest,
+            SetFullscreenRequest, SetMaximizedRequest,
+        },
+    },
+};
+use tonic::transport::Channel;
+
+use crate::{input::MouseButton, tag::TagHandle, util::Geometry};
+
+use self::rules::{WindowRule, WindowRuleCondition};
 
 pub mod rules;
 
-use crate::{
-    input::MouseButton,
-    msg::{Msg, Request, RequestResponse},
-    request, send_msg,
-    tag::TagHandle,
-};
-
-/// A unique identifier for each window.
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub(crate) enum WindowId {
-    /// A config API returned an invalid window. It should be using this variant.
-    None,
-    /// A valid window id.
-    #[serde(untagged)]
-    Some(u32),
-}
-
-/// Get all windows with the class `class`.
-pub fn get_by_class(class: &str) -> impl Iterator<Item = WindowHandle> + '_ {
-    get_all().filter(|win| win.properties().class.as_deref() == Some(class))
-}
-
-/// Get the currently focused window, or `None` if there isn't one.
-pub fn get_focused() -> Option<WindowHandle> {
-    get_all().find(|win| win.properties().focused.is_some_and(|focused| focused))
-}
-
-/// Get all windows.
-pub fn get_all() -> impl Iterator<Item = WindowHandle> {
-    let RequestResponse::Windows { window_ids } = request(Request::GetWindows) else {
-        unreachable!()
-    };
-
-    window_ids.into_iter().map(WindowHandle)
-}
-
-/// Begin a window move.
+/// A struct containing methods that get [`WindowHandle`]s and move windows with the mouse.
 ///
-/// This will start a window move grab with the provided button on the window the pointer
-/// is currently hovering over. Once `button` is let go, the move will end.
-pub fn begin_move(button: MouseButton) {
-    let msg = Msg::WindowMoveGrab {
-        button: button as u32,
-    };
-
-    send_msg(msg).unwrap();
+/// See [`WindowHandle`] for more information.
+#[derive(Debug, Clone)]
+pub struct Window {
+    channel: Channel,
 }
 
-/// Begin a window resize.
-///
-/// This will start a window resize grab with the provided button on the window the
-/// pointer is currently hovering over. Once `button` is let go, the resize will end.
-pub fn begin_resize(button: MouseButton) {
-    let msg = Msg::WindowResizeGrab {
-        button: button as u32,
-    };
-
-    send_msg(msg).unwrap();
-}
-
-/// A handle to a window.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WindowHandle(WindowId);
-
-/// Properties of a window, retrieved through [`WindowHandle::properties`].
-#[derive(Debug)]
-pub struct WindowProperties {
-    /// The size of the window, in pixels.
-    pub size: Option<(i32, i32)>,
-    /// The location of the window in the global space.
-    pub loc: Option<(i32, i32)>,
-    /// The window's class.
-    pub class: Option<String>,
-    /// The window's title.
-    pub title: Option<String>,
-    /// Whether or not the window is focused.
-    pub focused: Option<bool>,
-    /// Whether or not the window is floating.
-    pub floating: Option<bool>,
-    /// Whether the window is fullscreen, maximized, or neither.
-    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
-}
-
-impl WindowHandle {
-    /// Toggle this window between floating and tiled.
-    pub fn toggle_floating(&self) {
-        send_msg(Msg::ToggleFloating { window_id: self.0 }).unwrap();
+impl Window {
+    pub(crate) fn new(channel: Channel) -> Self {
+        Self { channel }
     }
 
-    /// Toggle this window's fullscreen status.
+    fn create_window_client(&self) -> WindowServiceClient<Channel> {
+        WindowServiceClient::new(self.channel.clone())
+    }
+
+    fn create_tag_client(&self) -> TagServiceClient<Channel> {
+        TagServiceClient::new(self.channel.clone())
+    }
+
+    fn create_output_client(&self) -> OutputServiceClient<Channel> {
+        OutputServiceClient::new(self.channel.clone())
+    }
+
+    /// Start moving the window with the mouse.
     ///
-    /// If used while not fullscreen, it becomes fullscreen.
-    /// If used while fullscreen, it becomes unfullscreen.
-    /// If used while maximized, it becomes fullscreen.
-    pub fn toggle_fullscreen(&self) {
-        send_msg(Msg::ToggleFullscreen { window_id: self.0 }).unwrap();
-    }
-
-    /// Toggle this window's maximized status.
+    /// This will begin moving the window under the pointer using the specified [`MouseButton`].
+    /// The button must be held down at the time this method is called for the move to start.
     ///
-    /// If used while not maximized, it becomes maximized.
-    /// If used while maximized, it becomes unmaximized.
-    /// If used while fullscreen, it becomes maximized.
-    pub fn toggle_maximized(&self) {
-        send_msg(Msg::ToggleMaximized { window_id: self.0 }).unwrap();
-    }
-
-    /// Set this window's size. None parameters will be ignored.
-    pub fn set_size(&self, width: Option<i32>, height: Option<i32>) {
-        send_msg(Msg::SetWindowSize {
-            window_id: self.0,
-            width,
-            height,
-        })
+    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
+    ///
+    /// // Set `Super + left click` to begin moving a window
+    /// input.mousebind([Mod::Super], MouseButton::Left, MouseEdge::Press, || {
+    ///     window.begin_move(MouseButton::Left);
+    /// });
+    /// ```
+    pub fn begin_move(&self, button: MouseButton) {
+        let mut client = self.create_window_client();
+        block_on(client.move_grab(MoveGrabRequest {
+            button: Some(button as u32),
+        }))
         .unwrap();
     }
 
-    /// Send a close event to this window.
-    pub fn close(&self) {
-        send_msg(Msg::CloseWindow { window_id: self.0 }).unwrap();
+    /// Start resizing the window with the mouse.
+    ///
+    /// This will begin resizing the window under the pointer using the specified [`MouseButton`].
+    /// The button must be held down at the time this method is called for the resize to start.
+    ///
+    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
+    ///
+    /// // Set `Super + right click` to begin moving a window
+    /// input.mousebind([Mod::Super], MouseButton::Right, MouseEdge::Press, || {
+    ///     window.begin_resize(MouseButton::Right);
+    /// });
+    /// ```
+    pub fn begin_resize(&self, button: MouseButton) {
+        let mut client = self.create_window_client();
+        block_on(client.resize_grab(ResizeGrabRequest {
+            button: Some(button as u32),
+        }))
+        .unwrap();
     }
 
-    /// Get this window's [`WindowProperties`].
-    pub fn properties(&self) -> WindowProperties {
-        let RequestResponse::WindowProps {
-            size,
-            loc,
-            class,
-            title,
-            focused,
-            floating,
-            fullscreen_or_maximized,
-        } = request(Request::GetWindowProps { window_id: self.0 })
-        else {
-            unreachable!()
-        };
+    /// Get all windows.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let windows = window.get_all();
+    /// ```
+    pub fn get_all(&self) -> impl Iterator<Item = WindowHandle> {
+        let mut client = self.create_window_client();
+        let tag_client = self.create_tag_client();
+        let output_client = self.create_output_client();
+        block_on(client.get(GetRequest {}))
+            .unwrap()
+            .into_inner()
+            .window_ids
+            .into_iter()
+            .map(move |id| WindowHandle {
+                client: client.clone(),
+                id,
+                tag_client: tag_client.clone(),
+                output_client: output_client.clone(),
+            })
+    }
+
+    /// Get the currently focused window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let focused_window = window.get_focused()?;
+    /// ```
+    pub fn get_focused(&self) -> Option<WindowHandle> {
+        self.get_all()
+            .find(|window| matches!(window.props().focused, Some(true)))
+    }
+
+    /// Add a window rule.
+    ///
+    /// A window rule is a set of criteria that a window must open with.
+    /// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
+    ///
+    /// TODO:
+    pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
+        let mut client = self.create_window_client();
+
+        block_on(client.add_window_rule(AddWindowRuleRequest {
+            cond: Some(cond.0),
+            rule: Some(rule.0),
+        }))
+        .unwrap();
+    }
+}
+
+/// A handle to a window.
+///
+/// This allows you to manipulate the window and get its properties.
+#[derive(Debug, Clone)]
+pub struct WindowHandle {
+    pub(crate) client: WindowServiceClient<Channel>,
+    pub(crate) id: u32,
+    pub(crate) tag_client: TagServiceClient<Channel>,
+    pub(crate) output_client: OutputServiceClient<Channel>,
+}
+
+impl PartialEq for WindowHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for WindowHandle {}
+
+impl std::hash::Hash for WindowHandle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+/// Whether a window is fullscreen, maximized, or neither.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
+pub enum FullscreenOrMaximized {
+    /// The window is neither fullscreen nor maximized
+    Neither = 1,
+    /// The window is fullscreen
+    Fullscreen,
+    /// The window is maximized
+    Maximized,
+}
+
+/// Properties of a window.
+#[derive(Debug, Clone)]
+pub struct WindowProperties {
+    /// The location and size of the window
+    pub geometry: Option<Geometry>,
+    /// The window's class
+    pub class: Option<String>,
+    /// The window's title
+    pub title: Option<String>,
+    /// Whether the window is focused or not
+    pub focused: Option<bool>,
+    /// Whether the window is floating or not
+    ///
+    /// Note that a window can still be floating even if it's fullscreen or maximized; those two
+    /// state will just override the floating state.
+    pub floating: Option<bool>,
+    /// Whether the window is fullscreen, maximized, or neither
+    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
+    /// All the tags on the window
+    pub tags: Vec<TagHandle>,
+}
+
+impl WindowHandle {
+    /// Send a close request to this window.
+    ///
+    /// If the window is unresponsive, it may not close.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Close the focused window
+    /// window.get_focused()?.close()
+    /// ```
+    pub fn close(mut self) {
+        block_on(self.client.close(CloseRequest {
+            window_id: Some(self.id),
+        }))
+        .unwrap();
+    }
+
+    /// Set this window to fullscreen or not.
+    ///
+    /// If it is maximized, setting it to fullscreen will remove the maximized state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Set the focused window to fullscreen.
+    /// window.get_focused()?.set_fullscreen(true);
+    /// ```
+    pub fn set_fullscreen(&self, set: bool) {
+        let mut client = self.client.clone();
+        block_on(client.set_fullscreen(SetFullscreenRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(
+                set,
+            )),
+        }))
+        .unwrap();
+    }
+
+    /// Toggle this window between fullscreen and not.
+    ///
+    /// If it is maximized, toggling it to fullscreen will remove the maximized state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Toggle the focused window to and from fullscreen.
+    /// window.get_focused()?.toggle_fullscreen();
+    /// ```
+    pub fn toggle_fullscreen(&self) {
+        let mut client = self.client.clone();
+        block_on(client.set_fullscreen(SetFullscreenRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(())),
+        }))
+        .unwrap();
+    }
+
+    /// Set this window to maximized or not.
+    ///
+    /// If it is fullscreen, setting it to maximized will remove the fullscreen state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Set the focused window to maximized.
+    /// window.get_focused()?.set_maximized(true);
+    /// ```
+    pub fn set_maximized(&self, set: bool) {
+        let mut client = self.client.clone();
+        block_on(client.set_maximized(SetMaximizedRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(
+                set,
+            )),
+        }))
+        .unwrap();
+    }
+
+    /// Toggle this window between maximized and not.
+    ///
+    /// If it is fullscreen, setting it to maximized will remove the fullscreen state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Toggle the focused window to and from maximized.
+    /// window.get_focused()?.toggle_maximized();
+    /// ```
+    pub fn toggle_maximized(&self) {
+        let mut client = self.client.clone();
+        block_on(client.set_maximized(SetMaximizedRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(())),
+        }))
+        .unwrap();
+    }
+
+    /// Set this window to floating or not.
+    ///
+    /// Floating windows will not be tiled and can be moved around and resized freely.
+    ///
+    /// Note that fullscreen and maximized windows can still be floating; those two states will
+    /// just override the floating state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Set the focused window to floating.
+    /// window.get_focused()?.set_floating(true);
+    /// ```
+    pub fn set_floating(&self, set: bool) {
+        let mut client = self.client.clone();
+        block_on(client.set_floating(SetFloatingRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(
+                set,
+            )),
+        }))
+        .unwrap();
+    }
+
+    /// Toggle this window to and from floating.
+    ///
+    /// Floating windows will not be tiled and can be moved around and resized freely.
+    ///
+    /// Note that fullscreen and maximized windows can still be floating; those two states will
+    /// just override the floating state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Toggle the focused window to and from floating.
+    /// window.get_focused()?.toggle_floating();
+    /// ```
+    pub fn toggle_floating(&self) {
+        let mut client = self.client.clone();
+        block_on(client.set_floating(SetFloatingRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(
+                (),
+            )),
+        }))
+        .unwrap();
+    }
+
+    /// Move this window to the given `tag`.
+    ///
+    /// This will remove all tags from this window then tag it with `tag`, essentially moving the
+    /// window to that tag.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Move the focused window to tag "Code" on the focused output
+    /// window.get_focused()?.move_to_tag(&tag.get("Code", None)?);
+    /// ```
+    pub fn move_to_tag(&self, tag: &TagHandle) {
+        let mut client = self.client.clone();
+
+        block_on(client.move_to_tag(MoveToTagRequest {
+            window_id: Some(self.id),
+            tag_id: Some(tag.id),
+        }))
+        .unwrap();
+    }
+
+    /// Set or unset a tag on this window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let focused = window.get_focused()?;
+    /// let tg = tag.get("Potato", None)?;
+    ///
+    /// focused.set_tag(&tg, true); // `focused` now has tag "Potato"
+    /// focused.set_tag(&tg, false); // `focused` no longer has tag "Potato"
+    /// ```
+    pub fn set_tag(&self, tag: &TagHandle, set: bool) {
+        let mut client = self.client.clone();
+
+        block_on(client.set_tag(SetTagRequest {
+            window_id: Some(self.id),
+            tag_id: Some(tag.id),
+            set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Set(set)),
+        }))
+        .unwrap();
+    }
+
+    /// Toggle a tag on this window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let focused = window.get_focused()?;
+    /// let tg = tag.get("Potato", None)?;
+    ///
+    /// // Assume `focused` does not have tag `tg`
+    ///
+    /// focused.toggle_tag(&tg); // `focused` now has tag "Potato"
+    /// focused.toggle_tag(&tg); // `focused` no longer has tag "Potato"
+    /// ```
+    pub fn toggle_tag(&self, tag: &TagHandle) {
+        let mut client = self.client.clone();
+
+        block_on(client.set_tag(SetTagRequest {
+            window_id: Some(self.id),
+            tag_id: Some(tag.id),
+            set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Toggle(())),
+        }))
+        .unwrap();
+    }
+
+    /// Get all properties of this window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::window::WindowProperties;
+    ///
+    /// let WindowProperties {
+    ///     geometry,
+    ///     class,
+    ///     title,
+    ///     focused,
+    ///     floating,
+    ///     fullscreen_or_maximized,
+    ///     tags,
+    /// } = window.get_focused()?.props();
+    /// ```
+    pub fn props(&self) -> WindowProperties {
+        let mut client = self.client.clone();
+        let tag_client = self.tag_client.clone();
+        let response = block_on(
+            client.get_properties(window::v0alpha1::GetPropertiesRequest {
+                window_id: Some(self.id),
+            }),
+        )
+        .unwrap()
+        .into_inner();
+
+        let fullscreen_or_maximized = response
+            .fullscreen_or_maximized
+            .unwrap_or_default()
+            .try_into()
+            .ok();
+
+        let geometry = response.geometry.map(|geo| Geometry {
+            x: geo.x(),
+            y: geo.y(),
+            width: geo.width() as u32,
+            height: geo.height() as u32,
+        });
 
         WindowProperties {
-            size,
-            loc,
-            class,
-            title,
-            focused,
-            floating,
+            geometry,
+            class: response.class,
+            title: response.title,
+            focused: response.focused,
+            floating: response.floating,
             fullscreen_or_maximized,
+            tags: response
+                .tag_ids
+                .into_iter()
+                .map(|id| TagHandle {
+                    client: tag_client.clone(),
+                    output_client: self.output_client.clone(),
+                    id,
+                })
+                .collect(),
         }
     }
 
-    /// Toggle `tag` on this window.
-    pub fn toggle_tag(&self, tag: &TagHandle) {
-        let msg = Msg::ToggleTagOnWindow {
-            window_id: self.0,
-            tag_id: tag.0,
-        };
-
-        send_msg(msg).unwrap();
+    /// Get this window's location and size.
+    ///
+    /// Shorthand for `self.props().geometry`.
+    pub fn geometry(&self) -> Option<Geometry> {
+        self.props().geometry
     }
 
-    /// Move this window to `tag`.
+    /// Get this window's class.
     ///
-    /// This will remove all other tags on this window.
-    pub fn move_to_tag(&self, tag: &TagHandle) {
-        let msg = Msg::MoveWindowToTag {
-            window_id: self.0,
-            tag_id: tag.0,
-        };
-
-        send_msg(msg).unwrap();
+    /// Shorthand for `self.props().class`.
+    pub fn class(&self) -> Option<String> {
+        self.props().class
     }
-}
 
-/// Whether or not a window is floating or tiled.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize)]
-pub enum FloatingOrTiled {
-    /// The window is floating.
+    /// Get this window's title.
     ///
-    /// It can be freely moved around and resized and will not respond to layouts.
-    Floating,
-    /// The window is tiled.
-    ///
-    /// It cannot be resized and can only move by swapping places with other tiled windows.
-    Tiled,
-}
+    /// Shorthand for `self.props().title`.
+    pub fn title(&self) -> Option<String> {
+        self.props().title
+    }
 
-/// Whether the window is fullscreen, maximized, or neither.
-///
-/// These three states are mutually exclusive. Setting a window to maximized while it is fullscreen
-/// will make it stop being fullscreen and vice versa.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum FullscreenOrMaximized {
-    /// The window is not fullscreen or maximized.
-    Neither,
-    /// The window is fullscreen.
+    /// Get whether or not this window is focused.
     ///
-    /// It will be the only rendered window on screen and will fill the output it resides on.
-    /// Layer surfaces will also not be rendered while a window is fullscreen.
-    Fullscreen,
-    /// The window is maximized.
+    /// Shorthand for `self.props().focused`.
+    pub fn focused(&self) -> Option<bool> {
+        self.props().focused
+    }
+
+    /// Get whether or not this window is floating.
     ///
-    /// It will fill up as much space on its output as it can, respecting any layer surfaces.
-    Maximized,
+    /// Shorthand for `self.props().floating`.
+    pub fn floating(&self) -> Option<bool> {
+        self.props().floating
+    }
+
+    /// Get whether this window is fullscreen, maximized, or neither.
+    ///
+    /// Shorthand for `self.props().fullscreen_or_maximized`.
+    pub fn fullscreen_or_maximized(&self) -> Option<FullscreenOrMaximized> {
+        self.props().fullscreen_or_maximized
+    }
+
+    /// Get all the tags on this window.
+    ///
+    /// Shorthand for `self.props().tags`.
+    pub fn tags(&self) -> Vec<TagHandle> {
+        self.props().tags
+    }
 }

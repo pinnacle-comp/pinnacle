@@ -72,7 +72,6 @@ use smithay_drm_extras::{
 };
 
 use crate::{
-    api::msg::{Args, OutgoingMsg},
     backend::Backend,
     config::ConnectorSavedState,
     output::OutputName,
@@ -985,36 +984,11 @@ impl State {
             output.with_state(|state| state.tags = tags.clone());
         } else {
             // Run any output callbacks
-            let clone = output.clone();
-            self.schedule(
-                |dt| dt.state.api_state.stream.is_some(),
-                move |dt| {
-                    let stream = dt
-                        .state
-                        .api_state
-                        .stream
-                        .as_ref()
-                        .expect("stream doesn't exist");
-                    let mut stream = stream.lock().expect("couldn't lock stream");
-                    for callback_id in dt.state.config.output_callback_ids.iter() {
-                        crate::api::send_to_client(
-                            &mut stream,
-                            &OutgoingMsg::CallCallback {
-                                callback_id: *callback_id,
-                                args: Some(Args::ConnectForAllOutputs {
-                                    output_name: clone.name(),
-                                }),
-                            },
-                        )
-                        .expect("Send to client failed");
-                    }
-                    for grpc_sender in dt.state.config.grpc_output_callback_senders.iter() {
-                        let _ = grpc_sender.send(Ok(ConnectForAllResponse {
-                            output_name: Some(clone.name()),
-                        }));
-                    }
-                },
-            );
+            for sender in self.config.output_callback_senders.iter() {
+                let _ = sender.send(Ok(ConnectForAllResponse {
+                    output_name: Some(output.name()),
+                }));
+            }
         }
     }
 

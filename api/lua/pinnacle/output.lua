@@ -191,7 +191,7 @@ end
 --- -- ┌─────┤       │
 --- -- │DP-1 │HDMI-1 │
 --- -- └─────┴───────┘
---- -- Notice that x = 0 aligns with the top of "DP-1", and the top of "HDMI-1" is at x = -360.
+--- -- Notice that y = 0 aligns with the top of "DP-1", and the top of "HDMI-1" is at y = -360.
 ---```
 ---
 ---@param loc { x: integer?, y: integer? }

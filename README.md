@@ -27,7 +27,9 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-It sports extensive configurability through either Lua or Rust, with the ability to add more languages in the future.
+It sports extensive configurability through either Lua or Rust, with the ability to add more languages
+in the future. <sup>And by that I mean other people can do the adding,
+    I'm already maintaining Lua and Rust lol</sup>
 
 > ### More video examples below!
 > <details>
@@ -61,7 +63,7 @@ You will need:
 - [Rust](https://www.rust-lang.org/) 1.72 or newer, to build the project and use the Rust API
 - [Lua](https://www.lua.org/) 5.4 or newer, to use the Lua API
 - Packages for [Smithay](https://github.com/Smithay/smithay):
-`libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
+  `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
     - Arch:
         ```sh
         sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
@@ -118,10 +120,6 @@ See flags you can pass in by running `cargo run -- --help` (or `-h`).
 # Configuration
 Pinnacle is configured in your choice of Lua or Rust.
 
-> [!NOTE]
-> Pinnacle is currently in the process of migrating the configuration backend from MessagePack to gRPC.
-> The Lua library has already been rewritten, and the Rust API will be rewritten soon.
-
 ## Out-of-the-box configurations
 If you just want to test Pinnacle out without copying stuff to your config directory,
 run one of the following in the crate root:
@@ -132,13 +130,13 @@ PINNACLE_CONFIG_DIR="./api/lua/examples/default" cargo run
 PINNACLE_CONFIG_DIR="~/.local/share/pinnacle/default_config" cargo run
 
 # For a Rust configuration
-PINNACLE_CONFIG_DIR="./api/rust" cargo run
+PINNACLE_CONFIG_DIR="./api/rust/examples/default_config" cargo run
 ```
 
 ## Custom configuration
 
 > [!IMPORTANT]
-> Pinnacle is under heavy development, and there *will* be major breaking changes to these APIs
+> Pinnacle is under development, and there *will* be major breaking changes to these APIs
 > until I release version 0.1, at which point there will be an API stability spec in place.
 >
 > Until then, I recommend you either use the out-of-the-box configs above or prepare for
@@ -180,7 +178,7 @@ If you want to use Rust to configure Pinnacle, follow these steps:
 1. In `~/.config/pinnacle`, run `cargo init`.
 2. In the `Cargo.toml` file, add the following under `[dependencies]`:
 ```toml
-pinnacle_api = { git = "http://github.com/pinnacle-comp/pinnacle" }
+pinnacle-api = { git = "http://github.com/pinnacle-comp/pinnacle" }
 ```
 3. Create the file `metaconfig.toml` at the root. Add the following to the file:
 ```toml
@@ -188,7 +186,7 @@ command = ["cargo", "run"]
 reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
 kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 ```
-4. Copy the contents from [`example_config.rs`](api/rust/examples/example_config.rs) to `src/main.rs`.
+4. Copy the [default config](api/rust/examples/default_config/main.rs) to `src/main.rs`.
 5. Run Pinnacle! (You may want to run `cargo build` beforehand so you don't have to wait for your config to compile.)
 
 ### API Documentation

@@ -1,22 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::{msg::Msg, ApiState},
-    backend::Backend,
-    config::Config,
-    cursor::Cursor,
-    focus::FocusState,
-    grab::resize_grab::ResizeSurfaceState,
-    window::WindowElement,
+    backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
+    grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     reexports::{
-        calloop::{
-            self, channel::Event, generic::Generic, Interest, LoopHandle, LoopSignal, Mode,
-            PostAction,
-        },
+        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
@@ -74,8 +66,6 @@ pub struct State {
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
-    /// The state holding stuff dealing with the api, like the stream
-    pub api_state: ApiState,
     /// Keeps track of the focus stack and focused output
     pub focus_state: FocusState,
 
@@ -159,8 +149,6 @@ impl State {
             },
         )?;
 
-        let (tx_channel, rx_channel) = calloop::channel::channel::<Msg>();
-
         loop_handle.insert_idle(|data| {
             if let Err(err) = data.state.start_config(crate::config::get_config_dir()) {
                 panic!("failed to start config: {err}");
@@ -173,16 +161,6 @@ impl State {
         seat.add_pointer();
 
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
-
-        loop_handle.insert_idle(|data| {
-            data.state
-                .loop_handle
-                .insert_source(rx_channel, |msg, _, data| match msg {
-                    Event::Msg(msg) => data.state.handle_msg(msg),
-                    Event::Closed => todo!(),
-                })
-                .expect("failed to insert rx_channel into loop");
-        });
 
         let xwayland = {
             let (xwayland, channel) = XWayland::new(&display_handle);
@@ -253,11 +231,6 @@ impl State {
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
 
             input_state: InputState::new(),
-            api_state: ApiState {
-                stream: None,
-                socket_token: None,
-                tx_channel,
-            },
             focus_state: FocusState::new(),
 
             config: Config::default(),
