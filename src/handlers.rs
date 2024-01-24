@@ -324,7 +324,7 @@ delegate_primary_selection!(State);
 
 impl DataControlHandler for State {
     fn data_control_state(&self) -> &DataControlState {
-        todo!()
+        &self.data_control_state
     }
 }
 delegate_data_control!(State);
