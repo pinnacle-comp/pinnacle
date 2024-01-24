@@ -191,7 +191,7 @@ impl State {
                 self.client_compositor_state(&client)
                     .blocker_cleared(self, &self.display_handle.clone());
 
-                tracing::debug!("blocker cleared");
+                // tracing::debug!("blocker cleared");
                 compositor::add_blocker(&surface, tiling_blocker.clone());
             }
         }
@@ -213,7 +213,7 @@ impl State {
                             .client_compositor_state(&client)
                             .blocker_cleared(&mut data.state, &data.display_handle);
 
-                        tracing::debug!("blocker cleared");
+                        // tracing::debug!("blocker cleared");
                     }
                 }
                 tiling_blocker.ready()
@@ -238,7 +238,7 @@ impl State {
                         .client_compositor_state(&client)
                         .blocker_cleared(&mut data.state, &data.display_handle);
 
-                    tracing::debug!("blocker cleared");
+                    // tracing::debug!("blocker cleared");
                 }
 
                 for (loc, win) in non_pending_wins {

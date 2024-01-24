@@ -7,9 +7,9 @@ use std::os::fd::OwnedFd;
 
 use smithay::{
     backend::renderer::utils,
-    delegate_compositor, delegate_data_device, delegate_fractional_scale, delegate_layer_shell,
-    delegate_output, delegate_presentation, delegate_primary_selection, delegate_relative_pointer,
-    delegate_seat, delegate_shm, delegate_viewporter,
+    delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
+    delegate_layer_shell, delegate_output, delegate_presentation, delegate_primary_selection,
+    delegate_relative_pointer, delegate_seat, delegate_shm, delegate_viewporter,
     desktop::{self, layer_map_for_output, PopupKind, WindowSurfaceType},
     input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
@@ -40,6 +40,7 @@ use smithay::{
             primary_selection::{
                 set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
             },
+            wlr_data_control::{DataControlHandler, DataControlState},
             SelectionHandler, SelectionSource, SelectionTarget,
         },
         shell::{
@@ -320,6 +321,13 @@ impl PrimarySelectionHandler for State {
     }
 }
 delegate_primary_selection!(State);
+
+impl DataControlHandler for State {
+    fn data_control_state(&self) -> &DataControlState {
+        todo!()
+    }
+}
+delegate_data_control!(State);
 
 impl SeatHandler for State {
     type KeyboardFocus = FocusTarget;

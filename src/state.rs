@@ -22,7 +22,7 @@ use smithay::{
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
         selection::data_device::DataDeviceState,
-        selection::primary_selection::PrimarySelectionState,
+        selection::{primary_selection::PrimarySelectionState, wlr_data_control::DataControlState},
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -63,6 +63,7 @@ pub struct State {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub primary_selection_state: PrimarySelectionState,
     pub layer_shell_state: WlrLayerShellState,
+    pub data_control_state: DataControlState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -208,6 +209,14 @@ impl State {
         };
         tracing::debug!("xwayland set up");
 
+        let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
+
+        let data_control_state = DataControlState::new::<Self, _>(
+            &display_handle,
+            Some(&primary_selection_state),
+            |_| true,
+        );
+
         let state = Self {
             backend,
             loop_signal,
@@ -227,8 +236,9 @@ impl State {
             fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
                 &display_handle,
             ),
-            primary_selection_state: PrimarySelectionState::new::<Self>(&display_handle),
+            primary_selection_state,
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
+            data_control_state,
 
             input_state: InputState::new(),
             focus_state: FocusState::new(),

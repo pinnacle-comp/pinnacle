@@ -55,10 +55,10 @@ impl TiledWindowBlocker {
             _ => unreachable!(),
         });
 
-        tracing::debug!(
-            "blocker ready is {}",
-            too_long_since_start || all_windows_acked
-        );
+        // tracing::debug!(
+        //     "blocker ready is {}",
+        //     too_long_since_start || all_windows_acked
+        // );
 
         too_long_since_start || all_windows_acked
     }
