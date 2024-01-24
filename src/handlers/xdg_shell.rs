@@ -51,6 +51,7 @@ impl XdgShellHandler for State {
             &self.focus_state.focused_output,
             self.space.outputs().next(),
         ) {
+            tracing::debug!("PLACING TOPLEVEL");
             window.place_on_output(output);
         }
 
