@@ -12,7 +12,6 @@
 //!
 //! This module also allows you to set window rules; see the [rules] module for more information.
 
-use futures::executor::block_on;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
@@ -31,7 +30,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{input::MouseButton, tag::TagHandle, util::Geometry};
+use crate::{block_on_tokio, input::MouseButton, tag::TagHandle, util::Geometry};
 
 use self::rules::{WindowRule, WindowRuleCondition};
 
@@ -81,7 +80,7 @@ impl Window {
     /// ```
     pub fn begin_move(&self, button: MouseButton) {
         let mut client = self.create_window_client();
-        block_on(client.move_grab(MoveGrabRequest {
+        block_on_tokio(client.move_grab(MoveGrabRequest {
             button: Some(button as u32),
         }))
         .unwrap();
@@ -106,7 +105,7 @@ impl Window {
     /// ```
     pub fn begin_resize(&self, button: MouseButton) {
         let mut client = self.create_window_client();
-        block_on(client.resize_grab(ResizeGrabRequest {
+        block_on_tokio(client.resize_grab(ResizeGrabRequest {
             button: Some(button as u32),
         }))
         .unwrap();
@@ -123,7 +122,7 @@ impl Window {
         let mut client = self.create_window_client();
         let tag_client = self.create_tag_client();
         let output_client = self.create_output_client();
-        block_on(client.get(GetRequest {}))
+        block_on_tokio(client.get(GetRequest {}))
             .unwrap()
             .into_inner()
             .window_ids
@@ -157,7 +156,7 @@ impl Window {
     pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
         let mut client = self.create_window_client();
 
-        block_on(client.add_window_rule(AddWindowRuleRequest {
+        block_on_tokio(client.add_window_rule(AddWindowRuleRequest {
             cond: Some(cond.0),
             rule: Some(rule.0),
         }))
@@ -236,7 +235,7 @@ impl WindowHandle {
     /// window.get_focused()?.close()
     /// ```
     pub fn close(mut self) {
-        block_on(self.client.close(CloseRequest {
+        block_on_tokio(self.client.close(CloseRequest {
             window_id: Some(self.id),
         }))
         .unwrap();
@@ -254,7 +253,7 @@ impl WindowHandle {
     /// ```
     pub fn set_fullscreen(&self, set: bool) {
         let mut client = self.client.clone();
-        block_on(client.set_fullscreen(SetFullscreenRequest {
+        block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(
                 set,
@@ -275,7 +274,7 @@ impl WindowHandle {
     /// ```
     pub fn toggle_fullscreen(&self) {
         let mut client = self.client.clone();
-        block_on(client.set_fullscreen(SetFullscreenRequest {
+        block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(())),
         }))
@@ -294,7 +293,7 @@ impl WindowHandle {
     /// ```
     pub fn set_maximized(&self, set: bool) {
         let mut client = self.client.clone();
-        block_on(client.set_maximized(SetMaximizedRequest {
+        block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(
                 set,
@@ -315,7 +314,7 @@ impl WindowHandle {
     /// ```
     pub fn toggle_maximized(&self) {
         let mut client = self.client.clone();
-        block_on(client.set_maximized(SetMaximizedRequest {
+        block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(())),
         }))
@@ -337,7 +336,7 @@ impl WindowHandle {
     /// ```
     pub fn set_floating(&self, set: bool) {
         let mut client = self.client.clone();
-        block_on(client.set_floating(SetFloatingRequest {
+        block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(
                 set,
@@ -361,7 +360,7 @@ impl WindowHandle {
     /// ```
     pub fn toggle_floating(&self) {
         let mut client = self.client.clone();
-        block_on(client.set_floating(SetFloatingRequest {
+        block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(
                 (),
@@ -384,7 +383,7 @@ impl WindowHandle {
     pub fn move_to_tag(&self, tag: &TagHandle) {
         let mut client = self.client.clone();
 
-        block_on(client.move_to_tag(MoveToTagRequest {
+        block_on_tokio(client.move_to_tag(MoveToTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
         }))
@@ -405,7 +404,7 @@ impl WindowHandle {
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
         let mut client = self.client.clone();
 
-        block_on(client.set_tag(SetTagRequest {
+        block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
             set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Set(set)),
@@ -429,7 +428,7 @@ impl WindowHandle {
     pub fn toggle_tag(&self, tag: &TagHandle) {
         let mut client = self.client.clone();
 
-        block_on(client.set_tag(SetTagRequest {
+        block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
             set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Toggle(())),
@@ -457,11 +456,11 @@ impl WindowHandle {
     pub fn props(&self) -> WindowProperties {
         let mut client = self.client.clone();
         let tag_client = self.tag_client.clone();
-        let response = block_on(
-            client.get_properties(window::v0alpha1::GetPropertiesRequest {
+        let response = block_on_tokio(client.get_properties(
+            window::v0alpha1::GetPropertiesRequest {
                 window_id: Some(self.id),
-            }),
-        )
+            },
+        ))
         .unwrap()
         .into_inner();
 

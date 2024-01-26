@@ -8,9 +8,7 @@
 //! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
 //! View the struct's documentation for more information.
 
-use futures::{
-    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
-};
+use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
@@ -23,6 +21,8 @@ use pinnacle_api_defs::pinnacle::input::{
 };
 use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
+
+use crate::block_on_tokio;
 
 use self::libinput::LibinputSetting;
 
@@ -259,7 +259,7 @@ impl Input {
     pub fn set_xkb_config(&self, xkb_config: XkbConfig) {
         let mut client = self.create_input_client();
 
-        block_on(client.set_xkb_config(SetXkbConfigRequest {
+        block_on_tokio(client.set_xkb_config(SetXkbConfigRequest {
             rules: xkb_config.rules.map(String::from),
             variant: xkb_config.variant.map(String::from),
             layout: xkb_config.layout.map(String::from),
@@ -286,7 +286,7 @@ impl Input {
     pub fn set_repeat_rate(&self, rate: i32, delay: i32) {
         let mut client = self.create_input_client();
 
-        block_on(client.set_repeat_rate(SetRepeatRateRequest {
+        block_on_tokio(client.set_repeat_rate(SetRepeatRateRequest {
             rate: Some(rate),
             delay: Some(delay),
         }))
@@ -343,7 +343,7 @@ impl Input {
             LibinputSetting::Tap(enable) => Setting::Tap(enable),
         };
 
-        block_on(client.set_libinput_setting(SetLibinputSettingRequest {
+        block_on_tokio(client.set_libinput_setting(SetLibinputSettingRequest {
             setting: Some(setting),
         }))
         .unwrap();

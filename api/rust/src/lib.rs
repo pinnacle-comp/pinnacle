@@ -82,7 +82,8 @@
 use std::sync::OnceLock;
 
 use futures::{
-    channel::mpsc::UnboundedReceiver, future::BoxFuture, stream::FuturesUnordered, StreamExt,
+    channel::mpsc::UnboundedReceiver, future::BoxFuture, stream::FuturesUnordered, Future,
+    StreamExt,
 };
 use input::Input;
 use output::Output;
@@ -201,4 +202,12 @@ pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
             }))
         }
     }
+}
+
+/// Block on a future using the current Tokio runtime.
+pub(crate) fn block_on_tokio<F: Future>(future: F) -> F::Output {
+    tokio::task::block_in_place(|| {
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(future)
+    })
 }

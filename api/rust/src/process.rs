@@ -7,13 +7,13 @@
 //! This module provides [`Process`], which allows you to spawn processes and set environment
 //! variables.
 
-use futures::{
-    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
-};
+use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
 use pinnacle_api_defs::pinnacle::process::v0alpha1::{
     process_service_client::ProcessServiceClient, SetEnvRequest, SpawnRequest,
 };
 use tonic::transport::Channel;
+
+use crate::block_on_tokio;
 
 /// A struct containing methods to spawn processes with optional callbacks and set environment
 /// variables.
@@ -173,7 +173,7 @@ impl Process {
 
         let mut client = self.create_process_client();
 
-        block_on(client.set_env(SetEnvRequest {
+        block_on_tokio(client.set_env(SetEnvRequest {
             key: Some(key),
             value: Some(value),
         }))

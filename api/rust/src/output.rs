@@ -9,9 +9,7 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use futures::{
-    channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture, FutureExt, StreamExt,
-};
+use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
 use pinnacle_api_defs::pinnacle::{
     output::{
         self,
@@ -23,7 +21,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::tag::TagHandle;
+use crate::{block_on_tokio, tag::TagHandle};
 
 /// A struct that allows you to get handles to connected outputs and set them up.
 ///
@@ -63,7 +61,7 @@ impl Output {
     pub fn get_all(&self) -> impl Iterator<Item = OutputHandle> {
         let mut client = self.create_output_client();
         let tag_client = self.create_tag_client();
-        block_on(client.get(output::v0alpha1::GetRequest {}))
+        block_on_tokio(client.get(output::v0alpha1::GetRequest {}))
             .unwrap()
             .into_inner()
             .output_names
@@ -248,7 +246,7 @@ impl OutputHandle {
     /// ```
     pub fn set_location(&self, x: impl Into<Option<i32>>, y: impl Into<Option<i32>>) {
         let mut client = self.client.clone();
-        block_on(client.set_location(SetLocationRequest {
+        block_on_tokio(client.set_location(SetLocationRequest {
             output_name: Some(self.name.clone()),
             x: x.into(),
             y: y.into(),
@@ -380,11 +378,11 @@ impl OutputHandle {
     /// ```
     pub fn props(&self) -> OutputProperties {
         let mut client = self.client.clone();
-        let response = block_on(
-            client.get_properties(output::v0alpha1::GetPropertiesRequest {
+        let response = block_on_tokio(client.get_properties(
+            output::v0alpha1::GetPropertiesRequest {
                 output_name: Some(self.name.clone()),
-            }),
-        )
+            },
+        ))
         .unwrap()
         .into_inner();
 

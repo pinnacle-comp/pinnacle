@@ -34,7 +34,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{channel::mpsc::UnboundedSender, executor::block_on, future::BoxFuture};
+use futures::{channel::mpsc::UnboundedSender, future::BoxFuture};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
@@ -48,7 +48,10 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::output::{Output, OutputHandle};
+use crate::{
+    block_on_tokio,
+    output::{Output, OutputHandle},
+};
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
@@ -99,7 +102,7 @@ impl Tag {
 
         let tag_names = tag_names.into_iter().map(Into::into).collect();
 
-        let response = block_on(client.add(AddRequest {
+        let response = block_on_tokio(client.add(AddRequest {
             output_name: Some(output.name.clone()),
             tag_names,
         }))
@@ -124,7 +127,7 @@ impl Tag {
         let mut client = self.create_tag_client();
         let output_client = self.create_output_client();
 
-        let response = block_on(client.get(tag::v0alpha1::GetRequest {}))
+        let response = block_on_tokio(client.get(tag::v0alpha1::GetRequest {}))
             .unwrap()
             .into_inner();
 
@@ -201,7 +204,7 @@ impl Tag {
 
         let mut client = self.create_tag_client();
 
-        block_on(client.remove(RemoveRequest { tag_ids })).unwrap();
+        block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
     }
 
     /// Create a [`LayoutCycler`] to cycle layouts on outputs.
@@ -386,7 +389,7 @@ impl TagHandle {
     /// ```
     pub fn switch_to(&self) {
         let mut client = self.client.clone();
-        block_on(client.switch_to(SwitchToRequest {
+        block_on_tokio(client.switch_to(SwitchToRequest {
             tag_id: Some(self.id),
         }))
         .unwrap();
@@ -412,7 +415,7 @@ impl TagHandle {
     /// ```
     pub fn set_active(&self, set: bool) {
         let mut client = self.client.clone();
-        block_on(client.set_active(SetActiveRequest {
+        block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Set(set)),
         }))
@@ -440,7 +443,7 @@ impl TagHandle {
     /// ```
     pub fn toggle_active(&self) {
         let mut client = self.client.clone();
-        block_on(client.set_active(SetActiveRequest {
+        block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Toggle(())),
         }))
@@ -461,7 +464,7 @@ impl TagHandle {
     /// // "DP-1" now only has tags "1" and "Buckle"
     /// ```
     pub fn remove(mut self) {
-        block_on(self.client.remove(RemoveRequest {
+        block_on_tokio(self.client.remove(RemoveRequest {
             tag_ids: vec![self.id],
         }))
         .unwrap();
@@ -485,7 +488,7 @@ impl TagHandle {
     /// ```
     pub fn set_layout(&self, layout: Layout) {
         let mut client = self.client.clone();
-        block_on(client.set_layout(SetLayoutRequest {
+        block_on_tokio(client.set_layout(SetLayoutRequest {
             tag_id: Some(self.id),
             layout: Some(layout as i32),
         }))
@@ -509,7 +512,7 @@ impl TagHandle {
         let mut client = self.client.clone();
         let output_client = self.output_client.clone();
 
-        let response = block_on(client.get_properties(tag::v0alpha1::GetPropertiesRequest {
+        let response = block_on_tokio(client.get_properties(tag::v0alpha1::GetPropertiesRequest {
             tag_id: Some(self.id),
         }))
         .unwrap()
