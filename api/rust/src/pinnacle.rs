@@ -6,11 +6,12 @@
 //!
 //! This module provides [`Pinnacle`], which allows you to quit the compositor.
 
-use futures::executor::block_on;
 use pinnacle_api_defs::pinnacle::v0alpha1::{
     pinnacle_service_client::PinnacleServiceClient, QuitRequest,
 };
 use tonic::transport::Channel;
+
+use crate::block_on_tokio;
 
 /// A struct that allows you to quit the compositor.
 #[derive(Debug, Clone)]
@@ -37,6 +38,6 @@ impl Pinnacle {
     /// ```
     pub fn quit(&self) {
         let mut client = self.create_pinnacle_client();
-        block_on(client.quit(QuitRequest {})).unwrap();
+        block_on_tokio(client.quit(QuitRequest {})).unwrap();
     }
 }
