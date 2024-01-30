@@ -45,9 +45,14 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt -- --check
-  clippy-pr:
+  clippy-review:
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
-    name: Clippy (pull request)
+    name: Clippy review
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
@@ -56,15 +61,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Clippy review
-        uses: giraffate/clippy-action@v1
+      - name: Get dependencies
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
         with:
-          reporter: "github-pr-review"
-          clippy_flags: -- -D warnings
-  clippy-push:
+          luaVersion: "5.4"
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Run Clippy fix
+        run: cargo clippy --fix --allow-dirty
+      - name: Clippy review
+        uses: reviewdog/action-suggester@v1
+        with:
+          tool_name: clippy
+  clippy-check:
     runs-on: ubuntu-latest
-    name: Clippy (push)
-    if: ${{ github.event_name == 'push' }}
+    name: Clippy check
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,8 +85,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Clippy check
-        uses: giraffate/clippy-action@v1
+      - name: Get dependencies
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
         with:
-          reporter: "github-check"
-          clippy_flags: -- -D warnings
+          luaVersion: "5.4"
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Clippy check
+        run: cargo clippy -- -D warnings
