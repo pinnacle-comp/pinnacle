@@ -233,7 +233,7 @@ impl State {
                 config_dir.display()
             );
             tracing::info!("Falling back to default Lua config");
-            state.start_config(&default_lua_config_dir)
+            state.start_config(&&default_lua_config_dir)
         };
 
         let metaconfig = match parse_metaconfig(config_dir) {
