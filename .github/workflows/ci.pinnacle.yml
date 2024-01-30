@@ -45,10 +45,9 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt -- --check
-  clippy-pr:
+  clippy-check:
     runs-on: ubuntu-latest
-    name: Clippy (PR)
-    if: ${{ github.event_name == 'pull_request' }}
+    name: Clippy
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,26 +55,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Clippy review
-        uses: giraffate/clippy-action@v1
-        with:
-          # reporter: "github-pr-review"
-          clippy_flags: -- -D warnings
-          filter_mode: nofilter
-  clippy-push:
-    runs-on: ubuntu-latest
-    name: Clippy (push)
-    if: ${{ github.event_name == 'push' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Get Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - name: Clippy check
-        uses: giraffate/clippy-action@v1
-        with:
-          reporter: "github-check"
-          clippy_flags: -- -D warnings
-          filter_mode: nofilter
+      - name: Cache stuff
+        uses: Swatinem/rust-cache@v2
+      - name: Get dependencies
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler
+      - name: Clippy
+        run: cargo clippy -- -D warnings
