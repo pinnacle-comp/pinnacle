@@ -48,6 +48,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
   clippy-pr:
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     name: Clippy (PR)
     if: ${{ github.event_name == 'pull_request' }}
@@ -67,7 +72,7 @@ jobs:
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Run Clippy fix
-        run: cargo clippy --fix -- -D warnings
+        run: cargo clippy --fix --allow-dirty -- -D warnings
       - name: Clippy review
         uses: reviewdog/action-suggester@v1
         with:
