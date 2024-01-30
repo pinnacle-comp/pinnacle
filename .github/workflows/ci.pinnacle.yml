@@ -32,7 +32,7 @@ jobs:
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Build
-        run: cargo clippy --verbose -- -D warnings
+        run: cargo check
       - name: Celebratory yahoo
         run: echo yahoo
   check-format:
@@ -77,6 +77,7 @@ jobs:
         uses: reviewdog/action-suggester@v1
         with:
           tool_name: clippy
+          fail_on_error: true
   # clippy-push:
   #   runs-on: ubuntu-latest
   #   name: Clippy (push)
