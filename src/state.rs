@@ -88,8 +88,6 @@ pub struct State {
 
     pub system_processes: sysinfo::System,
 
-    pub config_join_handle: Option<tokio::task::JoinHandle<()>>,
-
     // Currently only used to keep track of if the server has started
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
@@ -263,7 +261,6 @@ impl State {
                 RefreshKind::new().with_processes(ProcessRefreshKind::new()),
             ),
 
-            config_join_handle: None,
             grpc_server_join_handle: None,
         };
 

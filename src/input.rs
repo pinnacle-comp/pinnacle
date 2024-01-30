@@ -93,6 +93,17 @@ pub struct InputState {
     pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
 }
 
+impl InputState {
+    pub fn clear(&mut self) {
+        self.reload_keybind = None;
+        self.kill_keybind = None;
+        self.libinput_devices.clear();
+        self.keybinds.clear();
+        self.mousebinds.clear();
+        self.libinput_settings.clear();
+    }
+}
+
 impl std::fmt::Debug for InputState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InputState")

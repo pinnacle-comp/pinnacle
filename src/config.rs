@@ -4,6 +4,7 @@ use crate::{
     },
     input::ModifierMask,
     output::OutputName,
+    state::CalloopData,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
 };
@@ -24,11 +25,11 @@ use pinnacle_api_defs::pinnacle::{
 };
 use smithay::{
     input::keyboard::keysyms,
-    reexports::calloop::{self, channel::Event},
+    reexports::calloop::{self, channel::Event, LoopHandle, RegistrationToken},
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use toml::Table;
 
 use xkbcommon::xkb::Keysym;
@@ -166,6 +167,23 @@ pub struct Config {
     pub output_callback_senders: Vec<UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
+
+    config_join_handle: Option<JoinHandle<()>>,
+    config_reload_on_crash_token: Option<RegistrationToken>,
+}
+
+impl Config {
+    pub fn clear(&mut self, loop_handle: &LoopHandle<CalloopData>) {
+        self.window_rules.clear();
+        self.output_callback_senders.clear();
+        self.connector_saved_states.clear();
+        if let Some(join_handle) = self.config_join_handle.take() {
+            join_handle.abort();
+        }
+        if let Some(token) = self.config_reload_on_crash_token.take() {
+            loop_handle.remove(token);
+        }
+    }
 }
 
 /// State saved when an output is disconnected. When the output is reconnected to the same
@@ -179,7 +197,7 @@ pub struct ConnectorSavedState {
 }
 
 /// Parse a metaconfig file in `config_dir`, if any.
-fn parse(config_dir: &Path) -> anyhow::Result<Metaconfig> {
+fn parse_metaconfig(config_dir: &Path) -> anyhow::Result<Metaconfig> {
     let config_dir = config_dir.join("metaconfig.toml");
 
     let metaconfig =
@@ -205,76 +223,83 @@ impl State {
     pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
         let config_dir = config_dir.as_ref();
 
-        let metaconfig = match parse(config_dir) {
+        tracing::info!("Starting config at {}", config_dir.display());
+
+        let default_lua_config_dir = crate::XDG_BASE_DIRS.get_data_file("default_config");
+
+        let load_default_config = |state: &mut State, reason: &str| {
+            tracing::error!(
+                "Unable to load config at {}: {reason}",
+                config_dir.display()
+            );
+            tracing::info!("Falling back to default Lua config");
+            state.start_config(&default_lua_config_dir)
+        };
+
+        let metaconfig = match parse_metaconfig(config_dir) {
             Ok(metaconfig) => metaconfig,
-            Err(_) => {
-                self.start_config(crate::XDG_BASE_DIRS.get_data_home().join("default_config"))?;
-                return Ok(());
+            Err(err) => {
+                // Stops infinite recursion if somehow the default_config dir is screwed up
+                if config_dir == default_lua_config_dir {
+                    tracing::error!("The metaconfig at the default Lua config directory is either malformed or missing.");
+                    tracing::error!(
+                        "If you have not touched {}, this is a bug and you should file an issue (pretty please with a cherry on top?).",
+                        default_lua_config_dir.display()
+                    );
+                    anyhow::bail!("default lua config dir does not work");
+                }
+                return load_default_config(self, &err.to_string());
             }
         };
 
-        tracing::info!("Starting config");
         tracing::debug!("Clearing tags");
-
         for output in self.space.outputs() {
             output.with_state(|state| state.tags.clear());
         }
 
         TagId::reset();
 
-        tracing::debug!("Clearing mouse and keybinds");
-        self.input_state.keybinds.clear();
-        self.input_state.mousebinds.clear();
-        self.input_state.libinput_settings.clear();
-        self.config.window_rules.clear();
+        tracing::debug!("Clearing input state");
 
-        if let Some(config_join_handle) = self.config_join_handle.take() {
-            tracing::debug!("Killing old config");
-            config_join_handle.abort();
+        self.input_state.clear();
+
+        self.config.clear(&self.loop_handle);
+
+        // Because the grpc server is implemented to only start once,
+        // any updates to `socket_dir` won't be applied until restart.
+        if self.grpc_server_join_handle.is_none() {
+            // If a socket is provided in the metaconfig, use it.
+            let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
+                let socket_dir = shellexpand::full(socket_dir)?.to_string();
+
+                // cd into the metaconfig dir and canonicalize to preserve relative paths
+                // like ./dir/here
+                let current_dir = std::env::current_dir()?;
+
+                std::env::set_current_dir(config_dir)?;
+                let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
+                std::env::set_current_dir(current_dir)?;
+                socket_dir
+            } else {
+                // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
+                crate::XDG_BASE_DIRS
+                    .get_runtime_directory()
+                    .cloned()
+                    .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
+            };
+
+            self.start_grpc_server(socket_dir.as_path())?;
         }
-
-        // Love that trailing slash
-        let data_home = PathBuf::from(
-            crate::XDG_BASE_DIRS
-                .get_data_home()
-                .to_string_lossy()
-                .to_string()
-                .trim_end_matches('/'),
-        );
-        std::env::set_var("PINNACLE_LIB_DIR", data_home);
-
-        tracing::debug!("config dir is {:?}", config_dir);
-
-        // If a socket is provided in the metaconfig, use it.
-        let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
-            let socket_dir = shellexpand::full(socket_dir)?.to_string();
-
-            // cd into the metaconfig dir and canonicalize to preserve relative paths
-            // like ./dir/here
-            let current_dir = std::env::current_dir()?;
-
-            std::env::set_current_dir(config_dir)?;
-            let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
-            std::env::set_current_dir(current_dir)?;
-            socket_dir
-        } else {
-            // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-            crate::XDG_BASE_DIRS
-                .get_runtime_directory()
-                .cloned()
-                .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
-        };
-
-        self.start_grpc_server(socket_dir.as_path())?;
 
         let reload_keybind = metaconfig.reload_keybind;
         let kill_keybind = metaconfig.kill_keybind;
 
         let mut command = metaconfig.command.iter();
 
-        let arg0 = command
-            .next()
-            .context("command in metaconfig.toml was empty")?;
+        let arg0 = match command.next() {
+            Some(arg0) => arg0,
+            None => return load_default_config(self, "no command specified"),
+        };
 
         let command = command.collect::<Vec<_>>();
 
@@ -305,7 +330,7 @@ impl State {
 
         tracing::debug!("Config envs are {envs:?}");
 
-        let mut child = tokio::process::Command::new(arg0)
+        let mut child = match tokio::process::Command::new(arg0)
             .args(command)
             .envs(envs)
             .current_dir(config_dir)
@@ -313,7 +338,10 @@ impl State {
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
             .spawn()
-            .context("failed to spawn config")?;
+        {
+            Ok(child) => child,
+            Err(err) => return load_default_config(self, &err.to_string()),
+        };
 
         tracing::info!("Started config with {:?}", metaconfig.command);
 
@@ -326,19 +354,28 @@ impl State {
         self.input_state.reload_keybind = Some(reload_keybind);
         self.input_state.kill_keybind = Some(kill_keybind);
 
-        self.config_join_handle = Some(tokio::spawn(async move {
+        let (pinger, ping_source) = calloop::ping::make_ping()?;
+
+        let token = self
+            .loop_handle
+            .insert_source(ping_source, move |_, _, data| {
+                tracing::error!("Config crashed! Falling back to default Lua config");
+                data.state
+                    .start_config(&default_lua_config_dir)
+                    .expect("failed to start default lua config");
+            })?;
+
+        self.config.config_join_handle = Some(tokio::spawn(async move {
             let _ = child.wait().await;
+            pinger.ping();
         }));
+
+        self.config.config_reload_on_crash_token = Some(token);
 
         Ok(())
     }
 
     pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
-        if self.grpc_server_join_handle.is_some() {
-            tracing::info!("gRPC server already started");
-            return Ok(());
-        }
-
         self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
@@ -400,7 +437,7 @@ impl State {
         self.loop_handle
             .insert_source(grpc_receiver, |msg, _, data| match msg {
                 Event::Msg(f) => f(&mut data.state),
-                Event::Closed => tracing::debug!("grpc receiver was closed"),
+                Event::Closed => tracing::error!("grpc receiver was closed"),
             })
             .expect("failed to insert grpc_receiver into loop");
 
@@ -449,6 +486,9 @@ impl State {
                     }
                 }));
             }
+            // FIXME: Not really high priority but if you somehow reload the config really, REALLY
+            // |      fast at startup then I think there's a chance that the gRPC server
+            // |      could get started twice.
             None => self.schedule(
                 |data| data.state.xdisplay.is_some(),
                 move |data| {
