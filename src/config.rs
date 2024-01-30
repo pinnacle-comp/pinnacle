@@ -437,7 +437,7 @@ impl State {
         self.loop_handle
             .insert_source(grpc_receiver, |msg, _, data| match msg {
                 Event::Msg(f) => f(&mut data.state),
-                Event::Closed => tracing::debug!("grpc receiver was closed"),
+                Event::Closed => tracing::error!("grpc receiver was closed"),
             })
             .expect("failed to insert grpc_receiver into loop");
 

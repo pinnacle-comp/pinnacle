@@ -86,12 +86,20 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     if Uid::effective().is_root() && !args.allow_root {
-        println!("You are trying to run Pinnacle as root.\nThis is NOT recommended.\nTo run Pinnacle as root, pass in the --allow-root flag. Again, this is NOT recommended.");
+        tracing::warn!("You are trying to run Pinnacle as root.");
+        tracing::warn!("This is NOT recommended.");
+        tracing::warn!("To run Pinnacle as root, pass in the --allow-root flag.");
+        tracing::warn!("Again, this is NOT recommended.");
         return Ok(());
     }
 
     let in_graphical_env =
         std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
+
+    if !sysinfo::set_open_files_limit(0) {
+        tracing::warn!("Unable to set `sysinfo`'s open files limit to 0.");
+        tracing::warn!("You may see LOTS of file descriptors open under Pinnacle.");
+    }
 
     match (args.backend.winit, args.backend.udev, args.force) {
         (false, false, _) => {
