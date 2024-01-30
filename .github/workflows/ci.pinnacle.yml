@@ -59,7 +59,7 @@ jobs:
       - name: Clippy review
         uses: giraffate/clippy-action@v1
         with:
-          reporter: "github-pr-review"
+          # reporter: "github-pr-review"
           clippy_flags: -- -D warnings
           filter_mode: nofilter
   clippy-push:
