@@ -61,7 +61,7 @@ jobs:
         with:
           reporter: "github-pr-review"
           clippy_flags: -- -D warnings
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          filter_mode: nofilter
   clippy-push:
     runs-on: ubuntu-latest
     name: Clippy (push)
@@ -78,4 +78,4 @@ jobs:
         with:
           reporter: "github-check"
           clippy_flags: -- -D warnings
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          filter_mode: nofilter
