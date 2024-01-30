@@ -47,7 +47,7 @@ jobs:
         run: cargo fmt -- --check
   clippy-pr:
     runs-on: ubuntu-latest
-    name: Clippy (pull request)
+    name: Clippy (PR)
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
@@ -61,6 +61,7 @@ jobs:
         with:
           reporter: "github-pr-review"
           clippy_flags: -- -D warnings
+          github_token: ${{ secrets.GITHUB_TOKEN }}
   clippy-push:
     runs-on: ubuntu-latest
     name: Clippy (push)
@@ -77,3 +78,4 @@ jobs:
         with:
           reporter: "github-check"
           clippy_flags: -- -D warnings
+          github_token: ${{ secrets.GITHUB_TOKEN }}
