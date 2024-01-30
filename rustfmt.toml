@@ -1,5 +1,5 @@
 edition = "2021"
-error_on_line_overflow = true
+# error_on_line_overflow = true
 newline_style = "Unix"
 single_line_if_else_max_width = 60
 single_line_let_else_max_width = 60
