@@ -1,21 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::atomic::AtomicU32;
-
 use smithay::{
-    backend::renderer::utils::with_renderer_surface_state,
     desktop::layer_map_for_output,
     output::Output,
-    reexports::wayland_server::Resource,
     utils::{Logical, Point, Rectangle, Serial, Size},
-    wayland::compositor::{self, CompositorHandler},
+    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 
 use crate::{
     state::{State, WithState},
     window::{
-        blocker::TiledWindowBlocker,
-        window_state::{FloatingOrTiled, FullscreenOrMaximized, LocationRequestState},
+        window_state::{FloatingOrTiled, FullscreenOrMaximized},
         WindowElement,
     },
 };
@@ -54,19 +49,7 @@ impl State {
         }
     }
 
-    /// Compute tiled window locations and sizes, resize maximized and fullscreen windows correctly,
-    /// and send configures and that cool stuff.
     pub fn update_windows(&mut self, output: &Output) {
-        // HACK: With the blocker implementation, if I opened up a bunch of windows quickly they
-        // |     would freeze up.
-        // |     So instead of being smart and figuring something out I instead decided "f*** it"
-        // |     and stuck a static here to detect if update_windows was called again, causing
-        // |     previous blockers to be unblocked.
-        static UPDATE_COUNT: AtomicU32 = AtomicU32::new(0);
-        UPDATE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let current_update_count = UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed);
-
-        tracing::debug!("Updating windows");
         let Some(layout) =
             output.with_state(|state| state.focused_tags().next().map(|tag| tag.layout()))
         else {
@@ -133,119 +116,48 @@ impl State {
         }
 
         let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
-        let mut non_pending_wins = Vec::<(Point<_, _>, WindowElement)>::new();
+        let mut non_pending_wins = Vec::<(Point<i32, Logical>, WindowElement)>::new();
 
-        // TODO: completely refactor how tracking state changes works
-        for window in windows_on_foc_tags.iter() {
-            window.with_state(|state| {
-                if let LocationRequestState::Sent(loc) = state.loc_request_state {
-                    match &window {
-                        WindowElement::Wayland(win) => {
-                            // If the above didn't cause any change to size or other state, simply
-                            // map the window.
-                            let current_state = win.toplevel().current_state();
-                            let is_pending = win
-                                .toplevel()
-                                .with_pending_state(|state| state.size != current_state.size);
+        for win in windows_on_foc_tags.iter() {
+            if win.with_state(|state| state.target_loc.is_some()) {
+                match win {
+                    WindowElement::Wayland(wl_win) => {
+                        let pending =
+                            compositor::with_states(wl_win.toplevel().wl_surface(), |states| {
+                                let lock = states
+                                    .data_map
+                                    .get::<XdgToplevelSurfaceData>()
+                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                    .lock()
+                                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>");
 
-                            if !is_pending {
-                                tracing::debug!("No pending changes, mapping window");
-                                // TODO: map win here, not down there
-                                state.loc_request_state = LocationRequestState::Idle;
-                                non_pending_wins.push((loc, window.clone()));
-                            } else {
-                                tracing::debug!("Pending changes, requesting commit");
-                                let serial = win.toplevel().send_configure();
-                                state.loc_request_state =
-                                    LocationRequestState::Requested(serial, loc);
-                                pending_wins.push((window.clone(), serial));
+                                lock.has_pending_changes()
+                            });
+
+                        if pending {
+                            pending_wins.push((win.clone(), wl_win.toplevel().send_configure()))
+                        } else {
+                            let loc = win.with_state(|state| state.target_loc.take());
+                            if let Some(loc) = loc {
+                                non_pending_wins.push((loc, win.clone()));
                             }
                         }
-                        WindowElement::X11(surface) => {
-                            // already configured, just need to map
-                            // maybe wait for all wayland windows to commit before mapping
-                            // self.space.map_element(window.clone(), loc, false);
-                            surface
-                                .set_mapped(true)
-                                .expect("failed to set x11 win to mapped");
-                            state.loc_request_state = LocationRequestState::Idle;
-                            non_pending_wins.push((loc, window.clone()));
-                        }
-                        WindowElement::X11OverrideRedirect(_) => {
-                            // filtered out up there somewhere
-                            unreachable!();
-                        }
-                        _ => unreachable!(),
                     }
+                    WindowElement::X11(_) => {
+                        let loc = win.with_state(|state| state.target_loc.take());
+                        if let Some(loc) = loc {
+                            self.space.map_element(win.clone(), loc, false);
+                        }
+                    }
+                    WindowElement::X11OverrideRedirect(_) => (),
+                    _ => unreachable!(),
                 }
-            });
-        }
-
-        let tiling_blocker = TiledWindowBlocker::new(pending_wins.clone());
-
-        for (win, _) in pending_wins.iter() {
-            if let Some(surface) = win.wl_surface() {
-                let client = surface
-                    .client()
-                    .expect("Surface has no client/is no longer alive");
-                self.client_compositor_state(&client)
-                    .blocker_cleared(self, &self.display_handle.clone());
-
-                // tracing::debug!("blocker cleared");
-                compositor::add_blocker(&surface, tiling_blocker.clone());
             }
         }
 
-        let pending_wins_clone = pending_wins.clone();
-        let pending_wins_clone2 = pending_wins.clone();
-
-        self.schedule(
-            move |data| {
-                if UPDATE_COUNT.load(std::sync::atomic::Ordering::Relaxed) > current_update_count {
-                    for (win, _) in pending_wins_clone2.iter() {
-                        let Some(surface) = win.wl_surface() else {
-                            continue;
-                        };
-
-                        // INFO: pinnacle crashed when I pasted from one nvim instance to another in alacritty
-                        let Some(client) = surface.client() else { continue };
-                        data.state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(&mut data.state, &data.display_handle);
-
-                        // tracing::debug!("blocker cleared");
-                    }
-                }
-                tiling_blocker.ready()
-                    && pending_wins_clone2.iter().all(|(win, _)| {
-                        if let Some(surface) = win.wl_surface() {
-                            with_renderer_surface_state(&surface, |state| state.buffer().is_some())
-                        } else {
-                            true
-                        }
-                    })
-            },
-            move |data| {
-                for (win, _) in pending_wins_clone {
-                    let Some(surface) = win.wl_surface() else {
-                        continue;
-                    };
-
-                    let client = surface
-                        .client()
-                        .expect("Surface has no client/is no longer alive");
-                    data.state
-                        .client_compositor_state(&client)
-                        .blocker_cleared(&mut data.state, &data.display_handle);
-
-                    // tracing::debug!("blocker cleared");
-                }
-
-                for (loc, win) in non_pending_wins {
-                    data.state.space.map_element(win, loc, false);
-                }
-            },
-        );
+        for (loc, window) in non_pending_wins {
+            self.space.map_element(window, loc, false);
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use smithay::{
     desktop::space::SpaceElement,
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Point, Rectangle, Serial},
+    utils::{Logical, Point, Rectangle},
 };
 
 use crate::{
@@ -48,29 +48,11 @@ impl WindowId {
 pub struct WindowElementState {
     /// The id of this window.
     pub id: WindowId,
-    /// The window's resize state. See [WindowResizeState] for more.
-    pub loc_request_state: LocationRequestState,
     /// What tags the window is currently on.
     pub tags: Vec<Tag>,
     pub floating_or_tiled: FloatingOrTiled,
     pub fullscreen_or_maximized: FullscreenOrMaximized,
-}
-
-/// The state of a window's resize operation.
-#[derive(Debug, Default, Clone)]
-pub enum LocationRequestState {
-    /// The window doesn't need to be moved.
-    #[default]
-    Idle,
-    Sent(Point<i32, Logical>),
-    /// The window has received a configure request with a new size. The desired location and the
-    /// configure request's serial should be provided here.
-    Requested(Serial, Point<i32, Logical>),
-    /// The client has received the configure request and has successfully changed its size. It's
-    /// now safe to move the window in [`CompositorHandler.commit()`] without flickering.
-    ///
-    /// [`CompositorHandler.commit()`]: smithay::wayland::compositor::CompositorHandler#tymethod.commit
-    Acknowledged(Point<i32, Logical>),
+    pub target_loc: Option<Point<i32, Logical>>,
 }
 
 impl WindowElement {
@@ -313,10 +295,11 @@ impl WindowElementState {
     pub fn new() -> Self {
         Self {
             id: WindowId::next(),
-            loc_request_state: LocationRequestState::Idle,
+            // loc_request_state: LocationRequestState::Idle,
             tags: vec![],
             floating_or_tiled: FloatingOrTiled::Tiled(None),
             fullscreen_or_maximized: FullscreenOrMaximized::Neither,
+            target_loc: None,
         }
     }
 }

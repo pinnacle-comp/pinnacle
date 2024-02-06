@@ -3,14 +3,17 @@
 mod xdg_shell;
 mod xwayland;
 
-use std::os::fd::OwnedFd;
+use std::{os::fd::OwnedFd, time::Duration};
 
 use smithay::{
-    backend::renderer::utils,
+    backend::renderer::utils::{self, with_renderer_surface_state},
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
     delegate_layer_shell, delegate_output, delegate_presentation, delegate_primary_selection,
     delegate_relative_pointer, delegate_seat, delegate_shm, delegate_viewporter,
-    desktop::{self, layer_map_for_output, PopupKind, WindowSurfaceType},
+    desktop::{
+        self, layer_map_for_output, utils::surface_primary_scanout_output, PopupKind,
+        WindowSurfaceType,
+    },
     input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
@@ -23,6 +26,7 @@ use smithay::{
             Client, Resource,
         },
     },
+    utils::SERIAL_COUNTER,
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -55,7 +59,7 @@ use smithay::{
 use crate::{
     focus::FocusTarget,
     state::{CalloopData, ClientState, State, WithState},
-    window::{window_state::LocationRequestState, WindowElement},
+    window::WindowElement,
 };
 
 impl BufferHandler for State {
@@ -115,17 +119,80 @@ impl CompositorHandler for State {
         if !compositor::is_sync_subsurface(surface) {
             if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
                 window.on_commit();
-                win.with_state(|state| {
-                    if let LocationRequestState::Acknowledged(new_pos) = state.loc_request_state {
-                        tracing::debug!("Mapping Acknowledged window");
-                        state.loc_request_state = LocationRequestState::Idle;
-                        self.space.map_element(win.clone(), new_pos, false);
-                    }
-                });
+                if let Some(loc) = win.with_state(|state| state.target_loc.take()) {
+                    self.space.map_element(win.clone(), loc, false);
+                }
             }
         };
 
         self.popup_manager.commit(surface);
+
+        if let Some(new_window) = self
+            .new_windows
+            .iter()
+            .find(|win| win.wl_surface().as_ref() == Some(surface))
+            .cloned()
+        {
+            let is_mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some());
+
+            if is_mapped {
+                self.new_windows.retain(|win| win != &new_window);
+                self.windows.push(new_window.clone());
+
+                if let (Some(output), _) | (None, Some(output)) = (
+                    &self.focus_state.focused_output,
+                    self.space.outputs().next(),
+                ) {
+                    tracing::debug!("PLACING TOPLEVEL");
+                    new_window.place_on_output(output);
+                }
+
+                self.space
+                    .map_element(new_window.clone(), (1000000, 0), true);
+
+                self.apply_window_rules(&new_window);
+
+                if let Some(focused_output) = self.focus_state.focused_output.clone() {
+                    self.update_windows(&focused_output);
+                    new_window.send_frame(
+                        &focused_output,
+                        self.clock.now(),
+                        Some(Duration::ZERO),
+                        surface_primary_scanout_output,
+                    );
+                }
+
+                self.loop_handle.insert_idle(move |data| {
+                    data.state
+                        .seat
+                        .get_keyboard()
+                        .expect("Seat had no keyboard") // FIXME: actually handle error
+                        .set_focus(
+                            &mut data.state,
+                            Some(FocusTarget::Window(new_window)),
+                            SERIAL_COUNTER.next_serial(),
+                        );
+                });
+            } else if let WindowElement::Wayland(window) = &new_window {
+                window.on_commit();
+                let initial_configure_sent = compositor::with_states(surface, |states| {
+                    states
+                        .data_map
+                        .get::<XdgToplevelSurfaceData>()
+                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                        .lock()
+                        .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                        .initial_configure_sent
+                });
+
+                if !initial_configure_sent {
+                    tracing::debug!("Initial configure");
+                    window.toplevel().send_configure();
+                }
+            }
+
+            return;
+        }
 
         ensure_initial_configure(surface, self);
 

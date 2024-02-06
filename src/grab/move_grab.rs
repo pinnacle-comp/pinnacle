@@ -18,10 +18,7 @@ use smithay::{
 
 use crate::{
     state::{State, WithState},
-    window::{
-        window_state::{FloatingOrTiled, LocationRequestState},
-        WindowElement,
-    },
+    window::{window_state::FloatingOrTiled, WindowElement},
 };
 
 /// Data for moving a window.
@@ -110,13 +107,13 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     return;
                 }
 
-                let has_pending_resize = window_under.with_state(|state| {
-                    !matches!(state.loc_request_state, LocationRequestState::Idle)
-                });
-
-                if has_pending_resize {
-                    return;
-                }
+                // let has_pending_resize = window_under.with_state(|state| {
+                //     !matches!(state.loc_request_state, LocationRequestState::Idle)
+                // });
+                //
+                // if has_pending_resize {
+                //     return;
+                // }
 
                 tracing::debug!("Swapping window positions");
                 state.swap_window_positions(&self.window, &window_under);

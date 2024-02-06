@@ -28,7 +28,7 @@ impl OutputName {
 }
 
 /// The state of an output
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
 }

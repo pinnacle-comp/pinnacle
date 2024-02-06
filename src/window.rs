@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod blocker;
 pub mod rules;
 
 use std::{cell::RefCell, time::Duration};
@@ -38,7 +37,7 @@ use smithay::{
 
 use crate::state::{State, WithState};
 
-use self::window_state::{LocationRequestState, WindowElementState};
+use self::window_state::WindowElementState;
 
 pub mod window_state;
 
@@ -206,8 +205,11 @@ impl WindowElement {
             _ => unreachable!(),
         }
         self.with_state(|state| {
-            state.loc_request_state = LocationRequestState::Sent(new_geo.loc);
+            state.target_loc = Some(new_geo.loc);
         });
+        // self.with_state(|state| {
+        //     state.loc_request_state = LocationRequestState::Sent(new_geo.loc);
+        // });
     }
 
     pub fn class(&self) -> Option<String> {

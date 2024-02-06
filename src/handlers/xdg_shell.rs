@@ -12,24 +12,20 @@ use smithay::{
             xdg_toplevel::{self, ResizeEdge},
         },
         wayland_server::{
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
             Resource,
         },
     },
     utils::{Logical, Point, Rectangle, Serial, SERIAL_COUNTER},
-    wayland::{
-        compositor::{self},
-        shell::xdg::{
-            Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler,
-            XdgShellState,
-        },
+    wayland::shell::xdg::{
+        PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
     },
 };
 
 use crate::{
     focus::FocusTarget,
     state::{State, WithState},
-    window::{window_state::LocationRequestState, WindowElement},
+    window::WindowElement,
 };
 
 impl XdgShellHandler for State {
@@ -46,63 +42,64 @@ impl XdgShellHandler for State {
         });
 
         let window = WindowElement::Wayland(Window::new(surface.clone()));
+        self.new_windows.push(window);
 
-        if let (Some(output), _) | (None, Some(output)) = (
-            &self.focus_state.focused_output,
-            self.space.outputs().next(),
-        ) {
-            tracing::debug!("PLACING TOPLEVEL");
-            window.place_on_output(output);
-        }
-
-        // note to self: don't reorder this
-        // TODO: fix it so that reordering this doesn't break stuff
-        self.windows.push(window.clone());
-
-        self.space.map_element(window.clone(), (0, 0), true);
-
-        let win_clone = window.clone();
-
-        // Let the initial configure happen before updating the windows
-        self.schedule(
-            move |_data| {
-                if let WindowElement::Wayland(window) = &win_clone {
-                    let initial_configure_sent =
-                        compositor::with_states(window.toplevel().wl_surface(), |states| {
-                            states
-                                .data_map
-                                .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
-                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                .lock()
-                                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                                .initial_configure_sent
-                        });
-
-                    initial_configure_sent
-                } else {
-                    true
-                }
-            },
-            |data| {
-                data.state.apply_window_rules(&window);
-
-                if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
-                    data.state.update_windows(&focused_output);
-                }
-
-                data.state.loop_handle.insert_idle(move |data| {
-                    data.state
-                        .seat
-                        .get_keyboard()
-                        .expect("Seat had no keyboard") // FIXME: actually handle error
-                        .set_focus(
-                            &mut data.state,
-                            Some(FocusTarget::Window(window)),
-                            SERIAL_COUNTER.next_serial(),
-                        );
-                });
-            },
-        );
+        // if let (Some(output), _) | (None, Some(output)) = (
+        //     &self.focus_state.focused_output,
+        //     self.space.outputs().next(),
+        // ) {
+        //     tracing::debug!("PLACING TOPLEVEL");
+        //     window.place_on_output(output);
+        // }
+        //
+        // // note to self: don't reorder this
+        // // TODO: fix it so that reordering this doesn't break stuff
+        // self.windows.push(window.clone());
+        //
+        // self.space.map_element(window.clone(), (0, 0), true);
+        //
+        // let win_clone = window.clone();
+        //
+        // // Let the initial configure happen before updating the windows
+        // self.schedule(
+        //     move |_data| {
+        //         if let WindowElement::Wayland(window) = &win_clone {
+        //             let initial_configure_sent =
+        //                 compositor::with_states(window.toplevel().wl_surface(), |states| {
+        //                     states
+        //                         .data_map
+        //                         .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+        //                         .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+        //                         .lock()
+        //                         .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+        //                         .initial_configure_sent
+        //                 });
+        //
+        //             initial_configure_sent
+        //         } else {
+        //             true
+        //         }
+        //     },
+        //     |data| {
+        //         data.state.apply_window_rules(&window);
+        //
+        //         if let Some(focused_output) = data.state.focus_state.focused_output.clone() {
+        //             data.state.update_windows(&focused_output);
+        //         }
+        //
+        //         data.state.loop_handle.insert_idle(move |data| {
+        //             data.state
+        //                 .seat
+        //                 .get_keyboard()
+        //                 .expect("Seat had no keyboard") // FIXME: actually handle error
+        //                 .set_focus(
+        //                     &mut data.state,
+        //                     Some(FocusTarget::Window(window)),
+        //                     SERIAL_COUNTER.next_serial(),
+        //                 );
+        //         });
+        //     },
+        // );
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
@@ -724,26 +721,26 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
-        if let Some(window) = self.window_for_surface(&surface) {
-            if let LocationRequestState::Requested(serial, new_loc) =
-                window.with_state(|state| state.loc_request_state.clone())
-            {
-                match &configure {
-                    Configure::Toplevel(configure) => {
-                        if configure.serial >= serial {
-                            tracing::debug!("acked configure, new loc is {:?}", new_loc);
-                            window.with_state(|state| {
-                                state.loc_request_state =
-                                    LocationRequestState::Acknowledged(new_loc);
-                            });
-                        }
-                    }
-                    Configure::Popup(_) => todo!(),
-                }
-            }
-        }
-    }
+    // fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
+    //     if let Some(window) = self.window_for_surface(&surface) {
+    //         if let LocationRequestState::Requested(serial, new_loc) =
+    //             window.with_state(|state| state.loc_request_state.clone())
+    //         {
+    //             match &configure {
+    //                 Configure::Toplevel(configure) => {
+    //                     if configure.serial >= serial {
+    //                         tracing::debug!("acked configure, new loc is {:?}", new_loc);
+    //                         window.with_state(|state| {
+    //                             state.loc_request_state =
+    //                                 LocationRequestState::Acknowledged(new_loc);
+    //                         });
+    //                     }
+    //                 }
+    //                 Configure::Popup(_) => todo!(),
+    //             }
+    //         }
+    //     }
+    // }
 
     fn fullscreen_request(&mut self, surface: ToplevelSurface, mut wl_output: Option<WlOutput>) {
         if !surface

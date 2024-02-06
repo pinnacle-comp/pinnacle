@@ -78,6 +78,7 @@ pub struct State {
 
     /// The main window vec
     pub windows: Vec<WindowElement>,
+    pub new_windows: Vec<WindowElement>,
 
     pub config: Config,
 
@@ -252,6 +253,7 @@ impl State {
             popup_manager: PopupManager::default(),
 
             windows: vec![],
+            new_windows: Vec::new(),
 
             xwayland,
             xwm: None,
