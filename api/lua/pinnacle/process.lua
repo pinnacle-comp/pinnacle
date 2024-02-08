@@ -2,8 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local client = require("pinnacle.grpc.client")
+
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.process." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.process." .. client.version .. "."
 local service = prefix .. "ProcessService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -33,22 +35,16 @@ local function build_grpc_request_params(method, data)
     }
 end
 
----@nodoc
----@class ProcessModule
-local process = {}
-
 ---Process management.
 ---
 ---This module provides utilities to spawn processes and capture their output.
 ---@class Process
----@field private config_client Client
-local Process = {}
+local process = {}
 
----@param config_client Client
 ---@param args string[]
 ---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
 ---@param once boolean
-local function spawn_inner(config_client, args, callbacks, once)
+local function spawn_inner(args, callbacks, once)
     local callback = function() end
 
     if callbacks then
@@ -65,7 +61,7 @@ local function spawn_inner(config_client, args, callbacks, once)
         end
     end
 
-    config_client:server_streaming_request(
+    client.server_streaming_request(
         build_grpc_request_params("Spawn", {
             args = args,
             once = once,
@@ -88,47 +84,65 @@ end
 ---Note 2: If you spawn a window before tags are added it will spawn without any tags and
 ---won't be displayed in the compositor. TODO: Do what awesome does and display on all tags instead
 ---
+---### Example
+---```lua
+---Process.spawn("alacritty")
+---
+--- -- With a table of arguments
+---Process.spawn({ "bash", "-c", "echo hello" })
+---
+--- -- With callbacks
+---Process.spawn("alacritty", {
+---    stdout = function(line)
+---        print(line)
+---    end,
+---    -- You can ignore callbacks you don't need
+---    exit = function(code, msg)
+---        print("exited with code", code)
+---        print("exited with msg", msg)
+---    end,
+---})
+---```
+---
 ---@param args string | string[] The program arguments; a string instead of an array should be for only 1 argument
 ---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }? Callbacks that will be run whenever the program outputs to stdout, stderr, or exits.
-function Process:spawn(args, callbacks)
+function process.spawn(args, callbacks)
     if type(args) == "string" then
         args = { args }
     end
 
-    spawn_inner(self.config_client, args, callbacks, false)
+    spawn_inner(args, callbacks, false)
 end
 
----Like `Process:spawn` but will only spawn the program if it isn't already running.
+---Like `Process.spawn` but will only spawn the program if it isn't already running.
 ---
 ---@param args string | string[]
 ---@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
 ---
 ---@see Process.spawn
-function Process:spawn_once(args, callbacks)
+function process.spawn_once(args, callbacks)
     if type(args) == "string" then
         args = { args }
     end
 
-    spawn_inner(self.config_client, args, callbacks, true)
+    spawn_inner(args, callbacks, true)
 end
 
 ---Set an environment variable for the compositor.
 ---This will cause any future spawned processes to have this environment variable.
 ---
+---### Example
+---```lua
+---Process.set_env("ENV_NAME", "the value")
+---```
+---
 ---@param key string The environment variable key
 ---@param value string The environment variable value
-function Process:set_env(key, value)
-    self.config_client:unary_request(build_grpc_request_params("SetEnv", {
+function process.set_env(key, value)
+    client.unary_request(build_grpc_request_params("SetEnv", {
         key = key,
         value = value,
     }))
-end
-
-function process.new(config_client)
-    ---@type Process
-    local self = { config_client = config_client }
-    setmetatable(self, { __index = Process })
-    return self
 end
 
 return process

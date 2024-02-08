@@ -2,8 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local client = require("pinnacle.grpc.client")
+
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.output." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.output." .. client.version .. "."
 local service = prefix .. "OutputService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -52,15 +54,8 @@ local output_handle = {}
 ---This can be retrieved through the various `get` functions in the `Output` module.
 ---@classmod
 ---@class OutputHandle
----@field private config_client Client
 ---@field name string The unique name of this output
 local OutputHandle = {}
-
----@nodoc
----@class OutputModule
----@field private handle OutputHandleModule
-local output = {}
-output.handle = output_handle
 
 ---Output management.
 ---
@@ -68,25 +63,26 @@ output.handle = output_handle
 ---
 ---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---@class Output
----@field private config_client Client
-local Output = {}
+---@field private handle OutputHandleModule
+local output = {}
+output.handle = output_handle
 
 ---Get all outputs.
 ---
 ---### Example
 ---```lua
----local outputs = Output:get_all()
+---local outputs = Output.get_all()
 ---```
 ---
 ---@return OutputHandle[]
-function Output:get_all()
-    local response = self.config_client:unary_request(build_grpc_request_params("Get", {}))
+function output.get_all()
+    local response = client.unary_request(build_grpc_request_params("Get", {}))
 
     ---@type OutputHandle[]
     local handles = {}
 
     for _, output_name in ipairs(response.output_names or {}) do
-        table.insert(handles, output_handle.new(self.config_client, output_name))
+        table.insert(handles, output_handle.new(output_name))
     end
 
     return handles
@@ -96,13 +92,13 @@ end
 ---
 ---### Example
 ---```lua
----local output = Output:get_by_name("eDP-1")
+---local output = Output.get_by_name("eDP-1")
 ---```
 ---
 ---@param name string The name of the connector the output is connected to
 ---@return OutputHandle | nil
-function Output:get_by_name(name)
-    local handles = self:get_all()
+function output.get_by_name(name)
+    local handles = output.get_all()
 
     for _, handle in ipairs(handles) do
         if handle.name == name then
@@ -119,12 +115,12 @@ end
 ---
 ---### Example
 ---```lua
----local output = Output:get_focused()
+---local output = Output.get_focused()
 ---```
 ---
 ---@return OutputHandle | nil
-function Output:get_focused()
-    local handles = self:get_all()
+function output.get_focused()
+    local handles = output.get_all()
 
     for _, handle in ipairs(handles) do
         if handle:props().focused then
@@ -148,22 +144,22 @@ end
 ---### Example
 ---```lua
 --- -- Add tags "1" through "5" to all outputs
----Output:connect_for_all(function(output)
----    local tags = Tag:add(output, "1", "2", "3", "4", "5")
+---Output.connect_for_all(function(output)
+---    local tags = Tag.add(output, "1", "2", "3", "4", "5")
 ---    tags[1]:toggle_active()
 ---end)
 ---```
 ---
 ---@param callback fun(output: OutputHandle)
-function Output:connect_for_all(callback)
-    local handles = self:get_all()
+function output.connect_for_all(callback)
+    local handles = output.get_all()
     for _, handle in ipairs(handles) do
         callback(handle)
     end
 
-    self.config_client:server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
+    client.server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
         local output_name = response.output_name
-        local handle = output_handle.new(self.config_client, output_name)
+        local handle = output_handle.new(output_name)
         callback(handle)
     end)
 end
@@ -188,8 +184,8 @@ end
 --- --              │ 2560x │
 --- --              │ 1440  │
 --- --              └───────┘
----Output:get_by_name("DP-1"):set_location({ x = 0, y = 0 })
----Output:get_by_name("HDMI-1"):set_location({ x = 1920, y = -360 })
+---Output.get_by_name("DP-1"):set_location({ x = 0, y = 0 })
+---Output.get_by_name("HDMI-1"):set_location({ x = 1920, y = -360 })
 --- -- Results in:
 --- --       ┌───────┐
 --- -- ┌─────┤       │
@@ -202,7 +198,7 @@ end
 ---
 ---@see OutputHandle.set_loc_adj_to
 function OutputHandle:set_location(loc)
-    self.config_client:unary_request(build_grpc_request_params("SetLocation", {
+    client.unary_request(build_grpc_request_params("SetLocation", {
         output_name = self.name,
         x = loc.x,
         y = loc.y,
@@ -239,7 +235,7 @@ end
 --- --              │ 2560x │
 --- --              │ 1440  │
 --- --              └───────┘
----Output:get_by_name("DP-1"):set_loc_adj_to(Output:get_by_name("HDMI-1"), "bottom_align_right")
+---Output.get_by_name("DP-1"):set_loc_adj_to(Output:get_by_name("HDMI-1"), "bottom_align_right")
 --- -- Results in:
 --- -- ┌───────┐
 --- -- │       │
@@ -328,10 +324,9 @@ end
 ---
 ---@return OutputProperties
 function OutputHandle:props()
-    local response =
-        self.config_client:unary_request(build_grpc_request_params("GetProperties", { output_name = self.name }))
+    local response = client.unary_request(build_grpc_request_params("GetProperties", { output_name = self.name }))
 
-    local handles = require("pinnacle.tag").handle.new_from_table(self.config_client, response.tag_ids or {})
+    local handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
 
     response.tags = handles
     response.tag_ids = nil
@@ -447,23 +442,11 @@ function OutputHandle:tags()
 end
 
 ---@nodoc
----@return Output
-function output.new(config_client)
-    ---@type Output
-    local self = {
-        config_client = config_client,
-    }
-    setmetatable(self, { __index = Output })
-    return self
-end
-
----@nodoc
 ---Create a new `OutputHandle` from its raw name.
 ---@param output_name string
-function output_handle.new(config_client, output_name)
+function output_handle.new(output_name)
     ---@type OutputHandle
     local self = {
-        config_client = config_client,
         name = output_name,
     }
     setmetatable(self, { __index = OutputHandle })
