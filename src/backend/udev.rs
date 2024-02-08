@@ -710,7 +710,7 @@ where
                 element.sync.wait();
             }
             SurfaceCompositorRenderResult {
-                rendered: render_frame_result.damage.is_some(),
+                rendered: !render_frame_result.is_empty,
                 states: render_frame_result.states,
             }
         })
@@ -761,9 +761,10 @@ impl State {
             })
             .expect("failed to insert drm notifier into event loop");
 
-        let render_node = EGLDevice::device_for_display(
-            &EGLDisplay::new(gbm.clone()).expect("failed to create EGLDisplay"),
-        )
+        // SAFETY: no clue lol just copied this from anvil
+        let render_node = EGLDevice::device_for_display(&unsafe {
+            EGLDisplay::new(gbm.clone()).expect("failed to create EGLDisplay")
+        })
         .ok()
         .and_then(|x| x.try_get_render_node().ok().flatten())
         .unwrap_or(node);

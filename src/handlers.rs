@@ -35,12 +35,13 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
+        output::OutputHandler,
         seat::WaylandFocus,
-        selection::data_device::{
-            set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-            ServerDndGrabHandler,
-        },
         selection::{
+            data_device::{
+                set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+                ServerDndGrabHandler,
+            },
             primary_selection::{
                 set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
             },
@@ -133,7 +134,11 @@ impl CompositorHandler for State {
             .find(|win| win.wl_surface().as_ref() == Some(surface))
             .cloned()
         {
-            let is_mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some());
+            let Some(is_mapped) =
+                with_renderer_surface_state(surface, |state| state.buffer().is_some())
+            else {
+                unreachable!("on_commit_buffer_handler was called previously");
+            };
 
             if is_mapped {
                 self.new_windows.retain(|win| win != &new_window);
@@ -435,6 +440,7 @@ impl ShmHandler for State {
 }
 delegate_shm!(State);
 
+impl OutputHandler for State {}
 delegate_output!(State);
 
 delegate_viewporter!(State);

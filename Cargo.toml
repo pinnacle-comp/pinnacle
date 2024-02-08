@@ -13,29 +13,29 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
-smithay = { git = "https://github.com/Smithay/smithay", rev = "810df89", default-features = false, features = ["desktop", "wayland_frontend"] }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "810df89", optional = true }
-thiserror = "1"
-xcursor = { version = "0.3", optional = true }
-image = { version = "0.24", default-features = false, optional = true }
-serde = { version = "1.0", features = ["derive"] }
-x11rb = { version = "0.13", default-features = false, features = ["composite"], optional = true }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "1074914", default-features = false, features = ["desktop", "wayland_frontend"] }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1074914", optional = true }
+thiserror = "1.0.56"
+xcursor = { version = "0.3.5", optional = true }
+image = { version = "0.24.8", default-features = false, optional = true }
+serde = { version = "1.0.196", features = ["derive"] }
+x11rb = { version = "0.13.0", default-features = false, features = ["composite"], optional = true }
 shellexpand = "3.1.0"
-toml = "0.8"
-anyhow = { version = "1.0.75", features = ["backtrace"] }
-clap = { version = "4.4", features = ["derive"] }
-xkbcommon = "0.7"
+toml = "0.8.10"
+anyhow = { version = "1.0.79", features = ["backtrace"] }
+clap = { version = "4.4.18", features = ["derive"] }
+xkbcommon = "0.7.0"
 xdg = "2.5.2"
-lazy_static = "1.4"
+lazy_static = "1.4.0"
 sysinfo = "0.30.5"
-nix = { version = "0.27", features = ["user", "resource"] }
+nix = { version = "0.27.1", features = ["user", "resource"] }
 prost = "0.12.3"
 prost-types = "0.12.3"
 tonic = "0.10.2"
 tonic-reflection = "0.10.2"
 tokio-stream = { version = "0.1.14", features = ["net"] }
-tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "process", "io-util", "signal"]}
-bitflags = "2.4.1"
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "process", "io-util", "signal"]}
+bitflags = "2.4.2"
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 
 [build-dependencies]
