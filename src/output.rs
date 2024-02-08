@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::RefCell;
+use std::{cell::RefCell, marker::PhantomData};
 
 use smithay::output::Output;
 
@@ -52,4 +52,50 @@ impl OutputState {
     pub fn focused_tags(&self) -> impl Iterator<Item = &Tag> {
         self.tags.iter().filter(|tag| tag.active())
     }
+}
+
+trait OutputSignal {
+    type Callback;
+}
+
+///////////////////////////////////////////
+
+#[derive(Copy, Clone)]
+struct OutputSignalConnect;
+
+impl OutputSignal for OutputSignalConnect {
+    type Callback = Box<dyn FnMut(Output)>;
+}
+
+#[derive(Copy, Clone)]
+struct OutputSignalDisconnect;
+
+impl OutputSignal for OutputSignalDisconnect {
+    type Callback = Box<dyn FnMut(Output, i32)>;
+}
+
+// impl OutputSignalConnect {
+//     fn do_something(&self) -> <OutputSignalConnect as OutputSignal>::Callback {
+//         todo!()
+//     }
+// }
+
+fn connect_signal<S: OutputSignal>(signal: S, callback: <S as OutputSignal>::Callback) {}
+
+fn do_things() {
+    connect_signal(OutputSignalConnect, Box::new(|output| {}));
+    connect_signal(OutputSignalDisconnect, Box::new(|output, num| {}));
+}
+
+///////// ENUM
+
+enum OpSignal {
+    Connect(Box<dyn FnMut(Output)>),
+    Disconnect(Box<dyn FnMut(Output, i32)>),
+}
+
+fn connect_signal_enum(signal: OpSignal) {}
+
+fn do_things_enum() {
+    connect_signal_enum(OpSignal::Connect(Box::new(|output| {})));
 }

@@ -337,6 +337,30 @@ function Input:set_libinput_settings(settings)
     end
 end
 
+---@param func fun(code: integer, state: integer, x: number, y: number)
+function Input:connect_pointer_button(func)
+    local pin = require("pinnacle")
+    if not pin.callbacks.input_pointer_button then
+        require("pinnacle.signal").new(self.config_client):connect_signal("SIGNAL_INPUT_POINTER_BUTTON")
+    end
+
+    pin.callbacks.input_pointer_button = function(response)
+        func(response.code, response.state, response.x, response.y)
+    end
+end
+
+---@param func fun(x: number, y: number)
+function Input:connect_pointer_motion(func)
+    local pin = require("pinnacle")
+    if not pin.callbacks.input_pointer_motion then
+        require("pinnacle.signal").new(self.config_client):connect_signal("SIGNAL_INPUT_POINTER_MOTION")
+    end
+
+    pin.callbacks.input_pointer_motion = function(response)
+        func(response.x, response.y)
+    end
+end
+
 function input.new(config_client)
     ---@type Input
     local self = {

@@ -4,6 +4,7 @@ use crate::{
     backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
     grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
+use pinnacle_api_defs::pinnacle::signal::{self, v0alpha1::ListenResponse};
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -30,8 +31,10 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
-use std::{cell::RefCell, sync::Arc, time::Duration};
+use std::{cell::RefCell, collections::HashSet, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::Status;
 
 use crate::input::InputState;
 
@@ -91,6 +94,9 @@ pub struct State {
 
     // Currently only used to keep track of if the server has started
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
+
+    pub connected_signals: HashSet<signal::v0alpha1::Signal>,
+    pub signal_sender: Option<UnboundedSender<Result<ListenResponse, Status>>>,
 }
 
 impl State {
@@ -264,6 +270,9 @@ impl State {
             ),
 
             grpc_server_join_handle: None,
+
+            connected_signals: HashSet::with_capacity(25),
+            signal_sender: None,
         };
 
         Ok(state)

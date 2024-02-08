@@ -128,17 +128,33 @@ function Client:server_streaming_request(grpc_request_params, callback)
 
     self.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            -- Skip the 1-byte compressed flag and the 4-byte message length
-            local response_body = response_body:sub(6)
+            print("response body hex:", pb.tohex(response_body))
 
-            local success, obj = pcall(pb.decode, response_type, response_body)
-            if not success then
-                print(obj)
-                os.exit(1)
+            ---@type string
+            local response_body = response_body
+
+            while response_body:len() > 0 do
+                -- Grab the msg length
+                local msg_len = string.unpack(">I4", response_body:sub(2, 5))
+
+                -- Skip the 1-byte compressed flag and the 4-byte message length
+                response_body = response_body:sub(6, 6 + msg_len - 1)
+                print("response body hex SUBBED:", pb.tohex(response_body))
+
+                local success, obj = pcall(pb.decode, response_type, response_body)
+                if not success then
+                    print(obj)
+                    os.exit(1)
+                end
+
+                local response = obj
+                callback(response)
+
+                -- print("response body len b4 sub =", response_body:len())
+                -- print("msg len is", msg_len)
+                response_body = response_body:sub(msg_len + 1)
+                -- print("response body len at end =", response_body:len())
             end
-
-            local response = obj
-            callback(response)
         end
 
         local trailers = stream:get_headers()

@@ -12,6 +12,7 @@ local client = require("pinnacle.grpc.client")
 ---@class PinnacleModule
 local pinnacle = {
     version = "v0alpha1",
+    callbacks = {},
 }
 
 ---The Pinnacle module.
@@ -67,6 +68,8 @@ function pinnacle.setup(config_fn)
     setmetatable(self, { __index = Pinnacle })
 
     config_fn(self)
+
+    require("pinnacle.signal").new(config_client):listen()
 
     loop:loop()
 end

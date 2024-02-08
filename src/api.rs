@@ -9,6 +9,13 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
     process::v0alpha1::{SetEnvRequest, SpawnRequest, SpawnResponse},
+    signal::{
+        self,
+        v0alpha1::{
+            signal_service_server, ConnectSignalRequest, DisconnectSignalRequest, ListenRequest,
+            ListenResponse,
+        },
+    },
     tag::v0alpha1::{
         AddRequest, AddResponse, RemoveRequest, SetActiveRequest, SetLayoutRequest, SwitchToRequest,
     },
@@ -1883,5 +1890,80 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
             size,
             location,
         }
+    }
+}
+
+pub struct SignalService {
+    pub sender: StateFnSender,
+}
+
+#[tonic::async_trait]
+impl signal_service_server::SignalService for SignalService {
+    type ListenStream = ResponseStream<ListenResponse>;
+
+    async fn connect_signal(
+        &self,
+        request: Request<ConnectSignalRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let signal = request.signal();
+
+        if let signal::v0alpha1::Signal::Unspecified = signal {
+            return Err(Status::invalid_argument("unspecified signal"));
+        }
+
+        let f = Box::new(move |state: &mut State| {
+            state.connected_signals.insert(signal);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn disconnect_signal(
+        &self,
+        request: Request<DisconnectSignalRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let signal = request.signal();
+
+        if let signal::v0alpha1::Signal::Unspecified = signal {
+            return Err(Status::invalid_argument("unspecified signal"));
+        }
+
+        let f = Box::new(move |state: &mut State| {
+            state.connected_signals.remove(&signal);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        Ok(Response::new(()))
+    }
+
+    async fn listen(
+        &self,
+        _request: Request<ListenRequest>,
+    ) -> Result<Response<Self::ListenStream>, Status> {
+        let (sender, receiver) =
+            tokio::sync::mpsc::unbounded_channel::<Result<ListenResponse, Status>>();
+
+        let f = Box::new(move |state: &mut State| {
+            state.signal_sender = Some(sender);
+        });
+
+        self.sender
+            .send(f)
+            .map_err(|_| Status::internal("internal state was not running"))?;
+
+        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+
+        Ok(Response::new(Box::pin(receiver_stream)))
     }
 }

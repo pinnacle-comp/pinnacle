@@ -1,0 +1,253 @@
+syntax = "proto2";
+
+package pinnacle.signal.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+enum Signal {
+  SIGNAL_UNSPECIFIED = 0;
+  SIGNAL_INPUT_POINTER_BUTTON = 1;
+  SIGNAL_INPUT_POINTER_MOTION = 2;
+  SIGNAL_INPUT_POINTER_AXIS = 3;
+  SIGNAL_INPUT_KEYBOARD = 4;
+
+  SIGNAL_WINDOW_POINTER_BUTTON = 5;
+  SIGNAL_WINDOW_POINTER_MOTION = 6;
+  SIGNAL_WINDOW_POINTER_AXIS = 7;
+  SIGNAL_WINDOW_POINTER_ENTER = 8;
+  SIGNAL_WINDOW_POINTER_LEAVE = 9;
+  SIGNAL_WINDOW_KEYBOARD = 10;
+  SIGNAL_WINDOW_OPEN = 11;
+  SIGNAL_WINDOW_CLOSE = 12;
+  SIGNAL_WINDOW_FULLSCREEN = 13;
+  SIGNAL_WINDOW_MAXIMIZE = 14;
+  SIGNAL_WINDOW_FLOATING = 15;
+  SIGNAL_WINDOW_MOVE = 16;
+  SIGNAL_WINDOW_RESIZE = 17;
+
+  SIGNAL_OUTPUT_CONNECT = 18;
+  SIGNAL_OUTPUT_DISCONNECT = 19;
+  SIGNAL_OUTPUT_MOVE = 20;
+
+  SIGNAL_TAG_ADD = 21;
+  SIGNAL_TAG_REMOVE = 22;
+  SIGNAL_TAG_ACTIVE = 23;
+  SIGNAL_TAG_WINDOW_TAGGED = 24;
+  SIGNAL_TAG_WINDOW_UNTAGGED = 25;
+}
+
+enum State {
+  STATE_UNSPECIFIED = 0;
+  STATE_PRESS = 1;
+  STATE_RELEASE = 2;
+}
+
+message InputPointerButton {
+  // The numerical code of the button, given by one of the
+  // `BTN_` constants in `input-event-codes.h`.
+  optional uint32 code = 1;
+  // Whether the button was pressed or released.
+  optional State state = 2;
+  // The mouse x-coord in the global space at the time of the event.
+  optional double x = 3;
+  // The mouse y-coord in the global space at the time of the event.
+  optional double y = 4;
+}
+
+message InputPointerMotion {
+  optional double x = 1;
+  optional double y = 2;
+}
+
+message InputPointerAxis {
+  // The amount the device scrolled vertically.
+  //
+  // A value of 3.0 corresponds to one scroll wheel detent.
+  optional float vertical_value = 1;
+  // The amount the device scrolled horizontally.
+  //
+  // A value of 3.0 corresponds to one scroll wheel detent.
+  optional float horizontal_value = 2;
+  // The amount the device scrolled vertically, in discrete steps.
+  //
+  // A value of 120 corresponds to one scroll wheel detent.
+  optional uint32 vertical_value_discrete = 3;
+  // The amount the device scrolled horizontally, in discrete steps.
+  //
+  // A value of 120 corresponds to one scroll wheel detent.
+  optional uint32 horizontal_value_discrete = 4;
+}
+
+message InputKeyboard {
+  optional uint32 code = 1;
+  optional State state = 2;
+  repeated uint32 raw_keysyms = 3;
+  repeated uint32 modified_keysyms = 4;
+}
+
+message WindowPointerButton {
+  optional uint32 window_id = 1;
+  optional InputPointerButton pointer_button = 2;
+}
+
+message WindowPointerMotion {
+  optional uint32 window_id = 1;
+  optional InputPointerMotion pointer_motion = 2;
+}
+
+message WindowPointerAxis {
+  optional uint32 window_id = 1;
+  optional InputPointerAxis pointer_axis = 2;
+}
+
+message WindowPointerEnter {
+  optional uint32 window_id = 1;
+}
+
+message WindowPointerLeave {
+  optional uint32 window_id = 1;
+}
+
+message WindowKeyboard {
+  optional uint32 window_id = 1;
+  optional InputKeyboard keyboard = 2;
+}
+
+message WindowOpen {
+  optional uint32 window_id = 1;
+}
+
+message WindowClose {
+  optional uint32 window_id = 1;
+}
+
+message WindowFullscreen {
+  optional uint32 window_id = 1;
+  optional bool fullscreen = 2;
+}
+
+message WindowMaximize {
+  optional uint32 window_id = 1;
+  optional bool maximize = 2;
+}
+
+message WindowFloating {
+  optional uint32 window_id = 1;
+  optional bool floating = 2;
+}
+
+message WindowMove {
+  optional uint32 window_id = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+}
+
+message WindowResize {
+  optional uint32 window_id = 1;
+  optional uint32 width = 2;
+  optional uint32 height = 3;
+}
+
+message OutputConnect {
+  optional string output_name = 1;
+}
+
+message OutputDisconnect {
+  optional string output_name = 1;
+}
+
+message OutputMove {
+  optional string output_name = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+}
+
+message TagAdd {
+  optional uint32 tag_id = 1;
+}
+
+message TagRemove {
+  optional uint32 tag_id = 1;
+}
+
+message TagActive {
+  optional uint32 tag_id = 1;
+  optional bool active = 2;
+}
+
+message TagWindowTagged {
+  optional uint32 tag_id = 1;
+  optional uint32 window_id = 2;
+}
+
+message TagWindowUntagged {
+  optional uint32 tag_id = 1;
+  optional uint32 window_id = 2;
+}
+
+message ConnectSignalRequest {
+  optional Signal signal = 1;
+}
+
+message DisconnectSignalRequest {
+  optional Signal signal = 1;
+}
+
+message ListenRequest {}
+
+message ListenResponse {
+  oneof signal {
+    InputPointerButton input_pointer_button = 1;
+    InputPointerMotion input_pointer_motion = 2;
+    InputPointerAxis input_pointer_axis = 3;
+    InputKeyboard input_keyboard = 4;
+
+    WindowPointerButton window_pointer_button = 5;
+    WindowPointerMotion window_pointer_motion = 6;
+    WindowPointerAxis window_pointer_axis = 7;
+    WindowPointerEnter window_pointer_enter = 8;
+    WindowPointerLeave window_pointer_leave = 9;
+    WindowKeyboard window_keyboard = 10;
+    WindowOpen window_open = 11;
+    WindowClose window_close = 12;
+    WindowFullscreen window_fullscreen = 13;
+    WindowMaximize window_maximize = 14;
+    WindowFloating window_floating = 15;
+    WindowMove window_move = 16;
+    WindowResize window_resize = 17;
+
+    OutputConnect output_connect = 18;
+    OutputDisconnect output_disconnect = 19;
+    OutputMove output_move = 20;
+ 
+    // FIXME: Need to send ack for stuff like OutputDisconnect and TagRemove
+
+    TagAdd tag_add = 21;
+    TagRemove tag_remove = 22;
+    TagActive tag_active = 23;
+    TagWindowTagged tag_window_tagged = 24;
+    TagWindowUntagged tag_window_untagged = 25;
+  }
+}
+
+service SignalService {
+  // Notify the compositor that this client requests to connect the given
+  // signal.
+  //
+  // The compositor will begin sending relevant signals through the stream.
+  rpc ConnectSignal(ConnectSignalRequest) returns (google.protobuf.Empty);
+
+  // Notify the compositor that this client wishes to stop receiving signals
+  // for the given signal.
+  //
+  // Handling of when to disconnect should be implemented on a per-client basis.
+  // This would normally be when the user has disconnected all signals of the
+  // given type.
+  rpc DisconnectSignal(DisconnectSignalRequest) returns (google.protobuf.Empty);
+
+  // Listen for incoming signals.
+  //
+  // The compositor will send signals through the returned stream for any
+  // signal the client has explicitly `Connect`ed.
+  rpc Listen(ListenRequest) returns (stream ListenResponse);
+}
