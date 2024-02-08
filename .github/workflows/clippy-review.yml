@@ -1,4 +1,4 @@
-name: CI (Pinnacle)
+name: Clippy Review
 
 on:
   workflow_dispatch:
