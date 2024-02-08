@@ -2,8 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local client = require("pinnacle.grpc.client")
+
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.tag." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.tag." .. client.version .. "."
 local service = prefix .. "TagService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -53,15 +55,8 @@ local tag_handle = {}
 ---This can be retrieved through the various `get` functions in the `Tag` module.
 ---@classmod
 ---@class TagHandle
----@field private config_client Client
 ---@field id integer
 local TagHandle = {}
-
----@nodoc
----@class TagModule
----@field private handle TagHandleModule
-local tag = {}
-tag.handle = tag_handle
 
 ---Tag management.
 ---
@@ -79,20 +74,21 @@ tag.handle = tag_handle
 ---
 ---If you need to get tags beyond the first with the same name, use the `get` method and find what you need.
 ---@class Tag
----@field private config_client Client
-local Tag = {}
+---@field private handle TagHandleModule
+local tag = {}
+tag.handle = tag_handle
 
 ---Get all tags across all outputs.
 ---
 ---@return TagHandle[]
-function Tag:get_all()
-    local response = self.config_client:unary_request(build_grpc_request_params("Get", {}))
+function tag.get_all()
+    local response = client.unary_request(build_grpc_request_params("Get", {}))
 
     ---@type TagHandle[]
     local handles = {}
 
     for _, id in ipairs(response.tag_ids or {}) do
-        table.insert(handles, tag_handle.new(self.config_client, id))
+        table.insert(handles, tag_handle.new(id))
     end
 
     return handles
@@ -107,24 +103,24 @@ end
 ---### Example
 ---```lua
 --- -- Get tags on the focused output
----local tag = Tag:get("Tag")
+---local tag = Tag.get("Tag")
 ---
 --- -- Get tags on a specific output
----local tag_on_hdmi1 = Tag:get("Tag", Output:get_by_name("HDMI-1"))
+---local tag_on_hdmi1 = Tag.get("Tag", Output:get_by_name("HDMI-1"))
 ---```
 ---
 ---@param name string
 ---@param output OutputHandle?
 ---
 ---@return TagHandle | nil
-function Tag:get(name, output)
-    output = output or require("pinnacle.output").new(self.config_client):get_focused()
+function tag.get(name, output)
+    output = output or require("pinnacle.output").get_focused()
 
     if not output then
         return
     end
 
-    local handles = self:get_all()
+    local handles = tag.get_all()
 
     for _, handle in ipairs(handles) do
         local props = handle:props()
@@ -142,11 +138,11 @@ end
 ---
 ---### Example
 ---```lua
----local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
 --- -- With a table
 ---local tag_names = { "1", "2", "Buckle", "Shoe" }
----local tags = Tag:add(Output:get_by_name("HDMI-1"), tag_names)
+---local tags = Tag.add(Output.get_by_name("HDMI-1"), tag_names)
 ---```
 ---
 ---@param output OutputHandle
@@ -154,14 +150,14 @@ end
 ---
 ---@return TagHandle[] tags Handles to the created tags
 ---
----@overload fun(self: self, output: OutputHandle, tag_names: string[])
-function Tag:add(output, ...)
+---@overload fun(output: OutputHandle, tag_names: string[])
+function tag.add(output, ...)
     local tag_names = { ... }
     if type(tag_names[1]) == "table" then
         tag_names = tag_names[1] --[=[@as string[]]=]
     end
 
-    local response = self.config_client:unary_request(build_grpc_request_params("Add", {
+    local response = client.unary_request(build_grpc_request_params("Add", {
         output_name = output.name,
         tag_names = tag_names,
     }))
@@ -170,7 +166,7 @@ function Tag:add(output, ...)
     local handles = {}
 
     for _, id in ipairs(response.tag_ids) do
-        table.insert(handles, tag_handle.new(self.config_client, id))
+        table.insert(handles, tag_handle.new(id))
     end
 
     return handles
@@ -180,13 +176,13 @@ end
 ---
 ---### Example
 ---```lua
----local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
----Tag:remove(tags) -- "HDMI-1" no longer has those tags
+---Tag.remove(tags) -- "HDMI-1" no longer has those tags
 ---```
 ---
 ---@param tags TagHandle[]
-function Tag:remove(tags)
+function tag.remove(tags)
     ---@type integer[]
     local ids = {}
 
@@ -194,7 +190,7 @@ function Tag:remove(tags)
         table.insert(ids, tg.id)
     end
 
-    self.config_client:unary_request(build_grpc_request_params("Remove", { tag_ids = ids }))
+    client.unary_request(build_grpc_request_params("Remove", { tag_ids = ids }))
 end
 
 ---@class LayoutCycler
@@ -222,7 +218,7 @@ end
 ---    "corner_top_right".
 ---} -- Only cycle between these four layouts
 ---
----local layout_cycler = Tag:new_layout_cycler()
+---local layout_cycler = Tag.new_layout_cycler()
 ---
 --- -- Assume the focused output starts with the "master_stack" layout
 ---layout_cycler.next() -- Layout is now "dwindle"
@@ -232,14 +228,14 @@ end
 ---layout_cycler.next() -- Layout is now "corner_top_right"
 ---
 --- -- Cycling on another output
----layout_cycler.next(Output:get_by_name("eDP-1"))
----layout_cycler.prev(Output:get_by_name("HDMI-1"))
+---layout_cycler.next(Output.get_by_name("eDP-1"))
+---layout_cycler.prev(Output.get_by_name("HDMI-1"))
 ---```
 ---
 ---@param layouts Layout[]
 ---
 ---@return LayoutCycler
-function Tag:new_layout_cycler(layouts)
+function tag.new_layout_cycler(layouts)
     local indices = {}
 
     if #layouts == 0 then
@@ -252,7 +248,7 @@ function Tag:new_layout_cycler(layouts)
     ---@type LayoutCycler
     return {
         next = function(output)
-            local output = output or require("pinnacle.output").new(self.config_client):get_focused()
+            local output = output or require("pinnacle.output").get_focused()
             if not output then
                 return
             end
@@ -280,7 +276,7 @@ function Tag:new_layout_cycler(layouts)
             end
         end,
         prev = function(output)
-            local output = output or require("pinnacle.output").new(self.config_client):get_focused()
+            local output = output or require("pinnacle.output").get_focused()
             if not output then
                 return
             end
@@ -315,14 +311,14 @@ end
 ---
 ---### Example
 ---```lua
----local tags = Tag:add(Output:get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
+---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
 ---tags[2]:remove()
 ---tags[4]:remove()
 --- -- "HDMI-1" now only has tags "1" and "Buckle"
 ---```
 function TagHandle:remove()
-    self.config_client:unary_request(build_grpc_request_params("Remove", { tag_ids = { self.id } }))
+    client.unary_request(build_grpc_request_params("Remove", { tag_ids = { self.id } }))
 end
 
 local _layouts = {
@@ -350,14 +346,14 @@ local _layouts = {
 ---### Example
 ---```lua
 --- -- Assume the focused output has tag "Tag"
----Tag:get("Tag"):set_layout("dwindle")
+---Tag.get("Tag"):set_layout("dwindle")
 ---```
 ---
 ---@param layout Layout
 function TagHandle:set_layout(layout)
     local layout = _layouts[layout]
 
-    self.config_client:unary_request(build_grpc_request_params("SetLayout", {
+    client.unary_request(build_grpc_request_params("SetLayout", {
         tag_id = self.id,
         layout = layout,
     }))
@@ -371,11 +367,11 @@ end
 --- --  - "1": Alacritty
 --- --  - "2": Firefox, Discord
 --- --  - "3": Steam
----Tag:get("2"):switch_to() -- Displays Firefox and Discord
----Tag:get("3"):switch_to() -- Displays Steam
+---Tag.get("2"):switch_to() -- Displays Firefox and Discord
+---Tag.get("3"):switch_to() -- Displays Steam
 ---```
 function TagHandle:switch_to()
-    self.config_client:unary_request(build_grpc_request_params("SwitchTo", { tag_id = self.id }))
+    client.unary_request(build_grpc_request_params("SwitchTo", { tag_id = self.id }))
 end
 
 ---Set whether or not this tag is active.
@@ -386,14 +382,14 @@ end
 --- --  - "1": Alacritty
 --- --  - "2": Firefox, Discord
 --- --  - "3": Steam
----Tag:get("2"):set_active(true)  -- Displays Firefox and Discord
----Tag:get("3"):set_active(true)  -- Displays Firefox, Discord, and Steam
----Tag:get("2"):set_active(false) -- Displays Steam
+---Tag.get("2"):set_active(true)  -- Displays Firefox and Discord
+---Tag.get("3"):set_active(true)  -- Displays Firefox, Discord, and Steam
+---Tag.get("2"):set_active(false) -- Displays Steam
 ---```
 ---
 ---@param active boolean
 function TagHandle:set_active(active)
-    self.config_client:unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, set = active }))
+    client.unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, set = active }))
 end
 
 ---Toggle this tag's active state.
@@ -404,11 +400,11 @@ end
 --- --  - "1": Alacritty
 --- --  - "2": Firefox, Discord
 --- --  - "3": Steam
----Tag:get("2"):toggle_active() -- Displays Firefox and Discord
----Tag:get("2"):toggle_active() -- Displays nothing
+---Tag.get("2"):toggle_active() -- Displays Firefox and Discord
+---Tag.get("2"):toggle_active() -- Displays nothing
 ---```
 function TagHandle:toggle_active()
-    self.config_client:unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, toggle = {} }))
+    client.unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, toggle = {} }))
 end
 
 ---@class TagProperties
@@ -420,13 +416,12 @@ end
 ---
 ---@return TagProperties
 function TagHandle:props()
-    local response = self.config_client:unary_request(build_grpc_request_params("GetProperties", { tag_id = self.id }))
+    local response = client.unary_request(build_grpc_request_params("GetProperties", { tag_id = self.id }))
 
     return {
         active = response.active,
         name = response.name,
-        output = response.output_name
-            and require("pinnacle.output").handle.new(self.config_client, response.output_name),
+        output = response.output_name and require("pinnacle.output").handle.new(response.output_name),
     }
 end
 
@@ -458,25 +453,12 @@ function TagHandle:output()
 end
 
 ---@nodoc
----@return Tag
-function tag.new(config_client)
-    ---@type Tag
-    local self = {
-        config_client = config_client,
-    }
-    setmetatable(self, { __index = Tag })
-    return self
-end
-
----@nodoc
 ---Create a new `TagHandle` from an id.
----@param config_client Client
 ---@param tag_id integer
 ---@return TagHandle
-function tag_handle.new(config_client, tag_id)
+function tag_handle.new(tag_id)
     ---@type TagHandle
     local self = {
-        config_client = config_client,
         id = tag_id,
     }
     setmetatable(self, { __index = TagHandle })
@@ -484,15 +466,14 @@ function tag_handle.new(config_client, tag_id)
 end
 
 ---@nodoc
----@param config_client Client
 ---@param tag_ids integer[]
 ---@return TagHandle[]
-function tag_handle.new_from_table(config_client, tag_ids)
+function tag_handle.new_from_table(tag_ids)
     ---@type TagHandle[]
     local handles = {}
 
     for _, id in ipairs(tag_ids) do
-        table.insert(handles, tag_handle.new(config_client, id))
+        table.insert(handles, tag_handle.new(id))
     end
 
     return handles

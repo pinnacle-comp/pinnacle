@@ -2,8 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local client = require("pinnacle.grpc.client")
+
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.window." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.window." .. client.version .. "."
 local service = prefix .. "WindowService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -59,38 +61,30 @@ local window_handle = {}
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---@classmod
 ---@class WindowHandle
----@field private config_client Client
 ---@field id integer
 local WindowHandle = {}
-
----@nodoc
----@class WindowModule
----@field private handle WindowHandleModule
-local window = {}
-window.handle = window_handle
 
 ---Window management.
 ---
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class Window
----@field private config_client Client
-local Window = {}
+local window = {}
 
 ---Get all windows.
 ---
 ---### Example
 ---```lua
----local windows = Window:get_all()
+---local windows = Window.get_all()
 ---for _, window in ipairs(windows) do
 ---    print(window:props().class)
 ---end
 ---```
 ---@return WindowHandle[] windows Handles to all windows
-function Window:get_all()
-    local response = self.config_client:unary_request(build_grpc_request_params("Get", {}))
+function window.get_all()
+    local response = client.unary_request(build_grpc_request_params("Get", {}))
 
-    local handles = window_handle.new_from_table(self.config_client, response.window_ids or {})
+    local handles = window_handle.new_from_table(response.window_ids or {})
 
     return handles
 end
@@ -99,14 +93,14 @@ end
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    print(focused:props().class)
 ---end
 ---```
 ---@return WindowHandle | nil window A handle to the currently focused window
-function Window:get_focused()
-    local handles = self:get_all()
+function window.get_focused()
+    local handles = window.get_all()
 
     for _, handle in ipairs(handles) do
         if handle:props().focused then
@@ -124,14 +118,14 @@ end
 ---
 ---### Example
 ---```lua
----Input:mousebind({ "super" }, "btn_left", function()
----    Window:begin_move("btn_left")
+---Input.mousebind({ "super" }, "btn_left", function()
+---    Window.begin_move("btn_left")
 ---end)
 ---```
 ---@param button MouseButton The button that will initiate the move
-function Window:begin_move(button)
+function window.begin_move(button)
     local button = require("pinnacle.input").btn[button]
-    self.config_client:unary_request(build_grpc_request_params("MoveGrab", { button = button }))
+    client.unary_request(build_grpc_request_params("MoveGrab", { button = button }))
 end
 
 ---Begin resizing this window using the specified mouse button.
@@ -141,14 +135,14 @@ end
 ---
 ---### Example
 ---```lua
----Input:mousebind({ "super" }, "btn_right", function()
----    Window:begin_resize("btn_right")
+---Input.mousebind({ "super" }, "btn_right", function()
+---    Window.begin_resize("btn_right")
 ---end)
 ---```
 ---@param button MouseButton The button that will initiate the resize
-function Window:begin_resize(button)
+function window.begin_resize(button)
     local button = require("pinnacle.input").btn[button]
-    self.config_client:unary_request(build_grpc_request_params("ResizeGrab", { button = button }))
+    client.unary_request(build_grpc_request_params("ResizeGrab", { button = button }))
 end
 
 ---@class WindowRuleCondition
@@ -204,7 +198,7 @@ local _fullscreen_or_maximized_keys = {
 ---### Examples
 ---```lua
 --- -- A simple window rule. This one will cause Firefox to open on tag "Browser".
----Window:add_window_rule({
+---Window.add_window_rule({
 ---    cond = { classes = { "firefox" } },
 ---    rule = { tags = { "Browser" } },
 ---})
@@ -212,7 +206,7 @@ local _fullscreen_or_maximized_keys = {
 --- -- To apply rules when *all* provided conditions are true, use `all`.
 --- -- `all` takes an array of conditions and checks if all are true.
 --- -- The following will open Steam fullscreen only if it opens on tag "5".
----Window:add_window_rule({
+---Window.add_window_rule({
 ---    cond = {
 ---        all = {
 ---            {
@@ -226,7 +220,7 @@ local _fullscreen_or_maximized_keys = {
 ---
 --- -- The outermost block of a `cond` is implicitly an `all` block.
 --- -- Thus, the above can be shortened to:
----Window:add_window_rule({
+---Window.add_window_rule({
 ---    cond = {
 ---        class = "steam",
 ---        tag = Tag:get("5"),
@@ -236,7 +230,7 @@ local _fullscreen_or_maximized_keys = {
 ---
 --- -- `any` also exists to allow at least one provided condition to match.
 --- -- The following will open either xterm or Alacritty floating.
----Window:add_window_rule({
+---Window.add_window_rule({
 ---    cond = {
 ---        any = { { classes = { "xterm", "Alacritty" } } }
 ---    },
@@ -246,7 +240,7 @@ local _fullscreen_or_maximized_keys = {
 --- -- You can arbitrarily nest `any` and `all` to achieve desired logic.
 --- -- The following will open Discord, Thunderbird, or Firefox floating if they
 --- -- open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
----Window:add_window_rule({
+---Window.add_window_rule({
 ---    cond = {
 ---        all = { -- This `all` block is needed because the outermost block cannot be an array.
 ---            { any = {
@@ -270,7 +264,7 @@ local _fullscreen_or_maximized_keys = {
 ---```
 ---
 ---@param rule { cond: WindowRuleCondition, rule: WindowRule } The condition and rule
-function Window:add_window_rule(rule)
+function window.add_window_rule(rule)
     if rule.cond.tags then
         local ids = {}
         for _, tg in ipairs(rule.cond.tags) do
@@ -295,7 +289,7 @@ function Window:add_window_rule(rule)
         rule.rule.fullscreen_or_maximized = _fullscreen_or_maximized[rule.rule.fullscreen_or_maximized]
     end
 
-    self.config_client:unary_request(build_grpc_request_params("AddWindowRule", {
+    client.unary_request(build_grpc_request_params("AddWindowRule", {
         cond = rule.cond,
         rule = rule.rule,
     }))
@@ -305,11 +299,11 @@ end
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then focused:close() end
 ---```
 function WindowHandle:close()
-    self.config_client:unary_request(build_grpc_request_params("Close", { window_id = self.id }))
+    client.unary_request(build_grpc_request_params("Close", { window_id = self.id }))
 end
 
 ---Set this window's location and/or size.
@@ -328,7 +322,7 @@ end
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:set_floating(true)                     -- `set_geometry` only applies to floating geometry.
 ---
@@ -339,14 +333,14 @@ end
 ---```
 ---@param geo { x: integer?, y: integer, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
-    self.config_client:unary_request(build_grpc_request_params("SetGeometry", { window_id = self.id, geometry = geo }))
+    client.unary_request(build_grpc_request_params("SetGeometry", { window_id = self.id, geometry = geo }))
 end
 
 ---Set this window to fullscreen or not.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:set_fullscreen(true)
 ---    focused:set_fullscreen(false)
@@ -355,29 +349,27 @@ end
 ---
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
-    self.config_client:unary_request(
-        build_grpc_request_params("SetFullscreen", { window_id = self.id, set = fullscreen })
-    )
+    client.unary_request(build_grpc_request_params("SetFullscreen", { window_id = self.id, set = fullscreen }))
 end
 
 ---Toggle this window to and from fullscreen.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:toggle_fullscreen()
 ---end
 ---```
 function WindowHandle:toggle_fullscreen()
-    self.config_client:unary_request(build_grpc_request_params("SetFullscreen", { window_id = self.id, toggle = {} }))
+    client.unary_request(build_grpc_request_params("SetFullscreen", { window_id = self.id, toggle = {} }))
 end
 
 ---Set this window to maximized or not.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:set_maximized(true)
 ---    focused:set_maximized(false)
@@ -386,29 +378,27 @@ end
 ---
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
-    self.config_client:unary_request(
-        build_grpc_request_params("SetMaximized", { window_id = self.id, set = maximized })
-    )
+    client.unary_request(build_grpc_request_params("SetMaximized", { window_id = self.id, set = maximized }))
 end
 
 ---Toggle this window to and from maximized.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:toggle_maximized()
 ---end
 ---```
 function WindowHandle:toggle_maximized()
-    self.config_client:unary_request(build_grpc_request_params("SetMaximized", { window_id = self.id, toggle = {} }))
+    client.unary_request(build_grpc_request_params("SetMaximized", { window_id = self.id, toggle = {} }))
 end
 
 ---Set this window to floating or not.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:set_floating(true)
 ---    focused:set_floating(false)
@@ -417,20 +407,20 @@ end
 ---
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
-    self.config_client:unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, set = floating }))
+    client.unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, set = floating }))
 end
 
 ---Toggle this window to and from floating.
 ---
 ---### Example
 ---```lua
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
 ---    focused:toggle_floating()
 ---end
 ---```
 function WindowHandle:toggle_floating()
-    self.config_client:unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, toggle = {} }))
+    client.unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, toggle = {} }))
 end
 
 ---Move this window to the specified tag.
@@ -440,15 +430,15 @@ end
 ---### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
----    focused:move_to_tag(Tag:get("Tag"))
+---    focused:move_to_tag(Tag.get("Tag"))
 ---end
 ---```
 ---
 ---@param tag TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
-    self.config_client:unary_request(build_grpc_request_params("MoveToTag", { window_id = self.id, tag_id = tag.id }))
+    client.unary_request(build_grpc_request_params("MoveToTag", { window_id = self.id, tag_id = tag.id }))
 end
 
 ---Tag or untag the given tag on this window.
@@ -456,9 +446,9 @@ end
 ---### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
----    local tag = Tag:get("Tag")
+---    local tag = Tag.get("Tag")
 ---
 ---    focused:set_tag(tag, true)
 ---    -- `focused` now has tag "Tag"
@@ -470,9 +460,7 @@ end
 ---@param tag TagHandle The tag to set or unset
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
-    self.config_client:unary_request(
-        build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, set = set })
-    )
+    client.unary_request(build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, set = set }))
 end
 
 ---Toggle the given tag on this window.
@@ -480,9 +468,9 @@ end
 ---### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
----local focused = Window:get_focused()
+---local focused = Window.get_focused()
 ---if focused then
----    local tag = Tag:get("Tag")
+---    local tag = Tag.get("Tag")
 ---    focused:set_tag(tag, false)
 ---
 ---    focused:toggle_tag(tag)
@@ -494,9 +482,7 @@ end
 ---
 ---@param tag TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
-    self.config_client:unary_request(
-        build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, toggle = {} })
-    )
+    client.unary_request(build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, toggle = {} }))
 end
 
 ---@class WindowProperties
@@ -512,13 +498,11 @@ end
 ---
 ---@return WindowProperties
 function WindowHandle:props()
-    local response =
-        self.config_client:unary_request(build_grpc_request_params("GetProperties", { window_id = self.id }))
+    local response = client.unary_request(build_grpc_request_params("GetProperties", { window_id = self.id }))
 
     response.fullscreen_or_maximized = _fullscreen_or_maximized_keys[response.fullscreen_or_maximized]
 
-    response.tags = response.tag_ids
-        and require("pinnacle.tag").handle.new_from_table(self.config_client, response.tag_ids)
+    response.tags = response.tag_ids and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
     response.tag_ids = nil
 
     return response
@@ -588,26 +572,12 @@ function WindowHandle:tags()
 end
 
 ---@nodoc
----@param config_client Client
----@return Window
-function window.new(config_client)
-    ---@type Window
-    local self = {
-        config_client = config_client,
-    }
-    setmetatable(self, { __index = Window })
-    return self
-end
-
----@nodoc
 ---Create a new `WindowHandle` from an id.
----@param config_client Client
 ---@param window_id integer
 ---@return WindowHandle
-function window_handle.new(config_client, window_id)
+function window_handle.new(window_id)
     ---@type WindowHandle
     local self = {
-        config_client = config_client,
         id = window_id,
     }
     setmetatable(self, { __index = WindowHandle })
@@ -615,16 +585,15 @@ function window_handle.new(config_client, window_id)
 end
 
 ---@nodoc
----@param config_client Client
 ---@param window_ids integer[]
 ---
 ---@return WindowHandle[]
-function window_handle.new_from_table(config_client, window_ids)
+function window_handle.new_from_table(window_ids)
     ---@type WindowHandle[]
     local handles = {}
 
     for _, id in ipairs(window_ids) do
-        table.insert(handles, window_handle.new(config_client, id))
+        table.insert(handles, window_handle.new(id))
     end
 
     return handles

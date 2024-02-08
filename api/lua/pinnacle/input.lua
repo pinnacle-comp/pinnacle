@@ -2,8 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local client = require("pinnacle.grpc.client")
+
 ---The protobuf absolute path prefix
-local prefix = "pinnacle.input." .. require("pinnacle").version .. "."
+local prefix = "pinnacle.input." .. client.version .. "."
 local service = prefix .. "InputService"
 
 ---@type table<string, { request_type: string?, response_type: string? }>
@@ -97,20 +99,15 @@ local mouse_edge_values = {
 ---| "press" Trigger on mouse button press
 ---| "release" Trigger on mouse button release
 
----@nodoc
----@class InputModule
----@field private btn table
-local input = {}
-input.btn = mouse_button_values
-
 ---Input management.
 ---
 ---This module provides utilities to set key- and mousebinds as well as change keyboard settings.
 ---@class Input
----@field private config_client Client
-local Input = {
+---@field private btn table
+local input = {
     key = require("pinnacle.input.keys"),
 }
+input.btn = mouse_button_values
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
 ---
@@ -127,29 +124,29 @@ local Input = {
 ---Usually, it's best to use the non-modified key to prevent confusion and unintended behavior.
 ---
 ---```lua
----Input:keybind({ "shift" }, "a", function() end) -- This is preferred
----Input:keybind({ "shift" }, "A", function() end) -- over this
+---Input.keybind({ "shift" }, "a", function() end) -- This is preferred
+---Input.keybind({ "shift" }, "A", function() end) -- over this
 ---
 --- -- This keybind will only work with capslock on.
----Input:keybind({}, "A", function() end)
+---Input.keybind({}, "A", function() end)
 ---
 --- -- This keybind won't work at all because to get `@` you need to hold shift,
 --- -- which this keybind doesn't accept.
----Input:keybind({ "ctrl" }, "@", function() end)
+---Input.keybind({ "ctrl" }, "@", function() end)
 ---```
 ---
 ---### Example
 ---```lua
 --- -- Set `super + Return` to open Alacritty
----Input:keybind({ "super" }, Input.key.Return, function()
----    Process:spawn("alacritty")
+---Input.keybind({ "super" }, Input.key.Return, function()
+---    Process.spawn("alacritty")
 ---end)
 ---```
 ---
 ---@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
 ---@param key Key | string The key used to trigger the bind
 ---@param action fun() The function to run when the bind is triggered
-function Input:keybind(mods, key, action)
+function input.keybind(mods, key, action)
     local raw_code = nil
     local xkb_name = nil
 
@@ -164,7 +161,7 @@ function Input:keybind(mods, key, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    self.config_client:server_streaming_request(
+    client.server_streaming_request(
         build_grpc_request_params("SetKeybind", {
             modifiers = mod_values,
             raw_code = raw_code,
@@ -181,8 +178,8 @@ end
 ---### Example
 ---```lua
 --- -- Set `super + left mouse button` to move a window on press
----Input:mousebind({ "super" }, "btn_left", "press", function()
----    Window:begin_move("btn_left")
+---Input.mousebind({ "super" }, "btn_left", "press", function()
+---    Window.begin_move("btn_left")
 ---end)
 ---```
 ---
@@ -190,7 +187,7 @@ end
 ---@param button MouseButton The mouse button used to trigger the bind
 ---@param edge MouseEdge "press" or "release" to trigger on button press or release
 ---@param action fun() The function to run when the bind is triggered
-function Input:mousebind(mods, button, edge, action)
+function input.mousebind(mods, button, edge, action)
     local edge = mouse_edge_values[edge]
 
     local mod_values = {}
@@ -198,7 +195,7 @@ function Input:mousebind(mods, button, edge, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    self.config_client:server_streaming_request(
+    client.server_streaming_request(
         build_grpc_request_params("SetMousebind", {
             modifiers = mod_values,
             button = mouse_button_values[button],
@@ -223,28 +220,28 @@ end
 ---
 ---### Example
 ---```lua
----Input:set_xkb_config({
+---Input.set_xkb_config({
 ---    layout = "us,fr,ge",
 ---    options = "ctrl:swapcaps,caps:shift"
 ---})
 ---```
 ---
 ---@param xkb_config XkbConfig The new xkbconfig
-function Input:set_xkb_config(xkb_config)
-    self.config_client:unary_request(build_grpc_request_params("SetXkbConfig", xkb_config))
+function input.set_xkb_config(xkb_config)
+    client.unary_request(build_grpc_request_params("SetXkbConfig", xkb_config))
 end
 
 ---Set the keyboard's repeat rate and delay.
 ---
 ---### Example
 ---```lua
----Input:set_repeat_rate(100, 1000) -- Key must be held down for 1 second, then repeats 10 times per second.
+---Input.set_repeat_rate(100, 1000) -- Key must be held down for 1 second, then repeats 10 times per second.
 ---```
 ---
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
-function Input:set_repeat_rate(rate, delay)
-    self.config_client:unary_request(build_grpc_request_params("SetRepeatRate", {
+function input.set_repeat_rate(rate, delay)
+    client.unary_request(build_grpc_request_params("SetRepeatRate", {
         rate = rate,
         delay = delay,
     }))
@@ -308,42 +305,39 @@ local tap_button_map_values = {
 ---
 ---This includes settings for pointer devices, like acceleration profiles, natural scroll, and more.
 ---
+---### Example
+---```lua
+---Input.set_libinput_settings({
+---    accel_profile = "flat",
+---    natural_scroll = true,
+---})
+---```
+---
 ---@param settings LibinputSettings
-function Input:set_libinput_settings(settings)
+function input.set_libinput_settings(settings)
     for setting, value in pairs(settings) do
         if setting == "accel_profile" then
-            self.config_client:unary_request(
+            client.unary_request(
                 build_grpc_request_params("SetLibinputSetting", { [setting] = accel_profile_values[value] })
             )
         elseif setting == "calibration_matrix" then
-            self.config_client:unary_request(
-                build_grpc_request_params("SetLibinputSetting", { [setting] = { matrix = value } })
-            )
+            client.unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = { matrix = value } }))
         elseif setting == "click_method" then
-            self.config_client:unary_request(
+            client.unary_request(
                 build_grpc_request_params("SetLibinputSetting", { [setting] = click_method_values[value] })
             )
         elseif setting == "scroll_method" then
-            self.config_client:unary_request(
+            client.unary_request(
                 build_grpc_request_params("SetLibinputSetting", { [setting] = scroll_method_values[value] })
             )
         elseif setting == "tap_button_map" then
-            self.config_client:unary_request(
+            client.unary_request(
                 build_grpc_request_params("SetLibinputSetting", { [setting] = tap_button_map_values[value] })
             )
         else
-            self.config_client:unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = value }))
+            client.unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = value }))
         end
     end
-end
-
-function input.new(config_client)
-    ---@type Input
-    local self = {
-        config_client = config_client,
-    }
-    setmetatable(self, { __index = Input })
-    return self
 end
 
 return input

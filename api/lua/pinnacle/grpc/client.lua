@@ -22,15 +22,27 @@ local function create_request_headers(service, method)
     return req_headers
 end
 
----@nodoc
----@class ClientModule
-local client = {}
+local function new_conn()
+    local sock = socket.connect({
+        path = os.getenv("PINNACLE_GRPC_SOCKET"),
+    })
+    sock:connect()
+
+    local conn = h2_connection.new(sock, "client")
+    conn:connect()
+
+    return conn
+end
 
 ---@nodoc
 ---@class Client
 ---@field conn H2Connection
 ---@field loop CqueuesLoop
-local Client = {}
+local client = {
+    conn = new_conn(),
+    loop = require("cqueues").new(),
+    version = "v0alpha1",
+}
 
 ---@class GrpcRequestParams
 ---@field service string
@@ -49,8 +61,8 @@ local Client = {}
 ---`google.protobuf.Empty`.
 ---@param grpc_request_params GrpcRequestParams
 ---@return table
-function Client:unary_request(grpc_request_params)
-    local stream = self.conn:new_stream()
+function client.unary_request(grpc_request_params)
+    local stream = client.conn:new_stream()
 
     local service = grpc_request_params.service
     local method = grpc_request_params.method
@@ -98,8 +110,8 @@ end
 ---`google.protobuf.Empty`.
 ---@param grpc_request_params GrpcRequestParams
 ---@param callback fun(response: table)
-function Client:server_streaming_request(grpc_request_params, callback)
-    local stream = self.conn:new_stream()
+function client.server_streaming_request(grpc_request_params, callback)
+    local stream = client.conn:new_stream()
 
     local service = grpc_request_params.service
     local method = grpc_request_params.method
@@ -126,7 +138,7 @@ function Client:server_streaming_request(grpc_request_params, callback)
     local response_headers = stream:get_headers()
     -- TODO: check headers for errors
 
-    self.loop:wrap(function()
+    client.loop:wrap(function()
         for response_body in stream:each_chunk() do
             -- Skip the 1-byte compressed flag and the 4-byte message length
             local response_body = response_body:sub(6)
@@ -148,27 +160,6 @@ function Client:server_streaming_request(grpc_request_params, callback)
             end
         end
     end)
-end
-
----@nodoc
----@return Client
-function client.new(loop)
-    local sock = socket.connect({
-        path = os.getenv("PINNACLE_GRPC_SOCKET"),
-    })
-    sock:connect()
-
-    local conn = h2_connection.new(sock, "client")
-    conn:connect()
-
-    ---@type Client
-    local self = {
-        conn = conn,
-        loop = loop,
-    }
-    setmetatable(self, { __index = Client })
-
-    return self
 end
 
 return client
