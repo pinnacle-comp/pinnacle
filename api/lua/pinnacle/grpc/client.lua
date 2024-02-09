@@ -140,7 +140,7 @@ function client.server_streaming_request(grpc_request_params, callback)
 
     client.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            print("response body hex:", pb.tohex(response_body))
+            -- print("response body hex:", pb.tohex(response_body))
 
             ---@type string
             local response_body = response_body
@@ -151,7 +151,7 @@ function client.server_streaming_request(grpc_request_params, callback)
 
                 -- Skip the 1-byte compressed flag and the 4-byte message length
                 response_body = response_body:sub(6, 6 + msg_len - 1)
-                print("response body hex SUBBED:", pb.tohex(response_body))
+                -- print("response body hex SUBBED:", pb.tohex(response_body))
 
                 local success, obj = pcall(pb.decode, response_type, response_body)
                 if not success then

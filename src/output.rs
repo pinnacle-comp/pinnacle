@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, marker::PhantomData};
+use std::cell::RefCell;
 
 use smithay::output::Output;
 

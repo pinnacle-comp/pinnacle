@@ -74,7 +74,20 @@ local mouse_button_values = {
     btn_forward = 0x115,
     btn_back = 0x116,
 }
+
+---@type table<integer, MouseButtonName>
+local button_code_to_name = {
+    [0x110] = "btn_left",
+    [0x111] = "btn_right",
+    [0x112] = "btn_middle",
+    [0x113] = "btn_side",
+    [0x114] = "btn_extra",
+    [0x115] = "btn_forward",
+    [0x116] = "btn_back",
+}
+
 -- This alias is because I can't get @enum completion to work
+
 ---@alias MouseButton
 ---| 1 Left
 ---| 2 Right
@@ -91,6 +104,15 @@ local mouse_button_values = {
 ---| "btn_forward"
 ---| "btn_back"
 
+---@alias MouseButtonName
+---| "btn_left"
+---| "btn_right"
+---| "btn_middle"
+---| "btn_side"
+---| "btn_extra"
+---| "btn_forward"
+---| "btn_back"
+
 local mouse_edge_values = {
     press = 1,
     release = 2,
@@ -98,6 +120,12 @@ local mouse_edge_values = {
 ---@alias MouseEdge
 ---| "press" Trigger on mouse button press
 ---| "release" Trigger on mouse button release
+
+---@type table<integer, MouseEdge>
+local button_state_value_to_mouse_edge = {
+    [1] = "press",
+    [2] = "release",
+}
 
 ---Input management.
 ---
@@ -340,28 +368,39 @@ function input.set_libinput_settings(settings)
     end
 end
 
--- TODO: FIXME: AAHHHHH
----@param func fun(code: integer, state: integer, x: number, y: number)
-function Input.connect_pointer_button(func)
-    local pin = require("pinnacle")
-    if not pin.callbacks.input_pointer_button then
-        require("pinnacle.signal").new(self.config_client):connect_signal("SIGNAL_INPUT_POINTER_BUTTON")
+---@param signals InputSignal
+function input.connect_signal(signals)
+    local signal = require("pinnacle.signal")
+    if signals.pointer_button then
+        signal.insert_callback("input_pointer_button", function(response)
+            local button = button_code_to_name[response.code]
+            local state = button_state_value_to_mouse_edge[response.state]
+            signals.pointer_button(button, state, response.x, response.y)
+        end)
     end
 
-    pin.callbacks.input_pointer_button = function(response)
-        func(response.code, response.state, response.x, response.y)
-    end
-end
-
----@param func fun(x: number, y: number)
-function Input.connect_pointer_motion(func)
-    local pin = require("pinnacle")
-    if not pin.callbacks.input_pointer_motion then
-        require("pinnacle.signal").new(self.config_client):connect_signal("SIGNAL_INPUT_POINTER_MOTION")
+    if signals.pointer_motion then
+        signal.insert_callback("input_pointer_motion", function(response)
+            signals.pointer_motion(response.x, response.y, response.rel_x, response.rel_y)
+        end)
     end
 
-    pin.callbacks.input_pointer_motion = function(response)
-        func(response.x, response.y)
+    if signals.pointer_axis then
+        signal.insert_callback("input_pointer_axis", function(response)
+            signals.pointer_axis(
+                response.vertical_value,
+                response.horizontal_value,
+                response.vertical_value_discrete,
+                response.horizontal_value_discrete
+            )
+        end)
+    end
+
+    if signals.keyboard then
+        signal.insert_callback("input_keyboard", function(response)
+            local state = button_state_value_to_mouse_edge[response.state]
+            signals.keyboard(response.code, state, response.raw_keysyms, response.modified_keysyms)
+        end)
     end
 end
 

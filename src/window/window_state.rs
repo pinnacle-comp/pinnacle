@@ -17,20 +17,14 @@ use super::WindowElement;
 
 /// A unique identifier for each window.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum WindowId {
-    /// A config API returned an invalid window. It should be using this variant.
-    None,
-    /// A valid window id.
-    #[serde(untagged)]
-    Some(u32),
-}
+pub struct WindowId(pub u32);
 
 static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WindowId {
     /// Get the next available window id. This always starts at 0.
     pub fn next() -> Self {
-        Self::Some(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+        Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Get the window that has this WindowId.

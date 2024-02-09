@@ -11,29 +11,25 @@ enum Signal {
   SIGNAL_INPUT_POINTER_AXIS = 3;
   SIGNAL_INPUT_KEYBOARD = 4;
 
-  SIGNAL_WINDOW_POINTER_BUTTON = 5;
-  SIGNAL_WINDOW_POINTER_MOTION = 6;
-  SIGNAL_WINDOW_POINTER_AXIS = 7;
-  SIGNAL_WINDOW_POINTER_ENTER = 8;
-  SIGNAL_WINDOW_POINTER_LEAVE = 9;
-  SIGNAL_WINDOW_KEYBOARD = 10;
-  SIGNAL_WINDOW_OPEN = 11;
-  SIGNAL_WINDOW_CLOSE = 12;
-  SIGNAL_WINDOW_FULLSCREEN = 13;
-  SIGNAL_WINDOW_MAXIMIZE = 14;
-  SIGNAL_WINDOW_FLOATING = 15;
-  SIGNAL_WINDOW_MOVE = 16;
-  SIGNAL_WINDOW_RESIZE = 17;
+  SIGNAL_WINDOW_POINTER_ENTER = 5;
+  SIGNAL_WINDOW_POINTER_LEAVE = 6;
+  SIGNAL_WINDOW_OPEN = 7;
+  SIGNAL_WINDOW_CLOSE = 8;
+  SIGNAL_WINDOW_FULLSCREEN = 9;
+  SIGNAL_WINDOW_MAXIMIZE = 10;
+  SIGNAL_WINDOW_FLOATING = 11;
+  SIGNAL_WINDOW_MOVE = 12;
+  SIGNAL_WINDOW_RESIZE = 13;
 
-  SIGNAL_OUTPUT_CONNECT = 18;
-  SIGNAL_OUTPUT_DISCONNECT = 19;
-  SIGNAL_OUTPUT_MOVE = 20;
+  SIGNAL_OUTPUT_CONNECT = 14;
+  SIGNAL_OUTPUT_DISCONNECT = 15;
+  SIGNAL_OUTPUT_MOVE = 16;
 
-  SIGNAL_TAG_ADD = 21;
-  SIGNAL_TAG_REMOVE = 22;
-  SIGNAL_TAG_ACTIVE = 23;
-  SIGNAL_TAG_WINDOW_TAGGED = 24;
-  SIGNAL_TAG_WINDOW_UNTAGGED = 25;
+  SIGNAL_TAG_ADD = 17;
+  SIGNAL_TAG_REMOVE = 18;
+  SIGNAL_TAG_ACTIVE = 19;
+  SIGNAL_TAG_WINDOW_TAGGED = 20;
+  SIGNAL_TAG_WINDOW_UNTAGGED = 21;
 }
 
 enum State {
@@ -43,61 +39,75 @@ enum State {
 }
 
 message InputPointerButton {
+  // NULLABLE
+  //
+  // The window that received the button event.
+  optional uint32 window_id = 1;
+
   // The numerical code of the button, given by one of the
   // `BTN_` constants in `input-event-codes.h`.
-  optional uint32 code = 1;
+  optional uint32 code = 2;
   // Whether the button was pressed or released.
-  optional State state = 2;
+  optional State state = 3;
   // The mouse x-coord in the global space at the time of the event.
-  optional double x = 3;
+  optional double x = 4;
   // The mouse y-coord in the global space at the time of the event.
-  optional double y = 4;
+  optional double y = 5;
 }
 
 message InputPointerMotion {
-  optional double x = 1;
-  optional double y = 2;
+  // NULLABLE
+  //
+  // The window the pointer is over.
+  optional uint32 window_id = 1;
+
+  // The pointer's current x-coordinate.
+  optional double x = 2;
+  // The pointer's current y-coordinate.
+  optional double y = 3;
+  // The pointer's relative x motion.
+  optional double rel_x = 4;
+  // The pointer's relative y motion.
+  optional double rel_y = 5;
 }
 
 message InputPointerAxis {
+  // NULLABLE
+  //
+  // The window that received the axis event.
+  optional uint32 window_id = 1;
+
   // The amount the device scrolled vertically.
   //
   // A value of 3.0 corresponds to one scroll wheel detent.
-  optional float vertical_value = 1;
+  optional double vertical_value = 2;
   // The amount the device scrolled horizontally.
   //
   // A value of 3.0 corresponds to one scroll wheel detent.
-  optional float horizontal_value = 2;
+  optional double horizontal_value = 3;
   // The amount the device scrolled vertically, in discrete steps.
   //
   // A value of 120 corresponds to one scroll wheel detent.
-  optional uint32 vertical_value_discrete = 3;
+  optional int32 vertical_value_discrete = 4;
   // The amount the device scrolled horizontally, in discrete steps.
   //
   // A value of 120 corresponds to one scroll wheel detent.
-  optional uint32 horizontal_value_discrete = 4;
+  optional int32 horizontal_value_discrete = 5;
 }
 
 message InputKeyboard {
-  optional uint32 code = 1;
-  optional State state = 2;
-  repeated uint32 raw_keysyms = 3;
-  repeated uint32 modified_keysyms = 4;
-}
-
-message WindowPointerButton {
+  // NULLABLE
+  //
+  // The window that received the keyboard event.
+  //
+  // This will only have a window_id if the window has keyboard focus
+  // and the input is not eaten by the compositor.
   optional uint32 window_id = 1;
-  optional InputPointerButton pointer_button = 2;
-}
 
-message WindowPointerMotion {
-  optional uint32 window_id = 1;
-  optional InputPointerMotion pointer_motion = 2;
-}
-
-message WindowPointerAxis {
-  optional uint32 window_id = 1;
-  optional InputPointerAxis pointer_axis = 2;
+  optional uint32 code = 2;
+  optional State state = 3;
+  repeated uint32 raw_keysyms = 4;
+  repeated uint32 modified_keysyms = 5;
 }
 
 message WindowPointerEnter {
@@ -106,11 +116,6 @@ message WindowPointerEnter {
 
 message WindowPointerLeave {
   optional uint32 window_id = 1;
-}
-
-message WindowKeyboard {
-  optional uint32 window_id = 1;
-  optional InputKeyboard keyboard = 2;
 }
 
 message WindowOpen {
@@ -202,31 +207,27 @@ message ListenResponse {
     InputPointerAxis input_pointer_axis = 3;
     InputKeyboard input_keyboard = 4;
 
-    WindowPointerButton window_pointer_button = 5;
-    WindowPointerMotion window_pointer_motion = 6;
-    WindowPointerAxis window_pointer_axis = 7;
-    WindowPointerEnter window_pointer_enter = 8;
-    WindowPointerLeave window_pointer_leave = 9;
-    WindowKeyboard window_keyboard = 10;
-    WindowOpen window_open = 11;
-    WindowClose window_close = 12;
-    WindowFullscreen window_fullscreen = 13;
-    WindowMaximize window_maximize = 14;
-    WindowFloating window_floating = 15;
-    WindowMove window_move = 16;
-    WindowResize window_resize = 17;
+    WindowPointerEnter window_pointer_enter = 5;
+    WindowPointerLeave window_pointer_leave = 6;
+    WindowOpen window_open = 7;
+    WindowClose window_close = 8;
+    WindowFullscreen window_fullscreen = 9;
+    WindowMaximize window_maximize = 10;
+    WindowFloating window_floating = 11;
+    WindowMove window_move = 12;
+    WindowResize window_resize = 13;
 
-    OutputConnect output_connect = 18;
-    OutputDisconnect output_disconnect = 19;
-    OutputMove output_move = 20;
+    OutputConnect output_connect = 14;
+    OutputDisconnect output_disconnect = 15;
+    OutputMove output_move = 16;
  
     // FIXME: Need to send ack for stuff like OutputDisconnect and TagRemove
 
-    TagAdd tag_add = 21;
-    TagRemove tag_remove = 22;
-    TagActive tag_active = 23;
-    TagWindowTagged tag_window_tagged = 24;
-    TagWindowUntagged tag_window_untagged = 25;
+    TagAdd tag_add = 17;
+    TagRemove tag_remove = 18;
+    TagActive tag_active = 19;
+    TagWindowTagged tag_window_tagged = 20;
+    TagWindowUntagged tag_window_untagged = 21;
   }
 }
 

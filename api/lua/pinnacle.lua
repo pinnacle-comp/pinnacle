@@ -9,7 +9,6 @@ local client = require("pinnacle.grpc.client")
 ---This module contains one function: `setup`, which is how you'll access all the ways to configure Pinnacle.
 ---@class Pinnacle
 local pinnacle = {
-    callbacks = {},
     ---@type Input
     input = require("pinnacle.input"),
     ---@type Tag
@@ -46,7 +45,7 @@ function pinnacle.setup(config_fn)
     config_fn(pinnacle)
 
     -- TODO:
-    require("pinnacle.signal").new(config_client):listen()
+    require("pinnacle.signal").listen()
     client.loop:loop()
 end
 

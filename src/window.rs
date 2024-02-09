@@ -4,6 +4,10 @@ pub mod rules;
 
 use std::{cell::RefCell, time::Duration};
 
+use pinnacle_api_defs::pinnacle::signal::{
+    self,
+    v0alpha1::{WindowPointerEnter, WindowPointerLeave},
+};
 use smithay::{
     backend::input::KeyState,
     desktop::{
@@ -330,33 +334,39 @@ impl WindowElement {
 }
 
 impl PointerTarget<State> for WindowElement {
-    fn frame(&self, seat: &Seat<State>, data: &mut State) {
+    fn frame(&self, seat: &Seat<State>, state: &mut State) {
         match self {
-            WindowElement::Wayland(window) => window.frame(seat, data),
+            WindowElement::Wayland(window) => window.frame(seat, state),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.frame(seat, data)
+                surface.frame(seat, state)
             }
             _ => unreachable!(),
         }
     }
 
-    fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
+    fn enter(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::enter(surface, seat, data, event)
+                PointerTarget::enter(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
+
+        state.send_signal(signal::v0alpha1::Signal::WindowPointerEnter, || {
+            signal::v0alpha1::listen_response::Signal::WindowPointerEnter(WindowPointerEnter {
+                window_id: Some(self.with_state(|state| state.id.0)),
+            })
+        });
     }
 
-    fn motion(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
+    fn motion(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::motion(surface, seat, data, event)
+                PointerTarget::motion(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
@@ -365,16 +375,16 @@ impl PointerTarget<State> for WindowElement {
     fn relative_motion(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::relative_motion(window, seat, data, event);
+                PointerTarget::relative_motion(window, seat, state, event);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::relative_motion(surface, seat, data, event);
+                PointerTarget::relative_motion(surface, seat, state, event);
             }
             _ => unreachable!(),
         }
@@ -383,41 +393,47 @@ impl PointerTarget<State> for WindowElement {
     fn button(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         event: &smithay::input::pointer::ButtonEvent,
     ) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::button(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::button(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::button(surface, seat, data, event)
+                PointerTarget::button(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
     }
 
-    fn axis(&self, seat: &Seat<State>, data: &mut State, frame: AxisFrame) {
+    fn axis(&self, seat: &Seat<State>, state: &mut State, frame: AxisFrame) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, data, frame),
+            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, state, frame),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::axis(surface, seat, data, frame)
+                PointerTarget::axis(surface, seat, state, frame)
             }
             _ => unreachable!(),
         }
     }
 
-    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial, time: u32) {
+    fn leave(&self, seat: &Seat<State>, state: &mut State, serial: Serial, time: u32) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::leave(window, seat, data, serial, time);
+                PointerTarget::leave(window, seat, state, serial, time);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::leave(surface, seat, data, serial, time)
+                PointerTarget::leave(surface, seat, state, serial, time)
             }
             _ => unreachable!(),
         }
+
+        state.send_signal(signal::v0alpha1::Signal::WindowPointerLeave, || {
+            signal::v0alpha1::listen_response::Signal::WindowPointerLeave(WindowPointerLeave {
+                window_id: Some(self.with_state(|state| state.id.0)),
+            })
+        });
     }
 
     fn gesture_swipe_begin(

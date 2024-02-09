@@ -267,6 +267,9 @@ impl State {
 
         self.config.clear(&self.loop_handle);
 
+        self.signal_sender.take();
+        self.connected_signals.clear();
+
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
         if self.grpc_server_join_handle.is_none() {

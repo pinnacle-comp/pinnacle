@@ -28,6 +28,7 @@ mod input;
 mod layout;
 mod output;
 mod render;
+mod signal;
 mod state;
 mod tag;
 mod window;

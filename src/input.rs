@@ -12,7 +12,9 @@ use pinnacle_api_defs::pinnacle::{
     },
     signal::{
         self,
-        v0alpha1::{InputPointerButton, InputPointerMotion, ListenResponse},
+        v0alpha1::{
+            InputKeyboard, InputPointerAxis, InputPointerButton, InputPointerMotion, ListenResponse,
+        },
     },
 };
 use smithay::{
@@ -247,6 +249,17 @@ impl State {
             device.led_update(leds);
         }
 
+        let mut input_keyboard_signal = InputKeyboard {
+            window_id: None,
+            code: Some(event.key_code()),
+            state: Some(match press_state {
+                KeyState::Released => signal::v0alpha1::State::Release,
+                KeyState::Pressed => signal::v0alpha1::State::Press,
+            } as i32),
+            raw_keysyms: Vec::new(),
+            modified_keysyms: Vec::new(),
+        };
+
         let action = keyboard.input(
             self,
             event.key_code(),
@@ -254,6 +267,17 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
+                input_keyboard_signal.raw_keysyms = keysym
+                    .raw_syms()
+                    .iter()
+                    .map(|keysym| keysym.raw())
+                    .collect();
+                input_keyboard_signal.modified_keysyms = keysym
+                    .modified_syms()
+                    .iter()
+                    .map(|keysym| keysym.raw())
+                    .collect();
+
                 // tracing::debug!(keysym = ?keysym, raw_keysyms = ?keysym.raw_syms(), modified_syms = ?keysym.modified_syms());
                 if press_state == KeyState::Pressed {
                     let mod_mask = ModifierMask::from(modifiers);
@@ -272,10 +296,14 @@ impl State {
 
                     if kill_keybind == Some((mod_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::Quit);
-                    } else if reload_keybind == Some((mod_mask, mod_sym)) {
+                    }
+
+                    if reload_keybind == Some((mod_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::ReloadConfig);
-                    } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
-                        ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
+                    }
+
+                    if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
+                        keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
                         tracing::info!("Switching to vt {vt}");
@@ -288,21 +316,31 @@ impl State {
         );
 
         match action {
-            Some(KeyAction::CallCallback(sender)) => {
-                let _ = sender.send(Ok(SetKeybindResponse {}));
+            Some(key_action) => match key_action {
+                KeyAction::CallCallback(sender) => {
+                    let _ = sender.send(Ok(SetKeybindResponse {}));
+                }
+                KeyAction::Quit => self.shutdown(),
+                KeyAction::SwitchVt(vt) => self.switch_vt(vt),
+                KeyAction::ReloadConfig => {
+                    self.start_config(crate::config::get_config_dir())
+                        .expect("failed to restart config");
+                }
+            },
+            None => {
+                input_keyboard_signal.window_id = keyboard.current_focus().and_then(|focus| {
+                    if let FocusTarget::Window(win) = focus {
+                        Some(win.with_state(|state| state.id.0))
+                    } else {
+                        None
+                    }
+                });
             }
-            Some(KeyAction::SwitchVt(vt)) => {
-                self.switch_vt(vt);
-            }
-            Some(KeyAction::Quit) => {
-                self.shutdown();
-            }
-            Some(KeyAction::ReloadConfig) => {
-                self.start_config(crate::config::get_config_dir())
-                    .expect("failed to restart config");
-            }
-            None => (),
         }
+
+        self.send_signal(signal::v0alpha1::Signal::InputKeyboard, || {
+            signal::v0alpha1::listen_response::Signal::InputKeyboard(input_keyboard_signal)
+        });
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
@@ -316,32 +354,6 @@ impl State {
         let button_state = event.state();
 
         let pointer_loc = pointer.current_location();
-
-        if let Some(sender) = self.signal_sender.as_ref() {
-            if self
-                .connected_signals
-                .contains(&signal::v0alpha1::Signal::InputPointerButton)
-            {
-                tracing::info!("SENDING SIGNAL");
-                let signal = InputPointerButton {
-                    code: Some(button),
-                    state: Some(match button_state {
-                        ButtonState::Released => signal::v0alpha1::State::Release,
-                        ButtonState::Pressed => signal::v0alpha1::State::Press,
-                    } as i32),
-                    x: Some(pointer_loc.x),
-                    y: Some(pointer_loc.y),
-                };
-
-                sender
-                    .send(Ok(ListenResponse {
-                        signal: Some(
-                            signal::v0alpha1::listen_response::Signal::InputPointerButton(signal),
-                        ),
-                    }))
-                    .expect("TODO");
-            }
-        }
 
         let mod_mask = ModifierMask::from(keyboard.modifier_state());
 
@@ -431,6 +443,27 @@ impl State {
             },
         );
         pointer.frame(self);
+
+        let current_focus = keyboard.current_focus().and_then(|focus| {
+            if let FocusTarget::Window(win) = focus {
+                Some(win.with_state(|state| state.id.0))
+            } else {
+                None
+            }
+        });
+
+        self.send_signal(signal::v0alpha1::Signal::InputPointerButton, || {
+            signal::v0alpha1::listen_response::Signal::InputPointerButton(InputPointerButton {
+                window_id: current_focus,
+                code: Some(button),
+                state: Some(match button_state {
+                    ButtonState::Released => signal::v0alpha1::State::Release,
+                    ButtonState::Pressed => signal::v0alpha1::State::Press,
+                } as i32),
+                x: Some(pointer_loc.x),
+                y: Some(pointer_loc.y),
+            })
+        });
     }
 
     fn pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
@@ -471,6 +504,26 @@ impl State {
 
         pointer.axis(self, frame);
         pointer.frame(self);
+
+        let window_id_under =
+            self.focus_target_under(self.pointer_location)
+                .and_then(|(focus, _)| {
+                    if let FocusTarget::Window(win) = focus {
+                        Some(win.with_state(|state| state.id.0))
+                    } else {
+                        None
+                    }
+                });
+
+        self.send_signal(signal::v0alpha1::Signal::InputPointerAxis, || {
+            signal::v0alpha1::listen_response::Signal::InputPointerAxis(InputPointerAxis {
+                window_id: window_id_under,
+                vertical_value: Some(vertical_amount),
+                horizontal_value: Some(horizontal_amount),
+                vertical_value_discrete: vertical_amount_discrete.map(|amt| amt as i32),
+                horizontal_value_discrete: horizontal_amount_discrete.map(|amt| amt as i32),
+            })
+        });
     }
 
     /// Clamp pointer coordinates inside outputs.
@@ -518,28 +571,8 @@ impl State {
         let serial = SERIAL_COUNTER.next_serial();
         let pointer = self.seat.get_pointer().expect("Seat has no pointer"); // FIXME: handle err
 
+        let old_pointer_loc = self.pointer_location;
         self.pointer_location = pointer_loc;
-
-        if let Some(sender) = self.signal_sender.as_ref() {
-            if self
-                .connected_signals
-                .contains(&signal::v0alpha1::Signal::InputPointerMotion)
-            {
-                tracing::info!("SENDING SIGNAL");
-                let signal = InputPointerMotion {
-                    x: Some(self.pointer_location.x),
-                    y: Some(self.pointer_location.y),
-                };
-
-                sender
-                    .send(Ok(ListenResponse {
-                        signal: Some(
-                            signal::v0alpha1::listen_response::Signal::InputPointerMotion(signal),
-                        ),
-                    }))
-                    .expect("TODO");
-            }
-        }
 
         match self.focus_state.focused_output {
             Some(_) => {
@@ -557,9 +590,19 @@ impl State {
             }
         }
 
+        let focus_target_under = self.focus_target_under(pointer_loc);
+
+        let window_under_id = focus_target_under.as_ref().and_then(|(focus, _)| {
+            if let FocusTarget::Window(win) = focus {
+                Some(win.with_state(|state| state.id.0))
+            } else {
+                None
+            }
+        });
+
         pointer.motion(
             self,
-            self.focus_target_under(pointer_loc),
+            focus_target_under,
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -568,6 +611,16 @@ impl State {
         );
 
         pointer.frame(self);
+
+        self.send_signal(signal::v0alpha1::Signal::InputPointerMotion, || {
+            signal::v0alpha1::listen_response::Signal::InputPointerMotion(InputPointerMotion {
+                window_id: window_under_id,
+                x: Some(self.pointer_location.x),
+                y: Some(self.pointer_location.y),
+                rel_x: Some(self.pointer_location.x - old_pointer_loc.x),
+                rel_y: Some(self.pointer_location.y - old_pointer_loc.y),
+            })
+        });
     }
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
@@ -577,27 +630,6 @@ impl State {
         // clamp to screen limits
         // this event is never generated by winit
         self.pointer_location = self.clamp_coords(self.pointer_location);
-
-        if let Some(sender) = self.signal_sender.as_ref() {
-            if self
-                .connected_signals
-                .contains(&signal::v0alpha1::Signal::InputPointerMotion)
-            {
-                tracing::info!("SENDING SIGNAL");
-                let signal = InputPointerMotion {
-                    x: Some(self.pointer_location.x),
-                    y: Some(self.pointer_location.y),
-                };
-
-                sender
-                    .send(Ok(ListenResponse {
-                        signal: Some(
-                            signal::v0alpha1::listen_response::Signal::InputPointerMotion(signal),
-                        ),
-                    }))
-                    .expect("TODO");
-            }
-        }
 
         match self.focus_state.focused_output {
             Some(_) => {
@@ -628,6 +660,14 @@ impl State {
                 },
             );
 
+            let window_under_id = surface_under.as_ref().and_then(|(focus, _)| {
+                if let FocusTarget::Window(win) = focus {
+                    Some(win.with_state(|state| state.id.0))
+                } else {
+                    None
+                }
+            });
+
             pointer.relative_motion(
                 self,
                 surface_under,
@@ -639,6 +679,16 @@ impl State {
             );
 
             pointer.frame(self);
+
+            self.send_signal(signal::v0alpha1::Signal::InputPointerMotion, || {
+                signal::v0alpha1::listen_response::Signal::InputPointerMotion(InputPointerMotion {
+                    window_id: window_under_id,
+                    x: Some(self.pointer_location.x),
+                    y: Some(self.pointer_location.y),
+                    rel_x: Some(event.delta_x()),
+                    rel_y: Some(event.delta_y()),
+                })
+            });
 
             self.schedule_render(
                 &self

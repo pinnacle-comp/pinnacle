@@ -1157,7 +1157,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1189,7 +1189,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1245,7 +1245,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1297,7 +1297,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1347,7 +1347,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1397,7 +1397,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1430,7 +1430,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     async fn set_tag(&self, request: Request<SetTagRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1615,12 +1615,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             let window_ids = state
                 .windows
                 .iter()
-                .map(|win| {
-                    win.with_state(|state| match state.id {
-                        WindowId::None => unreachable!(),
-                        WindowId::Some(id) => id,
-                    })
-                })
+                .map(|win| win.with_state(|state| state.id.0))
                 .collect::<Vec<_>>();
 
             let _ = sender
@@ -1648,7 +1643,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
     > {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
