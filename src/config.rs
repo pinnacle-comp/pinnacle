@@ -31,6 +31,7 @@ use sysinfo::ProcessRefreshKind;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use toml::Table;
 
+use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -42,7 +43,7 @@ const DEFAULT_SOCKET_DIR: &str = "/tmp";
 
 /// The metaconfig struct containing what to run, what envs to run it with, various keybinds, and
 /// the target socket directory.
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, PartialEq)]
 pub struct Metaconfig {
     pub command: Vec<String>,
     pub envs: Option<Table>,
@@ -51,13 +52,13 @@ pub struct Metaconfig {
     pub socket_dir: Option<String>,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug, PartialEq)]
 pub struct Keybind {
     modifiers: Vec<Modifier>,
     key: Key,
 }
 
-#[derive(serde::Deserialize, Debug, Clone, Copy)]
+#[derive(serde::Deserialize, Debug, Clone, Copy, PartialEq)]
 enum Modifier {
     Shift,
     Ctrl,
@@ -84,7 +85,7 @@ impl From<Vec<self::Modifier>> for ModifierMask {
 }
 
 // TODO: accept xkbcommon names instead
-#[derive(serde::Deserialize, Debug, Clone, Copy)]
+#[derive(serde::Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[repr(u32)]
 pub enum Key {
@@ -207,12 +208,12 @@ fn parse_metaconfig(config_dir: &Path) -> anyhow::Result<Metaconfig> {
 
 /// Get the config dir. This is $PINNACLE_CONFIG_DIR, then $XDG_CONFIG_HOME/pinnacle,
 /// then ~/.config/pinnacle.
-pub fn get_config_dir() -> PathBuf {
+pub fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
     let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
         .ok()
         .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
 
-    config_dir.unwrap_or(crate::XDG_BASE_DIRS.get_config_home())
+    config_dir.unwrap_or(xdg_base_dirs.get_config_home())
 }
 
 impl State {
@@ -224,7 +225,7 @@ impl State {
 
         tracing::info!("Starting config at {}", config_dir.display());
 
-        let default_lua_config_dir = crate::XDG_BASE_DIRS.get_data_file("default_config");
+        let default_lua_config_dir = self.xdg_base_dirs.get_data_file("default_config");
 
         let load_default_config = |state: &mut State, reason: &str| {
             tracing::error!(
@@ -281,7 +282,7 @@ impl State {
                 socket_dir
             } else {
                 // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-                crate::XDG_BASE_DIRS
+                self.xdg_base_dirs
                     .get_runtime_directory()
                     .cloned()
                     .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
@@ -427,7 +428,7 @@ impl State {
 
         std::env::set_var(
             "PINNACLE_PROTO_DIR",
-            crate::XDG_BASE_DIRS.get_data_file("protobuf"),
+            self.xdg_base_dirs.get_data_file("protobuf"),
         );
 
         let (grpc_sender, grpc_receiver) =
@@ -499,6 +500,196 @@ impl State {
                 },
             ),
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env::var;
+
+    #[test]
+    fn config_dir_with_relative_env_works() -> anyhow::Result<()> {
+        let relative_path = "api/rust/examples/default_config";
+
+        temp_env::with_var("PINNACLE_CONFIG_DIR", Some(relative_path), || {
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+
+            // Prepending the relative path with the current dir *shouldn't* be necessary, me thinks
+            let expected = PathBuf::from(relative_path);
+
+            assert_eq!(get_config_dir(&xdg_base_dirs), expected);
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn config_dir_with_tilde_env_works() -> anyhow::Result<()> {
+        temp_env::with_var("PINNACLE_CONFIG_DIR", Some("~/some/dir/somewhere/"), || {
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+            let expected = PathBuf::from(var("HOME")?).join("some/dir/somewhere");
+
+            assert_eq!(get_config_dir(&xdg_base_dirs), expected);
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn config_dir_with_absolute_env_works() -> anyhow::Result<()> {
+        let absolute_path = "/its/morbin/time";
+
+        temp_env::with_var("PINNACLE_CONFIG_DIR", Some(absolute_path), || {
+            let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+            let expected = PathBuf::from(absolute_path);
+
+            assert_eq!(get_config_dir(&xdg_base_dirs), expected);
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn config_dir_without_env_and_with_xdg_works() -> anyhow::Result<()> {
+        let xdg_config_home = "/some/different/xdg/config/path";
+
+        temp_env::with_vars(
+            [
+                ("PINNACLE_CONFIG_DIR", None),
+                ("XDG_CONFIG_HOME", Some(xdg_config_home)),
+            ],
+            || {
+                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+                let expected = PathBuf::from(xdg_config_home).join("pinnacle");
+
+                assert_eq!(get_config_dir(&xdg_base_dirs), expected);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn config_dir_without_env_and_without_xdg_works() -> anyhow::Result<()> {
+        temp_env::with_vars(
+            [
+                ("PINNACLE_CONFIG_DIR", None::<&str>),
+                ("XDG_CONFIG_HOME", None),
+            ],
+            || {
+                let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+                let expected = PathBuf::from(var("HOME")?).join(".config/pinnacle");
+
+                assert_eq!(get_config_dir(&xdg_base_dirs), expected);
+
+                Ok(())
+            },
+        )
+    }
+
+    #[test]
+    fn full_metaconfig_successfully_parses() -> anyhow::Result<()> {
+        let metaconfig_text = r#"
+            command = ["lua", "init.lua"]
+
+            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+            kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+
+            socket_dir = "/path/to/socket/dir"
+
+            [envs]
+            MARCO = "polo"
+            SUN = "chips"
+        "#;
+
+        let metaconfig_dir = tempfile::tempdir()?;
+        std::fs::write(
+            metaconfig_dir.path().join("metaconfig.toml"),
+            metaconfig_text,
+        )?;
+
+        let expected_metaconfig = Metaconfig {
+            command: vec!["lua".to_string(), "init.lua".to_string()],
+            envs: Some(toml::Table::from_iter([
+                ("MARCO".to_string(), toml::Value::String("polo".to_string())),
+                ("SUN".to_string(), toml::Value::String("chips".to_string())),
+            ])),
+            reload_keybind: Keybind {
+                modifiers: vec![Modifier::Ctrl, Modifier::Alt],
+                key: Key::R,
+            },
+            kill_keybind: Keybind {
+                modifiers: vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift],
+                key: Key::Escape,
+            },
+            socket_dir: Some("/path/to/socket/dir".to_string()),
+        };
+
+        assert_eq!(
+            parse_metaconfig(metaconfig_dir.path())?,
+            expected_metaconfig
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn minimal_metaconfig_successfully_parses() -> anyhow::Result<()> {
+        let metaconfig_text = r#"
+            command = ["lua", "init.lua"]
+
+            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+            kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+        "#;
+
+        let metaconfig_dir = tempfile::tempdir()?;
+        std::fs::write(
+            metaconfig_dir.path().join("metaconfig.toml"),
+            metaconfig_text,
+        )?;
+
+        let expected_metaconfig = Metaconfig {
+            command: vec!["lua".to_string(), "init.lua".to_string()],
+            envs: None,
+            reload_keybind: Keybind {
+                modifiers: vec![Modifier::Ctrl, Modifier::Alt],
+                key: Key::R,
+            },
+            kill_keybind: Keybind {
+                modifiers: vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift],
+                key: Key::Escape,
+            },
+            socket_dir: None,
+        };
+
+        assert_eq!(
+            parse_metaconfig(metaconfig_dir.path())?,
+            expected_metaconfig
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn incorrect_metaconfig_does_not_parse() -> anyhow::Result<()> {
+        let metaconfig_text = r#"
+            command = "lua" # not an array
+
+            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+            # Missing `kill_keybind`
+            # kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+        "#;
+
+        let metaconfig_dir = tempfile::tempdir()?;
+        std::fs::write(
+            metaconfig_dir.path().join("metaconfig.toml"),
+            metaconfig_text,
+        )?;
+
+        assert!(parse_metaconfig(metaconfig_dir.path()).is_err());
 
         Ok(())
     }

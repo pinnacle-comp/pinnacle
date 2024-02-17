@@ -32,11 +32,6 @@ mod state;
 mod tag;
 mod window;
 
-lazy_static::lazy_static! {
-    pub static ref XDG_BASE_DIRS: BaseDirectories =
-        BaseDirectories::with_prefix("pinnacle").expect("couldn't create xdg BaseDirectories");
-}
-
 #[derive(clap::Args, Debug)]
 #[group(id = "backend", required = false, multiple = false)]
 struct Backends {
@@ -63,7 +58,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let xdg_state_dir = XDG_BASE_DIRS.get_state_home();
+    let xdg_state_dir = BaseDirectories::with_prefix("pinnacle")?.get_state_home();
 
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(Rotation::HOURLY)

@@ -4,6 +4,7 @@ use crate::{
     backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
     grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
+use anyhow::Context;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -32,6 +33,7 @@ use smithay::{
 };
 use std::{cell::RefCell, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
+use xdg::BaseDirectories;
 
 use crate::input::InputState;
 
@@ -91,6 +93,8 @@ pub struct State {
 
     // Currently only used to keep track of if the server has started
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
+
+    pub xdg_base_dirs: BaseDirectories,
 }
 
 impl State {
@@ -150,7 +154,9 @@ impl State {
         )?;
 
         loop_handle.insert_idle(|state| {
-            if let Err(err) = state.start_config(crate::config::get_config_dir()) {
+            if let Err(err) =
+                state.start_config(crate::config::get_config_dir(&state.xdg_base_dirs))
+            {
                 panic!("failed to start config: {err}");
             }
         });
@@ -264,6 +270,9 @@ impl State {
             ),
 
             grpc_server_join_handle: None,
+
+            xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
+                .context("couldn't create xdg BaseDirectories")?,
         };
 
         Ok(state)
