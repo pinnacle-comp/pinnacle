@@ -30,7 +30,7 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{CalloopData, State},
+    state::State,
 };
 
 use super::{Backend, BackendData};
@@ -63,7 +63,7 @@ impl Backend {
 
 /// Start Pinnacle as a window in a graphical environment.
 pub fn run_winit() -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
 
     let display: Display<State> = Display::new()?;
     let display_handle = display.handle();
@@ -190,9 +190,7 @@ pub fn run_winit() -> anyhow::Result<()> {
     let insert_ret =
         state
             .loop_handle
-            .insert_source(Timer::immediate(), move |_instant, _metadata, data| {
-                let state = &mut data.state;
-
+            .insert_source(Timer::immediate(), move |_instant, _metadata, state| {
                 let status = winit_evt_loop.dispatch_new_events(|event| match event {
                     WinitEvent::Resized {
                         size,
@@ -237,14 +235,12 @@ pub fn run_winit() -> anyhow::Result<()> {
 
     event_loop.run(
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut CalloopData {
-            display_handle,
-            state,
-        },
-        |data| {
-            data.state.space.refresh();
-            data.state.popup_manager.cleanup();
-            data.display_handle
+        &mut state,
+        |state| {
+            state.space.refresh();
+            state.popup_manager.cleanup();
+            state
+                .display_handle
                 .flush_clients()
                 .expect("failed to flush client buffers");
         },

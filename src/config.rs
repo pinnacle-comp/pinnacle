@@ -4,7 +4,6 @@ use crate::{
     },
     input::ModifierMask,
     output::OutputName,
-    state::CalloopData,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
 };
@@ -173,7 +172,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn clear(&mut self, loop_handle: &LoopHandle<CalloopData>) {
+    pub fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
         self.output_callback_senders.clear();
         self.connector_saved_states.clear();
@@ -358,9 +357,9 @@ impl State {
 
         let token = self
             .loop_handle
-            .insert_source(ping_source, move |_, _, data| {
+            .insert_source(ping_source, move |_, _, state| {
                 tracing::error!("Config crashed! Falling back to default Lua config");
-                data.state
+                state
                     .start_config(&default_lua_config_dir)
                     .expect("failed to start default lua config");
             })?;
@@ -435,8 +434,8 @@ impl State {
             calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
 
         self.loop_handle
-            .insert_source(grpc_receiver, |msg, _, data| match msg {
-                Event::Msg(f) => f(&mut data.state),
+            .insert_source(grpc_receiver, |msg, _, state| match msg {
+                Event::Msg(f) => f(state),
                 Event::Closed => tracing::error!("grpc receiver was closed"),
             })
             .expect("failed to insert grpc_receiver into loop");
@@ -490,9 +489,9 @@ impl State {
             // |      fast at startup then I think there's a chance that the gRPC server
             // |      could get started twice.
             None => self.schedule(
-                |data| data.state.xdisplay.is_some(),
-                move |data| {
-                    data.state.grpc_server_join_handle = Some(tokio::spawn(async move {
+                |state| state.xdisplay.is_some(),
+                move |state| {
+                    state.grpc_server_join_handle = Some(tokio::spawn(async move {
                         if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                             tracing::error!("gRPC server error: {err}");
                         }

@@ -76,7 +76,7 @@ use crate::{
     config::ConnectorSavedState,
     output::OutputName,
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{CalloopData, State, SurfaceDmabufFeedback, WithState},
+    state::{State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
 
@@ -131,7 +131,7 @@ impl Backend {
 
 impl Udev {
     /// Schedule a new render that will cause the compositor to redraw everything.
-    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<CalloopData>, output: &Output) {
+    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
         // tracing::debug!("schedule_render on output {}", output.name());
 
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
@@ -141,8 +141,8 @@ impl Udev {
         match &surface.render_state {
             RenderState::Idle => {
                 let output = output.clone();
-                let token = loop_handle.insert_idle(move |data| {
-                    data.state.render_surface(&output);
+                let token = loop_handle.insert_idle(move |state| {
+                    state.render_surface(&output);
                 });
 
                 surface.render_state = RenderState::Scheduled(token);
@@ -189,8 +189,8 @@ impl State {
 
                 // Wait for the clear to commit before switching
                 self.schedule(
-                    |data| {
-                        let udev = data.state.backend.udev();
+                    |state| {
+                        let udev = state.backend.udev();
                         !udev
                             .backends
                             .values()
@@ -198,8 +198,8 @@ impl State {
                             .map(|surface| surface.compositor.surface())
                             .any(|drm_surf| drm_surf.commit_pending())
                     },
-                    move |data| {
-                        let udev = data.state.backend.udev_mut();
+                    move |state| {
+                        let udev = state.backend.udev_mut();
                         if let Err(err) = udev.session.change_vt(vt) {
                             tracing::error!("Failed to switch to vt {vt}: {err}");
                         }
@@ -301,25 +301,25 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     event_loop
         .handle()
-        .insert_source(udev_backend, move |event, _, data| match event {
+        .insert_source(udev_backend, move |event, _, state| match event {
             // GPU connected
             UdevEvent::Added { device_id, path } => {
                 if let Err(err) = DrmNode::from_dev_id(device_id)
                     .map_err(DeviceAddError::DrmNode)
-                    .and_then(|node| data.state.device_added(node, &path))
+                    .and_then(|node| state.device_added(node, &path))
                 {
                     tracing::error!("Skipping device {device_id}: {err}");
                 }
             }
             UdevEvent::Changed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.state.device_changed(node)
+                    state.device_changed(node)
                 }
             }
             // GPU disconnected
             UdevEvent::Removed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.state.device_removed(node)
+                    state.device_removed(node)
                 }
             }
         })
@@ -338,9 +338,9 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     let insert_ret = event_loop
         .handle()
-        .insert_source(libinput_backend, move |event, _, data| {
-            data.state.apply_libinput_settings(&event);
-            data.state.process_input_event(event);
+        .insert_source(libinput_backend, move |event, _, state| {
+            state.apply_libinput_settings(&event);
+            state.process_input_event(event);
         });
 
     if let Err(err) = insert_ret {
@@ -349,8 +349,8 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     event_loop
         .handle()
-        .insert_source(notifier, move |event, _, data| {
-            let udev = data.state.backend.udev_mut();
+        .insert_source(notifier, move |event, _, state| {
+            let udev = state.backend.udev_mut();
 
             match event {
                 session::Event::PauseSession => {
@@ -398,13 +398,12 @@ pub fn run_udev() -> anyhow::Result<()> {
 
                     for (node, connectors) in connectors {
                         for (connector, crtc) in connectors {
-                            data.state
-                                .connector_disconnected(node, connector.clone(), crtc);
-                            data.state.connector_connected(node, connector, crtc);
+                            state.connector_disconnected(node, connector.clone(), crtc);
+                            state.connector_connected(node, connector, crtc);
                         }
                     }
-                    for output in data.state.space.outputs().cloned().collect::<Vec<_>>() {
-                        data.state.schedule_render(&output);
+                    for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                        state.schedule_render(&output);
                     }
                 }
             }
@@ -515,18 +514,16 @@ pub fn run_udev() -> anyhow::Result<()> {
 
     event_loop.run(
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut CalloopData {
-            state,
-            display_handle,
-        },
-        |data| {
-            data.state.space.refresh();
-            data.state.popup_manager.cleanup();
-            data.display_handle
+        &mut state,
+        |state| {
+            state.space.refresh();
+            state.popup_manager.cleanup();
+            state
+                .display_handle
                 .flush_clients()
                 .expect("failed to flush_clients");
 
-            data.state.focus_state.fix_up_focus(&mut data.state.space);
+            state.focus_state.fix_up_focus(&mut state.space);
         },
     )?;
 
@@ -743,7 +740,7 @@ impl State {
 
         let registration_token = self
             .loop_handle
-            .insert_source(notifier, move |event, metadata, data| match event {
+            .insert_source(notifier, move |event, metadata, state| match event {
                 DrmEvent::VBlank(crtc) => {
                     // { TODO:
                     //     let udev = data.state.backend.udev_mut();
@@ -753,7 +750,7 @@ impl State {
                     //     // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
                     //     udev.last_vblank_time = now;
                     // }
-                    data.state.on_vblank(node, crtc, metadata);
+                    state.on_vblank(node, crtc, metadata);
                 }
                 DrmEvent::Error(error) => {
                     tracing::error!("{:?}", error);

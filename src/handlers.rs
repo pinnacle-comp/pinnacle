@@ -59,7 +59,7 @@ use smithay::{
 
 use crate::{
     focus::FocusTarget,
-    state::{CalloopData, ClientState, State, WithState},
+    state::{ClientState, State, WithState},
     window::WindowElement,
 };
 
@@ -90,10 +90,10 @@ impl CompositorHandler for State {
                     let client = surface
                         .client()
                         .expect("Surface has no client/is no longer alive");
-                    let res = state.loop_handle.insert_source(source, move |_, _, data| {
-                        data.state
+                    let res = state.loop_handle.insert_source(source, move |_, _, state| {
+                        state
                             .client_compositor_state(&client)
-                            .blocker_cleared(&mut data.state, &data.display_handle);
+                            .blocker_cleared(state, &state.display_handle.clone());
                         Ok(())
                     });
                     if res.is_ok() {
@@ -107,9 +107,9 @@ impl CompositorHandler for State {
     fn commit(&mut self, surface: &WlSurface) {
         tracing::trace!("commit on surface {surface:?}");
 
-        X11Wm::commit_hook::<CalloopData>(surface);
+        X11Wm::commit_hook::<State>(surface);
 
-        utils::on_commit_buffer_handler::<Self>(surface);
+        utils::on_commit_buffer_handler::<State>(surface);
         self.backend.early_import(surface);
 
         let mut root = surface.clone();
@@ -167,13 +167,13 @@ impl CompositorHandler for State {
                     );
                 }
 
-                self.loop_handle.insert_idle(move |data| {
-                    data.state
+                self.loop_handle.insert_idle(move |state| {
+                    state
                         .seat
                         .get_keyboard()
                         .expect("Seat had no keyboard") // FIXME: actually handle error
                         .set_focus(
-                            &mut data.state,
+                            state,
                             Some(FocusTarget::Window(new_window)),
                             SERIAL_COUNTER.next_serial(),
                         );
@@ -527,8 +527,8 @@ impl WlrLayerShellHandler for State {
             .expect("failed to map layer surface");
         drop(map); // wow i really love refcells haha
 
-        self.loop_handle.insert_idle(move |data| {
-            data.state.update_windows(&output);
+        self.loop_handle.insert_idle(move |state| {
+            state.update_windows(&output);
         });
     }
 
@@ -547,8 +547,8 @@ impl WlrLayerShellHandler for State {
         }
 
         if let Some(output) = output {
-            self.loop_handle.insert_idle(move |data| {
-                data.state.update_windows(&output);
+            self.loop_handle.insert_idle(move |state| {
+                state.update_windows(&output);
             });
         }
     }

@@ -43,7 +43,7 @@ pub struct State {
     /// A loop signal used to stop the compositor
     pub loop_signal: LoopSignal,
     /// A handle to the event loop
-    pub loop_handle: LoopHandle<'static, CalloopData>,
+    pub loop_handle: LoopHandle<'static, Self>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
@@ -99,7 +99,7 @@ impl State {
         backend: Backend,
         display: Display<Self>,
         loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, CalloopData>,
+        loop_handle: LoopHandle<'static, Self>,
     ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
@@ -137,20 +137,20 @@ impl State {
 
         loop_handle.insert_source(
             Generic::new(display, Interest::READ, Mode::Level),
-            |_readiness, display, data| {
+            |_readiness, display, state| {
                 // Safety: we don't drop the display
                 unsafe {
                     display
                         .get_mut()
-                        .dispatch_clients(&mut data.state)
+                        .dispatch_clients(state)
                         .expect("failed to dispatch clients");
                 }
                 Ok(PostAction::Continue)
             },
         )?;
 
-        loop_handle.insert_idle(|data| {
-            if let Err(err) = data.state.start_config(crate::config::get_config_dir()) {
+        loop_handle.insert_idle(|state| {
+            if let Err(err) = state.start_config(crate::config::get_config_dir()) {
                 panic!("failed to start config: {err}");
             }
         });
@@ -166,7 +166,7 @@ impl State {
             let (xwayland, channel) = XWayland::new(&display_handle);
             let clone = display_handle.clone();
             tracing::debug!("inserting into loop");
-            let res = loop_handle.insert_source(channel, move |event, _, data| match event {
+            let res = loop_handle.insert_source(channel, move |event, _, state| match event {
                 XWaylandEvent::Ready {
                     connection,
                     client,
@@ -174,7 +174,7 @@ impl State {
                     display,
                 } => {
                     let mut wm = X11Wm::start_wm(
-                        data.state.loop_handle.clone(),
+                        state.loop_handle.clone(),
                         clone.clone(),
                         connection,
                         client,
@@ -192,13 +192,13 @@ impl State {
 
                     tracing::debug!("setting xwm and xdisplay");
 
-                    data.state.xwm = Some(wm);
-                    data.state.xdisplay = Some(display);
+                    state.xwm = Some(wm);
+                    state.xdisplay = Some(display);
 
                     std::env::set_var("DISPLAY", format!(":{display}"));
                 }
                 XWaylandEvent::Exited => {
-                    data.state.xwm.take();
+                    state.xwm.take();
                 }
             });
             if let Err(err) = res {
@@ -274,39 +274,22 @@ impl State {
     /// This will continually reschedule `run` in the event loop if `condition` returns false.
     pub fn schedule<F1, F2>(&self, condition: F1, run: F2)
     where
-        F1: Fn(&mut CalloopData) -> bool + 'static,
-        F2: FnOnce(&mut CalloopData) + 'static,
+        F1: Fn(&mut Self) -> bool + 'static,
+        F2: FnOnce(&mut Self) + 'static,
     {
-        self.loop_handle.insert_idle(|data| {
-            Self::schedule_inner(data, condition, run);
+        self.loop_handle.insert_idle(|state| {
+            if !condition(state) {
+                state.schedule(condition, run);
+            } else {
+                run(state);
+            }
         });
-    }
-
-    /// Schedule something to be done when `condition` returns true.
-    fn schedule_inner<F1, F2>(data: &mut CalloopData, condition: F1, run: F2)
-    where
-        F1: Fn(&mut CalloopData) -> bool + 'static,
-        F2: FnOnce(&mut CalloopData) + 'static,
-    {
-        if !condition(data) {
-            data.state.loop_handle.insert_idle(|data| {
-                Self::schedule_inner(data, condition, run);
-            });
-            return;
-        }
-
-        run(data);
     }
 
     pub fn shutdown(&self) {
         tracing::info!("Shutting down Pinnacle");
         self.loop_signal.stop();
     }
-}
-
-pub struct CalloopData {
-    pub display_handle: DisplayHandle,
-    pub state: State,
 }
 
 #[derive(Default)]

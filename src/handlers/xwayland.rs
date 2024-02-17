@@ -23,13 +23,13 @@ use smithay::{
 
 use crate::{
     focus::FocusTarget,
-    state::{CalloopData, WithState},
+    state::{State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
 
-impl XwmHandler for CalloopData {
+impl XwmHandler for State {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-        self.state.xwm.as_mut().expect("xwm not in state")
+        self.xwm.as_mut().expect("xwm not in state")
     }
 
     fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
@@ -42,24 +42,21 @@ impl XwmHandler for CalloopData {
         assert!(!window.is_override_redirect());
 
         let window = WindowElement::X11(window);
-        self.state.space.map_element(window.clone(), (0, 0), true);
+        self.space.map_element(window.clone(), (0, 0), true);
         let bbox = self
-            .state
             .space
             .element_bbox(&window)
             .expect("called element_bbox on an unmapped window");
 
         let output_size = self
-            .state
             .focus_state
             .focused_output
             .as_ref()
-            .and_then(|op| self.state.space.output_geometry(op))
+            .and_then(|op| self.space.output_geometry(op))
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
         let output_loc = self
-            .state
             .focus_state
             .focused_output
             .as_ref()
@@ -79,7 +76,7 @@ impl XwmHandler for CalloopData {
             unreachable!()
         };
 
-        self.state.space.map_element(window.clone(), loc, true);
+        self.space.map_element(window.clone(), loc, true);
         surface.set_mapped(true).expect("failed to map x11 window");
 
         let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
@@ -91,8 +88,8 @@ impl XwmHandler for CalloopData {
         // TODO: ssd
 
         if let (Some(output), _) | (None, Some(output)) = (
-            &self.state.focus_state.focused_output,
-            self.state.space.outputs().next(),
+            &self.focus_state.focused_output,
+            self.space.outputs().next(),
         ) {
             window.place_on_output(output);
         }
@@ -103,23 +100,23 @@ impl XwmHandler for CalloopData {
             });
         }
 
-        self.state.windows.push(window.clone());
+        self.windows.push(window.clone());
 
-        self.state.focus_state.set_focus(window.clone());
+        self.focus_state.set_focus(window.clone());
 
-        self.state.apply_window_rules(&window);
+        self.apply_window_rules(&window);
 
-        if let Some(output) = window.output(&self.state) {
-            self.state.update_windows(&output);
+        if let Some(output) = window.output(self) {
+            self.update_windows(&output);
         }
 
-        self.state.loop_handle.insert_idle(move |data| {
-            data.state
+        self.loop_handle.insert_idle(move |state| {
+            state
                     .seat
                     .get_keyboard()
                     .expect("Seat had no keyboard") // FIXME: actually handle error
                     .set_focus(
-                        &mut data.state,
+                        state,
                         Some(FocusTarget::Window(window)),
                         SERIAL_COUNTER.next_serial(),
                     );
@@ -134,54 +131,52 @@ impl XwmHandler for CalloopData {
         let loc = window.geometry().loc;
 
         let window = WindowElement::X11OverrideRedirect(window);
-        self.state.windows.push(window.clone());
+        self.windows.push(window.clone());
 
         if let (Some(output), _) | (None, Some(output)) = (
-            &self.state.focus_state.focused_output,
-            self.state.space.outputs().next(),
+            &self.focus_state.focused_output,
+            self.space.outputs().next(),
         ) {
             window.place_on_output(output);
         }
 
-        self.state.space.map_element(window.clone(), loc, true);
-        self.state.focus_state.set_focus(window);
+        self.space.map_element(window.clone(), loc, true);
+        self.focus_state.set_focus(window);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        self.state.focus_state.focus_stack.retain(|win| {
+        self.focus_state.focus_stack.retain(|win| {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())
         });
 
         let win = self
-            .state
             .space
             .elements()
             .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
             .cloned();
 
         if let Some(win) = win {
-            self.state.space.unmap_elem(&win);
+            self.space.unmap_elem(&win);
 
-            if let Some(output) = win.output(&self.state) {
-                self.state.update_windows(&output);
+            if let Some(output) = win.output(self) {
+                self.update_windows(&output);
 
-                let focus = self.state.focused_window(&output).map(FocusTarget::Window);
+                let focus = self.focused_window(&output).map(FocusTarget::Window);
 
                 if let Some(FocusTarget::Window(win)) = &focus {
-                    self.state.space.raise_element(win, true);
+                    self.space.raise_element(win, true);
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }
                 }
 
-                self.state
-                    .seat
+                self.seat
                     .get_keyboard()
                     .expect("Seat had no keyboard")
-                    .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
+                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
 
-                self.state.schedule_render(&output);
+                self.schedule_render(&output);
             }
         }
 
@@ -192,13 +187,12 @@ impl XwmHandler for CalloopData {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        self.state.focus_state.focus_stack.retain(|win| {
+        self.focus_state.focus_stack.retain(|win| {
             win.wl_surface()
                 .is_some_and(|surf| Some(surf) != window.wl_surface())
         });
 
         let win = self
-            .state
             .windows
             .iter()
             .find(|elem| {
@@ -215,30 +209,28 @@ impl XwmHandler for CalloopData {
             tracing::debug!("removing x11 window from windows");
 
             // INFO: comparing the windows doesn't work so wlsurface it is
-            // self.state.windows.retain(|elem| &win != elem);
-            self.state
-                .windows
+            // self.windows.retain(|elem| &win != elem);
+            self.windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
-            if let Some(output) = win.output(&self.state) {
-                self.state.update_windows(&output);
+            if let Some(output) = win.output(self) {
+                self.update_windows(&output);
 
-                let focus = self.state.focused_window(&output).map(FocusTarget::Window);
+                let focus = self.focused_window(&output).map(FocusTarget::Window);
 
                 if let Some(FocusTarget::Window(win)) = &focus {
-                    self.state.space.raise_element(win, true);
+                    self.space.raise_element(win, true);
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }
                 }
 
-                self.state
-                    .seat
+                self.seat
                     .get_keyboard()
                     .expect("Seat had no keyboard")
-                    .set_focus(&mut self.state, focus, SERIAL_COUNTER.next_serial());
+                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
 
-                self.state.schedule_render(&output);
+                self.schedule_render(&output);
             }
         }
         tracing::debug!("destroyed x11 window");
@@ -275,7 +267,6 @@ impl XwmHandler for CalloopData {
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
         let Some(win) = self
-            .state
             .space
             .elements()
             .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
@@ -284,7 +275,7 @@ impl XwmHandler for CalloopData {
             return;
         };
 
-        self.state.space.map_element(win, geometry.loc, true);
+        self.space.map_element(win, geometry.loc, true);
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -294,7 +285,7 @@ impl XwmHandler for CalloopData {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.state.window_for_surface(&surf))
+            .and_then(|surf| self.window_for_surface(&surf))
         else {
             return;
         };
@@ -311,7 +302,7 @@ impl XwmHandler for CalloopData {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.state.window_for_surface(&surf))
+            .and_then(|surf| self.window_for_surface(&surf))
         else {
             return;
         };
@@ -328,7 +319,7 @@ impl XwmHandler for CalloopData {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.state.window_for_surface(&surf))
+            .and_then(|surf| self.window_for_surface(&surf))
         else {
             return;
         };
@@ -345,7 +336,7 @@ impl XwmHandler for CalloopData {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.state.window_for_surface(&surf))
+            .and_then(|surf| self.window_for_surface(&surf))
         else {
             return;
         };
@@ -363,12 +354,12 @@ impl XwmHandler for CalloopData {
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
         let Some(wl_surf) = window.wl_surface() else { return };
-        let seat = self.state.seat.clone();
+        let seat = self.seat.clone();
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
         crate::grab::resize_grab::resize_request_server(
-            &mut self.state,
+            self,
             &wl_surf,
             &seat,
             SERIAL_COUNTER.next_serial(),
@@ -379,12 +370,12 @@ impl XwmHandler for CalloopData {
 
     fn move_request(&mut self, _xwm: XwmId, window: X11Surface, button: u32) {
         let Some(wl_surf) = window.wl_surface() else { return };
-        let seat = self.state.seat.clone();
+        let seat = self.seat.clone();
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
         crate::grab::move_grab::move_request_server(
-            &mut self.state,
+            self,
             &wl_surf,
             &seat,
             SERIAL_COUNTER.next_serial(),
@@ -393,8 +384,7 @@ impl XwmHandler for CalloopData {
     }
 
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
-        self.state
-            .seat
+        self.seat
             .get_keyboard()
             .and_then(|kb| kb.current_focus())
             .is_some_and(|focus| {
@@ -415,9 +405,7 @@ impl XwmHandler for CalloopData {
     ) {
         match selection {
             SelectionTarget::Clipboard => {
-                if let Err(err) =
-                    request_data_device_client_selection(&self.state.seat, mime_type, fd)
-                {
+                if let Err(err) = request_data_device_client_selection(&self.seat, mime_type, fd) {
                     tracing::error!(
                         ?err,
                         "Failed to request current wayland clipboard for XWayland"
@@ -425,8 +413,7 @@ impl XwmHandler for CalloopData {
                 }
             }
             SelectionTarget::Primary => {
-                if let Err(err) = request_primary_client_selection(&self.state.seat, mime_type, fd)
-                {
+                if let Err(err) = request_primary_client_selection(&self.seat, mime_type, fd) {
                     tracing::error!(
                         ?err,
                         "Failed to request current wayland primary selection for XWayland"
@@ -439,15 +426,10 @@ impl XwmHandler for CalloopData {
     fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
         match selection {
             SelectionTarget::Clipboard => {
-                set_data_device_selection(
-                    &self.state.display_handle,
-                    &self.state.seat,
-                    mime_types,
-                    (),
-                );
+                set_data_device_selection(&self.display_handle, &self.seat, mime_types, ());
             }
             SelectionTarget::Primary => {
-                set_primary_selection(&self.state.display_handle, &self.state.seat, mime_types, ());
+                set_primary_selection(&self.display_handle, &self.seat, mime_types, ());
             }
         }
     }
@@ -455,13 +437,13 @@ impl XwmHandler for CalloopData {
     fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
         match selection {
             SelectionTarget::Clipboard => {
-                if current_data_device_selection_userdata(&self.state.seat).is_some() {
-                    clear_data_device_selection(&self.state.display_handle, &self.state.seat);
+                if current_data_device_selection_userdata(&self.seat).is_some() {
+                    clear_data_device_selection(&self.display_handle, &self.seat);
                 }
             }
             SelectionTarget::Primary => {
-                if current_primary_selection_userdata(&self.state.seat).is_some() {
-                    clear_primary_selection(&self.state.display_handle, &self.state.seat);
+                if current_primary_selection_userdata(&self.seat).is_some() {
+                    clear_primary_selection(&self.display_handle, &self.seat);
                 }
             }
         }
