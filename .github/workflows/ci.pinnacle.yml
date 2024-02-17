@@ -33,6 +33,26 @@ jobs:
         run: cargo build --verbose
       - name: Celebratory yahoo
         run: echo yahoo
+  test:
+    runs-on: ubuntu-latest
+    name: Run tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Get Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache stuff
+        uses: Swatinem/rust-cache@v2
+      - name: Get dependencies
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Build
+        run: cargo test
   check-format:
     runs-on: ubuntu-latest
     name: Check formatting
