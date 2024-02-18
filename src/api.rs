@@ -447,11 +447,7 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
             }
 
             let Ok(mut child) = tokio::process::Command::new(OsString::from(arg0.clone()))
-                .envs(
-                    [("WAYLAND_DISPLAY", state.socket_name.clone())]
-                        .into_iter()
-                        .chain(state.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}")))),
-                )
+                .envs(state.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}"))))
                 .stdin(match has_callback {
                     true => Stdio::piped(),
                     false => Stdio::null(),

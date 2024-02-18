@@ -27,10 +27,10 @@ jobs:
       - name: Build docs
         run: cd ./api/rust && cargo doc
       - name: Create index.html
-        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=pinnacle_api\">" > ./api/rust/target/doc/index.html
+        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=pinnacle_api\">" > ./target/doc/index.html
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./api/rust/target/doc
+          publish_dir: ./target/doc
           destination_dir: ${{ env.BRANCH_NAME }}/rust

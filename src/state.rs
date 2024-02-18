@@ -50,8 +50,6 @@ pub struct State {
     pub clock: Clock<Monotonic>,
 
     pub space: Space<WindowElement>,
-    /// The name of the Wayland socket
-    pub socket_name: String,
 
     pub seat: Seat<State>,
 
@@ -108,11 +106,11 @@ impl State {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
 
-        std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
         tracing::info!(
-            "Set WAYLAND_DISPLAY to {}",
-            socket_name.clone().to_string_lossy()
+            "Setting WAYLAND_DISPLAY to {}",
+            socket_name.to_string_lossy()
         );
+        std::env::set_var("WAYLAND_DISPLAY", socket_name);
 
         // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
         // example. Because of this, opening up only around 100 processes would exhaust the file
@@ -170,8 +168,8 @@ impl State {
 
         let xwayland = {
             let (xwayland, channel) = XWayland::new(&display_handle);
-            let clone = display_handle.clone();
-            tracing::debug!("inserting into loop");
+            let dh_clone = display_handle.clone();
+
             let res = loop_handle.insert_source(channel, move |event, _, state| match event {
                 XWaylandEvent::Ready {
                     connection,
@@ -181,7 +179,7 @@ impl State {
                 } => {
                     let mut wm = X11Wm::start_wm(
                         state.loop_handle.clone(),
-                        clone.clone(),
+                        dh_clone.clone(),
                         connection,
                         client,
                     )
@@ -254,11 +252,9 @@ impl State {
 
             dnd_icon: None,
 
-            socket_name: socket_name.to_string_lossy().to_string(),
-
             popup_manager: PopupManager::default(),
 
-            windows: vec![],
+            windows: Vec::new(),
             new_windows: Vec::new(),
 
             xwayland,
