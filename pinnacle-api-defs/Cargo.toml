@@ -1,13 +1,15 @@
 [package]
 name = "pinnacle-api-defs"
 version = "0.0.1"
-edition = "2021"
+description = "Tonic protobuf codegen for Pinnacle and its Rust API"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
 
 [dependencies]
-tonic = "0.10.2"
-prost = "0.12.3"
-# prost-types = "0.12.3"
+tonic = { workspace = true }
+prost = { workspace = true }
 
 [build-dependencies]
-tonic-build = "0.10.2"
+tonic-build = { workspace = true }
 const_format = "0.2.32"

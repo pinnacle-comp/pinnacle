@@ -1,69 +1,97 @@
+[workspace]
+members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros"]
+
+[workspace.package]
+authors = ["Ottatop <ottatop1227@gmail.com>"]
+edition = "2021"
+repository = "https://github.com/pinnacle-comp/pinnacle/"
+
+[workspace.dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"]}
+
+prost = "0.12.3"
+tonic = "0.11.0"
+tonic-reflection = "0.11.0"
+tonic-build = "0.11.0"
+
+pinnacle-api-defs = { path = "./pinnacle-api-defs" }
+
+xkbcommon = "0.7.0"
+xdg = "2.5.2"
+
+#################################################################################
+
 [package]
 name = "pinnacle"
-authors = ["Ottatop <ottatop1227@gmail.com>"]
 version = "0.0.1"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 license = "GPL-3.0+"
 description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM"
 readme = "README.md"
-repository = "https://github.com/pinnacle-comp/pinnacle/"
+repository.workspace = true
 keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
+smithay = { git = "https://github.com/Smithay/smithay", rev = "1074914", default-features = false, features = ["desktop", "wayland_frontend"] }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1074914" }
+
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 tracing-appender = "0.2.3"
-smithay = { git = "https://github.com/Smithay/smithay", rev = "1074914", default-features = false, features = ["desktop", "wayland_frontend"] }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1074914", optional = true }
-thiserror = "1.0.56"
-xcursor = { version = "0.3.5", optional = true }
-image = { version = "0.24.8", default-features = false, optional = true }
-serde = { version = "1.0.196", features = ["derive"] }
-x11rb = { version = "0.13.0", default-features = false, features = ["composite"], optional = true }
-shellexpand = "3.1.0"
-toml = "0.8.10"
+
 anyhow = { version = "1.0.79", features = ["backtrace"] }
-clap = { version = "4.4.18", features = ["derive"] }
-xkbcommon = "0.7.0"
-xdg = "2.5.2"
+thiserror = "1.0.57"
+
+xcursor = { version = "0.3.5" }
+image = { version = "0.24.8", default-features = false }
+
+serde = { version = "1.0.196", features = ["derive"] }
+toml = "0.8.10"
+shellexpand = "3.1.0"
+clap = { version = "4.5.1", features = ["derive"] }
+x11rb = { version = "0.13.0", default-features = false, features = ["composite"] }
+xkbcommon = { workspace = true }
+xdg = { workspace = true }
 sysinfo = "0.30.5"
 nix = { version = "0.27.1", features = ["user", "resource"] }
-prost = "0.12.3"
-prost-types = "0.12.3"
-tonic = "0.10.2"
-tonic-reflection = "0.10.2"
+
+prost = { workspace = true }
+tonic = { workspace = true }
+tonic-reflection = { workspace = true }
+
+tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { version = "0.1.14", features = ["net"] }
-tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "process", "io-util", "signal"]}
+
 bitflags = "2.4.2"
-pinnacle-api-defs = { path = "./pinnacle-api-defs" }
+pinnacle-api-defs = { workspace = true }
 
 [build-dependencies]
-xdg = "2.5.2"
+xdg = { workspace = true }
 
 [dev-dependencies]
 temp-env = "0.3.6"
 tempfile = "3.10.0"
 
 [features]
-default = ["egl", "winit", "udev", "xwayland"]
-egl = ["smithay/use_system_lib", "smithay/backend_egl"]
-udev = [
-  "smithay-drm-extras",
-  "smithay/backend_libinput",
-  "smithay/backend_udev",
-  "smithay/backend_drm",
-  "smithay/backend_gbm",
-  "smithay/backend_vulkan",
-  "smithay/backend_egl",
-  "smithay/backend_session_libseat",
-  "image",
-  "smithay/renderer_gl",
-  "smithay/renderer_multi",
-  "xcursor",
+default = [
+    # udev
+    "smithay/backend_libinput",
+    "smithay/backend_udev",
+    "smithay/backend_drm",
+    "smithay/backend_gbm",
+    "smithay/backend_vulkan",
+    "smithay/backend_egl",
+    "smithay/backend_session_libseat",
+    "smithay/renderer_gl",
+    "smithay/renderer_multi",
+    # egl
+    "smithay/use_system_lib",
+    "smithay/backend_egl",
+    # winit
+    "smithay/backend_winit",
+    "smithay/backend_drm",
+    # xwayland
+    "smithay/xwayland",
+    "smithay/x11rb_event_source"
 ]
-winit = ["smithay/backend_winit", "smithay/backend_drm"]
-xwayland = ["smithay/xwayland", "x11rb", "smithay/x11rb_event_source", "xcursor"]
-
-[workspace]
-members = ["pinnacle-api-defs"]
-exclude = ["api/rust"]

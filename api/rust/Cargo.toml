@@ -1,25 +1,20 @@
 [package]
 name = "pinnacle-api"
 version = "0.0.2"
-edition = "2021"
-authors = ["Ottatop <ottatop1227@gmail.com>"]
+edition.workspace = true
+authors.workspace = true
 description = "The Rust implementation of the Pinnacle compositor's configuration API"
 license = "MPL-2.0"
-repository = "https://github.com/pinnacle-comp/pinnacle"
+repository.workspace = true
 keywords = ["compositor", "pinnacle", "api", "config"]
 categories = ["api-bindings", "config"]
 
 [dependencies]
-pinnacle-api-defs = { path = "../../pinnacle-api-defs" }
+pinnacle-api-defs = { workspace = true }
 pinnacle-api-macros = { path = "./pinnacle-api-macros" }
-tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread", "net"] }
-async-net = "2.0.0"
-async-compat = "0.2.3"
-tonic = "0.10.2"
+tokio = { workspace = true, features = ["net"] }
+tonic = { workspace = true }
 tower = { version = "0.4.13", features = ["util"] }
 futures = "0.3.30"
 num_enum = "0.7.2"
-xkbcommon = "0.7.0"
-
-[workspace]
-members = ["pinnacle-api-macros"]
+xkbcommon = { workspace = true }
