@@ -11,6 +11,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -375,7 +376,7 @@ impl State {
         Ok(())
     }
 
-    pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
+    fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
         self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
@@ -441,24 +442,12 @@ impl State {
             })
             .expect("failed to insert grpc_receiver into loop");
 
-        let pinnacle_service = PinnacleService {
-            sender: grpc_sender.clone(),
-        };
-        let input_service = InputService {
-            sender: grpc_sender.clone(),
-        };
-        let process_service = ProcessService {
-            sender: grpc_sender.clone(),
-        };
-        let tag_service = TagService {
-            sender: grpc_sender.clone(),
-        };
-        let output_service = OutputService {
-            sender: grpc_sender.clone(),
-        };
-        let window_service = WindowService {
-            sender: grpc_sender.clone(),
-        };
+        let pinnacle_service = PinnacleService::new(grpc_sender.clone());
+        let input_service = InputService::new(grpc_sender.clone());
+        let process_service = ProcessService::new(grpc_sender.clone());
+        let tag_service = TagService::new(grpc_sender.clone());
+        let output_service = OutputService::new(grpc_sender.clone());
+        let window_service = WindowService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)

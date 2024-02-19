@@ -2,21 +2,35 @@ use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::{
+        input_service_server,
         set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
         set_mousebind_request::MouseEdge,
         SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
         SetMousebindResponse, SetRepeatRateRequest, SetXkbConfigRequest,
     },
-    output::v0alpha1::{ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest},
-    process::v0alpha1::{SetEnvRequest, SpawnRequest, SpawnResponse},
-    tag::v0alpha1::{
-        AddRequest, AddResponse, RemoveRequest, SetActiveRequest, SetLayoutRequest, SwitchToRequest,
+    output::{
+        self,
+        v0alpha1::{
+            output_service_server, ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest,
+        },
     },
-    v0alpha1::{Geometry, QuitRequest},
-    window::v0alpha1::{
-        AddWindowRuleRequest, CloseRequest, FullscreenOrMaximized, MoveGrabRequest,
-        MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest, SetFullscreenRequest,
-        SetGeometryRequest, SetMaximizedRequest, SetTagRequest, WindowRule, WindowRuleCondition,
+    process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
+    tag::{
+        self,
+        v0alpha1::{
+            tag_service_server, AddRequest, AddResponse, RemoveRequest, SetActiveRequest,
+            SetLayoutRequest, SwitchToRequest,
+        },
+    },
+    v0alpha1::{pinnacle_service_server, Geometry, QuitRequest},
+    window::{
+        self,
+        v0alpha1::{
+            window_service_server, AddWindowRuleRequest, CloseRequest, FullscreenOrMaximized,
+            MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
+            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
+            WindowRule, WindowRuleCondition,
+        },
     },
 };
 use smithay::{
@@ -27,7 +41,10 @@ use smithay::{
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::io::AsyncBufReadExt;
+use tokio::{
+    io::AsyncBufReadExt,
+    sync::mpsc::{unbounded_channel, UnboundedSender},
+};
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 
@@ -44,34 +61,101 @@ use crate::{
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
 
+async fn run_unary_no_response<F>(
+    fn_sender: &StateFnSender,
+    with_state: F,
+) -> Result<Response<()>, Status>
+where
+    F: FnOnce(&mut State) + Send + 'static,
+{
+    fn_sender
+        .send(Box::new(with_state))
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    Ok(Response::new(()))
+}
+
+async fn run_unary<F, T>(fn_sender: &StateFnSender, with_state: F) -> Result<Response<T>, Status>
+where
+    F: FnOnce(&mut State) -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let (sender, receiver) = tokio::sync::oneshot::channel::<T>();
+
+    let f = Box::new(|state: &mut State| {
+        // TODO: find a way to handle this error
+        if sender.send(with_state(state)).is_err() {
+            panic!("failed to send result to config");
+        }
+    });
+
+    fn_sender
+        .send(f)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    receiver.await.map(Response::new).map_err(|err| {
+        Status::internal(format!(
+            "failed to transfer response for transport to client: {err}"
+        ))
+    })
+}
+
+fn run_server_streaming<F, T>(
+    fn_sender: &StateFnSender,
+    with_state: F,
+) -> Result<Response<ResponseStream<T>>, Status>
+where
+    F: FnOnce(&mut State, UnboundedSender<Result<T, Status>>) + Send + 'static,
+    T: Send + 'static,
+{
+    let (sender, receiver) = unbounded_channel::<Result<T, Status>>();
+
+    let f = Box::new(|state: &mut State| {
+        with_state(state, sender);
+    });
+
+    fn_sender
+        .send(f)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    Ok(Response::new(Box::pin(receiver_stream)))
+}
+
 pub struct PinnacleService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl PinnacleService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::v0alpha1::pinnacle_service_server::PinnacleService
-    for PinnacleService
-{
+impl pinnacle_service_server::PinnacleService for PinnacleService {
     async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
         tracing::trace!("PinnacleService.quit");
-        let f = Box::new(|state: &mut State| {
-            state.shutdown();
-        });
-        // Expect is ok here, if it panics then the state was dropped beforehand
-        self.sender.send(f).expect("failed to send f");
 
-        Ok(Response::new(()))
+        run_unary_no_response(&self.sender, |state| {
+            state.shutdown();
+        })
+        .await
     }
 }
 
 pub struct InputService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl InputService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputService
-    for InputService
-{
+impl input_service_server::InputService for InputService {
     type SetKeybindStream = ResponseStream<SetKeybindResponse>;
     type SetMousebindStream = ResponseStream<SetMousebindResponse>;
 
@@ -80,8 +164,6 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
         request: Request<SetKeybindRequest>,
     ) -> Result<Response<Self::SetKeybindStream>, Status> {
         let request = request.into_inner();
-
-        tracing::debug!(request = ?request);
 
         // TODO: impl From<&[Modifier]> for ModifierMask
         let modifiers = request
@@ -126,20 +208,12 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
             }
         };
 
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        self.sender
-            .send(Box::new(move |state| {
-                state
-                    .input_state
-                    .keybinds
-                    .insert((modifiers, keysym), sender);
-            }))
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-
-        Ok(Response::new(Box::pin(receiver_stream)))
+        run_server_streaming(&self.sender, move |state, sender| {
+            state
+                .input_state
+                .keybinds
+                .insert((modifiers, keysym), sender);
+        })
     }
 
     async fn set_mousebind(
@@ -177,20 +251,12 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
             return Err(Status::invalid_argument("press or release not specified"));
         }
 
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        self.sender
-            .send(Box::new(move |state| {
-                state
-                    .input_state
-                    .mousebinds
-                    .insert((modifiers, button, edge), sender);
-            }))
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-
-        Ok(Response::new(Box::pin(receiver_stream)))
+        run_server_streaming(&self.sender, move |state, sender| {
+            state
+                .input_state
+                .mousebinds
+                .insert((modifiers, button, edge), sender);
+        })
     }
 
     async fn set_xkb_config(
@@ -199,7 +265,7 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let new_config = XkbConfig {
                 rules: request.rules(),
                 variant: request.variant(),
@@ -212,13 +278,8 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
                     tracing::error!("Failed to set xkbconfig: {err}");
                 }
             }
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_repeat_rate(
@@ -234,17 +295,12 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
             .delay
             .ok_or_else(|| Status::invalid_argument("no rate specified"))?;
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             if let Some(kb) = state.seat.get_keyboard() {
                 kb.change_repeat_info(rate, delay);
             }
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_libinput_setting(
@@ -380,7 +436,7 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
             }),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             for device in state.input_state.libinput_devices.iter_mut() {
                 apply_setting(device);
             }
@@ -389,24 +445,23 @@ impl pinnacle_api_defs::pinnacle::input::v0alpha1::input_service_server::InputSe
                 .input_state
                 .libinput_settings
                 .insert(discriminant, apply_setting);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 }
 
 pub struct ProcessService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl ProcessService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::ProcessService
-    for ProcessService
-{
+impl process_service_server::ProcessService for ProcessService {
     type SpawnStream = ResponseStream<SpawnResponse>;
 
     async fn spawn(
@@ -423,9 +478,7 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
             .next()
             .ok_or_else(|| Status::invalid_argument("no args specified"))?;
 
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        let f = Box::new(move |state: &mut State| {
+        run_server_streaming(&self.sender, move |state, sender| {
             if once {
                 state
                     .system_processes
@@ -536,15 +589,7 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
                     Err(err) => tracing::warn!("child wait() err: {err}"),
                 }
             });
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-
-        Ok(Response::new(Box::pin(receiver_stream)))
+        })
     }
 
     async fn set_env(&self, request: Request<SetEnvRequest>) -> Result<Response<()>, Status> {
@@ -576,11 +621,17 @@ impl pinnacle_api_defs::pinnacle::process::v0alpha1::process_service_server::Pro
 }
 
 pub struct TagService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl TagService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService for TagService {
+impl tag_service_server::TagService for TagService {
     async fn set_active(&self, request: Request<SetActiveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
@@ -591,20 +642,12 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(
-                pinnacle_api_defs::pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Set(
-                    set,
-                ),
-            ) => Some(set),
-            Some(
-                pinnacle_api_defs::pinnacle::tag::v0alpha1::set_active_request::SetOrToggle::Toggle(
-                    _,
-                ),
-            ) => None,
+            Some(tag::v0alpha1::set_active_request::SetOrToggle::Set(set)) => Some(set),
+            Some(tag::v0alpha1::set_active_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(tag) = tag_id.tag(state) else {
                 return;
             };
@@ -620,13 +663,8 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
             state.update_windows(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn switch_to(&self, request: Request<SwitchToRequest>) -> Result<Response<()>, Status> {
@@ -638,7 +676,7 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(tag) = tag_id.tag(state) else { return };
             let Some(output) = tag.output(state) else { return };
 
@@ -652,13 +690,8 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
             state.update_windows(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn add(&self, request: Request<AddRequest>) -> Result<Response<AddResponse>, Status> {
@@ -670,9 +703,7 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 .ok_or_else(|| Status::invalid_argument("no output specified"))?,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<AddResponse>();
-
-        let f = Box::new(move |state: &mut State| {
+        run_unary(&self.sender, move |state| {
             let new_tags = request
                 .tag_names
                 .into_iter()
@@ -688,8 +719,6 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 })
                 .collect::<Vec<_>>();
 
-            let _ = sender.send(AddResponse { tag_ids });
-
             if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
                 let mut tags = saved_state.tags.clone();
                 tags.extend(new_tags.clone());
@@ -704,18 +733,16 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 );
             }
 
-            let Some(output) = state
+            if let Some(output) = state
                 .space
                 .outputs()
                 .find(|output| output.name() == output_name.0)
-            else {
-                return;
-            };
-
-            output.with_state(|state| {
-                state.tags.extend(new_tags.clone());
-                tracing::debug!("tags added, are now {:?}", state.tags);
-            });
+            {
+                output.with_state(|state| {
+                    state.tags.extend(new_tags.clone());
+                    tracing::debug!("tags added, are now {:?}", state.tags);
+                });
+            }
 
             for tag in new_tags {
                 for window in state.windows.iter() {
@@ -728,18 +755,10 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                     });
                 }
             }
-        });
 
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            AddResponse { tag_ids }
+        })
+        .await
     }
 
     // TODO: test
@@ -748,7 +767,7 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
 
         let tag_ids = request.tag_ids.into_iter().map(TagId::Some);
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
 
             for output in state.space.outputs().cloned().collect::<Vec<_>>() {
@@ -768,13 +787,8 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                     conn_saved_state.tags.retain(|tag| tag != tag_to_remove);
                 }
             }
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_layout(&self, request: Request<SetLayoutRequest>) -> Result<Response<()>, Status> {
@@ -800,7 +814,7 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
             Layout::CornerBottomRight => crate::layout::Layout::CornerBottomRight,
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(tag) = tag_id.tag(state) else { return };
 
             tag.set_layout(layout);
@@ -809,24 +823,15 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
 
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn get(
         &self,
-        _request: Request<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        _request: Request<tag::v0alpha1::GetRequest>,
+    ) -> Result<Response<tag::v0alpha1::GetResponse>, Status> {
+        run_unary(&self.sender, move |state| {
             let tag_ids = state
                 .space
                 .outputs()
@@ -838,27 +843,15 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 })
                 .collect::<Vec<_>>();
 
-            let _ =
-                sender.send(pinnacle_api_defs::pinnacle::tag::v0alpha1::GetResponse { tag_ids });
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            tag::v0alpha1::GetResponse { tag_ids }
+        })
+        .await
     }
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse>, Status>
-    {
+        request: Request<tag::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<tag::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
         let tag_id = TagId::Some(
@@ -867,11 +860,7 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        run_unary(&self.sender, move |state| {
             let tag = tag_id.tag(state);
 
             let output_name = tag
@@ -881,36 +870,28 @@ impl pinnacle_api_defs::pinnacle::tag::v0alpha1::tag_service_server::TagService 
             let active = tag.as_ref().map(|tag| tag.active());
             let name = tag.as_ref().map(|tag| tag.name());
 
-            let _ = sender.send(
-                pinnacle_api_defs::pinnacle::tag::v0alpha1::GetPropertiesResponse {
-                    active,
-                    name,
-                    output_name,
-                },
-            );
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            tag::v0alpha1::GetPropertiesResponse {
+                active,
+                name,
+                output_name,
+            }
+        })
+        .await
     }
 }
 
 pub struct OutputService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl OutputService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::OutputService
-    for OutputService
-{
+impl output_service_server::OutputService for OutputService {
     type ConnectForAllStream = ResponseStream<ConnectForAllResponse>;
 
     async fn set_location(
@@ -928,7 +909,7 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
         let x = request.x;
         let y = request.y;
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
                 if let Some(x) = x {
                     saved_state.loc.x = x;
@@ -960,13 +941,8 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
             state.space.map_output(&output, loc);
             tracing::debug!("Mapping output {} to {loc:?}", output.name());
             state.update_windows(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     // TODO: remove this and integrate it into a signal/event system
@@ -975,67 +951,32 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
         _request: Request<ConnectForAllRequest>,
     ) -> Result<Response<Self::ConnectForAllStream>, Status> {
         tracing::trace!("OutputService.connect_for_all");
-        let (sender, receiver) =
-            tokio::sync::mpsc::unbounded_channel::<Result<ConnectForAllResponse, Status>>();
 
-        let f = Box::new(move |state: &mut State| {
-            // for output in state.space.outputs() {
-            //     let _ = sender.send(Ok(ConnectForAllResponse {
-            //         output_name: Some(output.name()),
-            //     }));
-            //     tracing::debug!(name = output.name(), "sent connect_for_all");
-            // }
-
+        run_server_streaming(&self.sender, move |state, sender| {
             state.config.output_callback_senders.push(sender);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-
-        Ok(Response::new(Box::pin(receiver_stream)))
+        })
     }
 
     async fn get(
         &self,
-        _request: Request<pinnacle_api_defs::pinnacle::output::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        _request: Request<output::v0alpha1::GetRequest>,
+    ) -> Result<Response<output::v0alpha1::GetResponse>, Status> {
+        run_unary(&self.sender, move |state| {
             let output_names = state
                 .space
                 .outputs()
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
-            let _ = sender
-                .send(pinnacle_api_defs::pinnacle::output::v0alpha1::GetResponse { output_names });
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            output::v0alpha1::GetResponse { output_names }
+        })
+        .await
     }
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<
-        Response<pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse>,
-        Status,
-    > {
+        request: Request<output::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<output::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
         let output_name = OutputName(
@@ -1044,11 +985,7 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
                 .ok_or_else(|| Status::invalid_argument("no output specified"))?,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        run_unary(&self.sender, move |state| {
             let output = output_name.output(state);
 
             let pixel_width = output
@@ -1105,44 +1042,36 @@ impl pinnacle_api_defs::pinnacle::output::v0alpha1::output_service_server::Outpu
                 })
                 .unwrap_or_default();
 
-            let _ = sender.send(
-                pinnacle_api_defs::pinnacle::output::v0alpha1::GetPropertiesResponse {
-                    make,
-                    model,
-                    x,
-                    y,
-                    pixel_width,
-                    pixel_height,
-                    refresh_rate,
-                    physical_width,
-                    physical_height,
-                    focused,
-                    tag_ids,
-                },
-            );
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            output::v0alpha1::GetPropertiesResponse {
+                make,
+                model,
+                x,
+                y,
+                pixel_width,
+                pixel_height,
+                refresh_rate,
+                physical_width,
+                physical_height,
+                focused,
+                tag_ids,
+            }
+        })
+        .await
     }
 }
 
 pub struct WindowService {
-    pub sender: StateFnSender,
+    sender: StateFnSender,
+}
+
+impl WindowService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
 }
 
 #[tonic::async_trait]
-impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::WindowService
-    for WindowService
-{
+impl window_service_server::WindowService for WindowService {
     async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
@@ -1152,7 +1081,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
 
             match window {
@@ -1163,13 +1092,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 }
                 _ => unreachable!(),
             }
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_geometry(
@@ -1177,6 +1101,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         request: Request<SetGeometryRequest>,
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
+
+        tracing::info!(request = ?request);
 
         let window_id = WindowId::Some(
             request
@@ -1190,7 +1116,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         let width = geometry.width;
         let height = geometry.height;
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
 
             // TODO: with no x or y, defaults unmapped windows to 0, 0
@@ -1219,13 +1145,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 state.update_windows(&output);
                 state.schedule_render(&output);
             }
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_fullscreen(
@@ -1241,16 +1162,12 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => {
-                Some(set)
-            }
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => {
-                None
-            }
+            Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => Some(set),
+            Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
@@ -1271,13 +1188,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
 
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_maximized(
@@ -1293,14 +1205,12 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => {
-                Some(set)
-            }
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
+            Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => Some(set),
+            Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
@@ -1321,13 +1231,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
 
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_floating(
@@ -1343,14 +1248,12 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => {
-                Some(set)
-            }
-            Some(pinnacle_api_defs::pinnacle::window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
+            Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => Some(set),
+            Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
@@ -1371,13 +1274,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
 
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn move_to_tag(
@@ -1398,7 +1296,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
             let Some(tag) = tag_id.tag(state) else { return };
             window.with_state(|state| {
@@ -1407,13 +1305,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             let Some(output) = tag.output(state) else { return };
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn set_tag(&self, request: Request<SetTagRequest>) -> Result<Response<()>, Status> {
@@ -1432,20 +1325,12 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
         );
 
         let set_or_toggle = match request.set_or_toggle {
-            Some(
-                pinnacle_api_defs::pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Set(
-                    set,
-                ),
-            ) => Some(set),
-            Some(
-                pinnacle_api_defs::pinnacle::window::v0alpha1::set_tag_request::SetOrToggle::Toggle(
-                    _,
-                ),
-            ) => None,
+            Some(window::v0alpha1::set_tag_request::SetOrToggle::Set(set)) => Some(set),
+            Some(window::v0alpha1::set_tag_request::SetOrToggle::Toggle(_)) => None,
             None => return Err(Status::invalid_argument("unspecified set or toggle")),
         };
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
             let Some(tag) = tag_id.tag(state) else { return };
 
@@ -1475,13 +1360,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             let Some(output) = tag.output(state) else { return };
             state.update_windows(&output);
             state.schedule_render(&output);
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn move_grab(&self, request: Request<MoveGrabRequest>) -> Result<Response<()>, Status> {
@@ -1491,7 +1371,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             .button
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let Some((FocusTarget::Window(window), _)) =
                 state.focus_target_under(state.pointer_location)
             else {
@@ -1500,8 +1380,6 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             let Some(wl_surf) = window.wl_surface() else { return };
             let seat = state.seat.clone();
 
-            // We use the server one and not the client because windows like Steam don't provide
-            // GrabStartData, so we need to create it ourselves.
             crate::grab::move_grab::move_request_server(
                 state,
                 &wl_surf,
@@ -1509,13 +1387,8 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 SERIAL_COUNTER.next_serial(),
                 button,
             );
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn resize_grab(
@@ -1528,7 +1401,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             .button
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             let pointer_loc = state.pointer_location;
             let Some((FocusTarget::Window(window), window_loc)) =
                 state.focus_target_under(pointer_loc)
@@ -1583,24 +1456,15 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 edges.into(),
                 button,
             );
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 
     async fn get(
         &self,
-        _request: Request<pinnacle_api_defs::pinnacle::window::v0alpha1::GetRequest>,
-    ) -> Result<Response<pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse>, Status> {
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        _request: Request<window::v0alpha1::GetRequest>,
+    ) -> Result<Response<window::v0alpha1::GetResponse>, Status> {
+        run_unary(&self.sender, move |state| {
             let window_ids = state
                 .windows
                 .iter()
@@ -1612,29 +1476,15 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 })
                 .collect::<Vec<_>>();
 
-            let _ = sender
-                .send(pinnacle_api_defs::pinnacle::window::v0alpha1::GetResponse { window_ids });
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            window::v0alpha1::GetResponse { window_ids }
+        })
+        .await
     }
 
     async fn get_properties(
         &self,
-        request: Request<pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<
-        Response<pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse>,
-        Status,
-    > {
+        request: Request<window::v0alpha1::GetPropertiesRequest>,
+    ) -> Result<Response<window::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
         let window_id = WindowId::Some(
@@ -1643,11 +1493,7 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<
-            pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse,
-        >();
-
-        let f = Box::new(move |state: &mut State| {
+        run_unary(&self.sender, move |state| {
             let window = window_id.window(state);
 
             let width = window.as_ref().map(|win| win.geometry().size.w);
@@ -1738,29 +1584,17 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
                 })
                 .unwrap_or_default();
 
-            let _ = sender.send(
-                pinnacle_api_defs::pinnacle::window::v0alpha1::GetPropertiesResponse {
-                    geometry,
-                    class,
-                    title,
-                    focused,
-                    floating,
-                    fullscreen_or_maximized,
-                    tag_ids,
-                },
-            );
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        let response = receiver
-            .recv()
-            .await
-            .ok_or_else(|| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(response))
+            window::v0alpha1::GetPropertiesResponse {
+                geometry,
+                class,
+                title,
+                focused,
+                floating,
+                fullscreen_or_maximized,
+                tag_ids,
+            }
+        })
+        .await
     }
 
     async fn add_window_rule(
@@ -1779,15 +1613,10 @@ impl pinnacle_api_defs::pinnacle::window::v0alpha1::window_service_server::Windo
             .ok_or_else(|| Status::invalid_argument("no rule specified"))?
             .into();
 
-        let f = Box::new(move |state: &mut State| {
+        run_unary_no_response(&self.sender, move |state| {
             state.config.window_rules.push((cond, rule));
-        });
-
-        self.sender
-            .send(f)
-            .map_err(|_| Status::internal("internal state was not running"))?;
-
-        Ok(Response::new(()))
+        })
+        .await
     }
 }
 
