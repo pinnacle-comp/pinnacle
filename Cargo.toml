@@ -37,7 +37,7 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "1074914", default
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1074914" }
 
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
 tracing-appender = "0.2.3"
 
 anyhow = { version = "1.0.79", features = ["backtrace"] }

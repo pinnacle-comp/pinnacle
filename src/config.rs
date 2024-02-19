@@ -11,7 +11,6 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     process::Stdio,
-    time::Duration,
 };
 
 use anyhow::Context;

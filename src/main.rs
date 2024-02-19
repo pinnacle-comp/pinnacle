@@ -11,10 +11,12 @@
 // #![deny(unused_imports)] // this has remained commented out for months lol
 #![warn(clippy::unwrap_used)]
 
+use anyhow::Context;
 use clap::Parser;
 use nix::unistd::Uid;
+use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_appender::rolling::Rotation;
-use tracing_subscriber::{fmt::writer::MakeWriterExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use xdg::BaseDirectories;
 
 mod api;
@@ -65,77 +67,95 @@ async fn main() -> anyhow::Result<()> {
         .filename_suffix("pinnacle.log")
         .max_log_files(8)
         .build(xdg_state_dir)
-        .expect("failed to build file logger");
+        .context("failed to build file logger")?;
 
     let (appender, _guard) = tracing_appender::non_blocking(appender);
-    let writer = appender.and(std::io::stdout);
 
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("debug"));
+    let env_filter = EnvFilter::try_from_default_env();
 
-    tracing_subscriber::fmt()
+    let file_log_env_filter = match env_filter.as_ref() {
+        Ok(filter) if filter.max_level_hint() == Some(LevelFilter::TRACE) => {
+            EnvFilter::new("trace")
+        }
+        _ => EnvFilter::new("debug"),
+    };
+
+    let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
-        .with_env_filter(env_filter)
-        .with_writer(writer)
+        .with_writer(appender)
+        .with_filter(file_log_env_filter);
+
+    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("info"));
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_writer(std::io::stdout)
+        .with_filter(stdout_env_filter);
+
+    tracing_subscriber::registry()
+        .with(file_log_layer)
+        .with(stdout_layer)
         .init();
 
     let args = Args::parse();
 
-    if Uid::effective().is_root() && !args.allow_root {
-        tracing::warn!("You are trying to run Pinnacle as root.");
-        tracing::warn!("This is NOT recommended.");
-        tracing::warn!("To run Pinnacle as root, pass in the --allow-root flag.");
-        tracing::warn!("Again, this is NOT recommended.");
-        return Ok(());
+    if Uid::effective().is_root() {
+        if !args.allow_root {
+            warn!("You are trying to run Pinnacle as root.");
+            warn!("This is NOT recommended.");
+            warn!("To run Pinnacle as root, pass in the --allow-root flag.");
+            warn!("Again, this is NOT recommended.");
+            return Ok(());
+        } else {
+            warn!("Running Pinnacle as root. I hope you know what you're doing 🫡");
+        }
     }
 
     let in_graphical_env =
         std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
 
     if !sysinfo::set_open_files_limit(0) {
-        tracing::warn!("Unable to set `sysinfo`'s open files limit to 0.");
-        tracing::warn!("You may see LOTS of file descriptors open under Pinnacle.");
+        warn!("Unable to set `sysinfo`'s open files limit to 0.");
+        warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
     match (args.backend.winit, args.backend.udev, args.force) {
         (false, false, _) => {
             if in_graphical_env {
-                tracing::info!("Starting winit backend");
+                info!("Starting winit backend");
                 crate::backend::winit::run_winit()?;
             } else {
-                tracing::info!("Starting udev backend");
+                info!("Starting udev backend");
                 crate::backend::udev::run_udev()?;
             }
         }
         (true, false, force) => {
             if !in_graphical_env {
                 if force {
-                    tracing::warn!("Starting winit backend with no detected graphical environment");
+                    warn!("Starting winit backend with no detected graphical environment");
                     crate::backend::winit::run_winit()?;
                 } else {
-                    println!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
-                    println!("If you are trying to run the winit backend in a tty, it won't work.");
-                    println!("If you really want to, additionally pass in the --force flag.");
+                    warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
+                    warn!("If you are trying to run the winit backend in a tty, it won't work.");
+                    warn!("If you really want to, additionally pass in the --force flag.");
                 }
             } else {
-                tracing::info!("Starting winit backend");
+                info!("Starting winit backend");
                 crate::backend::winit::run_winit()?;
             }
         }
         (false, true, force) => {
             if in_graphical_env {
                 if force {
-                    tracing::warn!("Starting udev backend with a detected graphical environment");
+                    warn!("Starting udev backend with a detected graphical environment");
                     crate::backend::udev::run_udev()?;
                 } else {
-                    println!("WAYLAND_DISPLAY and/or DISPLAY are set.");
-                    println!(
-                        "If you are trying to run the udev backend in a graphical environment,"
-                    );
-                    println!("it won't work and may mess some things up.");
-                    println!("If you really want to, additionally pass in the --force flag.");
+                    warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
+                    warn!("If you are trying to run the udev backend in a graphical environment,");
+                    warn!("it won't work and may mess some things up.");
+                    warn!("If you really want to, additionally pass in the --force flag.");
                 }
             } else {
-                tracing::info!("Starting udev backend");
+                info!("Starting udev backend");
                 crate::backend::udev::run_udev()?;
             }
         }
