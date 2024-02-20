@@ -34,4 +34,5 @@ jobs:
           deploy_key: ${{ secrets.DOCS_DEPLOY_KEY_RUST }}
           external_repository: pinnacle-comp/rust-reference
           publish_dir: ./target/doc
+          destination_dir: ${{ env.BRANCH_NAME }}
           force_orphan: true

@@ -16,7 +16,7 @@ https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7
         - [Lua](#lua)
             - [Lua Language Server completion](#lua-language-server-completion)
         - [Rust](#rust)
-        - [API Documentation](#api-documentation)
+        - [API References](#api-references)
 - [Controls](#controls)
 - [Feature Requests, Bug Reports, Contributions, and Questions](#feature-requests-bug-reports-contributions-and-questions)
 - [Changelog](#changelog)
@@ -27,9 +27,7 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-It sports extensive configurability through either Lua or Rust, with the ability to add more languages
-in the future. <sup>And by that I mean other people can do the adding,
-    I'm already maintaining Lua and Rust lol</sup>
+It can be configured through either Lua or Rust.
 
 > ### More video examples below!
 > <details>
@@ -90,7 +88,7 @@ TODO: other distros
 
 # Building
 Build the project with:
-```
+```sh
 cargo build [--release]
 ```
 
@@ -189,9 +187,9 @@ kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
 4. Copy the [default config](api/rust/examples/default_config/main.rs) to `src/main.rs`.
 5. Run Pinnacle! (You may want to run `cargo build` beforehand so you don't have to wait for your config to compile.)
 
-### API Documentation
-<b>Lua: https://pinnacle-comp.github.io/pinnacle/main/lua.<br>
-Rust: https://pinnacle-comp.github.io/pinnacle/main/rust.</b>
+### API References
+<b>Lua: https://pinnacle-comp.github.io/lua-reference/main.<br>
+Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 
 > Documentation for other branches can be reached by replacing `main` with the branch you want.
 
