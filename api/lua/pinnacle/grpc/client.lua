@@ -11,7 +11,6 @@ local pb = require("pb")
 ---Create appropriate headers for a gRPC request.
 ---@param service string The desired service
 ---@param method string The desired method within the service
----@return HttpHeaders
 local function create_request_headers(service, method)
     local req_headers = headers.new()
     req_headers:append(":method", "POST")
@@ -33,6 +32,13 @@ local function new_conn()
 
     return conn
 end
+
+---@class CqueuesLoop
+---@field loop function
+---@field wrap fun(self: self, fn: function)
+
+---@class H2Connection
+---@field new_stream function
 
 ---@nodoc
 ---@class Client
@@ -80,8 +86,8 @@ function client.unary_request(grpc_request_params)
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
 
-    local response_headers = stream:get_headers()
-    -- TODO: check headers for errors
+    -- TODO: check response headers for errors
+    local _ = stream:get_headers()
 
     local response_body = stream:get_next_chunk()
 
@@ -95,6 +101,7 @@ function client.unary_request(grpc_request_params)
     stream:shutdown()
 
     -- Skip the 1-byte compressed flag and the 4-byte message length
+    ---@diagnostic disable-next-line: redefined-local
     local response_body = response_body:sub(6)
     local response = pb.decode(response_type, response_body)
 
@@ -135,14 +142,16 @@ function client.server_streaming_request(grpc_request_params, callback)
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
 
-    local response_headers = stream:get_headers()
-    -- TODO: check headers for errors
+    -- TODO: check response headers for errors
+    local _ = stream:get_headers()
 
     client.loop:wrap(function()
         for response_body in stream:each_chunk() do
             -- Skip the 1-byte compressed flag and the 4-byte message length
+            ---@diagnostic disable-next-line: redefined-local
             local response_body = response_body:sub(6)
 
+            ---@diagnostic disable-next-line: redefined-local
             local success, obj = pcall(pb.decode, response_type, response_body)
             if not success then
                 print(obj)
