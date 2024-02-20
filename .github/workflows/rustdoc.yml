@@ -25,12 +25,13 @@ jobs:
       - name: Get protoc
         run: sudo apt install protobuf-compiler
       - name: Build docs
-        run: cd ./api/rust && cargo doc
+        run: cd ./api/rust && cargo doc --no-deps -p pinnacle-api -p tokio -p xkbcommon
       - name: Create index.html
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=pinnacle_api\">" > ./target/doc/index.html
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          deploy_key: ${{ secrets.DOCS_DEPLOY_KEY_RUST }}
+          external_repository: pinnacle-comp/rust-reference
           publish_dir: ./target/doc
-          destination_dir: ${{ env.BRANCH_NAME }}/rust
+          force-orphan: true
