@@ -49,4 +49,4 @@ jobs:
           external_repository: pinnacle-comp/lua-reference
           publish_dir: ../ldoc_gen/.ldoc_gen/doc
           destination_dir: ${{ env.BRANCH_NAME }}
-          force_orphan: true
+          # force_orphan: true

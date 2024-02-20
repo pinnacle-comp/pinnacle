@@ -35,4 +35,4 @@ jobs:
           external_repository: pinnacle-comp/rust-reference
           publish_dir: ./target/doc
           destination_dir: ${{ env.BRANCH_NAME }}
-          force_orphan: true
+          # force_orphan: true
