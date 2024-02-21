@@ -34,7 +34,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture};
+use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
@@ -51,6 +51,7 @@ use tonic::transport::Channel;
 use crate::{
     block_on_tokio,
     output::{Output, OutputHandle},
+    util::Batch,
 };
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
@@ -58,6 +59,8 @@ use crate::{
 pub struct Tag {
     channel: Channel,
     fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
+    tag_client: TagServiceClient<Channel>,
+    output_client: OutputServiceClient<Channel>,
 }
 
 impl Tag {
@@ -66,17 +69,11 @@ impl Tag {
         fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
     ) -> Self {
         Self {
+            tag_client: TagServiceClient::new(channel.clone()),
+            output_client: OutputServiceClient::new(channel.clone()),
             channel,
             fut_sender,
         }
-    }
-
-    fn create_tag_client(&self) -> TagServiceClient<Channel> {
-        TagServiceClient::new(self.channel.clone())
-    }
-
-    fn create_output_client(&self) -> OutputServiceClient<Channel> {
-        OutputServiceClient::new(self.channel.clone())
     }
 
     /// Add tags to the specified output.
@@ -97,20 +94,31 @@ impl Tag {
         output: &OutputHandle,
         tag_names: impl IntoIterator<Item = impl Into<String>>,
     ) -> impl Iterator<Item = TagHandle> {
-        let mut client = self.create_tag_client();
-        let output_client = self.create_output_client();
+        block_on_tokio(self.add_async(output, tag_names))
+    }
+
+    /// The async version of [`Tag::add`].
+    pub async fn add_async(
+        &self,
+        output: &OutputHandle,
+        tag_names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> impl Iterator<Item = TagHandle> {
+        let mut client = self.tag_client.clone();
+        let output_client = self.output_client.clone();
 
         let tag_names = tag_names.into_iter().map(Into::into).collect();
 
-        let response = block_on_tokio(client.add(AddRequest {
-            output_name: Some(output.name.clone()),
-            tag_names,
-        }))
-        .unwrap()
-        .into_inner();
+        let response = client
+            .add(AddRequest {
+                output_name: Some(output.name.clone()),
+                tag_names,
+            })
+            .await
+            .unwrap()
+            .into_inner();
 
         response.tag_ids.into_iter().map(move |id| TagHandle {
-            client: client.clone(),
+            tag_client: client.clone(),
             output_client: output_client.clone(),
             id,
         })
@@ -124,15 +132,22 @@ impl Tag {
     /// let all_tags = tag.get_all();
     /// ```
     pub fn get_all(&self) -> impl Iterator<Item = TagHandle> {
-        let mut client = self.create_tag_client();
-        let output_client = self.create_output_client();
+        block_on_tokio(self.get_all_async())
+    }
 
-        let response = block_on_tokio(client.get(tag::v0alpha1::GetRequest {}))
+    /// The async version of [`Tag::get_all`].
+    pub async fn get_all_async(&self) -> impl Iterator<Item = TagHandle> {
+        let mut client = self.tag_client.clone();
+        let output_client = self.output_client.clone();
+
+        let response = client
+            .get(tag::v0alpha1::GetRequest {})
+            .await
             .unwrap()
             .into_inner();
 
         response.tag_ids.into_iter().map(move |id| TagHandle {
-            client: client.clone(),
+            tag_client: client.clone(),
             output_client: output_client.clone(),
             id,
         })
@@ -149,18 +164,20 @@ impl Tag {
     /// let tg = tag.get("Thing");
     /// ```
     pub fn get(&self, name: impl Into<String>) -> Option<TagHandle> {
+        block_on_tokio(self.get_async(name))
+    }
+
+    /// The async version of [`Tag::get`].
+    pub async fn get_async(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
         let output_module = Output::new(self.channel.clone(), self.fut_sender.clone());
         let focused_output = output_module.get_focused();
 
-        self.get_all().find(|tag| {
-            let props = tag.props();
-
-            let same_tag_name = props.name.as_ref() == Some(&name);
-            let same_output = props.output.is_some_and(|op| Some(op) == focused_output);
-
-            same_tag_name && same_output
-        })
+        if let Some(output) = focused_output {
+            self.get_on_output_async(name, &output).await
+        } else {
+            None
+        }
     }
 
     /// Get a handle to the first tag with the given name on the specified output.
@@ -178,16 +195,26 @@ impl Tag {
         name: impl Into<String>,
         output: &OutputHandle,
     ) -> Option<TagHandle> {
+        block_on_tokio(self.get_on_output_async(name, output))
+    }
+
+    /// The async version of [`Tag::get_on_output`].
+    pub async fn get_on_output_async(
+        &self,
+        name: impl Into<String>,
+        output: &OutputHandle,
+    ) -> Option<TagHandle> {
         let name = name.into();
 
-        self.get_all().find(|tag| {
-            let props = tag.props();
+        self.get_all_async().await.batch_find(
+            |tag| tag.props_async().boxed(),
+            |props| {
+                let same_tag_name = props.name.as_ref() == Some(&name);
+                let same_output = props.output.as_ref().is_some_and(|op| op == output);
 
-            let same_tag_name = props.name.as_ref() == Some(&name);
-            let same_output = props.output.is_some_and(|op| &op == output);
-
-            same_tag_name && same_output
-        })
+                same_tag_name && same_output
+            },
+        )
     }
 
     /// Remove the given tags from their outputs.
@@ -202,7 +229,7 @@ impl Tag {
     pub fn remove(&self, tags: impl IntoIterator<Item = TagHandle>) {
         let tag_ids = tags.into_iter().map(|handle| handle.id).collect::<Vec<_>>();
 
-        let mut client = self.create_tag_client();
+        let mut client = self.tag_client.clone();
 
         block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
     }
@@ -333,9 +360,9 @@ pub struct LayoutCycler {
 /// This handle allows you to do things like switch to tags and get their properties.
 #[derive(Debug, Clone)]
 pub struct TagHandle {
-    pub(crate) client: TagServiceClient<Channel>,
-    pub(crate) output_client: OutputServiceClient<Channel>,
     pub(crate) id: u32,
+    pub(crate) tag_client: TagServiceClient<Channel>,
+    pub(crate) output_client: OutputServiceClient<Channel>,
 }
 
 impl PartialEq for TagHandle {
@@ -388,7 +415,7 @@ impl TagHandle {
     /// tag.get("3")?.switch_to(); // Displays Steam
     /// ```
     pub fn switch_to(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.tag_client.clone();
         block_on_tokio(client.switch_to(SwitchToRequest {
             tag_id: Some(self.id),
         }))
@@ -414,7 +441,7 @@ impl TagHandle {
     /// tag.get("2")?.set_active(false); // Displays Steam
     /// ```
     pub fn set_active(&self, set: bool) {
-        let mut client = self.client.clone();
+        let mut client = self.tag_client.clone();
         block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Set(set)),
@@ -442,7 +469,7 @@ impl TagHandle {
     /// tag.get("2")?.toggle(); // Displays nothing
     /// ```
     pub fn toggle_active(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.tag_client.clone();
         block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Toggle(())),
@@ -463,8 +490,9 @@ impl TagHandle {
     /// tags[3].remove();
     /// // "DP-1" now only has tags "1" and "Buckle"
     /// ```
-    pub fn remove(mut self) {
-        block_on_tokio(self.client.remove(RemoveRequest {
+    pub fn remove(&self) {
+        let mut tag_client = self.tag_client.clone();
+        block_on_tokio(tag_client.remove(RemoveRequest {
             tag_ids: vec![self.id],
         }))
         .unwrap();
@@ -487,7 +515,7 @@ impl TagHandle {
     /// tag.get("1", None)?.set_layout(Layout::CornerTopLeft);
     /// ```
     pub fn set_layout(&self, layout: Layout) {
-        let mut client = self.client.clone();
+        let mut client = self.tag_client.clone();
         block_on_tokio(client.set_layout(SetLayoutRequest {
             tag_id: Some(self.id),
             layout: Some(layout as i32),
@@ -509,20 +537,27 @@ impl TagHandle {
     /// } = tag.get("1", None)?.props();
     /// ```
     pub fn props(&self) -> TagProperties {
-        let mut client = self.client.clone();
+        block_on_tokio(self.props_async())
+    }
+
+    /// The async version of [`TagHandle::props`].
+    pub async fn props_async(&self) -> TagProperties {
+        let mut client = self.tag_client.clone();
         let output_client = self.output_client.clone();
 
-        let response = block_on_tokio(client.get_properties(tag::v0alpha1::GetPropertiesRequest {
-            tag_id: Some(self.id),
-        }))
-        .unwrap()
-        .into_inner();
+        let response = client
+            .get_properties(tag::v0alpha1::GetPropertiesRequest {
+                tag_id: Some(self.id),
+            })
+            .await
+            .unwrap()
+            .into_inner();
 
         TagProperties {
             active: response.active,
             name: response.name,
             output: response.output_name.map(|name| OutputHandle {
-                client: output_client,
+                output_client,
                 tag_client: client,
                 name,
             }),
@@ -536,11 +571,21 @@ impl TagHandle {
         self.props().active
     }
 
+    /// The async version of [`TagHandle::active`].
+    pub async fn active_async(&self) -> Option<bool> {
+        self.props_async().await.active
+    }
+
     /// Get this tag's name.
     ///
     /// Shorthand for `self.props().name`.
     pub fn name(&self) -> Option<String> {
         self.props().name
+    }
+
+    /// The async version of [`TagHandle::name`].
+    pub async fn name_async(&self) -> Option<String> {
+        self.props_async().await.name
     }
 
     /// Get a handle to the output this tag is on.
@@ -549,9 +594,15 @@ impl TagHandle {
     pub fn output(&self) -> Option<OutputHandle> {
         self.props().output
     }
+
+    /// The async version of [`TagHandle::output`].
+    pub async fn output_async(&self) -> Option<OutputHandle> {
+        self.props_async().await.output
+    }
 }
 
 /// Properties of a tag.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct TagProperties {
     /// Whether the tag is active or not
     pub active: Option<bool>,

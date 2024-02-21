@@ -24,6 +24,7 @@ pub struct Process {
 }
 
 /// Optional callbacks to be run when a spawned process prints to stdout or stderr or exits.
+#[derive(Default)]
 pub struct SpawnCallbacks {
     /// A callback that will be run when a process prints to stdout with a line
     pub stdout: Option<Box<dyn FnMut(String) + Send>>,

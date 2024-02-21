@@ -12,6 +12,7 @@
 //!
 //! This module also allows you to set window rules; see the [rules] module for more information.
 
+use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     output::v0alpha1::output_service_client::OutputServiceClient,
@@ -30,7 +31,12 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{block_on_tokio, input::MouseButton, tag::TagHandle, util::Geometry};
+use crate::{
+    block_on_tokio,
+    input::MouseButton,
+    tag::TagHandle,
+    util::{Batch, Geometry},
+};
 
 use self::rules::{WindowRule, WindowRuleCondition};
 
@@ -41,24 +47,18 @@ pub mod rules;
 /// See [`WindowHandle`] for more information.
 #[derive(Debug, Clone)]
 pub struct Window {
-    channel: Channel,
+    window_client: WindowServiceClient<Channel>,
+    tag_client: TagServiceClient<Channel>,
+    output_client: OutputServiceClient<Channel>,
 }
 
 impl Window {
     pub(crate) fn new(channel: Channel) -> Self {
-        Self { channel }
-    }
-
-    fn create_window_client(&self) -> WindowServiceClient<Channel> {
-        WindowServiceClient::new(self.channel.clone())
-    }
-
-    fn create_tag_client(&self) -> TagServiceClient<Channel> {
-        TagServiceClient::new(self.channel.clone())
-    }
-
-    fn create_output_client(&self) -> OutputServiceClient<Channel> {
-        OutputServiceClient::new(self.channel.clone())
+        Self {
+            window_client: WindowServiceClient::new(channel.clone()),
+            tag_client: TagServiceClient::new(channel.clone()),
+            output_client: OutputServiceClient::new(channel),
+        }
     }
 
     /// Start moving the window with the mouse.
@@ -66,7 +66,7 @@ impl Window {
     /// This will begin moving the window under the pointer using the specified [`MouseButton`].
     /// The button must be held down at the time this method is called for the move to start.
     ///
-    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
+    /// This is intended to be used with [`Input::mousebind`][crate::input::Input::mousebind].
     ///
     /// # Examples
     ///
@@ -79,11 +79,12 @@ impl Window {
     /// });
     /// ```
     pub fn begin_move(&self, button: MouseButton) {
-        let mut client = self.create_window_client();
-        block_on_tokio(client.move_grab(MoveGrabRequest {
+        let mut client = self.window_client.clone();
+        if let Err(status) = block_on_tokio(client.move_grab(MoveGrabRequest {
             button: Some(button as u32),
-        }))
-        .unwrap();
+        })) {
+            eprintln!("ERROR: {status}");
+        }
     }
 
     /// Start resizing the window with the mouse.
@@ -91,7 +92,7 @@ impl Window {
     /// This will begin resizing the window under the pointer using the specified [`MouseButton`].
     /// The button must be held down at the time this method is called for the resize to start.
     ///
-    /// This is intended to be used with [`Input::keybind`][crate::input::Input::keybind].
+    /// This is intended to be used with [`Input::mousebind`][crate::input::Input::mousebind].
     ///
     /// # Examples
     ///
@@ -104,7 +105,7 @@ impl Window {
     /// });
     /// ```
     pub fn begin_resize(&self, button: MouseButton) {
-        let mut client = self.create_window_client();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.resize_grab(ResizeGrabRequest {
             button: Some(button as u32),
         }))
@@ -119,16 +120,23 @@ impl Window {
     /// let windows = window.get_all();
     /// ```
     pub fn get_all(&self) -> impl Iterator<Item = WindowHandle> {
-        let mut client = self.create_window_client();
-        let tag_client = self.create_tag_client();
-        let output_client = self.create_output_client();
-        block_on_tokio(client.get(GetRequest {}))
+        block_on_tokio(self.get_all_async())
+    }
+
+    /// The async version of [`Window::get_all`].
+    pub async fn get_all_async(&self) -> impl Iterator<Item = WindowHandle> {
+        let mut client = self.window_client.clone();
+        let tag_client = self.tag_client.clone();
+        let output_client = self.output_client.clone();
+        client
+            .get(GetRequest {})
+            .await
             .unwrap()
             .into_inner()
             .window_ids
             .into_iter()
             .map(move |id| WindowHandle {
-                client: client.clone(),
+                window_client: client.clone(),
                 id,
                 tag_client: tag_client.clone(),
                 output_client: output_client.clone(),
@@ -143,8 +151,15 @@ impl Window {
     /// let focused_window = window.get_focused()?;
     /// ```
     pub fn get_focused(&self) -> Option<WindowHandle> {
-        self.get_all()
-            .find(|window| matches!(window.props().focused, Some(true)))
+        block_on_tokio(self.get_focused_async())
+    }
+
+    /// The async version of [`Window::get_focused`].
+    pub async fn get_focused_async(&self) -> Option<WindowHandle> {
+        self.get_all_async().await.batch_find(
+            |win| win.focused_async().boxed(),
+            |focused| focused.is_some_and(|focused| focused),
+        )
     }
 
     /// Add a window rule.
@@ -154,7 +169,7 @@ impl Window {
     ///
     /// TODO:
     pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
-        let mut client = self.create_window_client();
+        let mut client = self.window_client.clone();
 
         block_on_tokio(client.add_window_rule(AddWindowRuleRequest {
             cond: Some(cond.0),
@@ -169,10 +184,10 @@ impl Window {
 /// This allows you to manipulate the window and get its properties.
 #[derive(Debug, Clone)]
 pub struct WindowHandle {
-    pub(crate) client: WindowServiceClient<Channel>,
-    pub(crate) id: u32,
-    pub(crate) tag_client: TagServiceClient<Channel>,
-    pub(crate) output_client: OutputServiceClient<Channel>,
+    id: u32,
+    window_client: WindowServiceClient<Channel>,
+    tag_client: TagServiceClient<Channel>,
+    output_client: OutputServiceClient<Channel>,
 }
 
 impl PartialEq for WindowHandle {
@@ -202,7 +217,7 @@ pub enum FullscreenOrMaximized {
 }
 
 /// Properties of a window.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct WindowProperties {
     /// The location and size of the window
     pub geometry: Option<Geometry>,
@@ -215,7 +230,7 @@ pub struct WindowProperties {
     /// Whether the window is floating or not
     ///
     /// Note that a window can still be floating even if it's fullscreen or maximized; those two
-    /// state will just override the floating state.
+    /// states will just override the floating state.
     pub floating: Option<bool>,
     /// Whether the window is fullscreen, maximized, or neither
     pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
@@ -234,8 +249,9 @@ impl WindowHandle {
     /// // Close the focused window
     /// window.get_focused()?.close()
     /// ```
-    pub fn close(mut self) {
-        block_on_tokio(self.client.close(CloseRequest {
+    pub fn close(&self) {
+        let mut window_client = self.window_client.clone();
+        block_on_tokio(window_client.close(CloseRequest {
             window_id: Some(self.id),
         }))
         .unwrap();
@@ -252,7 +268,7 @@ impl WindowHandle {
     /// window.get_focused()?.set_fullscreen(true);
     /// ```
     pub fn set_fullscreen(&self, set: bool) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(
@@ -273,7 +289,7 @@ impl WindowHandle {
     /// window.get_focused()?.toggle_fullscreen();
     /// ```
     pub fn toggle_fullscreen(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(())),
@@ -292,7 +308,7 @@ impl WindowHandle {
     /// window.get_focused()?.set_maximized(true);
     /// ```
     pub fn set_maximized(&self, set: bool) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(
@@ -304,7 +320,7 @@ impl WindowHandle {
 
     /// Toggle this window between maximized and not.
     ///
-    /// If it is fullscreen, setting it to maximized will remove the fullscreen state.
+    /// If it is fullscreen, toggling it to maximized will remove the fullscreen state.
     ///
     /// # Examples
     ///
@@ -313,7 +329,7 @@ impl WindowHandle {
     /// window.get_focused()?.toggle_maximized();
     /// ```
     pub fn toggle_maximized(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(())),
@@ -335,7 +351,7 @@ impl WindowHandle {
     /// window.get_focused()?.set_floating(true);
     /// ```
     pub fn set_floating(&self, set: bool) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(
@@ -359,7 +375,7 @@ impl WindowHandle {
     /// window.get_focused()?.toggle_floating();
     /// ```
     pub fn toggle_floating(&self) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
         block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(
@@ -381,7 +397,7 @@ impl WindowHandle {
     /// window.get_focused()?.move_to_tag(&tag.get("Code", None)?);
     /// ```
     pub fn move_to_tag(&self, tag: &TagHandle) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
 
         block_on_tokio(client.move_to_tag(MoveToTagRequest {
             window_id: Some(self.id),
@@ -402,7 +418,7 @@ impl WindowHandle {
     /// focused.set_tag(&tg, false); // `focused` no longer has tag "Potato"
     /// ```
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
 
         block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
@@ -426,7 +442,7 @@ impl WindowHandle {
     /// focused.toggle_tag(&tg); // `focused` no longer has tag "Potato"
     /// ```
     pub fn toggle_tag(&self, tag: &TagHandle) {
-        let mut client = self.client.clone();
+        let mut client = self.window_client.clone();
 
         block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
@@ -454,15 +470,26 @@ impl WindowHandle {
     /// } = window.get_focused()?.props();
     /// ```
     pub fn props(&self) -> WindowProperties {
-        let mut client = self.client.clone();
+        block_on_tokio(self.props_async())
+    }
+
+    /// The async version of [`props`][Self::props].
+    pub async fn props_async(&self) -> WindowProperties {
+        let mut client = self.window_client.clone();
         let tag_client = self.tag_client.clone();
-        let response = block_on_tokio(client.get_properties(
-            window::v0alpha1::GetPropertiesRequest {
+
+        let response = match client
+            .get_properties(window::v0alpha1::GetPropertiesRequest {
                 window_id: Some(self.id),
-            },
-        ))
-        .unwrap()
-        .into_inner();
+            })
+            .await
+        {
+            Ok(response) => response.into_inner(),
+            Err(status) => {
+                eprintln!("ERROR: {status}");
+                return WindowProperties::default();
+            }
+        };
 
         let fullscreen_or_maximized = response
             .fullscreen_or_maximized
@@ -488,7 +515,7 @@ impl WindowHandle {
                 .tag_ids
                 .into_iter()
                 .map(|id| TagHandle {
-                    client: tag_client.clone(),
+                    tag_client: tag_client.clone(),
                     output_client: self.output_client.clone(),
                     id,
                 })
@@ -503,11 +530,21 @@ impl WindowHandle {
         self.props().geometry
     }
 
+    /// The async version of [`geometry`][Self::geometry].
+    pub async fn geometry_async(&self) -> Option<Geometry> {
+        self.props_async().await.geometry
+    }
+
     /// Get this window's class.
     ///
     /// Shorthand for `self.props().class`.
     pub fn class(&self) -> Option<String> {
         self.props().class
+    }
+
+    /// The async version of [`class`][Self::class].
+    pub async fn class_async(&self) -> Option<String> {
+        self.props_async().await.class
     }
 
     /// Get this window's title.
@@ -517,11 +554,21 @@ impl WindowHandle {
         self.props().title
     }
 
+    /// The async version of [`title`][Self::title].
+    pub async fn title_async(&self) -> Option<String> {
+        self.props_async().await.title
+    }
+
     /// Get whether or not this window is focused.
     ///
     /// Shorthand for `self.props().focused`.
     pub fn focused(&self) -> Option<bool> {
         self.props().focused
+    }
+
+    /// The async version of [`focused`][Self::focused].
+    pub async fn focused_async(&self) -> Option<bool> {
+        self.props_async().await.focused
     }
 
     /// Get whether or not this window is floating.
@@ -531,6 +578,11 @@ impl WindowHandle {
         self.props().floating
     }
 
+    /// The async version of [`floating`][Self::floating]
+    pub async fn floating_async(&self) -> Option<bool> {
+        self.props_async().await.floating
+    }
+
     /// Get whether this window is fullscreen, maximized, or neither.
     ///
     /// Shorthand for `self.props().fullscreen_or_maximized`.
@@ -538,10 +590,20 @@ impl WindowHandle {
         self.props().fullscreen_or_maximized
     }
 
+    /// The async version of [`fullscreen_or_maximized`][Self::fullscreen_or_maximized].
+    pub async fn fullscreen_or_maximized_async(&self) -> Option<FullscreenOrMaximized> {
+        self.props_async().await.fullscreen_or_maximized
+    }
+
     /// Get all the tags on this window.
     ///
     /// Shorthand for `self.props().tags`.
     pub fn tags(&self) -> Vec<TagHandle> {
         self.props().tags
+    }
+
+    /// The async version of [`tags`][Self::tags].
+    pub async fn tags_async(&self) -> Vec<TagHandle> {
+        self.props_async().await.tags
     }
 }
