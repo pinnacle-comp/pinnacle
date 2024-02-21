@@ -70,8 +70,7 @@ pub struct Geometry {
 /// ```
 ///
 pub fn batch<T>(requests: impl IntoIterator<Item = impl Future<Output = T>>) -> Vec<T> {
-    let results = FuturesOrdered::from_iter(requests).collect::<Vec<_>>();
-    block_on_tokio(results)
+    block_on_tokio(batch_async(requests))
 }
 
 /// The async version of [`batch`].
@@ -94,17 +93,19 @@ pub async fn batch_async<T>(requests: impl IntoIterator<Item = impl Future<Outpu
 /// ```
 /// use pinnacle_api::util::batch_boxed;
 ///
-/// let windows = window.get_all();
+/// let mut windows = window.get_all();
 /// let first = windows.next()?;
 /// let last = windows.last()?;
 ///
 /// let classes: Vec<String> = batch_boxed![
 ///     async {
-///         let mut class = first.class_async().await;
+///         let class = first.class_async().await;
 ///         class.unwrap_or("no class".to_string())
 ///     },
 ///     async {
-///         last.class_async().await
+///         let mut class = last.class_async().await.unwrap_or("alalala");
+///         class += "hello";
+///         class
 ///     },
 /// ];
 /// ```
