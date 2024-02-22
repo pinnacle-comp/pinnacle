@@ -1,6 +1,7 @@
 use crate::{
     api::{
-        InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
+        signal::SignalService, InputService, OutputService, PinnacleService, ProcessService,
+        TagService, WindowService,
     },
     input::ModifierMask,
     output::OutputName,
@@ -18,6 +19,7 @@ use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
     output::v0alpha1::{output_service_server::OutputServiceServer, ConnectForAllResponse},
     process::v0alpha1::process_service_server::ProcessServiceServer,
+    signal::v0alpha1::signal_service_server::SignalServiceServer,
     tag::v0alpha1::tag_service_server::TagServiceServer,
     v0alpha1::pinnacle_service_server::PinnacleServiceServer,
     window::v0alpha1::window_service_server::WindowServiceServer,
@@ -447,6 +449,7 @@ impl State {
         let tag_service = TagService::new(grpc_sender.clone());
         let output_service = OutputService::new(grpc_sender.clone());
         let window_service = WindowService::new(grpc_sender.clone());
+        let signal_service = SignalService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
@@ -464,7 +467,8 @@ impl State {
             .add_service(ProcessServiceServer::new(process_service))
             .add_service(TagServiceServer::new(tag_service))
             .add_service(OutputServiceServer::new(output_service))
-            .add_service(WindowServiceServer::new(window_service));
+            .add_service(WindowServiceServer::new(window_service))
+            .add_service(SignalServiceServer::new(signal_service));
 
         match self.xdisplay.as_ref() {
             Some(_) => {

@@ -162,4 +162,10 @@ function client.server_streaming_request(grpc_request_params, callback)
     end)
 end
 
+---@param grpc_request_params GrpcRequestParams
+---@param callback fun(response: table)
+---
+---@return H2Stream
+function client.bidirectional_streaming_request(grpc_request_params, callback) end
+
 return client

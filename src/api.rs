@@ -1,3 +1,5 @@
+pub mod signal;
+
 use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
@@ -45,8 +47,8 @@ use tokio::{
     io::AsyncBufReadExt,
     sync::mpsc::{unbounded_channel, UnboundedSender},
 };
-use tokio_stream::Stream;
-use tonic::{Request, Response, Status};
+use tokio_stream::{Stream, StreamExt};
+use tonic::{Request, Response, Status, Streaming};
 
 use crate::{
     config::ConnectorSavedState,
@@ -57,6 +59,8 @@ use crate::{
     tag::{Tag, TagId},
     window::{window_state::WindowId, WindowElement},
 };
+
+use self::signal::SignalData;
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
@@ -117,6 +121,44 @@ where
     fn_sender
         .send(f)
         .map_err(|_| Status::internal("failed to execute request"))?;
+
+    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    Ok(Response::new(Box::pin(receiver_stream)))
+}
+
+fn run_bidirectional_streaming<F1, F2, I, O>(
+    fn_sender: StateFnSender,
+    mut in_stream: Streaming<I>,
+    with_client_item: F1,
+    with_out_stream: F2,
+) -> Result<Response<ResponseStream<O>>, Status>
+where
+    F1: Fn(&mut State, Result<I, Status>) + Clone + Send + 'static,
+    F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>) + Send + 'static,
+    I: Send + 'static,
+    O: Send + 'static,
+{
+    let (sender, receiver) = unbounded_channel::<Result<O, Status>>();
+
+    let with_out_stream = Box::new(|state: &mut State| {
+        with_out_stream(state, sender);
+    });
+
+    fn_sender
+        .send(with_out_stream)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    let with_in_stream = async move {
+        while let Some(t) = in_stream.next().await {
+            let with_client_item = with_client_item.clone();
+            // TODO: handle error
+            let _ = fn_sender.send(Box::new(move |state: &mut State| {
+                with_client_item(state, t);
+            }));
+        }
+    };
+
+    tokio::spawn(with_in_stream);
 
     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     Ok(Response::new(Box::pin(receiver_stream)))

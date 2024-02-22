@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
+    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
     grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
 use anyhow::Context;
@@ -93,6 +93,8 @@ pub struct State {
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
 
     pub xdg_base_dirs: BaseDirectories,
+
+    pub signal_state: SignalState,
 }
 
 impl State {
@@ -269,6 +271,8 @@ impl State {
 
             xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
                 .context("couldn't create xdg BaseDirectories")?,
+
+            signal_state: SignalState::default(),
         };
 
         Ok(state)

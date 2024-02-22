@@ -1,0 +1,53 @@
+syntax = "proto2";
+
+package pinnacle.signal.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+enum StreamControl {
+  STREAM_CONTROL_UNSPECIFIED = 0;
+  // The client is ready to receive the next signal.
+  STREAM_CONTROL_READY = 1;
+  // The client wishes to disconnect a signal connection.
+  STREAM_CONTROL_DISCONNECT = 2;
+}
+
+message OutputConnectRequest {
+  optional StreamControl control = 1;
+}
+message OutputConnectResponse {
+  optional string output_name = 1;
+}
+
+message LayoutRequest {
+  optional StreamControl control = 1;
+}
+message LayoutResponse {
+  // The windows that need to be laid out.
+  repeated uint32 window_ids = 1;
+  // The tag that is being laid out.
+  optional uint32 tag_id = 2;
+}
+
+message WindowPointerEnterRequest {
+  optional StreamControl control = 1;
+}
+message WindowPointerEnterResponse {
+  // The window that the pointer entered.
+  optional uint32 window_id = 1;
+}
+
+message WindowPointerLeaveRequest {
+  optional StreamControl control = 1;
+}
+message WindowPointerLeaveResponse {
+  // The window that the pointer left.
+  optional uint32 window_id = 1;
+}
+
+service SignalService {
+  rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
+  rpc Layout(stream LayoutRequest) returns (stream LayoutResponse);
+  rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
+  rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
+}
