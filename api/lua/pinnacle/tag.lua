@@ -319,6 +319,10 @@ function tag.new_layout_cycler(layouts)
     }
 end
 
+local signal_name_to_SignalName = {
+    layout = "Layout",
+}
+
 ---@class TagSignal
 ---@field layout fun(tag: TagHandle, windows: WindowHandle[])?
 
@@ -329,12 +333,10 @@ function tag.connect_signal(signals)
     local handles = require("pinnacle.signal").handles.new({})
 
     for signal, callback in pairs(signals) do
-        if signal == "layout" then
-            require("pinnacle.signal").add_callback("Layout", callback)
-            ---@diagnostic disable-next-line: invisible
-            local handle = require("pinnacle.signal").handle.new("Layout", callback)
-            handles[signal] = handle
-        end
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
     end
 
     return handles

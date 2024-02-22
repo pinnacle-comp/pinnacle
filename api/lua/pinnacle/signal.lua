@@ -70,7 +70,7 @@ local signals = {
     WindowPointerEnter = {
         ---@type H2Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle))[]
+        ---@type (fun(window: WindowHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -78,7 +78,7 @@ local signals = {
     WindowPointerLeave = {
         ---@type H2Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle))[]
+        ---@type (fun(window: WindowHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -101,6 +101,24 @@ signals.Layout.on_response = function(response)
 
     for _, callback in ipairs(signals.Layout.callbacks) do
         callback(tag_handle, window_handles)
+    end
+end
+
+signals.WindowPointerEnter.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+
+    for _, callback in ipairs(signals.WindowPointerEnter.callbacks) do
+        callback(window_handle)
+    end
+end
+
+signals.WindowPointerLeave.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local window_handle = require("pinnacle.window").handle.new(response.window_id)
+
+    for _, callback in ipairs(signals.WindowPointerLeave.callbacks) do
+        callback(window_handle)
     end
 end
 

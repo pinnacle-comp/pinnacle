@@ -164,6 +164,10 @@ function output.connect_for_all(callback)
     })
 end
 
+local signal_name_to_SignalName = {
+    connect = "OutputConnect",
+}
+
 ---@class OutputSignal
 ---@field connect fun(output: OutputHandle)?
 
@@ -174,12 +178,10 @@ function output.connect_signal(signals)
     local handles = require("pinnacle.signal").handles.new({})
 
     for signal, callback in pairs(signals) do
-        if signal == "connect" then
-            require("pinnacle.signal").add_callback("OutputConnect", callback)
-            ---@diagnostic disable-next-line: invisible
-            local handle = require("pinnacle.signal").handle.new("OutputConnect", callback)
-            handles[signal] = handle
-        end
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
     end
 
     return handles

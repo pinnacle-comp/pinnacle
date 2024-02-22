@@ -22,6 +22,15 @@ pub struct SignalState {
         SignalData<WindowPointerLeaveResponse, VecDeque<WindowPointerLeaveResponse>>,
 }
 
+impl SignalState {
+    pub fn clear(&mut self) {
+        self.output_connect.disconnect();
+        self.layout.disconnect();
+        self.window_pointer_enter.disconnect();
+        self.window_pointer_leave.disconnect();
+    }
+}
+
 #[derive(Debug, Default)]
 #[allow(private_bounds)]
 pub struct SignalData<T, B: SignalBuffer<T>> {

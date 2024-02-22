@@ -311,6 +311,33 @@ function window.add_window_rule(rule)
     }))
 end
 
+local signal_name_to_SignalName = {
+    pointer_enter = "WindowPointerEnter",
+    pointer_leave = "WindowPointerLeave",
+}
+
+---@class WindowSignal
+---@field pointer_enter fun(window: WindowHandle)?
+---@field pointer_leave fun(window: WindowHandle)?
+
+---@param signals WindowSignal
+---@return SignalHandles
+function window.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
+    end
+
+    return handles
+end
+
+------------------------------------------------------------------------
+
 ---Send a close request to this window.
 ---
 ---### Example
