@@ -128,7 +128,7 @@ where
 fn run_bidirectional_streaming<F1, F2, I, O>(
     fn_sender: StateFnSender,
     mut in_stream: Streaming<I>,
-    with_client_item: F1,
+    with_client_request: F1,
     with_out_stream: F2,
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
@@ -142,11 +142,11 @@ where
     let fn_sender_clone = fn_sender.clone();
 
     let with_in_stream = async move {
-        while let Some(t) = in_stream.next().await {
-            let with_client_item = with_client_item.clone();
+        while let Some(request) = in_stream.next().await {
+            let with_client_request = with_client_request.clone();
             // TODO: handle error
             let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
-                with_client_item(state, t);
+                with_client_request(state, request);
             }));
         }
     };
@@ -734,11 +734,13 @@ impl tag_service_server::TagService for TagService {
             state.update_focus(&output);
             state.schedule_render(&output);
 
-            state.signal_state.layout.signal(|_| {
-                pinnacle_api_defs::pinnacle::signal::v0alpha1::LayoutResponse {
-                    window_ids: vec![1, 2, 3],
-                    tag_id: Some(1),
-                }
+            state.signal_state.layout.signal(|buffer| {
+                buffer.push_back(
+                    pinnacle_api_defs::pinnacle::signal::v0alpha1::LayoutResponse {
+                        window_ids: vec![1, 2, 3],
+                        tag_id: Some(1),
+                    },
+                );
             });
         })
         .await
@@ -1125,7 +1127,7 @@ impl window_service_server::WindowService for WindowService {
     async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1154,7 +1156,7 @@ impl window_service_server::WindowService for WindowService {
 
         tracing::info!(request = ?request);
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1205,7 +1207,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1248,7 +1250,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1291,7 +1293,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1334,7 +1336,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1362,7 +1364,7 @@ impl window_service_server::WindowService for WindowService {
     async fn set_tag(&self, request: Request<SetTagRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1518,12 +1520,7 @@ impl window_service_server::WindowService for WindowService {
             let window_ids = state
                 .windows
                 .iter()
-                .map(|win| {
-                    win.with_state(|state| match state.id {
-                        WindowId::None => unreachable!(),
-                        WindowId::Some(id) => id,
-                    })
-                })
+                .map(|win| win.with_state(|state| state.id.0))
                 .collect::<Vec<_>>();
 
             window::v0alpha1::GetResponse { window_ids }
@@ -1537,7 +1534,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<window::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,

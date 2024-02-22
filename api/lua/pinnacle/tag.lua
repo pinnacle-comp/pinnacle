@@ -319,9 +319,25 @@ function tag.new_layout_cycler(layouts)
     }
 end
 
----@param fn fun(windows: WindowHandle[], tag: TagHandle)
-function tag.connect_layout(fn)
-    require("pinnacle.signal").layout_add(fn)
+---@class TagSignal
+---@field layout fun(tag: TagHandle, windows: WindowHandle[])?
+
+---@param signals TagSignal
+---@return SignalHandles
+function tag.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        if signal == "layout" then
+            require("pinnacle.signal").add_callback("Layout", callback)
+            ---@diagnostic disable-next-line: invisible
+            local handle = require("pinnacle.signal").handle.new("Layout", callback)
+            handles[signal] = handle
+        end
+    end
+
+    return handles
 end
 
 ---Remove this tag.

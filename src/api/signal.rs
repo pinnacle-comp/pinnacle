@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     signal_service_server, LayoutRequest, LayoutResponse, OutputConnectRequest,
     OutputConnectResponse, StreamControl, WindowPointerEnterRequest, WindowPointerEnterResponse,
@@ -12,33 +14,61 @@ use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
 
 #[derive(Debug, Default)]
 pub struct SignalState {
-    pub output_connect: SignalData<OutputConnectResponse>,
-    pub layout: SignalData<LayoutResponse>,
-    pub window_pointer_enter: SignalData<WindowPointerEnterResponse>,
-    pub window_pointer_leave: SignalData<WindowPointerLeaveResponse>,
+    pub output_connect: SignalData<OutputConnectResponse, VecDeque<OutputConnectResponse>>,
+    pub layout: SignalData<LayoutResponse, VecDeque<LayoutResponse>>,
+    pub window_pointer_enter:
+        SignalData<WindowPointerEnterResponse, VecDeque<WindowPointerEnterResponse>>,
+    pub window_pointer_leave:
+        SignalData<WindowPointerLeaveResponse, VecDeque<WindowPointerLeaveResponse>>,
 }
 
 #[derive(Debug, Default)]
-pub struct SignalData<T> {
+#[allow(private_bounds)]
+pub struct SignalData<T, B: SignalBuffer<T>> {
     sender: Option<UnboundedSender<Result<T, Status>>>,
     join_handle: Option<JoinHandle<()>>,
     ready: bool,
-    value: Option<T>,
+    buffer: B,
 }
 
-impl<T> SignalData<T> {
-    pub fn signal(&mut self, with_data: impl FnOnce(Option<T>) -> T) {
+/// A trait that denotes different types of containers that can be used to buffer signals.
+trait SignalBuffer<T>: Default {
+    /// Get the next signal from this buffer.
+    fn next(&mut self) -> Option<T>;
+}
+
+impl<T> SignalBuffer<T> for VecDeque<T> {
+    fn next(&mut self) -> Option<T> {
+        self.pop_front()
+    }
+}
+
+impl<T> SignalBuffer<T> for Option<T> {
+    fn next(&mut self) -> Option<T> {
+        self.take()
+    }
+}
+
+#[allow(private_bounds)]
+impl<T, B: SignalBuffer<T>> SignalData<T, B> {
+    /// Attempt to send a signal.
+    ///
+    /// If the client is ready to accept more of this signal, it will be sent immediately.
+    /// Otherwise, the signal will remain stored in the underlying buffer until the client is ready.
+    ///
+    /// Use `with_buffer` to populate and manipulate the buffer with the data you want.
+    pub fn signal(&mut self, with_buffer: impl FnOnce(&mut B)) {
         let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
+        with_buffer(&mut self.buffer);
+
         if self.ready {
-            sender
-                .send(Ok(with_data(self.value.take())))
-                .expect("failed to send signal");
-            self.ready = false;
-        } else {
-            self.value = Some(with_data(self.value.take()));
+            if let Some(data) = self.buffer.next() {
+                sender.send(Ok(data)).expect("failed to send signal");
+                self.ready = false;
+            }
         }
     }
 
@@ -59,16 +89,19 @@ impl<T> SignalData<T> {
             handle.abort();
         }
         self.ready = false;
-        self.value.take();
+        self.buffer = B::default();
     }
 
+    /// Mark this signal as ready to send.
+    ///
+    /// If there are signals already in the buffer, they will be sent.
     fn ready(&mut self) {
         let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
-        if let Some(value) = self.value.take() {
-            sender.send(Ok(value)).expect("failed to send signal");
+        if let Some(data) = self.buffer.next() {
+            sender.send(Ok(data)).expect("failed to send signal");
             self.ready = false;
         } else {
             self.ready = true;
@@ -99,16 +132,18 @@ impl_signal_request!(
     WindowPointerLeaveRequest
 );
 
-fn start_signal_stream<I: SignalRequest + std::fmt::Debug, O>(
+fn start_signal_stream<I, O, B, F>(
     sender: StateFnSender,
     in_stream: Streaming<I>,
-    signal: impl Fn(&mut State) -> &mut SignalData<O> + Clone + Send + 'static,
+    with_signal_buffer: F,
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
-    I: Send + 'static,
+    I: SignalRequest + std::fmt::Debug + Send + 'static,
     O: Send + 'static,
+    B: SignalBuffer<O>,
+    F: Fn(&mut State) -> &mut SignalData<O, B> + Clone + Send + 'static,
 {
-    let signal_clone = signal.clone();
+    let with_signal_buffer_clone = with_signal_buffer.clone();
 
     run_bidirectional_streaming(
         sender,
@@ -122,9 +157,9 @@ where
                 }
             };
 
-            tracing::info!("GOT {request:?} FROM CLIENT STREAM");
+            tracing::debug!("Got {request:?} from client stream");
 
-            let signal = signal(state);
+            let signal = with_signal_buffer(state);
             match request.control() {
                 StreamControl::Ready => signal.ready(),
                 StreamControl::Disconnect => signal.disconnect(),
@@ -132,7 +167,7 @@ where
             }
         },
         move |state, sender, join_handle| {
-            let signal = signal_clone(state);
+            let signal = with_signal_buffer_clone(state);
             signal.connect(sender, join_handle);
         },
     )

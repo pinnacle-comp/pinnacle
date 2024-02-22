@@ -166,6 +166,29 @@ function output.connect_for_all(callback)
     end)
 end
 
+---@class OutputSignal
+---@field connect fun(output: OutputHandle)?
+
+---@param signals OutputSignal
+---@return SignalHandles
+function output.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        if signal == "connect" then
+            require("pinnacle.signal").add_callback("OutputConnect", callback)
+            ---@diagnostic disable-next-line: invisible
+            local handle = require("pinnacle.signal").handle.new("OutputConnect", callback)
+            handles[signal] = handle
+        end
+    end
+
+    return handles
+end
+
+---------------------------------------------------------------------
+
 ---Set the location of this output in the global space.
 ---
 ---On startup, Pinnacle will lay out all connected outputs starting at (0, 0)

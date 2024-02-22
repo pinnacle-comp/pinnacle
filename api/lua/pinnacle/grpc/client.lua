@@ -42,6 +42,8 @@ end
 ---@field new_stream function
 
 ---@class H2Stream
+---@field write_chunk function
+---@field shutdown function
 
 ---@nodoc
 ---@class Client
@@ -202,8 +204,6 @@ function client.bidirectional_streaming_request(grpc_request_params, callback)
                 print(name, value, never_index)
             end
         end
-
-        print("AFTER bidirectional_streaming_request ENDS")
     end)
 
     return stream
