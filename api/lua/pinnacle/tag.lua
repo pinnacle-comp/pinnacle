@@ -319,6 +319,11 @@ function tag.new_layout_cycler(layouts)
     }
 end
 
+---@param fn fun(windows: WindowHandle[], tag: TagHandle)
+function tag.connect_layout(fn)
+    require("pinnacle.signal").layout_add(fn)
+end
+
 ---Remove this tag.
 ---
 ---### Example

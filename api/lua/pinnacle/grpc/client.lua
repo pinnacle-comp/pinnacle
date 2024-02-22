@@ -5,6 +5,7 @@
 local socket = require("cqueues.socket")
 local headers = require("http.headers")
 local h2_connection = require("http.h2_connection")
+local protobuf = require("pinnacle.grpc.protobuf")
 local pb = require("pb")
 
 ---@nodoc
@@ -39,6 +40,8 @@ end
 
 ---@class H2Connection
 ---@field new_stream function
+
+---@class H2Stream
 
 ---@nodoc
 ---@class Client
@@ -76,12 +79,7 @@ function client.unary_request(grpc_request_params)
     local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
     local data = grpc_request_params.data
 
-    local encoded_protobuf = assert(pb.encode(request_type, data), "wrong table schema")
-
-    local packed_prefix = string.pack("I1", 0)
-    local payload_len = string.pack(">I4", encoded_protobuf:len())
-
-    local body = packed_prefix .. payload_len .. encoded_protobuf
+    local body = protobuf.encode(request_type, data)
 
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
@@ -126,18 +124,7 @@ function client.server_streaming_request(grpc_request_params, callback)
     local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
     local data = grpc_request_params.data
 
-    local success, obj = pcall(pb.encode, request_type, data)
-    if not success then
-        print("failed to encode:", obj, "for", service, method, request_type, response_type)
-        os.exit(1)
-    end
-
-    local encoded_protobuf = obj
-
-    local packed_prefix = string.pack("I1", 0)
-    local payload_len = string.pack(">I4", encoded_protobuf:len())
-
-    local body = packed_prefix .. payload_len .. encoded_protobuf
+    local body = protobuf.encode(request_type, data)
 
     stream:write_headers(create_request_headers(service, method), false)
     stream:write_chunk(body, true)
@@ -175,6 +162,51 @@ end
 ---@param callback fun(response: table)
 ---
 ---@return H2Stream
-function client.bidirectional_streaming_request(grpc_request_params, callback) end
+function client.bidirectional_streaming_request(grpc_request_params, callback)
+    local stream = client.conn:new_stream()
+
+    local service = grpc_request_params.service
+    local method = grpc_request_params.method
+    local request_type = grpc_request_params.request_type
+    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
+    local data = grpc_request_params.data
+
+    local body = protobuf.encode(request_type, data)
+
+    stream:write_headers(create_request_headers(service, method), false)
+    stream:write_chunk(body, false)
+
+    -- TODO: check response headers for errors
+    local _ = stream:get_headers()
+
+    client.loop:wrap(function()
+        for response_body in stream:each_chunk() do
+            -- Skip the 1-byte compressed flag and the 4-byte message length
+            ---@diagnostic disable-next-line: redefined-local
+            local response_body = response_body:sub(6)
+
+            ---@diagnostic disable-next-line: redefined-local
+            local success, obj = pcall(pb.decode, response_type, response_body)
+            if not success then
+                print(obj)
+                os.exit(1)
+            end
+
+            local response = obj
+            callback(response)
+        end
+
+        local trailers = stream:get_headers()
+        if trailers then
+            for name, value, never_index in trailers:each() do
+                print(name, value, never_index)
+            end
+        end
+
+        print("AFTER bidirectional_streaming_request ENDS")
+    end)
+
+    return stream
+end
 
 return client

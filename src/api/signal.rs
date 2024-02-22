@@ -3,7 +3,7 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, StreamControl, WindowPointerEnterRequest, WindowPointerEnterResponse,
     WindowPointerLeaveRequest, WindowPointerLeaveResponse,
 };
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::state::State;
@@ -21,6 +21,7 @@ pub struct SignalState {
 #[derive(Debug, Default)]
 pub struct SignalData<T> {
     sender: Option<UnboundedSender<Result<T, Status>>>,
+    join_handle: Option<JoinHandle<()>>,
     ready: bool,
     value: Option<T>,
 }
@@ -41,12 +42,22 @@ impl<T> SignalData<T> {
         }
     }
 
-    pub fn connect(&mut self, sender: UnboundedSender<Result<T, Status>>) {
+    pub fn connect(
+        &mut self,
+        sender: UnboundedSender<Result<T, Status>>,
+        join_handle: JoinHandle<()>,
+    ) {
         self.sender.replace(sender);
+        if let Some(handle) = self.join_handle.replace(join_handle) {
+            handle.abort();
+        }
     }
 
     fn disconnect(&mut self) {
         self.sender.take();
+        if let Some(handle) = self.join_handle.take() {
+            handle.abort();
+        }
         self.ready = false;
         self.value.take();
     }
@@ -88,7 +99,7 @@ impl_signal_request!(
     WindowPointerLeaveRequest
 );
 
-fn start_signal_stream<I: SignalRequest, O>(
+fn start_signal_stream<I: SignalRequest + std::fmt::Debug, O>(
     sender: StateFnSender,
     in_stream: Streaming<I>,
     signal: impl Fn(&mut State) -> &mut SignalData<O> + Clone + Send + 'static,
@@ -111,6 +122,8 @@ where
                 }
             };
 
+            tracing::info!("GOT {request:?} FROM CLIENT STREAM");
+
             let signal = signal(state);
             match request.control() {
                 StreamControl::Ready => signal.ready(),
@@ -118,9 +131,9 @@ where
                 StreamControl::Unspecified => tracing::warn!("Received unspecified stream control"),
             }
         },
-        move |state, sender| {
+        move |state, sender, join_handle| {
             let signal = signal_clone(state);
-            signal.connect(sender);
+            signal.connect(sender, join_handle);
         },
     )
 }

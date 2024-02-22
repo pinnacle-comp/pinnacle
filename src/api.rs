@@ -46,6 +46,7 @@ use sysinfo::ProcessRefreshKind;
 use tokio::{
     io::AsyncBufReadExt,
     sync::mpsc::{unbounded_channel, UnboundedSender},
+    task::JoinHandle,
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
@@ -59,8 +60,6 @@ use crate::{
     tag::{Tag, TagId},
     window::{window_state::WindowId, WindowElement},
 };
-
-use self::signal::SignalData;
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
@@ -134,31 +133,33 @@ fn run_bidirectional_streaming<F1, F2, I, O>(
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
     F1: Fn(&mut State, Result<I, Status>) + Clone + Send + 'static,
-    F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>) + Send + 'static,
+    F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>, JoinHandle<()>) + Send + 'static,
     I: Send + 'static,
     O: Send + 'static,
 {
     let (sender, receiver) = unbounded_channel::<Result<O, Status>>();
 
-    let with_out_stream = Box::new(|state: &mut State| {
-        with_out_stream(state, sender);
-    });
-
-    fn_sender
-        .send(with_out_stream)
-        .map_err(|_| Status::internal("failed to execute request"))?;
+    let fn_sender_clone = fn_sender.clone();
 
     let with_in_stream = async move {
         while let Some(t) = in_stream.next().await {
             let with_client_item = with_client_item.clone();
             // TODO: handle error
-            let _ = fn_sender.send(Box::new(move |state: &mut State| {
+            let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
                 with_client_item(state, t);
             }));
         }
     };
 
-    tokio::spawn(with_in_stream);
+    let join_handle = tokio::spawn(with_in_stream);
+
+    let with_out_stream = Box::new(|state: &mut State| {
+        with_out_stream(state, sender, join_handle);
+    });
+
+    fn_sender
+        .send(with_out_stream)
+        .map_err(|_| Status::internal("failed to execute request"))?;
 
     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     Ok(Response::new(Box::pin(receiver_stream)))
@@ -732,6 +733,13 @@ impl tag_service_server::TagService for TagService {
             state.update_windows(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
+
+            state.signal_state.layout.signal(|_| {
+                pinnacle_api_defs::pinnacle::signal::v0alpha1::LayoutResponse {
+                    window_ids: vec![1, 2, 3],
+                    tag_id: Some(1),
+                }
+            });
         })
         .await
     }

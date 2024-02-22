@@ -69,7 +69,9 @@ local WindowHandle = {}
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class Window
+---@field private handle WindowHandleModule
 local window = {}
+window.handle = window_handle
 
 ---Get all windows.
 ---

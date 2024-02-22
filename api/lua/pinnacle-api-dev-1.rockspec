@@ -26,5 +26,6 @@ build = {
         ["pinnacle.tag"] = "pinnacle/tag.lua",
         ["pinnacle.window"] = "pinnacle/window.lua",
         ["pinnacle.util"] = "pinnacle/util.lua",
+        ["pinnacle.signal"] = "pinnacle/signal.lua",
     },
 }
