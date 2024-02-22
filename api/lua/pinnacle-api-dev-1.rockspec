@@ -5,7 +5,7 @@ source = {
 }
 description = {
     homepage = "*** please enter a project homepage ***",
-    license = "*** please specify a license ***",
+    license = "MPL 2.0",
 }
 dependencies = {
     "lua ~> 5.4",
@@ -25,5 +25,6 @@ build = {
         ["pinnacle.process"] = "pinnacle/process.lua",
         ["pinnacle.tag"] = "pinnacle/tag.lua",
         ["pinnacle.window"] = "pinnacle/window.lua",
+        ["pinnacle.util"] = "pinnacle/util.lua",
     },
 }

@@ -102,9 +102,20 @@ end
 function window.get_focused()
     local handles = window.get_all()
 
-    for _, handle in ipairs(handles) do
-        if handle:props().focused then
-            return handle
+    ---@type (fun(): WindowProperties)[]
+    local requests = {}
+
+    for i, handle in ipairs(handles) do
+        requests[i] = function()
+            return handle:props()
+        end
+    end
+
+    local props = require("pinnacle.util").batch(requests)
+
+    for i, prop in ipairs(props) do
+        if prop.focused then
+            return handles[i]
         end
     end
 
@@ -124,7 +135,8 @@ end
 ---```
 ---@param button MouseButton The button that will initiate the move
 function window.begin_move(button)
-    local button = require("pinnacle.input").btn[button]
+    ---@diagnostic disable-next-line: redefined-local, invisible
+    local button = require("pinnacle.input").mouse_button_values[button]
     client.unary_request(build_grpc_request_params("MoveGrab", { button = button }))
 end
 
@@ -141,7 +153,8 @@ end
 ---```
 ---@param button MouseButton The button that will initiate the resize
 function window.begin_resize(button)
-    local button = require("pinnacle.input").btn[button]
+    ---@diagnostic disable-next-line: redefined-local, invisible
+    local button = require("pinnacle.input").mouse_button_values[button]
     client.unary_request(build_grpc_request_params("ResizeGrab", { button = button }))
 end
 
@@ -274,6 +287,7 @@ function window.add_window_rule(rule)
     end
 
     if rule.rule.output then
+        ---@diagnostic disable-next-line: assign-type-mismatch
         rule.rule.output = rule.rule.output.name
     end
 
@@ -502,6 +516,7 @@ function WindowHandle:props()
 
     response.fullscreen_or_maximized = _fullscreen_or_maximized_keys[response.fullscreen_or_maximized]
 
+    ---@diagnostic disable-next-line: invisible
     response.tags = response.tag_ids and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
     response.tag_ids = nil
 

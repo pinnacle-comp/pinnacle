@@ -122,10 +122,20 @@ function tag.get(name, output)
 
     local handles = tag.get_all()
 
-    for _, handle in ipairs(handles) do
-        local props = handle:props()
-        if props.output and props.output.name == output.name and props.name == name then
-            return handle
+    ---@type (fun(): TagProperties)[]
+    local requests = {}
+
+    for i, handle in ipairs(handles) do
+        requests[i] = function()
+            return handle:props()
+        end
+    end
+
+    local props = require("pinnacle.util").batch(requests)
+
+    for i, prop in ipairs(props) do
+        if prop.output and prop.output.name == output.name and prop.name == name then
+            return handles[i]
         end
     end
 
@@ -248,12 +258,13 @@ function tag.new_layout_cycler(layouts)
     ---@type LayoutCycler
     return {
         next = function(output)
+            ---@diagnostic disable-next-line: redefined-local
             local output = output or require("pinnacle.output").get_focused()
             if not output then
                 return
             end
 
-            local tags = output:props().tags
+            local tags = output:props().tags or {}
 
             for _, tg in ipairs(tags) do
                 if tg:props().active then
@@ -276,12 +287,13 @@ function tag.new_layout_cycler(layouts)
             end
         end,
         prev = function(output)
+            ---@diagnostic disable-next-line: redefined-local
             local output = output or require("pinnacle.output").get_focused()
             if not output then
                 return
             end
 
-            local tags = output:props().tags
+            local tags = output:props().tags or {}
 
             for _, tg in ipairs(tags) do
                 if tg:props().active then
@@ -321,7 +333,7 @@ function TagHandle:remove()
     client.unary_request(build_grpc_request_params("Remove", { tag_ids = { self.id } }))
 end
 
-local _layouts = {
+local layout_name_to_code = {
     master_stack = 1,
     dwindle = 2,
     spiral = 3,
@@ -351,7 +363,8 @@ local _layouts = {
 ---
 ---@param layout Layout
 function TagHandle:set_layout(layout)
-    local layout = _layouts[layout]
+    ---@diagnostic disable-next-line: redefined-local
+    local layout = layout_name_to_code[layout]
 
     client.unary_request(build_grpc_request_params("SetLayout", {
         tag_id = self.id,
@@ -421,6 +434,7 @@ function TagHandle:props()
     return {
         active = response.active,
         name = response.name,
+        ---@diagnostic disable-next-line: invisible
         output = response.output_name and require("pinnacle.output").handle.new(response.output_name),
     }
 end

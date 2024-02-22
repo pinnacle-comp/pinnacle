@@ -21,15 +21,16 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{block_on_tokio, tag::TagHandle};
+use crate::{block_on_tokio, tag::TagHandle, util::Batch};
 
 /// A struct that allows you to get handles to connected outputs and set them up.
 ///
 /// See [`OutputHandle`] for more information.
 #[derive(Debug, Clone)]
 pub struct Output {
-    channel: Channel,
     fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
+    output_client: OutputServiceClient<Channel>,
+    tag_client: TagServiceClient<Channel>,
 }
 
 impl Output {
@@ -38,17 +39,10 @@ impl Output {
         fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
     ) -> Self {
         Self {
-            channel,
+            output_client: OutputServiceClient::new(channel.clone()),
+            tag_client: TagServiceClient::new(channel),
             fut_sender,
         }
-    }
-
-    fn create_output_client(&self) -> OutputServiceClient<Channel> {
-        OutputServiceClient::new(self.channel.clone())
-    }
-
-    fn create_tag_client(&self) -> TagServiceClient<Channel> {
-        TagServiceClient::new(self.channel.clone())
     }
 
     /// Get a handle to all connected outputs.
@@ -59,15 +53,22 @@ impl Output {
     /// let outputs = output.get_all();
     /// ```
     pub fn get_all(&self) -> impl Iterator<Item = OutputHandle> {
-        let mut client = self.create_output_client();
-        let tag_client = self.create_tag_client();
-        block_on_tokio(client.get(output::v0alpha1::GetRequest {}))
+        block_on_tokio(self.get_all_async())
+    }
+
+    /// The async version of [`Output::get_all`].
+    pub async fn get_all_async(&self) -> impl Iterator<Item = OutputHandle> {
+        let mut client = self.output_client.clone();
+        let tag_client = self.tag_client.clone();
+        client
+            .get(output::v0alpha1::GetRequest {})
+            .await
             .unwrap()
             .into_inner()
             .output_names
             .into_iter()
             .map(move |name| OutputHandle {
-                client: client.clone(),
+                output_client: client.clone(),
                 tag_client: tag_client.clone(),
                 name,
             })
@@ -84,8 +85,15 @@ impl Output {
     /// let op2 = output.get_by_name("HDMI-2")?;
     /// ```
     pub fn get_by_name(&self, name: impl Into<String>) -> Option<OutputHandle> {
+        block_on_tokio(self.get_by_name_async(name))
+    }
+
+    /// The async version of [`Output::get_by_name`].
+    pub async fn get_by_name_async(&self, name: impl Into<String>) -> Option<OutputHandle> {
         let name: String = name.into();
-        self.get_all().find(|output| output.name == name)
+        self.get_all_async()
+            .await
+            .find(|output| output.name == name)
     }
 
     /// Get a handle to the focused output.
@@ -100,6 +108,14 @@ impl Output {
     pub fn get_focused(&self) -> Option<OutputHandle> {
         self.get_all()
             .find(|output| matches!(output.props().focused, Some(true)))
+    }
+
+    /// The async version of [`Output::get_focused`].
+    pub async fn get_focused_async(&self) -> Option<OutputHandle> {
+        self.get_all_async().await.batch_find(
+            |output| output.props_async().boxed(),
+            |props| props.focused.is_some_and(|focused| focused),
+        )
     }
 
     /// Connect a closure to be run on all current and future outputs.
@@ -126,8 +142,8 @@ impl Output {
             for_all(output);
         }
 
-        let mut client = self.create_output_client();
-        let tag_client = self.create_tag_client();
+        let mut client = self.output_client.clone();
+        let tag_client = self.tag_client.clone();
 
         self.fut_sender
             .unbounded_send(
@@ -144,7 +160,7 @@ impl Output {
                         };
 
                         let output = OutputHandle {
-                            client: client.clone(),
+                            output_client: client.clone(),
                             tag_client: tag_client.clone(),
                             name: output_name,
                         };
@@ -163,7 +179,7 @@ impl Output {
 /// This allows you to manipulate outputs and get their properties.
 #[derive(Clone, Debug)]
 pub struct OutputHandle {
-    pub(crate) client: OutputServiceClient<Channel>,
+    pub(crate) output_client: OutputServiceClient<Channel>,
     pub(crate) tag_client: TagServiceClient<Channel>,
     pub(crate) name: String,
 }
@@ -245,7 +261,7 @@ impl OutputHandle {
     /// //          ^x=1920
     /// ```
     pub fn set_location(&self, x: impl Into<Option<i32>>, y: impl Into<Option<i32>>) {
-        let mut client = self.client.clone();
+        let mut client = self.output_client.clone();
         block_on_tokio(client.set_location(SetLocationRequest {
             output_name: Some(self.name.clone()),
             x: x.into(),
@@ -377,14 +393,19 @@ impl OutputHandle {
     /// } = output.get_focused()?.props();
     /// ```
     pub fn props(&self) -> OutputProperties {
-        let mut client = self.client.clone();
-        let response = block_on_tokio(client.get_properties(
-            output::v0alpha1::GetPropertiesRequest {
+        block_on_tokio(self.props_async())
+    }
+
+    /// The async version of [`OutputHandle::props`].
+    pub async fn props_async(&self) -> OutputProperties {
+        let mut client = self.output_client.clone();
+        let response = client
+            .get_properties(output::v0alpha1::GetPropertiesRequest {
                 output_name: Some(self.name.clone()),
-            },
-        ))
-        .unwrap()
-        .into_inner();
+            })
+            .await
+            .unwrap()
+            .into_inner();
 
         OutputProperties {
             make: response.make,
@@ -401,8 +422,8 @@ impl OutputHandle {
                 .tag_ids
                 .into_iter()
                 .map(|id| TagHandle {
-                    client: self.tag_client.clone(),
-                    output_client: self.client.clone(),
+                    tag_client: self.tag_client.clone(),
+                    output_client: self.output_client.clone(),
                     id,
                 })
                 .collect(),
@@ -418,11 +439,21 @@ impl OutputHandle {
         self.props().make
     }
 
+    /// The async version of [`OutputHandle::make`].
+    pub async fn make_async(&self) -> Option<String> {
+        self.props_async().await.make
+    }
+
     /// Get this output's model.
     ///
     /// Shorthand for `self.props().make`.
     pub fn model(&self) -> Option<String> {
         self.props().model
+    }
+
+    /// The async version of [`OutputHandle::model`].
+    pub async fn model_async(&self) -> Option<String> {
+        self.props_async().await.model
     }
 
     /// Get this output's x position in the global space.
@@ -432,11 +463,21 @@ impl OutputHandle {
         self.props().x
     }
 
+    /// The async version of [`OutputHandle::x`].
+    pub async fn x_async(&self) -> Option<i32> {
+        self.props_async().await.x
+    }
+
     /// Get this output's y position in the global space.
     ///
     /// Shorthand for `self.props().y`.
     pub fn y(&self) -> Option<i32> {
         self.props().y
+    }
+
+    /// The async version of [`OutputHandle::y`].
+    pub async fn y_async(&self) -> Option<i32> {
+        self.props_async().await.y
     }
 
     /// Get this output's screen width in pixels.
@@ -446,11 +487,21 @@ impl OutputHandle {
         self.props().pixel_width
     }
 
+    /// The async version of [`OutputHandle::pixel_width`].
+    pub async fn pixel_width_async(&self) -> Option<u32> {
+        self.props_async().await.pixel_width
+    }
+
     /// Get this output's screen height in pixels.
     ///
     /// Shorthand for `self.props().pixel_height`.
     pub fn pixel_height(&self) -> Option<u32> {
         self.props().pixel_height
+    }
+
+    /// The async version of [`OutputHandle::pixel_height`].
+    pub async fn pixel_height_async(&self) -> Option<u32> {
+        self.props_async().await.pixel_height
     }
 
     /// Get this output's refresh rate in millihertz.
@@ -462,6 +513,11 @@ impl OutputHandle {
         self.props().refresh_rate
     }
 
+    /// The async version of [`OutputHandle::refresh_rate`].
+    pub async fn refresh_rate_async(&self) -> Option<u32> {
+        self.props_async().await.refresh_rate
+    }
+
     /// Get this output's physical width in millimeters.
     ///
     /// Shorthand for `self.props().physical_width`.
@@ -469,11 +525,21 @@ impl OutputHandle {
         self.props().physical_width
     }
 
+    /// The async version of [`OutputHandle::physical_width`].
+    pub async fn physical_width_async(&self) -> Option<u32> {
+        self.props_async().await.physical_width
+    }
+
     /// Get this output's physical height in millimeters.
     ///
     /// Shorthand for `self.props().physical_height`.
     pub fn physical_height(&self) -> Option<u32> {
         self.props().physical_height
+    }
+
+    /// The async version of [`OutputHandle::physical_height`].
+    pub async fn physical_height_async(&self) -> Option<u32> {
+        self.props_async().await.physical_height
     }
 
     /// Get whether this output is focused or not.
@@ -485,11 +551,21 @@ impl OutputHandle {
         self.props().focused
     }
 
+    /// The async version of [`OutputHandle::focused`].
+    pub async fn focused_async(&self) -> Option<bool> {
+        self.props_async().await.focused
+    }
+
     /// Get the tags this output has.
     ///
     /// Shorthand for `self.props().tags`
     pub fn tags(&self) -> Vec<TagHandle> {
         self.props().tags
+    }
+
+    /// The async version of [`OutputHandle::tags`].
+    pub async fn tags_async(&self) -> Vec<TagHandle> {
+        self.props_async().await.tags
     }
 
     /// Get this output's unique name (the name of its connector).
@@ -499,7 +575,7 @@ impl OutputHandle {
 }
 
 /// The properties of an output.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct OutputProperties {
     /// The make of the output
     pub make: Option<String>,

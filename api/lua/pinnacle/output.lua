@@ -76,6 +76,8 @@ output.handle = output_handle
 ---
 ---@return OutputHandle[]
 function output.get_all()
+    -- Not going to batch these because I doubt people would have that many monitors
+
     local response = client.unary_request(build_grpc_request_params("Get", {}))
 
     ---@type OutputHandle[]
@@ -326,6 +328,7 @@ end
 function OutputHandle:props()
     local response = client.unary_request(build_grpc_request_params("GetProperties", { output_name = self.name }))
 
+    ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
 
     response.tags = handles

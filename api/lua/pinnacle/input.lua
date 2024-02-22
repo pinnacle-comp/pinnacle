@@ -103,11 +103,11 @@ local mouse_edge_values = {
 ---
 ---This module provides utilities to set key- and mousebinds as well as change keyboard settings.
 ---@class Input
----@field private btn table
+---@field private mouse_button_values table
 local input = {
     key = require("pinnacle.input.keys"),
 }
-input.btn = mouse_button_values
+input.mouse_button_values = mouse_button_values
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
 ---
@@ -188,6 +188,7 @@ end
 ---@param edge MouseEdge "press" or "release" to trigger on button press or release
 ---@param action fun() The function to run when the bind is triggered
 function input.mousebind(mods, button, edge, action)
+    ---@diagnostic disable-next-line: redefined-local
     local edge = mouse_edge_values[edge]
 
     local mod_values = {}
