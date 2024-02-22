@@ -17,7 +17,7 @@ use std::{
 use anyhow::Context;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
-    output::v0alpha1::{output_service_server::OutputServiceServer, ConnectForAllResponse},
+    output::v0alpha1::output_service_server::OutputServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
     signal::v0alpha1::signal_service_server::SignalServiceServer,
     tag::v0alpha1::tag_service_server::TagServiceServer,
@@ -30,7 +30,7 @@ use smithay::{
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
+use tokio::task::JoinHandle;
 use toml::Table;
 
 use xdg::BaseDirectories;
@@ -166,7 +166,6 @@ pub enum Key {
 pub struct Config {
     /// Window rules and conditions on when those rules should apply
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
-    pub output_callback_senders: Vec<UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 
@@ -177,7 +176,6 @@ pub struct Config {
 impl Config {
     pub fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
-        self.output_callback_senders.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();

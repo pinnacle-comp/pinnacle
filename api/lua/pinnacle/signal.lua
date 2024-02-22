@@ -186,7 +186,7 @@ end
 ---@param callback fun(response: table)
 function signal.connect(request, callback)
     local stream = client.bidirectional_streaming_request(
-        build_grpc_request_params("Layout", {
+        build_grpc_request_params(request, {
             control = stream_control.READY,
         }),
         function(response)

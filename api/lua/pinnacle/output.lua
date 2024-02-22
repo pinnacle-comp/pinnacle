@@ -159,11 +159,9 @@ function output.connect_for_all(callback)
         callback(handle)
     end
 
-    client.server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
-        local output_name = response.output_name
-        local handle = output_handle.new(output_name)
-        callback(handle)
-    end)
+    output.connect_signal({
+        connect = callback,
+    })
 end
 
 ---@class OutputSignal

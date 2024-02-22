@@ -2,8 +2,6 @@ syntax = "proto2";
 
 package pinnacle.signal.v0alpha1;
 
-import "google/protobuf/empty.proto";
-
 enum StreamControl {
   STREAM_CONTROL_UNSPECIFIED = 0;
   // The client is ready to receive the next signal.

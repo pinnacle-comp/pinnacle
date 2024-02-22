@@ -12,9 +12,7 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::{
         self,
-        v0alpha1::{
-            output_service_server, ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest,
-        },
+        v0alpha1::{output_service_server, SetLocationRequest},
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     tag::{
@@ -944,8 +942,6 @@ impl OutputService {
 
 #[tonic::async_trait]
 impl output_service_server::OutputService for OutputService {
-    type ConnectForAllStream = ResponseStream<ConnectForAllResponse>;
-
     async fn set_location(
         &self,
         request: Request<SetLocationRequest>,
@@ -995,18 +991,6 @@ impl output_service_server::OutputService for OutputService {
             state.update_windows(&output);
         })
         .await
-    }
-
-    // TODO: remove this and integrate it into a signal/event system
-    async fn connect_for_all(
-        &self,
-        _request: Request<ConnectForAllRequest>,
-    ) -> Result<Response<Self::ConnectForAllStream>, Status> {
-        tracing::trace!("OutputService.connect_for_all");
-
-        run_server_streaming(&self.sender, move |state, sender| {
-            state.config.output_callback_senders.push(sender);
-        })
     }
 
     async fn get(
