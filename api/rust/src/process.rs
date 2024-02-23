@@ -153,6 +153,7 @@ impl Process {
                                 exit(response.exit_code, exit_msg);
                             }
                         }
+                        tokio::task::yield_now().await;
                     }
                 }
                 .boxed(),

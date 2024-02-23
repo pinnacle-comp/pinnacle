@@ -166,6 +166,7 @@ impl Output {
                         };
 
                         for_all(output);
+                        tokio::task::yield_now().await;
                     }
                 }
                 .boxed(),

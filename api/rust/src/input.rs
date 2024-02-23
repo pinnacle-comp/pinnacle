@@ -177,6 +177,7 @@ impl Input {
 
                     while let Some(Ok(_response)) = stream.next().await {
                         action();
+                        tokio::task::yield_now().await;
                     }
                 }
                 .boxed(),
@@ -232,6 +233,7 @@ impl Input {
 
                     while let Some(Ok(_response)) = stream.next().await {
                         action();
+                        tokio::task::yield_now().await;
                     }
                 }
                 .boxed(),
