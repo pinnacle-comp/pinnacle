@@ -1,4 +1,10 @@
-//! Signals TODO:
+//! Compositor signals.
+//!
+//! Your config can connect to various compositor signals that allow you to, for example, do
+//! something when an output is connected or when the pointer enters a window.
+//!
+//! Some of the other modules have a `connect_signal` method that will allow you to pass in
+//! callbacks to run on each signal. Use them to connect to the signals defined here.
 
 use std::{
     collections::{btree_map, BTreeMap},
@@ -89,7 +95,7 @@ macro_rules! signals {
                         self.callback_count.clone(),
                         |out| {
                             block_on_tokio(self.client.$req(out))
-                                .expect("TODO")
+                                .expect("failed to request signal connection")
                                 .into_inner()
                         },
                         $on_resp,
@@ -114,6 +120,11 @@ signals! {
     /// Signals relating to tag events.
     TagSignal => {
         /// The compositor requested that the given windows be laid out.
+        ///
+        /// Callbacks receive the tag that is being laid out and the windows being laid out.
+        ///
+        /// Note: if multiple tags are active, only the first will be received, but all windows on those
+        /// active tags will be received.
         Layout = {
             enum_name = Layout,
             callback_type = LayoutFn,
@@ -140,6 +151,11 @@ signals! {
     /// Signals relating to output events.
     OutputSignal => {
         /// An output was connected.
+        ///
+        /// Callbacks receive the newly connected output.
+        ///
+        /// FIXME: This will not run on outputs that have been previously connected.
+        /// |      Tell the dev to fix this in the compositor.
         OutputConnect = {
             enum_name = Connect,
             callback_type = SingleOutputFn,
@@ -159,6 +175,8 @@ signals! {
     /// Signals relating to window events.
     WindowSignal => {
         /// The pointer entered a window.
+        ///
+        /// Callbacks receive the window the pointer entered.
         WindowPointerEnter = {
             enum_name = PointerEnter,
             callback_type = SingleWindowFn,
@@ -175,6 +193,8 @@ signals! {
             },
         }
         /// The pointer left a window.
+        ///
+        /// Callbacks receive the window the pointer left.
         WindowPointerLeave = {
             enum_name = PointerLeave,
             callback_type = SingleWindowFn,
@@ -300,11 +320,12 @@ where
                     match response {
                         Ok(response) => {
                             on_response(response, callbacks.values_mut());
-                            tokio::task::yield_now().await;
 
                             control_sender
                                 .send(Req::from_control(StreamControl::Ready))
                                 .expect("send failed");
+
+                            tokio::task::yield_now().await;
                         }
                         Err(status) => eprintln!("Error in recv: {status}"),
                     }

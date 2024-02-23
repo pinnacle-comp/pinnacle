@@ -122,12 +122,12 @@ impl Window {
     /// ```
     /// let windows = window.get_all();
     /// ```
-    pub fn get_all(&self) -> impl Iterator<Item = WindowHandle> {
+    pub fn get_all(&self) -> Vec<WindowHandle> {
         block_on_tokio(self.get_all_async())
     }
 
     /// The async version of [`Window::get_all`].
-    pub async fn get_all_async(&self) -> impl Iterator<Item = WindowHandle> {
+    pub async fn get_all_async(&self) -> Vec<WindowHandle> {
         let mut client = self.window_client.clone();
         client
             .get(GetRequest {})
@@ -138,8 +138,6 @@ impl Window {
             .into_iter()
             .map(move |id| self.new_handle(id))
             .collect::<Vec<_>>()
-            // TODO: consider changing return type to Vec to avoid this into_iter
-            .into_iter()
     }
 
     /// Get the currently focused window.
@@ -166,7 +164,7 @@ impl Window {
     /// A window rule is a set of criteria that a window must open with.
     /// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
     ///
-    /// TODO:
+    /// See the [`rules`] module for more information.
     pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
         let mut client = self.window_client.clone();
 
