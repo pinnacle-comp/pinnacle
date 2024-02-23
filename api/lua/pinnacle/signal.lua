@@ -49,37 +49,51 @@ local stream_control = {
     DISCONNECT = 2,
 }
 
+-- TODO: rewrite ldoc_gen so you don't have to stick @nodoc everywhere
+
 ---@type table<SignalServiceMethod, { sender: H2Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
+        ---@nodoc
         ---@type H2Stream?
         sender = nil,
+        ---@nodoc
         ---@type (fun(output: OutputHandle))[]
         callbacks = {},
+        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     Layout = {
+        ---@nodoc
         ---@type H2Stream?
         sender = nil,
+        ---@nodoc
         ---@type (fun(tag: TagHandle, windows: WindowHandle[]))[]
         callbacks = {},
+        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     WindowPointerEnter = {
+        ---@nodoc
         ---@type H2Stream?
         sender = nil,
+        ---@nodoc
         ---@type (fun(window: WindowHandle))[]
         callbacks = {},
+        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     WindowPointerLeave = {
+        ---@nodoc
         ---@type H2Stream?
         sender = nil,
+        ---@nodoc
         ---@type (fun(window: WindowHandle))[]
         callbacks = {},
+        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
@@ -124,20 +138,26 @@ end
 
 -----------------------------------------------------------------------------
 
+---@nodoc
 ---@class SignalHandleModule
 local signal_handle = {}
 
+---A handle to a connected signal that can be used to disconnect the provided callback.
+---
 ---@class SignalHandle
 ---@field signal SignalServiceMethod
 ---@field callback function The callback you connected
 local SignalHandle = {}
 
+---@nodoc
 ---@class SignalHandlesModule
 local signal_handles = {}
 
+---@nodoc
 ---@class SignalHandles
 local SignalHandles = {}
 
+---@nodoc
 ---@class Signal
 ---@field private handle SignalHandleModule
 ---@field private handles SignalHandlesModule
@@ -145,6 +165,7 @@ local signal = {}
 signal.handle = signal_handle
 signal.handles = signal_handles
 
+---@nodoc
 function SignalHandle:disconnect()
     local cb_index = nil
     for i, cb in ipairs(signals[self.signal].callbacks) do
@@ -163,6 +184,7 @@ function SignalHandle:disconnect()
     end
 end
 
+---@nodoc
 ---@return SignalHandle
 function signal_handle.new(request, callback)
     ---@type SignalHandle
@@ -174,6 +196,8 @@ function signal_handle.new(request, callback)
     return self
 end
 
+---Disconnect the callbacks from all the signal connections that are stored in this handle collection.
+---
 ---@param self table<string, SignalHandle>
 function SignalHandles:disconnect_all()
     for _, sig in pairs(self) do
@@ -181,6 +205,7 @@ function SignalHandles:disconnect_all()
     end
 end
 
+---@nodoc
 ---@param signal_hdls table<string, SignalHandle>
 ---@return SignalHandles
 function signal_handles.new(signal_hdls)
@@ -190,6 +215,7 @@ function signal_handles.new(signal_hdls)
     return self
 end
 
+---@nodoc
 ---@param request SignalServiceMethod
 ---@param callback function
 function signal.add_callback(request, callback)
@@ -200,6 +226,7 @@ function signal.add_callback(request, callback)
     table.insert(signals[request].callbacks, callback)
 end
 
+---@nodoc
 ---@param request SignalServiceMethod
 ---@param callback fun(response: table)
 function signal.connect(request, callback)
@@ -228,6 +255,7 @@ function signal.connect(request, callback)
     signals[request].sender = stream
 end
 
+---@nodoc
 ---This should only be called when call callbacks for the signal are removed
 ---@param request SignalServiceMethod
 function signal.disconnect(request)

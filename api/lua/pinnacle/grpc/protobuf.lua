@@ -39,6 +39,7 @@ function protobuf.build_protos()
     pb.option("enum_as_value")
 end
 
+---@nodoc
 ---Encode the given `data` as the protobuf `type`.
 ---@param type string The absolute protobuf type
 ---@param data table The table of data, conforming to its protobuf definition

@@ -234,8 +234,8 @@ end
 ---layout_cycler.next() -- Layout is now "dwindle"
 ---layout_cycler.next() -- Layout is now "corner_top_left"
 ---layout_cycler.next() -- Layout is now "corner_top_right"
+---layout_cycler.next() -- Layout is now "master_stack"
 ---layout_cycler.next() -- Layout is now "dwindle"
----layout_cycler.next() -- Layout is now "corner_top_right"
 ---
 --- -- Cycling on another output
 ---layout_cycler.next(Output.get_by_name("eDP-1"))
@@ -323,11 +323,31 @@ local signal_name_to_SignalName = {
     layout = "Layout",
 }
 
----@class TagSignal
----@field layout fun(tag: TagHandle, windows: WindowHandle[])?
+---@class TagSignal Signals related to tag events.
+---@field layout fun(tag: TagHandle, windows: WindowHandle[])? The compositor requested a layout of the given tiled windows. You'll also receive the first active tag.
 
----@param signals TagSignal
----@return SignalHandles
+---Connect to a tag signal.
+---
+---The compositor sends signals about various events. Use this function to run a callback when
+---some tag signal occurs.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Tag.connect_signal({
+---    layout = function(tag, windows)
+---        print("Compositor requested a layout")
+---    end
+---})
+---```
+---
+---@param signals TagSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
 function tag.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})

@@ -316,12 +316,32 @@ local signal_name_to_SignalName = {
     pointer_leave = "WindowPointerLeave",
 }
 
----@class WindowSignal
----@field pointer_enter fun(window: WindowHandle)?
----@field pointer_leave fun(window: WindowHandle)?
+---@class WindowSignal Signals related to compositor events.
+---@field pointer_enter fun(window: WindowHandle)? The pointer entered a window.
+---@field pointer_leave fun(window: WindowHandle)? The pointer left a window.
 
----@param signals WindowSignal
----@return SignalHandles
+---Connect to a window signal.
+---
+---The compositor sends signals about various events. Use this function to run a callback when
+---some window signal occurs.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Window.connect_signal({
+---    pointer_enter = function(window)
+---        print("Pointer entered", window:class())
+---    end
+---})
+---```
+---
+---@param signals WindowSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
 function window.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})
