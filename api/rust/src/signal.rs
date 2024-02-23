@@ -263,7 +263,7 @@ fn connect_signal<Req, Resp, F, T, O>(
 ) -> ConnectSignalChannels<F>
 where
     Req: SignalRequest + Send + 'static,
-    Resp: 'static,
+    Resp: Send + 'static,
     F: Send + 'static,
     T: FnOnce(UnboundedReceiverStream<Req>) -> Streaming<Resp>,
     O: FnMut(Resp, btree_map::ValuesMut<'_, SignalConnId, F>) + Send + 'static,
@@ -300,6 +300,7 @@ where
                     match response {
                         Ok(response) => {
                             on_response(response, callbacks.values_mut());
+                            tokio::task::yield_now().await;
 
                             control_sender
                                 .send(Req::from_control(StreamControl::Ready))
