@@ -51,6 +51,7 @@ local stream_control = {
 
 -- TODO: rewrite ldoc_gen so you don't have to stick @nodoc everywhere
 
+---@nodoc
 ---@type table<SignalServiceMethod, { sender: H2Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
@@ -142,19 +143,20 @@ end
 ---@class SignalHandleModule
 local signal_handle = {}
 
+---@classmod
 ---A handle to a connected signal that can be used to disconnect the provided callback.
 ---
 ---@class SignalHandle
----@field signal SignalServiceMethod
----@field callback function The callback you connected
+---@field private signal SignalServiceMethod
+---@field private callback function The callback you connected
 local SignalHandle = {}
 
 ---@nodoc
 ---@class SignalHandlesModule
 local signal_handles = {}
 
----@nodoc
----@class SignalHandles
+---@classmod
+---@class SignalHandles A collection of `SignalHandle`s retreived through a `connect_signal` function.
 local SignalHandles = {}
 
 ---@nodoc
@@ -165,7 +167,7 @@ local signal = {}
 signal.handle = signal_handle
 signal.handles = signal_handles
 
----@nodoc
+---Disconnect the provided callback from this signal.
 function SignalHandle:disconnect()
     local cb_index = nil
     for i, cb in ipairs(signals[self.signal].callbacks) do

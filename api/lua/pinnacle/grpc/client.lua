@@ -8,6 +8,7 @@ local h2_connection = require("http.h2_connection")
 local protobuf = require("pinnacle.grpc.protobuf")
 local pb = require("pb")
 
+---@nodoc
 ---Create appropriate headers for a gRPC request.
 ---@param service string The desired service
 ---@param method string The desired method within the service
