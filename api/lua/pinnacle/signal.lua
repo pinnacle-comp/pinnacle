@@ -155,8 +155,9 @@ local SignalHandle = {}
 ---@class SignalHandlesModule
 local signal_handles = {}
 
+---A collection of `SignalHandle`s retreived through a `connect_signal` function.
 ---@classmod
----@class SignalHandles A collection of `SignalHandle`s retreived through a `connect_signal` function.
+---@class SignalHandles
 local SignalHandles = {}
 
 ---@nodoc
