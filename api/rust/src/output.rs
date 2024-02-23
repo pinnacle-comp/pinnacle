@@ -9,39 +9,40 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
-use pinnacle_api_defs::pinnacle::{
-    output::{
-        self,
-        v0alpha1::{
-            output_service_client::OutputServiceClient, ConnectForAllRequest, SetLocationRequest,
-        },
-    },
-    tag::v0alpha1::tag_service_client::TagServiceClient,
+use futures::FutureExt;
+use pinnacle_api_defs::pinnacle::output::{
+    self,
+    v0alpha1::{output_service_client::OutputServiceClient, SetLocationRequest},
 };
 use tonic::transport::Channel;
 
-use crate::{block_on_tokio, tag::TagHandle, util::Batch};
+use crate::{
+    block_on_tokio,
+    signal::{OutputSignal, SignalHandle},
+    tag::TagHandle,
+    util::Batch,
+    SIGNAL, TAG,
+};
 
 /// A struct that allows you to get handles to connected outputs and set them up.
 ///
 /// See [`OutputHandle`] for more information.
 #[derive(Debug, Clone)]
 pub struct Output {
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
     output_client: OutputServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
 }
 
 impl Output {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
+    pub(crate) fn new(channel: Channel) -> Self {
         Self {
             output_client: OutputServiceClient::new(channel.clone()),
-            tag_client: TagServiceClient::new(channel),
-            fut_sender,
+        }
+    }
+
+    pub(crate) fn new_handle(&self, name: impl Into<String>) -> OutputHandle {
+        OutputHandle {
+            name: name.into(),
+            output_client: self.output_client.clone(),
         }
     }
 
@@ -52,14 +53,14 @@ impl Output {
     /// ```
     /// let outputs = output.get_all();
     /// ```
-    pub fn get_all(&self) -> impl Iterator<Item = OutputHandle> {
+    pub fn get_all(&self) -> Vec<OutputHandle> {
         block_on_tokio(self.get_all_async())
     }
 
     /// The async version of [`Output::get_all`].
-    pub async fn get_all_async(&self) -> impl Iterator<Item = OutputHandle> {
+    pub async fn get_all_async(&self) -> Vec<OutputHandle> {
         let mut client = self.output_client.clone();
-        let tag_client = self.tag_client.clone();
+
         client
             .get(output::v0alpha1::GetRequest {})
             .await
@@ -67,11 +68,8 @@ impl Output {
             .into_inner()
             .output_names
             .into_iter()
-            .map(move |name| OutputHandle {
-                output_client: client.clone(),
-                tag_client: tag_client.clone(),
-                name,
-            })
+            .map(move |name| self.new_handle(name))
+            .collect()
     }
 
     /// Get a handle to the output with the given name.
@@ -93,6 +91,7 @@ impl Output {
         let name: String = name.into();
         self.get_all_async()
             .await
+            .into_iter()
             .find(|output| output.name == name)
     }
 
@@ -107,6 +106,7 @@ impl Output {
     /// ```
     pub fn get_focused(&self) -> Option<OutputHandle> {
         self.get_all()
+            .into_iter()
             .find(|output| matches!(output.props().focused, Some(true)))
     }
 
@@ -137,40 +137,26 @@ impl Output {
     ///     tags.next().unwrap().set_active(true);
     /// });
     /// ```
-    pub fn connect_for_all(&self, mut for_all: impl FnMut(OutputHandle) + Send + 'static) {
+    pub fn connect_for_all(&self, mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
         for output in self.get_all() {
-            for_all(output);
+            for_all(&output);
         }
 
-        let mut client = self.output_client.clone();
-        let tag_client = self.tag_client.clone();
+        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        signal_state.output_connect.add_callback(Box::new(for_all));
+    }
 
-        self.fut_sender
-            .unbounded_send(
-                async move {
-                    let mut stream = client
-                        .connect_for_all(ConnectForAllRequest {})
-                        .await
-                        .unwrap()
-                        .into_inner();
+    /// Connect to an output signal.
+    ///
+    /// The compositor will fire off signals that your config can listen for and act upon.
+    /// You can pass in an [`OutputSignal`] along with a callback and it will get run
+    /// with the necessary arguments every time a signal of that type is received.
+    pub fn connect_signal(&self, signal: OutputSignal) -> SignalHandle {
+        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
 
-                    while let Some(Ok(response)) = stream.next().await {
-                        let Some(output_name) = response.output_name else {
-                            continue;
-                        };
-
-                        let output = OutputHandle {
-                            output_client: client.clone(),
-                            tag_client: tag_client.clone(),
-                            name: output_name,
-                        };
-
-                        for_all(output);
-                    }
-                }
-                .boxed(),
-            )
-            .unwrap();
+        match signal {
+            OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
+        }
     }
 }
 
@@ -179,9 +165,8 @@ impl Output {
 /// This allows you to manipulate outputs and get their properties.
 #[derive(Clone, Debug)]
 pub struct OutputHandle {
-    pub(crate) output_client: OutputServiceClient<Channel>,
-    pub(crate) tag_client: TagServiceClient<Channel>,
     pub(crate) name: String,
+    output_client: OutputServiceClient<Channel>,
 }
 
 impl PartialEq for OutputHandle {
@@ -407,6 +392,8 @@ impl OutputHandle {
             .unwrap()
             .into_inner();
 
+        let tag = TAG.get().expect("TAG doesn't exist");
+
         OutputProperties {
             make: response.make,
             model: response.model,
@@ -421,11 +408,7 @@ impl OutputHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| TagHandle {
-                    tag_client: self.tag_client.clone(),
-                    output_client: self.output_client.clone(),
-                    id,
-                })
+                .map(|id| tag.new_handle(id))
                 .collect(),
         }
     }

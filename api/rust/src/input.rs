@@ -8,7 +8,7 @@
 //! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
 //! View the struct's documentation for more information.
 
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt, StreamExt};
+use futures::{future::BoxFuture, FutureExt, StreamExt};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
@@ -19,6 +19,7 @@ use pinnacle_api_defs::pinnacle::input::{
         SetXkbConfigRequest,
     },
 };
+use tokio::sync::mpsc::UnboundedSender;
 use tonic::transport::Channel;
 use xkbcommon::xkb::Keysym;
 
@@ -162,7 +163,7 @@ impl Input {
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
         self.fut_sender
-            .unbounded_send(
+            .send(
                 async move {
                     let mut stream = client
                         .set_keybind(SetKeybindRequest {
@@ -218,7 +219,7 @@ impl Input {
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
         self.fut_sender
-            .unbounded_send(
+            .send(
                 async move {
                     let mut stream = client
                         .set_mousebind(SetMousebindRequest {

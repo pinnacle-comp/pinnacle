@@ -2,8 +2,8 @@ use std::collections::VecDeque;
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     signal_service_server, LayoutRequest, LayoutResponse, OutputConnectRequest,
-    OutputConnectResponse, StreamControl, WindowPointerEnterRequest, WindowPointerEnterResponse,
-    WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+    OutputConnectResponse, SignalRequest, StreamControl, WindowPointerEnterRequest,
+    WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
@@ -117,29 +117,6 @@ impl<T, B: SignalBuffer<T>> SignalData<T, B> {
         }
     }
 }
-
-trait SignalRequest {
-    fn control(&self) -> StreamControl;
-}
-
-macro_rules! impl_signal_request {
-    ( $( $request:ident ),* ) => {
-        $(
-            impl SignalRequest for $request {
-                fn control(&self) -> StreamControl {
-                    self.control()
-                }
-            }
-        )*
-    };
-}
-
-impl_signal_request!(
-    OutputConnectRequest,
-    LayoutRequest,
-    WindowPointerEnterRequest,
-    WindowPointerLeaveRequest
-);
 
 fn start_signal_stream<I, O, B, F>(
     sender: StateFnSender,

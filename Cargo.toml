@@ -8,6 +8,7 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 
 [workspace.dependencies]
 tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread"]}
+tokio-stream = { version = "0.1.14", features = ["net"] }
 
 prost = "0.12.3"
 tonic = "0.11.0"
@@ -61,7 +62,7 @@ tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 
 tokio = { workspace = true, features = ["process", "io-util", "signal"] }
-tokio-stream = { version = "0.1.14", features = ["net"] }
+tokio-stream = { workspace = true }
 
 bitflags = "2.4.2"
 pinnacle-api-defs = { workspace = true }

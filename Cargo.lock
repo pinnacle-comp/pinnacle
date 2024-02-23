@@ -1622,6 +1622,7 @@ dependencies = [
  "pinnacle-api-defs",
  "pinnacle-api-macros",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tower",
  "xkbcommon",

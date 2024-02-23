@@ -15,8 +15,6 @@
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
-    output::v0alpha1::output_service_client::OutputServiceClient,
-    tag::v0alpha1::tag_service_client::TagServiceClient,
     window::v0alpha1::{
         window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
         MoveToTagRequest, SetTagRequest,
@@ -34,8 +32,10 @@ use tonic::transport::Channel;
 use crate::{
     block_on_tokio,
     input::MouseButton,
+    signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
     util::{Batch, Geometry},
+    SIGNAL, TAG,
 };
 
 use self::rules::{WindowRule, WindowRuleCondition};
@@ -48,16 +48,19 @@ pub mod rules;
 #[derive(Debug, Clone)]
 pub struct Window {
     window_client: WindowServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
-    output_client: OutputServiceClient<Channel>,
 }
 
 impl Window {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             window_client: WindowServiceClient::new(channel.clone()),
-            tag_client: TagServiceClient::new(channel.clone()),
-            output_client: OutputServiceClient::new(channel),
+        }
+    }
+
+    pub(crate) fn new_handle(&self, id: u32) -> WindowHandle {
+        WindowHandle {
+            id,
+            window_client: self.window_client.clone(),
         }
     }
 
@@ -126,8 +129,6 @@ impl Window {
     /// The async version of [`Window::get_all`].
     pub async fn get_all_async(&self) -> impl Iterator<Item = WindowHandle> {
         let mut client = self.window_client.clone();
-        let tag_client = self.tag_client.clone();
-        let output_client = self.output_client.clone();
         client
             .get(GetRequest {})
             .await
@@ -135,12 +136,10 @@ impl Window {
             .into_inner()
             .window_ids
             .into_iter()
-            .map(move |id| WindowHandle {
-                window_client: client.clone(),
-                id,
-                tag_client: tag_client.clone(),
-                output_client: output_client.clone(),
-            })
+            .map(move |id| self.new_handle(id))
+            .collect::<Vec<_>>()
+            // TODO: consider changing return type to Vec to avoid this into_iter
+            .into_iter()
     }
 
     /// Get the currently focused window.
@@ -177,6 +176,20 @@ impl Window {
         }))
         .unwrap();
     }
+
+    /// Connect to a window signal.
+    ///
+    /// The compositor will fire off signals that your config can listen for and act upon.
+    /// You can pass in a [`WindowSignal`] along with a callback and it will get run
+    /// with the necessary arguments every time a signal of that type is received.
+    pub fn connect_signal(&self, signal: WindowSignal) -> SignalHandle {
+        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+
+        match signal {
+            WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
+            WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
+        }
+    }
 }
 
 /// A handle to a window.
@@ -186,8 +199,6 @@ impl Window {
 pub struct WindowHandle {
     id: u32,
     window_client: WindowServiceClient<Channel>,
-    tag_client: TagServiceClient<Channel>,
-    output_client: OutputServiceClient<Channel>,
 }
 
 impl PartialEq for WindowHandle {
@@ -476,7 +487,6 @@ impl WindowHandle {
     /// The async version of [`props`][Self::props].
     pub async fn props_async(&self) -> WindowProperties {
         let mut client = self.window_client.clone();
-        let tag_client = self.tag_client.clone();
 
         let response = match client
             .get_properties(window::v0alpha1::GetPropertiesRequest {
@@ -504,6 +514,8 @@ impl WindowHandle {
             height: geo.height() as u32,
         });
 
+        let tag = TAG.get().expect("TAG doesn't exist");
+
         WindowProperties {
             geometry,
             class: response.class,
@@ -514,11 +526,7 @@ impl WindowHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| TagHandle {
-                    tag_client: tag_client.clone(),
-                    output_client: self.output_client.clone(),
-                    id,
-                })
+                .map(|id| tag.new_handle(id))
                 .collect(),
         }
     }
