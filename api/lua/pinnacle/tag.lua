@@ -44,6 +44,14 @@ local function build_grpc_request_params(method, data)
     }
 end
 
+local set_or_toggle = {
+    SET = 1,
+    [true] = 1,
+    UNSET = 2,
+    [false] = 2,
+    TOGGLE = 3,
+}
+
 ---@nodoc
 ---@class TagHandleModule
 local tag_handle = {}
@@ -445,7 +453,9 @@ end
 ---
 ---@param active boolean
 function TagHandle:set_active(active)
-    client.unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, set = active }))
+    client.unary_request(
+        build_grpc_request_params("SetActive", { tag_id = self.id, set_or_toggle = set_or_toggle[active] })
+    )
 end
 
 ---Toggle this tag's active state.
@@ -460,7 +470,9 @@ end
 ---Tag.get("2"):toggle_active() -- Displays nothing
 ---```
 function TagHandle:toggle_active()
-    client.unary_request(build_grpc_request_params("SetActive", { tag_id = self.id, toggle = {} }))
+    client.unary_request(
+        build_grpc_request_params("SetActive", { tag_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+    )
 end
 
 ---@class TagProperties

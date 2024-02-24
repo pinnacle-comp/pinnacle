@@ -109,11 +109,22 @@ impl XdgShellHandler for State {
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
-        self.focus_state.focus_stack.retain(|window| {
+
+        self.z_index_stack.stack.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
+
+        for output in self.space.outputs() {
+            output.with_state(|state| {
+                state.focus_stack.stack.retain(|window| {
+                    window
+                        .wl_surface()
+                        .is_some_and(|surf| &surf != surface.wl_surface())
+                })
+            });
+        }
 
         let Some(window) = self.window_for_surface(surface.wl_surface()) else {
             return;
@@ -124,7 +135,9 @@ impl XdgShellHandler for State {
             let focus = self.focused_window(&output).map(FocusTarget::Window);
             if let Some(FocusTarget::Window(win)) = &focus {
                 tracing::debug!("Focusing on prev win");
+                // TODO:
                 self.space.raise_element(win, true);
+                self.z_index_stack.set_focus(win.clone());
                 if let WindowElement::Wayland(win) = &win {
                     win.toplevel().send_configure();
                 }
@@ -142,9 +155,8 @@ impl XdgShellHandler for State {
     fn new_popup(&mut self, surface: PopupSurface, mut positioner: PositionerState) {
         tracing::debug!(?positioner.constraint_adjustment, ?positioner.gravity);
         let output_rect = self
-            .focus_state
-            .focused_output
-            .as_ref()
+            .output_focus_stack
+            .current_focus()
             .or_else(|| self.space.outputs().next())
             .and_then(|op| self.space.output_geometry(op));
 

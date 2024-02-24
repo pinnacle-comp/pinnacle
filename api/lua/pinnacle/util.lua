@@ -58,6 +58,10 @@ local util = {}
 ---
 ---@return T[] responses The results of each request in the same order that they were in `requests`.
 function util.batch(requests)
+    if #requests == 0 then
+        return {}
+    end
+
     local loop = require("cqueues").new()
 
     local responses = {}

@@ -15,15 +15,13 @@
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
-    window::v0alpha1::{
-        window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
-        MoveToTagRequest, SetTagRequest,
-    },
+    v0alpha1::SetOrToggle,
     window::{
         self,
         v0alpha1::{
-            GetRequest, MoveGrabRequest, ResizeGrabRequest, SetFloatingRequest,
-            SetFullscreenRequest, SetMaximizedRequest,
+            window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
+            GetRequest, MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
+            SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
         },
     },
 };
@@ -280,9 +278,10 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(
-                set,
-            )),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
         }))
         .unwrap();
     }
@@ -301,7 +300,7 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(())),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
         .unwrap();
     }
@@ -320,9 +319,10 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(
-                set,
-            )),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
         }))
         .unwrap();
     }
@@ -341,7 +341,7 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(())),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
         .unwrap();
     }
@@ -363,9 +363,10 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(
-                set,
-            )),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
         }))
         .unwrap();
     }
@@ -387,9 +388,46 @@ impl WindowHandle {
         let mut client = self.window_client.clone();
         block_on_tokio(client.set_floating(SetFloatingRequest {
             window_id: Some(self.id),
-            set_or_toggle: Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(
-                (),
-            )),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
+        }))
+        .unwrap();
+    }
+
+    /// Focus or unfocus this window.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Unfocus the focused window
+    /// window.get_focused()?.set_focused(false);
+    /// ```
+    pub fn set_focused(&self, set: bool) {
+        let mut client = self.window_client.clone();
+        block_on_tokio(client.set_focused(SetFocusedRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
+        }))
+        .unwrap();
+    }
+
+    /// Toggle this window to and from focused.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Toggle the focused window to and from floating.
+    /// // Calling this a second time will do nothing because there won't
+    /// // be a focused window.
+    /// window.get_focused()?.toggle_focused();
+    /// ```
+    pub fn toggle_focused(&self) {
+        let mut client = self.window_client.clone();
+        block_on_tokio(client.set_focused(SetFocusedRequest {
+            window_id: Some(self.id),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
         .unwrap();
     }
@@ -432,7 +470,10 @@ impl WindowHandle {
         block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
-            set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Set(set)),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
         }))
         .unwrap();
     }
@@ -456,7 +497,7 @@ impl WindowHandle {
         block_on_tokio(client.set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
-            set_or_toggle: Some(window::v0alpha1::set_tag_request::SetOrToggle::Toggle(())),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
         .unwrap();
     }

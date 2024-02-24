@@ -165,7 +165,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         evt_loop_handle,
     )?;
 
-    state.focus_state.focused_output = Some(output.clone());
+    state.output_focus_stack.set_focus(output.clone());
 
     let winit = state.backend.winit_mut();
 
@@ -237,6 +237,7 @@ pub fn run_winit() -> anyhow::Result<()> {
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
         &mut state,
         |state| {
+            state.fixup_focus();
             state.space.refresh();
             state.popup_manager.cleanup();
             state
@@ -256,8 +257,6 @@ impl State {
         let full_redraw = &mut winit.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
-        self.focus_state.fix_up_focus(&mut self.space);
-
         if let CursorImageStatus::Surface(surface) = &self.cursor_status {
             if !surface.alive() {
                 self.cursor_status = CursorImageStatus::default_named();
@@ -269,11 +268,15 @@ impl State {
         let mut pointer_element = PointerElement::<GlesTexture>::new();
         pointer_element.set_status(self.cursor_status.clone());
 
+        // The z-index of these is determined by `state.fixup_focus()`, which is called at the end
+        // of every event loop cycle
+        let windows = self.space.elements().cloned().collect::<Vec<_>>();
+
         let output_render_elements = crate::render::generate_render_elements(
             output,
             winit.backend.renderer(),
             &self.space,
-            &self.focus_state.focus_stack,
+            &windows,
             self.pointer_location,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
@@ -316,7 +319,7 @@ impl State {
 
                 // Send frames to the cursor surface so it updates correctly
                 if let CursorImageStatus::Surface(surf) = &self.cursor_status {
-                    if let Some(op) = self.focus_state.focused_output.as_ref() {
+                    if let Some(op) = self.output_focus_stack.current_focus() {
                         send_frames_surface_tree(surf, op, time, Some(Duration::ZERO), |_, _| None);
                     }
                 }

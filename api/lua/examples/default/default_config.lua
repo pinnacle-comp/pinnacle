@@ -142,4 +142,11 @@ require("pinnacle").setup(function(Pinnacle)
             end
         end)
     end
+
+    -- Enable sloppy focus
+    Window.connect_signal({
+        pointer_enter = function(window)
+            window:set_focused(true)
+        end,
+    })
 end)

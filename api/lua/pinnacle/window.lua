@@ -16,6 +16,7 @@ local rpc_types = {
     SetFullscreen = {},
     SetMaximized = {},
     SetFloating = {},
+    SetFocused = {},
     MoveToTag = {},
     SetTag = {},
     MoveGrab = {},
@@ -46,6 +47,14 @@ local function build_grpc_request_params(method, data)
         data = data,
     }
 end
+
+local set_or_toggle = {
+    SET = 1,
+    [true] = 1,
+    UNSET = 2,
+    [false] = 2,
+    TOGGLE = 3,
+}
 
 ---@nodoc
 ---@class WindowHandleModule
@@ -412,7 +421,9 @@ end
 ---
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
-    client.unary_request(build_grpc_request_params("SetFullscreen", { window_id = self.id, set = fullscreen }))
+    client.unary_request(
+        build_grpc_request_params("SetFullscreen", { window_id = self.id, set_or_toggle = set_or_toggle[fullscreen] })
+    )
 end
 
 ---Toggle this window to and from fullscreen.
@@ -425,7 +436,9 @@ end
 ---end
 ---```
 function WindowHandle:toggle_fullscreen()
-    client.unary_request(build_grpc_request_params("SetFullscreen", { window_id = self.id, toggle = {} }))
+    client.unary_request(
+        build_grpc_request_params("SetFullscreen", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+    )
 end
 
 ---Set this window to maximized or not.
@@ -441,7 +454,9 @@ end
 ---
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
-    client.unary_request(build_grpc_request_params("SetMaximized", { window_id = self.id, set = maximized }))
+    client.unary_request(
+        build_grpc_request_params("SetMaximized", { window_id = self.id, set_or_toggle = set_or_toggle[maximized] })
+    )
 end
 
 ---Toggle this window to and from maximized.
@@ -454,7 +469,9 @@ end
 ---end
 ---```
 function WindowHandle:toggle_maximized()
-    client.unary_request(build_grpc_request_params("SetMaximized", { window_id = self.id, toggle = {} }))
+    client.unary_request(
+        build_grpc_request_params("SetMaximized", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+    )
 end
 
 ---Set this window to floating or not.
@@ -470,7 +487,9 @@ end
 ---
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
-    client.unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, set = floating }))
+    client.unary_request(
+        build_grpc_request_params("SetFloating", { window_id = self.id, set_or_toggle = set_or_toggle[floating] })
+    )
 end
 
 ---Toggle this window to and from floating.
@@ -483,7 +502,41 @@ end
 ---end
 ---```
 function WindowHandle:toggle_floating()
-    client.unary_request(build_grpc_request_params("SetFloating", { window_id = self.id, toggle = {} }))
+    client.unary_request(
+        build_grpc_request_params("SetFloating", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+    )
+end
+
+---Focus or unfocus this window.
+---
+---### Example
+---```lua
+---local focused = Window.get_focused()
+---if focused then
+---    focused:set_focused(false)
+---end
+---```
+---
+---@param focused boolean
+function WindowHandle:set_focused(focused)
+    client.unary_request(
+        build_grpc_request_params("SetFocused", { window_id = self.id, set_or_toggle = set_or_toggle[focused] })
+    )
+end
+
+---Toggle this window to and from focused.
+---
+---### Example
+---```lua
+---local focused = Window.get_focused()
+---if focused then
+---    focused:toggle_focused()
+---end
+---```
+function WindowHandle:toggle_focused()
+    client.unary_request(
+        build_grpc_request_params("SetFocused", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+    )
 end
 
 ---Move this window to the specified tag.
@@ -523,7 +576,12 @@ end
 ---@param tag TagHandle The tag to set or unset
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
-    client.unary_request(build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, set = set }))
+    client.unary_request(
+        build_grpc_request_params(
+            "SetTag",
+            { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle[set] }
+        )
+    )
 end
 
 ---Toggle the given tag on this window.
@@ -545,7 +603,12 @@ end
 ---
 ---@param tag TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
-    client.unary_request(build_grpc_request_params("SetTag", { window_id = self.id, tag_id = tag.id, toggle = {} }))
+    client.unary_request(
+        build_grpc_request_params(
+            "SetTag",
+            { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
+        )
+    )
 end
 
 ---@class WindowProperties

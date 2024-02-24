@@ -17,26 +17,22 @@ message SetGeometryRequest {
 
 message SetFullscreenRequest {
   optional uint32 window_id = 1;
-  oneof set_or_toggle {
-    bool set = 2;
-    google.protobuf.Empty toggle = 3;
-  }
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 2;
 }
 
 message SetMaximizedRequest {
   optional uint32 window_id = 1;
-  oneof set_or_toggle {
-    bool set = 2;
-    google.protobuf.Empty toggle = 3;
-  }
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 2;
 }
 
 message SetFloatingRequest {
   optional uint32 window_id = 1;
-  oneof set_or_toggle {
-    bool set = 2;
-    google.protobuf.Empty toggle = 3;
-  }
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 2;
+}
+
+message SetFocusedRequest {
+  optional uint32 window_id = 1;
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 2;
 }
 
 message MoveToTagRequest {
@@ -47,10 +43,7 @@ message MoveToTagRequest {
 message SetTagRequest {
   optional uint32 window_id = 1;
   optional uint32 tag_id = 2;
-  oneof set_or_toggle {
-    bool set = 3;
-    google.protobuf.Empty toggle = 4;
-  }
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 3;
 }
 
 message MoveGrabRequest {
@@ -119,6 +112,7 @@ service WindowService {
   rpc SetFullscreen(SetFullscreenRequest) returns (google.protobuf.Empty);
   rpc SetMaximized(SetMaximizedRequest) returns (google.protobuf.Empty);
   rpc SetFloating(SetFloatingRequest) returns (google.protobuf.Empty);
+  rpc SetFocused(SetFocusedRequest) returns (google.protobuf.Empty);
   rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
   rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);

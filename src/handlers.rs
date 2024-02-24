@@ -143,13 +143,15 @@ impl CompositorHandler for State {
             if is_mapped {
                 self.new_windows.retain(|win| win != &new_window);
                 self.windows.push(new_window.clone());
+                self.z_index_stack.set_focus(new_window.clone());
 
                 if let (Some(output), _) | (None, Some(output)) = (
-                    &self.focus_state.focused_output,
+                    self.output_focus_stack.current_focus(),
                     self.space.outputs().next(),
                 ) {
                     tracing::debug!("PLACING TOPLEVEL");
                     new_window.place_on_output(output);
+                    output.with_state(|state| state.focus_stack.set_focus(new_window.clone()));
                 }
 
                 self.space
@@ -157,7 +159,7 @@ impl CompositorHandler for State {
 
                 self.apply_window_rules(&new_window);
 
-                if let Some(focused_output) = self.focus_state.focused_output.clone() {
+                if let Some(focused_output) = self.output_focus_stack.current_focus().cloned() {
                     self.update_windows(&focused_output);
                     new_window.send_frame(
                         &focused_output,
@@ -414,14 +416,6 @@ impl SeatHandler for State {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
-        if let Some(win) =
-            focused.and_then(|focused| self.window_for_surface(&focused.wl_surface()?))
-        {
-            if let WindowElement::Wayland(win) = &win {
-                win.set_activated(true);
-            }
-            self.focus_state.set_focus(win);
-        }
         let focus_client = focused.and_then(|foc_target| {
             self.display_handle
                 .get_client(foc_target.wl_surface()?.id())
