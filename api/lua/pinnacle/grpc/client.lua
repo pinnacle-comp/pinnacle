@@ -136,19 +136,27 @@ function client.server_streaming_request(grpc_request_params, callback)
 
     client.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            -- Skip the 1-byte compressed flag and the 4-byte message length
             ---@diagnostic disable-next-line: redefined-local
-            local response_body = response_body:sub(6)
+            local response_body = response_body
 
-            ---@diagnostic disable-next-line: redefined-local
-            local success, obj = pcall(pb.decode, response_type, response_body)
-            if not success then
-                print(obj)
-                os.exit(1)
+            while response_body:len() > 0 do
+                local msg_len = string.unpack(">I4", response_body:sub(2, 5))
+
+                -- Skip the 1-byte compressed flag and the 4-byte message length
+                response_body = response_body:sub(6, 6 + msg_len - 1)
+
+                ---@diagnostic disable-next-line: redefined-local
+                local success, obj = pcall(pb.decode, response_type, response_body)
+                if not success then
+                    print(obj)
+                    os.exit(1)
+                end
+
+                local response = obj
+                callback(response)
+
+                response_body = response_body:sub(msg_len + 1)
             end
-
-            local response = obj
-            callback(response)
         end
 
         local trailers = stream:get_headers()
@@ -184,19 +192,27 @@ function client.bidirectional_streaming_request(grpc_request_params, callback)
 
     client.loop:wrap(function()
         for response_body in stream:each_chunk() do
-            -- Skip the 1-byte compressed flag and the 4-byte message length
             ---@diagnostic disable-next-line: redefined-local
-            local response_body = response_body:sub(6)
+            local response_body = response_body
 
-            ---@diagnostic disable-next-line: redefined-local
-            local success, obj = pcall(pb.decode, response_type, response_body)
-            if not success then
-                print(obj)
-                os.exit(1)
+            while response_body:len() > 0 do
+                local msg_len = string.unpack(">I4", response_body:sub(2, 5))
+
+                -- Skip the 1-byte compressed flag and the 4-byte message length
+                response_body = response_body:sub(6, 6 + msg_len - 1)
+
+                ---@diagnostic disable-next-line: redefined-local
+                local success, obj = pcall(pb.decode, response_type, response_body)
+                if not success then
+                    print(obj)
+                    os.exit(1)
+                end
+
+                local response = obj
+                callback(response)
+
+                response_body = response_body:sub(msg_len + 1)
             end
-
-            local response = obj
-            callback(response)
         end
 
         local trailers = stream:get_headers()
