@@ -56,22 +56,17 @@ impl State {
             return;
         };
 
-        let (windows_on_foc_tags, mut windows_not_on_foc_tags): (Vec<_>, _) =
-            output.with_state(|state| {
-                let focused_tags = state.focused_tags().collect::<Vec<_>>();
-                self.windows
-                    .iter()
-                    .filter(|win| !win.is_x11_override_redirect())
-                    .cloned()
-                    .partition(|win| {
-                        win.with_state(|state| {
-                            state.tags.iter().any(|tg| focused_tags.contains(&tg))
-                        })
-                    })
-            });
-
-        // Don't unmap windows that aren't on `output` (that would clear all other monitors)
-        windows_not_on_foc_tags.retain(|win| win.output(self) == Some(output.clone()));
+        let windows_on_foc_tags = output.with_state(|state| {
+            let focused_tags = state.focused_tags().collect::<Vec<_>>();
+            self.windows
+                .iter()
+                .filter(|win| !win.is_x11_override_redirect())
+                .filter(|win| {
+                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
 
         let tiled_windows = windows_on_foc_tags
             .iter()
@@ -124,14 +119,13 @@ impl State {
                     WindowElement::Wayland(wl_win) => {
                         let pending =
                             compositor::with_states(wl_win.toplevel().wl_surface(), |states| {
-                                let lock = states
+                                states
                                     .data_map
                                     .get::<XdgToplevelSurfaceData>()
                                     .expect("XdgToplevelSurfaceData wasn't in surface's data map")
                                     .lock()
-                                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>");
-
-                                lock.has_pending_changes()
+                                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                                    .has_pending_changes()
                             });
 
                         if pending {
@@ -158,6 +152,8 @@ impl State {
         for (loc, window) in non_pending_wins {
             self.space.map_element(window, loc, false);
         }
+
+        self.fixup_focus();
     }
 }
 

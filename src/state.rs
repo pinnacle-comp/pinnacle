@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor, focus::FocusState,
+    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor, focus::FocusStack,
     grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
@@ -22,8 +23,10 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
-        selection::data_device::DataDeviceState,
-        selection::{primary_selection::PrimarySelectionState, wlr_data_control::DataControlState},
+        selection::{
+            data_device::DataDeviceState, primary_selection::PrimarySelectionState,
+            wlr_data_control::DataControlState,
+        },
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -67,8 +70,9 @@ pub struct State {
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
-    /// Keeps track of the focus stack and focused output
-    pub focus_state: FocusState,
+
+    pub output_focus_stack: FocusStack<Output>,
+    pub z_index_stack: FocusStack<WindowElement>,
 
     pub popup_manager: PopupManager,
 
@@ -246,7 +250,9 @@ impl State {
             data_control_state,
 
             input_state: InputState::new(),
-            focus_state: FocusState::new(),
+
+            output_focus_stack: FocusStack::default(),
+            z_index_stack: FocusStack::default(),
 
             config: Config::default(),
 

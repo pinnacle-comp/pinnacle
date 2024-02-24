@@ -22,14 +22,14 @@ use pinnacle_api_defs::pinnacle::{
             SetLayoutRequest, SwitchToRequest,
         },
     },
-    v0alpha1::{pinnacle_service_server, Geometry, QuitRequest},
+    v0alpha1::{pinnacle_service_server, Geometry, QuitRequest, SetOrToggle},
     window::{
         self,
         v0alpha1::{
             window_service_server, AddWindowRuleRequest, CloseRequest, FullscreenOrMaximized,
             MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
-            SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
-            WindowRule, WindowRuleCondition,
+            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
+            SetTagRequest, WindowRule, WindowRuleCondition,
         },
     },
 };
@@ -682,19 +682,22 @@ impl tag_service_server::TagService for TagService {
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        let set_or_toggle = match request.set_or_toggle {
-            Some(tag::v0alpha1::set_active_request::SetOrToggle::Set(set)) => Some(set),
-            Some(tag::v0alpha1::set_active_request::SetOrToggle::Toggle(_)) => None,
-            None => return Err(Status::invalid_argument("unspecified set or toggle")),
-        };
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(tag) = tag_id.tag(state) else {
                 return;
             };
+
             match set_or_toggle {
-                Some(set) => tag.set_active(set),
-                None => tag.set_active(!tag.active()),
+                SetOrToggle::Set => tag.set_active(true),
+                SetOrToggle::Unset => tag.set_active(false),
+                SetOrToggle::Toggle => tag.set_active(!tag.active()),
+                SetOrToggle::Unspecified => unreachable!(),
             }
 
             let Some(output) = tag.output(state) else {
@@ -1057,9 +1060,8 @@ impl output_service_server::OutputService for OutputService {
             let y = output.as_ref().map(|output| output.current_location().y);
 
             let focused = state
-                .focus_state
-                .focused_output
-                .as_ref()
+                .output_focus_stack
+                .current_focus()
                 .and_then(|foc_op| output.as_ref().map(|op| op == foc_op));
 
             let tag_ids = output
@@ -1197,25 +1199,30 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let set_or_toggle = match request.set_or_toggle {
-            Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Set(set)) => Some(set),
-            Some(window::v0alpha1::set_fullscreen_request::SetOrToggle::Toggle(_)) => None,
-            None => return Err(Status::invalid_argument("unspecified set or toggle")),
-        };
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
+
             match set_or_toggle {
-                Some(set) => {
-                    let is_fullscreen =
-                        window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen());
-                    if set != is_fullscreen {
+                SetOrToggle::Set => {
+                    if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
                         window.toggle_fullscreen();
                     }
                 }
-                None => window.toggle_fullscreen(),
+                SetOrToggle::Unset => {
+                    if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+                        window.toggle_fullscreen();
+                    }
+                }
+                SetOrToggle::Toggle => window.toggle_fullscreen(),
+                SetOrToggle::Unspecified => unreachable!(),
             }
 
             let Some(output) = window.output(state) else {
@@ -1240,25 +1247,30 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let set_or_toggle = match request.set_or_toggle {
-            Some(window::v0alpha1::set_maximized_request::SetOrToggle::Set(set)) => Some(set),
-            Some(window::v0alpha1::set_maximized_request::SetOrToggle::Toggle(_)) => None,
-            None => return Err(Status::invalid_argument("unspecified set or toggle")),
-        };
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
+
             match set_or_toggle {
-                Some(set) => {
-                    let is_maximized =
-                        window.with_state(|state| state.fullscreen_or_maximized.is_maximized());
-                    if set != is_maximized {
+                SetOrToggle::Set => {
+                    if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
                         window.toggle_maximized();
                     }
                 }
-                None => window.toggle_maximized(),
+                SetOrToggle::Unset => {
+                    if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+                        window.toggle_maximized();
+                    }
+                }
+                SetOrToggle::Toggle => window.toggle_maximized(),
+                SetOrToggle::Unspecified => unreachable!(),
             }
 
             let Some(output) = window.output(state) else {
@@ -1283,30 +1295,145 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let set_or_toggle = match request.set_or_toggle {
-            Some(window::v0alpha1::set_floating_request::SetOrToggle::Set(set)) => Some(set),
-            Some(window::v0alpha1::set_floating_request::SetOrToggle::Toggle(_)) => None,
-            None => return Err(Status::invalid_argument("unspecified set or toggle")),
-        };
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else {
                 return;
             };
+
             match set_or_toggle {
-                Some(set) => {
-                    let is_floating =
-                        window.with_state(|state| state.floating_or_tiled.is_floating());
-                    if set != is_floating {
+                SetOrToggle::Set => {
+                    if !window.with_state(|state| state.floating_or_tiled.is_floating()) {
                         window.toggle_floating();
                     }
                 }
-                None => window.toggle_floating(),
+                SetOrToggle::Unset => {
+                    if window.with_state(|state| state.floating_or_tiled.is_floating()) {
+                        window.toggle_floating();
+                    }
+                }
+                SetOrToggle::Toggle => window.toggle_floating(),
+                SetOrToggle::Unspecified => unreachable!(),
             }
 
             let Some(output) = window.output(state) else {
                 return;
             };
+
+            state.update_windows(&output);
+            state.schedule_render(&output);
+        })
+        .await
+    }
+
+    async fn set_focused(
+        &self,
+        request: Request<SetFocusedRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(window) = window_id.window(state) else {
+                return;
+            };
+
+            let Some(output) = window.output(state) else {
+                return;
+            };
+
+            //     if !matches!(
+            //         &focus,
+            //         FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
+            //     ) {
+            //         keyboard.set_focus(self, Some(focus.clone()), serial);
+            //     }
+            //
+            //     self.space.elements().for_each(|window| {
+            //         if let WindowElement::Wayland(window) = window {
+            //             window.toplevel().send_configure();
+            //         }
+            //     });
+            // } else {
+            //     self.space.elements().for_each(|window| {
+            //         window.set_activate(false);
+            //         if let WindowElement::Wayland(window) = window {
+            //             window.toplevel().send_configure();
+            //         }
+            //     });
+            //     keyboard.set_focus(self, None, serial);
+            // }
+
+            for win in state.space.elements() {
+                win.set_activate(false);
+            }
+
+            match set_or_toggle {
+                SetOrToggle::Set => {
+                    window.set_activate(true);
+                    output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                    state.output_focus_stack.set_focus(output.clone());
+                    if let Some(keyboard) = state.seat.get_keyboard() {
+                        keyboard.set_focus(
+                            state,
+                            Some(FocusTarget::Window(window)),
+                            SERIAL_COUNTER.next_serial(),
+                        );
+                    }
+                }
+                SetOrToggle::Unset => {
+                    if output.with_state(|state| state.focus_stack.current_focus() == Some(&window))
+                    {
+                        output.with_state(|state| state.focus_stack.unset_focus());
+                        if let Some(keyboard) = state.seat.get_keyboard() {
+                            keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
+                        }
+                    }
+                }
+                SetOrToggle::Toggle => {
+                    if output.with_state(|state| state.focus_stack.current_focus() == Some(&window))
+                    {
+                        output.with_state(|state| state.focus_stack.unset_focus());
+                        if let Some(keyboard) = state.seat.get_keyboard() {
+                            keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
+                        }
+                    } else {
+                        window.set_activate(true);
+                        output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                        state.output_focus_stack.set_focus(output.clone());
+                        if let Some(keyboard) = state.seat.get_keyboard() {
+                            keyboard.set_focus(
+                                state,
+                                Some(FocusTarget::Window(window)),
+                                SERIAL_COUNTER.next_serial(),
+                            );
+                        }
+                    }
+                }
+                SetOrToggle::Unspecified => unreachable!(),
+            }
+
+            for window in state.space.elements() {
+                if let WindowElement::Wayland(window) = window {
+                    window.toplevel().send_configure();
+                }
+            }
 
             state.update_windows(&output);
             state.schedule_render(&output);
@@ -1360,11 +1487,11 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
         );
 
-        let set_or_toggle = match request.set_or_toggle {
-            Some(window::v0alpha1::set_tag_request::SetOrToggle::Set(set)) => Some(set),
-            Some(window::v0alpha1::set_tag_request::SetOrToggle::Toggle(_)) => None,
-            None => return Err(Status::invalid_argument("unspecified set or toggle")),
-        };
+        let set_or_toggle = request.set_or_toggle();
+
+        if set_or_toggle == SetOrToggle::Unspecified {
+            return Err(Status::invalid_argument("unspecified set or toggle"));
+        }
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
@@ -1372,25 +1499,21 @@ impl window_service_server::WindowService for WindowService {
 
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
-                Some(set) => {
-                    if set {
-                        window.with_state(|state| {
-                            state.tags.retain(|tg| tg != &tag);
-                            state.tags.push(tag.clone());
-                        })
-                    } else {
-                        window.with_state(|state| {
-                            state.tags.retain(|tg| tg != &tag);
-                        })
-                    }
-                }
-                None => window.with_state(|state| {
+                SetOrToggle::Set => window.with_state(|state| {
+                    state.tags.retain(|tg| tg != &tag);
+                    state.tags.push(tag.clone());
+                }),
+                SetOrToggle::Unset => window.with_state(|state| {
+                    state.tags.retain(|tg| tg != &tag);
+                }),
+                SetOrToggle::Toggle => window.with_state(|state| {
                     if !state.tags.contains(&tag) {
                         state.tags.push(tag.clone());
                     } else {
                         state.tags.retain(|tg| tg != &tag);
                     }
                 }),
+                SetOrToggle::Unspecified => unreachable!(),
             }
 
             let Some(output) = tag.output(state) else { return };

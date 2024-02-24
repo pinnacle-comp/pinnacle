@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{LayerSurface, PopupKind, Space},
+    desktop::{LayerSurface, PopupKind},
     input::{
         keyboard::KeyboardTarget,
         pointer::{MotionEvent, PointerTarget},
@@ -18,42 +18,42 @@ use crate::{
     window::WindowElement,
 };
 
-#[derive(Default)]
-pub struct FocusState {
-    /// The ordering of window focus
-    pub focus_stack: Vec<WindowElement>,
-    /// The focused output, currently defined to be the one the pointer is on.
-    pub focused_output: Option<Output>,
-}
-
 impl State {
     /// Get the currently focused window on `output`
     /// that isn't an override redirect window, if any.
     pub fn focused_window(&mut self, output: &Output) -> Option<WindowElement> {
-        self.focus_state.focus_stack.retain(|win| win.alive());
+        output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
 
-        let mut windows = self.focus_state.focus_stack.iter().rev().filter(|win| {
-            let win_tags = win.with_state(|state| state.tags.clone());
-            let output_tags =
-                output.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
-
-            win_tags
+        let windows = output.with_state(|state| {
+            state
+                .focus_stack
+                .stack
                 .iter()
-                .any(|win_tag| output_tags.iter().any(|op_tag| win_tag == op_tag))
+                .rev()
+                .filter(|win| {
+                    let win_tags = win.with_state(|state| state.tags.clone());
+                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+
+                    win_tags
+                        .iter()
+                        .any(|win_tag| output_tags.iter().any(|op_tag| win_tag == op_tag))
+                })
+                .cloned()
+                .collect::<Vec<_>>()
         });
 
-        windows.find(|win| !win.is_x11_override_redirect()).cloned()
+        windows
+            .into_iter()
+            .find(|win| !win.is_x11_override_redirect())
     }
 
-    /// Update the focus. This will raise the current focus and activate it,
-    /// as well as setting the keyboard focus to it.
+    /// Update the keyboard focus.
     pub fn update_focus(&mut self, output: &Output) {
         let current_focus = self.focused_window(output);
 
         if let Some(win) = &current_focus {
             assert!(!win.is_x11_override_redirect());
 
-            self.space.raise_element(win, true);
             if let WindowElement::Wayland(w) = win {
                 w.toplevel().send_configure();
             }
@@ -64,30 +64,49 @@ impl State {
             current_focus.map(|win| win.into()),
             SERIAL_COUNTER.next_serial(),
         );
+    }
 
-        // TODO: if there already is a visible focused window, don't do anything
+    pub fn fixup_focus(&mut self) {
+        for win in self.z_index_stack.stack.iter() {
+            self.space.raise_element(win, false);
+        }
     }
 }
 
-impl FocusState {
-    pub fn new() -> Self {
-        Default::default()
-    }
+/// A vector of windows, with the last one being the one in focus and the first
+/// being the one at the bottom of the focus stack.
+#[derive(Debug)]
+pub struct FocusStack<T> {
+    pub stack: Vec<T>,
+    focused: bool,
+}
 
-    /// Set the currently focused window.
-    pub fn set_focus(&mut self, window: WindowElement) {
-        self.focus_stack.retain(|win| win != &window);
-        self.focus_stack.push(window);
-    }
-
-    /// Fix focus layering for all windows in the `focus_stack`.
-    ///
-    /// This will call `space.raise_element` on all windows from back
-    /// to front to correct their z locations.
-    pub fn fix_up_focus(&self, space: &mut Space<WindowElement>) {
-        for win in self.focus_stack.iter() {
-            space.raise_element(win, false);
+impl<T> Default for FocusStack<T> {
+    fn default() -> Self {
+        Self {
+            stack: Default::default(),
+            focused: Default::default(),
         }
+    }
+}
+
+impl<T: PartialEq> FocusStack<T> {
+    /// Set `focus` to be focused.
+    ///
+    /// If it's already in the stack, it will be removed then pushed.
+    /// If it isn't, it will just be pushed.
+    pub fn set_focus(&mut self, focus: T) {
+        self.stack.retain(|foc| foc != &focus);
+        self.stack.push(focus);
+        self.focused = true;
+    }
+
+    pub fn unset_focus(&mut self) {
+        self.focused = false;
+    }
+
+    pub fn current_focus(&self) -> Option<&T> {
+        self.focused.then(|| self.stack.last())?
     }
 }
 

@@ -3,13 +3,11 @@ syntax = "proto2";
 package pinnacle.tag.v0alpha1;
 
 import "google/protobuf/empty.proto";
+import "pinnacle/v0alpha1/pinnacle.proto";
 
 message SetActiveRequest {
   optional uint32 tag_id = 1;
-  oneof set_or_toggle {
-    bool set = 2;
-    google.protobuf.Empty toggle = 3;
-  }
+  optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 2;
 }
 
 message SwitchToRequest {

@@ -63,7 +63,7 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{Clock, DeviceFd, IsAlive, Logical, Monotonic, Point, Transform},
+    utils::{Clock, DeviceFd, Logical, Monotonic, Point, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 use smithay_drm_extras::{
@@ -522,8 +522,6 @@ pub fn run_udev() -> anyhow::Result<()> {
                 .display_handle
                 .flush_clients()
                 .expect("failed to flush_clients");
-
-            state.focus_state.fix_up_focus(&mut state.space);
         },
     )?;
 
@@ -874,7 +872,7 @@ impl State {
         );
         let global = output.create_global::<State>(&udev.display_handle);
 
-        self.focus_state.focused_output = Some(output.clone());
+        self.output_focus_stack.set_focus(output.clone());
 
         let x = self.space.outputs().fold(0, |acc, o| {
             let Some(geo) = self.space.output_geometry(o) else {
@@ -1254,13 +1252,14 @@ impl State {
                 texture
             });
 
-        let windows = self
-            .focus_state
-            .focus_stack
-            .iter()
-            .filter(|win| win.alive())
-            .cloned()
-            .collect::<Vec<_>>();
+        // let windows = self
+        //     .output_focus_stack
+        //     .stack
+        //     .iter()
+        //     .flat_map(|op| op.with_state(|state| state.focus_stack.stack.clone()))
+        //     .collect::<Vec<_>>();
+
+        let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
         let result = render_surface(
             surface,

@@ -18,6 +18,7 @@ function protobuf.build_protos()
         PINNACLE_PROTO_DIR .. "/pinnacle/process/" .. version .. "/process.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/signal/" .. version .. "/signal.proto",
+        PINNACLE_PROTO_DIR .. "/google/protobuf/empty.proto",
     }
 
     local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "

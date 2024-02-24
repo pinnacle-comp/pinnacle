@@ -36,12 +36,15 @@ use std::{
 
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
-use pinnacle_api_defs::pinnacle::tag::{
-    self,
-    v0alpha1::{
-        tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
-        SetLayoutRequest, SwitchToRequest,
+use pinnacle_api_defs::pinnacle::{
+    tag::{
+        self,
+        v0alpha1::{
+            tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
+            SetLayoutRequest, SwitchToRequest,
+        },
     },
+    v0alpha1::SetOrToggle,
 };
 use tonic::transport::Channel;
 
@@ -451,7 +454,10 @@ impl TagHandle {
         let mut client = self.tag_client.clone();
         block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
-            set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Set(set)),
+            set_or_toggle: Some(match set {
+                true => SetOrToggle::Set,
+                false => SetOrToggle::Unset,
+            } as i32),
         }))
         .unwrap();
     }
@@ -479,7 +485,7 @@ impl TagHandle {
         let mut client = self.tag_client.clone();
         block_on_tokio(client.set_active(SetActiveRequest {
             tag_id: Some(self.id),
-            set_or_toggle: Some(tag::v0alpha1::set_active_request::SetOrToggle::Toggle(())),
+            set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
         .unwrap();
     }

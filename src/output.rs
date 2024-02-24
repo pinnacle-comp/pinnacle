@@ -5,8 +5,10 @@ use std::cell::RefCell;
 use smithay::output::Output;
 
 use crate::{
+    focus::FocusStack,
     state::{State, WithState},
     tag::Tag,
+    window::WindowElement,
 };
 
 /// A unique identifier for an output.
@@ -31,6 +33,7 @@ impl OutputName {
 #[derive(Default, Debug)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
+    pub focus_stack: FocusStack<WindowElement>,
 }
 
 impl WithState for Output {

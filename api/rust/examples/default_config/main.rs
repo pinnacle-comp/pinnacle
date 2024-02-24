@@ -1,3 +1,4 @@
+use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
@@ -148,4 +149,9 @@ async fn main() {
             }
         });
     }
+
+    // Enable sloppy focus
+    window.connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
+        win.set_focused(true);
+    })));
 }

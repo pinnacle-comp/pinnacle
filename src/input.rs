@@ -21,7 +21,7 @@ use smithay::{
     },
     reexports::input::{self, Led},
     utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::{seat::WaylandFocus, shell::wlr_layer},
+    wayland::shell::wlr_layer,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use xkbcommon::xkb::Keysym;
@@ -169,16 +169,20 @@ impl State {
 
         let layers = layer_map_for_output(output);
 
-        let top_fullscreen_window = self.focus_state.focus_stack.iter().rev().find(|win| {
-            win.with_state(|state| {
-                state.fullscreen_or_maximized.is_fullscreen()
-                    && output.with_state(|op_state| {
-                        op_state
-                            .focused_tags()
-                            .any(|op_tag| state.tags.contains(op_tag))
-                    })
-            })
-        });
+        let top_fullscreen_window = output
+            .with_state(|state| state.focus_stack.stack.clone())
+            .into_iter()
+            .rev()
+            .find(|win| {
+                win.with_state(|state| {
+                    state.fullscreen_or_maximized.is_fullscreen()
+                        && output.with_state(|op_state| {
+                            op_state
+                                .focused_tags()
+                                .any(|op_tag| state.tags.contains(op_tag))
+                        })
+                })
+            });
 
         if let Some(window) = top_fullscreen_window {
             Some((FocusTarget::from(window.clone()), output_geo.loc))
@@ -331,28 +335,19 @@ impl State {
         // unfocus on windows.
         if button_state == ButtonState::Pressed {
             if let Some((focus, _)) = self.focus_target_under(pointer_loc) {
-                // Move window to top of stack.
-                if let FocusTarget::Window(window) = &focus {
-                    self.space.raise_element(window, true);
-                    if let WindowElement::X11(surface) = &window {
-                        self.xwm
-                            .as_mut()
-                            .expect("no xwm")
-                            .raise_window(surface)
-                            .expect("failed to raise x11 win");
-                        surface
-                            .set_activated(true)
-                            .expect("failed to set x11 win to activated");
-                    }
-                }
-
-                tracing::debug!("wl_surface focus is some? {}", focus.wl_surface().is_some());
-
                 // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
                 // |     to wonky things like right-click menus not correctly getting pointer
                 // |     clicks or showing up at all.
 
                 // TODO: use update_keyboard_focus from anvil
+
+                if let FocusTarget::Window(window) = &focus {
+                    self.space.raise_element(window, true);
+                    self.z_index_stack.set_focus(window.clone());
+                    if let Some(output) = window.output(self) {
+                        output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                    }
+                }
 
                 if !matches!(
                     &focus,
@@ -361,30 +356,23 @@ impl State {
                     keyboard.set_focus(self, Some(focus.clone()), serial);
                 }
 
-                self.space.elements().for_each(|window| {
+                for window in self.space.elements() {
                     if let WindowElement::Wayland(window) = window {
                         window.toplevel().send_configure();
                     }
-                });
-
-                if let FocusTarget::Window(window) = &focus {
-                    tracing::debug!("setting keyboard focus to {:?}", window.class());
                 }
             } else {
-                self.space.elements().for_each(|window| match window {
-                    WindowElement::Wayland(window) => {
-                        window.set_activated(false);
-                        window.toplevel().send_configure();
-                    }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_activated(false)
-                            .expect("failed to deactivate x11 win");
-                        // INFO: do i need to configure this?
-                    }
-                    WindowElement::X11OverrideRedirect(_) => (),
-                    _ => unreachable!(),
-                });
+                if let Some(focused_op) = self.output_focus_stack.current_focus() {
+                    focused_op.with_state(|state| {
+                        state.focus_stack.unset_focus();
+                        for window in state.focus_stack.stack.iter() {
+                            window.set_activate(false);
+                            if let WindowElement::Wayland(window) = window {
+                                window.toplevel().send_configure();
+                            }
+                        }
+                    });
+                }
                 keyboard.set_focus(self, None, serial);
             }
         };
@@ -488,7 +476,7 @@ impl State {
 
         self.pointer_location = pointer_loc;
 
-        match self.focus_state.focused_output {
+        match self.output_focus_stack.current_focus() {
             Some(_) => {
                 if let Some(output) = self
                     .space
@@ -496,11 +484,13 @@ impl State {
                     .next()
                     .cloned()
                 {
-                    self.focus_state.focused_output = Some(output);
+                    self.output_focus_stack.set_focus(output);
                 }
             }
             None => {
-                self.focus_state.focused_output = self.space.outputs().next().cloned();
+                if let Some(output) = self.space.outputs().next().cloned() {
+                    self.output_focus_stack.set_focus(output);
+                }
             }
         }
 
@@ -524,7 +514,8 @@ impl State {
         // clamp to screen limits
         // this event is never generated by winit
         self.pointer_location = self.clamp_coords(self.pointer_location);
-        match self.focus_state.focused_output {
+
+        match self.output_focus_stack.current_focus() {
             Some(_) => {
                 if let Some(output) = self
                     .space
@@ -532,11 +523,13 @@ impl State {
                     .next()
                     .cloned()
                 {
-                    self.focus_state.focused_output = Some(output);
+                    self.output_focus_stack.set_focus(output);
                 }
             }
             None => {
-                self.focus_state.focused_output = self.space.outputs().next().cloned();
+                if let Some(output) = self.space.outputs().next().cloned() {
+                    self.output_focus_stack.set_focus(output);
+                }
             }
         }
 
@@ -565,13 +558,9 @@ impl State {
 
             pointer.frame(self);
 
-            self.schedule_render(
-                &self
-                    .focus_state
-                    .focused_output
-                    .clone()
-                    .expect("no focused output"),
-            );
+            if let Some(output) = self.output_focus_stack.current_focus().cloned() {
+                self.schedule_render(&output);
+            }
         }
     }
 }

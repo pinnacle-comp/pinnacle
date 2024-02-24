@@ -49,17 +49,15 @@ impl XwmHandler for State {
             .expect("called element_bbox on an unmapped window");
 
         let output_size = self
-            .focus_state
-            .focused_output
-            .as_ref()
+            .output_focus_stack
+            .current_focus()
             .and_then(|op| self.space.output_geometry(op))
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
         let output_loc = self
-            .focus_state
-            .focused_output
-            .as_ref()
+            .output_focus_stack
+            .current_focus()
             .map(|op| op.current_location())
             .unwrap_or((0, 0).into());
 
@@ -88,7 +86,7 @@ impl XwmHandler for State {
         // TODO: ssd
 
         if let (Some(output), _) | (None, Some(output)) = (
-            &self.focus_state.focused_output,
+            self.output_focus_stack.current_focus(),
             self.space.outputs().next(),
         ) {
             window.place_on_output(output);
@@ -100,26 +98,27 @@ impl XwmHandler for State {
             });
         }
 
+        // TODO: will an unmap -> map duplicate the window
         self.windows.push(window.clone());
-
-        self.focus_state.set_focus(window.clone());
+        self.z_index_stack.set_focus(window.clone());
 
         self.apply_window_rules(&window);
 
         if let Some(output) = window.output(self) {
+            output.with_state(|state| state.focus_stack.set_focus(window.clone()));
             self.update_windows(&output);
         }
 
         self.loop_handle.insert_idle(move |state| {
             state
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard") // FIXME: actually handle error
-                    .set_focus(
-                        state,
-                        Some(FocusTarget::Window(window)),
-                        SERIAL_COUNTER.next_serial(),
-                    );
+                .seat
+                .get_keyboard()
+                .expect("Seat had no keyboard") // FIXME: actually handle error
+                .set_focus(
+                    state,
+                    Some(FocusTarget::Window(window)),
+                    SERIAL_COUNTER.next_serial(),
+                );
         });
     }
 
@@ -131,24 +130,30 @@ impl XwmHandler for State {
         let loc = window.geometry().loc;
 
         let window = WindowElement::X11OverrideRedirect(window);
+
         self.windows.push(window.clone());
+        self.z_index_stack.set_focus(window.clone());
 
         if let (Some(output), _) | (None, Some(output)) = (
-            &self.focus_state.focused_output,
+            self.output_focus_stack.current_focus(),
             self.space.outputs().next(),
         ) {
             window.place_on_output(output);
+            output.with_state(|state| state.focus_stack.set_focus(window.clone()))
         }
 
-        self.space.map_element(window.clone(), loc, true);
-        self.focus_state.set_focus(window);
+        self.space.map_element(window, loc, true);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        self.focus_state.focus_stack.retain(|win| {
-            win.wl_surface()
-                .is_some_and(|surf| Some(surf) != window.wl_surface())
-        });
+        for output in self.space.outputs() {
+            output.with_state(|state| {
+                state.focus_stack.stack.retain(|win| {
+                    win.wl_surface()
+                        .is_some_and(|surf| Some(surf) != window.wl_surface())
+                })
+            });
+        }
 
         let win = self
             .space
@@ -157,6 +162,12 @@ impl XwmHandler for State {
             .cloned();
 
         if let Some(win) = win {
+            self.windows
+                .retain(|elem| win.wl_surface() != elem.wl_surface());
+            self.z_index_stack
+                .stack
+                .retain(|elem| win.wl_surface() != elem.wl_surface());
+
             self.space.unmap_elem(&win);
 
             if let Some(output) = win.output(self) {
@@ -166,6 +177,7 @@ impl XwmHandler for State {
 
                 if let Some(FocusTarget::Window(win)) = &focus {
                     self.space.raise_element(win, true);
+                    self.z_index_stack.set_focus(win.clone());
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }
@@ -187,10 +199,14 @@ impl XwmHandler for State {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
-        self.focus_state.focus_stack.retain(|win| {
-            win.wl_surface()
-                .is_some_and(|surf| Some(surf) != window.wl_surface())
-        });
+        for output in self.space.outputs() {
+            output.with_state(|state| {
+                state.focus_stack.stack.retain(|win| {
+                    win.wl_surface()
+                        .is_some_and(|surf| Some(surf) != window.wl_surface())
+                })
+            });
+        }
 
         let win = self
             .windows
@@ -213,6 +229,10 @@ impl XwmHandler for State {
             self.windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
+            self.z_index_stack
+                .stack
+                .retain(|elem| win.wl_surface() != elem.wl_surface());
+
             if let Some(output) = win.output(self) {
                 self.update_windows(&output);
 
@@ -220,6 +240,7 @@ impl XwmHandler for State {
 
                 if let Some(FocusTarget::Window(win)) = &focus {
                     self.space.raise_element(win, true);
+                    self.z_index_stack.set_focus(win.clone());
                     if let WindowElement::Wayland(win) = &win {
                         win.toplevel().send_configure();
                     }

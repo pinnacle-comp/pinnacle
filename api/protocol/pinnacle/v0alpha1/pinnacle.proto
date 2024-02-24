@@ -11,6 +11,14 @@ message Geometry {
   optional int32 height = 4;
 }
 
+// NOTE TO SELF: If you change this you MUST change the mappings in the Lua API
+enum SetOrToggle {
+  SET_OR_TOGGLE_UNSPECIFIED = 0;
+  SET_OR_TOGGLE_SET = 1;
+  SET_OR_TOGGLE_UNSET = 2;
+  SET_OR_TOGGLE_TOGGLE = 3;
+}
+
 message QuitRequest {}
 
 service PinnacleService {
