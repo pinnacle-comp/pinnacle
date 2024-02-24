@@ -1,3 +1,5 @@
+pub mod signal;
+
 use std::{ffi::OsString, num::NonZeroU32, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
@@ -10,9 +12,7 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::{
         self,
-        v0alpha1::{
-            output_service_server, ConnectForAllRequest, ConnectForAllResponse, SetLocationRequest,
-        },
+        v0alpha1::{output_service_server, SetLocationRequest},
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     tag::{
@@ -44,9 +44,10 @@ use sysinfo::ProcessRefreshKind;
 use tokio::{
     io::AsyncBufReadExt,
     sync::mpsc::{unbounded_channel, UnboundedSender},
+    task::JoinHandle,
 };
-use tokio_stream::Stream;
-use tonic::{Request, Response, Status};
+use tokio_stream::{Stream, StreamExt};
+use tonic::{Request, Response, Status, Streaming};
 
 use crate::{
     config::ConnectorSavedState,
@@ -116,6 +117,46 @@ where
 
     fn_sender
         .send(f)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    Ok(Response::new(Box::pin(receiver_stream)))
+}
+
+fn run_bidirectional_streaming<F1, F2, I, O>(
+    fn_sender: StateFnSender,
+    mut in_stream: Streaming<I>,
+    with_client_request: F1,
+    with_out_stream: F2,
+) -> Result<Response<ResponseStream<O>>, Status>
+where
+    F1: Fn(&mut State, Result<I, Status>) + Clone + Send + 'static,
+    F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>, JoinHandle<()>) + Send + 'static,
+    I: Send + 'static,
+    O: Send + 'static,
+{
+    let (sender, receiver) = unbounded_channel::<Result<O, Status>>();
+
+    let fn_sender_clone = fn_sender.clone();
+
+    let with_in_stream = async move {
+        while let Some(request) = in_stream.next().await {
+            let with_client_request = with_client_request.clone();
+            // TODO: handle error
+            let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
+                with_client_request(state, request);
+            }));
+        }
+    };
+
+    let join_handle = tokio::spawn(with_in_stream);
+
+    let with_out_stream = Box::new(|state: &mut State| {
+        with_out_stream(state, sender, join_handle);
+    });
+
+    fn_sender
+        .send(with_out_stream)
         .map_err(|_| Status::internal("failed to execute request"))?;
 
     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
@@ -690,6 +731,15 @@ impl tag_service_server::TagService for TagService {
             state.update_windows(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
+
+            state.signal_state.layout.signal(|buffer| {
+                buffer.push_back(
+                    pinnacle_api_defs::pinnacle::signal::v0alpha1::LayoutResponse {
+                        window_ids: vec![1, 2, 3],
+                        tag_id: Some(1),
+                    },
+                );
+            });
         })
         .await
     }
@@ -892,8 +942,6 @@ impl OutputService {
 
 #[tonic::async_trait]
 impl output_service_server::OutputService for OutputService {
-    type ConnectForAllStream = ResponseStream<ConnectForAllResponse>;
-
     async fn set_location(
         &self,
         request: Request<SetLocationRequest>,
@@ -943,18 +991,6 @@ impl output_service_server::OutputService for OutputService {
             state.update_windows(&output);
         })
         .await
-    }
-
-    // TODO: remove this and integrate it into a signal/event system
-    async fn connect_for_all(
-        &self,
-        _request: Request<ConnectForAllRequest>,
-    ) -> Result<Response<Self::ConnectForAllStream>, Status> {
-        tracing::trace!("OutputService.connect_for_all");
-
-        run_server_streaming(&self.sender, move |state, sender| {
-            state.config.output_callback_senders.push(sender);
-        })
     }
 
     async fn get(
@@ -1075,7 +1111,7 @@ impl window_service_server::WindowService for WindowService {
     async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1104,7 +1140,7 @@ impl window_service_server::WindowService for WindowService {
 
         tracing::info!(request = ?request);
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1155,7 +1191,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1198,7 +1234,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1241,7 +1277,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1284,7 +1320,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1312,7 +1348,7 @@ impl window_service_server::WindowService for WindowService {
     async fn set_tag(&self, request: Request<SetTagRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
@@ -1468,12 +1504,7 @@ impl window_service_server::WindowService for WindowService {
             let window_ids = state
                 .windows
                 .iter()
-                .map(|win| {
-                    win.with_state(|state| match state.id {
-                        WindowId::None => unreachable!(),
-                        WindowId::Some(id) => id,
-                    })
-                })
+                .map(|win| win.with_state(|state| state.id.0))
                 .collect::<Vec<_>>();
 
             window::v0alpha1::GetResponse { window_ids }
@@ -1487,7 +1518,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<window::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
-        let window_id = WindowId::Some(
+        let window_id = WindowId(
             request
                 .window_id
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,

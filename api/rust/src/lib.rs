@@ -82,7 +82,6 @@
 use std::sync::OnceLock;
 
 use futures::{
-    channel::mpsc::UnboundedReceiver,
     future::{BoxFuture, Either},
     stream::FuturesUnordered,
     Future, StreamExt,
@@ -91,7 +90,13 @@ use input::Input;
 use output::Output;
 use pinnacle::Pinnacle;
 use process::Process;
+use signal::SignalState;
 use tag::Tag;
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver},
+    RwLock,
+};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
@@ -100,6 +105,7 @@ pub mod input;
 pub mod output;
 pub mod pinnacle;
 pub mod process;
+pub mod signal;
 pub mod tag;
 pub mod util;
 pub mod window;
@@ -114,6 +120,7 @@ static WINDOW: OnceLock<Window> = OnceLock::new();
 static INPUT: OnceLock<Input> = OnceLock::new();
 static OUTPUT: OnceLock<Output> = OnceLock::new();
 static TAG: OnceLock<Tag> = OnceLock::new();
+static SIGNAL: OnceLock<RwLock<SignalState>> = OnceLock::new();
 
 /// A struct containing static references to all of the configuration structs.
 #[derive(Debug, Clone, Copy)]
@@ -147,16 +154,21 @@ pub async fn connect(
         }))
         .await?;
 
-    let (fut_sender, fut_recv) = futures::channel::mpsc::unbounded::<BoxFuture<()>>();
-
-    let output = Output::new(channel.clone(), fut_sender.clone());
+    let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<()>>();
 
     let pinnacle = PINNACLE.get_or_init(|| Pinnacle::new(channel.clone()));
     let process = PROCESS.get_or_init(|| Process::new(channel.clone(), fut_sender.clone()));
     let window = WINDOW.get_or_init(|| Window::new(channel.clone()));
     let input = INPUT.get_or_init(|| Input::new(channel.clone(), fut_sender.clone()));
-    let tag = TAG.get_or_init(|| Tag::new(channel.clone(), fut_sender.clone()));
-    let output = OUTPUT.get_or_init(|| output);
+    let tag = TAG.get_or_init(|| Tag::new(channel.clone()));
+    let output = OUTPUT.get_or_init(|| Output::new(channel.clone()));
+
+    SIGNAL
+        .set(RwLock::new(SignalState::new(
+            channel.clone(),
+            fut_sender.clone(),
+        )))
+        .map_err(|_| "failed to create SIGNAL")?;
 
     let modules = ApiModules {
         pinnacle,
@@ -177,8 +189,10 @@ pub async fn connect(
 ///
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
-pub async fn listen(mut fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
+pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
     let mut future_set = FuturesUnordered::<BoxFuture<()>>::new();
+
+    let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
 
     loop {
         match futures::future::select(fut_recv.next(), future_set.next()).await {

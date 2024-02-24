@@ -17,6 +17,7 @@ function protobuf.build_protos()
         PINNACLE_PROTO_DIR .. "/pinnacle/output/" .. version .. "/output.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/process/" .. version .. "/process.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/signal/" .. version .. "/signal.proto",
     }
 
     local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "
@@ -36,6 +37,28 @@ function protobuf.build_protos()
     assert(pb.load(pinnacle_pb_data), "failed to load .pb file")
 
     pb.option("enum_as_value")
+end
+
+---@nodoc
+---Encode the given `data` as the protobuf `type`.
+---@param type string The absolute protobuf type
+---@param data table The table of data, conforming to its protobuf definition
+---@return string buffer The encoded buffer
+function protobuf.encode(type, data)
+    local success, obj = pcall(pb.encode, type, data)
+    if not success then
+        print("failed to encode:", obj, "type:", type)
+        os.exit(1)
+    end
+
+    local encoded_protobuf = obj
+
+    local packed_prefix = string.pack("I1", 0)
+    local payload_len = string.pack(">I4", encoded_protobuf:len())
+
+    local body = packed_prefix .. payload_len .. encoded_protobuf
+
+    return body
 end
 
 return protobuf

@@ -1,6 +1,7 @@
 use crate::{
     api::{
-        InputService, OutputService, PinnacleService, ProcessService, TagService, WindowService,
+        signal::SignalService, InputService, OutputService, PinnacleService, ProcessService,
+        TagService, WindowService,
     },
     input::ModifierMask,
     output::OutputName,
@@ -16,8 +17,9 @@ use std::{
 use anyhow::Context;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
-    output::v0alpha1::{output_service_server::OutputServiceServer, ConnectForAllResponse},
+    output::v0alpha1::output_service_server::OutputServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
+    signal::v0alpha1::signal_service_server::SignalServiceServer,
     tag::v0alpha1::tag_service_server::TagServiceServer,
     v0alpha1::pinnacle_service_server::PinnacleServiceServer,
     window::v0alpha1::window_service_server::WindowServiceServer,
@@ -28,7 +30,7 @@ use smithay::{
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
+use tokio::task::JoinHandle;
 use toml::Table;
 
 use xdg::BaseDirectories;
@@ -164,7 +166,6 @@ pub enum Key {
 pub struct Config {
     /// Window rules and conditions on when those rules should apply
     pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
-    pub output_callback_senders: Vec<UnboundedSender<Result<ConnectForAllResponse, tonic::Status>>>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 
@@ -175,7 +176,6 @@ pub struct Config {
 impl Config {
     pub fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
-        self.output_callback_senders.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();
@@ -264,6 +264,8 @@ impl State {
         self.input_state.clear();
 
         self.config.clear(&self.loop_handle);
+
+        self.signal_state.clear();
 
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
@@ -447,6 +449,7 @@ impl State {
         let tag_service = TagService::new(grpc_sender.clone());
         let output_service = OutputService::new(grpc_sender.clone());
         let window_service = WindowService::new(grpc_sender.clone());
+        let signal_service = SignalService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
@@ -464,7 +467,8 @@ impl State {
             .add_service(ProcessServiceServer::new(process_service))
             .add_service(TagServiceServer::new(tag_service))
             .add_service(OutputServiceServer::new(output_service))
-            .add_service(WindowServiceServer::new(window_service));
+            .add_service(WindowServiceServer::new(window_service))
+            .add_service(SignalServiceServer::new(signal_service));
 
         match self.xdisplay.as_ref() {
             Some(_) => {

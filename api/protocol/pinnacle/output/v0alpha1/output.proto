@@ -10,11 +10,6 @@ message SetLocationRequest {
   optional int32 y = 3;
 }
 
-message ConnectForAllRequest {}
-message ConnectForAllResponse {
-  optional string output_name = 1;
-}
-
 message GetRequest {}
 message GetResponse {
   repeated string output_names = 1;
@@ -41,7 +36,6 @@ message GetPropertiesResponse {
 
 service OutputService {
   rpc SetLocation(SetLocationRequest) returns (google.protobuf.Empty);
-  rpc ConnectForAll(ConnectForAllRequest) returns (stream ConnectForAllResponse);
   rpc Get(GetRequest) returns (GetResponse);
   rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
 }

@@ -33,6 +33,42 @@ pub mod pinnacle {
             tonic::include_proto!("pinnacle.process.v0alpha1");
         }
     }
+
+    pub mod signal {
+        pub mod v0alpha1 {
+            tonic::include_proto!("pinnacle.signal.v0alpha1");
+
+            pub trait SignalRequest {
+                fn from_control(control: StreamControl) -> Self;
+                fn control(&self) -> StreamControl;
+            }
+
+            macro_rules! impl_signal_request {
+                ( $( $request:ident ),* ) => {
+                    $(
+                        impl SignalRequest for $request {
+                            fn from_control(control: StreamControl) -> Self {
+                                $request {
+                                    control: Some(control as i32),
+                                }
+                            }
+
+                            fn control(&self) -> StreamControl {
+                                self.control()
+                            }
+                        }
+                    )*
+                };
+            }
+
+            impl_signal_request!(
+                OutputConnectRequest,
+                LayoutRequest,
+                WindowPointerEnterRequest,
+                WindowPointerLeaveRequest
+            );
+        }
+    }
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("pinnacle");

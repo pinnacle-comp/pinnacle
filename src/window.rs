@@ -4,6 +4,9 @@ pub mod rules;
 
 use std::{cell::RefCell, time::Duration};
 
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    WindowPointerEnterResponse, WindowPointerLeaveResponse,
+};
 use smithay::{
     backend::input::KeyState,
     desktop::{
@@ -330,33 +333,40 @@ impl WindowElement {
 }
 
 impl PointerTarget<State> for WindowElement {
-    fn frame(&self, seat: &Seat<State>, data: &mut State) {
+    fn frame(&self, seat: &Seat<State>, state: &mut State) {
         match self {
-            WindowElement::Wayland(window) => window.frame(seat, data),
+            WindowElement::Wayland(window) => window.frame(seat, state),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.frame(seat, data)
+                surface.frame(seat, state)
             }
             _ => unreachable!(),
         }
     }
 
-    fn enter(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
+    fn enter(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::enter(surface, seat, data, event)
+                PointerTarget::enter(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
+
+        let window_id = Some(self.with_state(|state| state.id.0));
+
+        state
+            .signal_state
+            .window_pointer_enter
+            .signal(|buffer| buffer.push_back(WindowPointerEnterResponse { window_id }));
     }
 
-    fn motion(&self, seat: &Seat<State>, data: &mut State, event: &MotionEvent) {
+    fn motion(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::motion(surface, seat, data, event)
+                PointerTarget::motion(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
@@ -365,16 +375,16 @@ impl PointerTarget<State> for WindowElement {
     fn relative_motion(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::relative_motion(window, seat, data, event);
+                PointerTarget::relative_motion(window, seat, state, event);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::relative_motion(surface, seat, data, event);
+                PointerTarget::relative_motion(surface, seat, state, event);
             }
             _ => unreachable!(),
         }
@@ -383,47 +393,54 @@ impl PointerTarget<State> for WindowElement {
     fn button(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         event: &smithay::input::pointer::ButtonEvent,
     ) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::button(window, seat, data, event),
+            WindowElement::Wayland(window) => PointerTarget::button(window, seat, state, event),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::button(surface, seat, data, event)
+                PointerTarget::button(surface, seat, state, event)
             }
             _ => unreachable!(),
         }
     }
 
-    fn axis(&self, seat: &Seat<State>, data: &mut State, frame: AxisFrame) {
+    fn axis(&self, seat: &Seat<State>, state: &mut State, frame: AxisFrame) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, data, frame),
+            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, state, frame),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::axis(surface, seat, data, frame)
+                PointerTarget::axis(surface, seat, state, frame)
             }
             _ => unreachable!(),
         }
     }
 
-    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial, time: u32) {
+    fn leave(&self, seat: &Seat<State>, state: &mut State, serial: Serial, time: u32) {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::leave(window, seat, data, serial, time);
+                PointerTarget::leave(window, seat, state, serial, time);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                PointerTarget::leave(surface, seat, data, serial, time)
+                PointerTarget::leave(surface, seat, state, serial, time)
             }
             _ => unreachable!(),
         }
+
+        let window_id = Some(self.with_state(|state| state.id.0));
+
+        state
+            .signal_state
+            .window_pointer_leave
+            .signal(|buffer| buffer.push_back(WindowPointerLeaveResponse { window_id }));
     }
 
     fn gesture_swipe_begin(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GestureSwipeBeginEvent,
     ) {
         todo!()
@@ -432,7 +449,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_swipe_update(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GestureSwipeUpdateEvent,
     ) {
         todo!()
@@ -441,7 +458,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_swipe_end(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GestureSwipeEndEvent,
     ) {
         todo!()
@@ -450,7 +467,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_pinch_begin(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GesturePinchBeginEvent,
     ) {
         todo!()
@@ -459,7 +476,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_pinch_update(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GesturePinchUpdateEvent,
     ) {
         todo!()
@@ -468,7 +485,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_pinch_end(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GesturePinchEndEvent,
     ) {
         todo!()
@@ -477,7 +494,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_hold_begin(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GestureHoldBeginEvent,
     ) {
         todo!()
@@ -486,7 +503,7 @@ impl PointerTarget<State> for WindowElement {
     fn gesture_hold_end(
         &self,
         _seat: &Seat<State>,
-        _data: &mut State,
+        _state: &mut State,
         _event: &smithay::input::pointer::GestureHoldEndEvent,
     ) {
         todo!()
@@ -497,26 +514,26 @@ impl KeyboardTarget<State> for WindowElement {
     fn enter(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         keys: Vec<KeysymHandle<'_>>,
         serial: Serial,
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::enter(window, seat, data, keys, serial);
+                KeyboardTarget::enter(window, seat, state, keys, serial);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                KeyboardTarget::enter(surface, seat, data, keys, serial)
+                KeyboardTarget::enter(surface, seat, state, keys, serial)
             }
             _ => unreachable!(),
         }
     }
 
-    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial) {
+    fn leave(&self, seat: &Seat<State>, state: &mut State, serial: Serial) {
         match self {
-            WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, data, serial),
+            WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, state, serial),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                KeyboardTarget::leave(surface, seat, data, serial)
+                KeyboardTarget::leave(surface, seat, state, serial)
             }
             _ => unreachable!(),
         }
@@ -525,18 +542,18 @@ impl KeyboardTarget<State> for WindowElement {
     fn key(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         key: KeysymHandle<'_>,
-        state: KeyState,
+        key_state: KeyState,
         serial: Serial,
         time: u32,
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::key(window, seat, data, key, state, serial, time);
+                KeyboardTarget::key(window, seat, state, key, key_state, serial, time);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                KeyboardTarget::key(surface, seat, data, key, state, serial, time);
+                KeyboardTarget::key(surface, seat, state, key, key_state, serial, time);
             }
             _ => unreachable!(),
         }
@@ -545,16 +562,16 @@ impl KeyboardTarget<State> for WindowElement {
     fn modifiers(
         &self,
         seat: &Seat<State>,
-        data: &mut State,
+        state: &mut State,
         modifiers: ModifiersState,
         serial: Serial,
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::modifiers(window, seat, data, modifiers, serial);
+                KeyboardTarget::modifiers(window, seat, state, modifiers, serial);
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                KeyboardTarget::modifiers(surface, seat, data, modifiers, serial);
+                KeyboardTarget::modifiers(surface, seat, state, modifiers, serial);
             }
             _ => unreachable!(),
         }

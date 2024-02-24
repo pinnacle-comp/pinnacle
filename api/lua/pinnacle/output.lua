@@ -159,12 +159,55 @@ function output.connect_for_all(callback)
         callback(handle)
     end
 
-    client.server_streaming_request(build_grpc_request_params("ConnectForAll", {}), function(response)
-        local output_name = response.output_name
-        local handle = output_handle.new(output_name)
-        callback(handle)
-    end)
+    output.connect_signal({
+        connect = callback,
+    })
 end
+
+local signal_name_to_SignalName = {
+    connect = "OutputConnect",
+}
+
+---@class OutputSignal Signals related to output events.
+---@field connect fun(output: OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+
+---Connect to an output signal.
+---
+---The compositor sends signals about various events. Use this function to run a callback when
+---some output signal occurs.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Output.connect_signal({
+---    connect = function(output)
+---        print("New output connected:", output.name)
+---    end
+---})
+---```
+---
+---@param signals OutputSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
+function output.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
+    end
+
+    return handles
+end
+
+---------------------------------------------------------------------
 
 ---Set the location of this output in the global space.
 ---

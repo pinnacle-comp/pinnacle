@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::Context;
-use pinnacle_api_defs::pinnacle::output::v0alpha1::ConnectForAllResponse;
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -983,12 +983,11 @@ impl State {
 
             output.with_state(|state| state.tags = tags.clone());
         } else {
-            // Run any output callbacks
-            for sender in self.config.output_callback_senders.iter() {
-                let _ = sender.send(Ok(ConnectForAllResponse {
+            self.signal_state.output_connect.signal(|buffer| {
+                buffer.push_back(OutputConnectResponse {
                     output_name: Some(output.name()),
-                }));
-            }
+                })
+            });
         }
     }
 

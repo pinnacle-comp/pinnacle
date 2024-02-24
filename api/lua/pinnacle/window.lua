@@ -69,7 +69,9 @@ local WindowHandle = {}
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class Window
+---@field private handle WindowHandleModule
 local window = {}
+window.handle = window_handle
 
 ---Get all windows.
 ---
@@ -308,6 +310,53 @@ function window.add_window_rule(rule)
         rule = rule.rule,
     }))
 end
+
+local signal_name_to_SignalName = {
+    pointer_enter = "WindowPointerEnter",
+    pointer_leave = "WindowPointerLeave",
+}
+
+---@class WindowSignal Signals related to compositor events.
+---@field pointer_enter fun(window: WindowHandle)? The pointer entered a window.
+---@field pointer_leave fun(window: WindowHandle)? The pointer left a window.
+
+---Connect to a window signal.
+---
+---The compositor sends signals about various events. Use this function to run a callback when
+---some window signal occurs.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Window.connect_signal({
+---    pointer_enter = function(window)
+---        print("Pointer entered", window:class())
+---    end
+---})
+---```
+---
+---@param signals WindowSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
+function window.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
+    end
+
+    return handles
+end
+
+------------------------------------------------------------------------
 
 ---Send a close request to this window.
 ---

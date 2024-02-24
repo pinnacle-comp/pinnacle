@@ -83,10 +83,10 @@ async fn main() {
 
     // Setup all monitors with tags "1" through "5"
     output.connect_for_all(move |op| {
-        let mut tags = tag.add(&op, tag_names);
+        let tags = tag.add(op, tag_names);
 
         // Be sure to set a tag to active or windows won't display
-        tags.next().unwrap().set_active(true);
+        tags.first().unwrap().set_active(true);
     });
 
     process.spawn_once([terminal]);

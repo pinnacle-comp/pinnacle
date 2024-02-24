@@ -34,45 +34,42 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{channel::mpsc::UnboundedSender, future::BoxFuture, FutureExt};
+use futures::FutureExt;
 use num_enum::TryFromPrimitive;
-use pinnacle_api_defs::pinnacle::{
-    output::v0alpha1::output_service_client::OutputServiceClient,
-    tag::{
-        self,
-        v0alpha1::{
-            tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
-            SetLayoutRequest, SwitchToRequest,
-        },
+use pinnacle_api_defs::pinnacle::tag::{
+    self,
+    v0alpha1::{
+        tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
+        SetLayoutRequest, SwitchToRequest,
     },
 };
 use tonic::transport::Channel;
 
 use crate::{
     block_on_tokio,
-    output::{Output, OutputHandle},
+    output::OutputHandle,
+    signal::{SignalHandle, TagSignal},
     util::Batch,
+    OUTPUT, SIGNAL,
 };
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
 pub struct Tag {
-    channel: Channel,
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
     tag_client: TagServiceClient<Channel>,
-    output_client: OutputServiceClient<Channel>,
 }
 
 impl Tag {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
+    pub(crate) fn new(channel: Channel) -> Self {
         Self {
             tag_client: TagServiceClient::new(channel.clone()),
-            output_client: OutputServiceClient::new(channel.clone()),
-            channel,
-            fut_sender,
+        }
+    }
+
+    pub(crate) fn new_handle(&self, id: u32) -> TagHandle {
+        TagHandle {
+            id,
+            tag_client: self.tag_client.clone(),
         }
     }
 
@@ -93,7 +90,7 @@ impl Tag {
         &self,
         output: &OutputHandle,
         tag_names: impl IntoIterator<Item = impl Into<String>>,
-    ) -> impl Iterator<Item = TagHandle> {
+    ) -> Vec<TagHandle> {
         block_on_tokio(self.add_async(output, tag_names))
     }
 
@@ -102,9 +99,8 @@ impl Tag {
         &self,
         output: &OutputHandle,
         tag_names: impl IntoIterator<Item = impl Into<String>>,
-    ) -> impl Iterator<Item = TagHandle> {
+    ) -> Vec<TagHandle> {
         let mut client = self.tag_client.clone();
-        let output_client = self.output_client.clone();
 
         let tag_names = tag_names.into_iter().map(Into::into).collect();
 
@@ -117,11 +113,11 @@ impl Tag {
             .unwrap()
             .into_inner();
 
-        response.tag_ids.into_iter().map(move |id| TagHandle {
-            tag_client: client.clone(),
-            output_client: output_client.clone(),
-            id,
-        })
+        response
+            .tag_ids
+            .into_iter()
+            .map(move |id| self.new_handle(id))
+            .collect()
     }
 
     /// Get handles to all tags across all outputs.
@@ -131,14 +127,13 @@ impl Tag {
     /// ```
     /// let all_tags = tag.get_all();
     /// ```
-    pub fn get_all(&self) -> impl Iterator<Item = TagHandle> {
+    pub fn get_all(&self) -> Vec<TagHandle> {
         block_on_tokio(self.get_all_async())
     }
 
     /// The async version of [`Tag::get_all`].
-    pub async fn get_all_async(&self) -> impl Iterator<Item = TagHandle> {
+    pub async fn get_all_async(&self) -> Vec<TagHandle> {
         let mut client = self.tag_client.clone();
-        let output_client = self.output_client.clone();
 
         let response = client
             .get(tag::v0alpha1::GetRequest {})
@@ -146,11 +141,11 @@ impl Tag {
             .unwrap()
             .into_inner();
 
-        response.tag_ids.into_iter().map(move |id| TagHandle {
-            tag_client: client.clone(),
-            output_client: output_client.clone(),
-            id,
-        })
+        response
+            .tag_ids
+            .into_iter()
+            .map(move |id| self.new_handle(id))
+            .collect()
     }
 
     /// Get a handle to the first tag with the given name on the focused output.
@@ -170,7 +165,7 @@ impl Tag {
     /// The async version of [`Tag::get`].
     pub async fn get_async(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
-        let output_module = Output::new(self.channel.clone(), self.fut_sender.clone());
+        let output_module = OUTPUT.get().expect("OUTPUT doesn't exist");
         let focused_output = output_module.get_focused();
 
         if let Some(output) = focused_output {
@@ -280,7 +275,7 @@ impl Tag {
         let layouts_clone = layouts.clone();
         let len = layouts.len();
 
-        let output_module = Output::new(self.channel.clone(), self.fut_sender.clone());
+        let output_module = OUTPUT.get().expect("OUTPUT doesn't exist");
         let output_module_clone = output_module.clone();
 
         let next = move |output: Option<&OutputHandle>| {
@@ -343,6 +338,19 @@ impl Tag {
             next: Box::new(next),
         }
     }
+
+    /// Connect to a tag signal.
+    ///
+    /// The compositor will fire off signals that your config can listen for and act upon.
+    /// You can pass in a [`TagSignal`] along with a callback and it will get run
+    /// with the necessary arguments every time a signal of that type is received.
+    pub fn connect_signal(&self, signal: TagSignal) -> SignalHandle {
+        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+
+        match signal {
+            TagSignal::Layout(layout_fn) => signal_state.layout.add_callback(layout_fn),
+        }
+    }
 }
 
 /// A layout cycler that keeps track of tags and their layouts and provides functions to cycle
@@ -361,8 +369,7 @@ pub struct LayoutCycler {
 #[derive(Debug, Clone)]
 pub struct TagHandle {
     pub(crate) id: u32,
-    pub(crate) tag_client: TagServiceClient<Channel>,
-    pub(crate) output_client: OutputServiceClient<Channel>,
+    tag_client: TagServiceClient<Channel>,
 }
 
 impl PartialEq for TagHandle {
@@ -543,7 +550,6 @@ impl TagHandle {
     /// The async version of [`TagHandle::props`].
     pub async fn props_async(&self) -> TagProperties {
         let mut client = self.tag_client.clone();
-        let output_client = self.output_client.clone();
 
         let response = client
             .get_properties(tag::v0alpha1::GetPropertiesRequest {
@@ -553,14 +559,12 @@ impl TagHandle {
             .unwrap()
             .into_inner();
 
+        let output = OUTPUT.get().expect("OUTPUT doesn't exist");
+
         TagProperties {
             active: response.active,
             name: response.name,
-            output: response.output_name.map(|name| OutputHandle {
-                output_client,
-                tag_client: client,
-                name,
-            }),
+            output: response.output_name.map(|name| output.new_handle(name)),
         }
     }
 
