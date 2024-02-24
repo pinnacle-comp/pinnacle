@@ -58,7 +58,8 @@ It can be configured through either Lua or Rust.
 # Dependencies
 You will need:
 
-- [Rust](https://www.rust-lang.org/) 1.72 or newer, to build the project and use the Rust API
+- [Rust](https://www.rust-lang.org/) 1.74 or newer
+    - If you want to use the Rust API, you will need Rust 1.75 or newer
 - [Lua](https://www.lua.org/) 5.4 or newer, to use the Lua API
 - Packages for [Smithay](https://github.com/Smithay/smithay):
   `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
