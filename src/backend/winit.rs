@@ -30,7 +30,7 @@ use smithay::{
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
-    state::{State, WithState},
+    state::State,
 };
 
 use super::{Backend, BackendData};
