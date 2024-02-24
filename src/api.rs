@@ -1698,8 +1698,11 @@ impl window_service_server::WindowService for WindowService {
             });
 
             let focused = window.as_ref().and_then(|win| {
-                let output = win.output(state)?;
-                state.focused_window(&output).map(|foc_win| win == &foc_win)
+                state
+                    .output_focus_stack
+                    .current_focus()
+                    .and_then(|output| state.focused_window(output))
+                    .map(|foc_win| win == &foc_win)
             });
 
             let floating = window

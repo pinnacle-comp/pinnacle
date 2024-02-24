@@ -21,8 +21,9 @@ use crate::{
 impl State {
     /// Get the currently focused window on `output`
     /// that isn't an override redirect window, if any.
-    pub fn focused_window(&mut self, output: &Output) -> Option<WindowElement> {
-        output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
+    pub fn focused_window(&self, output: &Output) -> Option<WindowElement> {
+        // TODO: see if the below is necessary
+        // output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
 
         let windows = output.with_state(|state| {
             state

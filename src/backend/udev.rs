@@ -516,6 +516,7 @@ pub fn run_udev() -> anyhow::Result<()> {
         Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
         &mut state,
         |state| {
+            state.fixup_focus();
             state.space.refresh();
             state.popup_manager.cleanup();
             state
@@ -1251,13 +1252,6 @@ impl State {
                 pointer_images.push((frame, texture.clone()));
                 texture
             });
-
-        // let windows = self
-        //     .output_focus_stack
-        //     .stack
-        //     .iter()
-        //     .flat_map(|op| op.with_state(|state| state.focus_stack.stack.clone()))
-        //     .collect::<Vec<_>>();
 
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
