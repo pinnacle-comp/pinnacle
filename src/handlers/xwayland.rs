@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
+    desktop::Window,
+    reexports::x11rb::protocol::xproto,
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
-        selection::data_device::{
-            clear_data_device_selection, current_data_device_selection_userdata,
-            request_data_device_client_selection, set_data_device_selection,
-        },
+        seat::WaylandFocus,
         selection::{
+            data_device::{
+                clear_data_device_selection, current_data_device_selection_userdata,
+                request_data_device_client_selection, set_data_device_selection,
+            },
             primary_selection::{
                 clear_primary_selection, current_primary_selection_userdata,
                 request_primary_client_selection, set_primary_selection,
@@ -22,7 +25,7 @@ use smithay::{
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::KeyboardFocusTarget,
     state::{State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
@@ -36,12 +39,12 @@ impl XwmHandler for State {
 
     fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
-    fn map_window_request(&mut self, _xwm: XwmId, window: X11Surface) {
+    fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         tracing::trace!("map_window_request");
 
-        assert!(!window.is_override_redirect());
+        assert!(!surface.is_override_redirect());
 
-        let window = WindowElement::X11(window);
+        let window = WindowElement::new(Window::new_x11_window(surface));
         self.space.map_element(window.clone(), (0, 0), true);
         let bbox = self
             .space
@@ -70,7 +73,7 @@ impl XwmHandler for State {
         )
             .into();
 
-        let WindowElement::X11(surface) = &window else {
+        let Some(surface) = window.x11_surface() else {
             unreachable!()
         };
 
@@ -116,20 +119,20 @@ impl XwmHandler for State {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     state,
-                    Some(FocusTarget::Window(window)),
+                    Some(KeyboardFocusTarget::Window(window)),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
     }
 
-    fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
+    fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         tracing::trace!("mapped_override_redirect_window");
 
-        assert!(window.is_override_redirect());
+        assert!(surface.is_override_redirect());
 
-        let loc = window.geometry().loc;
+        let loc = surface.geometry().loc;
 
-        let window = WindowElement::X11OverrideRedirect(window);
+        let window = WindowElement::new(Window::new_x11_window(surface));
 
         self.windows.push(window.clone());
         self.z_index_stack.set_focus(window.clone());
@@ -145,12 +148,12 @@ impl XwmHandler for State {
         self.space.map_element(window, loc, true);
     }
 
-    fn unmapped_window(&mut self, _xwm: XwmId, window: X11Surface) {
+    fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         for output in self.space.outputs() {
             output.with_state(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != window.wl_surface())
+                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
                 })
             });
         }
@@ -158,7 +161,7 @@ impl XwmHandler for State {
         let win = self
             .space
             .elements()
-            .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
+            .find(|win| win.x11_surface().is_some_and(|surf| surf == &surface))
             .cloned();
 
         if let Some(win) = win {
@@ -173,37 +176,39 @@ impl XwmHandler for State {
             if let Some(output) = win.output(self) {
                 self.update_windows(&output);
 
-                let focus = self.focused_window(&output).map(FocusTarget::Window);
+                let focus = self
+                    .keyboard_focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
 
-                if let Some(FocusTarget::Window(win)) = &focus {
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
+                    // TODO: see if you need to raise z-index
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
-                    if let WindowElement::Wayland(win) = &win {
-                        win.toplevel().send_configure();
+                    if let Some(toplevel) = win.toplevel() {
+                        toplevel.send_configure();
                     }
                 }
 
-                self.seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+                if let Some(keyboard) = self.seat.get_keyboard() {
+                    keyboard.set_focus(self, focus, SERIAL_COUNTER.next_serial());
+                }
 
                 self.schedule_render(&output);
             }
         }
 
-        if !window.is_override_redirect() {
+        if !surface.is_override_redirect() {
             tracing::debug!("set mapped to false");
-            window.set_mapped(false).expect("failed to unmap x11 win");
+            surface.set_mapped(false).expect("failed to unmap x11 win");
         }
     }
 
-    fn destroyed_window(&mut self, _xwm: XwmId, window: X11Surface) {
+    fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         for output in self.space.outputs() {
             output.with_state(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != window.wl_surface())
+                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
                 })
             });
         }
@@ -212,12 +217,10 @@ impl XwmHandler for State {
             .windows
             .iter()
             .find(|elem| {
-                matches!(
-                    elem,
-                    WindowElement::X11(surface)
-                    | WindowElement::X11OverrideRedirect(surface)
-                        if surface.wl_surface() == window.wl_surface()
-                )
+                elem.x11_surface().is_some_and(|surf| {
+                    surf.wl_surface()
+                        .is_some_and(|s| Some(s) == surface.wl_surface())
+                })
             })
             .cloned();
 
@@ -236,13 +239,16 @@ impl XwmHandler for State {
             if let Some(output) = win.output(self) {
                 self.update_windows(&output);
 
-                let focus = self.focused_window(&output).map(FocusTarget::Window);
+                let focus = self
+                    .keyboard_focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
 
-                if let Some(FocusTarget::Window(win)) = &focus {
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
-                    if let WindowElement::Wayland(win) = &win {
-                        win.toplevel().send_configure();
+                    if let Some(toplevel) = win.toplevel() {
+                        // FIXME: will only update activated state of the new focus, not all windows
+                        toplevel.send_configure();
                     }
                 }
 
@@ -283,14 +289,14 @@ impl XwmHandler for State {
     fn configure_notify(
         &mut self,
         _xwm: XwmId,
-        window: X11Surface,
+        surface: X11Surface,
         geometry: Rectangle<i32, Logical>,
-        _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
+        _above: Option<xproto::Window>,
     ) {
         let Some(win) = self
             .space
             .elements()
-            .find(|elem| matches!(elem, WindowElement::X11(surface) if surface == &window))
+            .find(|elem| elem.x11_surface().is_some_and(|surf| surf == &surface))
             .cloned()
         else {
             return;
@@ -409,11 +415,12 @@ impl XwmHandler for State {
             .get_keyboard()
             .and_then(|kb| kb.current_focus())
             .is_some_and(|focus| {
-                if let FocusTarget::Window(WindowElement::X11(surface)) = focus {
-                    surface.xwm_id().expect("x11surface had no xwm id") == xwm
-                } else {
-                    false
+                if let KeyboardFocusTarget::Window(window) = focus {
+                    if let Some(surface) = window.x11_surface() {
+                        return surface.xwm_id() == Some(xwm);
+                    }
                 }
+                false
             })
     }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::layer_map_for_output,
+    desktop::{layer_map_for_output, WindowSurface},
     output::Output,
     utils::{Logical, Point, Rectangle, Serial, Size},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
@@ -115,21 +115,20 @@ impl State {
 
         for win in windows_on_foc_tags.iter() {
             if win.with_state(|state| state.target_loc.is_some()) {
-                match win {
-                    WindowElement::Wayland(wl_win) => {
-                        let pending =
-                            compositor::with_states(wl_win.toplevel().wl_surface(), |states| {
-                                states
-                                    .data_map
-                                    .get::<XdgToplevelSurfaceData>()
-                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                    .lock()
-                                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                                    .has_pending_changes()
-                            });
+                match win.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        let pending = compositor::with_states(toplevel.wl_surface(), |states| {
+                            states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                .lock()
+                                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                                .has_pending_changes()
+                        });
 
                         if pending {
-                            pending_wins.push((win.clone(), wl_win.toplevel().send_configure()))
+                            pending_wins.push((win.clone(), toplevel.send_configure()))
                         } else {
                             let loc = win.with_state(|state| state.target_loc.take());
                             if let Some(loc) = loc {
@@ -137,14 +136,14 @@ impl State {
                             }
                         }
                     }
-                    WindowElement::X11(_) => {
-                        let loc = win.with_state(|state| state.target_loc.take());
-                        if let Some(loc) = loc {
-                            self.space.map_element(win.clone(), loc, false);
+                    WindowSurface::X11(surf) => {
+                        if !surf.is_override_redirect() {
+                            let loc = win.with_state(|state| state.target_loc.take());
+                            if let Some(loc) = loc {
+                                self.space.map_element(win.clone(), loc, false);
+                            }
                         }
                     }
-                    WindowElement::X11OverrideRedirect(_) => (),
-                    _ => unreachable!(),
                 }
             }
         }
@@ -171,6 +170,7 @@ pub enum Layout {
 }
 
 fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
+    // let rect = rect.downscale(2);
     let size = rect.size;
     let loc = rect.loc;
 
@@ -183,7 +183,7 @@ fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
 
     if stack_count == 0 {
         // one window
-        master.change_geometry(Rectangle::from_loc_and_size(loc, size));
+        master.change_geometry(dbg!(Rectangle::from_loc_and_size(loc, size)));
     } else {
         let loc: Point<i32, Logical> = (loc.x, loc.y).into();
         let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();

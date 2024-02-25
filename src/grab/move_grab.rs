@@ -6,10 +6,9 @@ use smithay::{
     // |     input::keyboard
     input::{
         pointer::{
-            AxisFrame, ButtonEvent, GrabStartData, MotionEvent, PointerInnerHandle,
-            RelativeMotionEvent,
+            AxisFrame, ButtonEvent, Focus, GrabStartData, MotionEvent, PointerGrab,
+            PointerInnerHandle, RelativeMotionEvent,
         },
-        pointer::{Focus, PointerGrab},
         Seat, SeatHandler,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -51,7 +50,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         }
 
         state.space.raise_element(&self.window, false);
-        if let WindowElement::X11(surface) = &self.window {
+        if let Some(surface) = self.window.x11_surface() {
             state
                 .xwm
                 .as_mut()
@@ -136,7 +135,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
             });
 
-            if let WindowElement::X11(surface) = &self.window {
+            if let Some(surface) = self.window.x11_surface() {
                 let geo = surface.geometry();
                 let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
                 surface

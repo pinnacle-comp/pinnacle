@@ -4,26 +4,20 @@ pub mod move_grab;
 pub mod resize_grab;
 
 use smithay::{
-    input::{
-        pointer::{GrabStartData, PointerHandle},
-        SeatHandler,
-    },
+    input::pointer::{GrabStartData, PointerHandle},
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::Serial,
     wayland::seat::WaylandFocus,
 };
 
-use crate::focus::FocusTarget;
+use crate::state::State;
 
 /// Returns the [GrabStartData] from a pointer grab, if any.
-pub fn pointer_grab_start_data<S>(
-    pointer: &PointerHandle<S>,
+pub fn pointer_grab_start_data(
+    pointer: &PointerHandle<State>,
     surface: &WlSurface,
     serial: Serial,
-) -> Option<GrabStartData<S>>
-where
-    S: SeatHandler<PointerFocus = FocusTarget> + 'static,
-{
+) -> Option<GrabStartData<State>> {
     tracing::debug!("start of pointer_grab_start_data");
     if !pointer.has_grab(serial) {
         tracing::debug!("pointer doesn't have grab");

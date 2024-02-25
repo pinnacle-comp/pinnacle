@@ -17,13 +17,16 @@ use smithay::{
         },
     },
     utils::{Logical, Point, Rectangle, Serial, SERIAL_COUNTER},
-    wayland::shell::xdg::{
-        PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+    wayland::{
+        seat::WaylandFocus,
+        shell::xdg::{
+            PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+        },
     },
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::KeyboardFocusTarget,
     state::{State, WithState},
     window::WindowElement,
 };
@@ -33,15 +36,15 @@ impl XdgShellHandler for State {
         &mut self.xdg_shell_state
     }
 
-    fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        surface.with_pending_state(|state| {
+    fn new_toplevel(&mut self, toplevel: ToplevelSurface) {
+        toplevel.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::TiledTop);
             state.states.set(xdg_toplevel::State::TiledBottom);
             state.states.set(xdg_toplevel::State::TiledLeft);
             state.states.set(xdg_toplevel::State::TiledRight);
         });
 
-        let window = WindowElement::Wayland(Window::new(surface.clone()));
+        let window = WindowElement::new(Window::new_wayland_window(toplevel.clone()));
         self.new_windows.push(window);
 
         // if let (Some(output), _) | (None, Some(output)) = (
@@ -132,14 +135,18 @@ impl XdgShellHandler for State {
 
         if let Some(output) = window.output(self) {
             self.update_windows(&output);
-            let focus = self.focused_window(&output).map(FocusTarget::Window);
-            if let Some(FocusTarget::Window(win)) = &focus {
+            let focus = self
+                .keyboard_focused_window(&output)
+                .map(KeyboardFocusTarget::Window);
+            if let Some(KeyboardFocusTarget::Window(win)) = &focus {
                 tracing::debug!("Focusing on prev win");
-                // TODO:
+
+                // TODO: see if you need to raise z-index
                 self.space.raise_element(win, true);
                 self.z_index_stack.set_focus(win.clone());
-                if let WindowElement::Wayland(win) = &win {
-                    win.toplevel().send_configure();
+                if let Some(toplevel) = win.toplevel() {
+                    // FIXME: will only update activated state of the new focus, not all windows
+                    toplevel.send_configure();
                 }
             }
             self.seat
@@ -692,13 +699,13 @@ impl XdgShellHandler for State {
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
             self.window_for_surface(&root)
-                .map(FocusTarget::Window)
+                .map(KeyboardFocusTarget::Window)
                 .or_else(|| {
                     self.space.outputs().find_map(|op| {
                         layer_map_for_output(op)
                             .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
                             .cloned()
-                            .map(FocusTarget::LayerSurface)
+                            .map(KeyboardFocusTarget::LayerSurface)
                     })
                 })
         }) {

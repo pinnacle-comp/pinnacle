@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::Mutex;
+use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
@@ -71,18 +71,11 @@ where
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<C> {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.render_elements(renderer, location, scale, alpha)
-            }
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.render_elements(renderer, location, scale, alpha)
-            }
-            _ => unreachable!(),
-        }
-        .into_iter()
-        .map(C::from)
-        .collect()
+        self.deref()
+            .render_elements(renderer, location, scale, alpha)
+            .into_iter()
+            .map(C::from)
+            .collect()
     }
 }
 
@@ -161,14 +154,30 @@ where
             win.is_on_active_tag(space.outputs())
         })
         .map(|win| {
+            let element_geometry = space.element_geometry(win);
+            let elem_geo_loc = element_geometry.map(|geo| geo.loc).unwrap_or((0, 0).into());
+            let element_bbox = space.element_bbox(win);
+            let elem_bbox_loc = element_bbox.map(|geo| geo.loc).unwrap_or((0, 0).into());
+            let elem_loc = space.element_location(win).unwrap_or((0, 0).into());
+            let win_geo_loc = win.geometry().loc;
+            let win_bbox_loc = win.bbox().loc;
+
+            // tracing::info!(?elem_geo_loc, ?elem_bbox_loc, ?elem_loc, ?win_geo_loc, ?win_bbox_loc);
+            // tracing::info!(elem_size = ?element_geometry.unwrap().size);
+            // tracing::info!(elem_bbox_size = ?element_bbox.unwrap().size);
+            // tracing::info!(geo_size = ?win.geometry().size);
+            // tracing::info!(bbox_size = ?win.bbox().size);
+
             // subtract win.geometry().loc to align decorations correctly
-            let loc = (space.element_location(win).unwrap_or((0, 0).into()) - win.geometry().loc - output.current_location())
-                .to_physical((scale.x.round() as i32, scale.x.round() as i32));
+            let loc = (elem_geo_loc - win.geometry().loc - output.current_location())
+                .to_physical((scale.x.round() as i32, scale.y.round() as i32));
 
             let elem_geo = space.element_geometry(win).map(|mut geo| {
                 geo.loc -= output.current_location();
                 geo
             });
+
+            // tracing::info!(?loc);
 
             (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
         }).flat_map(|(elems, rect)| {
@@ -307,9 +316,8 @@ where
 
     let top_fullscreen_window = windows.iter().rev().find(|win| {
         let is_wayland_actually_fullscreen = {
-            if let WindowElement::Wayland(window) = win {
-                window
-                    .toplevel()
+            if let Some(toplevel) = win.toplevel() {
+                toplevel
                     .current_state()
                     .states
                     .contains(xdg_toplevel::State::Fullscreen)

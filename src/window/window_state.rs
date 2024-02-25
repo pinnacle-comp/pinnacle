@@ -3,10 +3,11 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use smithay::{
-    desktop::space::SpaceElement,
+    desktop::{space::SpaceElement, WindowSurface},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Point, Rectangle},
 };
+use tracing::error;
 
 use crate::{
     state::{State, WithState},
@@ -81,9 +82,9 @@ impl WindowElement {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
                 });
 
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
+                match self.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        toplevel.with_pending_state(|state| {
                             state.states.unset(xdg_toplevel::State::Maximized);
                             state.states.set(xdg_toplevel::State::Fullscreen);
                             state.states.set(xdg_toplevel::State::TiledTop);
@@ -92,16 +93,16 @@ impl WindowElement {
                             state.states.set(xdg_toplevel::State::TiledRight);
                         });
                     }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_maximized(false)
-                            .expect("failed to set x11 win to maximized");
-                        surface
-                            .set_fullscreen(true)
-                            .expect("failed to set x11 win to not fullscreen");
+                    WindowSurface::X11(surface) => {
+                        if !surface.is_override_redirect() {
+                            if let Err(err) = surface.set_maximized(false) {
+                                error!("Failed to set x11 surface to unmaximized: {err}");
+                            }
+                            if let Err(err) = surface.set_fullscreen(true) {
+                                error!("Failed to set x11 surface to fullscreen: {err}");
+                            }
+                        }
                     }
-                    WindowElement::X11OverrideRedirect(_) => (),
-                    _ => unreachable!(),
                 }
             }
             FullscreenOrMaximized::Fullscreen => {
@@ -128,9 +129,9 @@ impl WindowElement {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
                 });
 
-                match self {
-                    WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
+                match self.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        toplevel.with_pending_state(|state| {
                             state.states.set(xdg_toplevel::State::Maximized);
                             state.states.unset(xdg_toplevel::State::Fullscreen);
                             state.states.set(xdg_toplevel::State::TiledTop);
@@ -139,16 +140,16 @@ impl WindowElement {
                             state.states.set(xdg_toplevel::State::TiledRight);
                         });
                     }
-                    WindowElement::X11(surface) => {
-                        surface
-                            .set_maximized(true)
-                            .expect("failed to set x11 win to maximized");
-                        surface
-                            .set_fullscreen(false)
-                            .expect("failed to set x11 win to not fullscreen");
+                    WindowSurface::X11(surface) => {
+                        if !surface.is_override_redirect() {
+                            if let Err(err) = surface.set_maximized(true) {
+                                error!("Failed to set x11 surface to maximized: {err}");
+                            }
+                            if let Err(err) = surface.set_fullscreen(false) {
+                                error!("Failed to set x11 surface to unfullscreen: {err}");
+                            }
+                        }
                     }
-                    WindowElement::X11OverrideRedirect(_) => (),
-                    _ => unreachable!(),
                 }
             }
             FullscreenOrMaximized::Maximized => {
@@ -170,9 +171,9 @@ impl WindowElement {
     /// Unsets maximized and fullscreen states for both wayland and xwayland windows
     /// and unsets tiled states for wayland windows.
     fn set_floating_states(&self) {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
                     state.states.unset(xdg_toplevel::State::Maximized);
                     state.states.unset(xdg_toplevel::State::Fullscreen);
                     state.states.unset(xdg_toplevel::State::TiledTop);
@@ -181,25 +182,25 @@ impl WindowElement {
                     state.states.unset(xdg_toplevel::State::TiledRight);
                 });
             }
-            WindowElement::X11(surface) => {
-                surface
-                    .set_maximized(false)
-                    .expect("failed to set x11 win to maximized");
-                surface
-                    .set_fullscreen(false)
-                    .expect("failed to set x11 win to not fullscreen");
+            WindowSurface::X11(surface) => {
+                if !surface.is_override_redirect() {
+                    if let Err(err) = surface.set_maximized(false) {
+                        error!("Failed to set x11 surface to unmaximized: {err}");
+                    }
+                    if let Err(err) = surface.set_fullscreen(false) {
+                        error!("Failed to set x11 surface to unfullscreen: {err}");
+                    }
+                }
             }
-            WindowElement::X11OverrideRedirect(_) => (),
-            _ => unreachable!(),
         }
     }
 
     /// Unsets maximized and fullscreen states for both wayland and xwayland windows
     /// and sets tiled states for wayland windows.
     fn set_tiled_states(&self) {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
                     state.states.unset(xdg_toplevel::State::Maximized);
                     state.states.unset(xdg_toplevel::State::Fullscreen);
                     state.states.set(xdg_toplevel::State::TiledTop);
@@ -208,16 +209,16 @@ impl WindowElement {
                     state.states.set(xdg_toplevel::State::TiledRight);
                 });
             }
-            WindowElement::X11(surface) => {
-                surface
-                    .set_maximized(false)
-                    .expect("failed to set x11 win to maximized");
-                surface
-                    .set_fullscreen(false)
-                    .expect("failed to set x11 win to not fullscreen");
+            WindowSurface::X11(surface) => {
+                if !surface.is_override_redirect() {
+                    if let Err(err) = surface.set_maximized(false) {
+                        error!("Failed to set x11 surface to unmaximized: {err}");
+                    }
+                    if let Err(err) = surface.set_fullscreen(false) {
+                        error!("Failed to set x11 surface to unfullscreen: {err}");
+                    }
+                }
             }
-            WindowElement::X11OverrideRedirect(_) => (),
-            _ => unreachable!(),
         }
     }
 }
@@ -289,8 +290,7 @@ impl WindowElementState {
     pub fn new() -> Self {
         Self {
             id: WindowId::next(),
-            // loc_request_state: LocationRequestState::Idle,
-            tags: vec![],
+            tags: Vec::new(),
             floating_or_tiled: FloatingOrTiled::Tiled(None),
             fullscreen_or_maximized: FullscreenOrMaximized::Neither,
             target_loc: None,

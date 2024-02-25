@@ -4,7 +4,10 @@ pub mod libinput;
 
 use std::{collections::HashMap, mem::Discriminant};
 
-use crate::{focus::FocusTarget, state::WithState, window::WindowElement};
+use crate::{
+    focus::{KeyboardFocusTarget, PointerFocusTarget},
+    state::WithState,
+};
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
     set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
     SetMousebindResponse,
@@ -14,7 +17,7 @@ use smithay::{
         AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
         KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
-    desktop::{layer_map_for_output, space::SpaceElement},
+    desktop::{layer_map_for_output, space::SpaceElement, WindowSurfaceType},
     input::{
         keyboard::{keysyms, FilterResult, ModifiersState},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
@@ -24,6 +27,7 @@ use smithay::{
     wayland::shell::wlr_layer,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::info;
 use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
@@ -148,8 +152,11 @@ impl State {
         }
     }
 
-    /// Get the [`FocusTarget`] under `point`.
-    pub fn focus_target_under<P>(&self, point: P) -> Option<(FocusTarget, Point<i32, Logical>)>
+    /// Get the [`PointerFocusTarget`] under `point`.
+    pub fn pointer_focus_target_under<P>(
+        &self,
+        point: P,
+    ) -> Option<(PointerFocusTarget, Point<i32, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
     {
@@ -185,13 +192,13 @@ impl State {
             });
 
         if let Some(window) = top_fullscreen_window {
-            Some((FocusTarget::from(window.clone()), output_geo.loc))
+            Some((PointerFocusTarget::from(&window), output_geo.loc))
         } else if let (Some(layer), _) | (None, Some(layer)) = (
             layers.layer_under(wlr_layer::Layer::Overlay, point),
             layers.layer_under(wlr_layer::Layer::Top, point),
         ) {
             let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+            Some((PointerFocusTarget::from(layer), output_geo.loc + layer_loc))
         } else if let Some(ret) = self
             .space
             .elements()
@@ -200,12 +207,17 @@ impl State {
             .find_map(|win| {
                 let loc = self
                     .space
-                    .element_location(win)
+                    .element_geometry(win)
                     .expect("called elem loc on unmapped win")
+                    .loc
                     - win.geometry().loc;
+                // let elem_loc = self.space.element_location(win).expect("");
+                // assert_eq!(loc, elem_loc);
+                // let geo = self.space.element_geometry(win);
+                // info!(loc = ?loc, win_local_loc = ?win.geometry().loc, win_elem_geo = ?geo);
 
-                win.is_in_input_region(&(point - loc.to_f64()))
-                    .then(|| (win.clone().into(), loc))
+                win.surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
+                    .map(|(w, l)| (w, l + loc))
             })
         {
             Some(ret)
@@ -214,7 +226,7 @@ impl State {
             layers.layer_under(wlr_layer::Layer::Top, point),
         ) {
             let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-            Some((FocusTarget::from(layer.clone()), output_geo.loc + layer_loc))
+            Some((PointerFocusTarget::from(layer), output_geo.loc + layer_loc))
         } else {
             None
         }
@@ -276,7 +288,7 @@ impl State {
                         ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
-                        tracing::info!("Switching to vt {vt}");
+                        info!("Switching to vt {vt}");
                         return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
                     }
                 }
@@ -334,31 +346,35 @@ impl State {
         // If the button was clicked, focus on the window below if exists, else
         // unfocus on windows.
         if button_state == ButtonState::Pressed {
-            if let Some((focus, _)) = self.focus_target_under(pointer_loc) {
+            if let Some((focus, _)) = self.pointer_focus_target_under(pointer_loc) {
                 // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
                 // |     to wonky things like right-click menus not correctly getting pointer
                 // |     clicks or showing up at all.
 
                 // TODO: use update_keyboard_focus from anvil
 
-                if let FocusTarget::Window(window) = &focus {
-                    self.space.raise_element(window, true);
+                if let Some(window) = focus.window_for(self) {
+                    self.space.raise_element(&window, true);
                     self.z_index_stack.set_focus(window.clone());
                     if let Some(output) = window.output(self) {
                         output.with_state(|state| state.focus_stack.set_focus(window.clone()));
                     }
-                }
-
-                if !matches!(
-                    &focus,
-                    FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
-                ) {
-                    keyboard.set_focus(self, Some(focus.clone()), serial);
+                    if !window.is_x11_override_redirect() {
+                        keyboard.set_focus(self, Some(KeyboardFocusTarget::Window(window)), serial);
+                    }
+                } else if let Some(layer) = focus.layer_for(self) {
+                    if layer.can_receive_keyboard_focus() {
+                        keyboard.set_focus(
+                            self,
+                            Some(KeyboardFocusTarget::LayerSurface(layer)),
+                            serial,
+                        );
+                    }
                 }
 
                 for window in self.space.elements() {
-                    if let WindowElement::Wayland(window) = window {
-                        window.toplevel().send_configure();
+                    if let Some(toplevel) = window.toplevel() {
+                        toplevel.send_configure();
                     }
                 }
             } else {
@@ -367,8 +383,8 @@ impl State {
                         state.focus_stack.unset_focus();
                         for window in state.focus_stack.stack.iter() {
                             window.set_activate(false);
-                            if let WindowElement::Wayland(window) = window {
-                                window.toplevel().send_configure();
+                            if let Some(toplevel) = window.toplevel() {
+                                toplevel.send_configure();
                             }
                         }
                     });
@@ -494,9 +510,15 @@ impl State {
             }
         }
 
+        let foc = self.pointer_focus_target_under(pointer_loc);
+
+        // if let Some((_, loc)) = foc.as_ref() {
+        //     info!(loc = ?loc);
+        // }
+
         pointer.motion(
             self,
-            self.focus_target_under(pointer_loc),
+            foc,
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -533,7 +555,7 @@ impl State {
             }
         }
 
-        let surface_under = self.focus_target_under(self.pointer_location);
+        let surface_under = self.pointer_focus_target_under(self.pointer_location);
 
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.motion(

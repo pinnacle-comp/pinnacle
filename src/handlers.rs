@@ -58,9 +58,8 @@ use smithay::{
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::{KeyboardFocusTarget, PointerFocusTarget},
     state::{ClientState, State, WithState},
-    window::WindowElement,
 };
 
 impl BufferHandler for State {
@@ -118,10 +117,10 @@ impl CompositorHandler for State {
         }
 
         if !compositor::is_sync_subsurface(surface) {
-            if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
+            if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
-                if let Some(loc) = win.with_state(|state| state.target_loc.take()) {
-                    self.space.map_element(win.clone(), loc, false);
+                if let Some(loc) = window.with_state(|state| state.target_loc.take()) {
+                    self.space.map_element(window, loc, false);
                 }
             }
         };
@@ -176,12 +175,12 @@ impl CompositorHandler for State {
                         .expect("Seat had no keyboard") // FIXME: actually handle error
                         .set_focus(
                             state,
-                            Some(FocusTarget::Window(new_window)),
+                            Some(KeyboardFocusTarget::Window(new_window)),
                             SERIAL_COUNTER.next_serial(),
                         );
                 });
-            } else if let WindowElement::Wayland(window) = &new_window {
-                window.on_commit();
+            } else if let Some(toplevel) = new_window.toplevel() {
+                new_window.on_commit();
                 let initial_configure_sent = compositor::with_states(surface, |states| {
                     states
                         .data_map
@@ -194,7 +193,7 @@ impl CompositorHandler for State {
 
                 if !initial_configure_sent {
                     tracing::debug!("Initial configure");
-                    window.toplevel().send_configure();
+                    toplevel.send_configure();
                 }
             }
 
@@ -267,7 +266,7 @@ delegate_compositor!(State);
 
 fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
     if let Some(window) = state.window_for_surface(surface) {
-        if let WindowElement::Wayland(window) = &window {
+        if let Some(toplevel) = window.toplevel() {
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
                     .data_map
@@ -280,7 +279,7 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
 
             if !initial_configure_sent {
                 tracing::debug!("Initial configure");
-                window.toplevel().send_configure();
+                toplevel.send_configure();
             }
         }
         return;
@@ -404,8 +403,9 @@ impl DataControlHandler for State {
 delegate_data_control!(State);
 
 impl SeatHandler for State {
-    type KeyboardFocus = FocusTarget;
-    type PointerFocus = FocusTarget;
+    type KeyboardFocus = KeyboardFocusTarget;
+    type PointerFocus = PointerFocusTarget;
+    type TouchFocus = PointerFocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<Self> {
         &mut self.seat_state
