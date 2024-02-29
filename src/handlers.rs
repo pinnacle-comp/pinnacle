@@ -194,7 +194,7 @@ impl CompositorHandler for State {
 
                 if !initial_configure_sent {
                     tracing::debug!("Initial configure");
-                    window.toplevel().send_configure();
+                    window.toplevel().expect("in wayland enum").send_configure();
                 }
             }
 
@@ -280,7 +280,7 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
 
             if !initial_configure_sent {
                 tracing::debug!("Initial configure");
-                window.toplevel().send_configure();
+                window.toplevel().expect("in wayland enum").send_configure();
             }
         }
         return;
@@ -406,6 +406,7 @@ delegate_data_control!(State);
 impl SeatHandler for State {
     type KeyboardFocus = FocusTarget;
     type PointerFocus = FocusTarget;
+    type TouchFocus = FocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<Self> {
         &mut self.seat_state

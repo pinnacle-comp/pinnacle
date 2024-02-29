@@ -5,11 +5,12 @@ use smithay::{
     input::{
         keyboard::KeyboardTarget,
         pointer::{MotionEvent, PointerTarget},
+        touch::{self, TouchTarget},
         Seat,
     },
     output::Output,
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
-    utils::{IsAlive, SERIAL_COUNTER},
+    utils::{IsAlive, Serial, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
 
@@ -56,7 +57,7 @@ impl State {
             assert!(!win.is_x11_override_redirect());
 
             if let WindowElement::Wayland(w) = win {
-                w.toplevel().send_configure();
+                w.toplevel().expect("in wayland enum").send_configure();
             }
         }
 
@@ -140,9 +141,9 @@ impl TryFrom<FocusTarget> for WlSurface {
 impl PointerTarget<State> for FocusTarget {
     fn frame(&self, seat: &Seat<State>, data: &mut State) {
         match self {
-            FocusTarget::Window(window) => window.frame(seat, data),
-            FocusTarget::Popup(popup) => popup.wl_surface().frame(seat, data),
-            FocusTarget::LayerSurface(surf) => surf.frame(seat, data),
+            FocusTarget::Window(window) => PointerTarget::frame(window, seat, data),
+            FocusTarget::Popup(popup) => PointerTarget::frame(popup.wl_surface(), seat, data),
+            FocusTarget::LayerSurface(surf) => PointerTarget::frame(surf.wl_surface(), seat, data),
         }
     }
 
@@ -152,7 +153,9 @@ impl PointerTarget<State> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::enter(popup.wl_surface(), seat, data, event);
             }
-            FocusTarget::LayerSurface(surf) => PointerTarget::enter(surf, seat, data, event),
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::enter(surf.wl_surface(), seat, data, event)
+            }
         }
     }
 
@@ -162,7 +165,9 @@ impl PointerTarget<State> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::motion(popup.wl_surface(), seat, data, event);
             }
-            FocusTarget::LayerSurface(surf) => PointerTarget::motion(surf, seat, data, event),
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::motion(surf.wl_surface(), seat, data, event)
+            }
         }
     }
 
@@ -180,7 +185,7 @@ impl PointerTarget<State> for FocusTarget {
                 PointerTarget::relative_motion(popup.wl_surface(), seat, data, event);
             }
             FocusTarget::LayerSurface(surf) => {
-                PointerTarget::relative_motion(surf, seat, data, event);
+                PointerTarget::relative_motion(surf.wl_surface(), seat, data, event);
             }
         }
     }
@@ -196,7 +201,9 @@ impl PointerTarget<State> for FocusTarget {
             FocusTarget::Popup(popup) => {
                 PointerTarget::button(popup.wl_surface(), seat, data, event);
             }
-            FocusTarget::LayerSurface(surf) => PointerTarget::button(surf, seat, data, event),
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::button(surf.wl_surface(), seat, data, event)
+            }
         }
     }
 
@@ -209,23 +216,21 @@ impl PointerTarget<State> for FocusTarget {
         match self {
             FocusTarget::Window(window) => PointerTarget::axis(window, seat, data, frame),
             FocusTarget::Popup(popup) => PointerTarget::axis(popup.wl_surface(), seat, data, frame),
-            FocusTarget::LayerSurface(surf) => PointerTarget::axis(surf, seat, data, frame),
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::axis(surf.wl_surface(), seat, data, frame)
+            }
         }
     }
 
-    fn leave(
-        &self,
-        seat: &Seat<State>,
-        data: &mut State,
-        serial: smithay::utils::Serial,
-        time: u32,
-    ) {
+    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial, time: u32) {
         match self {
             FocusTarget::Window(window) => PointerTarget::leave(window, seat, data, serial, time),
             FocusTarget::Popup(popup) => {
                 PointerTarget::leave(popup.wl_surface(), seat, data, serial, time);
             }
-            FocusTarget::LayerSurface(surf) => PointerTarget::leave(surf, seat, data, serial, time),
+            FocusTarget::LayerSurface(surf) => {
+                PointerTarget::leave(surf.wl_surface(), seat, data, serial, time)
+            }
         }
     }
 
@@ -308,7 +313,7 @@ impl KeyboardTarget<State> for FocusTarget {
         seat: &Seat<State>,
         data: &mut State,
         keys: Vec<smithay::input::keyboard::KeysymHandle<'_>>,
-        serial: smithay::utils::Serial,
+        serial: Serial,
     ) {
         match self {
             FocusTarget::Window(window) => KeyboardTarget::enter(window, seat, data, keys, serial),
@@ -316,18 +321,20 @@ impl KeyboardTarget<State> for FocusTarget {
                 KeyboardTarget::enter(popup.wl_surface(), seat, data, keys, serial);
             }
             FocusTarget::LayerSurface(surf) => {
-                KeyboardTarget::enter(surf, seat, data, keys, serial);
+                KeyboardTarget::enter(surf.wl_surface(), seat, data, keys, serial);
             }
         }
     }
 
-    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: smithay::utils::Serial) {
+    fn leave(&self, seat: &Seat<State>, data: &mut State, serial: Serial) {
         match self {
             FocusTarget::Window(window) => KeyboardTarget::leave(window, seat, data, serial),
             FocusTarget::Popup(popup) => {
                 KeyboardTarget::leave(popup.wl_surface(), seat, data, serial);
             }
-            FocusTarget::LayerSurface(surf) => KeyboardTarget::leave(surf, seat, data, serial),
+            FocusTarget::LayerSurface(surf) => {
+                KeyboardTarget::leave(surf.wl_surface(), seat, data, serial)
+            }
         }
     }
 
@@ -337,7 +344,7 @@ impl KeyboardTarget<State> for FocusTarget {
         data: &mut State,
         key: smithay::input::keyboard::KeysymHandle<'_>,
         state: smithay::backend::input::KeyState,
-        serial: smithay::utils::Serial,
+        serial: Serial,
         time: u32,
     ) {
         match self {
@@ -348,7 +355,7 @@ impl KeyboardTarget<State> for FocusTarget {
                 KeyboardTarget::key(popup.wl_surface(), seat, data, key, state, serial, time);
             }
             FocusTarget::LayerSurface(surf) => {
-                KeyboardTarget::key(surf, seat, data, key, state, serial, time);
+                KeyboardTarget::key(surf.wl_surface(), seat, data, key, state, serial, time);
             }
         }
     }
@@ -358,7 +365,7 @@ impl KeyboardTarget<State> for FocusTarget {
         seat: &Seat<State>,
         data: &mut State,
         modifiers: smithay::input::keyboard::ModifiersState,
-        serial: smithay::utils::Serial,
+        serial: Serial,
     ) {
         match self {
             FocusTarget::Window(window) => {
@@ -368,9 +375,51 @@ impl KeyboardTarget<State> for FocusTarget {
                 KeyboardTarget::modifiers(popup.wl_surface(), seat, data, modifiers, serial);
             }
             FocusTarget::LayerSurface(surf) => {
-                KeyboardTarget::modifiers(surf, seat, data, modifiers, serial);
+                KeyboardTarget::modifiers(surf.wl_surface(), seat, data, modifiers, serial);
             }
         }
+    }
+}
+
+impl TouchTarget<State> for FocusTarget {
+    fn down(&self, seat: &Seat<State>, data: &mut State, event: &touch::DownEvent, seq: Serial) {
+        todo!()
+    }
+
+    fn up(&self, seat: &Seat<State>, data: &mut State, event: &touch::UpEvent, seq: Serial) {
+        todo!()
+    }
+
+    fn motion(
+        &self,
+        seat: &Seat<State>,
+        data: &mut State,
+        event: &touch::MotionEvent,
+        seq: Serial,
+    ) {
+        todo!()
+    }
+
+    fn frame(&self, seat: &Seat<State>, data: &mut State, seq: Serial) {
+        todo!()
+    }
+
+    fn cancel(&self, seat: &Seat<State>, data: &mut State, seq: Serial) {
+        todo!()
+    }
+
+    fn shape(&self, seat: &Seat<State>, data: &mut State, event: &touch::ShapeEvent, seq: Serial) {
+        todo!()
+    }
+
+    fn orientation(
+        &self,
+        seat: &Seat<State>,
+        data: &mut State,
+        event: &touch::OrientationEvent,
+        seq: Serial,
+    ) {
+        todo!()
     }
 }
 

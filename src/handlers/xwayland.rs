@@ -179,7 +179,7 @@ impl XwmHandler for State {
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
                     if let WindowElement::Wayland(win) = &win {
-                        win.toplevel().send_configure();
+                        win.toplevel().expect("in wayland enum").send_configure();
                     }
                 }
 
@@ -242,7 +242,7 @@ impl XwmHandler for State {
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
                     if let WindowElement::Wayland(win) = &win {
-                        win.toplevel().send_configure();
+                        win.toplevel().expect("in wayland enum").send_configure();
                     }
                 }
 

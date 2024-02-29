@@ -41,7 +41,7 @@ impl XdgShellHandler for State {
             state.states.set(xdg_toplevel::State::TiledRight);
         });
 
-        let window = WindowElement::Wayland(Window::new(surface.clone()));
+        let window = WindowElement::Wayland(Window::new_wayland_window(surface.clone()));
         self.new_windows.push(window);
 
         // if let (Some(output), _) | (None, Some(output)) = (
@@ -139,7 +139,7 @@ impl XdgShellHandler for State {
                 self.space.raise_element(win, true);
                 self.z_index_stack.set_focus(win.clone());
                 if let WindowElement::Wayland(win) = &win {
-                    win.toplevel().send_configure();
+                    win.toplevel().expect("in wayland enum").send_configure();
                 }
             }
             self.seat

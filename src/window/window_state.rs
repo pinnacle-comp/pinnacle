@@ -83,14 +83,17 @@ impl WindowElement {
 
                 match self {
                     WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Maximized);
-                            state.states.set(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
+                        window
+                            .toplevel()
+                            .expect("in wayland enum")
+                            .with_pending_state(|state| {
+                                state.states.unset(xdg_toplevel::State::Maximized);
+                                state.states.set(xdg_toplevel::State::Fullscreen);
+                                state.states.set(xdg_toplevel::State::TiledTop);
+                                state.states.set(xdg_toplevel::State::TiledLeft);
+                                state.states.set(xdg_toplevel::State::TiledBottom);
+                                state.states.set(xdg_toplevel::State::TiledRight);
+                            });
                     }
                     WindowElement::X11(surface) => {
                         surface
@@ -130,14 +133,17 @@ impl WindowElement {
 
                 match self {
                     WindowElement::Wayland(window) => {
-                        window.toplevel().with_pending_state(|state| {
-                            state.states.set(xdg_toplevel::State::Maximized);
-                            state.states.unset(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
+                        window
+                            .toplevel()
+                            .expect("in wayland enum")
+                            .with_pending_state(|state| {
+                                state.states.set(xdg_toplevel::State::Maximized);
+                                state.states.unset(xdg_toplevel::State::Fullscreen);
+                                state.states.set(xdg_toplevel::State::TiledTop);
+                                state.states.set(xdg_toplevel::State::TiledLeft);
+                                state.states.set(xdg_toplevel::State::TiledBottom);
+                                state.states.set(xdg_toplevel::State::TiledRight);
+                            });
                     }
                     WindowElement::X11(surface) => {
                         surface
@@ -172,14 +178,17 @@ impl WindowElement {
     fn set_floating_states(&self) {
         match self {
             WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
-                    state.states.unset(xdg_toplevel::State::Maximized);
-                    state.states.unset(xdg_toplevel::State::Fullscreen);
-                    state.states.unset(xdg_toplevel::State::TiledTop);
-                    state.states.unset(xdg_toplevel::State::TiledLeft);
-                    state.states.unset(xdg_toplevel::State::TiledBottom);
-                    state.states.unset(xdg_toplevel::State::TiledRight);
-                });
+                window
+                    .toplevel()
+                    .expect("in wayland enum")
+                    .with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.unset(xdg_toplevel::State::TiledTop);
+                        state.states.unset(xdg_toplevel::State::TiledLeft);
+                        state.states.unset(xdg_toplevel::State::TiledBottom);
+                        state.states.unset(xdg_toplevel::State::TiledRight);
+                    });
             }
             WindowElement::X11(surface) => {
                 surface
@@ -199,14 +208,17 @@ impl WindowElement {
     fn set_tiled_states(&self) {
         match self {
             WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
-                    state.states.unset(xdg_toplevel::State::Maximized);
-                    state.states.unset(xdg_toplevel::State::Fullscreen);
-                    state.states.set(xdg_toplevel::State::TiledTop);
-                    state.states.set(xdg_toplevel::State::TiledLeft);
-                    state.states.set(xdg_toplevel::State::TiledBottom);
-                    state.states.set(xdg_toplevel::State::TiledRight);
-                });
+                window
+                    .toplevel()
+                    .expect("in wayland enum")
+                    .with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
             }
             WindowElement::X11(surface) => {
                 surface

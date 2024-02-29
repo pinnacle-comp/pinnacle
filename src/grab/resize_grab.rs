@@ -160,7 +160,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
         match &self.window {
             WindowElement::Wayland(window) => {
-                let toplevel_surface = window.toplevel();
+                let toplevel_surface = window.toplevel().expect("in wayland enum");
 
                 toplevel_surface.with_pending_state(|state| {
                     state.states.set(xdg_toplevel::State::Resizing);
@@ -210,7 +210,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
             match &self.window {
                 WindowElement::Wayland(window) => {
-                    let toplevel_surface = window.toplevel();
+                    let toplevel_surface = window.toplevel().expect("in wayland enum");
                     toplevel_surface.with_pending_state(|state| {
                         state.states.unset(xdg_toplevel::State::Resizing);
                         state.size = Some(self.last_window_size);
@@ -459,11 +459,17 @@ pub fn resize_request_client(
         let initial_window_size = window.geometry().size;
 
         if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
-            window.toplevel().with_pending_state(|state| {
-                state.states.set(xdg_toplevel::State::Resizing);
-            });
+            window
+                .toplevel()
+                .expect("in wayland enum")
+                .with_pending_state(|state| {
+                    state.states.set(xdg_toplevel::State::Resizing);
+                });
 
-            window.toplevel().send_pending_configure();
+            window
+                .toplevel()
+                .expect("in wayland enum")
+                .send_pending_configure();
         }
 
         let grab = ResizeSurfaceGrab::start(
@@ -507,11 +513,17 @@ pub fn resize_request_server(
     let initial_window_size = window.geometry().size;
 
     if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
-        window.toplevel().with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Resizing);
-        });
+        window
+            .toplevel()
+            .expect("in wayland enum")
+            .with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Resizing);
+            });
 
-        window.toplevel().send_pending_configure();
+        window
+            .toplevel()
+            .expect("in wayland enum")
+            .send_pending_configure();
     }
 
     let start_data = smithay::input::pointer::GrabStartData {

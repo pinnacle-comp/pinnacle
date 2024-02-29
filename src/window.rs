@@ -193,9 +193,12 @@ impl WindowElement {
     pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
         match self {
             WindowElement::Wayland(window) => {
-                window.toplevel().with_pending_state(|state| {
-                    state.size = Some(new_geo.size);
-                });
+                window
+                    .toplevel()
+                    .expect("in wayland enum")
+                    .with_pending_state(|state| {
+                        state.size = Some(new_geo.size);
+                    });
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 // TODO: maybe move this check elsewhere idk
@@ -217,8 +220,9 @@ impl WindowElement {
 
     pub fn class(&self) -> Option<String> {
         match self {
-            WindowElement::Wayland(window) => {
-                compositor::with_states(window.toplevel().wl_surface(), |states| {
+            WindowElement::Wayland(window) => compositor::with_states(
+                window.toplevel().expect("in wayland enum").wl_surface(),
+                |states| {
                     states
                         .data_map
                         .get::<XdgToplevelSurfaceData>()
@@ -227,8 +231,8 @@ impl WindowElement {
                         .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
                         .app_id
                         .clone()
-                })
-            }
+                },
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 Some(surface.class())
             }
@@ -238,8 +242,9 @@ impl WindowElement {
 
     pub fn title(&self) -> Option<String> {
         match self {
-            WindowElement::Wayland(window) => {
-                compositor::with_states(window.toplevel().wl_surface(), |states| {
+            WindowElement::Wayland(window) => compositor::with_states(
+                window.toplevel().expect("in wayland enum").wl_surface(),
+                |states| {
                     states
                         .data_map
                         .get::<XdgToplevelSurfaceData>()
@@ -248,8 +253,8 @@ impl WindowElement {
                         .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
                         .title
                         .clone()
-                })
-            }
+                },
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 Some(surface.title())
             }
@@ -335,7 +340,10 @@ impl WindowElement {
 impl PointerTarget<State> for WindowElement {
     fn frame(&self, seat: &Seat<State>, state: &mut State) {
         match self {
-            WindowElement::Wayland(window) => window.frame(seat, state),
+            WindowElement::Wayland(window) => window
+                .wl_surface()
+                .expect("in wayland enum")
+                .frame(seat, state),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 surface.frame(seat, state)
             }
@@ -346,7 +354,12 @@ impl PointerTarget<State> for WindowElement {
     fn enter(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::enter(window, seat, state, event),
+            WindowElement::Wayland(window) => PointerTarget::enter(
+                &window.wl_surface().expect("in wayland enum"),
+                seat,
+                state,
+                event,
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::enter(surface, seat, state, event)
             }
@@ -364,7 +377,12 @@ impl PointerTarget<State> for WindowElement {
     fn motion(&self, seat: &Seat<State>, state: &mut State, event: &MotionEvent) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::motion(window, seat, state, event),
+            WindowElement::Wayland(window) => PointerTarget::motion(
+                &window.wl_surface().expect("in wayland enum"),
+                seat,
+                state,
+                event,
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::motion(surface, seat, state, event)
             }
@@ -381,7 +399,12 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::relative_motion(window, seat, state, event);
+                PointerTarget::relative_motion(
+                    &window.wl_surface().expect("in wayland enum"),
+                    seat,
+                    state,
+                    event,
+                );
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::relative_motion(surface, seat, state, event);
@@ -398,7 +421,12 @@ impl PointerTarget<State> for WindowElement {
     ) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::button(window, seat, state, event),
+            WindowElement::Wayland(window) => PointerTarget::button(
+                &window.wl_surface().expect("in wayland enum"),
+                seat,
+                state,
+                event,
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::button(surface, seat, state, event)
             }
@@ -409,7 +437,12 @@ impl PointerTarget<State> for WindowElement {
     fn axis(&self, seat: &Seat<State>, state: &mut State, frame: AxisFrame) {
         // TODO: ssd
         match self {
-            WindowElement::Wayland(window) => PointerTarget::axis(window, seat, state, frame),
+            WindowElement::Wayland(window) => PointerTarget::axis(
+                &window.wl_surface().expect("in wayland enum"),
+                seat,
+                state,
+                frame,
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::axis(surface, seat, state, frame)
             }
@@ -421,7 +454,13 @@ impl PointerTarget<State> for WindowElement {
         // TODO: ssd
         match self {
             WindowElement::Wayland(window) => {
-                PointerTarget::leave(window, seat, state, serial, time);
+                PointerTarget::leave(
+                    &window.wl_surface().expect("in wayland enum"),
+                    seat,
+                    state,
+                    serial,
+                    time,
+                );
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 PointerTarget::leave(surface, seat, state, serial, time)
@@ -520,7 +559,13 @@ impl KeyboardTarget<State> for WindowElement {
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::enter(window, seat, state, keys, serial);
+                KeyboardTarget::enter(
+                    &window.wl_surface().expect("in wayland enum"),
+                    seat,
+                    state,
+                    keys,
+                    serial,
+                );
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::enter(surface, seat, state, keys, serial)
@@ -531,7 +576,12 @@ impl KeyboardTarget<State> for WindowElement {
 
     fn leave(&self, seat: &Seat<State>, state: &mut State, serial: Serial) {
         match self {
-            WindowElement::Wayland(window) => KeyboardTarget::leave(window, seat, state, serial),
+            WindowElement::Wayland(window) => KeyboardTarget::leave(
+                &window.wl_surface().expect("in wayland enum"),
+                seat,
+                state,
+                serial,
+            ),
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::leave(surface, seat, state, serial)
             }
@@ -550,7 +600,15 @@ impl KeyboardTarget<State> for WindowElement {
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::key(window, seat, state, key, key_state, serial, time);
+                KeyboardTarget::key(
+                    &window.wl_surface().expect("in wayland enum"),
+                    seat,
+                    state,
+                    key,
+                    key_state,
+                    serial,
+                    time,
+                );
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::key(surface, seat, state, key, key_state, serial, time);
@@ -568,7 +626,13 @@ impl KeyboardTarget<State> for WindowElement {
     ) {
         match self {
             WindowElement::Wayland(window) => {
-                KeyboardTarget::modifiers(window, seat, state, modifiers, serial);
+                KeyboardTarget::modifiers(
+                    &window.wl_surface().expect("in wayland enum"),
+                    seat,
+                    state,
+                    modifiers,
+                    serial,
+                );
             }
             WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
                 KeyboardTarget::modifiers(surface, seat, state, modifiers, serial);

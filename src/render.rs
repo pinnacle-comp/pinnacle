@@ -310,6 +310,7 @@ where
             if let WindowElement::Wayland(window) = win {
                 window
                     .toplevel()
+                    .expect("in wayland enum")
                     .current_state()
                     .states
                     .contains(xdg_toplevel::State::Fullscreen)

@@ -91,8 +91,12 @@ const SUPPORTED_FORMATS: &[Fourcc] = &[
 const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 /// A [`MultiRenderer`] that uses the [`GbmGlesBackend`].
-type UdevRenderer<'a, 'b> =
-    MultiRenderer<'a, 'a, 'b, GbmGlesBackend<GlesRenderer>, GbmGlesBackend<GlesRenderer>>;
+type UdevRenderer<'a> = MultiRenderer<
+    'a,
+    'a,
+    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
+    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
+>;
 
 /// Udev state attached to each [`Output`].
 #[derive(Debug, PartialEq)]
@@ -110,7 +114,7 @@ pub struct Udev {
     pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     pub(super) primary_gpu: DrmNode,
     allocator: Option<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>,
-    pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer>>,
+    pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     backends: HashMap<DrmNode, UdevBackendData>,
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
@@ -226,10 +230,7 @@ impl BackendData for Udev {
     }
 
     fn early_import(&mut self, surface: &WlSurface) {
-        if let Err(err) =
-            self.gpu_manager
-                .early_import(Some(self.primary_gpu), self.primary_gpu, surface)
-        {
+        if let Err(err) = self.gpu_manager.early_import(self.primary_gpu, surface) {
             tracing::warn!("early buffer import failed: {}", err);
         }
     }
@@ -556,7 +557,7 @@ enum DeviceAddError {
 fn get_surface_dmabuf_feedback(
     primary_gpu: DrmNode,
     render_node: DrmNode,
-    gpu_manager: &mut GpuManager<GbmGlesBackend<GlesRenderer>>,
+    gpu_manager: &mut GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     composition: &GbmDrmCompositor,
 ) -> Option<DrmSurfaceDmabufFeedback> {
     let primary_formats = gpu_manager
@@ -1210,18 +1211,8 @@ impl State {
             udev.gpu_manager.single_renderer(&render_node)
         } else {
             let format = surface.compositor.format();
-            udev.gpu_manager.renderer(
-                &primary_gpu,
-                &render_node,
-                udev
-                    .allocator
-                    .as_mut()
-                    // TODO: We could build some kind of `GLAllocator` using Renderbuffers in theory for this case.
-                    //  That would work for memcpy's of offscreen contents.
-                    .expect("We need an allocator for multigpu systems")
-                    .as_mut(),
-                format,
-            )
+            udev.gpu_manager
+                .renderer(&primary_gpu, &render_node, format)
         }
         .expect("failed to create MultiRenderer");
 
@@ -1294,7 +1285,7 @@ fn render_surface_for_output<'a>(
 #[allow(clippy::too_many_arguments)]
 fn render_surface(
     surface: &mut RenderSurface,
-    renderer: &mut UdevRenderer<'_, '_>,
+    renderer: &mut UdevRenderer<'_>,
     output: &Output,
 
     space: &Space<WindowElement>,

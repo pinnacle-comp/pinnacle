@@ -1123,7 +1123,9 @@ impl window_service_server::WindowService for WindowService {
             let Some(window) = window_id.window(state) else { return };
 
             match window {
-                WindowElement::Wayland(window) => window.toplevel().send_close(),
+                WindowElement::Wayland(window) => {
+                    window.toplevel().expect("in wayland enum").send_close()
+                }
                 WindowElement::X11(surface) => surface.close().expect("failed to close x11 win"),
                 WindowElement::X11OverrideRedirect(_) => {
                     tracing::warn!("tried to close override redirect window");
@@ -1431,7 +1433,7 @@ impl window_service_server::WindowService for WindowService {
 
             for window in state.space.elements() {
                 if let WindowElement::Wayland(window) = window {
-                    window.toplevel().send_configure();
+                    window.toplevel().expect("in wayland enum").send_configure();
                 }
             }
 

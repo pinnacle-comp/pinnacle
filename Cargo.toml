@@ -34,8 +34,8 @@ repository.workspace = true
 keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", rev = "1074914", default-features = false, features = ["desktop", "wayland_frontend"] }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1074914" }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "418190e", default-features = false, features = ["desktop", "wayland_frontend"] }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "418190e" }
 
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }

@@ -117,8 +117,9 @@ impl State {
             if win.with_state(|state| state.target_loc.is_some()) {
                 match win {
                     WindowElement::Wayland(wl_win) => {
-                        let pending =
-                            compositor::with_states(wl_win.toplevel().wl_surface(), |states| {
+                        let pending = compositor::with_states(
+                            wl_win.toplevel().expect("in wayland enum").wl_surface(),
+                            |states| {
                                 states
                                     .data_map
                                     .get::<XdgToplevelSurfaceData>()
@@ -126,10 +127,14 @@ impl State {
                                     .lock()
                                     .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
                                     .has_pending_changes()
-                            });
+                            },
+                        );
 
                         if pending {
-                            pending_wins.push((win.clone(), wl_win.toplevel().send_configure()))
+                            pending_wins.push((
+                                win.clone(),
+                                wl_win.toplevel().expect("in wayland enum").send_configure(),
+                            ))
                         } else {
                             let loc = win.with_state(|state| state.target_loc.take());
                             if let Some(loc) = loc {

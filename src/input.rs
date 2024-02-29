@@ -358,7 +358,7 @@ impl State {
 
                 for window in self.space.elements() {
                     if let WindowElement::Wayland(window) = window {
-                        window.toplevel().send_configure();
+                        window.toplevel().expect("in wayland enum").send_configure();
                     }
                 }
             } else {
@@ -368,7 +368,7 @@ impl State {
                         for window in state.focus_stack.stack.iter() {
                             window.set_activate(false);
                             if let WindowElement::Wayland(window) = window {
-                                window.toplevel().send_configure();
+                                window.toplevel().expect("in wayland enum").send_configure();
                             }
                         }
                     });
