@@ -51,13 +51,16 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         }
 
         state.space.raise_element(&self.window, false);
-        if let WindowElement::X11(surface) = &self.window {
-            state
-                .xwm
-                .as_mut()
-                .expect("no xwm")
-                .raise_window(surface)
-                .expect("failed to raise x11 win");
+        if let Some(surface) = self.window.x11_surface() {
+            // INFO: can you raise OR windows or no idk
+            if !surface.is_override_redirect() {
+                state
+                    .xwm
+                    .as_mut()
+                    .expect("no xwm")
+                    .raise_window(surface)
+                    .expect("failed to raise x11 win");
+            }
         }
 
         let is_tiled = self
@@ -136,12 +139,14 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
             });
 
-            if let WindowElement::X11(surface) = &self.window {
-                let geo = surface.geometry();
-                let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
-                surface
-                    .configure(new_geo)
-                    .expect("failed to configure x11 win");
+            if let Some(surface) = self.window.x11_surface() {
+                if !surface.is_override_redirect() {
+                    let geo = surface.geometry();
+                    let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
+                    surface
+                        .configure(new_geo)
+                        .expect("failed to configure x11 win");
+                }
             }
 
             let outputs = state.space.outputs_for_element(&self.window);

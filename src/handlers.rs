@@ -60,7 +60,6 @@ use smithay::{
 use crate::{
     focus::FocusTarget,
     state::{ClientState, State, WithState},
-    window::WindowElement,
 };
 
 impl BufferHandler for State {
@@ -107,9 +106,10 @@ impl CompositorHandler for State {
     fn commit(&mut self, surface: &WlSurface) {
         tracing::trace!("commit on surface {surface:?}");
 
+        utils::on_commit_buffer_handler::<State>(surface);
+
         X11Wm::commit_hook::<State>(surface);
 
-        utils::on_commit_buffer_handler::<State>(surface);
         self.backend.early_import(surface);
 
         let mut root = surface.clone();
@@ -118,10 +118,10 @@ impl CompositorHandler for State {
         }
 
         if !compositor::is_sync_subsurface(surface) {
-            if let Some(win @ WindowElement::Wayland(window)) = &self.window_for_surface(&root) {
+            if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
-                if let Some(loc) = win.with_state(|state| state.target_loc.take()) {
-                    self.space.map_element(win.clone(), loc, false);
+                if let Some(loc) = window.with_state(|state| state.target_loc.take()) {
+                    self.space.map_element(window.clone(), loc, false);
                 }
             }
         };
@@ -149,7 +149,7 @@ impl CompositorHandler for State {
                     self.output_focus_stack.current_focus(),
                     self.space.outputs().next(),
                 ) {
-                    tracing::debug!("PLACING TOPLEVEL");
+                    tracing::debug!("Placing toplevel");
                     new_window.place_on_output(output);
                     output.with_state(|state| state.focus_stack.set_focus(new_window.clone()));
                 }
@@ -180,22 +180,9 @@ impl CompositorHandler for State {
                             SERIAL_COUNTER.next_serial(),
                         );
                 });
-            } else if let WindowElement::Wayland(window) = &new_window {
-                window.on_commit();
-                let initial_configure_sent = compositor::with_states(surface, |states| {
-                    states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                        .lock()
-                        .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                        .initial_configure_sent
-                });
-
-                if !initial_configure_sent {
-                    tracing::debug!("Initial configure");
-                    window.toplevel().expect("in wayland enum").send_configure();
-                }
+            } else if new_window.toplevel().is_some() {
+                new_window.on_commit();
+                ensure_initial_configure(surface, self);
             }
 
             return;
@@ -266,8 +253,11 @@ impl CompositorHandler for State {
 delegate_compositor!(State);
 
 fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
-    if let Some(window) = state.window_for_surface(surface) {
-        if let WindowElement::Wayland(window) = &window {
+    if let (Some(window), _) | (None, Some(window)) = (
+        state.window_for_surface(surface),
+        state.new_window_for_surface(surface),
+    ) {
+        if let Some(toplevel) = window.toplevel() {
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
                     .data_map
@@ -280,7 +270,7 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
 
             if !initial_configure_sent {
                 tracing::debug!("Initial configure");
-                window.toplevel().expect("in wayland enum").send_configure();
+                toplevel.send_configure();
             }
         }
         return;

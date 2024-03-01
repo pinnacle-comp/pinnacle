@@ -56,8 +56,8 @@ impl State {
         if let Some(win) = &current_focus {
             assert!(!win.is_x11_override_redirect());
 
-            if let WindowElement::Wayland(w) = win {
-                w.toplevel().expect("in wayland enum").send_configure();
+            if let Some(toplevel) = win.toplevel() {
+                toplevel.send_configure();
             }
         }
 
@@ -437,13 +437,9 @@ impl WaylandFocus for FocusTarget {
         object_id: &smithay::reexports::wayland_server::backend::ObjectId,
     ) -> bool {
         match self {
-            FocusTarget::Window(WindowElement::Wayland(window)) => window.same_client_as(object_id),
-            FocusTarget::Window(
-                WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface),
-            ) => surface.same_client_as(object_id),
+            FocusTarget::Window(window) => window.same_client_as(object_id),
             FocusTarget::Popup(popup) => popup.wl_surface().id().same_client_as(object_id),
             FocusTarget::LayerSurface(surf) => surf.wl_surface().id().same_client_as(object_id),
-            _ => unreachable!(),
         }
     }
 }

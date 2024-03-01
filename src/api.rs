@@ -34,11 +34,11 @@ use pinnacle_api_defs::pinnacle::{
     },
 };
 use smithay::{
-    desktop::space::SpaceElement,
+    desktop::{space::SpaceElement, WindowSurface},
     input::keyboard::XkbConfig,
     reexports::{calloop, input as libinput, wayland_protocols::xdg::shell::server},
     utils::{Point, Rectangle, SERIAL_COUNTER},
-    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
+    wayland::seat::WaylandFocus,
 };
 use sysinfo::ProcessRefreshKind;
 use tokio::{
@@ -48,6 +48,7 @@ use tokio::{
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
+use tracing::{error, warn};
 
 use crate::{
     config::ConnectorSavedState,
@@ -56,7 +57,7 @@ use crate::{
     output::OutputName,
     state::{State, WithState},
     tag::{Tag, TagId},
-    window::{window_state::WindowId, WindowElement},
+    window::window_state::WindowId,
 };
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
@@ -316,7 +317,7 @@ impl input_service_server::InputService for InputService {
             };
             if let Some(kb) = state.seat.get_keyboard() {
                 if let Err(err) = kb.set_xkb_config(state, new_config) {
-                    tracing::error!("Failed to set xkbconfig: {err}");
+                    error!("Failed to set xkbconfig: {err}");
                 }
             }
         })
@@ -557,7 +558,7 @@ impl process_service_server::ProcessService for ProcessService {
                 .args(command)
                 .spawn()
             else {
-                tracing::warn!("Tried to run {arg0}, but it doesn't exist",);
+                warn!("Tried to run {arg0}, but it doesn't exist",);
                 return;
             };
 
@@ -584,7 +585,7 @@ impl process_service_server::ProcessService for ProcessService {
                         match sender.send(response) {
                             Ok(_) => (),
                             Err(err) => {
-                                tracing::error!(err = ?err);
+                                error!(err = ?err);
                                 break;
                             }
                         }
@@ -608,7 +609,7 @@ impl process_service_server::ProcessService for ProcessService {
                         match sender.send(response) {
                             Ok(_) => (),
                             Err(err) => {
-                                tracing::error!(err = ?err);
+                                error!(err = ?err);
                                 break;
                             }
                         }
@@ -627,7 +628,7 @@ impl process_service_server::ProcessService for ProcessService {
                         // TODO: handle error
                         let _ = sender.send(response);
                     }
-                    Err(err) => tracing::warn!("child wait() err: {err}"),
+                    Err(err) => warn!("child wait() err: {err}"),
                 }
             });
         })
@@ -1122,15 +1123,17 @@ impl window_service_server::WindowService for WindowService {
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
 
-            match window {
-                WindowElement::Wayland(window) => {
-                    window.toplevel().expect("in wayland enum").send_close()
+            match window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => toplevel.send_close(),
+                WindowSurface::X11(surface) => {
+                    if !surface.is_override_redirect() {
+                        if let Err(err) = surface.close() {
+                            error!("failed to close x11 window: {err}");
+                        }
+                    } else {
+                        warn!("tried to close OR window");
+                    }
                 }
-                WindowElement::X11(surface) => surface.close().expect("failed to close x11 win"),
-                WindowElement::X11OverrideRedirect(_) => {
-                    tracing::warn!("tried to close override redirect window");
-                }
-                _ => unreachable!(),
             }
         })
         .await
@@ -1356,31 +1359,13 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
+            if window.is_x11_override_redirect() {
+                return;
+            }
+
             let Some(output) = window.output(state) else {
                 return;
             };
-
-            //     if !matches!(
-            //         &focus,
-            //         FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
-            //     ) {
-            //         keyboard.set_focus(self, Some(focus.clone()), serial);
-            //     }
-            //
-            //     self.space.elements().for_each(|window| {
-            //         if let WindowElement::Wayland(window) = window {
-            //             window.toplevel().send_configure();
-            //         }
-            //     });
-            // } else {
-            //     self.space.elements().for_each(|window| {
-            //         window.set_activate(false);
-            //         if let WindowElement::Wayland(window) = window {
-            //             window.toplevel().send_configure();
-            //         }
-            //     });
-            //     keyboard.set_focus(self, None, serial);
-            // }
 
             for win in state.space.elements() {
                 win.set_activate(false);
@@ -1432,8 +1417,8 @@ impl window_service_server::WindowService for WindowService {
             }
 
             for window in state.space.elements() {
-                if let WindowElement::Wayland(window) = window {
-                    window.toplevel().expect("in wayland enum").send_configure();
+                if let Some(toplevel) = window.toplevel() {
+                    toplevel.send_configure();
                 }
             }
 
@@ -1677,27 +1662,8 @@ impl window_service_server::WindowService for WindowService {
                 })
             };
 
-            let (class, title) = window.as_ref().map_or((None, None), |win| match &win {
-                WindowElement::Wayland(_) => {
-                    if let Some(wl_surf) = win.wl_surface() {
-                        compositor::with_states(&wl_surf, |states| {
-                            let lock = states
-                                .data_map
-                                .get::<XdgToplevelSurfaceData>()
-                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                .lock()
-                                .expect("failed to acquire lock");
-                            (lock.app_id.clone(), lock.title.clone())
-                        })
-                    } else {
-                        (None, None)
-                    }
-                }
-                WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                    (Some(surface.class()), Some(surface.title()))
-                }
-                _ => unreachable!(),
-            });
+            let class = window.as_ref().and_then(|win| win.class());
+            let title = window.as_ref().and_then(|win| win.title());
 
             let focused = window.as_ref().and_then(|win| {
                 state

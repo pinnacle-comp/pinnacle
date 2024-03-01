@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::space::SpaceElement,
+    desktop::{space::SpaceElement, utils::bbox_from_surface_tree, WindowSurface},
     input::{
         pointer::{AxisFrame, ButtonEvent, Focus, GrabStartData, PointerGrab, PointerInnerHandle},
         Seat, SeatHandler,
     },
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel::{self},
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::{compositor, shell::xdg::SurfaceCachedState},
+    wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
     xwayland,
 };
 
@@ -158,28 +158,26 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height.clamp(min_height, max_height),
         ));
 
-        match &self.window {
-            WindowElement::Wayland(window) => {
-                let toplevel_surface = window.toplevel().expect("in wayland enum");
-
-                toplevel_surface.with_pending_state(|state| {
+        match self.window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
                     state.states.set(xdg_toplevel::State::Resizing);
                     state.size = Some(self.last_window_size);
                 });
 
-                toplevel_surface.send_pending_configure();
+                toplevel.send_pending_configure();
             }
-            WindowElement::X11(surface) => {
-                let loc = data
-                    .space
-                    .element_location(&self.window)
-                    .expect("failed to get x11 win loc");
-                surface
-                    .configure(Rectangle::from_loc_and_size(loc, self.last_window_size))
-                    .expect("failed to configure x11 win");
+            WindowSurface::X11(surface) => {
+                if !surface.is_override_redirect() {
+                    let loc = data
+                        .space
+                        .element_location(&self.window)
+                        .expect("failed to get x11 win loc");
+                    surface
+                        .configure(Rectangle::from_loc_and_size(loc, self.last_window_size))
+                        .expect("failed to configure x11 win");
+                }
             }
-            WindowElement::X11OverrideRedirect(_) => (),
-            _ => unreachable!(),
         }
     }
 
@@ -208,17 +206,16 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                 return;
             }
 
-            match &self.window {
-                WindowElement::Wayland(window) => {
-                    let toplevel_surface = window.toplevel().expect("in wayland enum");
-                    toplevel_surface.with_pending_state(|state| {
+            match self.window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    toplevel.with_pending_state(|state| {
                         state.states.unset(xdg_toplevel::State::Resizing);
                         state.size = Some(self.last_window_size);
                     });
 
-                    toplevel_surface.send_pending_configure();
+                    toplevel.send_pending_configure();
 
-                    toplevel_surface.wl_surface().with_state(|state| {
+                    toplevel.wl_surface().with_state(|state| {
                         // TODO: validate resize state
                         state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                             edges: self.edges,
@@ -226,7 +223,10 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                         };
                     });
                 }
-                WindowElement::X11(surface) => {
+                WindowSurface::X11(surface) => {
+                    if surface.is_override_redirect() {
+                        return;
+                    }
                     let Some(surface) = surface.wl_surface() else { return };
                     surface.with_state(|state| {
                         state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
@@ -235,8 +235,6 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                         };
                     });
                 }
-                WindowElement::X11OverrideRedirect(_) => (),
-                _ => unreachable!(),
             }
         }
     }
@@ -418,12 +416,14 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
     if new_loc.x.is_some() || new_loc.y.is_some() {
         state.space.map_element(window.clone(), window_loc, false);
 
-        if let WindowElement::X11(surface) = window {
-            let geo = surface.geometry();
-            let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
-            surface
-                .configure(new_geo)
-                .expect("failed to configure x11 win");
+        if let Some(surface) = window.x11_surface() {
+            if !surface.is_override_redirect() {
+                let geo = surface.geometry();
+                let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
+                surface
+                    .configure(new_geo)
+                    .expect("failed to configure x11 win");
+            }
         }
     }
 
@@ -458,18 +458,14 @@ pub fn resize_request_client(
             .expect("resize request called on unmapped window");
         let initial_window_size = window.geometry().size;
 
-        if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
-            window
-                .toplevel()
-                .expect("in wayland enum")
-                .with_pending_state(|state| {
+        if let Some(window) = state.window_for_surface(surface) {
+            if let Some(toplevel) = window.toplevel() {
+                toplevel.with_pending_state(|state| {
                     state.states.set(xdg_toplevel::State::Resizing);
                 });
 
-            window
-                .toplevel()
-                .expect("in wayland enum")
-                .send_pending_configure();
+                toplevel.send_pending_configure();
+            }
         }
 
         let grab = ResizeSurfaceGrab::start(
@@ -512,18 +508,14 @@ pub fn resize_request_server(
         .expect("resize request called on unmapped window");
     let initial_window_size = window.geometry().size;
 
-    if let Some(WindowElement::Wayland(window)) = state.window_for_surface(surface) {
-        window
-            .toplevel()
-            .expect("in wayland enum")
-            .with_pending_state(|state| {
+    if let Some(window) = state.window_for_surface(surface) {
+        if let Some(toplevel) = window.toplevel() {
+            toplevel.with_pending_state(|state| {
                 state.states.set(xdg_toplevel::State::Resizing);
             });
 
-        window
-            .toplevel()
-            .expect("in wayland enum")
-            .send_pending_configure();
+            toplevel.send_pending_configure();
+        }
     }
 
     let start_data = smithay::input::pointer::GrabStartData {

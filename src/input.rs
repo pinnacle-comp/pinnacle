@@ -4,7 +4,7 @@ pub mod libinput;
 
 use std::{collections::HashMap, mem::Discriminant};
 
-use crate::{focus::FocusTarget, state::WithState, window::WindowElement};
+use crate::{focus::FocusTarget, state::WithState};
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
     set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
     SetMousebindResponse,
@@ -351,14 +351,14 @@ impl State {
 
                 if !matches!(
                     &focus,
-                    FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
+                    FocusTarget::Window(window) if window.is_x11_override_redirect()
                 ) {
                     keyboard.set_focus(self, Some(focus.clone()), serial);
                 }
 
                 for window in self.space.elements() {
-                    if let WindowElement::Wayland(window) = window {
-                        window.toplevel().expect("in wayland enum").send_configure();
+                    if let Some(toplevel) = window.toplevel() {
+                        toplevel.send_configure();
                     }
                 }
             } else {
@@ -367,8 +367,8 @@ impl State {
                         state.focus_stack.unset_focus();
                         for window in state.focus_stack.stack.iter() {
                             window.set_activate(false);
-                            if let WindowElement::Wayland(window) = window {
-                                window.toplevel().expect("in wayland enum").send_configure();
+                            if let Some(toplevel) = window.toplevel() {
+                                toplevel.send_configure();
                             }
                         }
                     });
