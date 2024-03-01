@@ -24,7 +24,7 @@ use smithay::{
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
@@ -118,7 +118,7 @@ impl XwmHandler for State {
                 .expect("Seat had no keyboard") // FIXME: actually handle error
                 .set_focus(
                     state,
-                    Some(FocusTarget::Window(window)),
+                    Some(KeyboardFocusTarget::Window(window)),
                     SERIAL_COUNTER.next_serial(),
                 );
         });
@@ -177,9 +177,11 @@ impl XwmHandler for State {
             if let Some(output) = win.output(self) {
                 self.update_windows(&output);
 
-                let focus = self.focused_window(&output).map(FocusTarget::Window);
+                let focus = self
+                    .focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
 
-                if let Some(FocusTarget::Window(win)) = &focus {
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
                     if let Some(toplevel) = win.toplevel() {
@@ -238,9 +240,11 @@ impl XwmHandler for State {
             if let Some(output) = win.output(self) {
                 self.update_windows(&output);
 
-                let focus = self.focused_window(&output).map(FocusTarget::Window);
+                let focus = self
+                    .focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
 
-                if let Some(FocusTarget::Window(win)) = &focus {
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
                     self.space.raise_element(win, true);
                     self.z_index_stack.set_focus(win.clone());
                     if let Some(toplevel) = win.toplevel() {
@@ -411,7 +415,7 @@ impl XwmHandler for State {
             .get_keyboard()
             .and_then(|kb| kb.current_focus())
             .is_some_and(|focus| {
-                if let FocusTarget::Window(window) = focus {
+                if let KeyboardFocusTarget::Window(window) = focus {
                     if let Some(surface) = window.x11_surface() {
                         return surface.xwm_id().expect("x11surface had no xwm id") == xwm;
                     }

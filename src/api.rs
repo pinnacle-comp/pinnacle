@@ -52,7 +52,7 @@ use tracing::{error, warn};
 
 use crate::{
     config::ConnectorSavedState,
-    focus::FocusTarget,
+    focus::keyboard::KeyboardFocusTarget,
     input::ModifierMask,
     output::OutputName,
     state::{State, WithState},
@@ -1379,7 +1379,7 @@ impl window_service_server::WindowService for WindowService {
                     if let Some(keyboard) = state.seat.get_keyboard() {
                         keyboard.set_focus(
                             state,
-                            Some(FocusTarget::Window(window)),
+                            Some(KeyboardFocusTarget::Window(window)),
                             SERIAL_COUNTER.next_serial(),
                         );
                     }
@@ -1407,7 +1407,7 @@ impl window_service_server::WindowService for WindowService {
                         if let Some(keyboard) = state.seat.get_keyboard() {
                             keyboard.set_focus(
                                 state,
-                                Some(FocusTarget::Window(window)),
+                                Some(KeyboardFocusTarget::Window(window)),
                                 SERIAL_COUNTER.next_serial(),
                             );
                         }
@@ -1518,12 +1518,17 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some((FocusTarget::Window(window), _)) =
-                state.focus_target_under(state.pointer_location)
+            let Some((pointer_focus, _)) = state.pointer_focus_target_under(state.pointer_location)
             else {
                 return;
             };
-            let Some(wl_surf) = window.wl_surface() else { return };
+            let Some(window) = pointer_focus.window_for(state) else {
+                tracing::info!("Move grabs are currently not implemented for non-windows");
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else {
+                return;
+            };
             let seat = state.seat.clone();
 
             crate::grab::move_grab::move_request_server(
@@ -1549,12 +1554,17 @@ impl window_service_server::WindowService for WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             let pointer_loc = state.pointer_location;
-            let Some((FocusTarget::Window(window), window_loc)) =
-                state.focus_target_under(pointer_loc)
+            let Some((pointer_focus, window_loc)) = state.pointer_focus_target_under(pointer_loc)
             else {
                 return;
             };
-            let Some(wl_surf) = window.wl_surface() else { return };
+            let Some(window) = pointer_focus.window_for(state) else {
+                tracing::info!("Move grabs are currently not implemented for non-windows");
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else {
+                return;
+            };
 
             let window_geometry = window.geometry();
             let window_x = window_loc.x as f64;

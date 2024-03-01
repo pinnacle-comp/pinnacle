@@ -58,7 +58,7 @@ use smithay::{
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     state::{ClientState, State, WithState},
 };
 
@@ -176,7 +176,7 @@ impl CompositorHandler for State {
                         .expect("Seat had no keyboard") // FIXME: actually handle error
                         .set_focus(
                             state,
-                            Some(FocusTarget::Window(new_window)),
+                            Some(KeyboardFocusTarget::Window(new_window)),
                             SERIAL_COUNTER.next_serial(),
                         );
                 });
@@ -394,9 +394,9 @@ impl DataControlHandler for State {
 delegate_data_control!(State);
 
 impl SeatHandler for State {
-    type KeyboardFocus = FocusTarget;
-    type PointerFocus = FocusTarget;
-    type TouchFocus = FocusTarget;
+    type KeyboardFocus = KeyboardFocusTarget;
+    type PointerFocus = PointerFocusTarget;
+    type TouchFocus = PointerFocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<Self> {
         &mut self.seat_state

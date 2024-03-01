@@ -6,14 +6,13 @@ use smithay::{
     // |     input::keyboard
     input::{
         pointer::{
-            AxisFrame, ButtonEvent, GrabStartData, MotionEvent, PointerInnerHandle,
-            RelativeMotionEvent,
+            AxisFrame, ButtonEvent, Focus, GrabStartData, MotionEvent, PointerGrab,
+            PointerInnerHandle, RelativeMotionEvent,
         },
-        pointer::{Focus, PointerGrab},
         Seat, SeatHandler,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{IsAlive, Logical, Point, Rectangle},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial},
 };
 
 use crate::{
@@ -270,7 +269,7 @@ pub fn move_request_client(
     state: &mut State,
     surface: &WlSurface,
     seat: &Seat<State>,
-    serial: smithay::utils::Serial,
+    serial: Serial,
     button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
@@ -303,7 +302,7 @@ pub fn move_request_server(
     state: &mut State,
     surface: &WlSurface,
     seat: &Seat<State>,
-    serial: smithay::utils::Serial,
+    serial: Serial,
     button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");

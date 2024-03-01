@@ -26,7 +26,7 @@ use smithay::{
 };
 
 use crate::{
-    focus::FocusTarget,
+    focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
     window::WindowElement,
 };
@@ -78,8 +78,10 @@ impl XdgShellHandler for State {
 
         if let Some(output) = window.output(self) {
             self.update_windows(&output);
-            let focus = self.focused_window(&output).map(FocusTarget::Window);
-            if let Some(FocusTarget::Window(win)) = &focus {
+            let focus = self
+                .focused_window(&output)
+                .map(KeyboardFocusTarget::Window);
+            if let Some(KeyboardFocusTarget::Window(win)) = &focus {
                 tracing::debug!("Focusing on prev win");
                 // TODO:
                 self.space.raise_element(win, true);
@@ -638,13 +640,13 @@ impl XdgShellHandler for State {
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
             self.window_for_surface(&root)
-                .map(FocusTarget::Window)
+                .map(KeyboardFocusTarget::Window)
                 .or_else(|| {
                     self.space.outputs().find_map(|op| {
                         layer_map_for_output(op)
                             .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
                             .cloned()
-                            .map(FocusTarget::LayerSurface)
+                            .map(KeyboardFocusTarget::LayerSurface)
                     })
                 })
         }) {

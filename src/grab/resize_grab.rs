@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::{space::SpaceElement, utils::bbox_from_surface_tree, WindowSurface},
+    desktop::{space::SpaceElement, WindowSurface},
     input::{
         pointer::{AxisFrame, ButtonEvent, Focus, GrabStartData, PointerGrab, PointerInnerHandle},
         Seat, SeatHandler,
