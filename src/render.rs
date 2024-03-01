@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::sync::Mutex;
+use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
@@ -71,18 +71,8 @@ where
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<C> {
-        match self {
-            WindowElement::Wayland(window) => {
-                window.render_elements(renderer, location, scale, alpha)
-            }
-            WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                surface.render_elements(renderer, location, scale, alpha)
-            }
-            _ => unreachable!(),
-        }
-        .into_iter()
-        .map(C::from)
-        .collect()
+        self.deref()
+            .render_elements(renderer, location, scale, alpha)
     }
 }
 
@@ -307,9 +297,8 @@ where
 
     let top_fullscreen_window = windows.iter().rev().find(|win| {
         let is_wayland_actually_fullscreen = {
-            if let WindowElement::Wayland(window) = win {
-                window
-                    .toplevel()
+            if let Some(toplevel) = win.toplevel() {
+                toplevel
                     .current_state()
                     .states
                     .contains(xdg_toplevel::State::Fullscreen)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{
-    desktop::layer_map_for_output,
+    desktop::{layer_map_for_output, WindowSurface},
     output::Output,
     utils::{Logical, Point, Rectangle, Serial, Size},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
@@ -115,21 +115,20 @@ impl State {
 
         for win in windows_on_foc_tags.iter() {
             if win.with_state(|state| state.target_loc.is_some()) {
-                match win {
-                    WindowElement::Wayland(wl_win) => {
-                        let pending =
-                            compositor::with_states(wl_win.toplevel().wl_surface(), |states| {
-                                states
-                                    .data_map
-                                    .get::<XdgToplevelSurfaceData>()
-                                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                    .lock()
-                                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                                    .has_pending_changes()
-                            });
+                match win.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        let pending = compositor::with_states(toplevel.wl_surface(), |states| {
+                            states
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                                .lock()
+                                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                                .has_pending_changes()
+                        });
 
                         if pending {
-                            pending_wins.push((win.clone(), wl_win.toplevel().send_configure()))
+                            pending_wins.push((win.clone(), toplevel.send_configure()))
                         } else {
                             let loc = win.with_state(|state| state.target_loc.take());
                             if let Some(loc) = loc {
@@ -137,14 +136,12 @@ impl State {
                             }
                         }
                     }
-                    WindowElement::X11(_) => {
+                    WindowSurface::X11(_) => {
                         let loc = win.with_state(|state| state.target_loc.take());
                         if let Some(loc) = loc {
                             self.space.map_element(win.clone(), loc, false);
                         }
                     }
-                    WindowElement::X11OverrideRedirect(_) => (),
-                    _ => unreachable!(),
                 }
             }
         }

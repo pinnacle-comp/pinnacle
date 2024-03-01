@@ -34,11 +34,11 @@ use pinnacle_api_defs::pinnacle::{
     },
 };
 use smithay::{
-    desktop::space::SpaceElement,
+    desktop::{space::SpaceElement, WindowSurface},
     input::keyboard::XkbConfig,
     reexports::{calloop, input as libinput, wayland_protocols::xdg::shell::server},
     utils::{Point, Rectangle, SERIAL_COUNTER},
-    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
+    wayland::seat::WaylandFocus,
 };
 use sysinfo::ProcessRefreshKind;
 use tokio::{
@@ -48,15 +48,16 @@ use tokio::{
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
+use tracing::{error, warn};
 
 use crate::{
     config::ConnectorSavedState,
-    focus::FocusTarget,
+    focus::keyboard::KeyboardFocusTarget,
     input::ModifierMask,
     output::OutputName,
     state::{State, WithState},
     tag::{Tag, TagId},
-    window::{window_state::WindowId, WindowElement},
+    window::window_state::WindowId,
 };
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
@@ -316,7 +317,7 @@ impl input_service_server::InputService for InputService {
             };
             if let Some(kb) = state.seat.get_keyboard() {
                 if let Err(err) = kb.set_xkb_config(state, new_config) {
-                    tracing::error!("Failed to set xkbconfig: {err}");
+                    error!("Failed to set xkbconfig: {err}");
                 }
             }
         })
@@ -557,7 +558,7 @@ impl process_service_server::ProcessService for ProcessService {
                 .args(command)
                 .spawn()
             else {
-                tracing::warn!("Tried to run {arg0}, but it doesn't exist",);
+                warn!("Tried to run {arg0}, but it doesn't exist",);
                 return;
             };
 
@@ -584,7 +585,7 @@ impl process_service_server::ProcessService for ProcessService {
                         match sender.send(response) {
                             Ok(_) => (),
                             Err(err) => {
-                                tracing::error!(err = ?err);
+                                error!(err = ?err);
                                 break;
                             }
                         }
@@ -608,7 +609,7 @@ impl process_service_server::ProcessService for ProcessService {
                         match sender.send(response) {
                             Ok(_) => (),
                             Err(err) => {
-                                tracing::error!(err = ?err);
+                                error!(err = ?err);
                                 break;
                             }
                         }
@@ -627,7 +628,7 @@ impl process_service_server::ProcessService for ProcessService {
                         // TODO: handle error
                         let _ = sender.send(response);
                     }
-                    Err(err) => tracing::warn!("child wait() err: {err}"),
+                    Err(err) => warn!("child wait() err: {err}"),
                 }
             });
         })
@@ -1122,13 +1123,17 @@ impl window_service_server::WindowService for WindowService {
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
 
-            match window {
-                WindowElement::Wayland(window) => window.toplevel().send_close(),
-                WindowElement::X11(surface) => surface.close().expect("failed to close x11 win"),
-                WindowElement::X11OverrideRedirect(_) => {
-                    tracing::warn!("tried to close override redirect window");
+            match window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => toplevel.send_close(),
+                WindowSurface::X11(surface) => {
+                    if !surface.is_override_redirect() {
+                        if let Err(err) = surface.close() {
+                            error!("failed to close x11 window: {err}");
+                        }
+                    } else {
+                        warn!("tried to close OR window");
+                    }
                 }
-                _ => unreachable!(),
             }
         })
         .await
@@ -1354,31 +1359,13 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
+            if window.is_x11_override_redirect() {
+                return;
+            }
+
             let Some(output) = window.output(state) else {
                 return;
             };
-
-            //     if !matches!(
-            //         &focus,
-            //         FocusTarget::Window(WindowElement::X11OverrideRedirect(_))
-            //     ) {
-            //         keyboard.set_focus(self, Some(focus.clone()), serial);
-            //     }
-            //
-            //     self.space.elements().for_each(|window| {
-            //         if let WindowElement::Wayland(window) = window {
-            //             window.toplevel().send_configure();
-            //         }
-            //     });
-            // } else {
-            //     self.space.elements().for_each(|window| {
-            //         window.set_activate(false);
-            //         if let WindowElement::Wayland(window) = window {
-            //             window.toplevel().send_configure();
-            //         }
-            //     });
-            //     keyboard.set_focus(self, None, serial);
-            // }
 
             for win in state.space.elements() {
                 win.set_activate(false);
@@ -1392,7 +1379,7 @@ impl window_service_server::WindowService for WindowService {
                     if let Some(keyboard) = state.seat.get_keyboard() {
                         keyboard.set_focus(
                             state,
-                            Some(FocusTarget::Window(window)),
+                            Some(KeyboardFocusTarget::Window(window)),
                             SERIAL_COUNTER.next_serial(),
                         );
                     }
@@ -1420,7 +1407,7 @@ impl window_service_server::WindowService for WindowService {
                         if let Some(keyboard) = state.seat.get_keyboard() {
                             keyboard.set_focus(
                                 state,
-                                Some(FocusTarget::Window(window)),
+                                Some(KeyboardFocusTarget::Window(window)),
                                 SERIAL_COUNTER.next_serial(),
                             );
                         }
@@ -1430,8 +1417,8 @@ impl window_service_server::WindowService for WindowService {
             }
 
             for window in state.space.elements() {
-                if let WindowElement::Wayland(window) = window {
-                    window.toplevel().send_configure();
+                if let Some(toplevel) = window.toplevel() {
+                    toplevel.send_configure();
                 }
             }
 
@@ -1531,12 +1518,17 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some((FocusTarget::Window(window), _)) =
-                state.focus_target_under(state.pointer_location)
+            let Some((pointer_focus, _)) = state.pointer_focus_target_under(state.pointer_location)
             else {
                 return;
             };
-            let Some(wl_surf) = window.wl_surface() else { return };
+            let Some(window) = pointer_focus.window_for(state) else {
+                tracing::info!("Move grabs are currently not implemented for non-windows");
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else {
+                return;
+            };
             let seat = state.seat.clone();
 
             crate::grab::move_grab::move_request_server(
@@ -1562,12 +1554,17 @@ impl window_service_server::WindowService for WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             let pointer_loc = state.pointer_location;
-            let Some((FocusTarget::Window(window), window_loc)) =
-                state.focus_target_under(pointer_loc)
+            let Some((pointer_focus, window_loc)) = state.pointer_focus_target_under(pointer_loc)
             else {
                 return;
             };
-            let Some(wl_surf) = window.wl_surface() else { return };
+            let Some(window) = pointer_focus.window_for(state) else {
+                tracing::info!("Move grabs are currently not implemented for non-windows");
+                return;
+            };
+            let Some(wl_surf) = window.wl_surface() else {
+                return;
+            };
 
             let window_geometry = window.geometry();
             let window_x = window_loc.x as f64;
@@ -1675,27 +1672,8 @@ impl window_service_server::WindowService for WindowService {
                 })
             };
 
-            let (class, title) = window.as_ref().map_or((None, None), |win| match &win {
-                WindowElement::Wayland(_) => {
-                    if let Some(wl_surf) = win.wl_surface() {
-                        compositor::with_states(&wl_surf, |states| {
-                            let lock = states
-                                .data_map
-                                .get::<XdgToplevelSurfaceData>()
-                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                .lock()
-                                .expect("failed to acquire lock");
-                            (lock.app_id.clone(), lock.title.clone())
-                        })
-                    } else {
-                        (None, None)
-                    }
-                }
-                WindowElement::X11(surface) | WindowElement::X11OverrideRedirect(surface) => {
-                    (Some(surface.class()), Some(surface.title()))
-                }
-                _ => unreachable!(),
-            });
+            let class = window.as_ref().and_then(|win| win.class());
+            let title = window.as_ref().and_then(|win| win.title());
 
             let focused = window.as_ref().and_then(|win| {
                 state
