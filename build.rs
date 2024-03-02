@@ -5,7 +5,7 @@ fn main() {
     let xdg = xdg::BaseDirectories::with_prefix("pinnacle").unwrap();
 
     let proto_dir = xdg.place_data_file("protobuf").unwrap();
-    let default_config_dir = xdg.place_data_file("default_config").unwrap();
+    let default_config_dir = xdg.place_data_file("default_config").unwrap().join("lua");
 
     let remove_protos = format!("rm -r {proto_dir:?}");
     let copy_protos = format!("cp -r ./api/protocol {proto_dir:?}");

@@ -225,7 +225,10 @@ impl State {
 
         tracing::info!("Starting config at {}", config_dir.display());
 
-        let default_lua_config_dir = self.xdg_base_dirs.get_data_file("default_config");
+        let default_lua_config_dir = self
+            .xdg_base_dirs
+            .get_data_file("default_config")
+            .join("lua");
 
         let load_default_config = |state: &mut State, reason: &str| {
             tracing::error!(

@@ -13,6 +13,7 @@
 
 use anyhow::Context;
 use clap::Parser;
+use cli::Cli;
 use nix::unistd::Uid;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_appender::rolling::Rotation;
@@ -21,6 +22,7 @@ use xdg::BaseDirectories;
 
 mod api;
 mod backend;
+mod cli;
 mod config;
 mod cursor;
 mod focus;
@@ -33,30 +35,6 @@ mod render;
 mod state;
 mod tag;
 mod window;
-
-#[derive(clap::Args, Debug)]
-#[group(id = "backend", required = false, multiple = false)]
-struct Backends {
-    #[arg(long, group = "backend")]
-    /// Run Pinnacle in a window in your graphical environment
-    winit: bool,
-    #[arg(long, group = "backend")]
-    /// Run Pinnacle from a tty
-    udev: bool,
-}
-
-#[derive(clap::Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[command(flatten)]
-    backend: Backends,
-    #[arg(long)]
-    /// Allow running Pinnacle as root (this is NOT recommended)
-    allow_root: bool,
-    #[arg(long, requires = "backend")]
-    /// Force Pinnacle to run with the provided backend
-    force: bool,
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -96,7 +74,12 @@ async fn main() -> anyhow::Result<()> {
         .with(stdout_layer)
         .init();
 
-    let args = Args::parse();
+    let args = Cli::parse_and_prompt();
+
+    tracing::info!("{args:#?}");
+
+    tracing::info!("Currently in cli debugging, remove this later");
+    return Ok(());
 
     if Uid::effective().is_root() {
         if !args.allow_root {
@@ -118,8 +101,8 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    match (args.backend.winit, args.backend.udev, args.force) {
-        (false, false, _) => {
+    match (args.backend, args.force) {
+        (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
                 crate::backend::winit::run_winit()?;
@@ -128,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
                 crate::backend::udev::run_udev()?;
             }
         }
-        (true, false, force) => {
+        (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
@@ -143,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
                 crate::backend::winit::run_winit()?;
             }
         }
-        (false, true, force) => {
+        (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
@@ -159,7 +142,6 @@ async fn main() -> anyhow::Result<()> {
                 crate::backend::udev::run_udev()?;
             }
         }
-        _ => unreachable!(),
     }
 
     Ok(())
