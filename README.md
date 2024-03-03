@@ -27,8 +27,6 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-It can be configured through either Lua or Rust.
-
 > ### More video examples below!
 > <details>
 > 
@@ -96,7 +94,9 @@ cargo build [--release]
 > [!NOTE]
 > On build, [`build.rs`](build.rs) will: 
 > - Copy Protobuf definition files to `$XDG_DATA_HOME/pinnacle/protobuf`
-> - Copy the [default config](api/lua/examples/default) to `$XDG_DATA_HOME/pinnacle/default_config`
+> - Copy the [Lua default config](api/lua/examples/default) and 
+>   [Rust default config](api/rust/examples/default_config/for_copying) to
+>   `$XDG_DATA_HOME/pinnacle/default_config/{lua,rust}`
 > - `cd` into [`api/lua`](api/lua) and run `luarocks make` to install the Lua library to `~/.luarocks/share/lua/5.4`
 
 # Running
@@ -122,14 +122,13 @@ Pinnacle is configured in your choice of Lua or Rust.
 ## Out-of-the-box configurations
 If you just want to test Pinnacle out without copying stuff to your config directory,
 run one of the following in the crate root:
+
 ```sh
 # For a Lua configuration
-PINNACLE_CONFIG_DIR="./api/lua/examples/default" cargo run
-# This should also have been copied to the directory below, so below will do the same
-PINNACLE_CONFIG_DIR="~/.local/share/pinnacle/default_config" cargo run
+cargo run -- -c "./api/lua/examples/default"
 
 # For a Rust configuration
-PINNACLE_CONFIG_DIR="./api/rust/examples/default_config" cargo run
+cargo run -- -c "./api/rust/examples/default_config"
 ```
 
 ## Custom configuration
@@ -137,58 +136,65 @@ PINNACLE_CONFIG_DIR="./api/rust/examples/default_config" cargo run
 > [!IMPORTANT]
 > Pinnacle is under development, and there *will* be major breaking changes to these APIs
 > until I release version 0.1, at which point there will be an API stability spec in place.
->
-> Until then, I recommend you either use the out-of-the-box configs above or prepare for
-> your config to break every now and then.
 
-Pinnacle will search for a `metaconfig.toml` file in the following directories, from top to bottom:
+### Generating a config
+
+Run the following command to open up the interactive config generator:
 ```sh
-$PINNACLE_CONFIG_DIR
-$XDG_CONFIG_HOME/pinnacle
-~/.config/pinnacle # Only if $XDG_CONFIG_HOME is not defined
+cargo run -- config gen
 ```
 
-The `metaconfig.toml` file provides information on what config to run, kill and reload keybinds,
-and any environment variables you want set. For more details, see the provided 
-[`metaconfig.toml`](api/lua/examples/default/metaconfig.toml) file.
+This will prompt you to choose a language (Lua or Rust) and directory to put the config in.
+It will then generate a config at that directory. If Lua is chosen and there are conflicting
+files in the directory, the generator will prompt to rename them to a backup before continuing.
+If Rust is chosen, the directory must be manually emptied to continue.
 
-If no `metaconfig.toml` file is found, the default Lua config will be loaded.
+Run `cargo run -- config gen --help` for information on the command.
 
-### Lua
-For custom configuration in Lua, copy the contents of `~/.local/share/pinnacle/default_config` to
-`~/.config/pinnacle` (or `$XDG_CONFIG_HOME/pinnacle`):
-```sh
-mkdir ~/.config/pinnacle
-cp -r ~/.local/share/pinnacle/default_config/. ~/.config/pinnacle
-```
-Note: there is a `.luarc.json` file that may not get copied if you do `cp <path>/* ~/.config/pinnacle`.
-The above command takes that into account.
+## More on configuration and the `metaconfig.toml` file
+Pinnacle is configured purely through IPC using [gRPC](https://grpc.io/). This is done through
+configuration clients that use the [Lua](api/lua) and [Rust](api/rust) interface libraries.
 
-> If you rename `default_config.lua`, make sure `command` in your `metaconfig.toml` is updated to reflect that.
-> If it isn't, the compositor will load the default config instead.
+As the compositor has no direct integration with these clients, it must know what it needs to run
+through a separate file, aptly called the `metaconfig.toml` file.
 
-#### Lua Language Server completion
+To start a config, Pinnacle will search for a `metaconfig.toml` file in the first directory
+that exists from the following:
+
+1. The directory passed in through `--config-dir`/`-c`
+2. `$PINNACLE_CONFIG_DIR`
+3. `$XDG_CONFIG_HOME/pinnacle`
+4. `~/.config/pinnacle` if $XDG_CONFIG_HOME is not defined
+
+If there is no `metaconfig.toml` file in that directory, Pinnacle will start the default Lua config
+at `$XDG_DATA_HOME/pinnacle/default_config/lua` (typically `~/.local/share/pinnacle/default_config/lua`).
+
+Additionally, if your config crashes, Pinnacle will also start the default Lua config.
+
+> [!NOTE]
+> If you have not run `eval $(luarocks path --lua-version 5.4)`, Pinnacle will go into an endless loop of
+> starting the default Lua config only for it to crash because it can't find the Lua library.
+
+### The `metaconfig.toml` file
+A `metaconfig.toml` file must contain the following entries:
+- `command`: An array denoting the program and arguments Pinnacle will run to start a config.
+- `reload_keybind`: A table denoting a keybind that Pinnacle will hardcode to restart your config.
+- `kill_keybind`: A table denoting a keybind that Pinnacle will hardcode to quit the compositor.
+    - The two keybinds above prevent you from getting locked in the compositor if the default config fails to start.
+
+It also has the following optional entries:
+- `socket_dir`: A directory that Pinnacle will place its IPC socket in (this defaults to `$XDG_RUNTIME_DIR`,
+  falling back to `/tmp` if that doesn't exist).
+- `[envs]`: A table of environment variables that Pinnacle will start the config with.
+
+For the specifics, see the default [`metaconfig.toml`](api/lua/examples/default/metaconfig.toml) file.
+
+## Lua Language Server completion
 A [`.luarc.json`](api/lua/examples/default/.luarc.json) file is included with the default Lua config
 and will set the correct workspace library files for use with the
 [Lua language server](https://github.com/LuaLS/lua-language-server).
 
-### Rust
-If you want to use Rust to configure Pinnacle, follow these steps:
-1. In `~/.config/pinnacle`, run `cargo init`.
-2. In the `Cargo.toml` file, add the following under `[dependencies]`:
-```toml
-pinnacle-api = { git = "http://github.com/pinnacle-comp/pinnacle" }
-```
-3. Create the file `metaconfig.toml` at the root. Add the following to the file:
-```toml
-command = ["cargo", "run"]
-reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
-```
-4. Copy the [default config](api/rust/examples/default_config/main.rs) to `src/main.rs`.
-5. Run Pinnacle! (You may want to run `cargo build` beforehand so you don't have to wait for your config to compile.)
-
-### API References
+## API References
 <b>Lua: https://pinnacle-comp.github.io/lua-reference/main.<br>
 Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 
