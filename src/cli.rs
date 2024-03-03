@@ -210,10 +210,20 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         }
     };
 
+    let default_dir = xdg::BaseDirectories::with_prefix("pinnacle")?.get_config_home();
+
+    let default_dir_clone = default_dir.clone();
+
     let dir_validator = move |s: &String| {
-        let dir =
-            shellexpand::full(s).map_err(|err| format!("Directory expansion failed: {err}"))?;
-        let mut target_dir = PathBuf::from(dir.to_string());
+        let mut target_dir = if s.is_empty() {
+            default_dir_clone.clone()
+        } else {
+            PathBuf::from(
+                shellexpand::full(s)
+                    .map_err(|err| format!("Directory expansion failed: {err}"))?
+                    .to_string(),
+            )
+        };
 
         if target_dir.is_relative() {
             let mut new_dir = std::env::current_dir().map_err(|err| {
@@ -280,7 +290,7 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
             assert!(interactive);
 
             let dir: String = cliclack::input("Choose a directory to place the config in:")
-                // Now this is a grade A bastardization of what this function is supposed to do
+                .default_input(default_dir.to_string_lossy().as_ref())
                 .validate_interactively(dir_validator)
                 .interact()?;
 
@@ -448,7 +458,7 @@ mod tests {
         let expected_config_gen = ConfigGen {
             lang: Some(Lang::Lua),
             dir: None,
-            non_interactive: false,
+            non_interactive: !std::io::stdout().is_terminal(),
         };
 
         let Some(CliSubcommand::Config(ConfigSubcommand::Gen(config_gen))) = cli.subcommand else {
