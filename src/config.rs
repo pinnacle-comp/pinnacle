@@ -33,6 +33,7 @@ use sysinfo::ProcessRefreshKind;
 use tokio::task::JoinHandle;
 use toml::Table;
 
+use tracing::{debug, error, info};
 use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
@@ -171,10 +172,27 @@ pub struct Config {
 
     config_join_handle: Option<JoinHandle<()>>,
     config_reload_on_crash_token: Option<RegistrationToken>,
+
+    pub no_config: bool,
+    config_dir: Option<PathBuf>,
 }
 
 impl Config {
-    pub fn clear(&mut self, loop_handle: &LoopHandle<State>) {
+    pub fn new(no_config: bool, config_dir: Option<PathBuf>) -> Self {
+        Config {
+            no_config,
+            config_dir,
+            ..Default::default()
+        }
+    }
+
+    pub fn dir(&self, xdg_base_dirs: &BaseDirectories) -> PathBuf {
+        self.config_dir
+            .clone()
+            .unwrap_or_else(|| get_config_dir(xdg_base_dirs))
+    }
+
+    fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {
@@ -208,7 +226,7 @@ fn parse_metaconfig(config_dir: &Path) -> anyhow::Result<Metaconfig> {
 
 /// Get the config dir. This is $PINNACLE_CONFIG_DIR, then $XDG_CONFIG_HOME/pinnacle,
 /// then ~/.config/pinnacle.
-pub fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
+fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
     let config_dir = std::env::var("PINNACLE_CONFIG_DIR")
         .ok()
         .and_then(|s| Some(PathBuf::from(shellexpand::full(&s).ok()?.to_string())));
@@ -221,9 +239,7 @@ impl State {
     ///
     /// If this method is called while a config is already running, it will be replaced.
     pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
-        let config_dir = config_dir.as_ref();
-
-        tracing::info!("Starting config at {}", config_dir.display());
+        let mut config_dir = config_dir.as_ref();
 
         let default_lua_config_dir = self
             .xdg_base_dirs
@@ -231,21 +247,26 @@ impl State {
             .join("lua");
 
         let load_default_config = |state: &mut State, reason: &str| {
-            tracing::error!(
+            error!(
                 "Unable to load config at {}: {reason}",
                 config_dir.display()
             );
-            tracing::info!("Falling back to default Lua config");
+            info!("Falling back to default Lua config");
             state.start_config(&default_lua_config_dir)
         };
+
+        // If `--no-config` was set, still load the keybinds from the default metaconfig
+        if self.config.no_config {
+            config_dir = &default_lua_config_dir
+        }
 
         let metaconfig = match parse_metaconfig(config_dir) {
             Ok(metaconfig) => metaconfig,
             Err(err) => {
                 // Stops infinite recursion if somehow the default_config dir is screwed up
                 if config_dir == default_lua_config_dir {
-                    tracing::error!("The metaconfig at the default Lua config directory is either malformed or missing.");
-                    tracing::error!(
+                    error!("The metaconfig at the default Lua config directory is either malformed or missing.");
+                    error!(
                         "If you have not touched {}, this is a bug and you should file an issue (pretty please with a cherry on top?).",
                         default_lua_config_dir.display()
                     );
@@ -255,14 +276,35 @@ impl State {
             }
         };
 
-        tracing::debug!("Clearing tags");
+        let reload_keybind = metaconfig.reload_keybind;
+        let kill_keybind = metaconfig.kill_keybind;
+
+        let reload_mask = ModifierMask::from(reload_keybind.modifiers);
+        let kill_mask = ModifierMask::from(kill_keybind.modifiers);
+
+        let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
+        let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
+
+        self.input_state.reload_keybind = Some(reload_keybind);
+        self.input_state.kill_keybind = Some(kill_keybind);
+
+        if self.config.no_config {
+            info!("`--no-config` was set, not spawning config");
+            return Ok(());
+        }
+
+        assert!(!self.config.no_config);
+
+        // Clear state
+
+        debug!("Clearing tags");
         for output in self.space.outputs() {
             output.with_state(|state| state.tags.clear());
         }
 
         TagId::reset();
 
-        tracing::debug!("Clearing input state");
+        debug!("Clearing input state");
 
         self.input_state.clear();
 
@@ -296,9 +338,6 @@ impl State {
             self.start_grpc_server(socket_dir.as_path())?;
         }
 
-        let reload_keybind = metaconfig.reload_keybind;
-        let kill_keybind = metaconfig.kill_keybind;
-
         let mut command = metaconfig.command.iter();
 
         let arg0 = match command.next() {
@@ -308,32 +347,26 @@ impl State {
 
         let command = command.collect::<Vec<_>>();
 
-        tracing::debug!(arg0, ?command);
+        debug!(arg0, ?command);
 
         let envs = metaconfig
             .envs
             .unwrap_or(toml::map::Map::new())
             .into_iter()
-            .filter_map(|(key, val)| {
+            .map(|(key, val)| -> anyhow::Result<Option<(String, String)>> {
                 if let toml::Value::String(string) = val {
-                    Some((
-                        key,
-                        shellexpand::full_with_context(
-                            &string,
-                            || std::env::var("HOME").ok(),
-                            // Expand nonexistent vars to an empty string instead of crashing
-                            |var| Ok::<_, ()>(Some(std::env::var(var).unwrap_or("".to_string()))),
-                        )
-                        .ok()?
-                        .to_string(),
-                    ))
+                    Ok(Some((key, shellexpand::full(&string)?.to_string())))
                 } else {
-                    None
+                    Ok(None)
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten();
 
-        tracing::debug!("Config envs are {envs:?}");
+        debug!("Config envs are {envs:?}");
+
+        info!("Starting config at {}", config_dir.display());
 
         let mut child = match tokio::process::Command::new(arg0)
             .args(command)
@@ -348,23 +381,14 @@ impl State {
             Err(err) => return load_default_config(self, &err.to_string()),
         };
 
-        tracing::info!("Started config with {:?}", metaconfig.command);
-
-        let reload_mask = ModifierMask::from(reload_keybind.modifiers);
-        let kill_mask = ModifierMask::from(kill_keybind.modifiers);
-
-        let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
-        let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
-
-        self.input_state.reload_keybind = Some(reload_keybind);
-        self.input_state.kill_keybind = Some(kill_keybind);
+        info!("Started config with {:?}", metaconfig.command);
 
         let (pinger, ping_source) = calloop::ping::make_ping()?;
 
         let token = self
             .loop_handle
             .insert_source(ping_source, move |_, _, state| {
-                tracing::error!("Config crashed! Falling back to default Lua config");
+                error!("Config crashed! Falling back to default Lua config");
                 state
                     .start_config(&default_lua_config_dir)
                     .expect("failed to start default lua config");
@@ -425,7 +449,7 @@ impl State {
                         .starts_with("pinnacle-grpc")
                 })
             {
-                tracing::debug!("Removing socket at {:?}", file.path());
+                debug!("Removing socket at {:?}", file.path());
                 std::fs::remove_file(file.path())
                     .context(format!("Failed to remove old socket at {:?}", file.path()))?;
             }
@@ -442,7 +466,7 @@ impl State {
         self.loop_handle
             .insert_source(grpc_receiver, |msg, _, state| match msg {
                 Event::Msg(f) => f(state),
-                Event::Closed => tracing::error!("grpc receiver was closed"),
+                Event::Closed => error!("grpc receiver was closed"),
             })
             .expect("failed to insert grpc_receiver into loop");
 
@@ -477,7 +501,7 @@ impl State {
             Some(_) => {
                 self.grpc_server_join_handle = Some(tokio::spawn(async move {
                     if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
-                        tracing::error!("gRPC server error: {err}");
+                        error!("gRPC server error: {err}");
                     }
                 }));
             }
@@ -489,7 +513,7 @@ impl State {
                 move |state| {
                     state.grpc_server_join_handle = Some(tokio::spawn(async move {
                         if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
-                            tracing::error!("gRPC server error: {err}");
+                            error!("gRPC server error: {err}");
                         }
                     }));
                 },
@@ -506,7 +530,7 @@ mod tests {
     use std::env::var;
 
     #[test]
-    fn config_dir_with_relative_env_works() -> anyhow::Result<()> {
+    fn get_config_dir_with_relative_env_works() -> anyhow::Result<()> {
         let relative_path = "api/rust/examples/default_config";
 
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some(relative_path), || {
@@ -522,7 +546,7 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_with_tilde_env_works() -> anyhow::Result<()> {
+    fn get_config_dir_with_tilde_env_works() -> anyhow::Result<()> {
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some("~/some/dir/somewhere/"), || {
             let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
             let expected = PathBuf::from(var("HOME")?).join("some/dir/somewhere");
@@ -534,7 +558,7 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_with_absolute_env_works() -> anyhow::Result<()> {
+    fn get_config_dir_with_absolute_env_works() -> anyhow::Result<()> {
         let absolute_path = "/its/morbin/time";
 
         temp_env::with_var("PINNACLE_CONFIG_DIR", Some(absolute_path), || {
@@ -548,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_without_env_and_with_xdg_works() -> anyhow::Result<()> {
+    fn get_config_dir_without_env_and_with_xdg_works() -> anyhow::Result<()> {
         let xdg_config_home = "/some/different/xdg/config/path";
 
         temp_env::with_vars(
@@ -568,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_without_env_and_without_xdg_works() -> anyhow::Result<()> {
+    fn get_config_dir_without_env_and_without_xdg_works() -> anyhow::Result<()> {
         temp_env::with_vars(
             [
                 ("PINNACLE_CONFIG_DIR", None::<&str>),
@@ -685,6 +709,28 @@ mod tests {
         )?;
 
         assert!(parse_metaconfig(metaconfig_dir.path()).is_err());
+
+        Ok(())
+    }
+
+    // Ayo can we get Kotlin style test function naming so I can do something like
+    // fn `config.dir with --config-dir returns correct dir`() {}
+    #[test]
+    fn config_dot_dir_with_dash_dash_config_dir_returns_correct_dir() -> anyhow::Result<()> {
+        let dir = PathBuf::from("/some/dir/here");
+        let config = Config::new(false, Some(dir.clone()));
+
+        assert_eq!(config.dir(&BaseDirectories::with_prefix("pinnacle")?), dir);
+
+        Ok(())
+    }
+
+    #[test]
+    fn config_dot_dir_without_dash_dash_config_dir_returns_correct_dir() -> anyhow::Result<()> {
+        let config = Config::new(false, None);
+        let xdg_base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+
+        assert_eq!(config.dir(&xdg_base_dirs), get_config_dir(&xdg_base_dirs));
 
         Ok(())
     }

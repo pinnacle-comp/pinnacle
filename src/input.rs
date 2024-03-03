@@ -329,7 +329,7 @@ impl State {
                 self.shutdown();
             }
             Some(KeyAction::ReloadConfig) => {
-                self.start_config(crate::config::get_config_dir(&self.xdg_base_dirs))
+                self.start_config(self.config.dir(&self.xdg_base_dirs))
                     .expect("failed to restart config");
             }
             None => (),

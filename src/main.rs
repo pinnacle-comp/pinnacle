@@ -12,7 +12,6 @@
 #![warn(clippy::unwrap_used)]
 
 use anyhow::Context;
-use clap::Parser;
 use cli::Cli;
 use nix::unistd::Uid;
 use tracing::{info, level_filters::LevelFilter, warn};
@@ -74,18 +73,15 @@ async fn main() -> anyhow::Result<()> {
         .with(stdout_layer)
         .init();
 
-    let args = Cli::parse_and_prompt();
-
-    tracing::info!("{args:#?}");
-
-    tracing::info!("Currently in cli debugging, remove this later");
-    return Ok(());
+    let Some(cli) = Cli::parse_and_prompt() else {
+        return Ok(());
+    };
 
     if Uid::effective().is_root() {
-        if !args.allow_root {
+        if !cli.allow_root {
             warn!("You are trying to run Pinnacle as root.");
             warn!("This is NOT recommended.");
-            warn!("To run Pinnacle as root, pass in the --allow-root flag.");
+            warn!("To run Pinnacle as root, pass in the `--allow-root` flag.");
             warn!("Again, this is NOT recommended.");
             return Ok(());
         } else {
@@ -101,45 +97,45 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    match (args.backend, args.force) {
+    match (cli.backend, cli.force) {
         (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
-                crate::backend::winit::run_winit()?;
+                crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::run_udev()?;
+                crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
             }
         }
         (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
-                    crate::backend::winit::run_winit()?;
+                    crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
                 } else {
                     warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
                     warn!("If you are trying to run the winit backend in a tty, it won't work.");
-                    warn!("If you really want to, additionally pass in the --force flag.");
+                    warn!("If you really want to, additionally pass in the `--force` flag.");
                 }
             } else {
                 info!("Starting winit backend");
-                crate::backend::winit::run_winit()?;
+                crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
             }
         }
         (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
-                    crate::backend::udev::run_udev()?;
+                    crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
                 } else {
                     warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
                     warn!("If you are trying to run the udev backend in a graphical environment,");
                     warn!("it won't work and may mess some things up.");
-                    warn!("If you really want to, additionally pass in the --force flag.");
+                    warn!("If you really want to, additionally pass in the `--force` flag.");
                 }
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::run_udev()?;
+                crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
             }
         }
     }

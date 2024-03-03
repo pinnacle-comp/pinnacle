@@ -1,13 +1,7 @@
-use std::{
-    cell::RefCell,
-    ffi::OsString,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-    rc::Rc,
-};
+use std::{io::IsTerminal, path::PathBuf};
 
-use clap::{error::ErrorKind, CommandFactory, Parser, ValueHint};
-use cliclack::Validate;
+use clap::{Parser, ValueHint};
+use tracing::{error, warn};
 
 /// Valid backends that Pinnacle can run.
 #[derive(clap::ValueEnum, Debug, Clone, Copy)]
@@ -52,27 +46,50 @@ pub struct Cli {
 
     /// Cli subcommands
     #[command(subcommand)]
-    pub subcommand: Option<CliSubcommand>,
+    subcommand: Option<CliSubcommand>,
 }
 
 impl Cli {
-    pub fn parse_and_prompt() -> Self {
-        let args = Cli::parse();
+    pub fn parse_and_prompt() -> Option<Self> {
+        let mut cli = Cli::parse();
 
-        match &args.subcommand {
-            Some(CliSubcommand::Config(ConfigSubcommand::Gen(config_gen))) => {
-                generate_config(config_gen.clone()).unwrap();
+        // oh my god rustfmt is starting to piss me off
+
+        cli.config_dir = cli.config_dir.and_then(|dir| {
+            let Some(dir) = dir.to_str() else {
+                warn!(
+                    "Could not convert `--config-dir`'s argument to `&str`; unsetting `--config-dir`"
+                );
+                return None;
+            };
+            let new_dir = shellexpand::full(dir);
+            match new_dir {
+                Ok(new_dir) => Some(PathBuf::from(new_dir.to_string())),
+                Err(err) => {
+                    warn!("Could not shellexpand `--config-dir`'s argument: {err}; unsetting `--config-dir`");
+                    None
+                }
             }
-            None => (),
+        });
+
+        if let Some(subcommand) = &cli.subcommand {
+            match subcommand {
+                CliSubcommand::Config(ConfigSubcommand::Gen(config_gen)) => {
+                    if let Err(err) = generate_config(config_gen.clone()) {
+                        error!("Error generating config: {err}");
+                    }
+                }
+            }
+            return None;
         }
 
-        args
+        Some(cli)
     }
 }
 
 /// Cli subcommands.
 #[derive(clap::Subcommand, Debug)]
-pub enum CliSubcommand {
+enum CliSubcommand {
     /// Commands dealing with configuration
     #[command(subcommand)]
     Config(ConfigSubcommand),
@@ -80,28 +97,42 @@ pub enum CliSubcommand {
 
 /// Config subcommands
 #[derive(clap::Subcommand, Debug)]
-pub enum ConfigSubcommand {
+enum ConfigSubcommand {
     /// Generate a config
     ///
     /// If not all flags are provided, this will launch an
-    /// interactive prompt.
+    /// interactive prompt unless `--non-interactive` is passed
+    /// or this is run in a non-interactive shell.
     Gen(ConfigGen),
 }
 
 /// Config arguments.
-#[derive(clap::Args, Debug, Clone)]
-pub struct ConfigGen {
+#[derive(clap::Args, Debug, Clone, PartialEq)]
+struct ConfigGen {
     /// Generate a config in a specific language
     #[arg(short, long)]
     pub lang: Option<Lang>,
+
     /// Generate a config at this directory
     #[arg(short, long, value_hint(ValueHint::DirPath))]
     pub dir: Option<PathBuf>,
+
+    /// Do not show interactive prompts if both `--lang` and `--dir` are set
+    ///
+    /// This does nothing inside of non-interactive shells.
+    #[arg(
+        short,
+        long,
+        requires("lang"),
+        requires("dir"),
+        default_value_t = !std::io::stdout().is_terminal()
+    )]
+    pub non_interactive: bool,
 }
 
 /// Possible languages for configuration.
 #[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Lang {
+enum Lang {
     /// Generate a Lua config
     Lua,
     /// Generate a Rust config
@@ -116,90 +147,141 @@ impl std::fmt::Display for Lang {
 
 //////////////////////////////////////////////////////////////////////
 
-/// Show the interactive prompt for config generation.
-pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
-    cliclack::intro("Config generation")?;
+// Pretty sure this function returns Result purely for testing which I don't *really* like
+/// Generate a new config.
+///
+/// If `--non-interactive` is passed or the shell is non-interactive, this will not
+/// output interactive prompts.
+fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
+    let interactive = !args.non_interactive;
 
-    let mut skip_confirmation = true;
+    if !interactive && (args.lang.is_none() || args.dir.is_none()) {
+        eprintln!("Error: both `--lang` and `--dir` must be set in a non-interactive shell.");
+        return Ok(());
+    }
+
+    if interactive {
+        cliclack::intro("Welcome to the interactive config generator!")?;
+        tokio::spawn(async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to listen for ctrl-c");
+        });
+    }
+
+    enum Level {
+        Info,
+        Success,
+    }
+
+    let message = |msg: &str, level: Level| -> anyhow::Result<()> {
+        if interactive {
+            Ok(match level {
+                Level::Info => cliclack::log::info(msg),
+                Level::Success => cliclack::log::success(msg),
+            }?)
+        } else {
+            println!("{msg}");
+            Ok(())
+        }
+    };
+
+    let exit_message = |msg: &str| {
+        if interactive {
+            cliclack::outro_cancel(msg).expect("failed to display outro_cancel");
+        } else {
+            eprintln!("{msg}, exiting");
+        }
+    };
 
     let lang = match args.lang {
         Some(lang) => {
-            cliclack::log::success(format!("Select a language:\n{lang} (from -l/--lang)"))?;
+            let msg = format!("Select a language:\n{lang} (from -l/--lang)");
+            message(&msg, Level::Success)?;
+
             lang
         }
         None => {
-            skip_confirmation = false;
+            assert!(interactive);
+
             cliclack::select("Select a language:")
                 .items(&[(Lang::Lua, "Lua", ""), (Lang::Rust, "Rust", "")])
                 .interact()?
         }
     };
 
-    let dir = match args.dir {
+    let dir_validator = move |s: &String| {
+        let dir =
+            shellexpand::full(s).map_err(|err| format!("Directory expansion failed: {err}"))?;
+        let mut target_dir = PathBuf::from(dir.to_string());
+
+        if target_dir.is_relative() {
+            let mut new_dir = std::env::current_dir().map_err(|err| {
+                format!("Failed to get the current dir to resolve relative path: {err}")
+            })?;
+            new_dir.push(target_dir);
+            target_dir = new_dir;
+        }
+
+        match target_dir.try_exists() {
+            Ok(exists) => {
+                if exists {
+                    if !target_dir.is_dir() {
+                        Err(format!(
+                            "`{}` exists but is not a directory",
+                            target_dir.display()
+                        ))
+                    } else if lang == Lang::Rust
+                        && std::fs::read_dir(&target_dir)
+                            .map_err(|err| {
+                                format!(
+                                    "Failed to check if `{}` is empty: {err}",
+                                    target_dir.display()
+                                )
+                            })?
+                            .next()
+                            .is_some()
+                    {
+                        Err(format!(
+                            "`{}` exists but is not empty. Empty it to generate a Rust config in it.",
+                            target_dir.display()
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Ok(())
+                }
+            }
+            Err(err) => Err(format!(
+                "Failed to check if `{}` exists: {err}",
+                target_dir.display()
+            )),
+        }
+    };
+
+    let target_dir = match args.dir {
         Some(dir) => {
-            cliclack::log::success(format!(
+            let msg = format!(
                 "Choose a directory to place the config in:\n{} (from -d/--dir)",
                 dir.display()
-            ))?;
+            );
+
+            message(&msg, Level::Success)?;
+
+            if lang == Lang::Rust && matches!(dir.try_exists(), Ok(true)) {
+                exit_message("Directory must be empty to create a Rust config in it");
+                anyhow::bail!("{msg}");
+            }
+
             dir
         }
         None => {
-            skip_confirmation = false;
-            let mut wants_to_create_dir: Option<PathBuf> = None;
-            let mut wants_to_create = false;
+            assert!(interactive);
 
             let dir: String = cliclack::input("Choose a directory to place the config in:")
                 // Now this is a grade A bastardization of what this function is supposed to do
-                .validate_interactively(DirValidator::new(move |s: &String| {
-                    let dir = shellexpand::full(s)
-                        .map_err(|err| format!("Directory expansion failed: {err}"))?;
-                    let mut dir = PathBuf::from(dir.to_string());
-
-                    if dir.is_relative() {
-                        let mut new_dir = std::env::current_dir().map_err(|err| {
-                            format!("Failed to get the current dir to resolve relative path: {err}")
-                        })?;
-                        new_dir.push(dir);
-                        dir = new_dir;
-                    }
-
-                    match dir.try_exists() {
-                        Ok(exists) => {
-                            if exists {
-                                if !dir.is_dir() {
-                                    Err(format!(
-                                        "`{}` exists but is not a directory",
-                                        dir.display()
-                                    ))
-                                } else {
-                                    wants_to_create_dir = None;
-                                    Ok(())
-                                }
-                            } else if wants_to_create_dir.as_ref() == Some(&dir) {
-                                if wants_to_create {
-                                    Ok(())
-                                } else {
-                                    wants_to_create = true;
-                                    Err(format!(
-                                        "`{}` doesn't exist. Press ENTER again to create it.",
-                                        dir.display()
-                                    ))
-                                }
-                            } else {
-                                wants_to_create = false;
-                                wants_to_create_dir = Some(dir.clone());
-                                Err(format!(
-                                    "`{}` doesn't exist. Press ENTER twice to create it.",
-                                    dir.display()
-                                ))
-                            }
-                        }
-                        Err(err) => Err(format!(
-                            "Failed to check if `{}` exists: {err}",
-                            dir.display()
-                        )),
-                    }
-                }))
+                .validate_interactively(dir_validator)
                 .interact()?;
 
             let dir = shellexpand::full(&dir)?;
@@ -215,103 +297,269 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         }
     };
 
-    if skip_confirmation {
-        cliclack::log::info("Final confirmation: skipping because all flags were present")?;
-    } else {
+    if let Ok(false) = target_dir.try_exists() {
+        let msg = format!(
+            "`{}` doesn't exist and will be created.",
+            target_dir.display()
+        );
+        message(&msg, Level::Info)?;
+    }
+
+    if interactive {
         let confirm_creation = cliclack::confirm(format!(
-            "Final confirmation: create a {} config inside `{}`?",
+            "Create a {} config inside `{}`?",
             lang,
-            dir.display()
+            target_dir.display()
         ))
         .initial_value(false)
         .interact()?;
 
         if !confirm_creation {
-            cliclack::outro_cancel("Config generation cancelled.")?;
-            anyhow::bail!("cancelled");
-        } else {
-            cliclack::log::info("HERE")?;
+            exit_message("Config generation cancelled.");
+            return Ok(());
         }
     }
+
+    std::fs::create_dir_all(&target_dir)?;
 
     // Generate the config
 
     let xdg_base_dirs = xdg::BaseDirectories::with_prefix("pinnacle")?;
     let mut default_config_dir = xdg_base_dirs.get_data_file("default_config");
+
+    // %F = %Y-%m-%d or year-month-day in ISO 8601
+    // %T = %H:%M:%S
+    let now = format!("{}", chrono::Local::now().format("%F.%T"));
+
     match lang {
         Lang::Lua => {
-            cliclack::log::info("HERE 2")?;
             default_config_dir.push("lua");
-            // %F = %Y-%m-%d or year-month-day in ISO 8601
-            let now = format!("{}", chrono::Local::now().format("%F.%T"));
-            let mut backed_up_files: Vec<(String, String)> = Vec::new();
+
+            let mut files_to_backup: Vec<(String, String)> = Vec::new();
+
             for file in std::fs::read_dir(&default_config_dir)? {
                 let file = file?;
                 let name = file.file_name();
-                let target_file = dir.join(&name);
+                let target_file = target_dir.join(&name);
                 if let Ok(true) = target_file.try_exists() {
                     let backup_name = format!("{}.{now}.bak", name.to_string_lossy());
-                    backed_up_files.push((name.to_string_lossy().to_string(), backup_name));
+                    files_to_backup.push((name.to_string_lossy().to_string(), backup_name));
                 }
             }
-            cliclack::log::info("HERE 3")?;
 
-            if !backed_up_files.is_empty() {
-                cliclack::log::info("HERE 4")?;
-                let prompt = backed_up_files
+            if !files_to_backup.is_empty() {
+                let msg = files_to_backup
                     .iter()
                     .map(|(src, dst)| format!("{src} -> {dst}"))
                     .collect::<Vec<_>>()
                     .join("\n");
-                cliclack::note("The following files will be renamed:", prompt)?;
-                let r#continue = cliclack::confirm("Continue?").interact()?;
 
-                if !r#continue {
-                    cliclack::outro_cancel("Config generation cancelled.")?;
-                    anyhow::bail!("cancelled");
+                if interactive {
+                    cliclack::note("The following files will be renamed:", msg)?;
+                    let r#continue = cliclack::confirm("Continue?").interact()?;
+
+                    if !r#continue {
+                        exit_message("Config generation cancelled.");
+                        return Ok(());
+                    }
+                } else {
+                    println!("The following files will be renamed:");
+                    println!("{msg}");
                 }
 
-                for (src, dst) in backed_up_files.iter() {
-                    std::fs::rename(dir.join(src), dir.join(dst))?;
+                for (src, dst) in files_to_backup.iter() {
+                    std::fs::rename(target_dir.join(src), target_dir.join(dst))?;
                 }
 
-                cliclack::log::info("Renamed old files")?;
-
-                dircpy::copy_dir(default_config_dir, dir)?;
-
-                cliclack::log::info("Copied new config over")?;
+                message("Renamed old files", Level::Info)?;
             }
-            cliclack::log::info("HERE END")?;
+
+            dircpy::copy_dir(&default_config_dir, &target_dir)?;
         }
         Lang::Rust => {
             default_config_dir.push("rust");
+
+            assert!(
+                std::fs::read_dir(&target_dir)?.next().is_none(),
+                "target directory was not empty"
+            );
+
+            dircpy::copy_dir(&default_config_dir, &target_dir)?;
         }
     }
 
-    cliclack::outro("Done!")?;
+    message("Copied new config over", Level::Info)?;
+
+    let mut outro_msg = format!("{lang} config created in {}!", target_dir.display());
+    if lang == Lang::Rust {
+        outro_msg = format!(
+            "{outro_msg}\nYou may want to run `cargo build` in the \
+            config directory beforehand to avoid waiting when starting up Pinnacle."
+        );
+    }
+
+    if interactive {
+        cliclack::outro(outro_msg)?;
+    } else {
+        println!("{outro_msg}");
+    }
 
     Ok(())
 }
 
-struct DirValidator<T, F: FnMut(&T) -> Result<(), E>, E>(Rc<RefCell<F>>, PhantomData<(T, E)>);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl<T, F, E> DirValidator<T, F, E>
-where
-    F: FnMut(&T) -> Result<(), E>,
-{
-    fn new(validator: F) -> Self {
-        Self(Rc::new(RefCell::new(validator)), PhantomData)
+    // TODO: find a way to test the interactive bits programmatically
+
+    #[test]
+    fn cli_config_gen_parses_correctly() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_dir = temp_dir.path().join("cli_config_gen_parses_correctly");
+
+        let cli = Cli::parse_from([
+            "pinnacle",
+            "config",
+            "gen",
+            "--lang",
+            "rust",
+            "--dir",
+            temp_dir
+                .to_str()
+                .ok_or(anyhow::anyhow!("not valid unicode"))?,
+            "--non-interactive",
+        ]);
+
+        let expected_config_gen = ConfigGen {
+            lang: Some(Lang::Rust),
+            dir: Some(temp_dir.to_path_buf()),
+            non_interactive: true,
+        };
+
+        let Some(CliSubcommand::Config(ConfigSubcommand::Gen(config_gen))) = cli.subcommand else {
+            anyhow::bail!("cli.subcommand config_gen doesn't exist");
+        };
+
+        assert_eq!(config_gen, expected_config_gen);
+
+        let cli = Cli::parse_from(["pinnacle", "config", "gen", "--lang", "lua"]);
+
+        let expected_config_gen = ConfigGen {
+            lang: Some(Lang::Lua),
+            dir: None,
+            non_interactive: false,
+        };
+
+        let Some(CliSubcommand::Config(ConfigSubcommand::Gen(config_gen))) = cli.subcommand else {
+            anyhow::bail!("cli.subcommand config_gen doesn't exist");
+        };
+
+        assert_eq!(config_gen, expected_config_gen);
+
+        Ok(())
     }
-}
 
-impl<T, F, E> Validate<T> for DirValidator<T, F, E>
-where
-    F: FnMut(&T) -> Result<(), E>,
-{
-    type Err = E;
+    #[test]
+    fn non_interactive_config_gen_lua_works() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_dir = temp_dir.path().join("non_interactive_config_gen_lua_works");
 
-    fn validate(&self, input: &T) -> Result<(), Self::Err> {
-        let mut validator = self.0.borrow_mut();
-        validator(input)
+        let config_gen = ConfigGen {
+            lang: Some(Lang::Lua),
+            dir: Some(temp_dir.clone()),
+            non_interactive: true,
+        };
+
+        generate_config(config_gen)?;
+
+        assert!(matches!(
+            temp_dir.join("default_config.lua").try_exists(),
+            Ok(true)
+        ));
+        assert!(matches!(
+            temp_dir.join("metaconfig.toml").try_exists(),
+            Ok(true)
+        ));
+        assert!(matches!(
+            temp_dir.join(".luarc.json").try_exists(),
+            Ok(true)
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn non_interactive_config_gen_rust_works() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_dir = temp_dir
+            .path()
+            .join("non_interactive_config_gen_rust_works");
+
+        let config_gen = ConfigGen {
+            lang: Some(Lang::Rust),
+            dir: Some(temp_dir.clone()),
+            non_interactive: true,
+        };
+
+        generate_config(config_gen)?;
+
+        assert!(matches!(
+            temp_dir.join("src/main.rs").try_exists(),
+            Ok(true)
+        ));
+        assert!(matches!(
+            temp_dir.join("metaconfig.toml").try_exists(),
+            Ok(true)
+        ));
+        assert!(matches!(temp_dir.join("Cargo.toml").try_exists(), Ok(true)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn non_interactive_config_gen_lua_backup_works() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_dir = temp_dir
+            .path()
+            .join("non_interactive_config_gen_lua_backup_works");
+
+        let config_gen = ConfigGen {
+            lang: Some(Lang::Lua),
+            dir: Some(temp_dir.clone()),
+            non_interactive: true,
+        };
+
+        generate_config(config_gen.clone())?;
+        generate_config(config_gen)?;
+
+        let generated_file_count = std::fs::read_dir(&temp_dir)?
+            .collect::<Result<Vec<_>, _>>()?
+            .len();
+
+        // 3 for original, 3 for backups
+        assert_eq!(generated_file_count, 6);
+
+        Ok(())
+    }
+
+    #[test]
+    fn non_interactive_config_gen_rust_nonempty_dir_does_not_work() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_dir = temp_dir
+            .path()
+            .join("non_interactive_config_gen_rust_nonempty_dir_does_not_work");
+
+        let config_gen = ConfigGen {
+            lang: Some(Lang::Rust),
+            dir: Some(temp_dir),
+            non_interactive: true,
+        };
+
+        generate_config(config_gen.clone())?;
+
+        assert!(generate_config(config_gen.clone()).is_err());
+
+        Ok(())
     }
 }
