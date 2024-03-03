@@ -13,10 +13,11 @@ https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7
 - [Configuration](#configuration)
     - [Out-of-the-box configurations](#out-of-the-box-configurations)
     - [Custom configuration](#custom-configuration)
-        - [Lua](#lua)
-            - [Lua Language Server completion](#lua-language-server-completion)
-        - [Rust](#rust)
-        - [API References](#api-references)
+        - [Generating a config](#generating-a-config)
+    - [More on configuration and the `metaconfig.toml` file](#more-on-configuration-and-the-metaconfig.toml-file)
+        - [The `metaconfig.toml` file](#the-metaconfig.toml-file)
+    - [Lua Language Server completion](#lua-language-server-completion)
+    - [API references](#api-references)
 - [Controls](#controls)
 - [Feature Requests, Bug Reports, Contributions, and Questions](#feature-requests-bug-reports-contributions-and-questions)
 - [Changelog](#changelog)
@@ -194,7 +195,7 @@ A [`.luarc.json`](api/lua/examples/default/.luarc.json) file is included with th
 and will set the correct workspace library files for use with the
 [Lua language server](https://github.com/LuaLS/lua-language-server).
 
-## API References
+## API references
 <b>Lua: https://pinnacle-comp.github.io/lua-reference/main.<br>
 Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 
