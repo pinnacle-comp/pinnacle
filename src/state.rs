@@ -17,7 +17,7 @@ use smithay::{
             Display, DisplayHandle,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point, Size},
+    utils::{Clock, Monotonic, Point, Size},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         dmabuf::DmabufFeedback,
@@ -78,7 +78,6 @@ pub struct State {
     pub popup_manager: PopupManager,
 
     pub cursor_status: CursorImageStatus,
-    pub pointer_location: Point<f64, Logical>,
     pub dnd_icon: Option<WlSurface>,
 
     /// The main window vec
@@ -236,7 +235,6 @@ impl State {
             compositor_state: CompositorState::new::<Self>(&display_handle),
             data_device_state: DataDeviceState::new::<Self>(&display_handle),
             seat_state,
-            pointer_location: (0.0, 0.0).into(),
             shm_state: ShmState::new::<Self>(&display_handle, vec![]),
             space: Space::<WindowElement>::default(),
             cursor_status: CursorImageStatus::default_named(),

@@ -1237,6 +1237,12 @@ impl State {
 
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
+        let pointer_location = self
+            .seat
+            .get_pointer()
+            .map(|ptr| ptr.current_location())
+            .unwrap_or((0.0, 0.0).into());
+
         let result = render_surface(
             surface,
             &mut renderer,
@@ -1247,7 +1253,7 @@ impl State {
             &mut self.cursor_status,
             &pointer_image,
             &mut udev.pointer_element,
-            self.pointer_location,
+            pointer_location,
             &self.clock,
         );
 

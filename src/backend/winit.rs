@@ -265,12 +265,18 @@ impl State {
         // of every event loop cycle
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
+        let pointer_location = self
+            .seat
+            .get_pointer()
+            .map(|ptr| ptr.current_location())
+            .unwrap_or((0.0, 0.0).into());
+
         let output_render_elements = crate::render::generate_render_elements(
             output,
             winit.backend.renderer(),
             &self.space,
             &windows,
-            self.pointer_location,
+            pointer_location,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
             // self.seat.input_method(),

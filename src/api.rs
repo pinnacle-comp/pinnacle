@@ -1518,7 +1518,11 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some((pointer_focus, _)) = state.pointer_focus_target_under(state.pointer_location)
+            let Some(pointer_location) = state.seat.get_pointer().map(|ptr| ptr.current_location())
+            else {
+                return;
+            };
+            let Some((pointer_focus, _)) = state.pointer_focus_target_under(pointer_location)
             else {
                 return;
             };
@@ -1553,7 +1557,10 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let pointer_loc = state.pointer_location;
+            let Some(pointer_loc) = state.seat.get_pointer().map(|ptr| ptr.current_location())
+            else {
+                return;
+            };
             let Some((pointer_focus, window_loc)) = state.pointer_focus_target_under(pointer_loc)
             else {
                 return;
