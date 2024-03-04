@@ -62,7 +62,7 @@ cliclack = "0.1.13"
 bitflags = "2.4.2"
 serde = { version = "1.0.196", features = ["derive"] }
 toml = "0.8.10"
-shellexpand = "3.1.0"
+shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.0", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }

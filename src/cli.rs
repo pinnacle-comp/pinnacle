@@ -56,15 +56,9 @@ impl Cli {
         // oh my god rustfmt is starting to piss me off
 
         cli.config_dir = cli.config_dir.and_then(|dir| {
-            let Some(dir) = dir.to_str() else {
-                warn!(
-                    "Could not convert `--config-dir`'s argument to `&str`; unsetting `--config-dir`"
-                );
-                return None;
-            };
-            let new_dir = shellexpand::full(dir);
+            let new_dir = shellexpand::path::full(&dir);
             match new_dir {
-                Ok(new_dir) => Some(PathBuf::from(new_dir.to_string())),
+                Ok(new_dir) => Some(new_dir.to_path_buf()),
                 Err(err) => {
                     warn!("Could not shellexpand `--config-dir`'s argument: {err}; unsetting `--config-dir`");
                     None
@@ -147,7 +141,6 @@ impl std::fmt::Display for Lang {
 
 //////////////////////////////////////////////////////////////////////
 
-// Pretty sure this function returns Result purely for testing which I don't *really* like
 /// Generate a new config.
 ///
 /// If `--non-interactive` is passed or the shell is non-interactive, this will not
@@ -289,13 +282,12 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         None => {
             assert!(interactive);
 
-            let dir: String = cliclack::input("Choose a directory to place the config in:")
+            let dir: PathBuf = cliclack::input("Choose a directory to place the config in:")
                 .default_input(default_dir.to_string_lossy().as_ref())
                 .validate_interactively(dir_validator)
                 .interact()?;
 
-            let dir = shellexpand::full(&dir)?;
-            let mut dir = PathBuf::from(dir.to_string());
+            let mut dir = shellexpand::path::full(&dir)?.to_path_buf();
 
             if dir.is_relative() {
                 let mut new_dir = std::env::current_dir()?;
