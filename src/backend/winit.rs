@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{ffi::OsString, time::Duration};
+use std::{ffi::OsString, path::PathBuf, time::Duration};
 
 use smithay::{
     backend::{
@@ -62,7 +62,7 @@ impl Backend {
 }
 
 /// Start Pinnacle as a window in a graphical environment.
-pub fn run_winit() -> anyhow::Result<()> {
+pub fn run_winit(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
 
     let display: Display<State> = Display::new()?;
@@ -153,16 +153,20 @@ pub fn run_winit() -> anyhow::Result<()> {
         tracing::info!("EGL hardware-acceleration enabled");
     }
 
+    let backend = Backend::Winit(Winit {
+        backend: winit_backend,
+        damage_tracker: OutputDamageTracker::from_output(&output),
+        dmabuf_state,
+        full_redraw: 0,
+    });
+
     let mut state = State::init(
-        Backend::Winit(Winit {
-            backend: winit_backend,
-            damage_tracker: OutputDamageTracker::from_output(&output),
-            dmabuf_state,
-            full_redraw: 0,
-        }),
+        backend,
         display,
         event_loop.get_signal(),
         evt_loop_handle,
+        no_config,
+        config_dir,
     )?;
 
     state.output_focus_stack.set_focus(output.clone());

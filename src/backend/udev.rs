@@ -3,7 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    path::Path,
+    path::{Path, PathBuf},
     time::Duration,
 };
 
@@ -236,7 +236,7 @@ impl BackendData for Udev {
     }
 }
 
-pub fn run_udev() -> anyhow::Result<()> {
+pub fn run_udev(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let mut event_loop = EventLoop::try_new()?;
     let display = Display::new()?;
 
@@ -283,6 +283,8 @@ pub fn run_udev() -> anyhow::Result<()> {
         display,
         event_loop.get_signal(),
         event_loop.handle(),
+        no_config,
+        config_dir,
     )?;
 
     // Initialize the udev backend

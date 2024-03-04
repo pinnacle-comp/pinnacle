@@ -34,8 +34,9 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
-use std::{cell::RefCell, sync::Arc, time::Duration};
+use std::{cell::RefCell, path::PathBuf, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
+use tracing::{error, info};
 use xdg::BaseDirectories;
 
 use crate::input::InputState;
@@ -108,11 +109,13 @@ impl State {
         display: Display<Self>,
         loop_signal: LoopSignal,
         loop_handle: LoopHandle<'static, Self>,
+        no_config: bool,
+        config_dir: Option<PathBuf>,
     ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
 
-        tracing::info!(
+        info!(
             "Setting WAYLAND_DISPLAY to {}",
             socket_name.to_string_lossy()
         );
@@ -124,15 +127,15 @@ impl State {
         //
         // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
         // environment, I *think* this is ok.
-        tracing::info!("Trying to raise file descriptor limit...");
+        info!("Trying to raise file descriptor limit...");
         if let Err(err) = nix::sys::resource::setrlimit(
             nix::sys::resource::Resource::RLIMIT_NOFILE,
             65536,
             65536 * 2,
         ) {
-            tracing::error!("Could not raise fd limit: errno {err}");
+            error!("Could not raise fd limit: errno {err}");
         } else {
-            tracing::info!("Fd raise success!");
+            info!("Fd raise success!");
         }
 
         loop_handle.insert_source(socket, |stream, _metadata, data| {
@@ -158,9 +161,7 @@ impl State {
         )?;
 
         loop_handle.insert_idle(|state| {
-            if let Err(err) =
-                state.start_config(crate::config::get_config_dir(&state.xdg_base_dirs))
-            {
+            if let Err(err) = state.start_config(state.config.dir(&state.xdg_base_dirs)) {
                 panic!("failed to start config: {err}");
             }
         });
@@ -212,7 +213,7 @@ impl State {
                 }
             });
             if let Err(err) = res {
-                tracing::error!("Failed to insert XWayland source into loop: {err}");
+                error!("Failed to insert XWayland source into loop: {err}");
             }
             xwayland
         };
@@ -254,7 +255,7 @@ impl State {
             output_focus_stack: FocusStack::default(),
             z_index_stack: FocusStack::default(),
 
-            config: Config::default(),
+            config: Config::new(no_config, config_dir),
 
             seat,
 
@@ -302,7 +303,7 @@ impl State {
     }
 
     pub fn shutdown(&self) {
-        tracing::info!("Shutting down Pinnacle");
+        info!("Shutting down Pinnacle");
         self.loop_signal.stop();
     }
 }
