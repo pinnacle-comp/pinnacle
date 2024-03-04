@@ -62,8 +62,11 @@ impl Backend {
 }
 
 /// Start Pinnacle as a window in a graphical environment.
-pub fn run_winit(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result<()> {
-    let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
+pub fn setup_winit(
+    no_config: bool,
+    config_dir: Option<PathBuf>,
+) -> anyhow::Result<(State, EventLoop<'static, State>)> {
+    let event_loop: EventLoop<State> = EventLoop::try_new()?;
 
     let display: Display<State> = Display::new()?;
     let display_handle = display.handle();
@@ -237,21 +240,7 @@ pub fn run_winit(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result
         anyhow::bail!("Failed to insert winit events into event loop: {err}");
     }
 
-    event_loop.run(
-        Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut state,
-        |state| {
-            state.fixup_focus();
-            state.space.refresh();
-            state.popup_manager.cleanup();
-            state
-                .display_handle
-                .flush_clients()
-                .expect("failed to flush client buffers");
-        },
-    )?;
-
-    Ok(())
+    Ok((state, event_loop))
 }
 
 impl State {

@@ -97,48 +97,60 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    match (cli.backend, cli.force) {
+    let (mut state, mut event_loop) = match (cli.backend, cli.force) {
         (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
-                crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
+                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
+                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
             }
         }
         (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
-                    crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
+                    crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
                 } else {
                     warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
                     warn!("If you are trying to run the winit backend in a tty, it won't work.");
                     warn!("If you really want to, additionally pass in the `--force` flag.");
+                    return Ok(());
                 }
             } else {
                 info!("Starting winit backend");
-                crate::backend::winit::run_winit(cli.no_config, cli.config_dir)?;
+                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
             }
         }
         (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
-                    crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
+                    crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
                 } else {
                     warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
                     warn!("If you are trying to run the udev backend in a graphical environment,");
                     warn!("it won't work and may mess some things up.");
                     warn!("If you really want to, additionally pass in the `--force` flag.");
+                    return Ok(());
                 }
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::run_udev(cli.no_config, cli.config_dir)?;
+                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
             }
         }
-    }
+    };
+
+    event_loop.run(None, &mut state, |state| {
+        state.fixup_focus();
+        state.space.refresh();
+        state.popup_manager.cleanup();
+        state
+            .display_handle
+            .flush_clients()
+            .expect("failed to flush client buffers");
+    })?;
 
     Ok(())
 }

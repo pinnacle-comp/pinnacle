@@ -236,8 +236,11 @@ impl BackendData for Udev {
     }
 }
 
-pub fn run_udev(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result<()> {
-    let mut event_loop = EventLoop::try_new()?;
+pub fn setup_udev(
+    no_config: bool,
+    config_dir: Option<PathBuf>,
+) -> anyhow::Result<(State, EventLoop<'static, State>)> {
+    let event_loop = EventLoop::try_new()?;
     let display = Display::new()?;
 
     // Initialize session
@@ -515,21 +518,7 @@ pub fn run_udev(no_config: bool, config_dir: Option<PathBuf>) -> anyhow::Result<
         tracing::error!("Failed to start XWayland: {err}");
     }
 
-    event_loop.run(
-        Some(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64)),
-        &mut state,
-        |state| {
-            state.fixup_focus();
-            state.space.refresh();
-            state.popup_manager.cleanup();
-            state
-                .display_handle
-                .flush_clients()
-                .expect("failed to flush_clients");
-        },
-    )?;
-
-    Ok(())
+    Ok((state, event_loop))
 }
 
 // TODO: document desperately

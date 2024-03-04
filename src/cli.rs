@@ -14,7 +14,7 @@ pub enum Backend {
 
 /// The main CLI struct.
 #[derive(clap::Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None, args_conflicts_with_subcommands = true)]
 pub struct Cli {
     /// Start Pinnacle with the config at this directory
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
@@ -50,6 +50,7 @@ pub struct Cli {
 }
 
 impl Cli {
+    //
     pub fn parse_and_prompt() -> Option<Self> {
         let mut cli = Cli::parse();
 
