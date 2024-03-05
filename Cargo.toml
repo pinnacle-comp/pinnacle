@@ -43,11 +43,11 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
 tracing-appender = "0.2.3"
 # Errors
-anyhow = { version = "1.0.79", features = ["backtrace"] }
+anyhow = { version = "1.0.80", features = ["backtrace"] }
 thiserror = "1.0.57"
 # xcursor stuff
 xcursor = { version = "0.3.5" }
-image = { version = "0.24.8", default-features = false }
+image = { version = "0.24.9", default-features = false }
 # gRPC
 prost = { workspace = true }
 tonic = { workspace = true }
@@ -60,14 +60,14 @@ clap = { version = "4.5.1", features = ["derive"] }
 cliclack = "0.1.13"
 # Misc.
 bitflags = "2.4.2"
-serde = { version = "1.0.196", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 toml = "0.8.10"
 shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.0", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
-sysinfo = "0.30.5"
-nix = { version = "0.27.1", features = ["user", "resource"] }
+sysinfo = "0.30.6"
+nix = { version = "0.28.0", features = ["user", "resource"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = "0.3.16"
 chrono = "0.4.34"
@@ -77,7 +77,7 @@ xdg = { workspace = true }
 
 [dev-dependencies]
 temp-env = "0.3.6"
-tempfile = "3.10.0"
+tempfile = "3.10.1"
 
 [features]
 default = [
