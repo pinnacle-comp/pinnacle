@@ -218,7 +218,7 @@ impl State {
             .space
             .elements()
             .rev()
-            .filter(|win| win.is_on_active_tag(self.space.outputs()))
+            .filter(|win| win.is_on_active_tag())
             .find_map(|win| {
                 let loc = self
                     .space
@@ -378,7 +378,7 @@ impl State {
                     self.space.raise_element(&window, true);
                     self.z_index_stack.set_focus(window.clone());
                     if let Some(output) = window.output(self) {
-                        output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                     }
                 }
 
@@ -395,8 +395,8 @@ impl State {
                     }
                 }
             } else {
-                if let Some(focused_op) = self.output_focus_stack.current_focus() {
-                    focused_op.with_state(|state| {
+                if let Some(focused_op) = self.focused_output() {
+                    focused_op.with_state_mut(|state| {
                         state.focus_stack.unset_focus();
                         for window in state.focus_stack.stack.iter() {
                             window.set_activate(false);
@@ -572,7 +572,7 @@ impl State {
 
             pointer.frame(self);
 
-            if let Some(output) = self.output_focus_stack.current_focus().cloned() {
+            if let Some(output) = self.focused_output().cloned() {
                 self.schedule_render(&output);
             }
         }

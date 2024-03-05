@@ -11,33 +11,23 @@ pub mod keyboard;
 pub mod pointer;
 
 impl State {
-    /// Get the currently focused window on `output`
-    /// that isn't an override redirect window, if any.
+    /// Get the currently focused window on `output`.
+    ///
+    /// This returns the topmost window on the keyboard focus stack that is on an active tag.
     pub fn focused_window(&self, output: &Output) -> Option<WindowElement> {
         // TODO: see if the below is necessary
         // output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
 
-        let windows = output.with_state(|state| {
+        output.with_state(|state| {
             state
                 .focus_stack
                 .stack
                 .iter()
                 .rev()
-                .filter(|win| {
-                    let win_tags = win.with_state(|state| state.tags.clone());
-                    let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
-
-                    win_tags
-                        .iter()
-                        .any(|win_tag| output_tags.iter().any(|op_tag| win_tag == op_tag))
-                })
+                .filter(|win| win.is_on_active_tag())
+                .find(|win| !win.is_x11_override_redirect())
                 .cloned()
-                .collect::<Vec<_>>()
-        });
-
-        windows
-            .into_iter()
-            .find(|win| !win.is_x11_override_redirect())
+        })
     }
 
     /// Update the keyboard focus.
@@ -64,41 +54,51 @@ impl State {
             self.space.raise_element(win, false);
         }
     }
+
+    /// Get the currently focused output, or the first mapped output if there is none, or None.
+    pub fn focused_output(&self) -> Option<&Output> {
+        self.output_focus_stack
+            .stack
+            .last()
+            .or_else(|| self.space.outputs().next())
+    }
 }
 
-/// A vector of windows, with the last one being the one in focus and the first
-/// being the one at the bottom of the focus stack.
-#[derive(Debug)]
-pub struct FocusStack<T> {
-    pub stack: Vec<T>,
+#[derive(Debug, Clone, Default)]
+pub struct OutputFocusStack {
+    stack: Vec<Output>,
+}
+
+impl OutputFocusStack {
+    // Set the new focused output.
+    pub fn set_focus(&mut self, output: Output) {
+        self.stack.retain(|op| op != &output);
+        self.stack.push(output);
+    }
+}
+
+/// A stack of windows, with the top one being the one in focus.
+#[derive(Debug, Default)]
+pub struct WindowKeyboardFocusStack {
+    pub stack: Vec<WindowElement>,
     focused: bool,
 }
 
-impl<T> Default for FocusStack<T> {
-    fn default() -> Self {
-        Self {
-            stack: Default::default(),
-            focused: Default::default(),
-        }
-    }
-}
-
-impl<T: PartialEq> FocusStack<T> {
-    /// Set `focus` to be focused.
+impl WindowKeyboardFocusStack {
+    /// Set `window` to be focused.
     ///
     /// If it's already in the stack, it will be removed then pushed.
     /// If it isn't, it will just be pushed.
-    pub fn set_focus(&mut self, focus: T) {
-        self.stack.retain(|foc| foc != &focus);
-        self.stack.push(focus);
+    pub fn set_focus(&mut self, window: WindowElement) {
+        self.stack.retain(|win| win != &window);
+        self.stack.push(window);
         self.focused = true;
     }
 
+    /// Unset the focus by marking this stack as unfocused.
+    ///
+    /// This will cause [`Self::current_focus`] to return `None`.
     pub fn unset_focus(&mut self) {
         self.focused = false;
-    }
-
-    pub fn current_focus(&self) -> Option<&T> {
-        self.focused.then(|| self.stack.last())?
     }
 }

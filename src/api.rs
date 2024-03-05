@@ -725,7 +725,7 @@ impl tag_service_server::TagService for TagService {
             let Some(tag) = tag_id.tag(state) else { return };
             let Some(output) = tag.output(state) else { return };
 
-            output.with_state(|state| {
+            output.with_state_mut(|state| {
                 for op_tag in state.tags.iter_mut() {
                     op_tag.set_active(false);
                 }
@@ -792,7 +792,7 @@ impl tag_service_server::TagService for TagService {
                 .outputs()
                 .find(|output| output.name() == output_name.0)
             {
-                output.with_state(|state| {
+                output.with_state_mut(|state| {
                     state.tags.extend(new_tags.clone());
                     tracing::debug!("tags added, are now {:?}", state.tags);
                 });
@@ -800,7 +800,7 @@ impl tag_service_server::TagService for TagService {
 
             for tag in new_tags {
                 for window in state.windows.iter() {
-                    window.with_state(|state| {
+                    window.with_state_mut(|state| {
                         for win_tag in state.tags.iter_mut() {
                             if win_tag.id() == tag.id() {
                                 *win_tag = tag.clone();
@@ -826,7 +826,7 @@ impl tag_service_server::TagService for TagService {
 
             for output in state.space.outputs().cloned().collect::<Vec<_>>() {
                 // TODO: seriously, convert state.tags into a hashset
-                output.with_state(|state| {
+                output.with_state_mut(|state| {
                     for tag_to_remove in tags_to_remove.iter() {
                         state.tags.retain(|tag| tag != tag_to_remove);
                     }
@@ -1061,8 +1061,7 @@ impl output_service_server::OutputService for OutputService {
             let y = output.as_ref().map(|output| output.current_location().y);
 
             let focused = state
-                .output_focus_stack
-                .current_focus()
+                .focused_output()
                 .and_then(|foc_op| output.as_ref().map(|op| op == foc_op));
 
             let tag_ids = output
@@ -1176,7 +1175,7 @@ impl window_service_server::WindowService for WindowService {
 
             let rect = Rectangle::from_loc_and_size(window_loc, window_size);
             // window.change_geometry(rect);
-            window.with_state(|state| {
+            window.with_state_mut(|state| {
                 use crate::window::window_state::FloatingOrTiled;
                 state.floating_or_tiled = match state.floating_or_tiled {
                     FloatingOrTiled::Floating(_) => FloatingOrTiled::Floating(rect),
@@ -1374,7 +1373,7 @@ impl window_service_server::WindowService for WindowService {
             match set_or_toggle {
                 SetOrToggle::Set => {
                     window.set_activate(true);
-                    output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                    output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                     state.output_focus_stack.set_focus(output.clone());
                     if let Some(keyboard) = state.seat.get_keyboard() {
                         keyboard.set_focus(
@@ -1385,24 +1384,22 @@ impl window_service_server::WindowService for WindowService {
                     }
                 }
                 SetOrToggle::Unset => {
-                    if output.with_state(|state| state.focus_stack.current_focus() == Some(&window))
-                    {
-                        output.with_state(|state| state.focus_stack.unset_focus());
+                    if state.focused_window(&output) == Some(window) {
+                        output.with_state_mut(|state| state.focus_stack.unset_focus());
                         if let Some(keyboard) = state.seat.get_keyboard() {
                             keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                         }
                     }
                 }
                 SetOrToggle::Toggle => {
-                    if output.with_state(|state| state.focus_stack.current_focus() == Some(&window))
-                    {
-                        output.with_state(|state| state.focus_stack.unset_focus());
+                    if state.focused_window(&output).as_ref() == Some(&window) {
+                        output.with_state_mut(|state| state.focus_stack.unset_focus());
                         if let Some(keyboard) = state.seat.get_keyboard() {
                             keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                         }
                     } else {
                         window.set_activate(true);
-                        output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+                        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                         state.output_focus_stack.set_focus(output.clone());
                         if let Some(keyboard) = state.seat.get_keyboard() {
                             keyboard.set_focus(
@@ -1449,7 +1446,7 @@ impl window_service_server::WindowService for WindowService {
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(state) else { return };
             let Some(tag) = tag_id.tag(state) else { return };
-            window.with_state(|state| {
+            window.with_state_mut(|state| {
                 state.tags = vec![tag.clone()];
             });
             let Some(output) = tag.output(state) else { return };
@@ -1486,14 +1483,14 @@ impl window_service_server::WindowService for WindowService {
 
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
-                SetOrToggle::Set => window.with_state(|state| {
+                SetOrToggle::Set => window.with_state_mut(|state| {
                     state.tags.retain(|tg| tg != &tag);
                     state.tags.push(tag.clone());
                 }),
-                SetOrToggle::Unset => window.with_state(|state| {
+                SetOrToggle::Unset => window.with_state_mut(|state| {
                     state.tags.retain(|tg| tg != &tag);
                 }),
-                SetOrToggle::Toggle => window.with_state(|state| {
+                SetOrToggle::Toggle => window.with_state_mut(|state| {
                     if !state.tags.contains(&tag) {
                         state.tags.push(tag.clone());
                     } else {
@@ -1684,8 +1681,7 @@ impl window_service_server::WindowService for WindowService {
 
             let focused = window.as_ref().and_then(|win| {
                 state
-                    .output_focus_stack
-                    .current_focus()
+                    .focused_output()
                     .and_then(|output| state.focused_window(output))
                     .map(|foc_win| win == &foc_win)
             });

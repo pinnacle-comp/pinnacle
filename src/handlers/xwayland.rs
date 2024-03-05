@@ -51,15 +51,13 @@ impl XwmHandler for State {
             .expect("called element_bbox on an unmapped window");
 
         let output_size = self
-            .output_focus_stack
-            .current_focus()
+            .focused_output()
             .and_then(|op| self.space.output_geometry(op))
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
         let output_loc = self
-            .output_focus_stack
-            .current_focus()
+            .focused_output()
             .map(|op| op.current_location())
             .unwrap_or((0, 0).into());
 
@@ -87,15 +85,12 @@ impl XwmHandler for State {
             .expect("failed to configure x11 window");
         // TODO: ssd
 
-        if let (Some(output), _) | (None, Some(output)) = (
-            self.output_focus_stack.current_focus(),
-            self.space.outputs().next(),
-        ) {
+        if let Some(output) = self.focused_output() {
             window.place_on_output(output);
         }
 
         if should_float(surface) {
-            window.with_state(|state| {
+            window.with_state_mut(|state| {
                 state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
             });
         }
@@ -107,7 +102,7 @@ impl XwmHandler for State {
         self.apply_window_rules(&window);
 
         if let Some(output) = window.output(self) {
-            output.with_state(|state| state.focus_stack.set_focus(window.clone()));
+            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
             self.update_windows(&output);
         }
 
@@ -136,14 +131,11 @@ impl XwmHandler for State {
         self.windows.push(window.clone());
         self.z_index_stack.set_focus(window.clone());
 
-        if let (Some(output), _) | (None, Some(output)) = (
-            self.output_focus_stack.current_focus(),
-            self.space.outputs().next(),
-        ) {
+        if let Some(output) = self.focused_output() {
             window.place_on_output(output);
             // FIXME: setting focus here may possibly muck things up
             // |      or maybe they won't idk
-            output.with_state(|state| state.focus_stack.set_focus(window.clone()))
+            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()))
         }
 
         self.space.map_element(window, loc, true);
@@ -151,7 +143,7 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         for output in self.space.outputs() {
-            output.with_state(|state| {
+            output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
                         .is_some_and(|surf| Some(surf) != surface.wl_surface())
@@ -206,7 +198,7 @@ impl XwmHandler for State {
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         for output in self.space.outputs() {
-            output.with_state(|state| {
+            output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
                         .is_some_and(|surf| Some(surf) != surface.wl_surface())

@@ -64,7 +64,7 @@ impl ResizeSurfaceGrab {
         initial_window_rect: Rectangle<i32, Logical>,
         button_used: u32,
     ) -> Option<Self> {
-        window.wl_surface()?.with_state(|state| {
+        window.wl_surface()?.with_state_mut(|state| {
             state.resize_state = ResizeSurfaceState::Resizing {
                 edges,
                 initial_window_rect,
@@ -215,7 +215,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
                     toplevel.send_pending_configure();
 
-                    toplevel.wl_surface().with_state(|state| {
+                    toplevel.wl_surface().with_state_mut(|state| {
                         // TODO: validate resize state
                         state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                             edges: self.edges,
@@ -228,7 +228,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                         return;
                     }
                     let Some(surface) = surface.wl_surface() else { return };
-                    surface.with_state(|state| {
+                    surface.with_state_mut(|state| {
                         state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                             edges: self.edges,
                             initial_window_rect: self.initial_window_rect,
@@ -363,7 +363,7 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
     let mut window_loc = state.space.element_location(&window)?;
     let geometry = window.geometry();
 
-    let new_loc: Point<Option<i32>, Logical> = surface.with_state(|state| {
+    let new_loc: Point<Option<i32>, Logical> = surface.with_state_mut(|state| {
         state
             .resize_state
             .commit()
@@ -406,7 +406,7 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
         .expect("called element_geometry on unmapped window")
         .size;
 
-    window.with_state(|state| {
+    window.with_state_mut(|state| {
         if state.floating_or_tiled.is_floating() {
             state.floating_or_tiled =
                 FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));

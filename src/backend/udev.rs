@@ -972,7 +972,7 @@ impl State {
             output.change_current_state(None, None, None, Some(*loc));
             self.space.map_output(&output, *loc);
 
-            output.with_state(|state| state.tags = tags.clone());
+            output.with_state_mut(|state| state.tags = tags.clone());
         } else {
             self.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {

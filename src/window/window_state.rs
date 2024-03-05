@@ -54,7 +54,7 @@ impl WindowElement {
     pub fn toggle_floating(&self) {
         match self.with_state(|state| state.floating_or_tiled) {
             FloatingOrTiled::Floating(current_rect) => {
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.floating_or_tiled = FloatingOrTiled::Tiled(Some(current_rect))
                 });
                 self.set_tiled_states();
@@ -62,7 +62,7 @@ impl WindowElement {
             FloatingOrTiled::Tiled(prev_rect) => {
                 let prev_rect = prev_rect.unwrap_or_else(|| self.geometry());
 
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.floating_or_tiled = FloatingOrTiled::Floating(prev_rect);
                 });
 
@@ -77,7 +77,7 @@ impl WindowElement {
     pub fn toggle_fullscreen(&self) {
         match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Maximized => {
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
                 });
 
@@ -105,7 +105,7 @@ impl WindowElement {
                 }
             }
             FullscreenOrMaximized::Fullscreen => {
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
                 });
 
@@ -124,7 +124,7 @@ impl WindowElement {
     pub fn toggle_maximized(&self) {
         match self.with_state(|state| state.fullscreen_or_maximized) {
             FullscreenOrMaximized::Neither | FullscreenOrMaximized::Fullscreen => {
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
                 });
 
@@ -152,7 +152,7 @@ impl WindowElement {
                 }
             }
             FullscreenOrMaximized::Maximized => {
-                self.with_state(|state| {
+                self.with_state_mut(|state| {
                     state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
                 });
 

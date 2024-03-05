@@ -5,10 +5,9 @@ use std::cell::RefCell;
 use smithay::output::Output;
 
 use crate::{
-    focus::FocusStack,
+    focus::WindowKeyboardFocusStack,
     state::{State, WithState},
     tag::Tag,
-    window::WindowElement,
 };
 
 /// A unique identifier for an output.
@@ -33,13 +32,24 @@ impl OutputName {
 #[derive(Default, Debug)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
-    pub focus_stack: FocusStack<WindowElement>,
+    pub focus_stack: WindowKeyboardFocusStack,
 }
 
 impl WithState for Output {
     type State = OutputState;
 
     fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnOnce(&Self::State) -> T,
+    {
+        let state = self
+            .user_data()
+            .get_or_insert(RefCell::<Self::State>::default);
+
+        func(&state.borrow())
+    }
+
+    fn with_state_mut<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut Self::State) -> T,
     {

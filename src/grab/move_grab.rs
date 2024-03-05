@@ -131,7 +131,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .expect("window wasn't mapped")
                 .size;
 
-            self.window.with_state(|state| {
+            self.window.with_state_mut(|state| {
                 if state.floating_or_tiled.is_floating() {
                     state.floating_or_tiled =
                         FloatingOrTiled::Floating(Rectangle::from_loc_and_size(new_loc, size));

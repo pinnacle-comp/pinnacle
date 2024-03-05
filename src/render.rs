@@ -147,9 +147,7 @@ where
     let elements = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
-        .filter(|win| {
-            win.is_on_active_tag(space.outputs())
-        })
+        .filter(|win| win.is_on_active_tag())
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
             let loc = (space.element_location(win).unwrap_or((0, 0).into()) - win.geometry().loc - output.current_location())
@@ -162,7 +160,9 @@ where
 
             (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
         }).flat_map(|(elems, rect)| {
-            // elems.into_iter().map(OutputRenderElements::from).collect::<Vec<_>>()
+            // We're cropping everything down to its expected size to stop any sussy windows that
+            // don't want to cooperate. Unfortunately this also truncates shadows and other
+            // external decorations.
             match rect {
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {

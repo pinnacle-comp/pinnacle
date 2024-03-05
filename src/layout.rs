@@ -130,14 +130,14 @@ impl State {
                         if pending {
                             pending_wins.push((win.clone(), toplevel.send_configure()))
                         } else {
-                            let loc = win.with_state(|state| state.target_loc.take());
+                            let loc = win.with_state_mut(|state| state.target_loc.take());
                             if let Some(loc) = loc {
                                 non_pending_wins.push((loc, win.clone()));
                             }
                         }
                     }
                     WindowSurface::X11(_) => {
-                        let loc = win.with_state(|state| state.target_loc.take());
+                        let loc = win.with_state_mut(|state| state.target_loc.take());
                         if let Some(loc) = loc {
                             self.space.map_element(win.clone(), loc, false);
                         }

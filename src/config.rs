@@ -299,7 +299,7 @@ impl State {
 
         debug!("Clearing tags");
         for output in self.space.outputs() {
-            output.with_state(|state| state.tags.clear());
+            output.with_state_mut(|state| state.tags.clear());
         }
 
         TagId::reset();

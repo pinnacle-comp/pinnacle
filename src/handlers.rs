@@ -120,7 +120,7 @@ impl CompositorHandler for State {
         if !compositor::is_sync_subsurface(surface) {
             if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
-                if let Some(loc) = window.with_state(|state| state.target_loc.take()) {
+                if let Some(loc) = window.with_state_mut(|state| state.target_loc.take()) {
                     self.space.map_element(window.clone(), loc, false);
                 }
             }
@@ -145,21 +145,21 @@ impl CompositorHandler for State {
                 self.windows.push(new_window.clone());
                 self.z_index_stack.set_focus(new_window.clone());
 
-                if let (Some(output), _) | (None, Some(output)) = (
-                    self.output_focus_stack.current_focus(),
-                    self.space.outputs().next(),
-                ) {
+                if let Some(output) = self.focused_output() {
                     tracing::debug!("Placing toplevel");
                     new_window.place_on_output(output);
-                    output.with_state(|state| state.focus_stack.set_focus(new_window.clone()));
+                    output.with_state_mut(|state| state.focus_stack.set_focus(new_window.clone()));
                 }
 
+                // FIXME: I'm mapping way offscreen here then sending a frame to prevent a window from
+                // |      mapping with its default geometry then immediately resizing
+                // |      because I don't set a target geometry before the initial configure.
                 self.space
                     .map_element(new_window.clone(), (1000000, 0), true);
 
                 self.apply_window_rules(&new_window);
 
-                if let Some(focused_output) = self.output_focus_stack.current_focus().cloned() {
+                if let Some(focused_output) = self.focused_output().cloned() {
                     self.update_windows(&focused_output);
                     new_window.send_frame(
                         &focused_output,

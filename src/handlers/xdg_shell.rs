@@ -63,7 +63,7 @@ impl XdgShellHandler for State {
         });
 
         for output in self.space.outputs() {
-            output.with_state(|state| {
+            output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|window| {
                     window
                         .wl_surface()
@@ -103,9 +103,7 @@ impl XdgShellHandler for State {
     fn new_popup(&mut self, surface: PopupSurface, mut positioner: PositionerState) {
         tracing::debug!(?positioner.constraint_adjustment, ?positioner.gravity);
         let output_rect = self
-            .output_focus_stack
-            .current_focus()
-            .or_else(|| self.space.outputs().next())
+            .focused_output()
             .and_then(|op| self.space.output_geometry(op));
 
         /// Horizontal direction

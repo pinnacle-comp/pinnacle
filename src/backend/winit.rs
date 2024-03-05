@@ -318,7 +318,7 @@ impl State {
 
                 // Send frames to the cursor surface so it updates correctly
                 if let CursorImageStatus::Surface(surf) = &self.cursor_status {
-                    if let Some(op) = self.output_focus_stack.current_focus() {
+                    if let Some(op) = self.focused_output() {
                         send_frames_surface_tree(surf, op, time, Some(Duration::ZERO), |_, _| None);
                     }
                 }

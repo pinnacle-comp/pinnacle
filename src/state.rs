@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor, focus::FocusStack,
-    grab::resize_grab::ResizeSurfaceState, window::WindowElement,
+    api::signal::SignalState,
+    backend::Backend,
+    config::Config,
+    cursor::Cursor,
+    focus::{OutputFocusStack, WindowKeyboardFocusStack},
+    grab::resize_grab::ResizeSurfaceState,
+    window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
-    output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
@@ -72,8 +76,8 @@ pub struct State {
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
 
-    pub output_focus_stack: FocusStack<Output>,
-    pub z_index_stack: FocusStack<WindowElement>,
+    pub output_focus_stack: OutputFocusStack,
+    pub z_index_stack: WindowKeyboardFocusStack,
 
     pub popup_manager: PopupManager,
 
@@ -250,8 +254,8 @@ impl State {
 
             input_state: InputState::new(),
 
-            output_focus_stack: FocusStack::default(),
-            z_index_stack: FocusStack::default(),
+            output_focus_stack: OutputFocusStack::default(),
+            z_index_stack: WindowKeyboardFocusStack::default(),
 
             config: Config::new(no_config, config_dir),
 
@@ -331,8 +335,16 @@ pub trait WithState {
 
     /// Access data map state.
     ///
-    /// RefCell Safety: This function will panic if called within itself.
+    /// RefCell Safety: This function will panic if called within [`with_state_mut`][Self::with_state_mut].
     fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnOnce(&Self::State) -> T;
+
+    /// Access data map state mutably.
+    ///
+    /// RefCell Safety: This function will panic if called within itself or
+    /// [`with_state`][Self::with_state].
+    fn with_state_mut<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut Self::State) -> T;
 }
@@ -346,6 +358,19 @@ impl WithState for WlSurface {
     type State = WlSurfaceState;
 
     fn with_state<F, T>(&self, func: F) -> T
+    where
+        F: FnOnce(&Self::State) -> T,
+    {
+        compositor::with_states(self, |states| {
+            let state = states
+                .data_map
+                .get_or_insert(RefCell::<Self::State>::default);
+
+            func(&state.borrow())
+        })
+    }
+
+    fn with_state_mut<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut Self::State) -> T,
     {

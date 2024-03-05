@@ -49,7 +49,6 @@ impl WindowElement {
                 });
             }
             WindowSurface::X11(surface) => {
-                // TODO: maybe move this check elsewhere idk
                 if !surface.is_override_redirect() {
                     surface
                         .configure(new_geo)
@@ -57,11 +56,12 @@ impl WindowElement {
                 }
             }
         }
-        self.with_state(|state| {
+        self.with_state_mut(|state| {
             state.target_loc = Some(new_geo.loc);
         });
     }
 
+    /// Get this window's class (app id in Wayland but hey old habits die hard).
     pub fn class(&self) -> Option<String> {
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
@@ -80,6 +80,7 @@ impl WindowElement {
         }
     }
 
+    /// Get this window's title.
     pub fn title(&self) -> Option<String> {
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
@@ -109,26 +110,16 @@ impl WindowElement {
 
     /// Returns whether or not this window has an active tag.
     ///
-    /// RefCell Safety: This uses RefCells on both `self` and everything in `outputs`.
-    pub fn is_on_active_tag<'a>(&self, outputs: impl IntoIterator<Item = &'a Output>) -> bool {
-        let tags = outputs
-            .into_iter()
-            .flat_map(|op| op.with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>()))
-            .collect::<Vec<_>>();
-
-        self.with_state(|state| {
-            state
-                .tags
-                .iter()
-                .any(|tag| tags.iter().any(|tag2| tag == tag2))
-        })
+    /// RefCell Safety: This calls `with_state` on `self`.
+    pub fn is_on_active_tag(&self) -> bool {
+        self.with_state(|state| state.tags.iter().any(|tag| tag.active()))
     }
 
     /// Place this window on the given output, giving it the output's focused tags.
     ///
-    /// RefCell Safety: Uses refcells on both the window and the output.
+    /// RefCell Safety: Uses `with_state_mut` on the window and `with_state` on the output
     pub fn place_on_output(&self, output: &Output) {
-        self.with_state(|state| {
+        self.with_state_mut(|state| {
             state.tags = output.with_state(|state| {
                 let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
                 if !output_tags.is_empty() {
@@ -198,6 +189,17 @@ impl WithState for WindowElement {
 
     fn with_state<F, T>(&self, func: F) -> T
     where
+        F: FnOnce(&Self::State) -> T,
+    {
+        let state = self
+            .user_data()
+            .get_or_insert(|| RefCell::new(WindowElementState::new()));
+
+        func(&state.borrow())
+    }
+
+    fn with_state_mut<F, T>(&self, func: F) -> T
+    where
         F: FnOnce(&mut Self::State) -> T,
     {
         let state = self
@@ -222,6 +224,9 @@ impl State {
             .cloned()
     }
 
+    /// `window_for_surface` but for windows that haven't commited a buffer yet.
+    ///
+    /// Currently only used in `ensure_initial_configure` in [`handlers`][crate::handlers].
     pub fn new_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.new_windows
             .iter()

@@ -189,7 +189,7 @@ impl State {
                         let tags = output
                             .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
 
-                        window.with_state(|state| state.tags = tags.clone());
+                        window.with_state_mut(|state| state.tags = tags.clone());
                     }
                 }
 
@@ -199,7 +199,7 @@ impl State {
                         .filter_map(|tag_id| tag_id.tag(self))
                         .collect::<Vec<_>>();
 
-                    window.with_state(|state| state.tags = tags.clone());
+                    window.with_state_mut(|state| state.tags = tags.clone());
                 }
 
                 if let Some(floating_or_tiled) = floating_or_tiled {
@@ -218,7 +218,7 @@ impl State {
                 }
 
                 if let Some(fs_or_max) = fullscreen_or_maximized {
-                    window.with_state(|state| state.fullscreen_or_maximized = *fs_or_max);
+                    window.with_state_mut(|state| state.fullscreen_or_maximized = *fs_or_max);
                 }
 
                 if let Some((w, h)) = size {
@@ -229,7 +229,7 @@ impl State {
                     match window.with_state(|state| state.floating_or_tiled) {
                         window_state::FloatingOrTiled::Floating(mut rect) => {
                             rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            window.with_state(|state| {
+                            window.with_state_mut(|state| {
                                 state.floating_or_tiled =
                                     window_state::FloatingOrTiled::Floating(rect)
                             });
@@ -238,7 +238,7 @@ impl State {
                             if let Some(rect) = rect.as_mut() {
                                 rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
                             }
-                            window.with_state(|state| {
+                            window.with_state_mut(|state| {
                                 state.floating_or_tiled = window_state::FloatingOrTiled::Tiled(rect)
                             });
                         }
@@ -249,7 +249,7 @@ impl State {
                     match window.with_state(|state| state.floating_or_tiled) {
                         window_state::FloatingOrTiled::Floating(mut rect) => {
                             rect.loc = (*loc).into();
-                            window.with_state(|state| {
+                            window.with_state_mut(|state| {
                                 state.floating_or_tiled =
                                     window_state::FloatingOrTiled::Floating(rect)
                             });
@@ -263,7 +263,7 @@ impl State {
                                 Rectangle::from_loc_and_size(Point::from(*loc), size)
                             });
 
-                            window.with_state(|state| {
+                            window.with_state_mut(|state| {
                                 state.floating_or_tiled =
                                     window_state::FloatingOrTiled::Tiled(Some(rect))
                             });
