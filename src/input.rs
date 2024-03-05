@@ -375,8 +375,7 @@ impl State {
                 // TODO: use update_keyboard_focus from anvil
 
                 if let Some(window) = focus.window_for(self) {
-                    self.space.raise_element(&window, true);
-                    self.z_index_stack.set_focus(window.clone());
+                    self.raise_window(window.clone(), true);
                     if let Some(output) = window.output(self) {
                         output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                     }

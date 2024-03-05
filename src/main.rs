@@ -143,13 +143,22 @@ async fn main() -> anyhow::Result<()> {
     };
 
     event_loop.run(None, &mut state, |state| {
-        state.fixup_focus();
+        state.fixup_z_layering();
         state.space.refresh();
         state.popup_manager.cleanup();
+
         state
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
+
+        // TODO: couple these or something, this is really error-prone
+        assert_eq!(
+            state.windows.len(),
+            state.z_index_stack.len(),
+            "Length of `windows` and `z_index_stack` are different. \
+            If you see this, report it to the developer."
+        );
     })?;
 
     Ok(())

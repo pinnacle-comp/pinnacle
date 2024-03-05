@@ -49,7 +49,8 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             return;
         }
 
-        state.space.raise_element(&self.window, false);
+        state.raise_window(self.window.clone(), false);
+
         if let Some(surface) = self.window.x11_surface() {
             // INFO: can you raise OR windows or no idk
             if !surface.is_override_redirect() {

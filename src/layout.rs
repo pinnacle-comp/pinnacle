@@ -150,7 +150,7 @@ impl State {
             self.space.map_element(window, loc, false);
         }
 
-        self.fixup_focus();
+        self.fixup_z_layering();
     }
 }
 

@@ -97,7 +97,7 @@ impl XwmHandler for State {
 
         // TODO: will an unmap -> map duplicate the window
         self.windows.push(window.clone());
-        self.z_index_stack.set_focus(window.clone());
+        self.raise_window(window.clone(), true);
 
         self.apply_window_rules(&window);
 
@@ -129,7 +129,6 @@ impl XwmHandler for State {
         let window = WindowElement::new(Window::new_x11_window(surface));
 
         self.windows.push(window.clone());
-        self.z_index_stack.set_focus(window.clone());
 
         if let Some(output) = self.focused_output() {
             window.place_on_output(output);
@@ -138,7 +137,8 @@ impl XwmHandler for State {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()))
         }
 
-        self.space.map_element(window, loc, true);
+        self.space.map_element(window.clone(), loc, true);
+        self.raise_window(window.clone(), true);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -161,7 +161,6 @@ impl XwmHandler for State {
             self.windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
             self.z_index_stack
-                .stack
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             self.space.unmap_elem(&win);
@@ -174,8 +173,7 @@ impl XwmHandler for State {
                     .map(KeyboardFocusTarget::Window);
 
                 if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.space.raise_element(win, true);
-                    self.z_index_stack.set_focus(win.clone());
+                    self.raise_window(win.clone(), true);
                     if let Some(toplevel) = win.toplevel() {
                         toplevel.send_configure();
                     }
@@ -226,7 +224,6 @@ impl XwmHandler for State {
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             self.z_index_stack
-                .stack
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             if let Some(output) = win.output(self) {
@@ -237,8 +234,7 @@ impl XwmHandler for State {
                     .map(KeyboardFocusTarget::Window);
 
                 if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.space.raise_element(win, true);
-                    self.z_index_stack.set_focus(win.clone());
+                    self.raise_window(win.clone(), true);
                     if let Some(toplevel) = win.toplevel() {
                         toplevel.send_configure();
                     }

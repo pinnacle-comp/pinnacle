@@ -56,7 +56,7 @@ impl XdgShellHandler for State {
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
 
-        self.z_index_stack.stack.retain(|window| {
+        self.z_index_stack.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
@@ -81,12 +81,11 @@ impl XdgShellHandler for State {
             let focus = self
                 .focused_window(&output)
                 .map(KeyboardFocusTarget::Window);
-            if let Some(KeyboardFocusTarget::Window(win)) = &focus {
+            if let Some(KeyboardFocusTarget::Window(window)) = &focus {
                 tracing::debug!("Focusing on prev win");
                 // TODO:
-                self.space.raise_element(win, true);
-                self.z_index_stack.set_focus(win.clone());
-                if let Some(toplevel) = win.toplevel() {
+                self.raise_window(window.clone(), true);
+                if let Some(toplevel) = window.toplevel() {
                     toplevel.send_configure();
                 }
             }

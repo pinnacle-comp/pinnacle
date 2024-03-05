@@ -143,7 +143,6 @@ impl CompositorHandler for State {
             if is_mapped {
                 self.new_windows.retain(|win| win != &new_window);
                 self.windows.push(new_window.clone());
-                self.z_index_stack.set_focus(new_window.clone());
 
                 if let Some(output) = self.focused_output() {
                     tracing::debug!("Placing toplevel");
@@ -156,6 +155,8 @@ impl CompositorHandler for State {
                 // |      because I don't set a target geometry before the initial configure.
                 self.space
                     .map_element(new_window.clone(), (1000000, 0), true);
+
+                self.raise_window(new_window.clone(), true);
 
                 self.apply_window_rules(&new_window);
 

@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::signal::SignalState,
-    backend::Backend,
-    config::Config,
-    cursor::Cursor,
-    focus::{OutputFocusStack, WindowKeyboardFocusStack},
-    grab::resize_grab::ResizeSurfaceState,
-    window::WindowElement,
+    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor,
+    focus::OutputFocusStack, grab::resize_grab::ResizeSurfaceState, window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
@@ -77,7 +72,7 @@ pub struct State {
     pub input_state: InputState,
 
     pub output_focus_stack: OutputFocusStack,
-    pub z_index_stack: WindowKeyboardFocusStack,
+    pub z_index_stack: Vec<WindowElement>,
 
     pub popup_manager: PopupManager,
 
@@ -255,7 +250,7 @@ impl State {
             input_state: InputState::new(),
 
             output_focus_stack: OutputFocusStack::default(),
-            z_index_stack: WindowKeyboardFocusStack::default(),
+            z_index_stack: Vec::new(),
 
             config: Config::new(no_config, config_dir),
 
