@@ -18,16 +18,20 @@ impl State {
         // TODO: see if the below is necessary
         // output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
 
-        output.with_state(|state| {
-            state
-                .focus_stack
-                .stack
-                .iter()
-                .rev()
-                .filter(|win| win.is_on_active_tag())
-                .find(|win| !win.is_x11_override_redirect())
-                .cloned()
-        })
+        output
+            .with_state(|state| {
+                state.focus_stack.focused.then(|| {
+                    state
+                        .focus_stack
+                        .stack
+                        .iter()
+                        .rev()
+                        .filter(|win| win.is_on_active_tag())
+                        .find(|win| !win.is_x11_override_redirect())
+                        .cloned()
+                })
+            })
+            .flatten()
     }
 
     /// Update the keyboard focus.
