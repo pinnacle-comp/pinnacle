@@ -555,6 +555,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "container_of"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89f5bbeb86761f66a87f8e327265ea0111f82f1928a84037b9abedab9f79472b"
+dependencies = [
+ "memoffset 0.6.5",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1466,6 +1475,15 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "memoffset"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a634b1c61a95585bd15607c6ab0c4e5b226e695ff2800ba0cdccddf208c406c"
@@ -1533,6 +1551,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c196769dd60fd4f363e11d948139556a344e79d451aeb2fa2fd040738ef7691"
 dependencies = [
  "jni-sys",
+]
+
+[[package]]
+name = "nix"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
+dependencies = [
+ "bitflags 2.4.2",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -1767,7 +1796,7 @@ dependencies = [
  "cliclack",
  "dircpy",
  "image",
- "nix",
+ "nix 0.28.0",
  "pinnacle-api-defs",
  "prost",
  "serde",
@@ -1786,6 +1815,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "wlcs",
  "x11rb",
  "xcursor",
  "xdg",
@@ -1824,6 +1854,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "pinnacle-wlcs"
+version = "0.0.1"
+dependencies = [
+ "pinnacle",
+ "smithay",
+ "wayland-sys",
+ "wlcs",
 ]
 
 [[package]]
@@ -3047,7 +3087,7 @@ dependencies = [
  "dlib",
  "libc",
  "log",
- "memoffset",
+ "memoffset 0.9.0",
  "once_cell",
  "pkg-config",
 ]
@@ -3395,6 +3435,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dffa400e67ed5a4dd237983829e66475f0a4a26938c4b04c21baede6262215b8"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "wlcs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d99c305ce368db32f0c675a3a17abbfd4123a59f4a1c56c0ee70b372cb7609e"
+dependencies = [
+ "container_of",
+ "memoffset 0.9.0",
+ "nix 0.27.1",
+ "wayland-sys",
 ]
 
 [[package]]

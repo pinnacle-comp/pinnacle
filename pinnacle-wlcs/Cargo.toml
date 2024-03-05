@@ -1,0 +1,15 @@
+[package]
+name = "pinnacle-wlcs"
+version = "0.0.1"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pinnacle = { path = "../", features = ["wlcs"] }
+smithay = { workspace = true }
+wlcs = { workspace = true }
+wayland-sys = { version = "0.31.1", features = ["client", "server", "dlopen"] }

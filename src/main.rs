@@ -12,28 +12,15 @@
 #![warn(clippy::unwrap_used)]
 
 use anyhow::Context;
-use cli::Cli;
 use nix::unistd::Uid;
+use pinnacle::{
+    backend::{udev::setup_udev, winit::setup_winit},
+    cli::{self, Cli},
+};
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use xdg::BaseDirectories;
-
-mod api;
-mod backend;
-mod cli;
-mod config;
-mod cursor;
-mod focus;
-mod grab;
-mod handlers;
-mod input;
-mod layout;
-mod output;
-mod render;
-mod state;
-mod tag;
-mod window;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -89,77 +76,84 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let in_graphical_env =
-        std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
-
     if !sysinfo::set_open_files_limit(0) {
         warn!("Unable to set `sysinfo`'s open files limit to 0.");
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    let (mut state, mut event_loop) = match (cli.backend, cli.force) {
-        (None, _) => {
-            if in_graphical_env {
-                info!("Starting winit backend");
-                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
-            } else {
-                info!("Starting udev backend");
-                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
-            }
-        }
-        (Some(cli::Backend::Winit), force) => {
-            if !in_graphical_env {
-                if force {
-                    warn!("Starting winit backend with no detected graphical environment");
-                    crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
+    #[cfg(not(feature = "wlcs"))]
+    {
+        let in_graphical_env =
+            std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
+
+        let (mut state, mut event_loop) = match (cli.backend, cli.force) {
+            (None, _) => {
+                if in_graphical_env {
+                    info!("Starting winit backend");
+                    setup_winit(cli.no_config, cli.config_dir)?
                 } else {
-                    warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
-                    warn!("If you are trying to run the winit backend in a tty, it won't work.");
-                    warn!("If you really want to, additionally pass in the `--force` flag.");
-                    return Ok(());
+                    info!("Starting udev backend");
+                    setup_udev(cli.no_config, cli.config_dir)?
                 }
-            } else {
-                info!("Starting winit backend");
-                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
             }
-        }
-        (Some(cli::Backend::Udev), force) => {
-            if in_graphical_env {
-                if force {
-                    warn!("Starting udev backend with a detected graphical environment");
-                    crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
+            (Some(cli::Backend::Winit), force) => {
+                if !in_graphical_env {
+                    if force {
+                        warn!("Starting winit backend with no detected graphical environment");
+                        setup_winit(cli.no_config, cli.config_dir)?
+                    } else {
+                        warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
+                        warn!(
+                            "If you are trying to run the winit backend in a tty, it won't work."
+                        );
+                        warn!("If you really want to, additionally pass in the `--force` flag.");
+                        return Ok(());
+                    }
                 } else {
-                    warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
-                    warn!("If you are trying to run the udev backend in a graphical environment,");
-                    warn!("it won't work and may mess some things up.");
-                    warn!("If you really want to, additionally pass in the `--force` flag.");
-                    return Ok(());
+                    info!("Starting winit backend");
+                    setup_winit(cli.no_config, cli.config_dir)?
                 }
-            } else {
-                info!("Starting udev backend");
-                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
             }
-        }
-    };
+            (Some(cli::Backend::Udev), force) => {
+                if in_graphical_env {
+                    if force {
+                        warn!("Starting udev backend with a detected graphical environment");
+                        setup_udev(cli.no_config, cli.config_dir)?
+                    } else {
+                        warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
+                        warn!(
+                            "If you are trying to run the udev backend in a graphical environment,"
+                        );
+                        warn!("it won't work and may mess some things up.");
+                        warn!("If you really want to, additionally pass in the `--force` flag.");
+                        return Ok(());
+                    }
+                } else {
+                    info!("Starting udev backend");
+                    setup_udev(cli.no_config, cli.config_dir)?
+                }
+            }
+        };
 
-    event_loop.run(None, &mut state, |state| {
-        state.fixup_z_layering();
-        state.space.refresh();
-        state.popup_manager.cleanup();
+        event_loop.run(None, &mut state, |state| {
+            state.fixup_z_layering();
+            state.space.refresh();
+            state.popup_manager.cleanup();
 
-        state
-            .display_handle
-            .flush_clients()
-            .expect("failed to flush client buffers");
+            state
+                .display_handle
+                .flush_clients()
+                .expect("failed to flush client buffers");
 
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            state.windows.len(),
-            state.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-            If you see this, report it to the developer."
-        );
-    })?;
+            // TODO: couple these or something, this is really error-prone
+            assert_eq!(
+                state.windows.len(),
+                state.z_index_stack.len(),
+                "Length of `windows` and `z_index_stack` are different. \
+                    If you see this, report it to the developer."
+            );
+        })?;
+    }
 
     Ok(())
 }

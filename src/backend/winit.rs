@@ -17,6 +17,7 @@ use smithay::{
     output::{Output, Subpixel},
     reexports::{
         calloop::{
+            self,
             timer::{TimeoutAction, Timer},
             EventLoop,
         },
@@ -32,6 +33,9 @@ use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
     state::State,
 };
+
+#[cfg(feature = "wlcs")]
+use crate::wlcs::WlcsEvent;
 
 use super::{Backend, BackendData};
 
@@ -65,6 +69,7 @@ impl Backend {
 pub fn setup_winit(
     no_config: bool,
     config_dir: Option<PathBuf>,
+    #[cfg(feature = "wlcs")] wlcs_recv: calloop::channel::Channel<WlcsEvent>,
 ) -> anyhow::Result<(State, EventLoop<'static, State>)> {
     let event_loop: EventLoop<State> = EventLoop::try_new()?;
 
