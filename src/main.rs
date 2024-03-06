@@ -12,28 +12,15 @@
 #![warn(clippy::unwrap_used)]
 
 use anyhow::Context;
-use cli::Cli;
 use nix::unistd::Uid;
+use pinnacle::{
+    backend::{udev::setup_udev, winit::setup_winit},
+    cli::{self, Cli},
+};
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use xdg::BaseDirectories;
-
-mod api;
-mod backend;
-mod cli;
-mod config;
-mod cursor;
-mod focus;
-mod grab;
-mod handlers;
-mod input;
-mod layout;
-mod output;
-mod render;
-mod state;
-mod tag;
-mod window;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -101,17 +88,17 @@ async fn main() -> anyhow::Result<()> {
         (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
-                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
+                setup_winit(cli.no_config, cli.config_dir)?
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
+                setup_udev(cli.no_config, cli.config_dir)?
             }
         }
         (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
-                    crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
+                    setup_winit(cli.no_config, cli.config_dir)?
                 } else {
                     warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
                     warn!("If you are trying to run the winit backend in a tty, it won't work.");
@@ -120,14 +107,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting winit backend");
-                crate::backend::winit::setup_winit(cli.no_config, cli.config_dir)?
+                setup_winit(cli.no_config, cli.config_dir)?
             }
         }
         (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
-                    crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
+                    setup_udev(cli.no_config, cli.config_dir)?
                 } else {
                     warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
                     warn!("If you are trying to run the udev backend in a graphical environment,");
@@ -137,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting udev backend");
-                crate::backend::udev::setup_udev(cli.no_config, cli.config_dir)?
+                setup_udev(cli.no_config, cli.config_dir)?
             }
         }
     };

@@ -286,6 +286,7 @@ impl FullscreenOrMaximized {
 }
 
 impl WindowElementState {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             id: WindowId::next(),
