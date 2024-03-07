@@ -412,6 +412,8 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Context;
+
     use super::*;
 
     // TODO: find a way to test the interactive bits programmatically
@@ -428,9 +430,7 @@ mod tests {
             "--lang",
             "rust",
             "--dir",
-            temp_dir
-                .to_str()
-                .ok_or(anyhow::anyhow!("not valid unicode"))?,
+            temp_dir.to_str().context("not valid unicode")?,
             "--non-interactive",
         ]);
 

@@ -53,10 +53,10 @@ jobs:
         uses: leafo/gh-actions-luarocks@v4
       - name: Build
         if: ${{ runner.debug != '1' }}
-        run: cargo test
+        run: cargo test -- --test-threads=1
       - name: Build (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug cargo test -- --nocapture
+        run: RUST_LOG=debug cargo test -- --nocapture --test-threads=1
   check-format:
     runs-on: ubuntu-latest
     name: Check formatting
@@ -79,6 +79,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - name: Cache stuff
+        uses: Swatinem/rust-cache@v2
       - name: Get dependencies
         run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev
       - name: Setup Lua

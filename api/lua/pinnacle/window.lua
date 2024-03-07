@@ -224,7 +224,7 @@ local _fullscreen_or_maximized_keys = {
 --- -- A simple window rule. This one will cause Firefox to open on tag "Browser".
 ---Window.add_window_rule({
 ---    cond = { classes = { "firefox" } },
----    rule = { tags = { "Browser" } },
+---    rule = { tags = { Tag.get("Browser") } },
 ---})
 ---
 --- -- To apply rules when *all* provided conditions are true, use `all`.
@@ -234,8 +234,8 @@ local _fullscreen_or_maximized_keys = {
 ---    cond = {
 ---        all = {
 ---            {
----                class = "steam",
----                tag = Tag:get("5"),
+---                classes = { "steam" },
+---                tags = { Tag.get("5") },
 ---            }
 ---        }
 ---    },
@@ -246,8 +246,8 @@ local _fullscreen_or_maximized_keys = {
 --- -- Thus, the above can be shortened to:
 ---Window.add_window_rule({
 ---    cond = {
----        class = "steam",
----        tag = Tag:get("5"),
+---        classes = { "steam" },
+---        tags = { Tag.get("5") },
 ---    },
 ---    rule = { fullscreen_or_maximized = "fullscreen" },
 ---})
@@ -268,17 +268,17 @@ local _fullscreen_or_maximized_keys = {
 ---    cond = {
 ---        all = { -- This `all` block is needed because the outermost block cannot be an array.
 ---            { any = {
----                { class = { "firefox", "thunderbird", "discord" } }
+---                { classes = { "firefox", "thunderbird", "discord" } }
 ---            } },
 ---            { any = {
 ---                -- Because `tag` is inside an `all` block,
 ---                -- the window must have all these tags for this to be true.
 ---                -- If it was in an `any` block, only one tag would need to match.
 ---                { all = {
----                    { tag = { "A", "B", "C" } }
+---                    { tags = { Tag.get("A"), Tag.get("B"), Tag.get("C") } }
 ---                } },
 ---                { all = {
----                    { tag = { "1", "2" } }
+---                    { tags = { Tag.get("1"), Tag.get("2") } }
 ---                } },
 ---            } }
 ---        }
