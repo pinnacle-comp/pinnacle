@@ -32,8 +32,12 @@ use crate::{
     window::WindowElement,
 };
 
+#[cfg(feature = "testing")]
+use self::dummy::Dummy;
 use self::{udev::Udev, winit::Winit};
 
+#[cfg(feature = "testing")]
+pub mod dummy;
 pub mod udev;
 pub mod winit;
 
@@ -42,6 +46,8 @@ pub enum Backend {
     Winit(Winit),
     /// The compositor is running in a tty
     Udev(Udev),
+    #[cfg(feature = "testing")]
+    Dummy(Dummy),
 }
 
 impl Backend {
@@ -49,6 +55,8 @@ impl Backend {
         match self {
             Backend::Winit(winit) => winit.seat_name(),
             Backend::Udev(udev) => udev.seat_name(),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.seat_name(),
         }
     }
 
@@ -56,6 +64,8 @@ impl Backend {
         match self {
             Backend::Winit(winit) => winit.early_import(surface),
             Backend::Udev(udev) => udev.early_import(surface),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.early_import(surface),
         }
     }
 
@@ -180,6 +190,8 @@ impl DmabufHandler for State {
                     .expect("udev had no dmabuf state")
                     .0
             }
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => unreachable!(),
         }
     }
 
@@ -200,6 +212,12 @@ impl DmabufHandler for State {
                 .gpu_manager
                 .single_renderer(&udev.primary_gpu)
                 .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
+                .map(|_| ())
+                .map_err(|_| ()),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy
+                .renderer
+                .import_dmabuf(&dmabuf, None)
                 .map(|_| ())
                 .map_err(|_| ()),
         };

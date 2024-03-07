@@ -404,7 +404,7 @@ impl State {
         Ok(())
     }
 
-    fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
+    pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
         self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 

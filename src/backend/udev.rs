@@ -167,49 +167,46 @@ impl State {
     ///
     /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
-        match &mut self.backend {
-            Backend::Winit(_) => (),
-            Backend::Udev(udev) => {
-                for backend in udev.backends.values_mut() {
-                    for surface in backend.surfaces.values_mut() {
-                        // Clear the overlay planes on tty switch.
-                        //
-                        // On my machine, switching a tty would leave the topmost window on the
-                        // screen. Smithay will render the topmost window on the overlay plane,
-                        // so we clear it here.
-                        let planes = surface.compositor.surface().planes().clone();
-                        tracing::debug!("Clearing overlay planes");
-                        for overlay_plane in planes.overlay {
-                            if let Err(err) = surface
-                                .compositor
-                                .surface()
-                                .clear_plane(overlay_plane.handle)
-                            {
-                                tracing::warn!("Failed to clear overlay planes: {err}");
-                            }
+        if let Backend::Udev(udev) = &mut self.backend {
+            for backend in udev.backends.values_mut() {
+                for surface in backend.surfaces.values_mut() {
+                    // Clear the overlay planes on tty switch.
+                    //
+                    // On my machine, switching a tty would leave the topmost window on the
+                    // screen. Smithay will render the topmost window on the overlay plane,
+                    // so we clear it here.
+                    let planes = surface.compositor.surface().planes().clone();
+                    tracing::debug!("Clearing overlay planes");
+                    for overlay_plane in planes.overlay {
+                        if let Err(err) = surface
+                            .compositor
+                            .surface()
+                            .clear_plane(overlay_plane.handle)
+                        {
+                            tracing::warn!("Failed to clear overlay planes: {err}");
                         }
                     }
                 }
-
-                // Wait for the clear to commit before switching
-                self.schedule(
-                    |state| {
-                        let udev = state.backend.udev();
-                        !udev
-                            .backends
-                            .values()
-                            .flat_map(|backend| backend.surfaces.values())
-                            .map(|surface| surface.compositor.surface())
-                            .any(|drm_surf| drm_surf.commit_pending())
-                    },
-                    move |state| {
-                        let udev = state.backend.udev_mut();
-                        if let Err(err) = udev.session.change_vt(vt) {
-                            tracing::error!("Failed to switch to vt {vt}: {err}");
-                        }
-                    },
-                );
             }
+
+            // Wait for the clear to commit before switching
+            self.schedule(
+                |state| {
+                    let udev = state.backend.udev();
+                    !udev
+                        .backends
+                        .values()
+                        .flat_map(|backend| backend.surfaces.values())
+                        .map(|surface| surface.compositor.surface())
+                        .any(|drm_surf| drm_surf.commit_pending())
+                },
+                move |state| {
+                    let udev = state.backend.udev_mut();
+                    if let Err(err) = udev.session.change_vt(vt) {
+                        tracing::error!("Failed to switch to vt {vt}: {err}");
+                    }
+                },
+            );
         }
     }
 }
