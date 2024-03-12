@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    signal_service_server, LayoutRequest, LayoutResponse, OutputConnectRequest,
-    OutputConnectResponse, SignalRequest, StreamControl, WindowPointerEnterRequest,
-    WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+    signal_service_server, OutputConnectRequest, OutputConnectResponse, SignalRequest,
+    StreamControl, WindowPointerEnterRequest, WindowPointerEnterResponse,
+    WindowPointerLeaveRequest, WindowPointerLeaveResponse,
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
@@ -15,7 +15,6 @@ use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
 #[derive(Debug, Default)]
 pub struct SignalState {
     pub output_connect: SignalData<OutputConnectResponse, VecDeque<OutputConnectResponse>>,
-    pub layout: SignalData<LayoutResponse, VecDeque<LayoutResponse>>,
     pub window_pointer_enter:
         SignalData<WindowPointerEnterResponse, VecDeque<WindowPointerEnterResponse>>,
     pub window_pointer_leave:
@@ -25,7 +24,6 @@ pub struct SignalState {
 impl SignalState {
     pub fn clear(&mut self) {
         self.output_connect.disconnect();
-        self.layout.disconnect();
         self.window_pointer_enter.disconnect();
         self.window_pointer_leave.disconnect();
     }
@@ -172,7 +170,6 @@ impl SignalService {
 #[tonic::async_trait]
 impl signal_service_server::SignalService for SignalService {
     type OutputConnectStream = ResponseStream<OutputConnectResponse>;
-    type LayoutStream = ResponseStream<LayoutResponse>;
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
 
@@ -184,17 +181,6 @@ impl signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.signal_state.output_connect
-        })
-    }
-
-    async fn layout(
-        &self,
-        request: Request<Streaming<LayoutRequest>>,
-    ) -> Result<Response<Self::LayoutStream>, Status> {
-        let in_stream = request.into_inner();
-
-        start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.layout
         })
     }
 

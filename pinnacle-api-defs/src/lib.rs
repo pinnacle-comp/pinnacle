@@ -63,7 +63,6 @@ pub mod pinnacle {
 
             impl_signal_request!(
                 OutputConnectRequest,
-                LayoutRequest,
                 WindowPointerEnterRequest,
                 WindowPointerLeaveRequest
             );

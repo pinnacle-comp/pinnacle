@@ -735,15 +735,6 @@ impl tag_service_server::TagService for TagService {
             state.update_windows(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
-
-            state.signal_state.layout.signal(|buffer| {
-                buffer.push_back(
-                    pinnacle_api_defs::pinnacle::signal::v0alpha1::LayoutResponse {
-                        window_ids: vec![1, 2, 3],
-                        tag_id: Some(1),
-                    },
-                );
-            });
         })
         .await
     }
