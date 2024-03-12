@@ -358,12 +358,17 @@ impl ResizeSurfaceState {
     }
 }
 
-pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
-    let window = state.window_for_surface(surface)?;
-    let mut window_loc = state.space.element_location(&window)?;
+// TODO: refactor this into something readable
+pub fn handle_commit(state: &mut State, surface: &WlSurface) {
+    let Some(window) = state.window_for_surface(surface) else {
+        return;
+    };
+    let Some(mut window_loc) = state.space.element_location(&window) else {
+        return;
+    };
     let geometry = window.geometry();
 
-    let new_loc: Point<Option<i32>, Logical> = surface.with_state_mut(|state| {
+    let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
         state
             .resize_state
             .commit()
@@ -389,14 +394,14 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
 
                 (new_x, new_y)
             })
-            .unwrap_or_default()
-            .into()
     });
 
-    if let Some(new_x) = new_loc.x {
+    let Some(new_loc) = new_loc else { return };
+
+    if let Some(new_x) = new_loc.0 {
         window_loc.x = new_x;
     }
-    if let Some(new_y) = new_loc.y {
+    if let Some(new_y) = new_loc.1 {
         window_loc.y = new_y;
     }
 
@@ -413,7 +418,7 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
         }
     });
 
-    if new_loc.x.is_some() || new_loc.y.is_some() {
+    if new_loc.0.is_some() || new_loc.1.is_some() {
         state.space.map_element(window.clone(), window_loc, false);
 
         if let Some(surface) = window.x11_surface() {
@@ -426,8 +431,6 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) -> Option<()> {
             }
         }
     }
-
-    Some(())
 }
 
 /// The application requests a resize e.g. when you drag the edges of a window.

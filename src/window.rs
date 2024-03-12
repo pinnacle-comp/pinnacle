@@ -40,7 +40,6 @@ impl WindowElement {
     /// Xwayland windows will still receive a configure.
     ///
     /// RefCell Safety: This method uses a [`RefCell`] on this window.
-    // TODO: ^ does that make things flicker?
     pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
