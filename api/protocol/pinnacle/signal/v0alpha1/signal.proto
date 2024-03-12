@@ -17,16 +17,6 @@ message OutputConnectResponse {
   optional string output_name = 1;
 }
 
-message LayoutRequest {
-  optional StreamControl control = 1;
-}
-message LayoutResponse {
-  // The windows that need to be laid out.
-  repeated uint32 window_ids = 1;
-  // The tag that is being laid out.
-  optional uint32 tag_id = 2;
-}
-
 message WindowPointerEnterRequest {
   optional StreamControl control = 1;
 }
@@ -45,7 +35,6 @@ message WindowPointerLeaveResponse {
 
 service SignalService {
   rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
-  rpc Layout(stream LayoutRequest) returns (stream LayoutResponse);
   rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
   rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
 }
