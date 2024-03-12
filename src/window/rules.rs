@@ -14,7 +14,7 @@ use std::num::NonZeroU32;
 
 use crate::{output::OutputName, tag::TagId, window::window_state::FullscreenOrMaximized};
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub struct WindowRuleCondition {
     /// This condition is met when any of the conditions provided is met.
     #[serde(default)]
@@ -137,7 +137,7 @@ impl WindowRuleCondition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub struct WindowRule {
     /// Set the output the window will open on.
     #[serde(default)]

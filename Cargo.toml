@@ -36,7 +36,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
 # Smithay
-smithay = { git = "https://github.com/Smithay/smithay", rev = "418190e", default-features = false, features = ["desktop", "wayland_frontend"] }
+# smithay is down there somewhere
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "418190e" }
 # Tracing
 tracing = "0.1.40"
@@ -72,32 +72,44 @@ pinnacle-api-defs = { workspace = true }
 dircpy = "0.3.16"
 chrono = "0.4.34"
 
+[dependencies.smithay]
+git = "https://github.com/Smithay/smithay"
+rev = "418190e"
+default-features = false
+features = [
+    "desktop",
+    "wayland_frontend",
+    # udev
+    "backend_libinput",
+    "backend_udev",
+    "backend_drm",
+    "backend_gbm",
+    "backend_vulkan",
+    "backend_egl",
+    "backend_session_libseat",
+    "renderer_gl",
+    "renderer_multi",
+    # egl
+    "use_system_lib",
+    "backend_egl",
+    # winit
+    "backend_winit",
+    "backend_drm",
+    # xwayland
+    "xwayland",
+    "x11rb_event_source",
+]
+
 [build-dependencies]
 xdg = { workspace = true }
 
 [dev-dependencies]
 temp-env = "0.3.6"
 tempfile = "3.10.1"
+test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
+pinnacle = { path = ".", features = ["testing"] }
 
 [features]
-default = [
-    # udev
-    "smithay/backend_libinput",
-    "smithay/backend_udev",
-    "smithay/backend_drm",
-    "smithay/backend_gbm",
-    "smithay/backend_vulkan",
-    "smithay/backend_egl",
-    "smithay/backend_session_libseat",
-    "smithay/renderer_gl",
-    "smithay/renderer_multi",
-    # egl
-    "smithay/use_system_lib",
-    "smithay/backend_egl",
-    # winit
-    "smithay/backend_winit",
-    "smithay/backend_drm",
-    # xwayland
-    "smithay/xwayland",
-    "smithay/x11rb_event_source"
+testing = [
+    "smithay/renderer_test",
 ]
