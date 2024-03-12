@@ -199,6 +199,49 @@ local _fullscreen_or_maximized_keys = {
     [3] = "maximized",
 }
 
+---@param rule WindowRule
+local function process_window_rule(rule)
+    if rule.output then
+        ---@diagnostic disable-next-line: assign-type-mismatch
+        rule.output = rule.output.name
+    end
+
+    if rule.tags then
+        local ids = {}
+        for _, tg in ipairs(rule.tags) do
+            table.insert(ids, tg.id)
+        end
+        rule.tags = ids
+    end
+
+    if rule.fullscreen_or_maximized then
+        rule.fullscreen_or_maximized = _fullscreen_or_maximized[rule.fullscreen_or_maximized]
+    end
+end
+
+---@param cond WindowRuleCondition
+local function process_window_rule_cond(cond)
+    if cond.tags then
+        local ids = {}
+        for _, tg in ipairs(cond.tags) do
+            table.insert(ids, tg.id)
+        end
+        cond.tags = ids
+    end
+
+    if cond.all then
+        for _, con in ipairs(cond.all) do
+            process_window_rule_cond(con)
+        end
+    end
+
+    if cond.any then
+        for _, con in ipairs(cond.any) do
+            process_window_rule_cond(con)
+        end
+    end
+end
+
 ---Add a window rule.
 ---
 ---A window rule defines what properties a window will spawn with given certain conditions.
@@ -289,30 +332,9 @@ local _fullscreen_or_maximized_keys = {
 ---
 ---@param rule { cond: WindowRuleCondition, rule: WindowRule } The condition and rule
 function window.add_window_rule(rule)
-    if rule.cond.tags then
-        local ids = {}
-        for _, tg in ipairs(rule.cond.tags) do
-            table.insert(ids, tg.id)
-        end
-        rule.cond.tags = ids
-    end
+    process_window_rule(rule.rule)
 
-    if rule.rule.output then
-        ---@diagnostic disable-next-line: assign-type-mismatch
-        rule.rule.output = rule.rule.output.name
-    end
-
-    if rule.rule.tags then
-        local ids = {}
-        for _, tg in ipairs(rule.rule.tags) do
-            table.insert(ids, tg.id)
-        end
-        rule.rule.tags = ids
-    end
-
-    if rule.rule.fullscreen_or_maximized then
-        rule.rule.fullscreen_or_maximized = _fullscreen_or_maximized[rule.rule.fullscreen_or_maximized]
-    end
+    process_window_rule_cond(rule.cond)
 
     client.unary_request(build_grpc_request_params("AddWindowRule", {
         cond = rule.cond,
