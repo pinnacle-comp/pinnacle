@@ -7,6 +7,7 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
+use tracing::{debug, error, warn};
 
 use crate::state::State;
 
@@ -119,7 +120,7 @@ impl<T, B: SignalBuffer<T>> SignalData<T, B> {
 fn start_signal_stream<I, O, B, F>(
     sender: StateFnSender,
     in_stream: Streaming<I>,
-    with_signal_buffer: F,
+    signal_data_selector: F,
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
     I: SignalRequest + std::fmt::Debug + Send + 'static,
@@ -127,7 +128,7 @@ where
     B: SignalBuffer<O>,
     F: Fn(&mut State) -> &mut SignalData<O, B> + Clone + Send + 'static,
 {
-    let with_signal_buffer_clone = with_signal_buffer.clone();
+    let signal_data_selector_clone = signal_data_selector.clone();
 
     run_bidirectional_streaming(
         sender,
@@ -136,22 +137,22 @@ where
             let request = match request {
                 Ok(request) => request,
                 Err(status) => {
-                    tracing::error!("Error in output_connect signal in stream: {status}");
+                    error!("Error in output_connect signal in stream: {status}");
                     return;
                 }
             };
 
-            tracing::debug!("Got {request:?} from client stream");
+            debug!("Got {request:?} from client stream");
 
-            let signal = with_signal_buffer(state);
+            let signal = signal_data_selector(state);
             match request.control() {
                 StreamControl::Ready => signal.ready(),
                 StreamControl::Disconnect => signal.disconnect(),
-                StreamControl::Unspecified => tracing::warn!("Received unspecified stream control"),
+                StreamControl::Unspecified => warn!("Received unspecified stream control"),
             }
         },
         move |state, sender, join_handle| {
-            let signal = with_signal_buffer_clone(state);
+            let signal = signal_data_selector_clone(state);
             signal.connect(sender, join_handle);
         },
     )

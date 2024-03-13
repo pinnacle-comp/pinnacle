@@ -1,7 +1,7 @@
 use crate::{
     api::{
-        signal::SignalService, InputService, OutputService, PinnacleService, ProcessService,
-        TagService, WindowService,
+        signal::SignalService, window::WindowService, InputService, OutputService, PinnacleService,
+        ProcessService, TagService,
     },
     input::ModifierMask,
     output::OutputName,
