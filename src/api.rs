@@ -674,7 +674,7 @@ impl tag_service_server::TagService for TagService {
     async fn set_active(&self, request: Request<SetActiveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -712,7 +712,7 @@ impl tag_service_server::TagService for TagService {
     async fn switch_to(&self, request: Request<SwitchToRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -755,10 +755,7 @@ impl tag_service_server::TagService for TagService {
             let tag_ids = new_tags
                 .iter()
                 .map(|tag| tag.id())
-                .map(|id| match id {
-                    TagId::None => unreachable!(),
-                    TagId::Some(id) => id,
-                })
+                .map(|id| id.0)
                 .collect::<Vec<_>>();
 
             if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
@@ -807,7 +804,7 @@ impl tag_service_server::TagService for TagService {
     async fn remove(&self, request: Request<RemoveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_ids = request.tag_ids.into_iter().map(TagId::Some);
+        let tag_ids = request.tag_ids.into_iter().map(TagId);
 
         run_unary_no_response(&self.sender, move |state| {
             let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
@@ -836,7 +833,7 @@ impl tag_service_server::TagService for TagService {
     async fn set_layout(&self, request: Request<SetLayoutRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -879,10 +876,7 @@ impl tag_service_server::TagService for TagService {
                 .outputs()
                 .flat_map(|op| op.with_state(|state| state.tags.clone()))
                 .map(|tag| tag.id())
-                .map(|id| match id {
-                    TagId::None => unreachable!(),
-                    TagId::Some(id) => id,
-                })
+                .map(|id| id.0)
                 .collect::<Vec<_>>();
 
             tag::v0alpha1::GetResponse { tag_ids }
@@ -896,7 +890,7 @@ impl tag_service_server::TagService for TagService {
     ) -> Result<Response<tag::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -1056,14 +1050,7 @@ impl output_service_server::OutputService for OutputService {
                 .as_ref()
                 .map(|output| {
                     output.with_state(|state| {
-                        state
-                            .tags
-                            .iter()
-                            .map(|tag| match tag.id() {
-                                TagId::None => unreachable!(),
-                                TagId::Some(id) => id,
-                            })
-                            .collect::<Vec<_>>()
+                        state.tags.iter().map(|tag| tag.id().0).collect::<Vec<_>>()
                     })
                 })
                 .unwrap_or_default();

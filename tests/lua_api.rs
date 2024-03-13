@@ -237,7 +237,7 @@ mod coverage {
                             ..Default::default()
                         },
                         WindowRule {
-                            tags: Some(vec![TagId::Some(0)]),
+                            tags: Some(vec![TagId(0)]),
                             ..Default::default()
                         }
                     )
@@ -272,7 +272,7 @@ mod coverage {
                         WindowRuleCondition {
                             cond_all: Some(vec![WindowRuleCondition {
                                 class: Some(vec!["steam".to_string()]),
-                                tag: Some(vec![TagId::Some(0), TagId::Some(1)]),
+                                tag: Some(vec![TagId(0), TagId(1)]),
                                 ..Default::default()
                             }]),
                             ..Default::default()

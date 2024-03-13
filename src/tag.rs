@@ -18,17 +18,12 @@ static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// A unique id for a [`Tag`].
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum TagId {
-    /// The tag given was invalid/nonexistent
-    None,
-    #[serde(untagged)]
-    Some(u32),
-}
+pub struct TagId(pub u32);
 
 impl TagId {
     /// Get the next available `TagId`.
     fn next() -> Self {
-        Self::Some(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+        Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Get the tag associated with this id.

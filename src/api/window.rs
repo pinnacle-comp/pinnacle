@@ -367,7 +367,7 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -395,7 +395,7 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let tag_id = TagId::Some(
+        let tag_id = TagId(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -640,14 +640,7 @@ impl window_service_server::WindowService for WindowService {
                 .as_ref()
                 .map(|win| {
                     win.with_state(|state| {
-                        state
-                            .tags
-                            .iter()
-                            .map(|tag| match tag.id() {
-                                TagId::Some(id) => id,
-                                TagId::None => unreachable!(),
-                            })
-                            .collect::<Vec<_>>()
+                        state.tags.iter().map(|tag| tag.id().0).collect::<Vec<_>>()
                     })
                 })
                 .unwrap_or_default();
@@ -722,7 +715,7 @@ impl From<WindowRuleCondition> for crate::window::rules::WindowRuleCondition {
 
         let tag = match cond.tags.is_empty() {
             true => None,
-            false => Some(cond.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
+            false => Some(cond.tags.into_iter().map(TagId).collect::<Vec<_>>()),
         };
 
         crate::window::rules::WindowRuleCondition {
@@ -752,7 +745,7 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
         let output = rule.output.map(OutputName);
         let tags = match rule.tags.is_empty() {
             true => None,
-            false => Some(rule.tags.into_iter().map(TagId::Some).collect::<Vec<_>>()),
+            false => Some(rule.tags.into_iter().map(TagId).collect::<Vec<_>>()),
         };
         let floating_or_tiled = rule.floating.map(|floating| match floating {
             true => crate::window::rules::FloatingOrTiled::Floating,
