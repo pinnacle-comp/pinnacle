@@ -28,5 +28,6 @@ build = {
         ["pinnacle.window"] = "pinnacle/window.lua",
         ["pinnacle.util"] = "pinnacle/util.lua",
         ["pinnacle.signal"] = "pinnacle/signal.lua",
+        ["pinnacle.layout"] = "pinnacle/layout.lua",
     },
 }

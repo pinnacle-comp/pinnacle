@@ -170,7 +170,7 @@ end
 
 ---@nodoc
 ---@param grpc_request_params GrpcRequestParams
----@param callback fun(response: table)
+---@param callback fun(response: table, stream: H2Stream)
 ---
 ---@return H2Stream
 function client.bidirectional_streaming_request(grpc_request_params, callback)
@@ -209,7 +209,7 @@ function client.bidirectional_streaming_request(grpc_request_params, callback)
                 end
 
                 local response = obj
-                callback(response)
+                callback(response, stream)
 
                 response_body = response_body:sub(msg_len + 1)
             end

@@ -425,7 +425,7 @@ end
 ---    focused:set_geometry({})                       -- Do nothing useful
 ---end
 ---```
----@param geo { x: integer?, y: integer, width: integer?, height: integer? } The new location and/or size
+---@param geo { x: integer?, y: integer?, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
     client.unary_request(build_grpc_request_params("SetGeometry", { window_id = self.id, geometry = geo }))
 end

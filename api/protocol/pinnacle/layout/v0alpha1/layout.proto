@@ -7,20 +7,22 @@ import "pinnacle/v0alpha1/pinnacle.proto";
 // Love how the response is the request and the request is the response
 
 message LayoutRequest {
-  // Respond to a layout request from the compositor.
+  // A response to a layout request from the compositor.
   message Geometries {
     // The id of the request this layout response is responding to.
     //
     // Responding with a request_id that has already been responded to
     // or that doesn't exist will return an error.
     optional uint32 request_id = 1;
+    // The output this request is responding to.
+    optional string output_name = 2;
     // Target geometries of all windows being laid out.
     //
     // Responding with a different number of geometries than
     // requested windows will return an error.
-    repeated .pinnacle.v0alpha1.Geometry geometries = 2;
+    repeated .pinnacle.v0alpha1.Geometry geometries = 3;
   }
-  // Request a layout explicitly.
+  // An explicit layout request.
   message ExplicitLayout {}
 
   oneof body {

@@ -1,7 +1,7 @@
 use crate::{
     api::{
-        signal::SignalService, window::WindowService, InputService, OutputService, PinnacleService,
-        ProcessService, TagService,
+        layout::LayoutService, signal::SignalService, window::WindowService, InputService,
+        OutputService, PinnacleService, ProcessService, TagService,
     },
     input::ModifierMask,
     output::OutputName,
@@ -17,6 +17,7 @@ use std::{
 use anyhow::Context;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
+    layout::v0alpha1::layout_service_server::LayoutServiceServer,
     output::v0alpha1::output_service_server::OutputServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
     signal::v0alpha1::signal_service_server::SignalServiceServer,
@@ -477,6 +478,7 @@ impl State {
         let output_service = OutputService::new(grpc_sender.clone());
         let window_service = WindowService::new(grpc_sender.clone());
         let signal_service = SignalService::new(grpc_sender.clone());
+        let layout_service = LayoutService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
@@ -495,7 +497,8 @@ impl State {
             .add_service(TagServiceServer::new(tag_service))
             .add_service(OutputServiceServer::new(output_service))
             .add_service(WindowServiceServer::new(window_service))
-            .add_service(SignalServiceServer::new(signal_service));
+            .add_service(SignalServiceServer::new(signal_service))
+            .add_service(LayoutServiceServer::new(layout_service));
 
         match self.xdisplay.as_ref() {
             Some(_) => {

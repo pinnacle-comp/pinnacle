@@ -4,6 +4,7 @@ require("pinnacle").setup(function(Pinnacle)
     local Output = Pinnacle.output
     local Tag = Pinnacle.tag
     local Window = Pinnacle.window
+    local Layout = Pinnacle.layout
 
     local key = Input.key
 
@@ -83,35 +84,18 @@ require("pinnacle").setup(function(Pinnacle)
         tags[1]:set_active(true)
     end)
 
-    -- Spawning must happen after you add tags, as Pinnacle currently doesn't render windows without tags.
-    Process.spawn_once(terminal)
+    --------------------
+    -- Layouts        --
+    --------------------
 
-    -- Create a layout cycler to cycle layouts on an output.
-    local layout_cycler = Tag.new_layout_cycler({
-        "master_stack",
-        "dwindle",
-        "spiral",
-        "corner_top_left",
-        "corner_top_right",
-        "corner_bottom_left",
-        "corner_bottom_right",
+    local layout_handler = Layout.new_handler({
+        Layout.builtins.master_stack,
     })
 
-    -- mod_key + space = Cycle forward one layout on the focused output
-    Input.keybind({ mod_key }, key.space, function()
-        local focused_op = Output.get_focused()
-        if focused_op then
-            layout_cycler.next(focused_op)
-        end
-    end)
+    Layout.set_handler(layout_handler)
 
-    -- mod_key + shift + space = Cycle backward one layout on the focused output
-    Input.keybind({ mod_key, "shift" }, key.space, function()
-        local focused_op = Output.get_focused()
-        if focused_op then
-            layout_cycler.prev(focused_op)
-        end
-    end)
+    -- Spawning must happen after you add tags, as Pinnacle currently doesn't render windows without tags.
+    Process.spawn_once(terminal)
 
     for _, tag_name in ipairs(tag_names) do
         -- nil-safety: tags are guaranteed to be on the outputs due to connect_for_all above

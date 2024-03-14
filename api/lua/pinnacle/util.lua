@@ -77,4 +77,126 @@ function util.batch(requests)
     return responses
 end
 
+-- Geometry stuff
+
+---@class RectangleModule
+local rectangle = {}
+
+---@class Rectangle
+---@field x number The x-position of the top-left corner
+---@field y number The y-position of the top-left corner
+---@field width number The width of the rectangle
+---@field height number The height of the rectangle
+local Rectangle = {}
+
+---Split this rectangle along `axis` at `at`.
+---
+---If `at2` is specified, the split will chop off a section of this
+---rectangle from `at` to `at2`.
+---
+---`at` and `at2` are relative to the space this rectangle is in, not
+---this rectangle's origin.
+---
+---@param axis "horizontal" | "vertical"
+---@param at number
+---@param thickness? number
+---
+---@return Rectangle rect1 The first rectangle.
+---@return Rectangle? rect2 The seoond rectangle, if there is one.
+function Rectangle:split_at(axis, at, thickness)
+    ---@diagnostic disable-next-line: redefined-local
+    local thickness = thickness or 0
+
+    if axis == "horizontal" then
+        -- Split is off to the top, at most chop off to `thickness`
+        if at <= self.y then
+            local diff = at - self.y + thickness
+            if diff > 0 then
+                self.y = self.y + diff
+                self.height = self.height - diff
+            end
+
+            return self
+        -- Split is to the bottom, then do nothing
+        elseif at >= self.y + self.height then
+            return self
+        -- Split only chops bottom off
+        elseif at + thickness >= self.y + self.height then
+            local diff = (self.y + self.height) - at
+            self.height = self.height - diff
+            return self
+        -- Do a split
+        else
+            local x = self.x
+            local top_y = self.y
+            local width = self.width
+            local top_height = at - self.y
+
+            local bot_y = at + thickness
+            local bot_height = self.y + self.height - at - thickness
+
+            local rect1 = rectangle.new(x, top_y, width, top_height)
+            local rect2 = rectangle.new(x, bot_y, width, bot_height)
+
+            return rect1, rect2
+        end
+    elseif axis == "vertical" then
+        -- Split is off to the left, at most chop off to `thickness`
+        if at <= self.x then
+            local diff = at - self.x + thickness
+            if diff > 0 then
+                self.x = self.x + diff
+                self.width = self.width - diff
+            end
+
+            return self
+        -- Split is to the right, then do nothing
+        elseif at >= self.x + self.width then
+            return self
+        -- Split only chops bottom off
+        elseif at + thickness >= self.x + self.width then
+            local diff = (self.x + self.width) - at
+            self.width = self.width - diff
+            return self
+        -- Do a split
+        else
+            local left_x = self.x
+            local y = self.y
+            local left_width = at - self.x
+            local height = self.height
+
+            local right_x = at + thickness
+            local right_width = self.x + self.width - at - thickness
+
+            local rect1 = rectangle.new(left_x, y, left_width, height)
+            local rect2 = rectangle.new(right_x, y, right_width, height)
+
+            return rect1, rect2
+        end
+    end -- TODO: handle error if neither
+
+    os.exit(1)
+end
+
+---@return Rectangle
+function rectangle.new(x, y, width, height)
+    ---@type Rectangle
+    local self = {
+        x = x,
+        y = y,
+        width = width,
+        height = height,
+    }
+    setmetatable(self, { __index = Rectangle })
+    return self
+end
+
+local r = rectangle.new(0, 0, 100, 100)
+local r1, r2 = r:split_at("horizontal", 96, 4)
+
+print(require("inspect")(r1))
+print(require("inspect")(r2))
+
+util.rectangle = rectangle
+
 return util

@@ -250,7 +250,7 @@ end
 ---layout_cycler.prev(Output.get_by_name("HDMI-1"))
 ---```
 ---
----@param layouts Layout[]
+---@param layouts LayoutOld[]
 ---
 ---@return LayoutCycler
 function tag.new_layout_cycler(layouts)
@@ -393,7 +393,7 @@ local layout_name_to_code = {
     corner_bottom_left = 6,
     corner_bottom_right = 7,
 }
----@alias Layout
+---@alias LayoutOld
 ---| "master_stack" # One master window on the left with all other windows stacked to the right.
 ---| "dwindle" # Windows split in half towards the bottom right corner.
 ---| "spiral" # Windows split in half in a spiral.
@@ -412,7 +412,7 @@ local layout_name_to_code = {
 ---Tag.get("Tag"):set_layout("dwindle")
 ---```
 ---
----@param layout Layout
+---@param layout LayoutOld
 function TagHandle:set_layout(layout)
     ---@diagnostic disable-next-line: redefined-local
     local layout = layout_name_to_code[layout]
