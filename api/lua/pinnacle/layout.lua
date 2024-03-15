@@ -59,6 +59,10 @@ end
 ---@field corner_height_factor number
 ---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
 
+---@class Builtin.Spiral : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
+---@field split_factors table<integer, number>
+
 local builtins = {
     ---@type Builtin.MasterStack
     master_stack = {
@@ -146,6 +150,31 @@ local builtins = {
         ---
         ---Defaults to "top_left".
         corner_loc = "top_left",
+    },
+
+    ---@type Builtin.Spiral
+    spiral = {
+        ---Gaps between windows, in pixels.
+        ---
+        ---This can be an integer or the table { inner: integer, outer: integer }.
+        ---If it is an integer, all gaps will be that amount of pixels wide.
+        ---If it is a table, `outer` denotes the amount of pixels around the
+        ---edge of the output area that will become a gap, and
+        ---`inner` denotes the amount of pixels around each window that
+        ---will become a gap.
+        ---
+        ---This means that, for example, `inner = 2` will cause the gap
+        ---width between windows to be 4; 2 around each window.
+        ---
+        ---Defaults to 4.
+        gaps = 4,
+        ---Factors applied to each split.
+        ---
+        ---The first split will use the factor at [1],
+        ---the second at [2], and so on.
+        ---
+        ---Defaults to 0.5 if there is no factor at [n].
+        split_factors = {},
     },
 }
 
@@ -486,6 +515,89 @@ function builtins.corner:layout(args)
                 end
             end
         end
+    end
+
+    if inner_gaps then
+        for i = 1, #geos do
+            geos[i].x = geos[i].x + inner_gaps
+            geos[i].y = geos[i].y + inner_gaps
+            geos[i].width = geos[i].width - inner_gaps * 2
+            geos[i].height = geos[i].height - inner_gaps * 2
+        end
+    end
+
+    return geos
+end
+
+function builtins.spiral:layout(args)
+    local win_count = #args.windows
+
+    if win_count == 0 then
+        return {}
+    end
+
+    local width = args.output_width
+    local height = args.output_height
+
+    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+
+    ---@type Rectangle[]
+    local geos = {}
+
+    ---@type integer
+    local outer_gaps
+    ---@type integer?
+    local inner_gaps
+
+    if type(self.gaps) == "number" then
+        outer_gaps = self.gaps --[[@as integer]]
+    else
+        outer_gaps = self.gaps.outer
+        inner_gaps = self.gaps.inner
+    end
+
+    rect = rect:split_at("horizontal", 0, outer_gaps)
+    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
+    rect = rect:split_at("vertical", 0, outer_gaps)
+    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+
+    if win_count == 1 then
+        table.insert(geos, rect)
+    else
+        local gaps = ((not inner_gaps and outer_gaps) or 0)
+
+        ---@type Rectangle
+        local rest = rect
+
+        for i = 1, win_count - 1 do
+            local factor = math.min(math.max(self.split_factors[i] or 0.5, 0.1), 0.9)
+            local axis
+            local split_coord
+            if i % 2 == 1 then
+                axis = "vertical"
+                split_coord = rest.x + math.floor(rest.width * factor + 0.5)
+            else
+                axis = "horizontal"
+                split_coord = rest.y + math.floor(rest.height * factor + 0.5)
+            end
+            split_coord = split_coord - gaps // 2
+
+            local to_push
+
+            if i % 4 == 3 or i % 4 == 0 then
+                rest, to_push = rest:split_at(axis, split_coord, gaps)
+            else
+                to_push, rest = rest:split_at(axis, split_coord, gaps)
+            end
+
+            if not rest then
+                break
+            end
+
+            table.insert(geos, to_push)
+        end
+
+        table.insert(geos, rest)
     end
 
     if inner_gaps then
