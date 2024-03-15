@@ -23,7 +23,14 @@ message LayoutRequest {
     repeated .pinnacle.v0alpha1.Geometry geometries = 3;
   }
   // An explicit layout request.
-  message ExplicitLayout {}
+  message ExplicitLayout {
+    // NULLABLE
+    //
+    // Layout this output.
+    //
+    // If it is null, the focused output will be used.
+    optional string output_name = 1;
+  }
 
   oneof body {
     Geometries geometries = 1;

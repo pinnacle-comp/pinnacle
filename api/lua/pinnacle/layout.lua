@@ -391,13 +391,18 @@ function builtins.dwindle:layout(args)
 end
 
 ---@class Layout
+---@field private stream H2Stream?
 local layout = {
     builtins = builtins,
 }
 
+---Set the layout manager for this config.
+---
+---It will manage layout requests from the compositor.
+---
 ---@param manager LayoutManager
 function layout.set_manager(manager)
-    client.bidirectional_streaming_request(
+    layout.stream = client.bidirectional_streaming_request(
         build_grpc_request_params("Layout", {
             layout = {},
         }),
@@ -437,20 +442,39 @@ function layout.set_manager(manager)
     )
 end
 
+---Request a layout on the given output, or the focused output if nil.
+---
+---If no `LayoutManager` was set, this will do nothing.
+---
+---@param output? OutputHandle
+function layout.request_layout(output)
+    if not layout.stream then
+        return
+    end
+
+    local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
+        layout = {
+            output_name = output and output.name,
+        },
+    })
+
+    layout.stream:write_chunk(body, false)
+end
+
+---An object that manages layouts.
 ---@class LayoutManager
 ---@field layouts LayoutGenerator[]
+---Get the active layout generator.
 ---@field get_active fun(self: self, args: LayoutArgs): LayoutGenerator
 
 ---A `LayoutManager` that keeps track of layouts per tag and provides
 ---methods to cycle between them.
 ---@class CyclingLayoutManager : LayoutManager
----@field index integer
-local CyclingLayoutManager = {
-    ---@type table<integer, integer>
-    tag_indices = {},
-}
+---@field tag_indices table<integer, integer>
+local CyclingLayoutManager = {}
 
 ---@param args LayoutArgs
+---
 ---@return LayoutGenerator
 function CyclingLayoutManager:get_active(args)
     local first_tag = args.tags[1]
@@ -472,6 +496,7 @@ function CyclingLayoutManager:get_active(args)
 end
 
 ---Cycle the layout for the given tag forward.
+---
 ---@param tag TagHandle
 function CyclingLayoutManager:cycle_layout_forward(tag)
     if not self.tag_indices[tag.id] then
@@ -486,6 +511,7 @@ function CyclingLayoutManager:cycle_layout_forward(tag)
 end
 
 ---Cycle the layout for the given tag backward.
+---
 ---@param tag TagHandle
 function CyclingLayoutManager:cycle_layout_backward(tag)
     if not self.tag_indices[tag.id] then
@@ -499,14 +525,18 @@ function CyclingLayoutManager:cycle_layout_backward(tag)
     end
 end
 
+---Create a new cycling layout manager.
+---
 ---@param layouts LayoutGenerator[]
 ---
 ---@return CyclingLayoutManager
+---
+---@see CyclingLayoutManager
 function layout.new_cycling_manager(layouts)
     ---@type CyclingLayoutManager
     local self = {
-        index = 1,
         layouts = layouts,
+        tag_indices = {},
     }
 
     setmetatable(self, { __index = CyclingLayoutManager })

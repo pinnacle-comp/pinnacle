@@ -4,6 +4,8 @@ use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
 };
 use tonic::{Request, Response, Status, Streaming};
 
+use crate::output::OutputName;
+
 use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
 
 pub struct LayoutService {
@@ -39,8 +41,14 @@ impl layout_service_server::LayoutService for LayoutService {
                                     tracing::error!("{err}")
                                 }
                             }
-                            layout_request::Body::Layout(ExplicitLayout {}) => {
-                                // TODO: state.layout_request(output, windows)
+                            layout_request::Body::Layout(ExplicitLayout { output_name }) => {
+                                if let Some(output) = output_name
+                                    .map(OutputName)
+                                    .and_then(|name| name.output(state))
+                                    .or_else(|| state.focused_output().cloned())
+                                {
+                                    state.request_layout(&output);
+                                }
                             }
                         }
                     }

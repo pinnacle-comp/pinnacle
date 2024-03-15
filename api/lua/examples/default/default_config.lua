@@ -109,6 +109,7 @@ require("pinnacle").setup(function(Pinnacle)
             end
             if tag then
                 layout_manager:cycle_layout_forward(tag)
+                Layout.request_layout(focused_op)
             end
         end
     end)
@@ -127,6 +128,7 @@ require("pinnacle").setup(function(Pinnacle)
             end
             if tag then
                 layout_manager:cycle_layout_backward(tag)
+                Layout.request_layout(focused_op)
             end
         end
     end)
