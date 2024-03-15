@@ -165,147 +165,127 @@ function builtins.master_stack:layout(args)
     ---@type { x: integer, y: integer, width: integer, height: integer }[]
     local geos = {}
 
+    ---@type integer
+    local outer_gaps
+    ---@type integer?
+    local inner_gaps
+
+    if type(self.gaps) == "number" then
+        outer_gaps = self.gaps --[[@as integer]]
+    else
+        outer_gaps = self.gaps.outer
+        inner_gaps = self.gaps.inner
+    end
+
+    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+
+    rect = rect:split_at("horizontal", 0, outer_gaps)
+    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
+    rect = rect:split_at("vertical", 0, outer_gaps)
+    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+
     local master_factor = math.max(math.min(self.master_factor, 0.9), 0.1)
     if win_count <= self.master_count then
         master_factor = 1
     end
 
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
-
     local master_rect
     local stack_rect
 
-    if type(self.gaps) == "number" then
-        local gaps = self.gaps --[[@as integer]]
+    local gaps = ((not inner_gaps and outer_gaps) or 0)
 
-        rect = rect:split_at("horizontal", 0, gaps)
-        rect = rect:split_at("horizontal", height - gaps, gaps)
-        rect = rect:split_at("vertical", 0, gaps)
-        rect = rect:split_at("vertical", width - gaps, gaps)
+    if self.master_side == "left" then
+        master_rect, stack_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+    elseif self.master_side == "right" then
+        stack_rect, master_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+    elseif self.master_side == "top" then
+        master_rect, stack_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+    else
+        stack_rect, master_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+    end
 
-        if self.master_side == "left" then
-            master_rect, stack_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
-        elseif self.master_side == "right" then
-            stack_rect, master_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
-        elseif self.master_side == "top" then
-            master_rect, stack_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+    if not master_rect then
+        assert(stack_rect)
+        master_rect = stack_rect
+        stack_rect = nil
+    end
+
+    local master_slice_count
+    local stack_slice_count = nil
+
+    if win_count > self.master_count then
+        master_slice_count = self.master_count - 1
+        stack_slice_count = win_count - self.master_count - 1
+    else
+        master_slice_count = win_count - 1
+    end
+
+    -- layout the master side
+    if master_slice_count > 0 then
+        local coord
+        local len
+        local axis
+
+        if self.master_side == "left" or self.master_side == "right" then
+            coord = master_rect.y
+            len = master_rect.height
+            axis = "horizontal"
         else
-            stack_rect, master_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+            coord = master_rect.x
+            len = master_rect.width
+            axis = "vertical"
         end
 
-        if not master_rect then
-            assert(stack_rect)
-            master_rect = stack_rect
-            stack_rect = nil
+        for i = 1, master_slice_count do
+            local slice_point = coord + math.floor(len * i + 0.5)
+            slice_point = slice_point - gaps // 2
+            local to_push, rest = master_rect:split_at(axis, slice_point, gaps)
+            table.insert(geos, to_push)
+            master_rect = rest
         end
+    end
 
-        local master_slice_count
-        local stack_slice_count = nil
+    table.insert(geos, master_rect)
 
-        if win_count > self.master_count then
-            master_slice_count = self.master_count - 1
-            stack_slice_count = win_count - self.master_count - 1
-        else
-            master_slice_count = win_count - 1
-        end
+    if stack_slice_count then
+        assert(stack_rect)
 
-        -- layout the master side
-        if master_slice_count > 0 then
+        if stack_slice_count > 0 then
             local coord
             local len
             local axis
-
             if self.master_side == "left" or self.master_side == "right" then
-                coord = master_rect.y
-                len = master_rect.height
+                coord = stack_rect.y
+                len = stack_rect.height / (stack_slice_count + 1)
                 axis = "horizontal"
             else
-                coord = master_rect.x
-                len = master_rect.width
+                coord = stack_rect.x
+                len = stack_rect.width / (stack_slice_count + 1)
                 axis = "vertical"
             end
 
-            for i = 1, master_slice_count do
+            for i = 1, stack_slice_count do
                 local slice_point = coord + math.floor(len * i + 0.5)
                 slice_point = slice_point - gaps // 2
-                local to_push, rest = master_rect:split_at(axis, slice_point, gaps)
+                local to_push, rest = stack_rect:split_at(axis, slice_point, gaps)
                 table.insert(geos, to_push)
-                master_rect = rest
+                stack_rect = rest
             end
         end
 
-        table.insert(geos, master_rect)
-
-        if stack_slice_count then
-            assert(stack_rect)
-
-            if stack_slice_count > 0 then
-                local coord
-                local len
-                local axis
-                if self.master_side == "left" or self.master_side == "right" then
-                    coord = stack_rect.y
-                    len = stack_rect.height / (stack_slice_count + 1)
-                    axis = "horizontal"
-                else
-                    coord = stack_rect.x
-                    len = stack_rect.width / (stack_slice_count + 1)
-                    axis = "vertical"
-                end
-
-                for i = 1, stack_slice_count do
-                    local slice_point = coord + math.floor(len * i + 0.5)
-                    slice_point = slice_point - gaps // 2
-                    local to_push, rest = stack_rect:split_at(axis, slice_point, gaps)
-                    table.insert(geos, to_push)
-                    stack_rect = rest
-                end
-            end
-
-            table.insert(geos, stack_rect)
-        end
-
-        return geos
-    else
-        local origin_x = self.gaps.outer
-        local origin_y = self.gaps.outer
-        width = width - self.gaps.outer * 2
-        height = height - self.gaps.outer * 2
-
-        if win_count == 1 then
-            table.insert(geos, {
-                x = origin_x + self.gaps.inner,
-                y = origin_y + self.gaps.inner,
-                width = width - self.gaps.inner * 2,
-                height = height - self.gaps.inner * 2,
-            })
-            return geos
-        end
-
-        local h = height / win_count
-        local y_s = {}
-        for i = 0, win_count - 1 do
-            table.insert(y_s, math.floor(i * h + 0.5))
-        end
-        local heights = {}
-        for i = 1, win_count - 1 do
-            table.insert(heights, y_s[i + 1] - y_s[i])
-        end
-        table.insert(heights, height - y_s[win_count])
-
-        for i = 1, win_count do
-            table.insert(geos, { x = origin_x, y = origin_y + y_s[i], width = width, height = heights[i] })
-        end
-
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + self.gaps.inner
-            geos[i].y = geos[i].y + self.gaps.inner
-            geos[i].width = geos[i].width - self.gaps.inner * 2
-            geos[i].height = geos[i].height - self.gaps.inner * 2
-        end
-
-        return geos
+        table.insert(geos, stack_rect)
     end
+
+    if inner_gaps then
+        for i = 1, #geos do
+            geos[i].x = geos[i].x + inner_gaps
+            geos[i].y = geos[i].y + inner_gaps
+            geos[i].width = geos[i].width - inner_gaps * 2
+            geos[i].height = geos[i].height - inner_gaps * 2
+        end
+    end
+
+    return geos
 end
 
 ---@param args LayoutArgs
@@ -326,18 +306,27 @@ function builtins.dwindle:layout(args)
     ---@type Rectangle[]
     local geos = {}
 
+    ---@type integer
+    local outer_gaps
+    ---@type integer?
+    local inner_gaps
+
     if type(self.gaps) == "number" then
-        local gaps = self.gaps --[[@as integer]]
+        outer_gaps = self.gaps --[[@as integer]]
+    else
+        outer_gaps = self.gaps.outer
+        inner_gaps = self.gaps.inner
+    end
 
-        rect = rect:split_at("horizontal", 0, gaps)
-        rect = rect:split_at("horizontal", height - gaps, gaps)
-        rect = rect:split_at("vertical", 0, gaps)
-        rect = rect:split_at("vertical", width - gaps, gaps)
+    rect = rect:split_at("horizontal", 0, outer_gaps)
+    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
+    rect = rect:split_at("vertical", 0, outer_gaps)
+    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
 
-        if win_count == 1 then
-            table.insert(geos, rect)
-            return geos
-        end
+    if win_count == 1 then
+        table.insert(geos, rect)
+    else
+        local gaps = ((not inner_gaps and outer_gaps) or 0)
 
         ---@type Rectangle
         local rest = rect
@@ -367,63 +356,18 @@ function builtins.dwindle:layout(args)
         end
 
         table.insert(geos, rest)
-
-        return geos
-    else
-        local inner_gaps = self.gaps.inner
-        local outer_gaps = self.gaps.outer
-
-        if win_count == 1 then
-            rect = rect:split_at("horizontal", 0, (inner_gaps + outer_gaps))
-            rect = rect:split_at("horizontal", height - (inner_gaps + outer_gaps), (inner_gaps + outer_gaps))
-            rect = rect:split_at("vertical", 0, (inner_gaps + outer_gaps))
-            rect = rect:split_at("vertical", width - (inner_gaps + outer_gaps), (inner_gaps + outer_gaps))
-            table.insert(geos, rect)
-            return geos
-        end
-
-        rect = rect:split_at("horizontal", 0, outer_gaps)
-        rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-        rect = rect:split_at("vertical", 0, outer_gaps)
-        rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
-
-        ---@type Rectangle
-        local rest = rect
-
-        for i = 1, win_count - 1 do
-            local factor = math.min(math.max(self.split_factors[i] or 0.5, 0.1), 0.9)
-            local axis
-            local split_coord
-            if i % 2 == 1 then
-                axis = "vertical"
-                split_coord = rest.x + math.floor(rest.width * factor + 0.5)
-            else
-                axis = "horizontal"
-                split_coord = rest.y + math.floor(rest.height * factor + 0.5)
-            end
-
-            local to_push
-
-            to_push, rest = rest:split_at(axis, split_coord)
-
-            if not rest then
-                break
-            end
-
-            table.insert(geos, to_push)
-        end
-
-        table.insert(geos, rest)
-
-        for i = 1, #geos do
-            geos[i] = geos[i]:split_at("horizontal", geos[i].y, inner_gaps)
-            geos[i] = geos[i]:split_at("horizontal", geos[i].y + geos[i].height - inner_gaps, inner_gaps)
-            geos[i] = geos[i]:split_at("vertical", geos[i].x, inner_gaps)
-            geos[i] = geos[i]:split_at("vertical", geos[i].x + geos[i].width - inner_gaps, inner_gaps)
-        end
-
-        return geos
     end
+
+    if inner_gaps then
+        for i = 1, #geos do
+            geos[i].x = geos[i].x + inner_gaps
+            geos[i].y = geos[i].y + inner_gaps
+            geos[i].width = geos[i].width - inner_gaps * 2
+            geos[i].height = geos[i].height - inner_gaps * 2
+        end
+    end
+
+    return geos
 end
 
 function builtins.corner:layout(args)
