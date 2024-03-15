@@ -264,7 +264,7 @@ impl State {
             anyhow::bail!("Attempted to layout but the request was nonexistent A");
         };
 
-        if dbg!(latest) == dbg!(request_id) {
+        if latest == request_id {
             pending.pop();
         } else if let Some(pos) = pending
             .split_last()

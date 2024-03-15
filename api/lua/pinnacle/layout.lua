@@ -42,26 +42,30 @@ end
 ---@class LayoutGenerator
 ---Generate an array of geometries from the given `LayoutArgs`.
 ---@field layout fun(self: self, args: LayoutArgs): { x: integer, y: integer, width: integer, height: integer }[]
+---Gaps between windows.
+---
+---Generators are free to ignore this, but it is recommended to implement gaps if
+---it makes sense for the layout.
+---@field gaps integer | { inner: integer, outer: integer }
 
 ---@class Builtin.MasterStack : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
 ---@field master_factor number
 ---@field master_side "left"|"right"|"top"|"bottom"
 ---@field master_count integer
 
 ---@class Builtin.Dwindle : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
 ---@field split_factors table<integer, number>
 
 ---@class Builtin.Corner : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
 ---@field corner_width_factor number
 ---@field corner_height_factor number
 ---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
 
 ---@class Builtin.Spiral : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
 ---@field split_factors table<integer, number>
+
+---@class Builtin.Fair : LayoutGenerator
+---@field direction "horizontal"|"vertical"
 
 local builtins = {
     ---@type Builtin.MasterStack
@@ -78,8 +82,8 @@ local builtins = {
         ---This means that, for example, `inner = 2` will cause the gap
         ---width between windows to be 4; 2 around each window.
         ---
-        ---Defaults to 4.
-        gaps = 4,
+        ---Defaults to 8.
+        gaps = 8,
         ---The proportion of the output taken up by the master window(s).
         ---
         ---This is a float that will be clamped between 0.1 and 0.9
@@ -111,8 +115,8 @@ local builtins = {
         ---This means that, for example, `inner = 2` will cause the gap
         ---width between windows to be 4; 2 around each window.
         ---
-        ---Defaults to 4.
-        gaps = 4,
+        ---Defaults to 8.
+        gaps = 8,
         ---Factors applied to each split.
         ---
         ---The first split will use the factor at [1],
@@ -136,8 +140,8 @@ local builtins = {
         ---This means that, for example, `inner = 2` will cause the gap
         ---width between windows to be 4; 2 around each window.
         ---
-        ---Defaults to 4.
-        gaps = 4,
+        ---Defaults to 8.
+        gaps = 8,
         ---How much of the output the corner window's width will take up.
         ---
         ---Defaults to 0.5.
@@ -166,8 +170,8 @@ local builtins = {
         ---This means that, for example, `inner = 2` will cause the gap
         ---width between windows to be 4; 2 around each window.
         ---
-        ---Defaults to 4.
-        gaps = 4,
+        ---Defaults to 8.
+        gaps = 8,
         ---Factors applied to each split.
         ---
         ---The first split will use the factor at [1],
@@ -175,6 +179,28 @@ local builtins = {
         ---
         ---Defaults to 0.5 if there is no factor at [n].
         split_factors = {},
+    },
+
+    ---@type Builtin.Fair
+    fair = {
+        ---Gaps between windows, in pixels.
+        ---
+        ---This can be an integer or the table { inner: integer, outer: integer }.
+        ---If it is an integer, all gaps will be that amount of pixels wide.
+        ---If it is a table, `outer` denotes the amount of pixels around the
+        ---edge of the output area that will become a gap, and
+        ---`inner` denotes the amount of pixels around each window that
+        ---will become a gap.
+        ---
+        ---This means that, for example, `inner = 2` will cause the gap
+        ---width between windows to be 4; 2 around each window.
+        ---
+        ---Defaults to 8.
+        gaps = 8,
+        ---The direction of the window lines.
+        ---
+        ---Defaults to "vertical".
+        direction = "vertical",
     },
 }
 
@@ -529,6 +555,8 @@ function builtins.corner:layout(args)
     return geos
 end
 
+-- Spiral is a copy-paste of dwindle with a minor change, yikes
+
 function builtins.spiral:layout(args)
     local win_count = #args.windows
 
@@ -584,9 +612,11 @@ function builtins.spiral:layout(args)
 
             local to_push
 
+            -- Minor change from dwindle here
             if i % 4 == 3 or i % 4 == 0 then
                 rest, to_push = rest:split_at(axis, split_coord, gaps)
             else
+                ---@diagnostic disable-next-line: cast-local-type
                 to_push, rest = rest:split_at(axis, split_coord, gaps)
             end
 
@@ -598,6 +628,147 @@ function builtins.spiral:layout(args)
         end
 
         table.insert(geos, rest)
+    end
+
+    if inner_gaps then
+        for i = 1, #geos do
+            geos[i].x = geos[i].x + inner_gaps
+            geos[i].y = geos[i].y + inner_gaps
+            geos[i].width = geos[i].width - inner_gaps * 2
+            geos[i].height = geos[i].height - inner_gaps * 2
+        end
+    end
+
+    return geos
+end
+
+function builtins.fair:layout(args)
+    local win_count = #args.windows
+
+    if win_count == 0 then
+        return {}
+    end
+
+    local width = args.output_width
+    local height = args.output_height
+
+    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+
+    ---@type Rectangle[]
+    local geos = {}
+
+    ---@type integer
+    local outer_gaps
+    ---@type integer?
+    local inner_gaps
+
+    if type(self.gaps) == "number" then
+        outer_gaps = self.gaps --[[@as integer]]
+    else
+        outer_gaps = self.gaps.outer
+        inner_gaps = self.gaps.inner
+    end
+
+    rect = rect:split_at("horizontal", 0, outer_gaps)
+    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
+    rect = rect:split_at("vertical", 0, outer_gaps)
+    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+
+    local gaps = ((not inner_gaps and outer_gaps) or 0)
+
+    if win_count == 1 then
+        table.insert(geos, rect)
+    elseif win_count == 2 then
+        local len
+        if self.direction == "vertical" then
+            len = rect.width
+        else
+            len = rect.height
+        end
+        -- Two windows is special cased to create a new line rather than increase to 2 in a line
+        local rect1, rect2 = rect:split_at(self.direction, len // 2 - gaps // 2, gaps)
+        if rect1 and rect2 then
+            table.insert(geos, rect1)
+            table.insert(geos, rect2)
+        end
+    else
+        -- 3 / 1
+        -- 7 / 2
+        -- 13 / 3
+        -- 21 / 4
+
+        local line_count = math.floor(math.sqrt(win_count) + 0.5)
+        local wins_per_line = {}
+        local max_per_line = line_count
+        if win_count > line_count * line_count then
+            max_per_line = line_count + 1
+        end
+        for i = 1, win_count do
+            local index = math.ceil(i / max_per_line)
+            if not wins_per_line[index] then
+                wins_per_line[index] = 0
+            end
+            wins_per_line[index] = wins_per_line[index] + 1
+        end
+
+        assert(#wins_per_line == line_count)
+
+        ---@type Rectangle[]
+        local line_rects = {}
+
+        local coord
+        local len
+        local axis
+        if self.direction == "horizontal" then
+            coord = rect.y
+            len = rect.height / line_count
+            axis = "horizontal"
+        else
+            coord = rect.x
+            len = rect.width / line_count
+            axis = "vertical"
+        end
+
+        for i = 1, line_count - 1 do
+            local slice_point = coord + math.floor(len * i + 0.5)
+            slice_point = slice_point - gaps // 2
+            local to_push, rest = rect:split_at(axis, slice_point, gaps)
+            table.insert(line_rects, to_push)
+            if not rest then
+                break
+            end
+            rect = rest
+        end
+
+        table.insert(line_rects, rect)
+
+        for i, line_rect in ipairs(line_rects) do
+            local coord ---@diagnostic disable-line: redefined-local
+            local len ---@diagnostic disable-line: redefined-local
+            local axis ---@diagnostic disable-line: redefined-local
+            if self.direction == "vertical" then
+                coord = line_rect.y
+                len = line_rect.height / wins_per_line[i]
+                axis = "horizontal"
+            else
+                coord = line_rect.x
+                len = line_rect.width / wins_per_line[i]
+                axis = "vertical"
+            end
+
+            for j = 1, wins_per_line[i] - 1 do
+                local slice_point = coord + math.floor(len * j + 0.5)
+                slice_point = slice_point - gaps // 2
+                local to_push, rest = line_rect:split_at(axis, slice_point, gaps)
+                table.insert(geos, to_push)
+                if not rest then
+                    break
+                end
+                line_rect = rest
+            end
+
+            table.insert(geos, line_rect)
+        end
     end
 
     if inner_gaps then
@@ -649,7 +820,13 @@ function layout.set_manager(manager)
                 output_height = response.output_height,
             }
 
-            local geos = manager:get_active(args):layout(args)
+            local a = manager:get_active(args)
+            local success, geos = pcall(a.layout, a, args)
+
+            if not success then
+                print(geos)
+                os.exit(1)
+            end
 
             local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
                 geometries = {
@@ -701,12 +878,14 @@ local CyclingLayoutManager = {}
 function CyclingLayoutManager:get_active(args)
     local first_tag = args.tags[1]
 
+    -- Return a no-op generator if there are no active tags
     if not first_tag then
         ---@type LayoutGenerator
         return {
             layout = function(_, _)
                 return {}
             end,
+            gaps = 0,
         }
     end
 

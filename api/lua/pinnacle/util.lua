@@ -91,18 +91,18 @@ local Rectangle = {}
 
 ---Split this rectangle along `axis` at `at`.
 ---
----If `at2` is specified, the split will chop off a section of this
----rectangle from `at` to `at2`.
+---If `thickness` is specified, the split will chop off a section of this
+---rectangle from `at` to `at + thickness`.
 ---
----`at` and `at2` are relative to the space this rectangle is in, not
+---`at` is relative to the space this rectangle is in, not
 ---this rectangle's origin.
 ---
 ---@param axis "horizontal" | "vertical"
 ---@param at number
----@param thickness? number
+---@param thickness number?
 ---
 ---@return Rectangle rect1 The first rectangle.
----@return Rectangle? rect2 The seoond rectangle, if there is one.
+---@return Rectangle|nil rect2 The seoond rectangle, if there is one.
 function Rectangle:split_at(axis, at, thickness)
     ---@diagnostic disable-next-line: redefined-local
     local thickness = thickness or 0
@@ -173,8 +173,9 @@ function Rectangle:split_at(axis, at, thickness)
 
             return rect1, rect2
         end
-    end -- TODO: handle error if neither
+    end
 
+    print("Invalid axis:", axis)
     os.exit(1)
 end
 
