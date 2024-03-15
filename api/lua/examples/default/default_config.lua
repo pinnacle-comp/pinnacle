@@ -91,6 +91,7 @@ require("pinnacle").setup(function(Pinnacle)
     local layout_manager = Layout.new_cycling_manager({
         Layout.builtins.master_stack,
         Layout.builtins.dwindle,
+        Layout.builtins.corner,
     })
 
     Layout.set_manager(layout_manager)

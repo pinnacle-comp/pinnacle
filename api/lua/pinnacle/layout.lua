@@ -53,6 +53,12 @@ end
 ---@field gaps integer | { inner: integer, outer: integer }
 ---@field split_factors table<integer, number>
 
+---@class Builtin.Corner : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
+---@field corner_width_factor number
+---@field corner_height_factor number
+---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
+
 local builtins = {
     ---@type Builtin.MasterStack
     master_stack = {
@@ -110,6 +116,36 @@ local builtins = {
         ---
         ---Defaults to 0.5 if there is no factor at [n].
         split_factors = {},
+    },
+
+    ---@type Builtin.Corner
+    corner = {
+        ---Gaps between windows, in pixels.
+        ---
+        ---This can be an integer or the table { inner: integer, outer: integer }.
+        ---If it is an integer, all gaps will be that amount of pixels wide.
+        ---If it is a table, `outer` denotes the amount of pixels around the
+        ---edge of the output area that will become a gap, and
+        ---`inner` denotes the amount of pixels around each window that
+        ---will become a gap.
+        ---
+        ---This means that, for example, `inner = 2` will cause the gap
+        ---width between windows to be 4; 2 around each window.
+        ---
+        ---Defaults to 4.
+        gaps = 4,
+        ---How much of the output the corner window's width will take up.
+        ---
+        ---Defaults to 0.5.
+        corner_width_factor = 0.5,
+        ---How much of the output the corner window's height will take up.
+        ---
+        ---Defaults to 0.5.
+        corner_height_factor = 0.5,
+        ---Which side the corner window will be in.
+        ---
+        ---Defaults to "top_left".
+        corner_loc = "top_left",
     },
 }
 
@@ -388,6 +424,136 @@ function builtins.dwindle:layout(args)
 
         return geos
     end
+end
+
+function builtins.corner:layout(args)
+    local win_count = #args.windows
+
+    if win_count == 0 then
+        return {}
+    end
+
+    local width = args.output_width
+    local height = args.output_height
+
+    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+
+    ---@type Rectangle[]
+    local geos = {}
+
+    ---@type integer
+    local outer_gaps
+    ---@type integer?
+    local inner_gaps
+
+    if type(self.gaps) == "number" then
+        outer_gaps = self.gaps --[[@as integer]]
+    else
+        outer_gaps = self.gaps.outer
+        inner_gaps = self.gaps.inner
+    end
+
+    rect = rect:split_at("horizontal", 0, outer_gaps)
+    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
+    rect = rect:split_at("vertical", 0, outer_gaps)
+    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+
+    if win_count == 1 then
+        table.insert(geos, rect)
+    else
+        local gaps = ((not inner_gaps and outer_gaps) or 0)
+
+        local corner_rect, vert_stack_rect
+
+        if self.corner_loc == "top_left" or self.corner_loc == "bottom_left" then
+            local x_slice_point = rect.x + math.floor(rect.width * self.corner_width_factor + 0.5) - gaps // 2
+            corner_rect, vert_stack_rect = rect:split_at("vertical", x_slice_point, gaps)
+        else
+            local x_slice_point = rect.x + math.floor(rect.width * (1 - self.corner_width_factor) + 0.5) - gaps // 2
+            vert_stack_rect, corner_rect = rect:split_at("vertical", x_slice_point, gaps)
+        end
+
+        if win_count == 2 then
+            table.insert(geos, corner_rect)
+            table.insert(geos, vert_stack_rect)
+        else
+            assert(corner_rect)
+
+            local horiz_stack_rect
+
+            if self.corner_loc == "top_left" or self.corner_loc == "top_right" then
+                local y_slice_point = rect.y + math.floor(rect.height * self.corner_height_factor + 0.5) - gaps // 2
+                corner_rect, horiz_stack_rect = corner_rect:split_at("horizontal", y_slice_point, gaps)
+            else
+                local y_slice_point = rect.y
+                    + math.floor(rect.height * (1 - self.corner_height_factor) + 0.5)
+                    - gaps // 2
+                horiz_stack_rect, corner_rect = corner_rect:split_at("horizontal", y_slice_point, gaps)
+            end
+
+            assert(horiz_stack_rect)
+            assert(vert_stack_rect)
+            assert(corner_rect)
+
+            table.insert(geos, corner_rect)
+
+            -- win_count >= 3 here
+
+            ---@type Rectangle[]
+            local vert_geos = {}
+            ---@type Rectangle[]
+            local horiz_geos = {}
+
+            local vert_stack_count = math.ceil((win_count - 1) / 2)
+            local horiz_stack_count = math.floor((win_count - 1) / 2)
+
+            local vert_stack_y = vert_stack_rect.y
+            local vert_win_height = vert_stack_rect.height / vert_stack_count
+
+            for i = 1, vert_stack_count - 1 do
+                local slice_point = vert_stack_y + math.floor(vert_win_height * i + 0.5)
+                slice_point = slice_point - gaps // 2
+                local to_push, rest = vert_stack_rect:split_at("horizontal", slice_point, gaps)
+                table.insert(vert_geos, to_push)
+                vert_stack_rect = rest
+            end
+
+            table.insert(vert_geos, vert_stack_rect)
+
+            local horiz_stack_x = horiz_stack_rect.x
+            local horiz_win_width = horiz_stack_rect.width / horiz_stack_count
+
+            for i = 1, horiz_stack_count - 1 do
+                local slice_point = horiz_stack_x + math.floor(horiz_win_width * i + 0.5)
+                slice_point = slice_point - gaps // 2
+                local to_push, rest = horiz_stack_rect:split_at("vertical", slice_point, gaps)
+                table.insert(horiz_geos, to_push)
+                horiz_stack_rect = rest
+            end
+
+            table.insert(horiz_geos, horiz_stack_rect)
+
+            -- Alternate between the vertical and horizontal stacks
+            for i = 1, #vert_geos + #horiz_geos do
+                if i % 2 == 1 then
+                    table.insert(geos, vert_geos[math.ceil(i / 2)])
+                else
+                    table.insert(geos, horiz_geos[i / 2])
+                end
+            end
+        end
+    end
+
+    if inner_gaps then
+        for i = 1, #geos do
+            geos[i].x = geos[i].x + inner_gaps
+            geos[i].y = geos[i].y + inner_gaps
+            geos[i].width = geos[i].width - inner_gaps * 2
+            geos[i].height = geos[i].height - inner_gaps * 2
+        end
+    end
+
+    return geos
 end
 
 ---@class Layout
