@@ -9,10 +9,7 @@ use std::{
 
 use smithay::output::Output;
 
-use crate::{
-    layout::Layout,
-    state::{State, WithState},
-};
+use crate::state::{State, WithState};
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -52,8 +49,6 @@ struct TagInner {
     name: String,
     /// Whether this tag is active or not.
     active: bool,
-    /// What layout this tag has.
-    layout: Layout,
 }
 
 impl PartialEq for TagInner {
@@ -88,14 +83,6 @@ impl Tag {
     pub fn set_active(&self, active: bool) {
         self.0.borrow_mut().active = active;
     }
-
-    pub fn layout(&self) -> Layout {
-        self.0.borrow().layout
-    }
-
-    pub fn set_layout(&self, layout: Layout) {
-        self.0.borrow_mut().layout = layout;
-    }
 }
 
 impl Tag {
@@ -104,7 +91,6 @@ impl Tag {
             id: TagId::next(),
             name,
             active: false,
-            layout: Layout::MasterStack, // TODO: get from config
         })))
     }
 

@@ -114,7 +114,7 @@ impl window_service_server::WindowService for WindowService {
             });
 
             for output in state.space.outputs_for_element(&window) {
-                state.update_windows(&output);
+                state.request_layout(&output);
                 state.schedule_render(&output);
             }
         })
@@ -163,7 +163,7 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -211,7 +211,7 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -259,7 +259,7 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -349,7 +349,7 @@ impl window_service_server::WindowService for WindowService {
                 }
             }
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -380,7 +380,7 @@ impl window_service_server::WindowService for WindowService {
                 state.tags = vec![tag.clone()];
             });
             let Some(output) = tag.output(state) else { return };
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -431,7 +431,7 @@ impl window_service_server::WindowService for WindowService {
             }
 
             let Some(output) = tag.output(state) else { return };
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await

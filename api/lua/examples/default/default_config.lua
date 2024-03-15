@@ -88,11 +88,48 @@ require("pinnacle").setup(function(Pinnacle)
     -- Layouts        --
     --------------------
 
-    local layout_handler = Layout.new_handler({
+    local layout_manager = Layout.new_cycling_manager({
         Layout.builtins.master_stack,
+        Layout.builtins.dwindle,
     })
 
-    Layout.set_handler(layout_handler)
+    Layout.set_manager(layout_manager)
+
+    -- mod_key + space = Cycle forward one layout on the focused output
+    Input.keybind({ mod_key }, key.space, function()
+        local focused_op = Output.get_focused()
+        if focused_op then
+            local tags = focused_op:tags()
+            local tag = nil
+            for _, t in ipairs(tags or {}) do
+                if t:active() then
+                    tag = t
+                    break
+                end
+            end
+            if tag then
+                layout_manager:cycle_layout_forward(tag)
+            end
+        end
+    end)
+
+    -- mod_key + shift + space = Cycle backward one layout on the focused output
+    Input.keybind({ mod_key, "shift" }, key.space, function()
+        local focused_op = Output.get_focused()
+        if focused_op then
+            local tags = focused_op:tags()
+            local tag = nil
+            for _, t in ipairs(tags or {}) do
+                if t:active() then
+                    tag = t
+                    break
+                end
+            end
+            if tag then
+                layout_manager:cycle_layout_backward(tag)
+            end
+        end
+    end)
 
     -- Spawning must happen after you add tags, as Pinnacle currently doesn't render windows without tags.
     Process.spawn_once(terminal)

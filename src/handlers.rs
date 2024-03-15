@@ -161,7 +161,7 @@ impl CompositorHandler for State {
                 self.apply_window_rules(&new_window);
 
                 if let Some(focused_output) = self.focused_output().cloned() {
-                    self.update_windows(&focused_output);
+                    self.request_layout(&focused_output);
                     new_window.send_frame(
                         &focused_output,
                         self.clock.now(),
@@ -514,7 +514,7 @@ impl WlrLayerShellHandler for State {
         drop(map); // wow i really love refcells haha
 
         self.loop_handle.insert_idle(move |state| {
-            state.update_windows(&output);
+            state.request_layout(&output);
         });
     }
 
@@ -534,7 +534,7 @@ impl WlrLayerShellHandler for State {
 
         if let Some(output) = output {
             self.loop_handle.insert_idle(move |state| {
-                state.update_windows(&output);
+                state.request_layout(&output);
             });
         }
     }

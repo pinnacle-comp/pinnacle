@@ -191,12 +191,6 @@ function rectangle.new(x, y, width, height)
     return self
 end
 
-local r = rectangle.new(0, 0, 100, 100)
-local r1, r2 = r:split_at("horizontal", 96, 4)
-
-print(require("inspect")(r1))
-print(require("inspect")(r2))
-
 util.rectangle = rectangle
 
 return util

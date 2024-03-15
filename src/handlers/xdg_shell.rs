@@ -77,7 +77,7 @@ impl XdgShellHandler for State {
         };
 
         if let Some(output) = window.output(self) {
-            self.update_windows(&output);
+            self.request_layout(&output);
             let focus = self
                 .focused_window(&output)
                 .map(KeyboardFocusTarget::Window);
@@ -766,7 +766,7 @@ impl XdgShellHandler for State {
         }
 
         let Some(output) = window.output(self) else { return };
-        self.update_windows(&output);
+        self.request_layout(&output);
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
@@ -779,7 +779,7 @@ impl XdgShellHandler for State {
         }
 
         let Some(output) = window.output(self) else { return };
-        self.update_windows(&output);
+        self.request_layout(&output);
     }
 
     fn minimize_request(&mut self, _surface: ToplevelSurface) {

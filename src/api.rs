@@ -703,7 +703,7 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
         })
@@ -730,7 +730,7 @@ impl tag_service_server::TagService for TagService {
                 tag.set_active(true);
             });
 
-            state.update_windows(&output);
+            state.request_layout(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
         })
@@ -818,7 +818,7 @@ impl tag_service_server::TagService for TagService {
                     }
                 });
 
-                state.update_windows(&output);
+                state.request_layout(&output);
                 state.schedule_render(&output);
             }
 
@@ -831,40 +831,13 @@ impl tag_service_server::TagService for TagService {
         .await
     }
 
-    async fn set_layout(&self, request: Request<SetLayoutRequest>) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
+    async fn set_layout(
+        &self,
+        _request: Request<SetLayoutRequest>,
+    ) -> Result<Response<()>, Status> {
+        warn!("Tag.set_layout has been deprecated");
 
-        let tag_id = TagId(
-            request
-                .tag_id
-                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
-        );
-
-        use pinnacle_api_defs::pinnacle::tag::v0alpha1::set_layout_request::Layout;
-
-        // TODO: from impl
-        let layout = match request.layout() {
-            Layout::Unspecified => return Err(Status::invalid_argument("unspecified layout")),
-            Layout::MasterStack => crate::layout::Layout::MasterStack,
-            Layout::Dwindle => crate::layout::Layout::Dwindle,
-            Layout::Spiral => crate::layout::Layout::Spiral,
-            Layout::CornerTopLeft => crate::layout::Layout::CornerTopLeft,
-            Layout::CornerTopRight => crate::layout::Layout::CornerTopRight,
-            Layout::CornerBottomLeft => crate::layout::Layout::CornerBottomLeft,
-            Layout::CornerBottomRight => crate::layout::Layout::CornerBottomRight,
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(tag) = tag_id.tag(state) else { return };
-
-            tag.set_layout(layout);
-
-            let Some(output) = tag.output(state) else { return };
-
-            state.update_windows(&output);
-            state.schedule_render(&output);
-        })
-        .await
+        run_unary_no_response(&self.sender, move |_state| {}).await
     }
 
     async fn get(
@@ -975,7 +948,7 @@ impl output_service_server::OutputService for OutputService {
             output.change_current_state(None, None, None, Some(loc));
             state.space.map_output(&output, loc);
             tracing::debug!("Mapping output {} to {loc:?}", output.name());
-            state.update_windows(&output);
+            state.request_layout(&output);
         })
         .await
     }

@@ -34,7 +34,6 @@ impl layout_service_server::LayoutService for LayoutService {
                     if let Some(body) = request.body {
                         match body {
                             layout_request::Body::Geometries(geos) => {
-                                // dbg!(&geos);
                                 if let Err(err) = state.apply_layout(geos) {
                                     // TODO: send a Status and handle the error client side
                                     tracing::error!("{err}")
@@ -46,9 +45,9 @@ impl layout_service_server::LayoutService for LayoutService {
                         }
                     }
                 }
-                Err(_) => (),
+                Err(err) => tracing::error!("{err}"),
             },
-            |state, sender, join_handle| {
+            |state, sender, _join_handle| {
                 state.layout_state.layout_request_sender = Some(sender);
             },
         )
