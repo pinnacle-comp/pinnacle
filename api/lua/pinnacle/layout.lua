@@ -42,29 +42,41 @@ end
 ---@class LayoutGenerator
 ---Generate an array of geometries from the given `LayoutArgs`.
 ---@field layout fun(self: self, args: LayoutArgs): { x: integer, y: integer, width: integer, height: integer }[]
----Gaps between windows.
----
----Generators are free to ignore this, but it is recommended to implement gaps if
----it makes sense for the layout.
----@field gaps integer | { inner: integer, outer: integer }
 
+---A `LayoutGenerator` that has one master area to one side
+---and a stack of windows next to it.
 ---@class Builtin.MasterStack : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
 ---@field master_factor number
 ---@field master_side "left"|"right"|"top"|"bottom"
 ---@field master_count integer
 
+---A `LayoutGenerator` that lays out windows in a shrinking fashion
+---towards the bottom right corner.
 ---@class Builtin.Dwindle : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
 ---@field split_factors table<integer, number>
 
+---A `LayoutGenerator` that has one main corner window and a
+---horizontal and vertical stack flanking it on the other two sides.
 ---@class Builtin.Corner : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
 ---@field corner_width_factor number
 ---@field corner_height_factor number
 ---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
 
+---A `LayoutGenerator` that lays out windows in a spiral.
+---
+---This is similar to the dwindle layout but in a spiral instead of
+---towards the borrom right corner.
 ---@class Builtin.Spiral : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
 ---@field split_factors table<integer, number>
 
+---A `LayoutGenerator` that attempts to layout windows such that
+---they are the same size.
 ---@class Builtin.Fair : LayoutGenerator
+---@field gaps integer | { inner: integer, outer: integer }
 ---@field direction "horizontal"|"vertical"
 
 local builtins = {
@@ -401,6 +413,7 @@ function builtins.dwindle:layout(args)
 
             local to_push
 
+            ---@diagnostic disable-next-line: cast-local-type
             to_push, rest = rest:split_at(axis, split_coord, gaps)
 
             if not rest then

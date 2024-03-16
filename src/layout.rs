@@ -222,8 +222,6 @@ impl State {
     }
 
     pub fn apply_layout(&mut self, geometries: Geometries) -> anyhow::Result<()> {
-        tracing::info!("Applying layout");
-
         let Geometries {
             request_id: Some(request_id),
             output_name: Some(output_name),

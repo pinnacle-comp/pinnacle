@@ -77,6 +77,43 @@ function util.batch(requests)
     return responses
 end
 
+-- Taken from the following stackoverflow answer:
+-- https://stackoverflow.com/a/16077650
+local function deep_copy_rec(obj, seen)
+    seen = seen or {}
+    if obj == nil then
+        return nil
+    end
+    if seen[obj] then
+        return seen[obj]
+    end
+
+    local no
+    if type(obj) == "table" then
+        no = {}
+        seen[obj] = no
+
+        for k, v in next, obj, nil do
+            no[deep_copy_rec(k, seen)] = deep_copy_rec(v, seen)
+        end
+        setmetatable(no, deep_copy_rec(getmetatable(obj), seen))
+    else -- number, string, boolean, etc
+        no = obj
+    end
+    return no
+end
+
+---Create a deep copy of an object.
+---
+---@generic T
+---
+---@param obj T The object to deep copy.
+---
+---@return T deep_copy A deep copy of `obj`
+function util.deep_copy(obj)
+    return deep_copy_rec(obj, nil)
+end
+
 -- Geometry stuff
 
 ---@class RectangleModule

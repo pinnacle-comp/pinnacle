@@ -744,7 +744,7 @@ pub enum CornerLocation {
 }
 
 /// A [`LayoutGenerator`] that has one main corner window and a
-/// horizontal and vertical stack flanking on the other two sides.
+/// horizontal and vertical stack flanking it on the other two sides.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CornerLayout {
     /// Gaps between windows.
