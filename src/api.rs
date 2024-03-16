@@ -21,7 +21,7 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             tag_service_server, AddRequest, AddResponse, RemoveRequest, SetActiveRequest,
-            SetLayoutRequest, SwitchToRequest,
+            SwitchToRequest,
         },
     },
     v0alpha1::{pinnacle_service_server, QuitRequest, SetOrToggle},
@@ -829,15 +829,6 @@ impl tag_service_server::TagService for TagService {
             }
         })
         .await
-    }
-
-    async fn set_layout(
-        &self,
-        _request: Request<SetLayoutRequest>,
-    ) -> Result<Response<()>, Status> {
-        warn!("Tag.set_layout has been deprecated");
-
-        run_unary_no_response(&self.sender, move |_state| {}).await
     }
 
     async fn get(

@@ -24,7 +24,6 @@ build = {
         ["pinnacle.output"] = "pinnacle/output.lua",
         ["pinnacle.process"] = "pinnacle/process.lua",
         ["pinnacle.tag"] = "pinnacle/tag.lua",
-        ["pinnacle.tag.layout"] = "pinnacle/tag/layout.lua",
         ["pinnacle.window"] = "pinnacle/window.lua",
         ["pinnacle.util"] = "pinnacle/util.lua",
         ["pinnacle.signal"] = "pinnacle/signal.lua",

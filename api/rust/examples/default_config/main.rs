@@ -1,11 +1,10 @@
 use pinnacle_api::layout::{
-    CornerLayout, DwindleLayout, FairLayout, LayoutManager, MasterStackLayout, SpiralLayout,
+    CornerLayout, DwindleLayout, FairLayout, MasterStackLayout, SpiralLayout,
 };
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
-    tag::{Layout, LayoutCycler},
     ApiModules,
 };
 
