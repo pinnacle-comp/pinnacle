@@ -4,11 +4,12 @@
 
 //! Layout management.
 //!
-//! TODO:
+//! TODO: finish this documentation
 
-#![allow(missing_docs)] // TODO:
-
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
     layout_request::{Body, ExplicitLayout, Geometries},
@@ -41,16 +42,11 @@ impl Layout {
         }
     }
 
-    pub fn new_cycling_manager(
-        &self,
-        layouts: impl IntoIterator<Item = Box<dyn LayoutGenerator + Send>>,
-    ) -> CyclingLayoutManager {
-        CyclingLayoutManager {
-            layouts: layouts.into_iter().collect(),
-            tag_indices: HashMap::new(),
-        }
-    }
-
+    /// Consume the given [`LayoutManager`] and set it as the global layout handler.
+    ///
+    /// This returns a [`LayoutRequester`] that allows you to manually request layouts from
+    /// the compositor. The requester also contains your layout manager wrapped in an `Arc<Mutex>`
+    /// to allow you to mutate its settings.
     pub fn set_manager<M>(&self, manager: M) -> LayoutRequester<M>
     where
         M: LayoutManager + Send + 'static,
@@ -63,7 +59,7 @@ impl Layout {
 
         let from_client_clone = from_client.clone();
 
-        let manager = Arc::new(tokio::sync::Mutex::new(manager));
+        let manager = Arc::new(Mutex::new(manager));
 
         let requester = LayoutRequester {
             sender: from_client_clone,
@@ -87,7 +83,7 @@ impl Layout {
                     output_width: response.output_width.unwrap_or_default(),
                     output_height: response.output_height.unwrap_or_default(),
                 };
-                let geos = manager.lock().await.active_layout(&args).layout(&args);
+                let geos = manager.lock().unwrap().active_layout(&args).layout(&args);
                 from_client
                     .send(LayoutRequest {
                         body: Some(Body::Geometries(Geometries {
@@ -113,42 +109,87 @@ impl Layout {
     }
 }
 
+/// Arguments that [`LayoutGenerator`]s receive when a layout is requested.
 #[derive(Clone, Debug)]
 pub struct LayoutArgs {
+    /// The output that is being laid out.
     pub output: OutputHandle,
+    /// The windows that are being laid out.
     pub windows: Vec<WindowHandle>,
+    /// The *focused* tags on the output.
     pub tags: Vec<TagHandle>,
+    /// The width of the layout area, in pixels.
     pub output_width: u32,
+    /// The height of the layout area, in pixels.
     pub output_height: u32,
 }
 
+/// Types that can manage layouts.
 pub trait LayoutManager {
+    /// Get the currently active layout for layouting.
     fn active_layout(&mut self, args: &LayoutArgs) -> &dyn LayoutGenerator;
 }
 
+/// Types that can generate layouts by computing a vector of [geometries][Geometry].
 pub trait LayoutGenerator {
+    /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
     fn layout(&self, args: &LayoutArgs) -> Vec<Geometry>;
 }
 
+/// Gaps between windows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Gaps {
+    /// An absolute amount of pixels between windows and the edge of the output.
+    ///
+    /// For example, `Gaps::Absolute(8)` means there will be 8 pixels between each window
+    /// and between the edge of the output.
     Absolute(u32),
-    Split { inner: u32, outer: u32 },
+    /// A split amount of pixels between windows and the edge of the output.
+    Split {
+        /// The amount of gap in pixels around *each* window.
+        ///
+        /// For example, `Gaps::Split { inner: 2, ... }` means there will be
+        /// 4 pixels between windows, 2 around each window.
+        inner: u32,
+        /// The amount of gap in pixels inset from the edge of the output.
+        outer: u32,
+    },
 }
 
+/// A [`LayoutManager`] that keeps track of layouts per output and provides
+/// methods to cycle between them.
 pub struct CyclingLayoutManager {
     layouts: Vec<Box<dyn LayoutGenerator + Send>>,
     tag_indices: HashMap<u32, usize>,
 }
 
 impl CyclingLayoutManager {
-    pub fn new(
-        layout: &Layout,
-        layouts: impl IntoIterator<Item = Box<dyn LayoutGenerator + Send>>,
-    ) -> Self {
-        layout.new_cycling_manager(layouts)
+    /// Create a new [`CyclingLayoutManager`] from the given [`LayoutGenerator`]s.
+    ///
+    /// `LayoutGenerator`s must be boxed then coerced to trait objects, so you
+    /// will need to do an unsizing cast to use them here.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::layout::CyclingLayoutManager;
+    /// use pinnacle_api::layout::{MasterStackLayout, DwindleLayout, CornerLayout};
+    ///
+    /// let cycling_layout_manager = CyclingLayoutManager::new([
+    ///     // The `as _` is necessary to coerce to a boxed trait object
+    ///     Box::<MasterStackLayout>::default() as _,
+    ///     Box::<DwindleLayout>::default() as _,
+    ///     Box::<CornerLayout>::default() as _,
+    /// ]);
+    /// ```
+    pub fn new(layouts: impl IntoIterator<Item = Box<dyn LayoutGenerator + Send>>) -> Self {
+        Self {
+            layouts: layouts.into_iter().collect(),
+            tag_indices: HashMap::default(),
+        }
     }
 
+    /// Cycle the layout forward on the given tag.
     pub fn cycle_layout_forward(&mut self, tag: &TagHandle) {
         let index = self.tag_indices.entry(tag.id).or_default();
         *index += 1;
@@ -157,6 +198,7 @@ impl CyclingLayoutManager {
         }
     }
 
+    /// Cycle the layout backward on the given tag.
     pub fn cycle_layout_backward(&mut self, tag: &TagHandle) {
         let index = self.tag_indices.entry(tag.id).or_default();
         if let Some(i) = index.checked_sub(1) {
@@ -180,10 +222,12 @@ impl LayoutManager for CyclingLayoutManager {
     }
 }
 
+/// A struct that can request layouts and provides access to a consumed [`LayoutManager`].
 #[derive(Debug)]
 pub struct LayoutRequester<T> {
     sender: UnboundedSender<LayoutRequest>,
-    pub manager: Arc<tokio::sync::Mutex<T>>,
+    /// The manager that was consumed, wrapped in an `Arc<Mutex>`.
+    pub manager: Arc<Mutex<T>>,
 }
 
 impl<T> Clone for LayoutRequester<T> {
@@ -196,6 +240,10 @@ impl<T> Clone for LayoutRequester<T> {
 }
 
 impl<T> LayoutRequester<T> {
+    /// Request a layout from the compositor.
+    ///
+    /// This uses the focused output for the request.
+    /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
         let output_name = OUTPUT.get().unwrap().get_focused().map(|op| op.name);
         self.sender
@@ -205,6 +253,7 @@ impl<T> LayoutRequester<T> {
             .unwrap();
     }
 
+    /// Request a layout from the compositor for the given output.
     pub fn request_layout_on_output(&self, output: &OutputHandle) {
         self.sender
             .send(LayoutRequest {
@@ -217,18 +266,21 @@ impl<T> LayoutRequester<T> {
 }
 
 impl LayoutRequester<CyclingLayoutManager> {
+    /// Cycle the layout forward for the given tag.
     pub fn cycle_layout_forward(&self, tag: &TagHandle) {
-        let mut lock = block_on_tokio(self.manager.lock());
+        let mut lock = self.manager.lock().unwrap();
         lock.cycle_layout_forward(tag);
     }
 
+    /// Cycle the layout backward for the given tag.
     pub fn cycle_layout_backward(&mut self, tag: &TagHandle) {
-        let mut lock = block_on_tokio(self.manager.lock());
+        let mut lock = self.manager.lock().unwrap();
         lock.cycle_layout_backward(tag);
     }
 }
 
-pub struct NoopLayout;
+/// A layout generator that does nothing.
+struct NoopLayout;
 
 impl LayoutGenerator for NoopLayout {
     fn layout(&self, _args: &LayoutArgs) -> Vec<Geometry> {
@@ -236,19 +288,40 @@ impl LayoutGenerator for NoopLayout {
     }
 }
 
+/// Which side the master area will be.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MasterSide {
+    /// The master area will be on the left.
     Left,
+    /// The master area will be on the right.
     Right,
+    /// The master area will be at the top.
     Top,
+    /// The master area will be at the bottom.
     Bottom,
 }
 
+/// A [`LayoutGenerator`] that has one master area to one side and a stack of windows
+/// next to it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MasterStackLayout {
+    /// Gaps between windows.
+    ///
+    /// Defaults to `Gaps::Absolute(8)`.
     pub gaps: Gaps,
+    /// The proportion of the output the master area will take up.
+    ///
+    /// This will be clamped between 0.1 and 0.9.
+    ///
+    /// Defaults to 0.5
     pub master_factor: f32,
+    /// Which side the master area will be.
+    ///
+    /// Defaults to [`MasterSide::Left`].
     pub master_side: MasterSide,
+    /// How many windows will be in the master area.
+    ///
+    /// Defaults to 1.
     pub master_count: u32,
 }
 
@@ -423,9 +496,20 @@ impl LayoutGenerator for MasterStackLayout {
     }
 }
 
+/// A [`LayoutGenerator`] that lays out windows in a shrinking fashion
+/// towards the bottom right corner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DwindleLayout {
+    /// Gaps between windows.
+    ///
+    /// Defaults to `Gaps::Absolute(8)`.
     pub gaps: Gaps,
+    /// The ratio for each dwindle split.
+    ///
+    /// The first split will use the factor at key `1`,
+    /// the second at key `2`, and so on.
+    ///
+    /// Splits without a factor will default to 0.5.
     pub split_factors: HashMap<usize, f32>,
 }
 
@@ -524,9 +608,22 @@ impl LayoutGenerator for DwindleLayout {
     }
 }
 
+/// A [`LayoutGenerator`] that lays out windows in a spiral.
+///
+/// This is similar to the [`DwindleLayout`] but in a spiral instead of
+/// towards the bottom right corner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpiralLayout {
+    /// Gaps between windows.
+    ///
+    /// Defaults to `Gaps::Absolute(8)`.
     pub gaps: Gaps,
+    /// The ratio for each dwindle split.
+    ///
+    /// The first split will use the factor at key `1`,
+    /// the second at key `2`, and so on.
+    ///
+    /// Splits without a factor will default to 0.5.
     pub split_factors: HashMap<usize, f32>,
 }
 
@@ -633,19 +730,36 @@ impl LayoutGenerator for SpiralLayout {
     }
 }
 
+/// Which corner the corner window will in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CornerLocation {
+    /// The corner window will be in the top left.
     TopLeft,
+    /// The corner window will be in the top right.
     TopRight,
+    /// The corner window will be in the bottom left.
     BottomLeft,
+    /// The corner window will be in the bottom right.
     BottomRight,
 }
 
+/// A [`LayoutGenerator`] that has one main corner window and a
+/// horizontal and vertical stack flanking on the other two sides.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CornerLayout {
+    /// Gaps between windows.
+    ///
+    /// Defaults to `Gaps::Absolute(8)`.
     pub gaps: Gaps,
+    /// The proportion of the output that the width of the window takes up.
+    ///
+    /// Defaults to 0.5.
     pub corner_width_factor: f32,
+    /// The proportion of the output that the height of the window takes up.
+    ///
+    /// Defaults to 0.5.
     pub corner_height_factor: f32,
+    /// The location of the corner window.
     pub corner_loc: CornerLocation,
 }
 
@@ -830,9 +944,17 @@ impl LayoutGenerator for CornerLayout {
     }
 }
 
+/// A [`LayoutGenerator`] that attempts to layout windows such that
+/// they are the same size.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FairLayout {
+    /// The proportion of the output that the width of the window takes up.
+    ///
+    /// Defaults to 0.5.
     pub gaps: Gaps,
+    /// Which axis the lines of windows will run.
+    ///
+    /// Defaults to [`Axis::Vertical`].
     pub axis: Axis,
 }
 

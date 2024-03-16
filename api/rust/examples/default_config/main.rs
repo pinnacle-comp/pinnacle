@@ -1,5 +1,5 @@
 use pinnacle_api::layout::{
-    CornerLayout, DwindleLayout, FairLayout, MasterStackLayout, SpiralLayout,
+    CornerLayout, CyclingLayoutManager, DwindleLayout, FairLayout, MasterStackLayout, SpiralLayout,
 };
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::xkbcommon::xkb::Keysym;
@@ -89,7 +89,7 @@ async fn main() {
     let corner = Box::<CornerLayout>::default();
     let fair = Box::<FairLayout>::default();
 
-    let layout_requester = layout.set_manager(layout.new_cycling_manager([
+    let layout_requester = layout.set_manager(CyclingLayoutManager::new([
         master_stack as _,
         dwindle as _,
         spiral as _,

@@ -26,13 +26,21 @@ pub struct Geometry {
     pub height: u32,
 }
 
+/// A horizontal or vertical axis.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub enum Axis {
+    /// A horizontal axis.
     Horizontal,
+    /// A vertical axis.
     Vertical,
 }
 
 impl Geometry {
+    /// Split this geometry along the given [`Axis`] at `at`.
+    ///
+    /// `thickness` denotes how thick the split will be from `at`.
+    ///
+    /// Returns the top/left geometry along with the bottom/right one if it exists.
     pub fn split_at(mut self, axis: Axis, at: i32, thickness: u32) -> (Geometry, Option<Geometry>) {
         match axis {
             Axis::Horizontal => {

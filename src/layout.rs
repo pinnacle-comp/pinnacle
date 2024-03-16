@@ -51,8 +51,13 @@ impl State {
 
         let output_geo = self.space.output_geometry(output).expect("no output geo");
 
+        let non_exclusive_geo = {
+            let map = layer_map_for_output(output);
+            map.non_exclusive_zone()
+        };
+
         for (win, geo) in tiled_windows.zip(geometries.into_iter().map(|mut geo| {
-            geo.loc += output_geo.loc;
+            geo.loc += output_geo.loc + non_exclusive_geo.loc;
             geo
         })) {
             win.change_geometry(geo);
@@ -64,18 +69,10 @@ impl State {
                     window.change_geometry(output_geo);
                 }
                 FullscreenOrMaximized::Maximized => {
-                    let map = layer_map_for_output(output);
-                    let geo = if map.layers().next().is_none() {
-                        // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
-                        // |     output res, even when there are no layer surfaces mapped. In this case, we
-                        // |     just return the output geometry.
-                        output_geo
-                    } else {
-                        let zone = map.non_exclusive_zone();
-                        tracing::debug!("non_exclusive_zone is {zone:?}");
-                        Rectangle::from_loc_and_size(output_geo.loc + zone.loc, zone.size)
-                    };
-                    window.change_geometry(geo);
+                    window.change_geometry(Rectangle::from_loc_and_size(
+                        output_geo.loc + non_exclusive_geo.loc,
+                        non_exclusive_geo.size,
+                    ));
                 }
                 FullscreenOrMaximized::Neither => {
                     if let FloatingOrTiled::Floating(rect) =
@@ -185,13 +182,10 @@ impl State {
             .cloned()
             .collect::<Vec<_>>();
 
-        let Some((output_width, output_height)) = self
-            .space
-            .output_geometry(output)
-            .map(|geo| (geo.size.w, geo.size.h))
-        else {
-            error!("Called `output_geometry` on an unmapped output");
-            return;
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
         };
 
         let window_ids = windows
