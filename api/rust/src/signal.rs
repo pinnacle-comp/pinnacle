@@ -313,7 +313,6 @@ where
                     }
                 }
                 _dc = dc_ping_recv_fuse => {
-                    println!("dc");
                     control_sender.send(Req::from_control(StreamControl::Disconnect)).expect("send failed");
                     break;
                 }

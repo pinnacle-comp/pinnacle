@@ -283,11 +283,11 @@ function builtins.master_stack:layout(args)
 
         if self.master_side == "left" or self.master_side == "right" then
             coord = master_rect.y
-            len = master_rect.height
+            len = master_rect.height // (master_slice_count + 1)
             axis = "horizontal"
         else
             coord = master_rect.x
-            len = master_rect.width
+            len = master_rect.width // (master_slice_count + 1)
             axis = "vertical"
         end
 
@@ -680,23 +680,21 @@ function builtins.fair:layout(args)
         table.insert(geos, rect)
     elseif win_count == 2 then
         local len
+        local coord
         if self.direction == "vertical" then
             len = rect.width
+            coord = rect.x
         else
             len = rect.height
+            coord = rect.y
         end
         -- Two windows is special cased to create a new line rather than increase to 2 in a line
-        local rect1, rect2 = rect:split_at(self.direction, len // 2 - gaps // 2, gaps)
+        local rect1, rect2 = rect:split_at(self.direction, coord + len // 2 - gaps // 2, gaps)
         if rect1 and rect2 then
             table.insert(geos, rect1)
             table.insert(geos, rect2)
         end
     else
-        -- 3 / 1
-        -- 7 / 2
-        -- 13 / 3
-        -- 21 / 4
-
         local line_count = math.floor(math.sqrt(win_count) + 0.5)
         local wins_per_line = {}
         local max_per_line = line_count

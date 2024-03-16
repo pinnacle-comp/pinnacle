@@ -26,6 +26,97 @@ pub struct Geometry {
     pub height: u32,
 }
 
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+impl Geometry {
+    pub fn split_at(mut self, axis: Axis, at: i32, thickness: u32) -> (Geometry, Option<Geometry>) {
+        match axis {
+            Axis::Horizontal => {
+                if at <= self.y {
+                    let diff = at - self.y + thickness as i32;
+                    if diff > 0 {
+                        self.y += diff;
+                        self.height = self.height.saturating_sub(diff as u32);
+                    }
+                    (self, None)
+                } else if at >= self.y + self.height as i32 {
+                    (self, None)
+                } else if at + thickness as i32 >= self.y + self.height as i32 {
+                    let diff = self.y + self.height as i32 - at;
+                    self.height = self.height.saturating_sub(diff as u32);
+                    (self, None)
+                } else {
+                    let x = self.x;
+                    let top_y = self.y;
+                    let width = self.width;
+                    let top_height = at - self.y;
+
+                    let bot_y = at + thickness as i32;
+                    let bot_height = self.y + self.height as i32 - at - thickness as i32;
+
+                    let geo1 = Geometry {
+                        x,
+                        y: top_y,
+                        width,
+                        height: top_height as u32,
+                    };
+                    let geo2 = Geometry {
+                        x,
+                        y: bot_y,
+                        width,
+                        height: bot_height as u32,
+                    };
+
+                    (geo1, Some(geo2))
+                }
+            }
+            Axis::Vertical => {
+                if at <= self.x {
+                    let diff = at - self.x + thickness as i32;
+                    if diff > 0 {
+                        self.x += diff;
+                        self.width = self.width.saturating_sub(diff as u32);
+                    }
+                    (self, None)
+                } else if at >= self.x + self.width as i32 {
+                    (self, None)
+                } else if at + thickness as i32 >= self.x + self.width as i32 {
+                    let diff = self.x + self.width as i32 - at;
+                    self.width = self.width.saturating_sub(diff as u32);
+                    (self, None)
+                } else {
+                    let left_x = self.x;
+                    let y = self.y;
+                    let left_width = at - self.x;
+                    let height = self.height;
+
+                    let right_x = at + thickness as i32;
+                    let right_width = self.x + self.width as i32 - at - thickness as i32;
+
+                    let geo1 = Geometry {
+                        x: left_x,
+                        y,
+                        width: left_width as u32,
+                        height,
+                    };
+                    let geo2 = Geometry {
+                        x: right_x,
+                        y,
+                        width: right_width as u32,
+                        height,
+                    };
+
+                    (geo1, Some(geo2))
+                }
+            }
+        }
+    }
+}
+
 /// Batch a set of requests that will be sent ot the compositor all at once.
 ///
 /// # Rationale

@@ -1,3 +1,6 @@
+use pinnacle_api::layout::{
+    CornerLayout, DwindleLayout, FairLayout, LayoutManager, MasterStackLayout, SpiralLayout,
+};
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
@@ -15,6 +18,7 @@ async fn main() {
         input,
         output,
         tag,
+        layout,
     } = modules;
 
     let mod_key = Mod::Ctrl;
@@ -78,6 +82,54 @@ async fn main() {
     // You can define window rules to get windows to open with desired properties.
     // See `pinnacle_api::window::rules` in the docs for more information.
 
+    // Layouts
+
+    let master_stack = Box::<MasterStackLayout>::default();
+    let dwindle = Box::<DwindleLayout>::default();
+    let spiral = Box::<SpiralLayout>::default();
+    let corner = Box::<CornerLayout>::default();
+    let fair = Box::<FairLayout>::default();
+
+    let layout_requester = layout.set_manager(layout.new_cycling_manager([
+        master_stack as _,
+        dwindle as _,
+        spiral as _,
+        corner as _,
+        fair as _,
+    ]));
+
+    let mut layout_requester_clone = layout_requester.clone();
+
+    // `mod_key + space` cycles to the next layout
+    input.keybind([mod_key], Keysym::space, move || {
+        let Some(focused_op) = output.get_focused() else { return };
+        let Some(first_active_tag) = focused_op
+            .tags()
+            .into_iter()
+            .find(|tg| tg.active().unwrap_or(false))
+        else {
+            return;
+        };
+
+        layout_requester.cycle_layout_forward(&first_active_tag);
+        layout_requester.request_layout_on_output(&focused_op);
+    });
+
+    // `mod_key + shift + space` cycles to the previous layout
+    input.keybind([mod_key, Mod::Shift], Keysym::space, move || {
+        let Some(focused_op) = output.get_focused() else { return };
+        let Some(first_active_tag) = focused_op
+            .tags()
+            .into_iter()
+            .find(|tg| tg.active().unwrap_or(false))
+        else {
+            return;
+        };
+
+        layout_requester_clone.cycle_layout_backward(&first_active_tag);
+        layout_requester_clone.request_layout_on_output(&focused_op);
+    });
+
     // Tags
 
     let tag_names = ["1", "2", "3", "4", "5"];
@@ -91,30 +143,6 @@ async fn main() {
     });
 
     process.spawn_once([terminal]);
-
-    // Create a layout cycler to cycle through the given layouts
-    let LayoutCycler {
-        prev: layout_prev,
-        next: layout_next,
-    } = tag.new_layout_cycler([
-        Layout::MasterStack,
-        Layout::Dwindle,
-        Layout::Spiral,
-        Layout::CornerTopLeft,
-        Layout::CornerTopRight,
-        Layout::CornerBottomLeft,
-        Layout::CornerBottomRight,
-    ]);
-
-    // `mod_key + space` cycles to the next layout
-    input.keybind([mod_key], Keysym::space, move || {
-        layout_next(None);
-    });
-
-    // `mod_key + shift + space` cycles to the previous layout
-    input.keybind([mod_key, Mod::Shift], Keysym::space, move || {
-        layout_prev(None);
-    });
 
     for tag_name in tag_names {
         // `mod_key + 1-5` switches to tag "1" to "5"
