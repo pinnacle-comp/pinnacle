@@ -77,20 +77,40 @@ local builtins = {}
 ---How many windows the master side will have.
 ---@field master_count integer
 local MasterStack = {
-    ---Defaults to 8.
     gaps = 8,
-    ---Defaults to 0.5.
     master_factor = 0.5,
-    ---Defaults to "left".
     master_side = "left",
-    ---Defaults to 1.
     master_count = 1,
 }
 
 ---@class Builtin.MasterStack.Args
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---
+---Defaults to 8.
 ---@field gaps? integer | { inner: integer, outer: integer }
+---The proportion of the output taken up by the master window(s).
+---
+---This is a float that will be clamped between 0.1 and 0.9.
+---
+---Defaults to 0.5.
 ---@field master_factor? number
+---The side the master window(s) will be on.
+---
+---Defaults to "left".
 ---@field master_side? "left"|"right"|"top"|"bottom"
+---How many windows the master side will have.
+---
+---Defaults to 1.
 ---@field master_count? integer
 
 ---@param args LayoutArgs
@@ -270,14 +290,31 @@ end
 ---the second at [2], and so on.
 ---@field split_factors table<integer, number>
 local Dwindle = {
-    ---Defaults to 8.
     gaps = 8,
-    ---Defaults to 0.5 if there is no factor at [n].
     split_factors = {},
 }
 
 ---@class Builtin.Dwindle.Args
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---
+---Defaults to 8.
 ---@field gaps? integer | { inner: integer, outer: integer }
+---The proportions that each split will split at.
+---
+---The first split will use the factor at [1],
+---the second at [2], and so on.
+---
+---Defaults to 0.5 if there is no factor at [n].
 ---@field split_factors? table<integer, number>
 
 ---@param args LayoutArgs
@@ -403,20 +440,38 @@ end
 ---Which corner the corner window will be in.
 ---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
 local Corner = {
-    ---Defaults to 8.
     gaps = 8,
-    ---Defaults to 0.5.
     corner_width_factor = 0.5,
-    ---Defaults to 0.5.
     corner_height_factor = 0.5,
-    ---Defaults to "top_left".
     corner_loc = "top_left",
 }
 
 ---@class Builtin.Corner.Args
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---
+---Defaults to 8.
 ---@field gaps? integer | { inner: integer, outer: integer }
+---How much of the output the corner window's width will take up.
+---
+---Defaults to 0.5.
 ---@field corner_width_factor? number
+---How much of the output the corner window's height will take up.
+---
+---Defaults to 0.5.
 ---@field corner_height_factor? number
+---Which corner the corner window will be in.
+---
+---Defaults to "top_left".
 ---@field corner_loc? "top_left"|"top_right"|"bottom_left"|"bottom_right"
 
 ---@param args LayoutArgs
@@ -593,14 +648,31 @@ end
 ---the second at [2], and so on.
 ---@field split_factors table<integer, number>
 local Spiral = {
-    ---Defaults to 8.
     gaps = 8,
-    ---Defaults to 0.5 if there is no factor at [n].
     split_factors = {},
 }
 
 ---@class Builtin.Spiral.Args
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---
+---Defaults to 8.
 ---@field gaps? integer | { inner: integer, outer: integer }
+---The proportions that each split will split at.
+---
+---The first split will use the factor at [1],
+---the second at [2], and so on.
+---
+---Defaults to 0.5 if there is no factor at [n].
 ---@field split_factors? table<integer, number>
 
 ---@param args LayoutArgs
@@ -724,17 +796,31 @@ end
 ---This means that, for example, `inner = 2` will cause the gap
 ---width between windows to be 4; 2 around each window.
 ---@field gaps integer | { inner: integer, outer: integer }
----The direction of the window lines.
+---The direction of the lines of windows.
 ---@field direction "horizontal"|"vertical"
 local Fair = {
-    ---Defaults to 8.
     gaps = 8,
-    ---Defaults to "vertical".
     direction = "vertical",
 }
 
 ---@class Builtin.Fair.Args
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---
+---Defaults to 8.
 ---@field gaps? integer | { inner: integer, outer: integer }
+---The direction of the lines of windows.
+---
+---Defaults to "vertical".
 ---@field direction? "horizontal"|"vertical"
 
 ---@param args LayoutArgs
