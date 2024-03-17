@@ -29,11 +29,6 @@
 //!
 //! These [`TagHandle`]s allow you to manipulate individual tags and get their properties.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
@@ -41,20 +36,14 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
-            SetLayoutRequest, SwitchToRequest,
+            SwitchToRequest,
         },
     },
     v0alpha1::SetOrToggle,
 };
 use tonic::transport::Channel;
 
-use crate::{
-    block_on_tokio,
-    output::OutputHandle,
-    signal::{SignalHandle, TagSignal},
-    util::Batch,
-    OUTPUT, SIGNAL,
-};
+use crate::{block_on_tokio, output::OutputHandle, util::Batch, OUTPUT};
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
@@ -231,139 +220,6 @@ impl Tag {
 
         block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
     }
-
-    /// Create a [`LayoutCycler`] to cycle layouts on outputs.
-    ///
-    /// This will create a `LayoutCycler` with two functions: one to cycle forward the layout for
-    /// the first active tag on the specified output, and one to cycle backward.
-    ///
-    /// If you do not specify an output for `LayoutCycler` functions, it will default to the
-    /// focused output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::tag::{Layout, LayoutCycler};
-    /// use pinnacle_api::xkbcommon::xkb::Keysym;
-    /// use pinnacle_api::input::Mod;
-    ///
-    /// // Create a layout cycler that cycles through the listed layouts
-    /// let LayoutCycler {
-    ///     prev: layout_prev,
-    ///     next: layout_next,
-    /// } = tag.new_layout_cycler([
-    ///     Layout::MasterStack,
-    ///     Layout::Dwindle,
-    ///     Layout::Spiral,
-    ///     Layout::CornerTopLeft,
-    ///     Layout::CornerTopRight,
-    ///     Layout::CornerBottomLeft,
-    ///     Layout::CornerBottomRight,
-    /// ]);
-    ///
-    /// // Cycle layouts forward on the focused output
-    /// layout_next(None);
-    ///
-    /// // Cycle layouts backward on the focused output
-    /// layout_prev(None);
-    ///
-    /// // Cycle layouts forward on "eDP-1"
-    /// layout_next(output.get_by_name("eDP-1")?);
-    /// ```
-    pub fn new_layout_cycler(&self, layouts: impl IntoIterator<Item = Layout>) -> LayoutCycler {
-        let indices = Arc::new(Mutex::new(HashMap::<u32, usize>::new()));
-        let indices_clone = indices.clone();
-
-        let layouts = layouts.into_iter().collect::<Vec<_>>();
-        let layouts_clone = layouts.clone();
-        let len = layouts.len();
-
-        let output_module = OUTPUT.get().expect("OUTPUT doesn't exist");
-        let output_module_clone = output_module.clone();
-
-        let next = move |output: Option<&OutputHandle>| {
-            let Some(output) = output.cloned().or_else(|| output_module.get_focused()) else {
-                return;
-            };
-
-            let Some(first_tag) = output
-                .props()
-                .tags
-                .into_iter()
-                .find(|tag| tag.active() == Some(true))
-            else {
-                return;
-            };
-
-            let mut indices = indices.lock().expect("layout next mutex lock failed");
-            let index = indices.entry(first_tag.id).or_insert(0);
-
-            if *index + 1 >= len {
-                *index = 0;
-            } else {
-                *index += 1;
-            }
-
-            first_tag.set_layout(layouts[*index]);
-        };
-
-        let prev = move |output: Option<&OutputHandle>| {
-            let Some(output) = output
-                .cloned()
-                .or_else(|| output_module_clone.get_focused())
-            else {
-                return;
-            };
-
-            let Some(first_tag) = output
-                .props()
-                .tags
-                .into_iter()
-                .find(|tag| tag.active() == Some(true))
-            else {
-                return;
-            };
-
-            let mut indices = indices_clone.lock().expect("layout next mutex lock failed");
-            let index = indices.entry(first_tag.id).or_insert(0);
-
-            if index.checked_sub(1).is_none() {
-                *index = len - 1;
-            } else {
-                *index -= 1;
-            }
-
-            first_tag.set_layout(layouts_clone[*index]);
-        };
-
-        LayoutCycler {
-            prev: Box::new(prev),
-            next: Box::new(next),
-        }
-    }
-
-    /// Connect to a tag signal.
-    ///
-    /// The compositor will fire off signals that your config can listen for and act upon.
-    /// You can pass in a [`TagSignal`] along with a callback and it will get run
-    /// with the necessary arguments every time a signal of that type is received.
-    pub fn connect_signal(&self, signal: TagSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
-
-        match signal {
-            TagSignal::Layout(layout_fn) => signal_state.layout.add_callback(layout_fn),
-        }
-    }
-}
-
-/// A layout cycler that keeps track of tags and their layouts and provides functions to cycle
-/// layouts on them.
-#[allow(clippy::type_complexity)]
-pub struct LayoutCycler {
-    /// Cycle to the next layout on the given output, or the focused output if `None`.
-    pub prev: Box<dyn Fn(Option<&OutputHandle>) + Send + Sync + 'static>,
-    /// Cycle to the previous layout on the given output, or the focused output if `None`.
-    pub next: Box<dyn Fn(Option<&OutputHandle>) + Send + Sync + 'static>,
 }
 
 /// A handle to a tag.
@@ -507,31 +363,6 @@ impl TagHandle {
         let mut tag_client = self.tag_client.clone();
         block_on_tokio(tag_client.remove(RemoveRequest {
             tag_ids: vec![self.id],
-        }))
-        .unwrap();
-    }
-
-    /// Set this tag's layout.
-    ///
-    /// Layouting only applies to tiled windows (windows that are not floating, maximized, or
-    /// fullscreen). If multiple tags are active on an output, the first active tag's layout will
-    /// determine the layout strategy.
-    ///
-    /// See [`Layout`] for the different static layouts Pinnacle currently has to offer.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::tag::Layout;
-    ///
-    /// // Set the layout of tag "1" on the focused output to "corner top left".
-    /// tag.get("1", None)?.set_layout(Layout::CornerTopLeft);
-    /// ```
-    pub fn set_layout(&self, layout: Layout) {
-        let mut client = self.tag_client.clone();
-        block_on_tokio(client.set_layout(SetLayoutRequest {
-            tag_id: Some(self.id),
-            layout: Some(layout as i32),
         }))
         .unwrap();
     }

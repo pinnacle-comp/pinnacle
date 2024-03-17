@@ -2,7 +2,8 @@
 
 use crate::{
     api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor,
-    focus::OutputFocusStack, grab::resize_grab::ResizeSurfaceState, window::WindowElement,
+    focus::OutputFocusStack, grab::resize_grab::ResizeSurfaceState, layout::LayoutState,
+    window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
@@ -98,6 +99,8 @@ pub struct State {
     pub xdg_base_dirs: BaseDirectories,
 
     pub signal_state: SignalState,
+
+    pub layout_state: LayoutState,
 }
 
 impl State {
@@ -277,6 +280,8 @@ impl State {
                 .context("couldn't create xdg BaseDirectories")?,
 
             signal_state: SignalState::default(),
+
+            layout_state: LayoutState::default(),
         };
 
         Ok(state)

@@ -19,6 +19,10 @@ local pinnacle = {
     window = require("pinnacle.window"),
     ---@type Process
     process = require("pinnacle.process"),
+    ---@type Util
+    util = require("pinnacle.util"),
+    ---@type Layout
+    layout = require("pinnacle.layout"),
 }
 
 ---Quit Pinnacle.
@@ -44,7 +48,10 @@ function pinnacle.setup(config_fn)
 
     config_fn(pinnacle)
 
-    client.loop:loop()
+    local success, err = pcall(client.loop.loop, client.loop)
+    if not success then
+        print(err)
+    end
 end
 
 return pinnacle

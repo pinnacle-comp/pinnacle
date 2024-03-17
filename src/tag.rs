@@ -9,26 +9,18 @@ use std::{
 
 use smithay::output::Output;
 
-use crate::{
-    layout::Layout,
-    state::{State, WithState},
-};
+use crate::state::{State, WithState};
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// A unique id for a [`Tag`].
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum TagId {
-    /// The tag given was invalid/nonexistent
-    None,
-    #[serde(untagged)]
-    Some(u32),
-}
+pub struct TagId(pub u32);
 
 impl TagId {
     /// Get the next available `TagId`.
     fn next() -> Self {
-        Self::Some(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
+        Self(TAG_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
     /// Get the tag associated with this id.
@@ -57,8 +49,6 @@ struct TagInner {
     name: String,
     /// Whether this tag is active or not.
     active: bool,
-    /// What layout this tag has.
-    layout: Layout,
 }
 
 impl PartialEq for TagInner {
@@ -93,14 +83,6 @@ impl Tag {
     pub fn set_active(&self, active: bool) {
         self.0.borrow_mut().active = active;
     }
-
-    pub fn layout(&self) -> Layout {
-        self.0.borrow().layout
-    }
-
-    pub fn set_layout(&self, layout: Layout) {
-        self.0.borrow_mut().layout = layout;
-    }
 }
 
 impl Tag {
@@ -109,7 +91,6 @@ impl Tag {
             id: TagId::next(),
             name,
             active: false,
-            layout: Layout::MasterStack, // TODO: get from config
         })))
     }
 

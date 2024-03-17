@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::{HashMap, HashSet};
+
+use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
     desktop::{layer_map_for_output, WindowSurface},
     output::Output,
-    utils::{Logical, Point, Rectangle, Serial, Size},
+    utils::{Logical, Point, Rectangle, Serial},
     wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
 };
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::Status;
+use tracing::error;
 
 use crate::{
+    output::OutputName,
     state::{State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized},
@@ -16,46 +23,11 @@ use crate::{
 };
 
 impl State {
-    /// Compute the positions and sizes of tiled windows on
-    /// `output` according to the provided [`Layout`].
-    fn tile_windows(&self, output: &Output, windows: Vec<WindowElement>, layout: Layout) {
-        let Some(rect) = self.space.output_geometry(output).map(|op_geo| {
-            let map = layer_map_for_output(output);
-            if map.layers().peekable().peek().is_none() {
-                // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
-                // |     output res, even when there are no layer surfaces mapped. In this case, we
-                // |     just return the output geometry.
-                op_geo
-            } else {
-                let zone = map.non_exclusive_zone();
-                tracing::debug!("non_exclusive_zone is {zone:?}");
-                Rectangle::from_loc_and_size(op_geo.loc + zone.loc, zone.size)
-            }
-        }) else {
-            // TODO: maybe default to something like 800x800 like in anvil so people still see
-            // |     windows open
-            tracing::error!("Failed to get output geometry");
-            return;
-        };
-
-        match layout {
-            Layout::MasterStack => master_stack(windows, rect),
-            Layout::Dwindle => dwindle(windows, rect),
-            Layout::Spiral => spiral(windows, rect),
-            layout @ (Layout::CornerTopLeft
-            | Layout::CornerTopRight
-            | Layout::CornerBottomLeft
-            | Layout::CornerBottomRight) => corner(&layout, windows, rect),
-        }
-    }
-
-    pub fn update_windows(&mut self, output: &Output) {
-        let Some(layout) =
-            output.with_state(|state| state.focused_tags().next().map(|tag| tag.layout()))
-        else {
-            return;
-        };
-
+    pub fn update_windows_with_geometries(
+        &mut self,
+        output: &Output,
+        geometries: Vec<Rectangle<i32, Logical>>,
+    ) {
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
             self.windows
@@ -75,30 +47,32 @@ impl State {
                     state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
                 })
             })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        self.tile_windows(output, tiled_windows, layout);
+            .cloned();
 
         let output_geo = self.space.output_geometry(output).expect("no output geo");
+
+        let non_exclusive_geo = {
+            let map = layer_map_for_output(output);
+            map.non_exclusive_zone()
+        };
+
+        for (win, geo) in tiled_windows.zip(geometries.into_iter().map(|mut geo| {
+            geo.loc += output_geo.loc + non_exclusive_geo.loc;
+            geo
+        })) {
+            win.change_geometry(geo);
+        }
+
         for window in windows_on_foc_tags.iter() {
             match window.with_state(|state| state.fullscreen_or_maximized) {
                 FullscreenOrMaximized::Fullscreen => {
                     window.change_geometry(output_geo);
                 }
                 FullscreenOrMaximized::Maximized => {
-                    let map = layer_map_for_output(output);
-                    let geo = if map.layers().next().is_none() {
-                        // INFO: Sometimes the exclusive zone is some weird number that doesn't match the
-                        // |     output res, even when there are no layer surfaces mapped. In this case, we
-                        // |     just return the output geometry.
-                        output_geo
-                    } else {
-                        let zone = map.non_exclusive_zone();
-                        tracing::debug!("non_exclusive_zone is {zone:?}");
-                        Rectangle::from_loc_and_size(output_geo.loc + zone.loc, zone.size)
-                    };
-                    window.change_geometry(geo);
+                    window.change_geometry(Rectangle::from_loc_and_size(
+                        output_geo.loc + non_exclusive_geo.loc,
+                        non_exclusive_geo.size,
+                    ));
                 }
                 FullscreenOrMaximized::Neither => {
                     if let FloatingOrTiled::Floating(rect) =
@@ -152,309 +126,7 @@ impl State {
 
         self.fixup_z_layering();
     }
-}
 
-// -------------------------------------------
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
-pub enum Layout {
-    MasterStack,
-    Dwindle,
-    Spiral,
-    CornerTopLeft,
-    CornerTopRight,
-    CornerBottomLeft,
-    CornerBottomRight,
-}
-
-fn master_stack(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
-    let size = rect.size;
-    let loc = rect.loc;
-
-    let master = windows.first();
-    let stack = windows.iter().skip(1);
-
-    let Some(master) = master else { return };
-
-    let stack_count = stack.clone().count();
-
-    if stack_count == 0 {
-        // one window
-        master.change_geometry(Rectangle::from_loc_and_size(loc, size));
-    } else {
-        let loc: Point<i32, Logical> = (loc.x, loc.y).into();
-        let new_master_size: Size<i32, Logical> = (size.w / 2, size.h).into();
-        master.change_geometry(Rectangle::from_loc_and_size(loc, new_master_size));
-
-        let height = size.h as f32 / stack_count as f32;
-        let mut y_s = vec![];
-        for i in 0..stack_count {
-            y_s.push((i as f32 * height).round() as i32);
-        }
-        let heights = y_s
-            .windows(2)
-            .map(|pair| pair[1] - pair[0])
-            .chain(vec![size.h - y_s.last().expect("vec was empty")])
-            .collect::<Vec<_>>();
-
-        for (i, win) in stack.enumerate() {
-            win.change_geometry(Rectangle::from_loc_and_size(
-                Point::from((size.w / 2 + loc.x, y_s[i] + loc.y)),
-                Size::from((size.w / 2, i32::max(heights[i], 40))),
-            ));
-        }
-    }
-}
-
-fn dwindle(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
-    let size = rect.size;
-    let loc = rect.loc;
-
-    let mut iter = windows.windows(2).peekable();
-
-    if iter.peek().is_none() {
-        if let Some(window) = windows.first() {
-            window.change_geometry(Rectangle::from_loc_and_size(loc, size));
-        }
-    } else {
-        let mut win1_size = size;
-        let mut win1_loc = loc;
-        for (i, wins) in iter.enumerate() {
-            let win1 = &wins[0];
-            let win2 = &wins[1];
-
-            enum Slice {
-                Right,
-                Below,
-            }
-
-            let slice = if i % 2 == 0 { Slice::Right } else { Slice::Below };
-
-            match slice {
-                Slice::Right => {
-                    let width_partition = win1_size.w / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        win1_loc,
-                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
-                    ));
-
-                    win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
-                    win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-                Slice::Below => {
-                    let height_partition = win1_size.h / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        win1_loc,
-                        Size::from((win1_size.w, i32::max(win1_size.h - height_partition, 40))),
-                    ));
-
-                    win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
-                    win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-            }
-        }
-    }
-}
-
-fn spiral(windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
-    let size = rect.size;
-    let loc = rect.loc;
-
-    let mut window_pairs = windows.windows(2).peekable();
-
-    if window_pairs.peek().is_none() {
-        if let Some(window) = windows.first() {
-            window.change_geometry(Rectangle::from_loc_and_size(loc, size));
-        }
-    } else {
-        let mut win1_loc = loc;
-        let mut win1_size = size;
-
-        for (i, wins) in window_pairs.enumerate() {
-            let win1 = &wins[0];
-            let win2 = &wins[1];
-
-            enum Slice {
-                Above,
-                Below,
-                Left,
-                Right,
-            }
-
-            let slice = match i % 4 {
-                0 => Slice::Right,
-                1 => Slice::Below,
-                2 => Slice::Left,
-                3 => Slice::Above,
-                _ => unreachable!(),
-            };
-
-            match slice {
-                Slice::Above => {
-                    let height_partition = win1_size.h / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        Point::from((win1_loc.x, win1_loc.y + height_partition)),
-                        Size::from((win1_size.w, i32::max(win1_size.h - height_partition, 40))),
-                    ));
-
-                    win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-                Slice::Below => {
-                    let height_partition = win1_size.h / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        win1_loc,
-                        Size::from((win1_size.w, win1_size.h - i32::max(height_partition, 40))),
-                    ));
-
-                    win1_loc = (win1_loc.x, win1_loc.y + (win1_size.h - height_partition)).into();
-                    win1_size = (win1_size.w, i32::max(height_partition, 40)).into();
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-                Slice::Left => {
-                    let width_partition = win1_size.w / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        Point::from((win1_loc.x + width_partition, win1_loc.y)),
-                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
-                    ));
-
-                    win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-                Slice::Right => {
-                    let width_partition = win1_size.w / 2;
-
-                    win1.change_geometry(Rectangle::from_loc_and_size(
-                        win1_loc,
-                        Size::from((win1_size.w - width_partition, i32::max(win1_size.h, 40))),
-                    ));
-
-                    win1_loc = (win1_loc.x + (win1_size.w - width_partition), win1_loc.y).into();
-                    win1_size = (width_partition, i32::max(win1_size.h, 40)).into();
-                    win2.change_geometry(Rectangle::from_loc_and_size(win1_loc, win1_size));
-                }
-            }
-        }
-    }
-}
-
-fn corner(layout: &Layout, windows: Vec<WindowElement>, rect: Rectangle<i32, Logical>) {
-    let size = rect.size;
-    let loc = rect.loc;
-
-    match windows.len() {
-        0 => (),
-        1 => {
-            windows[0].change_geometry(rect);
-        }
-        2 => {
-            windows[0].change_geometry(Rectangle::from_loc_and_size(
-                loc,
-                Size::from((size.w / 2, size.h)),
-            ));
-
-            windows[1].change_geometry(Rectangle::from_loc_and_size(
-                Point::from((loc.x + size.w / 2, loc.y)),
-                Size::from((size.w / 2, size.h)),
-            ));
-        }
-        _ => {
-            let mut windows = windows.into_iter();
-            let Some(corner) = windows.next() else { unreachable!() };
-
-            let mut horiz_stack = Vec::<WindowElement>::new();
-            let mut vert_stack = Vec::<WindowElement>::new();
-
-            for (i, win) in windows.enumerate() {
-                if i % 2 == 0 {
-                    horiz_stack.push(win);
-                } else {
-                    vert_stack.push(win);
-                }
-            }
-
-            let div_factor = 2;
-
-            corner.change_geometry(Rectangle::from_loc_and_size(
-                Point::from(match layout {
-                    Layout::CornerTopLeft => (loc.x, loc.y),
-                    Layout::CornerTopRight => (loc.x + size.w - size.w / div_factor, loc.y),
-                    Layout::CornerBottomLeft => (loc.x, loc.y + size.h - size.h / div_factor),
-                    Layout::CornerBottomRight => (
-                        loc.x + size.w - size.w / div_factor,
-                        loc.y + size.h - size.h / div_factor,
-                    ),
-                    _ => unreachable!(),
-                }),
-                Size::from((size.w / div_factor, size.h / div_factor)),
-            ));
-
-            let vert_stack_count = vert_stack.len();
-
-            let height = size.h as f32 / vert_stack_count as f32;
-            let mut y_s = vec![];
-            for i in 0..vert_stack_count {
-                y_s.push((i as f32 * height).round() as i32);
-            }
-            let heights = y_s
-                .windows(2)
-                .map(|pair| pair[1] - pair[0])
-                .chain(vec![size.h - y_s.last().expect("vec was empty")])
-                .collect::<Vec<_>>();
-
-            for (i, win) in vert_stack.iter().enumerate() {
-                win.change_geometry(Rectangle::from_loc_and_size(
-                    Point::from((
-                        match layout {
-                            Layout::CornerTopLeft | Layout::CornerBottomLeft => size.w / 2 + loc.x,
-                            Layout::CornerTopRight | Layout::CornerBottomRight => loc.x,
-                            _ => unreachable!(),
-                        },
-                        y_s[i] + loc.y,
-                    )),
-                    Size::from((size.w / 2, i32::max(heights[i], 40))),
-                ));
-            }
-
-            let horiz_stack_count = horiz_stack.len();
-
-            let width = size.w as f32 / 2.0 / horiz_stack_count as f32;
-            let mut x_s = vec![];
-            for i in 0..horiz_stack_count {
-                x_s.push((i as f32 * width).round() as i32);
-            }
-            let widths = x_s
-                .windows(2)
-                .map(|pair| pair[1] - pair[0])
-                .chain(vec![size.w / 2 - x_s.last().expect("vec was empty")])
-                .collect::<Vec<_>>();
-
-            for (i, win) in horiz_stack.iter().enumerate() {
-                win.change_geometry(Rectangle::from_loc_and_size(
-                    Point::from(match layout {
-                        Layout::CornerTopLeft => (x_s[i] + loc.x, loc.y + size.h / 2),
-                        Layout::CornerTopRight => (x_s[i] + loc.x + size.w / 2, loc.y + size.h / 2),
-                        Layout::CornerBottomLeft => (x_s[i] + loc.x, loc.y),
-                        Layout::CornerBottomRight => (x_s[i] + loc.x + size.w / 2, loc.y),
-                        _ => unreachable!(),
-                    }),
-                    Size::from((i32::max(widths[i], 1), size.h / 2)),
-                ));
-            }
-        }
-    }
-}
-
-impl State {
     /// Swaps two windows in the main window vec and updates all windows.
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
         let win1_index = self.windows.iter().position(|win| win == win1);
@@ -463,8 +135,157 @@ impl State {
         if let (Some(first), Some(second)) = (win1_index, win2_index) {
             self.windows.swap(first, second);
             if let Some(output) = win1.output(self) {
-                self.update_windows(&output);
+                self.request_layout(&output);
             }
         }
+    }
+}
+
+/// A monotonically increasing identifier for layout requests.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LayoutRequestId(pub u32);
+
+#[derive(Debug, Default)]
+pub struct LayoutState {
+    pub layout_request_sender: Option<UnboundedSender<Result<LayoutResponse, Status>>>,
+    id_maps: HashMap<Output, LayoutRequestId>,
+    pending_requests: HashMap<Output, Vec<(LayoutRequestId, Vec<WindowElement>)>>,
+    old_requests: HashMap<Output, HashSet<LayoutRequestId>>,
+}
+
+impl State {
+    pub fn request_layout(&mut self, output: &Output) {
+        let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
+            error!("Layout requested but no client has connected to the layout service");
+            return;
+        };
+
+        let windows_on_foc_tags = output.with_state(|state| {
+            let focused_tags = state.focused_tags().collect::<Vec<_>>();
+            self.windows
+                .iter()
+                .filter(|win| !win.is_x11_override_redirect())
+                .filter(|win| {
+                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+
+        let windows = windows_on_foc_tags
+            .iter()
+            .filter(|win| {
+                win.with_state(|state| {
+                    state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
+        };
+
+        let window_ids = windows
+            .iter()
+            .map(|win| win.with_state(|state| state.id.0))
+            .collect::<Vec<_>>();
+
+        let tag_ids =
+            output.with_state(|state| state.focused_tags().map(|tag| tag.id().0).collect());
+
+        let id = self
+            .layout_state
+            .id_maps
+            .entry(output.clone())
+            .or_insert(LayoutRequestId(0));
+
+        self.layout_state
+            .pending_requests
+            .entry(output.clone())
+            .or_default()
+            .push((*id, windows));
+
+        // TODO: error
+        let _ = sender.send(Ok(LayoutResponse {
+            request_id: Some(id.0),
+            output_name: Some(output.name()),
+            window_ids,
+            tag_ids,
+            output_width: Some(output_width as u32),
+            output_height: Some(output_height as u32),
+        }));
+
+        *id = LayoutRequestId(id.0 + 1);
+    }
+
+    pub fn apply_layout(&mut self, geometries: Geometries) -> anyhow::Result<()> {
+        let Geometries {
+            request_id: Some(request_id),
+            output_name: Some(output_name),
+            geometries,
+        } = geometries
+        else {
+            anyhow::bail!("One or more `geometries` fields were None");
+        };
+
+        let request_id = LayoutRequestId(request_id);
+        let Some(output) = OutputName(output_name).output(self) else {
+            anyhow::bail!("Output was invalid");
+        };
+
+        let old_requests = self
+            .layout_state
+            .old_requests
+            .entry(output.clone())
+            .or_default();
+
+        if old_requests.contains(&request_id) {
+            anyhow::bail!("Attempted to layout but the request was already fulfilled");
+        }
+
+        let pending = self
+            .layout_state
+            .pending_requests
+            .entry(output.clone())
+            .or_default();
+
+        let Some(latest) = pending.last().map(|(id, _)| *id) else {
+            anyhow::bail!("Attempted to layout but the request was nonexistent A");
+        };
+
+        if latest == request_id {
+            pending.pop();
+        } else if let Some(pos) = pending
+            .split_last()
+            .and_then(|(_, rest)| rest.iter().position(|(id, _)| id == &request_id))
+        {
+            // Ignore stale requests
+            old_requests.insert(request_id);
+            pending.remove(pos);
+            return Ok(());
+        } else {
+            anyhow::bail!("Attempted to layout but the request was nonexistent B");
+        };
+
+        let geometries = geometries
+            .into_iter()
+            .map(|geo| {
+                Some(Rectangle::<i32, Logical>::from_loc_and_size(
+                    (geo.x?, geo.y?),
+                    (i32::max(geo.width?, 1), i32::max(geo.height?, 1)),
+                ))
+            })
+            .collect::<Option<Vec<_>>>();
+
+        let Some(geometries) = geometries else {
+            anyhow::bail!("Attempted to layout but one or more dimensions were null");
+        };
+
+        self.update_windows_with_geometries(&output, geometries);
+
+        Ok(())
     }
 }

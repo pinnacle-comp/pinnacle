@@ -25,9 +25,7 @@ use tokio::sync::{
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::{transport::Channel, Streaming};
 
-use crate::{
-    block_on_tokio, output::OutputHandle, tag::TagHandle, window::WindowHandle, OUTPUT, TAG, WINDOW,
-};
+use crate::{block_on_tokio, output::OutputHandle, window::WindowHandle, OUTPUT, WINDOW};
 
 pub(crate) trait Signal {
     type Callback;
@@ -117,37 +115,6 @@ macro_rules! signals {
 }
 
 signals! {
-    /// Signals relating to tag events.
-    TagSignal => {
-        /// The compositor requested that the given windows be laid out.
-        ///
-        /// Callbacks receive the tag that is being laid out and the windows being laid out.
-        ///
-        /// Note: if multiple tags are active, only the first will be received, but all windows on those
-        /// active tags will be received.
-        Layout = {
-            enum_name = Layout,
-            callback_type = LayoutFn,
-            client_request = layout,
-            on_response = |response, callbacks| {
-                if let Some(tag_id) = response.tag_id {
-                    let tag = TAG.get().expect("TAG doesn't exist");
-                    let window = WINDOW.get().expect("WINDOW doesn't exist");
-                    let tag = tag.new_handle(tag_id);
-
-                    let windows = response
-                        .window_ids
-                        .into_iter()
-                        .map(|id| window.new_handle(id))
-                        .collect::<Vec<_>>();
-
-                    for callback in callbacks {
-                        callback(&tag, windows.as_slice());
-                    }
-                }
-            },
-        }
-    }
     /// Signals relating to output events.
     OutputSignal => {
         /// An output was connected.
@@ -213,12 +180,10 @@ signals! {
     }
 }
 
-pub(crate) type LayoutFn = Box<dyn FnMut(&TagHandle, &[WindowHandle]) + Send + 'static>;
 pub(crate) type SingleOutputFn = Box<dyn FnMut(&OutputHandle) + Send + 'static>;
 pub(crate) type SingleWindowFn = Box<dyn FnMut(&WindowHandle) + Send + 'static>;
 
 pub(crate) struct SignalState {
-    pub(crate) layout: SignalData<Layout>,
     pub(crate) output_connect: SignalData<OutputConnect>,
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
@@ -231,7 +196,6 @@ impl SignalState {
     ) -> Self {
         let client = SignalServiceClient::new(channel);
         Self {
-            layout: SignalData::new(client.clone(), fut_sender.clone()),
             output_connect: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_enter: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_leave: SignalData::new(client.clone(), fut_sender.clone()),
@@ -349,7 +313,6 @@ where
                     }
                 }
                 _dc = dc_ping_recv_fuse => {
-                    println!("dc");
                     control_sender.send(Req::from_control(StreamControl::Disconnect)).expect("send failed");
                     break;
                 }

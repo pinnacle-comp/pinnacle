@@ -103,7 +103,7 @@ impl XwmHandler for State {
 
         if let Some(output) = window.output(self) {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-            self.update_windows(&output);
+            self.request_layout(&output);
         }
 
         self.loop_handle.insert_idle(move |state| {
@@ -166,7 +166,7 @@ impl XwmHandler for State {
             self.space.unmap_elem(&win);
 
             if let Some(output) = win.output(self) {
-                self.update_windows(&output);
+                self.request_layout(&output);
 
                 let focus = self
                     .focused_window(&output)
@@ -227,7 +227,7 @@ impl XwmHandler for State {
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             if let Some(output) = win.output(self) {
-                self.update_windows(&output);
+                self.request_layout(&output);
 
                 let focus = self
                     .focused_window(&output)

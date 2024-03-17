@@ -63,10 +63,15 @@ pub mod pinnacle {
 
             impl_signal_request!(
                 OutputConnectRequest,
-                LayoutRequest,
                 WindowPointerEnterRequest,
                 WindowPointerLeaveRequest
             );
+        }
+    }
+
+    pub mod layout {
+        pub mod v0alpha1 {
+            tonic::include_proto!("pinnacle.layout.v0alpha1");
         }
     }
 }

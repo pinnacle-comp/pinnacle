@@ -233,7 +233,7 @@ pub fn setup_winit(
                     None,
                 );
                 layer_map_for_output(&output).arrange();
-                state.update_windows(&output);
+                state.request_layout(&output);
             }
             WinitEvent::Focus(_) => {}
             WinitEvent::Input(input_evt) => {

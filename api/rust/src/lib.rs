@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#![deny(elided_lifetimes_in_paths)]
 #![warn(missing_docs)]
 
 //! The Rust implementation of [Pinnacle](https://github.com/pinnacle-comp/pinnacle)'s
@@ -87,6 +88,7 @@ use futures::{
     Future, StreamExt,
 };
 use input::Input;
+use layout::Layout;
 use output::Output;
 use pinnacle::Pinnacle;
 use process::Process;
@@ -102,6 +104,7 @@ use tower::service_fn;
 use window::Window;
 
 pub mod input;
+pub mod layout;
 pub mod output;
 pub mod pinnacle;
 pub mod process;
@@ -121,6 +124,7 @@ static INPUT: OnceLock<Input> = OnceLock::new();
 static OUTPUT: OnceLock<Output> = OnceLock::new();
 static TAG: OnceLock<Tag> = OnceLock::new();
 static SIGNAL: OnceLock<RwLock<SignalState>> = OnceLock::new();
+static LAYOUT: OnceLock<Layout> = OnceLock::new();
 
 /// A struct containing static references to all of the configuration structs.
 #[derive(Debug, Clone, Copy)]
@@ -137,6 +141,8 @@ pub struct ApiModules {
     pub output: &'static Output,
     /// The [`Tag`] struct
     pub tag: &'static Tag,
+    /// The [`Layout`] struct
+    pub layout: &'static Layout,
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
@@ -154,7 +160,7 @@ pub async fn connect(
         }))
         .await?;
 
-    let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<()>>();
+    let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<'static, ()>>();
 
     let pinnacle = PINNACLE.get_or_init(|| Pinnacle::new(channel.clone()));
     let process = PROCESS.get_or_init(|| Process::new(channel.clone(), fut_sender.clone()));
@@ -162,6 +168,7 @@ pub async fn connect(
     let input = INPUT.get_or_init(|| Input::new(channel.clone(), fut_sender.clone()));
     let tag = TAG.get_or_init(|| Tag::new(channel.clone()));
     let output = OUTPUT.get_or_init(|| Output::new(channel.clone()));
+    let layout = LAYOUT.get_or_init(|| Layout::new(channel.clone()));
 
     SIGNAL
         .set(RwLock::new(SignalState::new(
@@ -177,6 +184,7 @@ pub async fn connect(
         input,
         output,
         tag,
+        layout,
     };
 
     Ok((modules, fut_recv))
@@ -190,7 +198,7 @@ pub async fn connect(
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
 pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
-    let mut future_set = FuturesUnordered::<BoxFuture<()>>::new();
+    let mut future_set = FuturesUnordered::<BoxFuture<'static, ()>>::new();
 
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
 

@@ -14,9 +14,6 @@ local rpc_types = {
     OutputConnect = {
         response_type = "OutputConnectResponse",
     },
-    Layout = {
-        response_type = "LayoutResponse",
-    },
     WindowPointerEnter = {
         response_type = "WindowPointerEnterResponse",
     },
@@ -65,17 +62,6 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
-    Layout = {
-        ---@nodoc
-        ---@type H2Stream?
-        sender = nil,
-        ---@nodoc
-        ---@type (fun(tag: TagHandle, windows: WindowHandle[]))[]
-        callbacks = {},
-        ---@nodoc
-        ---@type fun(response: table)
-        on_response = nil,
-    },
     WindowPointerEnter = {
         ---@nodoc
         ---@type H2Stream?
@@ -105,17 +91,6 @@ signals.OutputConnect.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputConnect.callbacks) do
         callback(handle)
-    end
-end
-
-signals.Layout.on_response = function(response)
-    ---@diagnostic disable-next-line: invisible
-    local window_handles = require("pinnacle.window").handle.new_from_table(response.window_ids or {})
-    ---@diagnostic disable-next-line: invisible
-    local tag_handle = require("pinnacle.tag").handle.new(response.tag_id)
-
-    for _, callback in ipairs(signals.Layout.callbacks) do
-        callback(tag_handle, window_handles)
     end
 end
 
