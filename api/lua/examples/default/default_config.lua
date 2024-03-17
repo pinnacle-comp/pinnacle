@@ -1,3 +1,4 @@
+-- neovim users be like
 require("pinnacle").setup(function(Pinnacle)
     local Input = Pinnacle.input
     local Process = Pinnacle.process
@@ -85,68 +86,7 @@ require("pinnacle").setup(function(Pinnacle)
         tags[1]:set_active(true)
     end)
 
-    --------------------
-    -- Layouts        --
-    --------------------
-
-    local layout_manager = Layout.new_cycling_manager({
-        Layout.builtins.master_stack(),
-        Layout.builtins.master_stack({ master_side = "right" }),
-        Layout.builtins.master_stack({ master_side = "top" }),
-        Layout.builtins.master_stack({ master_side = "bottom" }),
-        Layout.builtins.dwindle(),
-        Layout.builtins.spiral(),
-        Layout.builtins.corner(),
-        Layout.builtins.corner({ corner_loc = "top_right" }),
-        Layout.builtins.corner({ corner_loc = "bottom_left" }),
-        Layout.builtins.corner({ corner_loc = "bottom_right" }),
-        Layout.builtins.fair(),
-        Layout.builtins.fair({ direction = "horizontal" }),
-    })
-
-    Layout.set_manager(layout_manager)
-
-    -- mod_key + space = Cycle forward one layout on the focused output
-    Input.keybind({ mod_key }, key.space, function()
-        local focused_op = Output.get_focused()
-        if focused_op then
-            local tags = focused_op:tags()
-            local tag = nil
-            for _, t in ipairs(tags or {}) do
-                if t:active() then
-                    tag = t
-                    break
-                end
-            end
-            if tag then
-                layout_manager:cycle_layout_forward(tag)
-                Layout.request_layout(focused_op)
-            end
-        end
-    end)
-
-    -- mod_key + shift + space = Cycle backward one layout on the focused output
-    Input.keybind({ mod_key, "shift" }, key.space, function()
-        local focused_op = Output.get_focused()
-        if focused_op then
-            local tags = focused_op:tags()
-            local tag = nil
-            for _, t in ipairs(tags or {}) do
-                if t:active() then
-                    tag = t
-                    break
-                end
-            end
-            if tag then
-                layout_manager:cycle_layout_backward(tag)
-                Layout.request_layout(focused_op)
-            end
-        end
-    end)
-
-    -- Spawning must happen after you add tags, as Pinnacle currently doesn't render windows without tags.
-    Process.spawn_once(terminal)
-
+    -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do
         -- nil-safety: tags are guaranteed to be on the outputs due to connect_for_all above
 
@@ -177,10 +117,139 @@ require("pinnacle").setup(function(Pinnacle)
         end)
     end
 
+    --------------------
+    -- Layouts        --
+    --------------------
+
+    -- Pinnacle does not manage layouts compositor-side.
+    -- Instead, it delegates computation of layouts to your config,
+    -- which provides an interface to calculate the size and location of
+    -- windows that the compositor will use to position windows.
+    --
+    -- If you're familiar with River's layout generators, you'll understand the system here
+    -- a bit better.
+    --
+    -- The Lua API provides two layout system abstractions:
+    --     1. Layout managers, and
+    --     2. Layout generators.
+    --
+    -- ### Layout Managers ###
+    -- A layout manager is a table that contains a `get_active` function
+    -- that returns some layout generator.
+    -- A manager is meant to keep track of and choose various layout generators
+    -- across your usage of the compositor.
+    --
+    -- ### Layout generators ###
+    -- A layout generator is a table that holds some state as well as
+    -- the `layout` function, which takes in layout arguments and computes
+    -- an array of geometries that will determine the size and position
+    -- of windows being laid out.
+    --
+    -- There is one built-in layout manager and five built-in layout generators,
+    -- as shown below.
+    --
+    -- Additionally, this system is designed to be user-extensible;
+    -- you are free to create your own layout managers and generators for
+    -- maximum customizability! Docs for doing so are in the works, so sit tight.
+
+    -- Create a cycling layout manager. This provides methods to cycle
+    -- between the given layout generators below.
+    local layout_manager = Layout.new_cycling_manager({
+        -- `Layout.builtins` contains functions that create various layout generators.
+        -- Each of these has settings that can be overridden by passing in a table with
+        -- overriding options.
+        Layout.builtins.master_stack(),
+        Layout.builtins.master_stack({ master_side = "right" }),
+        Layout.builtins.master_stack({ master_side = "top" }),
+        Layout.builtins.master_stack({ master_side = "bottom" }),
+        Layout.builtins.dwindle(),
+        Layout.builtins.spiral(),
+        Layout.builtins.corner(),
+        Layout.builtins.corner({ corner_loc = "top_right" }),
+        Layout.builtins.corner({ corner_loc = "bottom_left" }),
+        Layout.builtins.corner({ corner_loc = "bottom_right" }),
+        Layout.builtins.fair(),
+        Layout.builtins.fair({ direction = "horizontal" }),
+    })
+
+    -- Set the cycling layout manager as the layout manager that will be used.
+    -- This then allows you to call `Layout.request_layout` to manually layout windows.
+    Layout.set_manager(layout_manager)
+
+    -- mod_key + space = Cycle forward one layout on the focused output
+    --
+    -- Yes, this is a bit verbose for my liking.
+    -- You need to cycle the layout on the first active tag
+    -- because that is the one that decides which layout is used.
+    Input.keybind({ mod_key }, key.space, function()
+        local focused_op = Output.get_focused()
+        if focused_op then
+            local tags = focused_op:tags() or {}
+            local tag = nil
+
+            ---@type (fun(): (boolean|nil))[]
+            local tag_actives = {}
+            for i, t in ipairs(tags) do
+                tag_actives[i] = function()
+                    return t:active()
+                end
+            end
+
+            -- We are batching API calls here for better performance
+            tag_actives = Util.batch(tag_actives)
+
+            for i, active in ipairs(tag_actives) do
+                if active then
+                    tag = tags[i]
+                    break
+                end
+            end
+
+            if tag then
+                layout_manager:cycle_layout_forward(tag)
+                Layout.request_layout(focused_op)
+            end
+        end
+    end)
+
+    -- mod_key + shift + space = Cycle backward one layout on the focused output
+    Input.keybind({ mod_key, "shift" }, key.space, function()
+        local focused_op = Output.get_focused()
+        if focused_op then
+            local tags = focused_op:tags() or {}
+            local tag = nil
+
+            ---@type (fun(): (boolean|nil))[]
+            local tag_actives = {}
+            for i, t in ipairs(tags) do
+                tag_actives[i] = function()
+                    return t:active()
+                end
+            end
+
+            tag_actives = Util.batch(tag_actives)
+
+            for i, active in ipairs(tag_actives) do
+                if active then
+                    tag = tags[i]
+                    break
+                end
+            end
+
+            if tag then
+                layout_manager:cycle_layout_backward(tag)
+                Layout.request_layout(focused_op)
+            end
+        end
+    end)
+
     -- Enable sloppy focus
     Window.connect_signal({
         pointer_enter = function(window)
             window:set_focused(true)
         end,
     })
+
+    -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
+    Process.spawn_once(terminal)
 end)
