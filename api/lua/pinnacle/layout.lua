@@ -1043,7 +1043,7 @@ end
 ---
 ---If no `LayoutManager` was set, this will do nothing.
 ---
----@param output? OutputHandle
+---@param output OutputHandle?
 function layout.request_layout(output)
     if not layout.stream then
         return
@@ -1064,6 +1064,7 @@ end
 ---Get the active layout generator.
 ---@field get_active fun(self: self, args: LayoutArgs): LayoutGenerator
 
+---@classmod
 ---A `LayoutManager` that keeps track of layouts per tag and provides
 ---methods to cycle between them.
 ---@class CyclingLayoutManager : LayoutManager
