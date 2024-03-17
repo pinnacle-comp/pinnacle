@@ -43,183 +43,59 @@ end
 ---Generate an array of geometries from the given `LayoutArgs`.
 ---@field layout fun(self: self, args: LayoutArgs): { x: integer, y: integer, width: integer, height: integer }[]
 
+---Builtin layout generators.
+---
+---This contains functions that create various builtin generators.
+---@class Builtin
+local builtins = {}
+
+----------------------------------------
+-- Master Stack                       --
+----------------------------------------
+
 ---A `LayoutGenerator` that has one master area to one side
 ---and a stack of windows next to it.
----@class Builtin.MasterStack : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
----@field master_factor number
----@field master_side "left"|"right"|"top"|"bottom"
----@field master_count integer
-
----A `LayoutGenerator` that lays out windows in a shrinking fashion
----towards the bottom right corner.
----@class Builtin.Dwindle : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
----@field split_factors table<integer, number>
-
----A `LayoutGenerator` that has one main corner window and a
----horizontal and vertical stack flanking it on the other two sides.
----@class Builtin.Corner : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
----@field corner_width_factor number
----@field corner_height_factor number
----@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
-
----A `LayoutGenerator` that lays out windows in a spiral.
+---@class Builtin.MasterStack: LayoutGenerator
+---Gaps between windows, in pixels.
 ---
----This is similar to the dwindle layout but in a spiral instead of
----towards the borrom right corner.
----@class Builtin.Spiral : LayoutGenerator
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
 ---@field gaps integer | { inner: integer, outer: integer }
----@field split_factors table<integer, number>
-
----A `LayoutGenerator` that attempts to layout windows such that
----they are the same size.
----@class Builtin.Fair : LayoutGenerator
----@field gaps integer | { inner: integer, outer: integer }
----@field direction "horizontal"|"vertical"
-
-local builtins = {
-    ---@type Builtin.MasterStack
-    master_stack = {
-        ---Gaps between windows, in pixels.
-        ---
-        ---This can be an integer or the table { inner: integer, outer: integer }.
-        ---If it is an integer, all gaps will be that amount of pixels wide.
-        ---If it is a table, `outer` denotes the amount of pixels around the
-        ---edge of the output area that will become a gap, and
-        ---`inner` denotes the amount of pixels around each window that
-        ---will become a gap.
-        ---
-        ---This means that, for example, `inner = 2` will cause the gap
-        ---width between windows to be 4; 2 around each window.
-        ---
-        ---Defaults to 8.
-        gaps = 8,
-        ---The proportion of the output taken up by the master window(s).
-        ---
-        ---This is a float that will be clamped between 0.1 and 0.9
-        ---similarly to River.
-        ---
-        ---Defaults to 0.5.
-        master_factor = 0.5,
-        ---The side the master window(s) will be on.
-        ---
-        ---Defaults to `"left"`.
-        master_side = "left",
-        ---How many windows the master side will have.
-        ---
-        ---Defaults to 1.
-        master_count = 1,
-    },
-
-    ---@type Builtin.Dwindle
-    dwindle = {
-        ---Gaps between windows, in pixels.
-        ---
-        ---This can be an integer or the table { inner: integer, outer: integer }.
-        ---If it is an integer, all gaps will be that amount of pixels wide.
-        ---If it is a table, `outer` denotes the amount of pixels around the
-        ---edge of the output area that will become a gap, and
-        ---`inner` denotes the amount of pixels around each window that
-        ---will become a gap.
-        ---
-        ---This means that, for example, `inner = 2` will cause the gap
-        ---width between windows to be 4; 2 around each window.
-        ---
-        ---Defaults to 8.
-        gaps = 8,
-        ---Factors applied to each split.
-        ---
-        ---The first split will use the factor at [1],
-        ---the second at [2], and so on.
-        ---
-        ---Defaults to 0.5 if there is no factor at [n].
-        split_factors = {},
-    },
-
-    ---@type Builtin.Corner
-    corner = {
-        ---Gaps between windows, in pixels.
-        ---
-        ---This can be an integer or the table { inner: integer, outer: integer }.
-        ---If it is an integer, all gaps will be that amount of pixels wide.
-        ---If it is a table, `outer` denotes the amount of pixels around the
-        ---edge of the output area that will become a gap, and
-        ---`inner` denotes the amount of pixels around each window that
-        ---will become a gap.
-        ---
-        ---This means that, for example, `inner = 2` will cause the gap
-        ---width between windows to be 4; 2 around each window.
-        ---
-        ---Defaults to 8.
-        gaps = 8,
-        ---How much of the output the corner window's width will take up.
-        ---
-        ---Defaults to 0.5.
-        corner_width_factor = 0.5,
-        ---How much of the output the corner window's height will take up.
-        ---
-        ---Defaults to 0.5.
-        corner_height_factor = 0.5,
-        ---Which side the corner window will be in.
-        ---
-        ---Defaults to "top_left".
-        corner_loc = "top_left",
-    },
-
-    ---@type Builtin.Spiral
-    spiral = {
-        ---Gaps between windows, in pixels.
-        ---
-        ---This can be an integer or the table { inner: integer, outer: integer }.
-        ---If it is an integer, all gaps will be that amount of pixels wide.
-        ---If it is a table, `outer` denotes the amount of pixels around the
-        ---edge of the output area that will become a gap, and
-        ---`inner` denotes the amount of pixels around each window that
-        ---will become a gap.
-        ---
-        ---This means that, for example, `inner = 2` will cause the gap
-        ---width between windows to be 4; 2 around each window.
-        ---
-        ---Defaults to 8.
-        gaps = 8,
-        ---Factors applied to each split.
-        ---
-        ---The first split will use the factor at [1],
-        ---the second at [2], and so on.
-        ---
-        ---Defaults to 0.5 if there is no factor at [n].
-        split_factors = {},
-    },
-
-    ---@type Builtin.Fair
-    fair = {
-        ---Gaps between windows, in pixels.
-        ---
-        ---This can be an integer or the table { inner: integer, outer: integer }.
-        ---If it is an integer, all gaps will be that amount of pixels wide.
-        ---If it is a table, `outer` denotes the amount of pixels around the
-        ---edge of the output area that will become a gap, and
-        ---`inner` denotes the amount of pixels around each window that
-        ---will become a gap.
-        ---
-        ---This means that, for example, `inner = 2` will cause the gap
-        ---width between windows to be 4; 2 around each window.
-        ---
-        ---Defaults to 8.
-        gaps = 8,
-        ---The direction of the window lines.
-        ---
-        ---Defaults to "vertical".
-        direction = "vertical",
-    },
+---The proportion of the output taken up by the master window(s).
+---
+---This is a float that will be clamped between 0.1 and 0.9.
+---@field master_factor number
+---The side the master window(s) will be on.
+---@field master_side "left"|"right"|"top"|"bottom"
+---How many windows the master side will have.
+---@field master_count integer
+local MasterStack = {
+    ---Defaults to 8.
+    gaps = 8,
+    ---Defaults to 0.5.
+    master_factor = 0.5,
+    ---Defaults to "left".
+    master_side = "left",
+    ---Defaults to 1.
+    master_count = 1,
 }
 
+---@class Builtin.MasterStack.Args
+---@field gaps? integer | { inner: integer, outer: integer }
+---@field master_factor? number
+---@field master_side? "left"|"right"|"top"|"bottom"
+---@field master_count? integer
+
 ---@param args LayoutArgs
----
 ---@return { x: integer, y: integer, width: integer, height: integer }[]
-function builtins.master_stack:layout(args)
+function MasterStack:layout(args)
     local win_count = #args.windows
 
     if win_count == 0 then
@@ -355,10 +231,59 @@ function builtins.master_stack:layout(args)
     return geos
 end
 
+---Create a master stack layout generator.
+---
+---Pass in `settings` to override the defaults.
+---
+---@param settings? Builtin.MasterStack.Args
+---
+---@return Builtin.MasterStack
+function builtins.master_stack(settings)
+    local master_stack = settings or {}
+    setmetatable(master_stack, { __index = MasterStack })
+    ---@cast master_stack Builtin.MasterStack
+    return master_stack
+end
+
+----------------------------------------
+-- Dwindle                            --
+----------------------------------------
+
+---A `LayoutGenerator` that lays out windows in a shrinking fashion
+---towards the bottom right corner.
+---@class Builtin.Dwindle: LayoutGenerator
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---@field gaps integer | { inner: integer, outer: integer }
+---The proportions that each split will split at.
+---
+---The first split will use the factor at [1],
+---the second at [2], and so on.
+---@field split_factors table<integer, number>
+local Dwindle = {
+    ---Defaults to 8.
+    gaps = 8,
+    ---Defaults to 0.5 if there is no factor at [n].
+    split_factors = {},
+}
+
+---@class Builtin.Dwindle.Args
+---@field gaps? integer | { inner: integer, outer: integer }
+---@field split_factors? table<integer, number>
+
 ---@param args LayoutArgs
 ---
 ---@return { x: integer, y: integer, width: integer, height: integer }[]
-function builtins.dwindle:layout(args)
+function Dwindle:layout(args)
     local win_count = #args.windows
 
     if win_count == 0 then
@@ -438,7 +363,66 @@ function builtins.dwindle:layout(args)
     return geos
 end
 
-function builtins.corner:layout(args)
+---Create a dwindle layout generator.
+---
+---Pass in `settings` to override the defaults.
+---
+---@param settings? Builtin.Dwindle.Args
+---
+---@return Builtin.Dwindle
+function builtins.dwindle(settings)
+    local dwindle = settings or {}
+    setmetatable(dwindle, { __index = Dwindle })
+    ---@cast dwindle Builtin.Dwindle
+    return dwindle
+end
+
+----------------------------------------
+-- Corner                             --
+----------------------------------------
+
+---A `LayoutGenerator` that has one main corner window and a
+---horizontal and vertical stack flanking it on the other two sides.
+---@class Builtin.Corner: LayoutGenerator
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---@field gaps integer | { inner: integer, outer: integer }
+---How much of the output the corner window's width will take up.
+---@field corner_width_factor number
+---How much of the output the corner window's height will take up.
+---@field corner_height_factor number
+---Which corner the corner window will be in.
+---@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
+local Corner = {
+    ---Defaults to 8.
+    gaps = 8,
+    ---Defaults to 0.5.
+    corner_width_factor = 0.5,
+    ---Defaults to 0.5.
+    corner_height_factor = 0.5,
+    ---Defaults to "top_left".
+    corner_loc = "top_left",
+}
+
+---@class Builtin.Corner.Args
+---@field gaps? integer | { inner: integer, outer: integer }
+---@field corner_width_factor? number
+---@field corner_height_factor? number
+---@field corner_loc? "top_left"|"top_right"|"bottom_left"|"bottom_right"
+
+---@param args LayoutArgs
+---
+---@return { x: integer, y: integer, width: integer, height: integer }[]
+function Corner:layout(args)
     local win_count = #args.windows
 
     if win_count == 0 then
@@ -568,9 +552,61 @@ function builtins.corner:layout(args)
     return geos
 end
 
--- Spiral is a copy-paste of dwindle with a minor change, yikes
+---Create a corner layout generator.
+---
+---Pass in `settings` to override the defaults.
+---
+---@param settings? Builtin.Corner.Args
+---
+---@return Builtin.Corner
+function builtins.corner(settings)
+    local corner = settings or {}
+    setmetatable(corner, { __index = Corner })
+    ---@cast corner Builtin.Corner
+    return corner
+end
 
-function builtins.spiral:layout(args)
+----------------------------------------
+-- Spiral                             --
+----------------------------------------
+
+---A `LayoutGenerator` that lays out windows in a spiral.
+---
+---This is similar to the dwindle layout but in a spiral instead of
+---towards the borrom right corner.
+---@class Builtin.Spiral : LayoutGenerator
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---@field gaps integer | { inner: integer, outer: integer }
+---The proportions that each split will split at.
+---
+---The first split will use the factor at [1],
+---the second at [2], and so on.
+---@field split_factors table<integer, number>
+local Spiral = {
+    ---Defaults to 8.
+    gaps = 8,
+    ---Defaults to 0.5 if there is no factor at [n].
+    split_factors = {},
+}
+
+---@class Builtin.Spiral.Args
+---@field gaps? integer | { inner: integer, outer: integer }
+---@field split_factors? table<integer, number>
+
+---@param args LayoutArgs
+---
+---@return { x: integer, y: integer, width: integer, height: integer }[]
+function Spiral:layout(args)
     local win_count = #args.windows
 
     if win_count == 0 then
@@ -655,7 +691,56 @@ function builtins.spiral:layout(args)
     return geos
 end
 
-function builtins.fair:layout(args)
+---Create a spiral layout generator.
+---
+---Pass in `settings` to override the defaults.
+---
+---@param settings? Builtin.Spiral.Args
+---
+---@return Builtin.Spiral
+function builtins.spiral(settings)
+    local spiral = settings or {}
+    setmetatable(spiral, { __index = Spiral })
+    ---@cast spiral Builtin.Spiral
+    return spiral
+end
+
+----------------------------------------
+-- Fair                               --
+----------------------------------------
+
+---A `LayoutGenerator` that attempts to layout windows such that
+---they are the same size.
+---@class Builtin.Fair : LayoutGenerator
+---Gaps between windows, in pixels.
+---
+---This can be an integer or the table { inner: integer, outer: integer }.
+---If it is an integer, all gaps will be that amount of pixels wide.
+---If it is a table, `outer` denotes the amount of pixels around the
+---edge of the output area that will become a gap, and
+---`inner` denotes the amount of pixels around each window that
+---will become a gap.
+---
+---This means that, for example, `inner = 2` will cause the gap
+---width between windows to be 4; 2 around each window.
+---@field gaps integer | { inner: integer, outer: integer }
+---The direction of the window lines.
+---@field direction "horizontal"|"vertical"
+local Fair = {
+    ---Defaults to 8.
+    gaps = 8,
+    ---Defaults to "vertical".
+    direction = "vertical",
+}
+
+---@class Builtin.Fair.Args
+---@field gaps? integer | { inner: integer, outer: integer }
+---@field direction? "horizontal"|"vertical"
+
+---@param args LayoutArgs
+---
+---@return { x: integer, y: integer, width: integer, height: integer }[]
+function Fair:layout(args)
     local win_count = #args.windows
 
     if win_count == 0 then
@@ -794,6 +879,20 @@ function builtins.fair:layout(args)
     return geos
 end
 
+---Create a fair layout generator.
+---
+---Pass in `settings` to override the defaults.
+---
+---@param settings? Builtin.Fair.Args
+---
+---@return Builtin.Fair
+function builtins.fair(settings)
+    local fair = settings or {}
+    setmetatable(fair, { __index = Fair })
+    ---@cast fair Builtin.Fair
+    return fair
+end
+
 ---@class Layout
 ---@field private stream H2Stream?
 local layout = {
@@ -803,6 +902,8 @@ local layout = {
 ---Set the layout manager for this config.
 ---
 ---It will manage layout requests from the compositor.
+---
+---Only one layout manager can manage layouts at a time.
 ---
 ---@param manager LayoutManager
 function layout.set_manager(manager)

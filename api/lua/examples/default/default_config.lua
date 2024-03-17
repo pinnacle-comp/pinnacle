@@ -89,24 +89,19 @@ require("pinnacle").setup(function(Pinnacle)
     -- Layouts        --
     --------------------
 
-    -- TODO: convert layouts into objs, deep_copy doesn't work on fns
-
-    local master_stack_right = Util.deep_copy(Layout.builtins.master_stack)
-    master_stack_right.master_side = "right"
-    local master_stack_top = Util.deep_copy(Layout.builtins.master_stack)
-    master_stack_top.master_side = "top"
-    local master_stack_bottom = Util.deep_copy(Layout.builtins.master_stack)
-    master_stack_bottom.master_side = "bottom"
-
     local layout_manager = Layout.new_cycling_manager({
-        Layout.builtins.master_stack,
-        master_stack_right,
-        master_stack_top,
-        master_stack_bottom,
-        Layout.builtins.dwindle,
-        Layout.builtins.spiral,
-        Layout.builtins.corner,
-        Layout.builtins.fair,
+        Layout.builtins.master_stack(),
+        Layout.builtins.master_stack({ master_side = "right" }),
+        Layout.builtins.master_stack({ master_side = "top" }),
+        Layout.builtins.master_stack({ master_side = "bottom" }),
+        Layout.builtins.dwindle(),
+        Layout.builtins.spiral(),
+        Layout.builtins.corner(),
+        Layout.builtins.corner({ corner_loc = "top_right" }),
+        Layout.builtins.corner({ corner_loc = "bottom_left" }),
+        Layout.builtins.corner({ corner_loc = "bottom_right" }),
+        Layout.builtins.fair(),
+        Layout.builtins.fair({ direction = "horizontal" }),
     })
 
     Layout.set_manager(layout_manager)
