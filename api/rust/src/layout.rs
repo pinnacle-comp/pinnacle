@@ -29,7 +29,7 @@ use crate::{
     OUTPUT, TAG, WINDOW,
 };
 
-/// A struct that allows you to add and remove tags and get [`TagHandle`]s.
+/// A struct that allows you to manage layouts.
 #[derive(Clone, Debug)]
 pub struct Layout {
     layout_client: LayoutServiceClient<Channel>,
