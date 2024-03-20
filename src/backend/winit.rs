@@ -22,7 +22,10 @@ use smithay::{
         },
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
-        winit::window::{Icon, WindowBuilder},
+        winit::{
+            platform::pump_events::PumpStatus,
+            window::{Icon, WindowBuilder},
+        },
     },
     utils::{IsAlive, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
@@ -39,7 +42,6 @@ const LOGO_BYTES: &[u8] = include_bytes!("../../resources/pinnacle_logo_icon.rgb
 
 pub struct Winit {
     pub backend: WinitGraphicsBackend<GlesRenderer>,
-    pub current_refresh: Option<u32>,
     pub damage_tracker: OutputDamageTracker,
     pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     pub full_redraw: u8,
@@ -58,11 +60,6 @@ impl BackendData for Winit {
 }
 
 impl Backend {
-    fn winit(&self) -> &Winit {
-        let Backend::Winit(winit) = self else { unreachable!() };
-        winit
-    }
-
     fn winit_mut(&mut self) -> &mut Winit {
         let Backend::Winit(winit) = self else { unreachable!() };
         winit
@@ -85,7 +82,7 @@ pub fn setup_winit(
         .with_title("Pinnacle")
         .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
 
-    let (mut winit_backend, winit_evt_loop) =
+    let (mut winit_backend, mut winit_evt_loop) =
         match winit::init_from_builder::<GlesRenderer>(window_builder) {
             Ok(ret) => ret,
             Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
@@ -93,7 +90,7 @@ pub fn setup_winit(
 
     let mode = smithay::output::Mode {
         size: winit_backend.window_size(),
-        refresh: 60_000,
+        refresh: 144_000,
     };
 
     let physical_properties = smithay::output::PhysicalProperties {
@@ -103,7 +100,7 @@ pub fn setup_winit(
         model: "Winit Window".to_string(),
     };
 
-    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
+    let output = Output::new("Pinnacle window".to_string(), physical_properties);
 
     output.create_global::<State>(&display_handle);
 
@@ -168,14 +165,8 @@ pub fn setup_winit(
         tracing::info!("EGL hardware-acceleration enabled");
     }
 
-    let current_refresh = winit_backend
-        .window()
-        .current_monitor()
-        .and_then(|mon| mon.refresh_rate_millihertz());
-
     let backend = Backend::Winit(Winit {
         backend: winit_backend,
-        current_refresh,
         damage_tracker: OutputDamageTracker::from_output(&output),
         dmabuf_state,
         full_redraw: 0,
@@ -210,85 +201,49 @@ pub fn setup_winit(
         tracing::error!("Failed to start XWayland: {err}");
     }
 
-    let output_clone = output.clone();
-
-    if let Err(err) = state
-        .loop_handle
-        .insert_source(winit_evt_loop, move |event, _, state| match event {
-            WinitEvent::Resized {
-                size,
-                scale_factor: _, // TODO:
-            } => {
-                let current_refresh = output
-                    .current_mode()
-                    .map(|mode| mode.refresh)
-                    .unwrap_or(60_000);
-                output.change_current_state(
-                    Some(smithay::output::Mode {
-                        size,
-                        refresh: current_refresh,
-                    }),
-                    None,
-                    None,
-                    None,
-                );
-                layer_map_for_output(&output).arrange();
-                state.request_layout(&output);
-            }
-            WinitEvent::Focus(_) => {}
-            WinitEvent::Input(input_evt) => {
-                state.process_input_event(input_evt);
-            }
-            WinitEvent::Redraw => {
-                state.render_winit_window(&output);
-            }
-            WinitEvent::CloseRequested => {
-                state.shutdown();
-            }
-        })
-    {
-        anyhow::bail!("Failed to insert winit loop into event loop: {err}");
-    }
-
-    if let Err(err) =
+    let insert_ret =
         state
             .loop_handle
-            .insert_source(Timer::immediate(), move |_instant, _, state| {
-                let window = state.backend.winit().backend.window();
-                window.request_redraw();
+            .insert_source(Timer::immediate(), move |_instant, _metadata, state| {
+                let status = winit_evt_loop.dispatch_new_events(|event| match event {
+                    WinitEvent::Resized {
+                        size,
+                        scale_factor: _,
+                    } => {
+                        output.change_current_state(
+                            Some(smithay::output::Mode {
+                                size,
+                                refresh: 144_000,
+                            }),
+                            None,
+                            None,
+                            None,
+                        );
+                        layer_map_for_output(&output).arrange();
+                        state.request_layout(&output);
+                    }
+                    WinitEvent::Focus(_) => {}
+                    WinitEvent::Input(input_evt) => {
+                        state.process_input_event(input_evt);
+                    }
+                    WinitEvent::Redraw => {
+                        state.render_winit_window(&output);
+                    }
+                    WinitEvent::CloseRequested => {
+                        state.shutdown();
+                    }
+                });
 
-                let refresh_rate = window
-                    .current_monitor()
-                    .and_then(|mon| mon.refresh_rate_millihertz());
-
-                if state.backend.winit().current_refresh != refresh_rate {
-                    let current_size = output_clone
-                        .current_mode()
-                        .map(|mode| mode.size)
-                        .unwrap_or_else(|| {
-                            (
-                                window.inner_size().width as i32,
-                                window.inner_size().height as i32,
-                            )
-                                .into()
-                        });
-                    output_clone.change_current_state(
-                        Some(smithay::output::Mode {
-                            size: current_size,
-                            refresh: refresh_rate.unwrap_or(60_000) as i32,
-                        }),
-                        None,
-                        None,
-                        None,
-                    );
+                if let PumpStatus::Exit(_) = status {
+                    state.shutdown();
                 }
 
-                TimeoutAction::ToDuration(Duration::from_secs_f64(
-                    1000.0 / refresh_rate.unwrap_or(60_000) as f64,
-                ))
-            })
-    {
-        anyhow::bail!("Failed to insert redraw request loop into event loop: {err}");
+                state.render_winit_window(&output);
+
+                TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
+            });
+    if let Err(err) = insert_ret {
+        anyhow::bail!("Failed to insert winit events into event loop: {err}");
     }
 
     Ok((state, event_loop))
@@ -357,8 +312,7 @@ impl State {
             Ok(render_output_result) => {
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
-                    winit.backend.window().pre_present_notify();
-
+                    // tracing::debug!("damage rects are {damage:?}");
                     if let Err(err) = winit.backend.submit(Some(&damage)) {
                         tracing::warn!("{}", err);
                     }
