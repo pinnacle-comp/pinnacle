@@ -286,6 +286,8 @@ impl State {
 
         self.update_windows_with_geometries(&output, geometries);
 
+        self.schedule_render(&output);
+
         Ok(())
     }
 }
