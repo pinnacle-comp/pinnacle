@@ -6,7 +6,7 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             window_service_server, AddWindowRuleRequest, CloseRequest, FullscreenOrMaximized,
-            MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
+            MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest, SetFloatingRequest,
             SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
             SetTagRequest, WindowRule, WindowRuleCondition,
         },
@@ -429,6 +429,26 @@ impl window_service_server::WindowService for WindowService {
             let Some(output) = tag.output(state) else { return };
             state.request_layout(&output);
             state.schedule_render(&output);
+        })
+        .await
+    }
+
+    async fn raise(&self, request: Request<RaiseRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(
+            request
+                .window_id
+                .ok_or_else(|| Status::invalid_argument("no window specified"))?,
+        );
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(window) = window_id.window(state) else {
+                warn!("`raise` was called on a nonexistent window");
+                return;
+            };
+
+            state.raise_window(window, false);
         })
         .await
     }

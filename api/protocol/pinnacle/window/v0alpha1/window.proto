@@ -46,6 +46,12 @@ message SetTagRequest {
   optional .pinnacle.v0alpha1.SetOrToggle set_or_toggle = 3;
 }
 
+// Raise a window.
+message RaiseRequest {
+  // The id of the window to raise.
+  optional uint32 window_id = 1;
+}
+
 message MoveGrabRequest {
   optional uint32 button = 1;
 }
@@ -53,6 +59,7 @@ message MoveGrabRequest {
 message ResizeGrabRequest {
   optional uint32 button = 1;
 }
+
 
 message GetRequest {}
 message GetResponse {
@@ -115,6 +122,7 @@ service WindowService {
   rpc SetFocused(SetFocusedRequest) returns (google.protobuf.Empty);
   rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
   rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
+  rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
   rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
   rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
 

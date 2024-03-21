@@ -54,6 +54,7 @@ require("pinnacle").setup(function(Pinnacle)
         local focused = Window.get_focused()
         if focused then
             focused:toggle_floating()
+            focused:raise()
         end
     end)
 
@@ -62,6 +63,7 @@ require("pinnacle").setup(function(Pinnacle)
         local focused = Window.get_focused()
         if focused then
             focused:toggle_fullscreen()
+            focused:raise()
         end
     end)
 
@@ -70,6 +72,7 @@ require("pinnacle").setup(function(Pinnacle)
         local focused = Window.get_focused()
         if focused then
             focused:toggle_maximized()
+            focused:raise()
         end
     end)
 

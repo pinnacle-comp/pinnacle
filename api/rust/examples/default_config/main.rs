@@ -69,6 +69,7 @@ async fn main() {
     input.keybind([mod_key, Mod::Alt], Keysym::space, || {
         if let Some(window) = window.get_focused() {
             window.toggle_floating();
+            window.raise();
         }
     });
 
@@ -76,6 +77,7 @@ async fn main() {
     input.keybind([mod_key], 'f', || {
         if let Some(window) = window.get_focused() {
             window.toggle_fullscreen();
+            window.raise();
         }
     });
 
@@ -83,6 +85,7 @@ async fn main() {
     input.keybind([mod_key], 'm', || {
         if let Some(window) = window.get_focused() {
             window.toggle_maximized();
+            window.raise();
         }
     });
 

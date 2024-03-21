@@ -19,6 +19,7 @@ local rpc_types = {
     SetFocused = {},
     MoveToTag = {},
     SetTag = {},
+    Raise = {},
     MoveGrab = {},
     ResizeGrab = {},
     Get = {
@@ -631,6 +632,21 @@ function WindowHandle:toggle_tag(tag)
             { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
         )
     )
+end
+
+---Raise a window.
+---
+---This will raise a window all the way to the top of the z-stack.
+---
+---### Example
+---```lua
+---local focused = Window.get_focused()
+---if focused then
+---    focused:raise()
+---end
+---```
+function WindowHandle:raise()
+    client.unary_request(build_grpc_request_params("Raise", { window_id = self.id }))
 end
 
 ---@class WindowProperties

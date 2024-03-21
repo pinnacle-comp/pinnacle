@@ -56,6 +56,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
+use tracing::error;
 
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
@@ -504,14 +505,15 @@ impl WlrLayerShellHandler for State {
             .or_else(|| self.space.outputs().next().cloned());
 
         let Some(output) = output else {
-            tracing::error!("New layer surface, but there was no output to map it on");
+            error!("New layer surface, but there was no output to map it on");
             return;
         };
 
-        let mut map = layer_map_for_output(&output);
-        map.map_layer(&desktop::LayerSurface::new(surface, namespace))
-            .expect("failed to map layer surface");
-        drop(map); // wow i really love refcells haha
+        if let Err(err) =
+            layer_map_for_output(&output).map_layer(&desktop::LayerSurface::new(surface, namespace))
+        {
+            error!("Failed to map layer surface: {err}");
+        }
 
         self.loop_handle.insert_idle(move |state| {
             state.request_layout(&output);

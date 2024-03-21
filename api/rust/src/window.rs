@@ -20,8 +20,9 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
-            GetRequest, MoveGrabRequest, MoveToTagRequest, ResizeGrabRequest, SetFloatingRequest,
-            SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
+            GetRequest, MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
+            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest,
+            SetTagRequest,
         },
     },
 };
@@ -498,6 +499,24 @@ impl WindowHandle {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
+        }))
+        .unwrap();
+    }
+
+    /// Raise this window.
+    ///
+    /// This will raise this window all the way to the top of the z-stack.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// window.get_focused()?.raise();
+    /// ```
+    pub fn raise(&self) {
+        let mut client = self.window_client.clone();
+
+        block_on_tokio(client.raise(RaiseRequest {
+            window_id: Some(self.id),
         }))
         .unwrap();
     }
