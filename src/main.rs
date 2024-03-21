@@ -130,6 +130,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     event_loop.run(None, &mut state, |state| {
+        state.update_pointer_focus();
         state.fixup_z_layering();
         state.space.refresh();
         state.popup_manager.cleanup();

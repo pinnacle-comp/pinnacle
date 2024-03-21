@@ -2,7 +2,7 @@
 
 pub mod libinput;
 
-use std::{collections::HashMap, mem::Discriminant};
+use std::{collections::HashMap, mem::Discriminant, time::Duration};
 
 use crate::{focus::pointer::PointerFocusTarget, state::WithState};
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
@@ -251,6 +251,34 @@ impl State {
         } else {
             None
         }
+    }
+
+    /// Update the pointer focus if it's different from the previous one.
+    pub fn update_pointer_focus(&mut self) {
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+
+        let location = pointer.current_location();
+        let surface_under = self.pointer_focus_target_under(location);
+
+        if pointer
+            .current_focus()
+            .is_some_and(|foc| matches!(&surface_under, Some((f, _)) if f == &foc))
+        {
+            return;
+        }
+
+        pointer.motion(
+            self,
+            surface_under,
+            &MotionEvent {
+                location,
+                serial: SERIAL_COUNTER.next_serial(),
+                time: Duration::from(self.clock.now()).as_millis() as u32,
+            },
+        );
+        pointer.frame(self);
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
@@ -518,9 +546,11 @@ impl State {
             self.output_focus_stack.set_focus(output);
         }
 
+        let pointer_focus = self.pointer_focus_target_under(pointer_loc);
+
         pointer.motion(
             self,
-            self.pointer_focus_target_under(pointer_loc),
+            pointer_focus,
             &MotionEvent {
                 location: pointer_loc,
                 serial,
@@ -536,6 +566,7 @@ impl State {
             tracing::error!("Pointer motion received with no pointer on seat");
             return;
         };
+
         let mut pointer_loc = pointer.current_location();
         pointer_loc += event.delta();
 
@@ -549,32 +580,30 @@ impl State {
 
         let surface_under = self.pointer_focus_target_under(pointer_loc);
 
-        if let Some(pointer) = self.seat.get_pointer() {
-            pointer.motion(
-                self,
-                surface_under.clone(),
-                &MotionEvent {
-                    location: pointer_loc,
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
-                },
-            );
+        pointer.motion(
+            self,
+            surface_under.clone(),
+            &MotionEvent {
+                location: pointer_loc,
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+            },
+        );
 
-            pointer.relative_motion(
-                self,
-                surface_under,
-                &RelativeMotionEvent {
-                    delta: event.delta(),
-                    delta_unaccel: event.delta_unaccel(),
-                    utime: event.time(),
-                },
-            );
+        pointer.relative_motion(
+            self,
+            surface_under,
+            &RelativeMotionEvent {
+                delta: event.delta(),
+                delta_unaccel: event.delta_unaccel(),
+                utime: event.time(),
+            },
+        );
 
-            pointer.frame(self);
+        pointer.frame(self);
 
-            if let Some(output) = self.focused_output().cloned() {
-                self.schedule_render(&output);
-            }
+        if let Some(output) = self.focused_output().cloned() {
+            self.schedule_render(&output);
         }
     }
 }

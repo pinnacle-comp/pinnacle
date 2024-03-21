@@ -620,6 +620,7 @@ enum RenderState {
         /// The idle token from a render being scheduled.
         /// This is used to cancel renders if, for example,
         /// the output being rendered is removed.
+        #[allow(dead_code)] // TODO:
         Idle<'static>,
     ),
     /// A frame was rendered and scheduled and we are waiting for vblank.
