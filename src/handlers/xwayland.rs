@@ -341,6 +341,9 @@ impl XwmHandler for State {
 
         if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
             window.toggle_fullscreen();
+            if let Some(output) = window.output(self) {
+                self.request_layout(&output);
+            }
         }
     }
 
@@ -358,6 +361,9 @@ impl XwmHandler for State {
 
         if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
             window.toggle_fullscreen();
+            if let Some(output) = window.output(self) {
+                self.request_layout(&output);
+            }
         }
     }
 
