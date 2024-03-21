@@ -277,6 +277,23 @@ impl State {
             }
         };
 
+        // Clear state
+
+        debug!("Clearing tags");
+        for output in self.space.outputs() {
+            output.with_state_mut(|state| state.tags.clear());
+        }
+
+        TagId::reset();
+
+        debug!("Clearing input state");
+
+        self.input_state.clear();
+
+        self.config.clear(&self.loop_handle);
+
+        self.signal_state.clear();
+
         let reload_keybind = metaconfig.reload_keybind;
         let kill_keybind = metaconfig.kill_keybind;
 
@@ -295,23 +312,6 @@ impl State {
         }
 
         assert!(!self.config.no_config);
-
-        // Clear state
-
-        debug!("Clearing tags");
-        for output in self.space.outputs() {
-            output.with_state_mut(|state| state.tags.clear());
-        }
-
-        TagId::reset();
-
-        debug!("Clearing input state");
-
-        self.input_state.clear();
-
-        self.config.clear(&self.loop_handle);
-
-        self.signal_state.clear();
 
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
