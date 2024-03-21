@@ -267,7 +267,7 @@ impl State {
         let mut pointer_element = PointerElement::<GlesTexture>::new();
         pointer_element.set_status(self.cursor_status.clone());
 
-        // The z-index of these is determined by `state.fixup_focus()`, which is called at the end
+        // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
@@ -304,7 +304,7 @@ impl State {
                 .render_output(renderer, age, &output_render_elements, [0.6, 0.6, 0.6, 1.0])
                 .map_err(|err| match err {
                     damage::Error::Rendering(err) => err.into(),
-                    damage::Error::OutputNoMode(_) => todo!(),
+                    damage::Error::OutputNoMode(_) => panic!("winit output has no mode set"),
                 })
         });
 
@@ -312,7 +312,6 @@ impl State {
             Ok(render_output_result) => {
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
-                    // tracing::debug!("damage rects are {damage:?}");
                     if let Err(err) = winit.backend.submit(Some(&damage)) {
                         tracing::warn!("{}", err);
                     }

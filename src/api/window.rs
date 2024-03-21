@@ -92,10 +92,7 @@ impl window_service_server::WindowService for WindowService {
             let Some(window) = window_id.window(state) else { return };
 
             // TODO: with no x or y, defaults unmapped windows to 0, 0
-            let mut window_loc = state
-                .space
-                .element_location(&window)
-                .unwrap_or((x.unwrap_or_default(), y.unwrap_or_default()).into());
+            let mut window_loc = state.space.element_location(&window).unwrap_or_default();
             window_loc.x = x.unwrap_or(window_loc.x);
             window_loc.y = y.unwrap_or(window_loc.y);
 
@@ -104,7 +101,7 @@ impl window_service_server::WindowService for WindowService {
             window_size.h = height.unwrap_or(window_size.h);
 
             let rect = Rectangle::from_loc_and_size(window_loc, window_size);
-            // window.change_geometry(rect);
+
             window.with_state_mut(|state| {
                 use crate::window::window_state::FloatingOrTiled;
                 state.floating_or_tiled = match state.floating_or_tiled {
@@ -349,7 +346,6 @@ impl window_service_server::WindowService for WindowService {
                 }
             }
 
-            state.request_layout(&output);
             state.schedule_render(&output);
         })
         .await

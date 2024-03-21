@@ -589,13 +589,11 @@ impl XdgShellHandler for State {
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
         tracing::debug!("move_request_client");
-        const BUTTON_LEFT: u32 = 0x110; // We assume the left mouse button is used
         crate::grab::move_grab::move_request_client(
             self,
             surface.wl_surface(),
             &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
-            BUTTON_LEFT,
         );
     }
 

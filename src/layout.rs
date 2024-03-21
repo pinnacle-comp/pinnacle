@@ -11,7 +11,7 @@ use smithay::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
-use tracing::error;
+use tracing::warn;
 
 use crate::{
     output::OutputName,
@@ -23,7 +23,7 @@ use crate::{
 };
 
 impl State {
-    pub fn update_windows_with_geometries(
+    fn update_windows_with_geometries(
         &mut self,
         output: &Output,
         geometries: Vec<Rectangle<i32, Logical>>,
@@ -56,11 +56,20 @@ impl State {
             map.non_exclusive_zone()
         };
 
-        for (win, geo) in tiled_windows.zip(geometries.into_iter().map(|mut geo| {
+        let mut zipped = tiled_windows.zip(geometries.into_iter().map(|mut geo| {
             geo.loc += output_geo.loc + non_exclusive_geo.loc;
             geo
-        })) {
+        }));
+
+        for (win, geo) in zipped.by_ref() {
             win.change_geometry(geo);
+        }
+
+        let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
+
+        for win in remaining_wins {
+            assert!(win.with_state(|state| state.floating_or_tiled.is_floating()));
+            win.toggle_floating();
         }
 
         for window in windows_on_foc_tags.iter() {
@@ -156,7 +165,7 @@ pub struct LayoutState {
 impl State {
     pub fn request_layout(&mut self, output: &Output) {
         let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
-            error!("Layout requested but no client has connected to the layout service");
+            warn!("Layout requested but no client has connected to the layout service");
             return;
         };
 

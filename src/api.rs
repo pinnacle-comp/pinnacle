@@ -38,7 +38,7 @@ use tokio::{
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
     config::ConnectorSavedState,
@@ -230,19 +230,19 @@ impl input_service_server::InputService for InputService {
         use pinnacle_api_defs::pinnacle::input::v0alpha1::set_keybind_request::Key;
         let keysym = match key {
             Key::RawCode(num) => {
-                tracing::info!("set keybind: {:?}, raw {}", modifiers, num);
+                debug!("Set keybind: {:?}, raw {}", modifiers, num);
                 xkbcommon::xkb::Keysym::new(num)
             }
             Key::XkbName(s) => {
                 if s.chars().count() == 1 {
                     let Some(ch) = s.chars().next() else { unreachable!() };
                     let keysym = xkbcommon::xkb::Keysym::from_char(ch);
-                    tracing::info!("set keybind: {:?}, {:?}", modifiers, keysym);
+                    debug!("Set keybind: {:?}, {:?}", modifiers, keysym);
                     keysym
                 } else {
                     let keysym =
                         xkbcommon::xkb::keysym_from_name(&s, xkbcommon::xkb::KEYSYM_NO_FLAGS);
-                    tracing::info!("set keybind: {:?}, {:?}", modifiers, keysym);
+                    debug!("Set keybind: {:?}, {:?}", modifiers, keysym);
                     keysym
                 }
             }
@@ -262,7 +262,7 @@ impl input_service_server::InputService for InputService {
     ) -> Result<Response<Self::SetMousebindStream>, Status> {
         let request = request.into_inner();
 
-        tracing::debug!(request = ?request);
+        debug!(request = ?request);
 
         let modifiers = request
             .modifiers()
@@ -508,7 +508,7 @@ impl process_service_server::ProcessService for ProcessService {
         &self,
         request: Request<SpawnRequest>,
     ) -> Result<Response<Self::SpawnStream>, Status> {
-        tracing::debug!("ProcessService.spawn");
+        debug!("ProcessService.spawn");
         let request = request.into_inner();
 
         let once = request.once();
@@ -780,7 +780,7 @@ impl tag_service_server::TagService for TagService {
             {
                 output.with_state_mut(|state| {
                     state.tags.extend(new_tags.clone());
-                    tracing::debug!("tags added, are now {:?}", state.tags);
+                    debug!("tags added, are now {:?}", state.tags);
                 });
             }
 
@@ -938,7 +938,7 @@ impl output_service_server::OutputService for OutputService {
             }
             output.change_current_state(None, None, None, Some(loc));
             state.space.map_output(&output, loc);
-            tracing::debug!("Mapping output {} to {loc:?}", output.name());
+            debug!("Mapping output {} to {loc:?}", output.name());
             state.request_layout(&output);
         })
         .await

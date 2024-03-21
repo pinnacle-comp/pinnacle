@@ -6,14 +6,17 @@ use smithay::{
     // |     input::keyboard
     input::{
         pointer::{
-            AxisFrame, ButtonEvent, Focus, GrabStartData, MotionEvent, PointerGrab,
-            PointerInnerHandle, RelativeMotionEvent,
+            AxisFrame, ButtonEvent, Focus, GestureHoldBeginEvent, GestureHoldEndEvent,
+            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
+            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, GrabStartData,
+            MotionEvent, PointerGrab, PointerInnerHandle, RelativeMotionEvent,
         },
         Seat, SeatHandler,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
 };
+use tracing::{debug, warn};
 
 use crate::{
     state::{State, WithState},
@@ -26,8 +29,6 @@ pub struct MoveSurfaceGrab {
     /// The window being moved
     pub window: WindowElement,
     pub initial_window_loc: Point<i32, Logical>,
-    /// Which button initiated the grab
-    pub button_used: u32,
 }
 
 impl PointerGrab<State> for MoveSurfaceGrab {
@@ -103,22 +104,13 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     return;
                 }
 
-                let is_floating =
-                    window_under.with_state(|state| state.floating_or_tiled.is_floating());
-
-                if is_floating {
+                if window_under.with_state(|state| {
+                    state.floating_or_tiled.is_floating() || state.target_loc.is_some()
+                }) {
                     return;
                 }
 
-                // let has_pending_resize = window_under.with_state(|state| {
-                //     !matches!(state.loc_request_state, LocationRequestState::Idle)
-                // });
-                //
-                // if has_pending_resize {
-                //     return;
-                // }
-
-                tracing::debug!("Swapping window positions");
+                debug!("Swapping window positions");
                 state.swap_window_positions(&self.window, &window_under);
             }
         } else {
@@ -174,7 +166,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
     ) {
         handle.button(data, event);
 
-        if !handle.current_pressed().contains(&self.button_used) {
+        if !handle.current_pressed().contains(&self.start_data.button) {
             handle.unset_grab(data, event.serial, event.time, true);
         }
     }
@@ -194,74 +186,74 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
     fn gesture_swipe_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeBeginEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_begin(data, event);
     }
 
     fn gesture_swipe_update(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeUpdateEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeUpdateEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_update(data, event);
     }
 
     fn gesture_swipe_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeEndEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_end(data, event);
     }
 
     fn gesture_pinch_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchBeginEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_begin(data, event);
     }
 
     fn gesture_pinch_update(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchUpdateEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchUpdateEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_update(data, event);
     }
 
     fn gesture_pinch_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchEndEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_end(data, event);
     }
 
     fn gesture_hold_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureHoldBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureHoldBeginEvent,
     ) {
-        todo!()
+        handle.gesture_hold_begin(data, event);
     }
 
     fn gesture_hold_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureHoldEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureHoldEndEvent,
     ) {
-        todo!()
+        handle.gesture_hold_end(data, event);
     }
 }
 
@@ -271,12 +263,11 @@ pub fn move_request_client(
     surface: &WlSurface,
     seat: &Seat<State>,
     serial: Serial,
-    button_used: u32,
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
     if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
         let Some(window) = state.window_for_surface(surface) else {
-            tracing::error!("Surface had no window, cancelling move request");
+            warn!("Surface had no window, cancelling move request");
             return;
         };
 
@@ -289,12 +280,11 @@ pub fn move_request_client(
             start_data,
             window,
             initial_window_loc,
-            button_used,
         };
 
         pointer.set_grab(state, grab, serial, Focus::Clear);
     } else {
-        tracing::warn!("no grab start data");
+        debug!("No grab start data for grab, cancelling");
     }
 }
 
@@ -308,7 +298,7 @@ pub fn move_request_server(
 ) {
     let pointer = seat.get_pointer().expect("seat had no pointer");
     let Some(window) = state.window_for_surface(surface) else {
-        tracing::error!("Surface had no window, cancelling move request");
+        warn!("Surface had no window, cancelling move request");
         return;
     };
 
@@ -329,7 +319,6 @@ pub fn move_request_server(
         start_data,
         window,
         initial_window_loc,
-        button_used,
     };
 
     pointer.set_grab(state, grab, serial, Focus::Clear);

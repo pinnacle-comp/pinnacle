@@ -3,7 +3,12 @@
 use smithay::{
     desktop::{space::SpaceElement, WindowSurface},
     input::{
-        pointer::{AxisFrame, ButtonEvent, Focus, GrabStartData, PointerGrab, PointerInnerHandle},
+        pointer::{
+            AxisFrame, ButtonEvent, Focus, GestureHoldBeginEvent, GestureHoldEndEvent,
+            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
+            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, GrabStartData,
+            PointerGrab, PointerInnerHandle,
+        },
         Seat, SeatHandler,
     },
     reexports::{
@@ -136,19 +141,11 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                 let data = states.cached_state.current::<SurfaceCachedState>();
                 (data.min_size, data.max_size)
             }),
-            None => ((0, 0).into(), (0, 0).into()),
+            None => (Size::default(), Size::default()),
         };
 
-        // HACK: Here I set the min height to be self.window.geometry().loc.y.abs() because if it's
-        // |     lower then the compositor crashes trying to create a size with height -1 if you make the
-        // |     window height too small.
-        // |     However I don't know if the loc.y from window.geometry will always be the negative
-        // |     of the csd height.
         let min_width = i32::max(1, min_size.w);
-        let min_height = i32::max(
-            i32::max(0, self.window.geometry().loc.y.abs()) + 1,
-            min_size.h,
-        );
+        let min_height = i32::max(1, min_size.h);
 
         let max_width = if max_size.w != 0 { max_size.w } else { i32::MAX };
         let max_height = if max_size.h != 0 { max_size.h } else { i32::MAX };
@@ -254,74 +251,74 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
     fn gesture_swipe_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeBeginEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_begin(data, event);
     }
 
     fn gesture_swipe_update(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeUpdateEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeUpdateEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_update(data, event);
     }
 
     fn gesture_swipe_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureSwipeEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureSwipeEndEvent,
     ) {
-        todo!()
+        handle.gesture_swipe_end(data, event);
     }
 
     fn gesture_pinch_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchBeginEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_begin(data, event);
     }
 
     fn gesture_pinch_update(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchUpdateEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchUpdateEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_update(data, event);
     }
 
     fn gesture_pinch_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GesturePinchEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GesturePinchEndEvent,
     ) {
-        todo!()
+        handle.gesture_pinch_end(data, event);
     }
 
     fn gesture_hold_begin(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureHoldBeginEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureHoldBeginEvent,
     ) {
-        todo!()
+        handle.gesture_hold_begin(data, event);
     }
 
     fn gesture_hold_end(
         &mut self,
-        _data: &mut State,
-        _handle: &mut PointerInnerHandle<'_, State>,
-        _event: &smithay::input::pointer::GestureHoldEndEvent,
+        data: &mut State,
+        handle: &mut PointerInnerHandle<'_, State>,
+        event: &GestureHoldEndEvent,
     ) {
-        todo!()
+        handle.gesture_hold_end(data, event);
     }
 }
 
