@@ -4,7 +4,10 @@ pub mod libinput;
 
 use std::{collections::HashMap, mem::Discriminant, time::Duration};
 
-use crate::{focus::pointer::PointerFocusTarget, state::WithState};
+use crate::{
+    focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
+    state::WithState,
+};
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
     set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
     SetMousebindResponse,
@@ -20,8 +23,11 @@ use smithay::{
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
     reexports::input::{self, Led},
-    utils::{Logical, Point, SERIAL_COUNTER},
-    wayland::shell::wlr_layer,
+    utils::{IsAlive, Logical, Point, SERIAL_COUNTER},
+    wayland::{
+        compositor,
+        shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
+    },
 };
 use tokio::sync::mpsc::UnboundedSender;
 use xkbcommon::xkb::Keysym;
@@ -91,6 +97,11 @@ pub struct InputState {
     >,
     #[allow(clippy::type_complexity)]
     pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
+
+    /// A keyboard focus target stack that is used when there are exclusive keyboard layer
+    /// surfaces. When used, the first item is the previous focus before there were any
+    /// exclusive layer surfaces.
+    exclusive_layer_focus_stack: Vec<KeyboardFocusTarget>,
 }
 
 impl InputState {
@@ -306,6 +317,62 @@ impl State {
             device.led_update(leds);
         }
 
+        for layer in self.layer_shell_state.layer_surfaces().rev() {
+            let data = compositor::with_states(layer.wl_surface(), |states| {
+                *states.cached_state.current::<LayerSurfaceCachedState>()
+            });
+            if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
+                && matches!(
+                    data.layer,
+                    wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
+                )
+            {
+                let layer_surface = self.space.outputs().find_map(|op| {
+                    let map = layer_map_for_output(op);
+                    let cloned = map.layers().find(|l| l.layer_surface() == &layer).cloned();
+                    cloned
+                });
+
+                if let Some(layer_surface) = layer_surface {
+                    match self.input_state.exclusive_layer_focus_stack.last() {
+                        Some(focus) => {
+                            let layer_focus = KeyboardFocusTarget::LayerSurface(layer_surface);
+                            if &layer_focus != focus {
+                                self.input_state
+                                    .exclusive_layer_focus_stack
+                                    .push(layer_focus);
+                            }
+                        }
+                        // Push the previous focus on as this is the first exclusive layer surface
+                        // on screen. This lets us restore it when that layer surface goes away.
+                        None => {
+                            self.input_state
+                                .exclusive_layer_focus_stack
+                                .extend(keyboard.current_focus());
+                            self.input_state
+                                .exclusive_layer_focus_stack
+                                .push(KeyboardFocusTarget::LayerSurface(layer_surface));
+                        }
+                    }
+                }
+            }
+        }
+
+        while let Some(last) = self.input_state.exclusive_layer_focus_stack.pop() {
+            if last.alive() {
+                // If it's not empty then there's another exclusive layer surface
+                // underneath. Otherwise `last` is the previous keyboard focus
+                // and we don't need the stack anymore.
+                if !self.input_state.exclusive_layer_focus_stack.is_empty() {
+                    self.input_state
+                        .exclusive_layer_focus_stack
+                        .push(last.clone());
+                }
+                keyboard.set_focus(self, Some(last), serial);
+                break;
+            }
+        }
+
         let action = keyboard.input(
             self,
             event.key_code(),
@@ -313,7 +380,6 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
-                // tracing::debug!(keysym = ?keysym, raw_keysyms = ?keysym.raw_syms(), modified_syms = ?keysym.modified_syms());
                 if press_state == KeyState::Pressed {
                     let mod_mask = ModifierMask::from(modifiers);
 
