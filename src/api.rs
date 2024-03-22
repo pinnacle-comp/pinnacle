@@ -24,7 +24,7 @@ use pinnacle_api_defs::pinnacle::{
             SwitchToRequest,
         },
     },
-    v0alpha1::{pinnacle_service_server, QuitRequest, SetOrToggle},
+    v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
 };
 use smithay::{
     input::keyboard::XkbConfig,
@@ -181,6 +181,11 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
             state.shutdown();
         })
         .await
+    }
+
+    async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
+        let payload = request.into_inner().payload;
+        Ok(Response::new(PingResponse { payload }))
     }
 }
 

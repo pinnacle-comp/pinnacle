@@ -1802,6 +1802,7 @@ dependencies = [
  "num_enum",
  "pinnacle-api-defs",
  "pinnacle-api-macros",
+ "rand",
  "tokio",
  "tokio-stream",
  "tonic",

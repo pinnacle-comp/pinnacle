@@ -80,13 +80,9 @@
 //! ## 5. Begin crafting your config!
 //! You can peruse the documentation for things to configure.
 
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Duration};
 
-use futures::{
-    future::{BoxFuture, Either},
-    stream::FuturesUnordered,
-    Future, StreamExt,
-};
+use futures::{future::BoxFuture, Future, StreamExt};
 use input::Input;
 use layout::Layout;
 use output::Output;
@@ -151,7 +147,8 @@ pub struct ApiModules {
 /// You should use that macro instead of this function directly.
 pub async fn connect(
 ) -> Result<(ApiModules, UnboundedReceiver<BoxFuture<'static, ()>>), Box<dyn std::error::Error>> {
-    let channel = Endpoint::try_from("http://[::]:50051")? // port doesn't matter, we use a unix socket
+    // port doesn't matter, we use a unix socket
+    let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| {
             tokio::net::UnixStream::connect(
                 std::env::var("PINNACLE_GRPC_SOCKET")
@@ -198,19 +195,24 @@ pub async fn connect(
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
 pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
-    let mut future_set = FuturesUnordered::<BoxFuture<'static, ()>>::new();
-
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
 
-    loop {
-        match futures::future::select(fut_recv.next(), future_set.next()).await {
-            Either::Left((fut, _)) => {
-                if let Some(fut) = fut {
-                    future_set.push(fut);
-                }
+    let pinnacle = PINNACLE.get().unwrap();
+
+    let keepalive = async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            if let Err(err) = pinnacle.ping().await {
+                eprintln!("Failed to ping compositor: {err}");
+                std::process::exit(1);
             }
-            Either::Right(_) => (),
         }
+    };
+
+    tokio::spawn(keepalive);
+
+    while let Some(fut) = fut_recv.next().await {
+        tokio::spawn(fut);
     }
 }
 

@@ -19,3 +19,4 @@ tower = { version = "0.4.13", features = ["util"] }
 futures = "0.3.30"
 num_enum = "0.7.2"
 xkbcommon = { workspace = true }
+rand = "0.8.5"

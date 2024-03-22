@@ -21,6 +21,20 @@ enum SetOrToggle {
 
 message QuitRequest {}
 
+// A manual ping request independent of any HTTP keepalive.
+//
+// Tonic does not seems to give you the means to run something
+// when a keepalive ping fails, so this is for the Rust API to
+// ping the compositor.
+message PingRequest {
+  optional bytes payload = 1;
+}
+
+message PingResponse {
+  optional bytes payload = 1;
+}
+
 service PinnacleService {
   rpc Quit(QuitRequest) returns (google.protobuf.Empty);
+  rpc Ping(PingRequest) returns (PingResponse);
 }
