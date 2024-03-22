@@ -478,7 +478,8 @@ impl State {
                 if !matches!(
                     focus.window_for(self),
                     Some(window) if window.is_x11_override_redirect()
-                ) {
+                ) && focus.popup_for(self).is_none()
+                {
                     keyboard.set_focus(self, focus.to_keyboard_focus_target(self), serial);
                 }
 
