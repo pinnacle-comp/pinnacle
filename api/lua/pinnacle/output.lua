@@ -362,6 +362,33 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     self:set_location({ x = x, y = y })
 end
 
+---Set this output's mode.
+---
+---If `refresh_rate_millihz` is provided, Pinnacle will attempt to use the mode with that refresh rate.
+---If it isn't, Pinnacle will attempt to use the mode with the highest refresh rate that matches the
+---given size.
+---
+---The refresh rate is in millihertz. For example, to choose a mode with a refresh rate of 60Hz, use 60000.
+---
+---If this output doesn't support the given mode, it will be ignored.
+---
+---### Example
+---```lua
+---Output.get_focused():set_mode(2560, 1440, 144000)
+---```
+---
+---@param pixel_width integer
+---@param pixel_height integer
+---@param refresh_rate_millihz integer?
+function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
+    client.unary_request(build_grpc_request_params("SetMode", {
+        output_name = self.name,
+        pixel_width = pixel_width,
+        pixel_height = pixel_height,
+        refresh_rate_millihz = refresh_rate_millihz,
+    }))
+end
+
 ---@class Mode
 ---@field pixel_width integer
 ---@field pixel_height integer

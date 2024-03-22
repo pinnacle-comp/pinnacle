@@ -955,16 +955,18 @@ impl output_service_server::OutputService for OutputService {
         run_unary_no_response(&self.sender, |state| {
             let Some(output) = request
                 .output_name
+                .clone()
                 .map(OutputName)
                 .and_then(|name| name.output(state))
             else {
                 return;
             };
 
-            let mode = request.mode.and_then(|mode| {
+            // poor man's try v2
+            let mode = Some(request).and_then(|request| {
                 Some(smithay::output::Mode {
-                    size: (mode.pixel_width? as i32, mode.pixel_height? as i32).into(),
-                    refresh: mode.refresh_rate_millihz? as i32,
+                    size: (request.pixel_width? as i32, request.pixel_height? as i32).into(),
+                    refresh: request.refresh_rate_millihz? as i32,
                 })
             });
 
@@ -1029,7 +1031,7 @@ impl output_service_server::OutputService for OutputService {
                         .map(from_smithay_mode)
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or(Vec::new());
+                .unwrap_or_default();
 
             let model = output
                 .as_ref()

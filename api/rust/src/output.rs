@@ -12,7 +12,7 @@
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
-    v0alpha1::{output_service_client::OutputServiceClient, SetLocationRequest},
+    v0alpha1::{output_service_client::OutputServiceClient, SetLocationRequest, SetModeRequest},
 };
 use tonic::transport::Channel;
 
@@ -356,6 +356,38 @@ impl OutputHandle {
         };
 
         attempt_set_loc();
+    }
+
+    /// Set this output's mode.
+    ///
+    /// If `refresh_rate_millihertz` is provided, Pinnacle will attempt to use the mode with that
+    /// refresh rate. If it is not, Pinnacle will attempt to use the mode with the
+    /// highest refresh rate that matches the given size.
+    ///
+    /// The refresh rate should be given in millihertz. For example, if you want a refresh rate of
+    /// 60Hz, use 60000.
+    ///
+    /// If this output doesn't support the given mode, it will be ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.set_mode(2560, 1440, 144000);
+    /// ```
+    pub fn set_mode(
+        &self,
+        pixel_width: u32,
+        pixel_height: u32,
+        refresh_rate_millihertz: impl Into<Option<u32>>,
+    ) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_mode(SetModeRequest {
+            output_name: Some(self.name.clone()),
+            pixel_width: Some(pixel_width),
+            pixel_height: Some(pixel_height),
+            refresh_rate_millihz: refresh_rate_millihertz.into(),
+        }))
+        .unwrap();
     }
 
     /// Get all properties of this output.

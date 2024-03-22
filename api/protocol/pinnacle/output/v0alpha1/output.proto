@@ -18,7 +18,10 @@ message SetLocationRequest {
 
 message SetModeRequest {
   optional string output_name = 1;
-  optional Mode mode = 2;
+  optional uint32 pixel_width = 2;
+  optional uint32 pixel_height = 3;
+  // NULLABLE
+  optional uint32 refresh_rate_millihz = 4;
 }
 
 message GetRequest {}
