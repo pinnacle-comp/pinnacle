@@ -146,6 +146,7 @@ impl State {
             if let Some(output) = win1.output(self) {
                 self.request_layout(&output);
             }
+            self.layout_state.pending_swap = true;
         }
     }
 }
@@ -157,6 +158,7 @@ pub struct LayoutRequestId(pub u32);
 #[derive(Debug, Default)]
 pub struct LayoutState {
     pub layout_request_sender: Option<UnboundedSender<Result<LayoutResponse, Status>>>,
+    pub pending_swap: bool,
     id_maps: HashMap<Output, LayoutRequestId>,
     pending_requests: HashMap<Output, Vec<(LayoutRequestId, Vec<WindowElement>)>>,
     old_requests: HashMap<Output, HashSet<LayoutRequestId>>,
@@ -296,6 +298,8 @@ impl State {
         self.update_windows_with_geometries(&output, geometries);
 
         self.schedule_render(&output);
+
+        self.layout_state.pending_swap = false;
 
         Ok(())
     }

@@ -87,6 +87,10 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .cloned();
 
             if let Some(window_under) = window_under {
+                if state.layout_state.pending_swap {
+                    return;
+                }
+
                 if window_under == self.window {
                     return;
                 }
