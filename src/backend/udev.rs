@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod drm_util;
+
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
@@ -66,10 +68,8 @@ use smithay::{
     utils::{Clock, DeviceFd, Logical, Monotonic, Point, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
-use smithay_drm_extras::{
-    drm_scanner::{DrmScanEvent, DrmScanner},
-    edid::EdidInfo,
-};
+use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
+use tracing::warn;
 
 use crate::{
     backend::Backend,
@@ -79,6 +79,8 @@ use crate::{
     state::{State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
+
+use self::drm_util::EdidInfo;
 
 use super::BackendData;
 
@@ -183,7 +185,7 @@ impl State {
                             .surface()
                             .clear_plane(overlay_plane.handle)
                         {
-                            tracing::warn!("Failed to clear overlay planes: {err}");
+                            warn!("Failed to clear overlay planes: {err}");
                         }
                     }
                 }
@@ -228,7 +230,7 @@ impl BackendData for Udev {
 
     fn early_import(&mut self, surface: &WlSurface) {
         if let Err(err) = self.gpu_manager.early_import(self.primary_gpu, surface) {
-            tracing::warn!("early buffer import failed: {}", err);
+            warn!("early buffer import failed: {}", err);
         }
     }
 }
@@ -376,7 +378,7 @@ pub fn setup_udev(
                         backend.drm.activate(false).expect("failed to activate drm");
                         for surface in backend.surfaces.values_mut() {
                             if let Err(err) = surface.compositor.surface().reset_state() {
-                                tracing::warn!("Failed to reset drm surface state: {}", err);
+                                warn!("Failed to reset drm surface state: {}", err);
                             }
                             // reset the buffers after resume to trigger a full redraw
                             // this is important after a vt switch as the primary plane
@@ -445,7 +447,7 @@ pub fn setup_udev(
                         as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
                 }
                 Err(err) => {
-                    tracing::warn!("Failed to create vulkan allocator: {}", err);
+                    warn!("Failed to create vulkan allocator: {}", err);
                 }
             }
         }
@@ -778,7 +780,6 @@ impl State {
     }
 
     /// A display was plugged in.
-    // TODO: better edid info from cosmic-comp
     fn connector_connected(
         &mut self,
         node: DrmNode,
@@ -827,7 +828,7 @@ impl State {
         {
             Ok(surface) => surface,
             Err(err) => {
-                tracing::warn!("Failed to create drm surface: {}", err);
+                warn!("Failed to create drm surface: {}", err);
                 return;
             }
         };
@@ -838,9 +839,13 @@ impl State {
             connector.interface_id()
         );
 
-        let (make, model) = EdidInfo::for_connector(&device.drm, connector.handle())
-            .map(|info| (info.manufacturer, info.model))
-            .unwrap_or_else(|| ("Unknown".into(), "Unknown".into()));
+        let (make, model) =
+            EdidInfo::try_from_device_and_connector(&device.drm, connector.handle())
+                .map(|info| (info.manufacturer, info.model))
+                .unwrap_or_else(|err| {
+                    warn!("Failed to parse EDID info: {err}");
+                    ("Unknown".into(), "Unknown".into())
+                });
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
@@ -897,7 +902,7 @@ impl State {
             let driver = match device.drm.get_driver() {
                 Ok(driver) => driver,
                 Err(err) => {
-                    tracing::warn!("Failed to query drm driver: {}", err);
+                    warn!("Failed to query drm driver: {}", err);
                     return;
                 }
             };
@@ -932,7 +937,7 @@ impl State {
             ) {
                 Ok(compositor) => compositor,
                 Err(err) => {
-                    tracing::warn!("Failed to create drm compositor: {}", err);
+                    warn!("Failed to create drm compositor: {}", err);
                     return;
                 }
             }
@@ -1154,7 +1159,7 @@ impl State {
                 }
             }
             Err(err) => {
-                tracing::warn!("Error during rendering: {:?}", err);
+                warn!("Error during rendering: {:?}", err);
                 if let SwapBuffersError::ContextLost(err) = err {
                     panic!("Rendering loop lost: {}", err)
                 }
