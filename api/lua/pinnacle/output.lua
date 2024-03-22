@@ -12,6 +12,7 @@ local service = prefix .. "OutputService"
 ---@enum (key) OutputServiceMethod
 local rpc_types = {
     SetLocation = {},
+    SetMode = {},
     ConnectForAll = {
         response_type = "ConnectForAllResponse",
     },
@@ -319,51 +320,65 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     ---@type integer
     local y
 
+    if not self_props.current_mode or not other_props.current_mode then
+        return
+    end
+
+    local self_width = self_props.current_mode.pixel_width
+    local self_height = self_props.current_mode.pixel_height
+    local other_width = other_props.current_mode.pixel_width
+    local other_height = other_props.current_mode.pixel_height
+
     if dir == "top" or dir == "bottom" then
         if dir == "top" then
-            y = other_props.y - self_props.pixel_height
+            y = other_props.y - self_height
         else
-            y = other_props.y + other_props.pixel_height
+            y = other_props.y + other_height
         end
 
         if align == "left" then
             x = other_props.x
         elseif align == "center" then
-            x = other_props.x + math.floor((other_props.pixel_width - self_props.pixel_width) / 2)
+            x = other_props.x + math.floor((other_width - self_width) / 2)
         elseif align == "bottom" then
-            x = other_props.x + (other_props.pixel_width - self_props.pixel_width)
+            x = other_props.x + (other_width - self_width)
         end
     else
         if dir == "left" then
-            x = other_props.x - self_props.pixel_width
+            x = other_props.x - self_width
         else
-            x = other_props.x + other_props.pixel_width
+            x = other_props.x + other_width
         end
 
         if align == "top" then
             y = other_props.y
         elseif align == "center" then
-            y = other_props.y + math.floor((other_props.pixel_height - self_props.pixel_height) / 2)
+            y = other_props.y + math.floor((other_height - self_height) / 2)
         elseif align == "bottom" then
-            y = other_props.y + (other_props.pixel_height - self_props.pixel_height)
+            y = other_props.y + (other_height - self_height)
         end
     end
 
     self:set_location({ x = x, y = y })
 end
 
+---@class Mode
+---@field pixel_width integer
+---@field pixel_height integer
+---@field refresh_rate_millihz integer
+
 ---@class OutputProperties
 ---@field make string?
 ---@field model string?
 ---@field x integer?
 ---@field y integer?
----@field pixel_width integer?
----@field pixel_height integer?
----@field refresh_rate integer?
+---@field current_mode Mode?
+---@field preferred_mode Mode?
+---@field modes Mode[]
 ---@field physical_width integer?
 ---@field physical_height integer?
 ---@field focused boolean?
----@field tags TagHandle[]?
+---@field tags TagHandle[]
 
 ---Get all properties of this output.
 ---
@@ -376,6 +391,7 @@ function OutputHandle:props()
 
     response.tags = handles
     response.tag_ids = nil
+    response.modes = response.modes or {}
 
     return response
 end
@@ -420,33 +436,31 @@ function OutputHandle:y()
     return self:props().y
 end
 
----Get this output's width in pixels.
+---Get this output's current mode.
 ---
----Shorthand for `handle:props().pixel_width`.
+---Shorthand for `handle:props().current_mode`.
 ---
----@return integer?
-function OutputHandle:pixel_width()
-    return self:props().pixel_width
+---@return Mode?
+function OutputHandle:current_mode()
+    return self:props().current_mode
 end
 
----Get this output's height in pixels.
+---Get this output's preferred mode.
 ---
----Shorthand for `handle:props().pixel_height`.
+---Shorthand for `handle:props().preferred_mode`.
 ---
----@return integer?
-function OutputHandle:pixel_height()
-    return self:props().pixel_height
+---@return Mode?
+function OutputHandle:preferred_mode()
+    return self:props().preferred_mode
 end
 
----Get this output's refresh rate in millihertz.
+---Get all of this output's available modes.
 ---
----For example, 144Hz is returned as 144000.
+---Shorthand for `handle:props().modes`.
 ---
----Shorthand for `handle:props().refresh_rate`.
----
----@return integer?
-function OutputHandle:refresh_rate()
-    return self:props().refresh_rate
+---@return Mode[]
+function OutputHandle:modes()
+    return self:props().modes
 end
 
 ---Get this output's physical width in millimeters.

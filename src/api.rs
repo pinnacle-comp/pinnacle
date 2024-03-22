@@ -14,7 +14,7 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::{
         self,
-        v0alpha1::{output_service_server, SetLocationRequest},
+        v0alpha1::{output_service_server, SetLocationRequest, SetModeRequest},
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     tag::{
@@ -949,6 +949,30 @@ impl output_service_server::OutputService for OutputService {
         .await
     }
 
+    async fn set_mode(&self, request: Request<SetModeRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        run_unary_no_response(&self.sender, |state| {
+            let Some(output) = request
+                .output_name
+                .map(OutputName)
+                .and_then(|name| name.output(state))
+            else {
+                return;
+            };
+
+            let mode = request.mode.and_then(|mode| {
+                Some(smithay::output::Mode {
+                    size: (mode.pixel_width? as i32, mode.pixel_height? as i32).into(),
+                    refresh: mode.refresh_rate_millihz? as i32,
+                })
+            });
+
+            output.change_current_state(mode, None, None, None);
+        })
+        .await
+    }
+
     async fn get(
         &self,
         _request: Request<output::v0alpha1::GetRequest>,
@@ -977,20 +1001,35 @@ impl output_service_server::OutputService for OutputService {
                 .ok_or_else(|| Status::invalid_argument("no output specified"))?,
         );
 
+        let from_smithay_mode = |mode: smithay::output::Mode| -> output::v0alpha1::Mode {
+            output::v0alpha1::Mode {
+                pixel_width: Some(mode.size.w as u32),
+                pixel_height: Some(mode.size.h as u32),
+                refresh_rate_millihz: Some(mode.refresh as u32),
+            }
+        };
+
         run_unary(&self.sender, move |state| {
             let output = output_name.output(state);
 
-            let pixel_width = output
+            let current_mode = output
                 .as_ref()
-                .and_then(|output| output.current_mode().map(|mode| mode.size.w as u32));
+                .and_then(|output| output.current_mode().map(from_smithay_mode));
 
-            let pixel_height = output
+            let preferred_mode = output
                 .as_ref()
-                .and_then(|output| output.current_mode().map(|mode| mode.size.h as u32));
+                .and_then(|output| output.preferred_mode().map(from_smithay_mode));
 
-            let refresh_rate = output
+            let modes = output
                 .as_ref()
-                .and_then(|output| output.current_mode().map(|mode| mode.refresh as u32));
+                .map(|output| {
+                    output
+                        .modes()
+                        .into_iter()
+                        .map(from_smithay_mode)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or(Vec::new());
 
             let model = output
                 .as_ref()
@@ -1030,9 +1069,9 @@ impl output_service_server::OutputService for OutputService {
                 model,
                 x,
                 y,
-                pixel_width,
-                pixel_height,
-                refresh_rate,
+                current_mode,
+                preferred_mode,
+                modes,
                 physical_width,
                 physical_height,
                 focused,

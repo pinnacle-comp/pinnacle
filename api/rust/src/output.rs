@@ -300,11 +300,13 @@ impl OutputHandle {
         let attempt_set_loc = || -> Option<()> {
             let other_x = other_props.x?;
             let other_y = other_props.y?;
-            let other_width = other_props.pixel_width? as i32;
-            let other_height = other_props.pixel_height? as i32;
+            let other_mode = other_props.current_mode?;
+            let other_width = other_mode.pixel_width as i32;
+            let other_height = other_mode.pixel_height as i32;
 
-            let self_width = self_props.pixel_width? as i32;
-            let self_height = self_props.pixel_height? as i32;
+            let self_mode = self_props.current_mode?;
+            let self_width = self_mode.pixel_width as i32;
+            let self_height = self_mode.pixel_height as i32;
 
             use Alignment::*;
 
@@ -399,9 +401,31 @@ impl OutputHandle {
             model: response.model,
             x: response.x,
             y: response.y,
-            pixel_width: response.pixel_width,
-            pixel_height: response.pixel_height,
-            refresh_rate: response.refresh_rate,
+            current_mode: response.current_mode.and_then(|mode| {
+                Some(Mode {
+                    pixel_width: mode.pixel_width?,
+                    pixel_height: mode.pixel_height?,
+                    refresh_rate_millihertz: mode.refresh_rate_millihz?,
+                })
+            }),
+            preferred_mode: response.preferred_mode.and_then(|mode| {
+                Some(Mode {
+                    pixel_width: mode.pixel_width?,
+                    pixel_height: mode.pixel_height?,
+                    refresh_rate_millihertz: mode.refresh_rate_millihz?,
+                })
+            }),
+            modes: response
+                .modes
+                .into_iter()
+                .flat_map(|mode| {
+                    Some(Mode {
+                        pixel_width: mode.pixel_width?,
+                        pixel_height: mode.pixel_height?,
+                        refresh_rate_millihertz: mode.refresh_rate_millihz?,
+                    })
+                })
+                .collect(),
             physical_width: response.physical_width,
             physical_height: response.physical_height,
             focused: response.focused,
@@ -463,42 +487,40 @@ impl OutputHandle {
         self.props_async().await.y
     }
 
-    /// Get this output's screen width in pixels.
+    /// Get this output's current mode.
     ///
-    /// Shorthand for `self.props().pixel_width`.
-    pub fn pixel_width(&self) -> Option<u32> {
-        self.props().pixel_width
+    /// Shorthand for `self.props().current_mode`.
+    pub fn current_mode(&self) -> Option<Mode> {
+        self.props().current_mode
     }
 
-    /// The async version of [`OutputHandle::pixel_width`].
-    pub async fn pixel_width_async(&self) -> Option<u32> {
-        self.props_async().await.pixel_width
+    /// The async version of [`OutputHandle::current_mode`].
+    pub async fn current_mode_async(&self) -> Option<Mode> {
+        self.props_async().await.current_mode
     }
 
-    /// Get this output's screen height in pixels.
+    /// Get this output's preferred mode.
     ///
-    /// Shorthand for `self.props().pixel_height`.
-    pub fn pixel_height(&self) -> Option<u32> {
-        self.props().pixel_height
+    /// Shorthand for `self.props().preferred_mode`.
+    pub fn preferred_mode(&self) -> Option<Mode> {
+        self.props().preferred_mode
     }
 
-    /// The async version of [`OutputHandle::pixel_height`].
-    pub async fn pixel_height_async(&self) -> Option<u32> {
-        self.props_async().await.pixel_height
+    /// The async version of [`OutputHandle::preferred_mode`].
+    pub async fn preferred_mode_async(&self) -> Option<Mode> {
+        self.props_async().await.preferred_mode
     }
 
-    /// Get this output's refresh rate in millihertz.
+    /// Get all available modes this output supports.
     ///
-    /// For example, 144Hz will be returned as 144000.
-    ///
-    /// Shorthand for `self.props().refresh_rate`.
-    pub fn refresh_rate(&self) -> Option<u32> {
-        self.props().refresh_rate
+    /// Shorthand for `self.props().modes`.
+    pub fn modes(&self) -> Vec<Mode> {
+        self.props().modes
     }
 
-    /// The async version of [`OutputHandle::refresh_rate`].
-    pub async fn refresh_rate_async(&self) -> Option<u32> {
-        self.props_async().await.refresh_rate
+    /// The async version of [`OutputHandle::modes`].
+    pub async fn modes_async(&self) -> Vec<Mode> {
+        self.props_async().await.modes
     }
 
     /// Get this output's physical width in millimeters.
@@ -557,34 +579,47 @@ impl OutputHandle {
     }
 }
 
+/// A possible output pixel dimension and refresh rate configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct Mode {
+    /// The width of the output, in pixels.
+    pub pixel_width: u32,
+    /// The height of the output, in pixels.
+    pub pixel_height: u32,
+    /// The output's refresh rate, in millihertz.
+    ///
+    /// For example, 60Hz is returned as 60000.
+    pub refresh_rate_millihertz: u32,
+}
+
 /// The properties of an output.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct OutputProperties {
-    /// The make of the output
+    /// The make of the output.
     pub make: Option<String>,
-    /// The model of the output
+    /// The model of the output.
     ///
     /// This is something like "27GL83A" or whatever crap monitor manufacturers name their monitors
     /// these days.
     pub model: Option<String>,
-    /// The x position of the output in the global space
+    /// The x position of the output in the global space.
     pub x: Option<i32>,
-    /// The y position of the output in the global space
+    /// The y position of the output in the global space.
     pub y: Option<i32>,
-    /// The output's screen width in pixels
-    pub pixel_width: Option<u32>,
-    /// The output's screen height in pixels
-    pub pixel_height: Option<u32>,
-    /// The output's refresh rate in millihertz
-    pub refresh_rate: Option<u32>,
-    /// The output's physical width in millimeters
+    /// The output's current mode.
+    pub current_mode: Option<Mode>,
+    /// The output's preferred mode.
+    pub preferred_mode: Option<Mode>,
+    /// All available modes the output supports.
+    pub modes: Vec<Mode>,
+    /// The output's physical width in millimeters.
     pub physical_width: Option<u32>,
-    /// The output's physical height in millimeters
+    /// The output's physical height in millimeters.
     pub physical_height: Option<u32>,
-    /// Whether this output is focused or not
+    /// Whether this output is focused or not.
     ///
     /// This is currently implemented as the output with the most recent pointer motion.
     pub focused: Option<bool>,
-    /// The tags this output has
+    /// The tags this output has.
     pub tags: Vec<TagHandle>,
 }
