@@ -8,7 +8,7 @@ use smithay::{
         renderer::{
             damage::{self, OutputDamageTracker},
             gles::{GlesRenderer, GlesTexture},
-            ImportDma, ImportEgl, ImportMemWl,
+            ImportDma, ImportEgl, ImportMemWl, Renderer, TextureFilter,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
@@ -87,6 +87,14 @@ pub fn setup_winit(
             Ok(ret) => ret,
             Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
         };
+
+    // TODO: set from config
+    winit_backend
+        .renderer()
+        .upscale_filter(TextureFilter::Nearest)?;
+    winit_backend
+        .renderer()
+        .downscale_filter(TextureFilter::Nearest)?;
 
     let mode = smithay::output::Mode {
         size: winit_backend.window_size(),
