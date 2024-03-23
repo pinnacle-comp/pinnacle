@@ -19,7 +19,7 @@ use test_log::test;
 fn run_lua(ident: &str, code: &str) {
     #[rustfmt::skip]
     let code = format!(r#"
-        require("pinnacle").setup(function({ident})
+        require("pinnacle").run(function({ident})
             local run = function({ident})
                 {code}
             end

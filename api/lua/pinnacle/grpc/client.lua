@@ -55,21 +55,6 @@ local client = {
     version = "v0alpha1",
 }
 
-client.loop:wrap(function()
-    while true do
-        -- If the only managed coroutine is this ping loop, return to allow the config to exit
-        if client.loop:count() == 1 then
-            return
-        end
-        require("cqueues").sleep(60)
-        local success, err, errno = client.conn:ping(10)
-        if not success then
-            print("Compositor ping failed:", err, errno)
-            os.exit(1)
-        end
-    end
-end)
-
 ---@class GrpcRequestParams
 ---@field service string
 ---@field method string
