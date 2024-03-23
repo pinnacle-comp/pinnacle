@@ -49,6 +49,12 @@ message GetPropertiesResponse {
   optional int32 x = 3;
   // The y coord of the output in the global space
   optional int32 y = 4;
+  // The logical width of the output in the global space
+  // taking into account scaling, in pixels.
+  optional uint32 logical_width = 13;
+  // The logical height of the output in the global space
+  // taking into account scaling, in pixels.
+  optional uint32 logical_height = 14;
   // NULLABLE
   //
   // The current mode

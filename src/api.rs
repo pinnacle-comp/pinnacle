@@ -1054,6 +1054,11 @@ impl output_service_server::OutputService for OutputService {
         run_unary(&self.sender, move |state| {
             let output = output_name.output(state);
 
+            let logical_size = output
+                .as_ref()
+                .and_then(|output| state.space.output_geometry(output))
+                .map(|geo| (geo.size.w, geo.size.h));
+
             let current_mode = output
                 .as_ref()
                 .and_then(|output| output.current_mode().map(from_smithay_mode));
@@ -1115,6 +1120,8 @@ impl output_service_server::OutputService for OutputService {
                 model,
                 x,
                 y,
+                logical_width: logical_size.map(|(w, _)| w as u32),
+                logical_height: logical_size.map(|(_, h)| h as u32),
                 current_mode,
                 preferred_mode,
                 modes,

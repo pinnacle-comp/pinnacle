@@ -303,13 +303,11 @@ impl OutputHandle {
         let attempt_set_loc = || -> Option<()> {
             let other_x = other_props.x?;
             let other_y = other_props.y?;
-            let other_mode = other_props.current_mode?;
-            let other_width = other_mode.pixel_width as i32;
-            let other_height = other_mode.pixel_height as i32;
+            let other_width = other_props.logical_width? as i32;
+            let other_height = other_props.logical_height? as i32;
 
-            let self_mode = self_props.current_mode?;
-            let self_width = self_mode.pixel_width as i32;
-            let self_height = self_mode.pixel_height as i32;
+            let self_width = self_props.logical_width? as i32;
+            let self_height = self_props.logical_height? as i32;
 
             use Alignment::*;
 
@@ -446,17 +444,7 @@ impl OutputHandle {
     /// use pinnacle_api::output::OutputProperties;
     ///
     /// let OutputProperties {
-    ///     make,
-    ///     model,
-    ///     x,
-    ///     y,
-    ///     pixel_width,
-    ///     pixel_height,
-    ///     refresh_rate,
-    ///     physical_width,
-    ///     physical_height,
-    ///     focused,
-    ///     tags,
+    ///     ..
     /// } = output.get_focused()?.props();
     /// ```
     pub fn props(&self) -> OutputProperties {
@@ -481,6 +469,8 @@ impl OutputHandle {
             model: response.model,
             x: response.x,
             y: response.y,
+            logical_width: response.logical_width,
+            logical_height: response.logical_height,
             current_mode: response.current_mode.and_then(|mode| {
                 Some(Mode {
                     pixel_width: mode.pixel_width?,
@@ -566,6 +556,30 @@ impl OutputHandle {
     /// The async version of [`OutputHandle::y`].
     pub async fn y_async(&self) -> Option<i32> {
         self.props_async().await.y
+    }
+
+    /// Get this output's logical width in pixels.
+    ///
+    /// Shorthand for `self.props().logical_width`.
+    pub fn logical_width(&self) -> Option<u32> {
+        self.props().logical_width
+    }
+
+    /// The async version of [`OutputHandle::logical_width`].
+    pub async fn logical_width_async(&self) -> Option<u32> {
+        self.props_async().await.logical_width
+    }
+
+    /// Get this output's logical height in pixels.
+    ///
+    /// Shorthand for `self.props().logical_height`.
+    pub fn logical_height(&self) -> Option<u32> {
+        self.props().logical_height
+    }
+
+    /// The async version of [`OutputHandle::logical_height`].
+    pub async fn logical_height_async(&self) -> Option<u32> {
+        self.props_async().await.logical_height
     }
 
     /// Get this output's current mode.
@@ -699,6 +713,12 @@ pub struct OutputProperties {
     pub x: Option<i32>,
     /// The y position of the output in the global space.
     pub y: Option<i32>,
+    /// The logical width of this output in the global space
+    /// taking into account scaling, in pixels.
+    pub logical_width: Option<u32>,
+    /// The logical height of this output in the global space
+    /// taking into account scaling, in pixels.
+    pub logical_height: Option<u32>,
     /// The output's current mode.
     pub current_mode: Option<Mode>,
     /// The output's preferred mode.

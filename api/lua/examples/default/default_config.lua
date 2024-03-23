@@ -31,12 +31,6 @@ require("pinnacle").setup(function(Pinnacle)
     -- Keybinds       --
     --------------------
 
-    Input.keybind({ mod_key }, "=", function()
-        Output.get_focused():increase_scale(0.25)
-    end)
-    Input.keybind({ mod_key }, "-", function()
-        Output.get_focused():decrease_scale(0.25)
-    end)
 
     -- mod_key + alt + q = Quit Pinnacle
     Input.keybind({ mod_key, "alt" }, "q", function()
@@ -81,6 +75,31 @@ require("pinnacle").setup(function(Pinnacle)
             focused:toggle_maximized()
             focused:raise()
         end
+    end)
+
+    local function layout_outputs_in_line()
+        local prev_op
+        for i, op in ipairs(Output.get_all()) do
+            if i == 1 then
+                prev_op = op
+                goto continue
+            end
+
+            op:set_loc_adj_to(prev_op, "right_align_top")
+            prev_op = op
+
+            ::continue::
+        end
+    end
+
+    Input.keybind({ mod_key }, "=", function()
+        Output.get_focused():increase_scale(0.25)
+        layout_outputs_in_line()
+    end)
+
+    Input.keybind({ mod_key }, "-", function()
+        Output.get_focused():decrease_scale(0.25)
+        layout_outputs_in_line()
     end)
 
     --------------------

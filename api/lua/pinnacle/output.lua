@@ -321,14 +321,14 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     ---@type integer
     local y
 
-    if not self_props.current_mode or not other_props.current_mode then
+    local self_width = self_props.logical_width
+    local self_height = self_props.logical_height
+    local other_width = other_props.logical_width
+    local other_height = other_props.logical_height
+
+    if not (self_width and self_height and other_width and other_height) then
         return
     end
-
-    local self_width = self_props.current_mode.pixel_width
-    local self_height = self_props.current_mode.pixel_height
-    local other_width = other_props.current_mode.pixel_width
-    local other_height = other_props.current_mode.pixel_height
 
     if dir == "top" or dir == "bottom" then
         if dir == "top" then
@@ -421,6 +421,8 @@ end
 ---@field model string?
 ---@field x integer?
 ---@field y integer?
+---@field logical_width integer?
+---@field logical_height integer?
 ---@field current_mode Mode?
 ---@field preferred_mode Mode?
 ---@field modes Mode[]
@@ -484,6 +486,24 @@ end
 ---@return integer?
 function OutputHandle:y()
     return self:props().y
+end
+
+---Get this output's logical width in pixels.
+---
+---Shorthand for `handle:props().logical_width`.
+---
+---@return integer?
+function OutputHandle:logical_width()
+    return self:props().logical_width
+end
+
+---Get this output's logical height in pixels.
+---
+---Shorthand for `handle:props().y`.
+---
+---@return integer?
+function OutputHandle:logical_height()
+    return self:props().logical_height
 end
 
 ---Get this output's current mode.
