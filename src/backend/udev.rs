@@ -27,7 +27,7 @@ use smithay::{
         egl::{self, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            damage::{self},
+            damage,
             element::{texture::TextureBuffer, RenderElement, RenderElementStates},
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
@@ -43,6 +43,7 @@ use smithay::{
         SwapBuffersError,
     },
     desktop::{
+        layer_map_for_output,
         utils::{send_frames_surface_tree, OutputPresentationFeedback},
         Space,
     },
@@ -69,7 +70,7 @@ use smithay::{
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::{
     backend::Backend,
@@ -138,8 +139,6 @@ impl Backend {
 impl Udev {
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
-        // tracing::debug!("schedule_render on output {}", output.name());
-
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
@@ -205,11 +204,56 @@ impl State {
                 move |state| {
                     let udev = state.backend.udev_mut();
                     if let Err(err) = udev.session.change_vt(vt) {
-                        tracing::error!("Failed to switch to vt {vt}: {err}");
+                        error!("Failed to switch to vt {vt}: {err}");
                     }
                 },
             );
         }
+    }
+
+    /// Resize the output with the given mode.
+    ///
+    /// TODO: This is in udev.rs but is also used in winit.rs.
+    /// |     I've got no clue how to make things public without making a mess.
+    pub fn resize_output(&mut self, output: &Output, mode: smithay::output::Mode) {
+        if let Backend::Udev(udev) = &mut self.backend {
+            let drm_mode = udev.backends.iter().find_map(|(_, backend)| {
+                backend
+                    .drm_scanner
+                    .crtcs()
+                    .find(|(_, handle)| {
+                        output
+                            .user_data()
+                            .get::<UdevOutputData>()
+                            .is_some_and(|data| &data.crtc == handle)
+                    })
+                    .and_then(|(info, _)| {
+                        info.modes()
+                            .iter()
+                            .find(|m| smithay::output::Mode::from(**m) == mode)
+                    })
+                    .copied()
+            });
+
+            if let Some(drm_mode) = drm_mode {
+                if let Some(render_surface) = render_surface_for_output(output, &mut udev.backends)
+                {
+                    match render_surface.compositor.use_mode(drm_mode) {
+                        Ok(()) => {
+                            output.change_current_state(Some(mode), None, None, None);
+                            layer_map_for_output(output).arrange();
+                        }
+                        Err(err) => error!("Failed to resize output: {err}"),
+                    }
+                }
+            }
+        } else {
+            output.change_current_state(Some(mode), None, None, None);
+            layer_map_for_output(output).arrange();
+        }
+
+        self.schedule_render(output);
+        self.request_layout(output);
     }
 }
 
@@ -298,7 +342,7 @@ pub fn setup_udev(
             .map_err(DeviceAddError::DrmNode)
             .and_then(|node| state.device_added(node, path))
         {
-            tracing::error!("Skipping device {device_id}: {err}");
+            error!("Skipping device {device_id}: {err}");
         }
     }
 
@@ -313,7 +357,7 @@ pub fn setup_udev(
                     .map_err(DeviceAddError::DrmNode)
                     .and_then(|node| state.device_added(node, &path))
                 {
-                    tracing::error!("Skipping device {device_id}: {err}");
+                    error!("Skipping device {device_id}: {err}");
                 }
             }
             UdevEvent::Changed { device_id } => {
@@ -370,7 +414,7 @@ pub fn setup_udev(
                     tracing::info!("resuming session");
 
                     if let Err(err) = libinput_context.resume() {
-                        tracing::error!("Failed to resume libinput context: {:?}", err);
+                        error!("Failed to resume libinput context: {:?}", err);
                     }
                     for backend in udev.backends.values_mut() {
                         // TODO: this is false because i'm too lazy to remove the code directly
@@ -479,7 +523,7 @@ pub fn setup_udev(
 
     match renderer.bind_wl_display(&display_handle) {
         Ok(_) => tracing::info!("EGL hardware-acceleration enabled"),
-        Err(err) => tracing::error!(?err, "Failed to initialize EGL hardware-acceleration"),
+        Err(err) => error!(?err, "Failed to initialize EGL hardware-acceleration"),
     }
 
     // init dmabuf support with format list from our primary gpu
@@ -514,7 +558,7 @@ pub fn setup_udev(
         true,
         |_| {},
     ) {
-        tracing::error!("Failed to start XWayland: {err}");
+        error!("Failed to start XWayland: {err}");
     }
 
     Ok((state, event_loop))
@@ -733,18 +777,10 @@ impl State {
             .loop_handle
             .insert_source(notifier, move |event, metadata, state| match event {
                 DrmEvent::VBlank(crtc) => {
-                    // { TODO:
-                    //     let udev = data.state.backend.udev_mut();
-                    //     let then = udev.last_vblank_time;
-                    //     let now = Instant::now();
-                    //     let diff = now.duration_since(then);
-                    //     // tracing::debug!(time = diff.as_secs_f64(), "Time since last vblank");
-                    //     udev.last_vblank_time = now;
-                    // }
                     state.on_vblank(node, crtc, metadata);
                 }
                 DrmEvent::Error(error) => {
-                    tracing::error!("{:?}", error);
+                    error!("{:?}", error);
                 }
             })
             .expect("failed to insert drm notifier into event loop");
@@ -820,7 +856,10 @@ impl State {
         let drm_mode = connector.modes()[mode_id];
         let wl_mode = smithay::output::Mode::from(drm_mode);
 
-        tracing::debug!(clock = ?drm_mode.clock(), hsync = ?drm_mode.hsync(), vsync = ?drm_mode.vsync());
+        let modes = connector
+            .modes()
+            .iter()
+            .map(|mode| smithay::output::Mode::from(*mode));
 
         let surface = match device
             .drm
@@ -839,13 +878,12 @@ impl State {
             connector.interface_id()
         );
 
-        let (make, model) =
-            EdidInfo::try_from_device_and_connector(&device.drm, connector.handle())
-                .map(|info| (info.manufacturer, info.model))
-                .unwrap_or_else(|err| {
-                    warn!("Failed to parse EDID info: {err}");
-                    ("Unknown".into(), "Unknown".into())
-                });
+        let (make, model) = EdidInfo::try_from_connector(&device.drm, connector.handle())
+            .map(|info| (info.manufacturer, info.model))
+            .unwrap_or_else(|err| {
+                warn!("Failed to parse EDID info: {err}");
+                ("Unknown".into(), "Unknown".into())
+            });
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
@@ -861,12 +899,16 @@ impl State {
             output_name,
             PhysicalProperties {
                 size: (phys_w as i32, phys_h as i32).into(),
-                subpixel: Subpixel::Unknown,
+                subpixel: Subpixel::from(connector.subpixel()),
                 make,
                 model,
             },
         );
         let global = output.create_global::<State>(&udev.display_handle);
+
+        for mode in modes {
+            output.add_mode(mode);
+        }
 
         self.output_focus_stack.set_focus(output.clone());
 
@@ -892,6 +934,7 @@ impl State {
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
 
+        // I like how this is still in here
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
         } else {

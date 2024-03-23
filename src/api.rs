@@ -963,14 +963,16 @@ impl output_service_server::OutputService for OutputService {
             };
 
             // poor man's try v2
-            let mode = Some(request).and_then(|request| {
+            let Some(mode) = Some(request).and_then(|request| {
                 Some(smithay::output::Mode {
                     size: (request.pixel_width? as i32, request.pixel_height? as i32).into(),
                     refresh: request.refresh_rate_millihz? as i32,
                 })
-            });
+            }) else {
+                return;
+            };
 
-            output.change_current_state(mode, None, None, None);
+            state.resize_output(&output, mode);
         })
         .await
     }

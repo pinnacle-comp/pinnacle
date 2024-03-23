@@ -9,7 +9,7 @@ pub struct EdidInfo {
 }
 
 impl EdidInfo {
-    pub fn try_from_device_and_connector(
+    pub fn try_from_connector(
         device: &impl Device,
         connector: connector::Handle,
     ) -> anyhow::Result<Self> {

@@ -12,7 +12,7 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    desktop::utils::send_frames_surface_tree,
     input::pointer::CursorImageStatus,
     output::{Output, Subpixel},
     reexports::{
@@ -210,17 +210,11 @@ pub fn setup_winit(
                         size,
                         scale_factor: _,
                     } => {
-                        output.change_current_state(
-                            Some(smithay::output::Mode {
-                                size,
-                                refresh: 144_000,
-                            }),
-                            None,
-                            None,
-                            None,
-                        );
-                        layer_map_for_output(&output).arrange();
-                        state.request_layout(&output);
+                        let mode = smithay::output::Mode {
+                            size,
+                            refresh: 144_000,
+                        };
+                        state.resize_output(&output, mode);
                     }
                     WinitEvent::Focus(_) => {}
                     WinitEvent::Input(input_evt) => {
