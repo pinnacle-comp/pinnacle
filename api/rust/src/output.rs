@@ -12,7 +12,10 @@
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
-    v0alpha1::{output_service_client::OutputServiceClient, SetLocationRequest, SetModeRequest},
+    v0alpha1::{
+        output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
+        SetLocationRequest, SetModeRequest, SetScaleRequest,
+    },
 };
 use tonic::transport::Channel;
 
@@ -388,6 +391,51 @@ impl OutputHandle {
             refresh_rate_millihz: refresh_rate_millihertz.into(),
         }))
         .unwrap();
+    }
+
+    /// Set this output's scaling factor.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.set_scale(1.5);
+    /// ```
+    pub fn set_scale(&self, scale: f32) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_scale(SetScaleRequest {
+            output_name: Some(self.name.clone()),
+            absolute_or_relative: Some(AbsoluteOrRelative::Absolute(scale)),
+        }))
+        .unwrap();
+    }
+
+    /// Increase this output's scaling factor by `increase_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.increase_scale(0.25);
+    /// ```
+    pub fn increase_scale(&self, increase_by: f32) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_scale(SetScaleRequest {
+            output_name: Some(self.name.clone()),
+            absolute_or_relative: Some(AbsoluteOrRelative::Relative(increase_by)),
+        }))
+        .unwrap();
+    }
+
+    /// Decrease this output's scaling factor by `decrease_by`.
+    ///
+    /// This simply calls [`OutputHandle::increase_scale`] with the negative of `decrease_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.decrease_scale(0.25);
+    /// ```
+    pub fn decrease_scale(&self, decrease_by: f32) {
+        self.increase_scale(-decrease_by);
     }
 
     /// Get all properties of this output.

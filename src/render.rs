@@ -148,8 +148,8 @@ where
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
             let loc = (
-                space.element_location(win) .unwrap_or((0, 0).into()) 
-                    - win.geometry().loc 
+                space.element_location(win) .unwrap_or((0, 0).into())
+                    - win.geometry().loc
                     - output.current_location()
                 )
                 .to_physical_precise_round(scale);
