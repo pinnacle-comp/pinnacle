@@ -65,6 +65,7 @@ message GetPropertiesResponse {
   optional uint32 physical_height = 9;
   optional bool focused = 10;
   repeated uint32 tag_ids = 11;
+  optional float scale = 12;
 }
 
 service OutputService {

@@ -1106,6 +1106,10 @@ impl output_service_server::OutputService for OutputService {
                 })
                 .unwrap_or_default();
 
+            let scale = output
+                .as_ref()
+                .map(|output| output.current_scale().fractional_scale() as f32);
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1118,6 +1122,7 @@ impl output_service_server::OutputService for OutputService {
                 physical_height,
                 focused,
                 tag_ids,
+                scale,
             }
         })
         .await

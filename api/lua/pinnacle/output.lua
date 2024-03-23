@@ -428,6 +428,7 @@ end
 ---@field physical_height integer?
 ---@field focused boolean?
 ---@field tags TagHandle[]
+---@field scale number?
 
 ---Get all properties of this output.
 ---
@@ -548,6 +549,15 @@ end
 ---@return TagHandle[]?
 function OutputHandle:tags()
     return self:props().tags
+end
+
+---Get this output's scaling factor.
+---
+---Shorthand for `handle:props().scale`.
+---
+---@return number?
+function OutputHandle:scale()
+    return self:props().scale
 end
 
 ---@nodoc

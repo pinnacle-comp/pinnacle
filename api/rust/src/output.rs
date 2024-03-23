@@ -514,6 +514,7 @@ impl OutputHandle {
                 .into_iter()
                 .map(|id| tag.new_handle(id))
                 .collect(),
+            scale: response.scale,
         }
     }
 
@@ -653,6 +654,18 @@ impl OutputHandle {
         self.props_async().await.tags
     }
 
+    /// Get this output's scaling factor.
+    ///
+    /// Shorthand for `self.props().scale`
+    pub fn scale(&self) -> Option<f32> {
+        self.props().scale
+    }
+
+    /// The async version of [`OutputHandle::scale`].
+    pub async fn scale_async(&self) -> Option<f32> {
+        self.props_async().await.scale
+    }
+
     /// Get this output's unique name (the name of its connector).
     pub fn name(&self) -> &str {
         &self.name
@@ -673,7 +686,7 @@ pub struct Mode {
 }
 
 /// The properties of an output.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct OutputProperties {
     /// The make of the output.
     pub make: Option<String>,
@@ -702,4 +715,6 @@ pub struct OutputProperties {
     pub focused: Option<bool>,
     /// The tags this output has.
     pub tags: Vec<TagHandle>,
+    /// This output's scaling factor.
+    pub scale: Option<f32>,
 }
