@@ -57,6 +57,10 @@ local client = {
 
 client.loop:wrap(function()
     while true do
+        -- If the only managed coroutine is this ping loop, return to allow the config to exit
+        if client.loop:count() == 1 then
+            return
+        end
         require("cqueues").sleep(60)
         local success, err, errno = client.conn:ping(10)
         if not success then
