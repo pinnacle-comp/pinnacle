@@ -106,12 +106,9 @@ where
                 .map(|geo| (surface, geo.loc))
         })
         .map(|(surface, loc)| {
-            let render_elements = surface.render_elements::<WaylandSurfaceRenderElement<R>>(
-                renderer,
-                loc.to_physical((scale.x.round() as i32, scale.y.round() as i32)),
-                scale,
-                1.0,
-            );
+            let loc = loc.to_physical_precise_round(scale);
+            let render_elements = surface
+                .render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0);
             (surface.layer(), render_elements)
         });
 
@@ -150,8 +147,12 @@ where
         .filter(|win| win.is_on_active_tag())
         .map(|win| {
             // subtract win.geometry().loc to align decorations correctly
-            let loc = (space.element_location(win).unwrap_or((0, 0).into()) - win.geometry().loc - output.current_location())
-                .to_physical((scale.x.round() as i32, scale.x.round() as i32));
+            let loc = (
+                space.element_location(win) .unwrap_or((0, 0).into()) 
+                    - win.geometry().loc 
+                    - output.current_location()
+                )
+                .to_physical_precise_round(scale);
 
             let elem_geo = space.element_geometry(win).map(|mut geo| {
                 geo.loc -= output.current_location();
@@ -166,7 +167,7 @@ where
             match rect {
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {
-                        CropRenderElement::from_element(elem, scale, rect.to_physical_precise_down(scale))
+                        CropRenderElement::from_element(elem, scale, rect.to_physical_precise_round(scale))
                     }).map(TransformRenderElement::from).map(OutputRenderElements::from).collect::<Vec<_>>()
                 },
                 None => elems.into_iter().map(OutputRenderElements::from).collect(),
@@ -243,7 +244,7 @@ where
         };
 
         let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
-        let cursor_pos_scaled = cursor_pos.to_physical(scale).to_i32_round();
+        let cursor_pos_scaled = cursor_pos.to_physical_precise_round(scale);
 
         // set cursor
         if let Some(pointer_image) = pointer_image {

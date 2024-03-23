@@ -31,6 +31,13 @@ require("pinnacle").setup(function(Pinnacle)
     -- Keybinds       --
     --------------------
 
+    Input.keybind({ mod_key }, "=", function()
+        Output.get_focused():increase_scale(0.25)
+    end)
+    Input.keybind({ mod_key }, "-", function()
+        Output.get_focused():decrease_scale(0.25)
+    end)
+
     -- mod_key + alt + q = Quit Pinnacle
     Input.keybind({ mod_key, "alt" }, "q", function()
         Pinnacle.quit()

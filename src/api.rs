@@ -14,7 +14,10 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::{
         self,
-        v0alpha1::{output_service_server, SetLocationRequest, SetModeRequest},
+        v0alpha1::{
+            output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
+            SetModeRequest, SetScaleRequest,
+        },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     tag::{
@@ -27,7 +30,9 @@ use pinnacle_api_defs::pinnacle::{
     v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
 };
 use smithay::{
+    desktop::layer_map_for_output,
     input::keyboard::XkbConfig,
+    output::Scale,
     reexports::{calloop, input as libinput},
 };
 use sysinfo::ProcessRefreshKind;
@@ -973,6 +978,39 @@ impl output_service_server::OutputService for OutputService {
             };
 
             state.resize_output(&output, mode);
+        })
+        .await
+    }
+
+    async fn set_scale(&self, request: Request<SetScaleRequest>) -> Result<Response<()>, Status> {
+        let SetScaleRequest {
+            output_name: Some(output_name),
+            absolute_or_relative: Some(absolute_or_relative),
+        } = request.into_inner()
+        else {
+            return Err(Status::invalid_argument(
+                "output_name or absolute_or_relative were null",
+            ));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(output) = OutputName(output_name).output(state) else {
+                return;
+            };
+
+            let mut current_scale = output.current_scale().fractional_scale();
+
+            match absolute_or_relative {
+                AbsoluteOrRelative::Absolute(abs) => current_scale = abs as f64,
+                AbsoluteOrRelative::Relative(rel) => current_scale += rel as f64,
+            }
+
+            current_scale = f64::max(current_scale, 0.25);
+
+            output.change_current_state(None, None, Some(Scale::Fractional(current_scale)), None);
+            layer_map_for_output(&output).arrange();
+            state.request_layout(&output);
+            state.schedule_render(&output);
         })
         .await
     }

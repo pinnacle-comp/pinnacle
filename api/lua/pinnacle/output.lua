@@ -13,6 +13,7 @@ local service = prefix .. "OutputService"
 local rpc_types = {
     SetLocation = {},
     SetMode = {},
+    SetScale = {},
     ConnectForAll = {
         response_type = "ConnectForAllResponse",
     },
@@ -387,6 +388,27 @@ function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
         pixel_height = pixel_height,
         refresh_rate_millihz = refresh_rate_millihz,
     }))
+end
+
+---Set this output's scaling factor.
+---
+---@param scale number
+function OutputHandle:set_scale(scale)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, absolute = scale }))
+end
+
+---Increase this output's scaling factor.
+---
+---@param increase_by number
+function OutputHandle:increase_scale(increase_by)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = increase_by }))
+end
+
+---Decrease this output's scaling factor.
+---
+---@param decrease_by number
+function OutputHandle:decrease_scale(decrease_by)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = -decrease_by }))
 end
 
 ---@class Mode
