@@ -31,7 +31,7 @@ use smithay::{
             element::{texture::TextureBuffer, RenderElement, RenderElementStates},
             gles::{GlesRenderer, GlesTexture},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
-            Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
+            Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer, TextureFilter,
         },
         session::{
             self,
@@ -1252,6 +1252,10 @@ impl State {
                 .renderer(&primary_gpu, &render_node, format)
         }
         .expect("failed to create MultiRenderer");
+
+        // TODO: set from config
+        let _ = renderer.upscale_filter(TextureFilter::Nearest);
+        let _ = renderer.downscale_filter(TextureFilter::Nearest);
 
         let pointer_images = &mut udev.pointer_images;
         let pointer_image = pointer_images
