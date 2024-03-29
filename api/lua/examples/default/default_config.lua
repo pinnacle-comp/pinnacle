@@ -92,14 +92,22 @@ require("pinnacle").setup(function(Pinnacle)
         end
     end
 
-    Input.keybind({ mod_key }, "=", function()
+    Input.keybind({ mod_key, "shift" }, "=", function()
         Output.get_focused():increase_scale(0.25)
         layout_outputs_in_line()
     end)
 
-    Input.keybind({ mod_key }, "-", function()
+    Input.keybind({ mod_key, "shift" }, "-", function()
         Output.get_focused():decrease_scale(0.25)
         layout_outputs_in_line()
+    end)
+
+    Input.keybind({ mod_key }, "u", function()
+        Pinnacle.render.set_upscale_filter("nearest_neighbor")
+    end)
+
+    Input.keybind({ mod_key }, "d", function()
+        Pinnacle.render.set_upscale_filter("bilinear")
     end)
 
     --------------------

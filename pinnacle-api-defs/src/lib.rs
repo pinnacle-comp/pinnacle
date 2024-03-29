@@ -74,6 +74,12 @@ pub mod pinnacle {
             tonic::include_proto!("pinnacle.layout.v0alpha1");
         }
     }
+
+    pub mod render {
+        pub mod v0alpha1 {
+            tonic::include_proto!("pinnacle.render.v0alpha1");
+        }
+    }
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("pinnacle");

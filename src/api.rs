@@ -20,6 +20,9 @@ use pinnacle_api_defs::pinnacle::{
         },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
+    render::v0alpha1::{
+        render_service_server, Filter, SetDownscaleFilterRequest, SetUpscaleFilterRequest,
+    },
     tag::{
         self,
         v0alpha1::{
@@ -30,6 +33,7 @@ use pinnacle_api_defs::pinnacle::{
     v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
 };
 use smithay::{
+    backend::renderer::TextureFilter,
     desktop::layer_map_for_output,
     input::keyboard::XkbConfig,
     output::Scale,
@@ -46,6 +50,7 @@ use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, warn};
 
 use crate::{
+    backend::BackendData,
     config::ConnectorSavedState,
     input::ModifierMask,
     output::OutputName,
@@ -1130,6 +1135,69 @@ impl output_service_server::OutputService for OutputService {
                 focused,
                 tag_ids,
                 scale,
+            }
+        })
+        .await
+    }
+}
+
+pub struct RenderService {
+    sender: StateFnSender,
+}
+
+impl RenderService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
+}
+
+#[tonic::async_trait]
+impl render_service_server::RenderService for RenderService {
+    async fn set_upscale_filter(
+        &self,
+        request: Request<SetUpscaleFilterRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+        if let Filter::Unspecified = request.filter() {
+            return Err(Status::invalid_argument("unspecified filter"));
+        }
+
+        let filter = match request.filter() {
+            Filter::Bilinear => TextureFilter::Linear,
+            Filter::NearestNeighbor => TextureFilter::Nearest,
+            _ => unreachable!(),
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.backend.set_upscale_filter(filter);
+            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                state.backend.reset_buffers(&output);
+                state.schedule_render(&output);
+            }
+        })
+        .await
+    }
+
+    async fn set_downscale_filter(
+        &self,
+        request: Request<SetDownscaleFilterRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+        if let Filter::Unspecified = request.filter() {
+            return Err(Status::invalid_argument("unspecified filter"));
+        }
+
+        let filter = match request.filter() {
+            Filter::Bilinear => TextureFilter::Linear,
+            Filter::NearestNeighbor => TextureFilter::Nearest,
+            _ => unreachable!(),
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.backend.set_downscale_filter(filter);
+            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                state.backend.reset_buffers(&output);
+                state.schedule_render(&output);
             }
         })
         .await

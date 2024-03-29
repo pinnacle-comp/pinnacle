@@ -8,13 +8,13 @@ use smithay::{
         renderer::{
             damage::{self, OutputDamageTracker},
             gles::{GlesRenderer, GlesTexture},
-            ImportDma, ImportEgl, ImportMemWl, Renderer, TextureFilter,
+            ImportDma, ImportEgl, ImportMemWl,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::utils::send_frames_surface_tree,
+    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
     input::pointer::CursorImageStatus,
-    output::{Output, Subpixel},
+    output::{Output, Scale, Subpixel},
     reexports::{
         calloop::{
             timer::{TimeoutAction, Timer},
@@ -30,6 +30,7 @@ use smithay::{
     utils::{IsAlive, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
+use tracing::error;
 
 use crate::{
     render::{pointer::PointerElement, take_presentation_feedback},
@@ -87,14 +88,6 @@ pub fn setup_winit(
             Ok(ret) => ret,
             Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
         };
-
-    // TODO: set from config
-    winit_backend
-        .renderer()
-        .upscale_filter(TextureFilter::Nearest)?;
-    winit_backend
-        .renderer()
-        .downscale_filter(TextureFilter::Nearest)?;
 
     let mode = smithay::output::Mode {
         size: winit_backend.window_size(),
@@ -206,7 +199,7 @@ pub fn setup_winit(
         true,
         |_| {},
     ) {
-        tracing::error!("Failed to start XWayland: {err}");
+        error!("Failed to start XWayland: {err}");
     }
 
     let insert_ret =
@@ -214,17 +207,25 @@ pub fn setup_winit(
             .loop_handle
             .insert_source(Timer::immediate(), move |_instant, _metadata, state| {
                 let status = winit_evt_loop.dispatch_new_events(|event| match event {
-                    WinitEvent::Resized {
-                        size,
-                        scale_factor: _,
-                    } => {
+                    WinitEvent::Resized { size, scale_factor } => {
                         let mode = smithay::output::Mode {
                             size,
                             refresh: 144_000,
                         };
-                        state.resize_output(&output, mode);
+                        output.change_current_state(
+                            Some(mode),
+                            None,
+                            Some(Scale::Fractional(scale_factor)),
+                            None,
+                        );
+                        layer_map_for_output(&output).arrange();
+                        state.request_layout(&output);
                     }
-                    WinitEvent::Focus(_) => {}
+                    WinitEvent::Focus(focused) => {
+                        if focused {
+                            state.backend.winit_mut().reset_buffers(&output);
+                        }
+                    }
                     WinitEvent::Input(input_evt) => {
                         state.process_input_event(input_evt);
                     }
@@ -315,7 +316,7 @@ impl State {
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
                     if let Err(err) = winit.backend.submit(Some(&damage)) {
-                        tracing::warn!("{}", err);
+                        error!("{}", err);
                     }
                 }
 

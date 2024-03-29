@@ -10,7 +10,7 @@ use smithay::{
                 default_primary_scanout_output_compare, utils::select_dmabuf_feedback,
                 RenderElementStates,
             },
-            ImportDma,
+            ImportDma, Renderer, TextureFilter,
         },
     },
     delegate_dmabuf,
@@ -26,6 +26,7 @@ use smithay::{
         fractional_scale::with_fractional_scale,
     },
 };
+use tracing::error;
 
 use crate::{
     state::{State, SurfaceDmabufFeedback},
@@ -51,6 +52,32 @@ pub enum Backend {
 }
 
 impl Backend {
+    pub fn set_upscale_filter(&mut self, filter: TextureFilter) {
+        match self {
+            Backend::Winit(winit) => {
+                if let Err(err) = winit.backend.renderer().upscale_filter(filter) {
+                    error!("Failed to set winit upscale filter: {err}");
+                }
+            }
+            Backend::Udev(udev) => udev.upscale_filter = filter,
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => (),
+        }
+    }
+
+    pub fn set_downscale_filter(&mut self, filter: TextureFilter) {
+        match self {
+            Backend::Winit(winit) => {
+                if let Err(err) = winit.backend.renderer().downscale_filter(filter) {
+                    error!("Failed to set winit upscale filter: {err}");
+                }
+            }
+            Backend::Udev(udev) => udev.downscale_filter = filter,
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => (),
+        }
+    }
+
     pub fn seat_name(&self) -> String {
         match self {
             Backend::Winit(winit) => winit.seat_name(),
@@ -86,13 +113,41 @@ impl Backend {
     }
 }
 
-/// A trait defining common methods for each available backend: winit and tty-udev
 pub trait BackendData: 'static {
     fn seat_name(&self) -> String;
     fn reset_buffers(&mut self, output: &Output);
 
     // INFO: only for udev in anvil, maybe shouldn't be a trait fn?
     fn early_import(&mut self, surface: &WlSurface);
+}
+
+impl BackendData for Backend {
+    fn seat_name(&self) -> String {
+        match self {
+            Backend::Winit(winit) => winit.seat_name(),
+            Backend::Udev(udev) => udev.seat_name(),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.seat_name(),
+        }
+    }
+
+    fn reset_buffers(&mut self, output: &Output) {
+        match self {
+            Backend::Winit(winit) => winit.reset_buffers(output),
+            Backend::Udev(udev) => udev.reset_buffers(output),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.reset_buffers(output),
+        }
+    }
+
+    fn early_import(&mut self, surface: &WlSurface) {
+        match self {
+            Backend::Winit(winit) => winit.early_import(surface),
+            Backend::Udev(udev) => udev.early_import(surface),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.early_import(surface),
+        }
+    }
 }
 
 /// Update surface primary scanout outputs and send frames and dmabuf feedback to visible windows

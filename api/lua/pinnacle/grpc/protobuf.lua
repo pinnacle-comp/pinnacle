@@ -19,6 +19,7 @@ function protobuf.build_protos()
         PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/signal/" .. version .. "/signal.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/layout/" .. version .. "/layout.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/render/" .. version .. "/render.proto",
         PINNACLE_PROTO_DIR .. "/google/protobuf/empty.proto",
     }
 
