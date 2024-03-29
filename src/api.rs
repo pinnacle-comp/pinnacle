@@ -774,25 +774,15 @@ impl tag_service_server::TagService for TagService {
                 .map(|id| id.0)
                 .collect::<Vec<_>>();
 
-            if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
-                let mut tags = saved_state.tags.clone();
-                tags.extend(new_tags.clone());
-                saved_state.tags = tags;
-            } else {
-                state.config.connector_saved_states.insert(
-                    output_name.clone(),
-                    crate::config::ConnectorSavedState {
-                        tags: new_tags.clone(),
-                        ..Default::default()
-                    },
-                );
-            }
+            state
+                .config
+                .connector_saved_states
+                .entry(output_name.clone())
+                .or_default()
+                .tags
+                .extend(new_tags.clone());
 
-            if let Some(output) = state
-                .space
-                .outputs()
-                .find(|output| output.name() == output_name.0)
-            {
+            if let Some(output) = output_name.output(state) {
                 output.with_state_mut(|state| {
                     state.tags.extend(new_tags.clone());
                     debug!("tags added, are now {:?}", state.tags);

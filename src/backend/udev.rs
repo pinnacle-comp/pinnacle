@@ -998,9 +998,9 @@ impl State {
             .connector_saved_states
             .get(&OutputName(output.name()))
         {
-            let ConnectorSavedState { loc, tags } = saved_state;
+            let ConnectorSavedState { loc, tags, scale } = saved_state;
 
-            output.change_current_state(None, None, None, Some(*loc));
+            output.change_current_state(None, None, *scale, Some(*loc));
             self.space.map_output(&output, *loc);
 
             output.with_state_mut(|state| state.tags = tags.clone());
@@ -1050,6 +1050,7 @@ impl State {
                 ConnectorSavedState {
                     loc: output.current_location(),
                     tags: output.with_state(|state| state.tags.clone()),
+                    scale: Some(output.current_scale()),
                 },
             );
             self.space.unmap_output(&output);

@@ -214,6 +214,8 @@ pub struct ConnectorSavedState {
     pub loc: Point<i32, Logical>,
     /// The output's previous tags
     pub tags: Vec<Tag>,
+    /// The output's previous scale
+    pub scale: Option<smithay::output::Scale>,
 }
 
 /// Parse a metaconfig file in `config_dir`, if any.
