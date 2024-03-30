@@ -7,7 +7,7 @@
 
 </div>
 
-https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7a6639b0c9
+![image](https://github.com/pinnacle-comp/pinnacle/assets/120758733/a0e9ce93-30bb-4359-9b61-78ad4c4134d9)
 
 # Table of Contents
 - [Info](#info)
