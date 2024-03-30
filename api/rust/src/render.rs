@@ -33,6 +33,14 @@ impl Render {
     }
 
     /// Set the upscaling filter that will be used for rendering.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::render::ScalingFilter;
+    ///
+    /// render.set_upscale_filter(ScalingFilter::NearestNeighbor);
+    /// ```
     pub fn set_upscale_filter(&self, filter: ScalingFilter) {
         let mut client = self.client.clone();
         block_on_tokio(client.set_upscale_filter(SetUpscaleFilterRequest {
@@ -42,6 +50,14 @@ impl Render {
     }
 
     /// Set the downscaling filter that will be used for rendering.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::render::ScalingFilter;
+    ///
+    /// render.set_downscale_filter(ScalingFilter::NearestNeighbor);
+    /// ```
     pub fn set_downscale_filter(&self, filter: ScalingFilter) {
         let mut client = self.client.clone();
         block_on_tokio(client.set_downscale_filter(SetDownscaleFilterRequest {

@@ -39,8 +39,8 @@ end
 local render = {}
 
 ---@alias ScalingFilter
----| "bilinear"
----| "nearest_neighbor"
+---| "bilinear" Blend between the four closest pixels. May cause scaling to be blurry.
+---| "nearest_neighbor" Choose the closest pixel. Causes scaling to look pixelated.
 
 ---@type table<ScalingFilter, integer>
 local filter_name_to_filter_value = {
