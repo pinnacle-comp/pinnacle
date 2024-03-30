@@ -59,7 +59,7 @@ for Wayland.
 - Is very cool :thumbsup:
 
 ### Roadmap
-- TODO
+- See #142
 
 # Dependencies
 You will need:
