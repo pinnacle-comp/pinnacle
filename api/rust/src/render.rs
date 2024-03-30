@@ -18,7 +18,7 @@ pub enum ScalingFilter {
     /// Use a bilinear filter.
     ///
     /// This will make up- and downscaling blurry.
-    Bilinear,
+    Bilinear = 1,
     /// Use a nearest neighbor filter.
     ///
     /// This will cause scaling to look pixelated.
