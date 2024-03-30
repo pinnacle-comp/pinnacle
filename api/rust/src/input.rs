@@ -253,7 +253,7 @@ impl Input {
     /// ```
     /// use pinnacle_api::input::XkbConfig;
     ///
-    /// input.set_xkb_config(Xkbconfig {
+    /// input.set_xkb_config(XkbConfig {
     ///     layout: Some("us,fr,ge"),
     ///     options: Some("ctrl:swapcaps,caps:shift"),
     ///     ..Default::default()
