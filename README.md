@@ -1,5 +1,12 @@
 ![Pinnacle banner](/assets/pinnacle_banner_dark.png)
 
+<div align="center">
+
+[![Discord](https://img.shields.io/discord/1223351743522537565?style=for-the-badge&logo=discord&logoColor=white&label=Discord&labelColor=%235865F2&color=%231825A2)](https://discord.gg/JhpKtU2aMA)
+[![Matrix](https://img.shields.io/matrix/pinnacle%3Amatrix.org?style=for-the-badge&logo=matrix&logoColor=white&label=Matrix&labelColor=black&color=gray)](https://matrix.to/#/#pinnacle:matrix.org)
+
+</div>
+
 https://github.com/Ottatop/pinnacle/assets/120758733/c175ba80-9796-4759-92c3-1d7a6639b0c9
 
 # Table of Contents
