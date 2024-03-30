@@ -73,7 +73,7 @@ You will need:
         ```sh
         sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
         ```
-    - Debian:
+    - Debian/Ubuntu:
         ```sh
         sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
         ```
@@ -83,10 +83,18 @@ You will need:
         ```sh
         sudo pacman -S protobuf
         ```
+    - Debian/Ubuntu:
+        ```sh
+        sudo apt install protobuf-compiler
+        ```
 - [LuaRocks](https://luarocks.org/), the Lua package manager, to use the Lua API
     - Arch:
         ```sh
         sudo pacman -S luarocks
+        ```
+    - Debian/Ubuntu:
+        ```sh
+        sudo apt install luarocks
         ```
     - You must run `eval $(luarocks path --lua-version 5.4)` so that your config can find the API
       library files. It is recommended to place this command in your shell's startup script.

@@ -83,7 +83,7 @@ impl Process {
     /// process.spawn_with_callbacks(["alacritty"], SpawnCallbacks {
     ///     stdout: Some(Box::new(|line| println!("stdout: {line}"))),
     ///     stderr: Some(Box::new(|line| println!("stderr: {line}"))),
-    ///     stdout: Some(Box::new(|code, msg| println!("exit code: {code:?}, exit_msg: {msg}"))),
+    ///     exit: Some(Box::new(|code, msg| println!("exit code: {code:?}, exit_msg: {msg}"))),
     /// });
     /// ```
     pub fn spawn_with_callbacks(
