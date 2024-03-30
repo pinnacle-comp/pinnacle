@@ -555,7 +555,6 @@ impl process_service_server::ProcessService for ProcessService {
             }
 
             let Ok(mut child) = tokio::process::Command::new(OsString::from(arg0.clone()))
-                .envs(state.xdisplay.map(|xdisp| ("DISPLAY", format!(":{xdisp}"))))
                 .stdin(match has_callback {
                     true => Stdio::piped(),
                     false => Stdio::null(),

@@ -161,12 +161,6 @@ impl State {
             },
         )?;
 
-        loop_handle.insert_idle(|state| {
-            if let Err(err) = state.start_config(state.config.dir(&state.xdg_base_dirs)) {
-                panic!("failed to start config: {err}");
-            }
-        });
-
         let mut seat_state = SeatState::new();
 
         let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
@@ -208,6 +202,10 @@ impl State {
                     state.xdisplay = Some(display);
 
                     std::env::set_var("DISPLAY", format!(":{display}"));
+
+                    if let Err(err) = state.start_config(state.config.dir(&state.xdg_base_dirs)) {
+                        panic!("failed to start config: {err}");
+                    }
                 }
                 XWaylandEvent::Exited => {
                     state.xwm.take();
