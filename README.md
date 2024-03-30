@@ -59,7 +59,7 @@ for Wayland.
 - Is very cool :thumbsup:
 
 ### Roadmap
-- See #142
+- See [#142](https://github.com/pinnacle-comp/pinnacle/issues/142)
 
 # Dependencies
 You will need:
