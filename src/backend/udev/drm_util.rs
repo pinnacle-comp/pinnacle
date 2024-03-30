@@ -31,7 +31,7 @@ impl EdidInfo {
             }
         }
 
-        dbg!(info)
+        info
     }
 }
 

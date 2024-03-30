@@ -6,7 +6,7 @@ local client = require("pinnacle.grpc.client")
 
 ---The entry point to configuration.
 ---
----This module contains one function: `setup`, which is how you'll access all the ways to configure Pinnacle.
+---This module contains the `setup` function, which is how you'll access all the ways to configure Pinnacle.
 ---@class Pinnacle
 local pinnacle = {
     ---@type Input
@@ -23,6 +23,8 @@ local pinnacle = {
     util = require("pinnacle.util"),
     ---@type Layout
     layout = require("pinnacle.layout"),
+    ---@type Render
+    render = require("pinnacle.render"),
 }
 
 ---Quit Pinnacle.
@@ -50,6 +52,8 @@ end
 function pinnacle.setup(config_fn)
     require("pinnacle.grpc.protobuf").build_protos()
 
+    -- This function ensures a config won't run forever if Pinnacle is killed
+    -- and doesn't kill configs on drop.
     client.loop:wrap(function()
         while true do
             require("cqueues").sleep(60)

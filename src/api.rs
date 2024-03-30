@@ -14,9 +14,15 @@ use pinnacle_api_defs::pinnacle::{
     },
     output::{
         self,
-        v0alpha1::{output_service_server, SetLocationRequest, SetModeRequest},
+        v0alpha1::{
+            output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
+            SetModeRequest, SetScaleRequest,
+        },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
+    render::v0alpha1::{
+        render_service_server, Filter, SetDownscaleFilterRequest, SetUpscaleFilterRequest,
+    },
     tag::{
         self,
         v0alpha1::{
@@ -27,7 +33,10 @@ use pinnacle_api_defs::pinnacle::{
     v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
 };
 use smithay::{
+    backend::renderer::TextureFilter,
+    desktop::layer_map_for_output,
     input::keyboard::XkbConfig,
+    output::Scale,
     reexports::{calloop, input as libinput},
 };
 use sysinfo::ProcessRefreshKind;
@@ -41,6 +50,7 @@ use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, warn};
 
 use crate::{
+    backend::BackendData,
     config::ConnectorSavedState,
     input::ModifierMask,
     output::OutputName,
@@ -764,25 +774,15 @@ impl tag_service_server::TagService for TagService {
                 .map(|id| id.0)
                 .collect::<Vec<_>>();
 
-            if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
-                let mut tags = saved_state.tags.clone();
-                tags.extend(new_tags.clone());
-                saved_state.tags = tags;
-            } else {
-                state.config.connector_saved_states.insert(
-                    output_name.clone(),
-                    crate::config::ConnectorSavedState {
-                        tags: new_tags.clone(),
-                        ..Default::default()
-                    },
-                );
-            }
+            state
+                .config
+                .connector_saved_states
+                .entry(output_name.clone())
+                .or_default()
+                .tags
+                .extend(new_tags.clone());
 
-            if let Some(output) = state
-                .space
-                .outputs()
-                .find(|output| output.name() == output_name.0)
-            {
+            if let Some(output) = output_name.output(state) {
                 output.with_state_mut(|state| {
                     state.tags.extend(new_tags.clone());
                     debug!("tags added, are now {:?}", state.tags);
@@ -977,6 +977,39 @@ impl output_service_server::OutputService for OutputService {
         .await
     }
 
+    async fn set_scale(&self, request: Request<SetScaleRequest>) -> Result<Response<()>, Status> {
+        let SetScaleRequest {
+            output_name: Some(output_name),
+            absolute_or_relative: Some(absolute_or_relative),
+        } = request.into_inner()
+        else {
+            return Err(Status::invalid_argument(
+                "output_name or absolute_or_relative were null",
+            ));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(output) = OutputName(output_name).output(state) else {
+                return;
+            };
+
+            let mut current_scale = output.current_scale().fractional_scale();
+
+            match absolute_or_relative {
+                AbsoluteOrRelative::Absolute(abs) => current_scale = abs as f64,
+                AbsoluteOrRelative::Relative(rel) => current_scale += rel as f64,
+            }
+
+            current_scale = f64::max(current_scale, 0.25);
+
+            output.change_current_state(None, None, Some(Scale::Fractional(current_scale)), None);
+            layer_map_for_output(&output).arrange();
+            state.request_layout(&output);
+            state.schedule_render(&output);
+        })
+        .await
+    }
+
     async fn get(
         &self,
         _request: Request<output::v0alpha1::GetRequest>,
@@ -1015,6 +1048,11 @@ impl output_service_server::OutputService for OutputService {
 
         run_unary(&self.sender, move |state| {
             let output = output_name.output(state);
+
+            let logical_size = output
+                .as_ref()
+                .and_then(|output| state.space.output_geometry(output))
+                .map(|geo| (geo.size.w, geo.size.h));
 
             let current_mode = output
                 .as_ref()
@@ -1068,11 +1106,17 @@ impl output_service_server::OutputService for OutputService {
                 })
                 .unwrap_or_default();
 
+            let scale = output
+                .as_ref()
+                .map(|output| output.current_scale().fractional_scale() as f32);
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
                 x,
                 y,
+                logical_width: logical_size.map(|(w, _)| w as u32),
+                logical_height: logical_size.map(|(_, h)| h as u32),
                 current_mode,
                 preferred_mode,
                 modes,
@@ -1080,6 +1124,70 @@ impl output_service_server::OutputService for OutputService {
                 physical_height,
                 focused,
                 tag_ids,
+                scale,
+            }
+        })
+        .await
+    }
+}
+
+pub struct RenderService {
+    sender: StateFnSender,
+}
+
+impl RenderService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
+}
+
+#[tonic::async_trait]
+impl render_service_server::RenderService for RenderService {
+    async fn set_upscale_filter(
+        &self,
+        request: Request<SetUpscaleFilterRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+        if let Filter::Unspecified = request.filter() {
+            return Err(Status::invalid_argument("unspecified filter"));
+        }
+
+        let filter = match request.filter() {
+            Filter::Bilinear => TextureFilter::Linear,
+            Filter::NearestNeighbor => TextureFilter::Nearest,
+            _ => unreachable!(),
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.backend.set_upscale_filter(filter);
+            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                state.backend.reset_buffers(&output);
+                state.schedule_render(&output);
+            }
+        })
+        .await
+    }
+
+    async fn set_downscale_filter(
+        &self,
+        request: Request<SetDownscaleFilterRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+        if let Filter::Unspecified = request.filter() {
+            return Err(Status::invalid_argument("unspecified filter"));
+        }
+
+        let filter = match request.filter() {
+            Filter::Bilinear => TextureFilter::Linear,
+            Filter::NearestNeighbor => TextureFilter::Nearest,
+            _ => unreachable!(),
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.backend.set_downscale_filter(filter);
+            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                state.backend.reset_buffers(&output);
+                state.schedule_render(&output);
             }
         })
         .await

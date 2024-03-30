@@ -88,6 +88,7 @@ use layout::Layout;
 use output::Output;
 use pinnacle::Pinnacle;
 use process::Process;
+use render::Render;
 use signal::SignalState;
 use tag::Tag;
 use tokio::sync::{
@@ -104,6 +105,7 @@ pub mod layout;
 pub mod output;
 pub mod pinnacle;
 pub mod process;
+pub mod render;
 pub mod signal;
 pub mod tag;
 pub mod util;
@@ -121,6 +123,7 @@ static OUTPUT: OnceLock<Output> = OnceLock::new();
 static TAG: OnceLock<Tag> = OnceLock::new();
 static SIGNAL: OnceLock<RwLock<SignalState>> = OnceLock::new();
 static LAYOUT: OnceLock<Layout> = OnceLock::new();
+static RENDER: OnceLock<Render> = OnceLock::new();
 
 /// A struct containing static references to all of the configuration structs.
 #[derive(Debug, Clone, Copy)]
@@ -139,6 +142,8 @@ pub struct ApiModules {
     pub tag: &'static Tag,
     /// The [`Layout`] struct
     pub layout: &'static Layout,
+    /// The [`Render`] struct
+    pub render: &'static Render,
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
@@ -166,6 +171,7 @@ pub async fn connect(
     let tag = TAG.get_or_init(|| Tag::new(channel.clone()));
     let output = OUTPUT.get_or_init(|| Output::new(channel.clone()));
     let layout = LAYOUT.get_or_init(|| Layout::new(channel.clone()));
+    let render = RENDER.get_or_init(|| Render::new(channel.clone()));
 
     SIGNAL
         .set(RwLock::new(SignalState::new(
@@ -182,6 +188,7 @@ pub async fn connect(
         output,
         tag,
         layout,
+        render,
     };
 
     Ok((modules, fut_recv))

@@ -12,7 +12,10 @@
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
-    v0alpha1::{output_service_client::OutputServiceClient, SetLocationRequest, SetModeRequest},
+    v0alpha1::{
+        output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
+        SetLocationRequest, SetModeRequest, SetScaleRequest,
+    },
 };
 use tonic::transport::Channel;
 
@@ -300,13 +303,11 @@ impl OutputHandle {
         let attempt_set_loc = || -> Option<()> {
             let other_x = other_props.x?;
             let other_y = other_props.y?;
-            let other_mode = other_props.current_mode?;
-            let other_width = other_mode.pixel_width as i32;
-            let other_height = other_mode.pixel_height as i32;
+            let other_width = other_props.logical_width? as i32;
+            let other_height = other_props.logical_height? as i32;
 
-            let self_mode = self_props.current_mode?;
-            let self_width = self_mode.pixel_width as i32;
-            let self_height = self_mode.pixel_height as i32;
+            let self_width = self_props.logical_width? as i32;
+            let self_height = self_props.logical_height? as i32;
 
             use Alignment::*;
 
@@ -390,6 +391,51 @@ impl OutputHandle {
         .unwrap();
     }
 
+    /// Set this output's scaling factor.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.set_scale(1.5);
+    /// ```
+    pub fn set_scale(&self, scale: f32) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_scale(SetScaleRequest {
+            output_name: Some(self.name.clone()),
+            absolute_or_relative: Some(AbsoluteOrRelative::Absolute(scale)),
+        }))
+        .unwrap();
+    }
+
+    /// Increase this output's scaling factor by `increase_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.increase_scale(0.25);
+    /// ```
+    pub fn increase_scale(&self, increase_by: f32) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_scale(SetScaleRequest {
+            output_name: Some(self.name.clone()),
+            absolute_or_relative: Some(AbsoluteOrRelative::Relative(increase_by)),
+        }))
+        .unwrap();
+    }
+
+    /// Decrease this output's scaling factor by `decrease_by`.
+    ///
+    /// This simply calls [`OutputHandle::increase_scale`] with the negative of `decrease_by`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.get_focused()?.decrease_scale(0.25);
+    /// ```
+    pub fn decrease_scale(&self, decrease_by: f32) {
+        self.increase_scale(-decrease_by);
+    }
+
     /// Get all properties of this output.
     ///
     /// # Examples
@@ -398,17 +444,7 @@ impl OutputHandle {
     /// use pinnacle_api::output::OutputProperties;
     ///
     /// let OutputProperties {
-    ///     make,
-    ///     model,
-    ///     x,
-    ///     y,
-    ///     pixel_width,
-    ///     pixel_height,
-    ///     refresh_rate,
-    ///     physical_width,
-    ///     physical_height,
-    ///     focused,
-    ///     tags,
+    ///     ..
     /// } = output.get_focused()?.props();
     /// ```
     pub fn props(&self) -> OutputProperties {
@@ -433,6 +469,8 @@ impl OutputHandle {
             model: response.model,
             x: response.x,
             y: response.y,
+            logical_width: response.logical_width,
+            logical_height: response.logical_height,
             current_mode: response.current_mode.and_then(|mode| {
                 Some(Mode {
                     pixel_width: mode.pixel_width?,
@@ -466,6 +504,7 @@ impl OutputHandle {
                 .into_iter()
                 .map(|id| tag.new_handle(id))
                 .collect(),
+            scale: response.scale,
         }
     }
 
@@ -517,6 +556,30 @@ impl OutputHandle {
     /// The async version of [`OutputHandle::y`].
     pub async fn y_async(&self) -> Option<i32> {
         self.props_async().await.y
+    }
+
+    /// Get this output's logical width in pixels.
+    ///
+    /// Shorthand for `self.props().logical_width`.
+    pub fn logical_width(&self) -> Option<u32> {
+        self.props().logical_width
+    }
+
+    /// The async version of [`OutputHandle::logical_width`].
+    pub async fn logical_width_async(&self) -> Option<u32> {
+        self.props_async().await.logical_width
+    }
+
+    /// Get this output's logical height in pixels.
+    ///
+    /// Shorthand for `self.props().logical_height`.
+    pub fn logical_height(&self) -> Option<u32> {
+        self.props().logical_height
+    }
+
+    /// The async version of [`OutputHandle::logical_height`].
+    pub async fn logical_height_async(&self) -> Option<u32> {
+        self.props_async().await.logical_height
     }
 
     /// Get this output's current mode.
@@ -605,6 +668,18 @@ impl OutputHandle {
         self.props_async().await.tags
     }
 
+    /// Get this output's scaling factor.
+    ///
+    /// Shorthand for `self.props().scale`
+    pub fn scale(&self) -> Option<f32> {
+        self.props().scale
+    }
+
+    /// The async version of [`OutputHandle::scale`].
+    pub async fn scale_async(&self) -> Option<f32> {
+        self.props_async().await.scale
+    }
+
     /// Get this output's unique name (the name of its connector).
     pub fn name(&self) -> &str {
         &self.name
@@ -625,7 +700,7 @@ pub struct Mode {
 }
 
 /// The properties of an output.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct OutputProperties {
     /// The make of the output.
     pub make: Option<String>,
@@ -638,6 +713,12 @@ pub struct OutputProperties {
     pub x: Option<i32>,
     /// The y position of the output in the global space.
     pub y: Option<i32>,
+    /// The logical width of this output in the global space
+    /// taking into account scaling, in pixels.
+    pub logical_width: Option<u32>,
+    /// The logical height of this output in the global space
+    /// taking into account scaling, in pixels.
+    pub logical_height: Option<u32>,
     /// The output's current mode.
     pub current_mode: Option<Mode>,
     /// The output's preferred mode.
@@ -654,4 +735,6 @@ pub struct OutputProperties {
     pub focused: Option<bool>,
     /// The tags this output has.
     pub tags: Vec<TagHandle>,
+    /// This output's scaling factor.
+    pub scale: Option<f32>,
 }

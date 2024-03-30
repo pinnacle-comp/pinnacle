@@ -29,9 +29,9 @@ use smithay::{
         renderer::{
             damage,
             element::{texture::TextureBuffer, RenderElement, RenderElementStates},
-            gles::{GlesRenderer, GlesTexture},
+            gles::GlesRenderer,
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
-            Bind, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
+            Bind, ImportDma, ImportEgl, ImportMemWl, Renderer, TextureFilter,
         },
         session::{
             self,
@@ -52,10 +52,7 @@ use smithay::{
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{EventLoop, Idle, LoopHandle, RegistrationToken},
-        drm::{
-            control::{connector, crtc, ModeTypeFlags},
-            Device,
-        },
+        drm::control::{connector, crtc, ModeTypeFlags},
         input::Libinput,
         rustix::fs::OFlags,
         wayland_protocols::wp::{
@@ -122,6 +119,9 @@ pub struct Udev {
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
     pointer_element: PointerElement<MultiTexture>,
     pointer_image: crate::cursor::Cursor,
+
+    pub(super) upscale_filter: TextureFilter,
+    pub(super) downscale_filter: TextureFilter,
 }
 
 impl Backend {
@@ -320,6 +320,9 @@ pub fn setup_udev(
         pointer_image: crate::cursor::Cursor::load(),
         pointer_images: Vec::new(),
         pointer_element: PointerElement::default(),
+
+        upscale_filter: TextureFilter::Linear,
+        downscale_filter: TextureFilter::Linear,
     };
 
     let display_handle = display.handle();
@@ -721,14 +724,14 @@ struct SurfaceCompositorRenderResult {
 /// Render a frame with the given elements.
 ///
 /// This frame needs to be queued for scanout afterwards.
-fn render_frame<R, E, Target>(
+fn render_frame<R, E>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut R,
     elements: &[E],
     clear_color: [f32; 4],
 ) -> Result<SurfaceCompositorRenderResult, SwapBuffersError>
 where
-    R: Renderer + Bind<Dmabuf> + Bind<Target> + Offscreen<Target> + ExportMem,
+    R: Renderer + Bind<Dmabuf>,
     <R as Renderer>::TextureId: 'static,
     <R as Renderer>::Error: Into<SwapBuffersError>,
     E: RenderElement<R>,
@@ -942,30 +945,12 @@ impl State {
         };
 
         let compositor = {
-            let driver = match device.drm.get_driver() {
-                Ok(driver) => driver,
-                Err(err) => {
-                    warn!("Failed to query drm driver: {}", err);
-                    return;
-                }
-            };
-
             let mut planes = surface.planes().clone();
 
-            // Using an overlay plane on a nvidia card breaks
-            if driver
-                .name()
-                .to_string_lossy()
-                .to_lowercase()
-                .contains("nvidia")
-                || driver
-                    .description()
-                    .to_string_lossy()
-                    .to_lowercase()
-                    .contains("nvidia")
-            {
-                planes.overlay = vec![];
-            }
+            // INFO: We are disabling overlay planes because it seems that any elements on
+            // |     overlay planes don't get up/downscaled according to the set filter;
+            // |     it always defaults to linear.
+            planes.overlay.clear();
 
             match DrmCompositor::new(
                 &output,
@@ -1013,9 +998,9 @@ impl State {
             .connector_saved_states
             .get(&OutputName(output.name()))
         {
-            let ConnectorSavedState { loc, tags } = saved_state;
+            let ConnectorSavedState { loc, tags, scale } = saved_state;
 
-            output.change_current_state(None, None, None, Some(*loc));
+            output.change_current_state(None, None, *scale, Some(*loc));
             self.space.map_output(&output, *loc);
 
             output.with_state_mut(|state| state.tags = tags.clone());
@@ -1065,6 +1050,7 @@ impl State {
                 ConnectorSavedState {
                     loc: output.current_location(),
                     tags: output.with_state(|state| state.tags.clone()),
+                    scale: Some(output.current_scale()),
                 },
             );
             self.space.unmap_output(&output);
@@ -1238,9 +1224,11 @@ impl State {
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = udev
-            .pointer_image
-            .get_image(1 /*scale*/, self.clock.now().into());
+        let frame = udev.pointer_image.get_image(
+            1,
+            // output.current_scale().integer_scale() as u32,
+            self.clock.now().into(),
+        );
 
         let render_node = surface.render_node;
         let primary_gpu = udev.primary_gpu;
@@ -1252,6 +1240,9 @@ impl State {
                 .renderer(&primary_gpu, &render_node, format)
         }
         .expect("failed to create MultiRenderer");
+
+        let _ = renderer.upscale_filter(udev.upscale_filter);
+        let _ = renderer.downscale_filter(udev.downscale_filter);
 
         let pointer_images = &mut udev.pointer_images;
         let pointer_image = pointer_images
@@ -1356,7 +1347,7 @@ fn render_surface(
         Some(pointer_image),
     );
 
-    let res = render_frame::<_, _, GlesTexture>(
+    let res = render_frame(
         &mut surface.compositor,
         renderer,
         &output_render_elements,

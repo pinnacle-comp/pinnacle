@@ -16,6 +16,7 @@ use pinnacle_api::{
 #[pinnacle_api::config(modules)]
 async fn main() {
     // Deconstruct to get all the APIs.
+    #[allow(unused_variables)]
     let ApiModules {
         pinnacle,
         process,
@@ -24,6 +25,7 @@ async fn main() {
         output,
         tag,
         layout,
+        render,
     } = modules;
 
     let mod_key = Mod::Ctrl;

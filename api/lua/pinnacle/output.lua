@@ -13,6 +13,7 @@ local service = prefix .. "OutputService"
 local rpc_types = {
     SetLocation = {},
     SetMode = {},
+    SetScale = {},
     ConnectForAll = {
         response_type = "ConnectForAllResponse",
     },
@@ -320,14 +321,14 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     ---@type integer
     local y
 
-    if not self_props.current_mode or not other_props.current_mode then
+    local self_width = self_props.logical_width
+    local self_height = self_props.logical_height
+    local other_width = other_props.logical_width
+    local other_height = other_props.logical_height
+
+    if not (self_width and self_height and other_width and other_height) then
         return
     end
-
-    local self_width = self_props.current_mode.pixel_width
-    local self_height = self_props.current_mode.pixel_height
-    local other_width = other_props.current_mode.pixel_width
-    local other_height = other_props.current_mode.pixel_height
 
     if dir == "top" or dir == "bottom" then
         if dir == "top" then
@@ -389,6 +390,27 @@ function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
     }))
 end
 
+---Set this output's scaling factor.
+---
+---@param scale number
+function OutputHandle:set_scale(scale)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, absolute = scale }))
+end
+
+---Increase this output's scaling factor.
+---
+---@param increase_by number
+function OutputHandle:increase_scale(increase_by)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = increase_by }))
+end
+
+---Decrease this output's scaling factor.
+---
+---@param decrease_by number
+function OutputHandle:decrease_scale(decrease_by)
+    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = -decrease_by }))
+end
+
 ---@class Mode
 ---@field pixel_width integer
 ---@field pixel_height integer
@@ -399,6 +421,8 @@ end
 ---@field model string?
 ---@field x integer?
 ---@field y integer?
+---@field logical_width integer?
+---@field logical_height integer?
 ---@field current_mode Mode?
 ---@field preferred_mode Mode?
 ---@field modes Mode[]
@@ -406,6 +430,7 @@ end
 ---@field physical_height integer?
 ---@field focused boolean?
 ---@field tags TagHandle[]
+---@field scale number?
 
 ---Get all properties of this output.
 ---
@@ -461,6 +486,24 @@ end
 ---@return integer?
 function OutputHandle:y()
     return self:props().y
+end
+
+---Get this output's logical width in pixels.
+---
+---Shorthand for `handle:props().logical_width`.
+---
+---@return integer?
+function OutputHandle:logical_width()
+    return self:props().logical_width
+end
+
+---Get this output's logical height in pixels.
+---
+---Shorthand for `handle:props().y`.
+---
+---@return integer?
+function OutputHandle:logical_height()
+    return self:props().logical_height
 end
 
 ---Get this output's current mode.
@@ -526,6 +569,15 @@ end
 ---@return TagHandle[]?
 function OutputHandle:tags()
     return self:props().tags
+end
+
+---Get this output's scaling factor.
+---
+---Shorthand for `handle:props().scale`.
+---
+---@return number?
+function OutputHandle:scale()
+    return self:props().scale
 end
 
 ---@nodoc

@@ -15,6 +15,7 @@ fn main() {
         formatcp!("../api/protocol/pinnacle/window/{VERSION}/window.proto"),
         formatcp!("../api/protocol/pinnacle/signal/{VERSION}/signal.proto"),
         formatcp!("../api/protocol/pinnacle/layout/{VERSION}/layout.proto"),
+        formatcp!("../api/protocol/pinnacle/render/{VERSION}/render.proto"),
     ];
 
     let descriptor_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("pinnacle.bin");
