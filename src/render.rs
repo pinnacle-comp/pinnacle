@@ -6,7 +6,6 @@ use smithay::{
     backend::renderer::{
         element::{
             surface::WaylandSurfaceRenderElement,
-            texture::TextureBuffer,
             utils::{CropRenderElement, RelocateRenderElement, RescaleRenderElement},
             AsRenderElements, RenderElementStates, Wrap,
         },
@@ -28,7 +27,7 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     render_elements,
-    utils::{IsAlive, Logical, Physical, Point, Scale},
+    utils::{Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
 };
 
@@ -178,6 +177,65 @@ where
     elements
 }
 
+pub fn pointer_render_elements<R>(
+    output: &Output,
+    renderer: &mut R,
+    space: &Space<WindowElement>,
+    pointer_location: Point<f64, Logical>,
+    cursor_status: &mut CursorImageStatus,
+    dnd_icon: Option<&WlSurface>,
+    pointer_element: &PointerElement<<R as Renderer>::TextureId>,
+) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
+where
+    R: Renderer + ImportAll,
+    <R as Renderer>::TextureId: Clone + 'static,
+{
+    let mut output_render_elements = Vec::new();
+
+    let Some(output_geometry) = space.output_geometry(output) else {
+        return output_render_elements;
+    };
+    let scale = Scale::from(output.current_scale().fractional_scale());
+
+    if output_geometry.to_f64().contains(pointer_location) {
+        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = cursor_status {
+            compositor::with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<Mutex<CursorImageAttributes>>()
+                    .expect("surface data map had no CursorImageAttributes")
+                    .lock()
+                    .expect("failed to lock mutex")
+                    .hotspot
+            })
+        } else {
+            (0, 0).into()
+        };
+
+        let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
+        let cursor_pos_scaled = cursor_pos.to_physical_precise_round(scale);
+
+        output_render_elements.extend(pointer_element.render_elements(
+            renderer,
+            cursor_pos_scaled,
+            scale,
+            1.0,
+        ));
+
+        if let Some(dnd_icon) = dnd_icon {
+            output_render_elements.extend(AsRenderElements::render_elements(
+                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
+                renderer,
+                cursor_pos_scaled,
+                scale,
+                1.0,
+            ));
+        }
+    }
+
+    output_render_elements
+}
+
 /// Generate render elements for the given output.
 ///
 /// Render elements will be pulled from the provided windows,
@@ -188,21 +246,12 @@ pub fn generate_render_elements<R, T>(
     renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-    pointer_location: Point<f64, Logical>,
-    cursor_status: &mut CursorImageStatus,
-    dnd_icon: Option<&WlSurface>,
-    // input_method: &InputMethodHandle,
-    pointer_element: &mut PointerElement<T>,
-    pointer_image: Option<&TextureBuffer<T>>,
 ) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer<TextureId = T> + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
     T: Texture + Clone,
 {
-    let output_geometry = space
-        .output_geometry(output)
-        .expect("called output_geometry on an unmapped output");
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut output_render_elements: Vec<OutputRenderElements<_, _>> = Vec::new();
@@ -227,58 +276,6 @@ where
     //         1.0,
     //     ));
     // });
-
-    if output_geometry.to_f64().contains(pointer_location) {
-        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = cursor_status {
-            compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<Mutex<CursorImageAttributes>>()
-                    .expect("surface data map had no CursorImageAttributes")
-                    .lock()
-                    .expect("failed to lock mutex")
-                    .hotspot
-            })
-        } else {
-            (0, 0).into()
-        };
-
-        let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
-        let cursor_pos_scaled = cursor_pos.to_physical_precise_round(scale);
-
-        // set cursor
-        if let Some(pointer_image) = pointer_image {
-            pointer_element.set_texture(pointer_image.clone());
-        }
-
-        // TODO: why is updating the cursor texture in generate_render_elements?
-        // draw the cursor as relevant and
-        // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &*cursor_status {
-            if !surface.alive() {
-                *cursor_status = CursorImageStatus::default_named();
-            }
-        }
-
-        pointer_element.set_status(cursor_status.clone());
-
-        output_render_elements.extend(pointer_element.render_elements(
-            renderer,
-            cursor_pos_scaled,
-            scale,
-            1.0,
-        ));
-
-        if let Some(dnd_icon) = dnd_icon {
-            output_render_elements.extend(AsRenderElements::render_elements(
-                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
-                renderer,
-                cursor_pos_scaled,
-                scale,
-                1.0,
-            ));
-        }
-    }
 
     let o_r_elements = override_redirect_windows.iter().flat_map(|surf| {
         surf.render_elements::<WaylandSurfaceRenderElement<R>>(

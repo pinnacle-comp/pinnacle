@@ -12,7 +12,7 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    desktop::layer_map_for_output,
     input::pointer::CursorImageStatus,
     output::{Output, Scale, Subpixel},
     reexports::{
@@ -33,7 +33,10 @@ use smithay::{
 use tracing::error;
 
 use crate::{
-    render::{pointer::PointerElement, take_presentation_feedback},
+    render::{
+        generate_render_elements, pointer::PointerElement, pointer_render_elements,
+        take_presentation_feedback,
+    },
     state::State,
 };
 
@@ -268,6 +271,7 @@ impl State {
         let cursor_visible = !matches!(self.cursor_status, CursorImageStatus::Surface(_));
 
         let mut pointer_element = PointerElement::<GlesTexture>::new();
+
         pointer_element.set_status(self.cursor_status.clone());
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
@@ -280,18 +284,25 @@ impl State {
             .map(|ptr| ptr.current_location())
             .unwrap_or((0.0, 0.0).into());
 
-        let output_render_elements = crate::render::generate_render_elements(
+        let pointer_render_elements = pointer_render_elements(
             output,
             winit.backend.renderer(),
             &self.space,
-            &windows,
             pointer_location,
             &mut self.cursor_status,
             self.dnd_icon.as_ref(),
-            // self.seat.input_method(),
-            &mut pointer_element,
-            None,
+            &pointer_element,
         );
+
+        let output_render_elements = pointer_render_elements
+            .into_iter()
+            .chain(generate_render_elements(
+                output,
+                winit.backend.renderer(),
+                &self.space,
+                &windows,
+            ))
+            .collect::<Vec<_>>();
 
         let render_res = winit.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -324,19 +335,13 @@ impl State {
 
                 let time = self.clock.now();
 
-                // Send frames to the cursor surface so it updates correctly
-                if let CursorImageStatus::Surface(surf) = &self.cursor_status {
-                    if let Some(op) = self.focused_output() {
-                        send_frames_surface_tree(surf, op, time, Some(Duration::ZERO), |_, _| None);
-                    }
-                }
-
                 super::post_repaint(
                     output,
                     &render_output_result.states,
                     &self.space,
                     None,
                     time.into(),
+                    &self.cursor_status,
                 );
 
                 if has_rendered {

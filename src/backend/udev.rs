@@ -45,7 +45,6 @@ use smithay::{
     desktop::{
         layer_map_for_output,
         utils::{send_frames_surface_tree, OutputPresentationFeedback},
-        Space,
     },
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
@@ -63,7 +62,7 @@ use smithay::{
             backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
         },
     },
-    utils::{Clock, DeviceFd, Logical, Monotonic, Point, Transform},
+    utils::{DeviceFd, IsAlive, Transform},
     wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
@@ -73,9 +72,8 @@ use crate::{
     backend::Backend,
     config::ConnectorSavedState,
     output::OutputName,
-    render::{pointer::PointerElement, take_presentation_feedback},
+    render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
     state::{State, SurfaceDmabufFeedback, WithState},
-    window::WindowElement,
 };
 
 use self::drm_util::EdidInfo;
@@ -91,6 +89,7 @@ const SUPPORTED_FORMATS: &[Fourcc] = &[
 const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 /// A [`MultiRenderer`] that uses the [`GbmGlesBackend`].
+#[allow(dead_code)] // dunno if i'm gonna need this again
 type UdevRenderer<'a> = MultiRenderer<
     'a,
     'a,
@@ -1280,19 +1279,83 @@ impl State {
             .map(|ptr| ptr.current_location())
             .unwrap_or((0.0, 0.0).into());
 
-        let result = render_surface(
-            surface,
-            &mut renderer,
+        // set cursor
+        udev.pointer_element.set_texture(pointer_image.clone());
+
+        // draw the cursor as relevant and
+        // reset the cursor if the surface is no longer alive
+        if let CursorImageStatus::Surface(surface) = &self.cursor_status {
+            if !surface.alive() {
+                self.cursor_status = CursorImageStatus::default_named();
+            } else {
+                send_frames_surface_tree(
+                    surface,
+                    output,
+                    self.clock.now(),
+                    Some(Duration::ZERO),
+                    |_, _| None,
+                );
+            }
+        }
+
+        udev.pointer_element.set_status(self.cursor_status.clone());
+
+        let pointer_render_elements = pointer_render_elements(
             output,
+            &mut renderer,
             &self.space,
-            &windows,
-            self.dnd_icon.as_ref(),
-            &mut self.cursor_status,
-            &pointer_image,
-            &mut udev.pointer_element,
             pointer_location,
-            &self.clock,
+            &mut self.cursor_status,
+            self.dnd_icon.as_ref(),
+            &udev.pointer_element,
         );
+
+        let output_render_elements = pointer_render_elements
+            .into_iter()
+            .chain(crate::render::generate_render_elements(
+                output,
+                &mut renderer,
+                &self.space,
+                &windows,
+            ))
+            .collect::<Vec<_>>();
+
+        let result = (|| -> Result<bool, SwapBuffersError> {
+            let res = render_frame(
+                &mut surface.compositor,
+                &mut renderer,
+                &output_render_elements,
+                [0.6, 0.6, 0.6, 1.0],
+            )?;
+
+            let time = self.clock.now();
+
+            super::post_repaint(
+                output,
+                &res.states,
+                &self.space,
+                surface
+                    .dmabuf_feedback
+                    .as_ref()
+                    .map(|feedback| SurfaceDmabufFeedback {
+                        render_feedback: &feedback.render_feedback,
+                        scanout_feedback: &feedback.scanout_feedback,
+                    }),
+                time.into(),
+                &self.cursor_status,
+            );
+
+            if res.rendered {
+                let output_presentation_feedback =
+                    take_presentation_feedback(output, &self.space, &res.states);
+                surface
+                    .compositor
+                    .queue_frame(Some(output_presentation_feedback))
+                    .map_err(SwapBuffersError::from)?;
+            }
+
+            Ok(res.rendered)
+        })();
 
         match result {
             Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
@@ -1310,77 +1373,4 @@ fn render_surface_for_output<'a>(
     backends
         .get_mut(device_id)
         .and_then(|device| device.surfaces.get_mut(crtc))
-}
-
-/// Render windows, layers, and everything else needed to the given [`RenderSurface`].
-/// Also queues the frame for scanout.
-///
-/// `windows` should be provided in the order of z-rendering, top to bottom.
-#[allow(clippy::too_many_arguments)]
-fn render_surface(
-    surface: &mut RenderSurface,
-    renderer: &mut UdevRenderer<'_>,
-    output: &Output,
-
-    space: &Space<WindowElement>,
-    windows: &[WindowElement],
-
-    dnd_icon: Option<&WlSurface>,
-    cursor_status: &mut CursorImageStatus,
-
-    pointer_image: &TextureBuffer<MultiTexture>,
-    pointer_element: &mut PointerElement<MultiTexture>,
-    pointer_location: Point<f64, Logical>,
-
-    clock: &Clock<Monotonic>,
-) -> Result<bool, SwapBuffersError> {
-    let output_render_elements = crate::render::generate_render_elements(
-        output,
-        renderer,
-        space,
-        windows,
-        pointer_location,
-        cursor_status,
-        dnd_icon,
-        // input_method,
-        pointer_element,
-        Some(pointer_image),
-    );
-
-    let res = render_frame(
-        &mut surface.compositor,
-        renderer,
-        &output_render_elements,
-        [0.6, 0.6, 0.6, 1.0],
-    )?;
-
-    let time = clock.now();
-
-    if let CursorImageStatus::Surface(surf) = cursor_status {
-        send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
-    }
-
-    super::post_repaint(
-        output,
-        &res.states,
-        space,
-        surface
-            .dmabuf_feedback
-            .as_ref()
-            .map(|feedback| SurfaceDmabufFeedback {
-                render_feedback: &feedback.render_feedback,
-                scanout_feedback: &feedback.scanout_feedback,
-            }),
-        time.into(),
-    );
-
-    if res.rendered {
-        let output_presentation_feedback = take_presentation_feedback(output, space, &res.states);
-        surface
-            .compositor
-            .queue_frame(Some(output_presentation_feedback))
-            .map_err(SwapBuffersError::from)?;
-    }
-
-    Ok(res.rendered)
 }
