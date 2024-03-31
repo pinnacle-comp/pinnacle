@@ -59,7 +59,9 @@ use smithay::{
 use tracing::error;
 
 use crate::{
+    delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
+    protocol::screencopy::{Screencopy, ScreencopyHandler},
     state::{ClientState, State, WithState},
 };
 
@@ -542,3 +544,10 @@ impl WlrLayerShellHandler for State {
     }
 }
 delegate_layer_shell!(State);
+
+impl ScreencopyHandler for State {
+    fn frame(&mut self, frame: Screencopy) {
+        todo!()
+    }
+}
+delegate_screencopy!(State);
