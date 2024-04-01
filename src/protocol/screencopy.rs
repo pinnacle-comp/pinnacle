@@ -211,7 +211,7 @@ macro_rules! delegate_screencopy {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ScreencopyFrameInfo {
     output: Output,
     physical_region: Rectangle<i32, Physical>,
@@ -289,6 +289,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub struct Screencopy {
     info: ScreencopyFrameInfo,
     frame: ZwlrScreencopyFrameV1,
@@ -322,6 +323,11 @@ impl Screencopy {
 
     pub fn overlay_cursor(&self) -> bool {
         self.info.overlay_cursor
+    }
+
+    /// Get whether or not this screencopy should be done on damage.
+    pub fn with_damage(&self) -> bool {
+        self.with_damage
     }
 
     /// Mark damaged regions of the screencopy buffer.

@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, ensure, Context};
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
@@ -20,18 +20,21 @@ use smithay::{
             Allocator, Fourcc,
         },
         drm::{
-            compositor::{DrmCompositor, PrimaryPlaneElement},
+            compositor::{DrmCompositor, PrimaryPlaneElement, RenderFrameResult},
+            gbm::GbmFramebuffer,
             CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata,
             DrmNode, NodeType,
         },
         egl::{self, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            damage,
-            element::{texture::TextureBuffer, RenderElement, RenderElementStates},
-            gles::GlesRenderer,
+            self, damage,
+            element::{texture::TextureBuffer, Element, RenderElement},
+            gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
-            Bind, ImportDma, ImportEgl, ImportMemWl, Renderer, TextureFilter,
+            utils::CommitCounter,
+            Bind, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen, Renderer,
+            TextureFilter,
         },
         session::{
             self,
@@ -50,8 +53,12 @@ use smithay::{
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
-        calloop::{EventLoop, Idle, LoopHandle, RegistrationToken},
+        calloop::{
+            self, generic::Generic, EventLoop, Idle, Interest, LoopHandle, PostAction,
+            RegistrationToken,
+        },
         drm::control::{connector, crtc, ModeTypeFlags},
+        gbm::BufferObject,
         input::Libinput,
         rustix::fs::OFlags,
         wayland_protocols::wp::{
@@ -59,14 +66,16 @@ use smithay::{
             presentation_time::server::wp_presentation_feedback,
         },
         wayland_server::{
-            backend::GlobalId, protocol::wl_surface::WlSurface, Display, DisplayHandle,
+            backend::GlobalId,
+            protocol::{wl_shm, wl_surface::WlSurface},
+            Display, DisplayHandle,
         },
     },
-    utils::{DeviceFd, IsAlive, Transform},
-    wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+    utils::{DeviceFd, IsAlive, Point, Rectangle, Transform},
+    wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
     backend::Backend,
@@ -696,6 +705,8 @@ struct RenderSurface {
     compositor: GbmDrmCompositor,
     dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
     render_state: RenderState,
+    primary_plane_element_swapchain_commit_counter: CommitCounter,
+    primary_plane_element_element_commit_counter: CommitCounter,
 }
 
 impl Drop for RenderSurface {
@@ -714,21 +725,15 @@ type GbmDrmCompositor = DrmCompositor<
     DrmDeviceFd,
 >;
 
-/// The result of a frame render from `render_frame`.
-struct SurfaceCompositorRenderResult {
-    rendered: bool,
-    states: RenderElementStates,
-}
-
 /// Render a frame with the given elements.
 ///
 /// This frame needs to be queued for scanout afterwards.
-fn render_frame<R, E>(
+fn render_frame<'a, R, E>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut R,
-    elements: &[E],
+    elements: &'a [E],
     clear_color: [f32; 4],
-) -> Result<SurfaceCompositorRenderResult, SwapBuffersError>
+) -> Result<RenderFrameResult<'a, BufferObject<()>, GbmFramebuffer, E>, SwapBuffersError>
 where
     R: Renderer + Bind<Dmabuf>,
     <R as Renderer>::TextureId: 'static,
@@ -739,15 +744,6 @@ where
 
     compositor
         .render_frame(renderer, elements, clear_color)
-        .map(|render_frame_result| {
-            if let PrimaryPlaneElement::Swapchain(element) = render_frame_result.primary_element {
-                element.sync.wait();
-            }
-            SurfaceCompositorRenderResult {
-                rendered: !render_frame_result.is_empty,
-                states: render_frame_result.states,
-            }
-        })
         .map_err(|err| match err {
             RenderFrameError::PrepareFrame(err) => err.into(),
             RenderFrameError::RenderFrame(damage::Error::Rendering(err)) => err.into(),
@@ -985,6 +981,8 @@ impl State {
             compositor,
             dmabuf_feedback,
             render_state: RenderState::Idle,
+            primary_plane_element_swapchain_commit_counter: CommitCounter::default(),
+            primary_plane_element_element_commit_counter: CommitCounter::default(),
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1300,39 +1298,235 @@ impl State {
 
         udev.pointer_element.set_status(self.cursor_status.clone());
 
-        let pointer_render_elements = pointer_render_elements(
-            output,
-            &mut renderer,
-            &self.space,
-            pointer_location,
-            &mut self.cursor_status,
-            self.dnd_icon.as_ref(),
-            &udev.pointer_element,
-        );
+        let pending_screencopy_without_cursor = output.with_state(|state| {
+            state
+                .screencopy
+                .as_ref()
+                .is_some_and(|sc| !sc.overlay_cursor())
+        });
 
-        let output_render_elements = pointer_render_elements
-            .into_iter()
-            .chain(crate::render::generate_render_elements(
+        let mut output_render_elements = Vec::new();
+
+        // If there isn't a pending screencopy that doesn't want to overlay the cursor,
+        // render it.
+        //
+        // This will cause the cursor to disappear for a frame if there is one though,
+        // but it shouldn't meaningfully affect anything.
+        if !pending_screencopy_without_cursor {
+            let pointer_render_elements = pointer_render_elements(
                 output,
                 &mut renderer,
                 &self.space,
-                &windows,
-            ))
-            .collect::<Vec<_>>();
+                pointer_location,
+                &mut self.cursor_status,
+                self.dnd_icon.as_ref(),
+                &udev.pointer_element,
+            );
+            output_render_elements.extend(pointer_render_elements);
+        }
+
+        output_render_elements.extend(crate::render::generate_render_elements(
+            output,
+            &mut renderer,
+            &self.space,
+            &windows,
+        ));
 
         let result = (|| -> Result<bool, SwapBuffersError> {
-            let res = render_frame(
+            let render_frame_result = render_frame(
                 &mut surface.compositor,
                 &mut renderer,
                 &output_render_elements,
                 [0.6, 0.6, 0.6, 1.0],
             )?;
 
+            if let PrimaryPlaneElement::Swapchain(element) = &render_frame_result.primary_element {
+                element.sync.wait();
+            }
+
+            // Compute damage
+
+            let damage = match &render_frame_result.primary_element {
+                PrimaryPlaneElement::Swapchain(element) => {
+                    let damage = element
+                        .damage
+                        .damage_since(Some(surface.primary_plane_element_swapchain_commit_counter));
+                    surface.primary_plane_element_swapchain_commit_counter =
+                        element.damage.current_commit();
+                    damage.map(|dmg| {
+                        dmg.into_iter()
+                            .map(|rect| {
+                                rect.to_logical(1, Transform::Normal, &rect.size)
+                                    .to_physical(1)
+                            })
+                            .collect()
+                    })
+                }
+                PrimaryPlaneElement::Element(element) => {
+                    let damage = element.damage_since(
+                        smithay::utils::Scale::from(output.current_scale().fractional_scale()),
+                        Some(surface.primary_plane_element_swapchain_commit_counter),
+                    );
+                    surface.primary_plane_element_element_commit_counter = element.current_commit();
+                    Some(damage)
+                }
+            };
+
+            let mut damage = damage.unwrap_or_else(|| {
+                vec![Rectangle::from_loc_and_size(
+                    Point::from((0, 0)),
+                    output.current_mode().unwrap().size,
+                )]
+            });
+
+            // The primary plane had no damage but something got rendered, so it must be the cursor
+            if damage.is_empty() && !render_frame_result.is_empty {
+                if let Some(cursor_elem) = render_frame_result.cursor_element {
+                    damage.push(cursor_elem.geometry(smithay::utils::Scale::from(
+                        output.current_scale().fractional_scale(),
+                    )));
+                }
+            }
+
+            // dbg!(&damage);
+
+            if let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) {
+                'screencopy: {
+                    assert!(screencopy.output() == output);
+
+                    if screencopy.with_damage() {
+                        tracing::info!("WITH DAMAGE");
+                        if damage.is_empty() {
+                            output.with_state_mut(|state| state.screencopy.replace(screencopy));
+                            break 'screencopy;
+                        }
+                        screencopy.damage(&damage);
+                    }
+
+                    let sync_fd = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
+                        debug!("Dmabuf screencopy");
+
+                        renderer.bind(dmabuf).unwrap();
+
+                        render_frame_result
+                            .blit_frame_result(
+                                screencopy.physical_region().size,
+                                Transform::Normal,
+                                output.current_scale().fractional_scale(),
+                                &mut renderer,
+                                if screencopy.with_damage() {
+                                    damage
+                                } else {
+                                    vec![screencopy.physical_region()]
+                                },
+                                [],
+                            )
+                            .map(|sync| sync.export())
+                            .map_err(|err| anyhow!("{err}"))
+                    } else if !matches!(
+                        renderer::buffer_type(screencopy.buffer()),
+                        Some(BufferType::Shm)
+                    ) {
+                        Err(anyhow!("not a shm buffer"))
+                    } else {
+                        debug!("Shm screencopy");
+
+                        let res = smithay::wayland::shm::with_buffer_contents_mut(
+                            &screencopy.buffer().clone(),
+                            |shm_ptr, shm_len, buffer_data| {
+                                // yoinked from Niri (thanks yall)
+                                ensure!(
+                                    // The buffer prefers pixels in little endian ...
+                                    buffer_data.format == wl_shm::Format::Argb8888
+                                        && buffer_data.stride
+                                            == screencopy.physical_region().size.w * 4
+                                        && buffer_data.height
+                                            == screencopy.physical_region().size.h
+                                        && shm_len as i32
+                                            == buffer_data.stride * buffer_data.height,
+                                    "invalid buffer format or size"
+                                );
+
+                                let buffer_rect =
+                                    screencopy.physical_region().to_logical(1).to_buffer(
+                                        1,
+                                        Transform::Normal,
+                                        &screencopy.physical_region().size.to_logical(1),
+                                    );
+
+                                let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                                    smithay::backend::allocator::Fourcc::Argb8888,
+                                    buffer_rect.size,
+                                )?;
+
+                                renderer.bind(offscreen)?;
+
+                                let sync_point = render_frame_result.blit_frame_result(
+                                    screencopy.physical_region().size,
+                                    Transform::Normal,
+                                    output.current_scale().fractional_scale(),
+                                    &mut renderer,
+                                    if screencopy.with_damage() {
+                                        damage
+                                    } else {
+                                        vec![screencopy.physical_region()]
+                                    },
+                                    [],
+                                )?;
+
+                                let mapping = renderer.copy_framebuffer(
+                                    Rectangle::from_loc_and_size(
+                                        Point::from((0, 0)),
+                                        buffer_rect.size,
+                                    ),
+                                    smithay::backend::allocator::Fourcc::Argb8888,
+                                )?;
+
+                                let bytes = renderer.map_texture(&mapping)?;
+
+                                ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
+
+                                // SAFETY: TODO: safety docs
+                                unsafe {
+                                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
+                                }
+
+                                Ok(sync_point.export())
+                            },
+                        );
+
+                        res.unwrap()
+                    };
+
+                    match sync_fd {
+                        Ok(Some(sync_fd)) => {
+                            let mut screencopy = Some(screencopy);
+                            let source =
+                                Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
+                            let res = self.loop_handle.insert_source(source, move |_, _, _| {
+                                let Some(screencopy) = screencopy.take() else {
+                                    unreachable!("This source is removed after one run");
+                                };
+                                screencopy.submit(false);
+                                Ok(PostAction::Remove)
+                            });
+                            if res.is_err() {
+                                error!("Failed to schedule screencopy submission");
+                            }
+                        }
+                        Ok(None) => {
+                            screencopy.submit(false);
+                        }
+                        Err(err) => error!("Failed to submit screencopy: {err}"),
+                    }
+                }
+            }
+
             let time = self.clock.now();
 
             super::post_repaint(
                 output,
-                &res.states,
+                &render_frame_result.states,
                 &self.space,
                 surface
                     .dmabuf_feedback
@@ -1345,16 +1539,18 @@ impl State {
                 &self.cursor_status,
             );
 
-            if res.rendered {
+            let rendered = !render_frame_result.is_empty;
+
+            if rendered {
                 let output_presentation_feedback =
-                    take_presentation_feedback(output, &self.space, &res.states);
+                    take_presentation_feedback(output, &self.space, &render_frame_result.states);
                 surface
                     .compositor
                     .queue_frame(Some(output_presentation_feedback))
                     .map_err(SwapBuffersError::from)?;
             }
 
-            Ok(res.rendered)
+            Ok(rendered)
         })();
 
         match result {

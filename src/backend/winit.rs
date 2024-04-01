@@ -2,13 +2,15 @@
 
 use std::{ffi::OsString, path::PathBuf, time::Duration};
 
+use anyhow::anyhow;
 use smithay::{
     backend::{
         egl::EGLDevice,
         renderer::{
+            self,
             damage::{self, OutputDamageTracker},
             gles::{GlesRenderer, GlesTexture},
-            ImportDma, ImportEgl, ImportMemWl,
+            Blit, BufferType, ImportDma, ImportEgl, ImportMemWl, TextureFilter,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
@@ -17,8 +19,10 @@ use smithay::{
     output::{Output, Scale, Subpixel},
     reexports::{
         calloop::{
+            self,
+            generic::Generic,
             timer::{TimeoutAction, Timer},
-            EventLoop,
+            EventLoop, Interest, PostAction,
         },
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{protocol::wl_surface::WlSurface, Display},
@@ -27,17 +31,17 @@ use smithay::{
             window::{Icon, WindowBuilder},
         },
     },
-    utils::{IsAlive, Transform},
-    wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+    utils::{IsAlive, Point, Rectangle, Transform},
+    wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     render::{
-        generate_render_elements, pointer::PointerElement, pointer_render_elements,
-        take_presentation_feedback,
+        copy_to_shm_screencopy, generate_render_elements, pointer::PointerElement,
+        pointer_render_elements, take_presentation_feedback,
     },
-    state::State,
+    state::{State, WithState},
 };
 
 use super::{Backend, BackendData};
@@ -278,31 +282,45 @@ impl State {
         // of every event loop cycle
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
-        let pointer_location = self
-            .seat
-            .get_pointer()
-            .map(|ptr| ptr.current_location())
-            .unwrap_or((0.0, 0.0).into());
+        let mut output_render_elements = Vec::new();
 
-        let pointer_render_elements = pointer_render_elements(
-            output,
-            winit.backend.renderer(),
-            &self.space,
-            pointer_location,
-            &mut self.cursor_status,
-            self.dnd_icon.as_ref(),
-            &pointer_element,
-        );
+        let pending_screencopy_without_cursor = output.with_state(|state| {
+            state
+                .screencopy
+                .as_ref()
+                .is_some_and(|sc| !sc.overlay_cursor())
+        });
 
-        let output_render_elements = pointer_render_elements
-            .into_iter()
-            .chain(generate_render_elements(
+        // If there isn't a pending screencopy that doesn't want to overlay the cursor,
+        // render it.
+        //
+        // This will cause the cursor to disappear for a frame if there is one though,
+        // but it shouldn't meaningfully affect anything.
+        if !pending_screencopy_without_cursor {
+            let pointer_location = self
+                .seat
+                .get_pointer()
+                .map(|ptr| ptr.current_location())
+                .unwrap_or((0.0, 0.0).into());
+
+            let pointer_render_elements = pointer_render_elements(
                 output,
                 winit.backend.renderer(),
                 &self.space,
-                &windows,
-            ))
-            .collect::<Vec<_>>();
+                pointer_location,
+                &mut self.cursor_status,
+                self.dnd_icon.as_ref(),
+                &pointer_element,
+            );
+            output_render_elements.extend(pointer_render_elements);
+        }
+
+        output_render_elements.extend(generate_render_elements(
+            output,
+            winit.backend.renderer(),
+            &self.space,
+            &windows,
+        ));
 
         let render_res = winit.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -324,10 +342,97 @@ impl State {
 
         match render_res {
             Ok(render_output_result) => {
+                'screencopy: {
+                    // If there is a pending screencopy, copy to it
+                    if let Some(mut screencopy) =
+                        output.with_state_mut(|state| state.screencopy.take())
+                    {
+                        assert!(screencopy.output() == output);
+
+                        if screencopy.with_damage() {
+                            if let Some(damage) = render_output_result.damage.as_ref() {
+                                let damage = damage
+                                    .iter()
+                                    .flat_map(|rect| {
+                                        rect.intersection(screencopy.physical_region())
+                                    })
+                                    .collect::<Vec<_>>();
+                                if damage.is_empty() {
+                                    output.with_state_mut(|state| {
+                                        state.screencopy.replace(screencopy)
+                                    });
+                                    break 'screencopy;
+                                }
+                                screencopy.damage(&damage);
+                            } else {
+                                output.with_state_mut(|state| state.screencopy.replace(screencopy));
+                                break 'screencopy;
+                            }
+                        }
+
+                        let sync_fd = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
+                            debug!("Dmabuf screencopy");
+
+                            winit
+                                .backend
+                                .renderer()
+                                .blit_to(
+                                    dmabuf,
+                                    screencopy.physical_region(),
+                                    Rectangle::from_loc_and_size(
+                                        Point::from((0, 0)),
+                                        screencopy.physical_region().size,
+                                    ),
+                                    TextureFilter::Nearest,
+                                )
+                                .map(|_| render_output_result.sync.export())
+                                .map_err(|err| anyhow!("{err}"))
+                        } else if !matches!(
+                            renderer::buffer_type(screencopy.buffer()),
+                            Some(BufferType::Shm)
+                        ) {
+                            Err(anyhow!("not a shm buffer"))
+                        } else {
+                            debug!("Shm screencopy");
+
+                            let res = copy_to_shm_screencopy(winit.backend.renderer(), &screencopy)
+                                .map(|_| render_output_result.sync.export());
+
+                            // We must rebind to the underlying EGL surface for buffer swapping
+                            // as it is bound in `copy_to_shm_screencopy` above.
+                            let _ = winit.backend.bind();
+
+                            res
+                        };
+
+                        match sync_fd {
+                            Ok(Some(sync_fd)) => {
+                                let mut screencopy = Some(screencopy);
+                                let source =
+                                    Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
+                                let res = self.loop_handle.insert_source(source, move |_, _, _| {
+                                    let Some(screencopy) = screencopy.take() else {
+                                        unreachable!("This source is removed after one run");
+                                    };
+                                    screencopy.submit(false);
+                                    Ok(PostAction::Remove)
+                                });
+                                if res.is_err() {
+                                    error!("Failed to schedule screencopy submission");
+                                }
+                            }
+                            Ok(None) => {
+                                screencopy.submit(false);
+                            }
+                            Err(err) => error!("Failed to submit screencopy: {err}"),
+                        }
+                    }
+                }
+
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
                     if let Err(err) = winit.backend.submit(Some(&damage)) {
-                        error!("{}", err);
+                        error!("Failed to submit buffer: {}", err);
                     }
                 }
 

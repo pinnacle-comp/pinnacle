@@ -546,8 +546,9 @@ impl WlrLayerShellHandler for State {
 delegate_layer_shell!(State);
 
 impl ScreencopyHandler for State {
-    fn frame(&mut self, _frame: Screencopy) {
-        todo!()
+    fn frame(&mut self, frame: Screencopy) {
+        let output = frame.output().clone();
+        output.with_state_mut(|state| state.screencopy.replace(frame));
     }
 }
 delegate_screencopy!(State);
