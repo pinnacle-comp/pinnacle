@@ -220,12 +220,18 @@ pub struct ConnectorSavedState {
 
 /// Parse a metaconfig file in `config_dir`, if any.
 fn parse_metaconfig(config_dir: &Path) -> anyhow::Result<Metaconfig> {
-    let config_dir = config_dir.join("metaconfig.toml");
+    let metaconfig_path = config_dir.join("metaconfig.toml");
 
-    let metaconfig =
-        std::fs::read_to_string(config_dir).context("Failed to read metaconfig.toml")?;
-
-    toml::from_str(&metaconfig).context("Failed to deserialize toml")
+    std::fs::read_to_string(&metaconfig_path)
+        .with_context(|| format!("Failed to read {}", metaconfig_path.display()))
+        .and_then(|data| {
+            toml::from_str(&data).with_context(|| {
+                format!(
+                    "Failed to deserialize toml in {}",
+                    metaconfig_path.display()
+                )
+            })
+        })
 }
 
 /// Get the config dir. This is $PINNACLE_CONFIG_DIR, then $XDG_CONFIG_HOME/pinnacle,
@@ -276,7 +282,7 @@ impl State {
                     );
                     anyhow::bail!("default lua config dir does not work");
                 }
-                return load_default_config(self, &err.to_string());
+                return load_default_config(self, &format!("{}, {}", err, err.root_cause()));
             }
         };
 
@@ -370,19 +376,28 @@ impl State {
 
         debug!("Config envs are {envs:?}");
 
-        info!("Starting config at {}", config_dir.display());
+        info!(
+            "Starting config process at {} with {:?}",
+            config_dir.display(),
+            metaconfig.command
+        );
 
-        let mut child = match tokio::process::Command::new(arg0)
-            .args(command)
+        let mut cmd = tokio::process::Command::new(arg0);
+        cmd.args(command)
             .envs(envs)
             .current_dir(config_dir)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-        {
+            .kill_on_drop(true);
+
+        let mut child = match cmd.spawn() {
             Ok(child) => child,
-            Err(err) => return load_default_config(self, &err.to_string()),
+            Err(err) => {
+                return load_default_config(
+                    self,
+                    &format!("failed to start config process {cmd:?}: {err}"),
+                )
+            }
         };
 
         info!("Started config with {:?}", metaconfig.command);
