@@ -548,6 +548,9 @@ delegate_layer_shell!(State);
 impl ScreencopyHandler for State {
     fn frame(&mut self, frame: Screencopy) {
         let output = frame.output().clone();
+        if !frame.with_damage() {
+            self.schedule_render(&output);
+        }
         output.with_state_mut(|state| state.screencopy.replace(frame));
     }
 }

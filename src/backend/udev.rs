@@ -29,7 +29,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self, damage,
-            element::{texture::TextureBuffer, Element, RenderElement},
+            element::{self, texture::TextureBuffer, Element, RenderElement},
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             utils::CommitCounter,
@@ -1298,12 +1298,8 @@ impl State {
 
         udev.pointer_element.set_status(self.cursor_status.clone());
 
-        let pending_screencopy_without_cursor = output.with_state(|state| {
-            state
-                .screencopy
-                .as_ref()
-                .is_some_and(|sc| !sc.overlay_cursor())
-        });
+        let pending_screencopy_with_cursor =
+            output.with_state(|state| state.screencopy.as_ref().map(|sc| sc.overlay_cursor()));
 
         let mut output_render_elements = Vec::new();
 
@@ -1312,17 +1308,40 @@ impl State {
         //
         // This will cause the cursor to disappear for a frame if there is one though,
         // but it shouldn't meaningfully affect anything.
-        if !pending_screencopy_without_cursor {
-            let pointer_render_elements = pointer_render_elements(
-                output,
-                &mut renderer,
-                &self.space,
-                pointer_location,
-                &mut self.cursor_status,
-                self.dnd_icon.as_ref(),
-                &udev.pointer_element,
-            );
-            output_render_elements.extend(pointer_render_elements);
+        match pending_screencopy_with_cursor {
+            Some(include_cursor) => {
+                if include_cursor {
+                    // HACK: Doing `RenderFrameResult::blit_frame_result` with something on the
+                    // |     cursor plane causes the cursor to overwrite the pixels underneath it,
+                    // |     leading to a transparent hole under the cursor.
+                    // |     To circumvent that, we set the cursor to render on the primary plane instead.
+                    udev.pointer_element
+                        .set_element_kind(element::Kind::Unspecified);
+                    let pointer_render_elements = pointer_render_elements(
+                        output,
+                        &mut renderer,
+                        &self.space,
+                        pointer_location,
+                        &mut self.cursor_status,
+                        self.dnd_icon.as_ref(),
+                        &udev.pointer_element,
+                    );
+                    udev.pointer_element.set_element_kind(element::Kind::Cursor);
+                    output_render_elements.extend(pointer_render_elements);
+                }
+            }
+            None => {
+                let pointer_render_elements = pointer_render_elements(
+                    output,
+                    &mut renderer,
+                    &self.space,
+                    pointer_location,
+                    &mut self.cursor_status,
+                    self.dnd_icon.as_ref(),
+                    &udev.pointer_element,
+                );
+                output_render_elements.extend(pointer_render_elements);
+            }
         }
 
         output_render_elements.extend(crate::render::generate_render_elements(
@@ -1345,6 +1364,9 @@ impl State {
             }
 
             // Compute damage
+            //
+            // Also, I'm pretty sure that `RenderFrameResult` used to give us the damage, didn't
+            // it? But it was removed in favor of the `is_empty` bool
 
             let damage = match &render_frame_result.primary_element {
                 PrimaryPlaneElement::Swapchain(element) => {
@@ -1375,11 +1397,13 @@ impl State {
             let mut damage = damage.unwrap_or_else(|| {
                 vec![Rectangle::from_loc_and_size(
                     Point::from((0, 0)),
-                    output.current_mode().unwrap().size,
+                    output.current_mode().unwrap().size, // TODO: transform
                 )]
             });
 
             // The primary plane had no damage but something got rendered, so it must be the cursor
+            //
+            // We currently have overlay planes disabled, so we don't have to worry about that.
             if damage.is_empty() && !render_frame_result.is_empty {
                 if let Some(cursor_elem) = render_frame_result.cursor_element {
                     damage.push(cursor_elem.geometry(smithay::utils::Scale::from(
@@ -1387,8 +1411,6 @@ impl State {
                     )));
                 }
             }
-
-            // dbg!(&damage);
 
             if let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) {
                 'screencopy: {

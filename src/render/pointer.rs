@@ -18,6 +18,7 @@ use smithay::{
 pub struct PointerElement<T: Texture> {
     texture: Option<TextureBuffer<T>>,
     status: CursorImageStatus,
+    kind: element::Kind,
 }
 
 impl<T: Texture> Default for PointerElement<T> {
@@ -25,6 +26,7 @@ impl<T: Texture> Default for PointerElement<T> {
         Self {
             texture: Default::default(),
             status: CursorImageStatus::default_named(),
+            kind: element::Kind::Cursor,
         }
     }
 }
@@ -40,6 +42,10 @@ impl<T: Texture> PointerElement<T> {
 
     pub fn set_texture(&mut self, texture: TextureBuffer<T>) {
         self.texture = Some(texture);
+    }
+
+    pub fn set_element_kind(&mut self, kind: element::Kind) {
+        self.kind = kind;
     }
 }
 
@@ -74,7 +80,7 @@ where
                             None,
                             None,
                             None,
-                            element::Kind::Cursor,
+                            self.kind,
                         ),
                     )
                     .into()]
@@ -85,12 +91,7 @@ where
             CursorImageStatus::Surface(surface) => {
                 let elements: Vec<PointerRenderElement<R>> =
                     surface::render_elements_from_surface_tree(
-                        renderer,
-                        surface,
-                        location,
-                        scale,
-                        alpha,
-                        element::Kind::Cursor,
+                        renderer, surface, location, scale, alpha, self.kind,
                     );
                 elements.into_iter().map(C::from).collect()
             }
