@@ -395,7 +395,9 @@ impl Screencopy {
         });
 
         // Notify client about successful copy.
-        let time = UNIX_EPOCH.elapsed().unwrap();
+        let time = UNIX_EPOCH
+            .elapsed()
+            .expect("failed to get time since UNIX_EPOCH");
         let tv_sec_hi = (time.as_secs() >> 32) as u32;
         let tv_sec_lo = (time.as_secs() & 0xFFFFFFFF) as u32;
         let tv_nsec = time.subsec_nanos();
