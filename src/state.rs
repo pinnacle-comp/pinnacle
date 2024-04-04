@@ -3,7 +3,7 @@
 use crate::{
     api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor,
     focus::OutputFocusStack, grab::resize_grab::ResizeSurfaceState, layout::LayoutState,
-    window::WindowElement,
+    protocol::screencopy::ScreencopyManagerState, window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
@@ -68,6 +68,7 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub layer_shell_state: WlrLayerShellState,
     pub data_control_state: DataControlState,
+    pub screencopy_manager_state: ScreencopyManagerState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -247,6 +248,10 @@ impl State {
             primary_selection_state,
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
             data_control_state,
+            screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
+                &display_handle,
+                |_| true,
+            ),
 
             input_state: InputState::new(),
 

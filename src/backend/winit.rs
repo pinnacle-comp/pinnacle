@@ -2,39 +2,50 @@
 
 use std::{ffi::OsString, path::PathBuf, time::Duration};
 
+use anyhow::{anyhow, ensure};
 use smithay::{
     backend::{
         egl::EGLDevice,
         renderer::{
-            damage::{self, OutputDamageTracker},
-            gles::{GlesRenderer, GlesTexture},
-            ImportDma, ImportEgl, ImportMemWl,
+            self, buffer_type,
+            damage::{self, OutputDamageTracker, RenderOutputResult},
+            gles::{GlesRenderbuffer, GlesRenderer, GlesTexture},
+            Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
+            TextureFilter,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::{layer_map_for_output, utils::send_frames_surface_tree},
+    desktop::layer_map_for_output,
     input::pointer::CursorImageStatus,
     output::{Output, Scale, Subpixel},
     reexports::{
         calloop::{
+            self,
+            generic::Generic,
             timer::{TimeoutAction, Timer},
-            EventLoop,
+            EventLoop, Interest, LoopHandle, PostAction,
         },
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
-        wayland_server::{protocol::wl_surface::WlSurface, Display},
+        wayland_server::{
+            protocol::{wl_shm, wl_surface::WlSurface},
+            Display,
+        },
         winit::{
             platform::pump_events::PumpStatus,
             window::{Icon, WindowBuilder},
         },
     },
-    utils::{IsAlive, Transform},
-    wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+    utils::{IsAlive, Point, Rectangle, Transform},
+    wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
-use tracing::error;
+use tracing::{error, trace, warn};
 
 use crate::{
-    render::{pointer::PointerElement, take_presentation_feedback},
-    state::State,
+    render::{
+        generate_render_elements, pointer::PointerElement, pointer_render_elements,
+        take_presentation_feedback,
+    },
+    state::{State, WithState},
 };
 
 use super::{Backend, BackendData};
@@ -103,8 +114,6 @@ pub fn setup_winit(
 
     let output = Output::new("Pinnacle window".to_string(), physical_properties);
 
-    output.create_global::<State>(&display_handle);
-
     output.change_current_state(
         Some(mode),
         Some(Transform::Flipped180),
@@ -130,11 +139,11 @@ pub fn setup_winit(
             Some(dmabuf_default_feedback)
         }
         Ok(None) => {
-            tracing::warn!("failed to query render node, dmabuf will use v3");
+            warn!("failed to query render node, dmabuf will use v3");
             None
         }
         Err(err) => {
-            tracing::warn!("{}", err);
+            warn!("{}", err);
             None
         }
     };
@@ -181,6 +190,9 @@ pub fn setup_winit(
         no_config,
         config_dir,
     )?;
+
+    // wl-mirror segfaults if it gets a wl-output global before the xdg output manager global
+    output.create_global::<State>(&display_handle);
 
     state.output_focus_stack.set_focus(output.clone());
 
@@ -268,30 +280,52 @@ impl State {
         let cursor_visible = !matches!(self.cursor_status, CursorImageStatus::Surface(_));
 
         let mut pointer_element = PointerElement::<GlesTexture>::new();
+
         pointer_element.set_status(self.cursor_status.clone());
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
         let windows = self.space.elements().cloned().collect::<Vec<_>>();
 
-        let pointer_location = self
-            .seat
-            .get_pointer()
-            .map(|ptr| ptr.current_location())
-            .unwrap_or((0.0, 0.0).into());
+        let mut output_render_elements = Vec::new();
 
-        let output_render_elements = crate::render::generate_render_elements(
+        let pending_screencopy_without_cursor = output.with_state(|state| {
+            state
+                .screencopy
+                .as_ref()
+                .is_some_and(|sc| !sc.overlay_cursor())
+        });
+
+        // If there isn't a pending screencopy that doesn't want to overlay the cursor,
+        // render it.
+        //
+        // This will cause the cursor to disappear for a frame if there is one though,
+        // but it shouldn't meaningfully affect anything.
+        if !pending_screencopy_without_cursor {
+            let pointer_location = self
+                .seat
+                .get_pointer()
+                .map(|ptr| ptr.current_location())
+                .unwrap_or((0.0, 0.0).into());
+
+            let pointer_render_elements = pointer_render_elements(
+                output,
+                winit.backend.renderer(),
+                &self.space,
+                pointer_location,
+                &mut self.cursor_status,
+                self.dnd_icon.as_ref(),
+                &pointer_element,
+            );
+            output_render_elements.extend(pointer_render_elements);
+        }
+
+        output_render_elements.extend(generate_render_elements(
             output,
             winit.backend.renderer(),
             &self.space,
             &windows,
-            pointer_location,
-            &mut self.cursor_status,
-            self.dnd_icon.as_ref(),
-            // self.seat.input_method(),
-            &mut pointer_element,
-            None,
-        );
+        ));
 
         let render_res = winit.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -313,10 +347,12 @@ impl State {
 
         match render_res {
             Ok(render_output_result) => {
+                winit.handle_pending_screencopy(output, &render_output_result, &self.loop_handle);
+
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
                     if let Err(err) = winit.backend.submit(Some(&damage)) {
-                        error!("{}", err);
+                        error!("Failed to submit buffer: {}", err);
                     }
                 }
 
@@ -324,19 +360,13 @@ impl State {
 
                 let time = self.clock.now();
 
-                // Send frames to the cursor surface so it updates correctly
-                if let CursorImageStatus::Surface(surf) = &self.cursor_status {
-                    if let Some(op) = self.focused_output() {
-                        send_frames_surface_tree(surf, op, time, Some(Duration::ZERO), |_, _| None);
-                    }
-                }
-
                 super::post_repaint(
                     output,
                     &render_output_result.states,
                     &self.space,
                     None,
                     time.into(),
+                    &self.cursor_status,
                 );
 
                 if has_rendered {
@@ -357,8 +387,171 @@ impl State {
                 }
             }
             Err(err) => {
-                tracing::warn!("{}", err);
+                warn!("{}", err);
             }
+        }
+    }
+}
+
+impl Winit {
+    fn handle_pending_screencopy(
+        &mut self,
+        output: &Output,
+        render_output_result: &RenderOutputResult,
+        loop_handle: &LoopHandle<'static, State>,
+    ) {
+        let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
+            return;
+        };
+
+        assert!(screencopy.output() == output);
+
+        if screencopy.with_damage() {
+            match render_output_result.damage.as_ref() {
+                Some(damage) if !damage.is_empty() => screencopy.damage(damage),
+                _ => {
+                    output.with_state_mut(|state| state.screencopy.replace(screencopy));
+                    return;
+                }
+            }
+        }
+
+        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
+            trace!("Dmabuf screencopy");
+
+            self.backend
+                .renderer()
+                .blit_to(
+                    dmabuf,
+                    screencopy.physical_region(),
+                    Rectangle::from_loc_and_size(
+                        Point::from((0, 0)),
+                        screencopy.physical_region().size,
+                    ),
+                    TextureFilter::Nearest,
+                )
+                .map(|_| render_output_result.sync.clone())
+                .map_err(|err| anyhow!("{err}"))
+        } else if !matches!(
+            renderer::buffer_type(screencopy.buffer()),
+            Some(BufferType::Shm)
+        ) {
+            Err(anyhow!("not a shm buffer"))
+        } else {
+            trace!("Shm screencopy");
+
+            let sync_point = {
+                let renderer = self.backend.renderer();
+                let screencopy = &screencopy;
+                if !matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)) {
+                    warn!("screencopy does not have a shm buffer");
+                    return;
+                }
+
+                let res = smithay::wayland::shm::with_buffer_contents_mut(
+                    &screencopy.buffer().clone(),
+                    |shm_ptr, shm_len, buffer_data| {
+                        // yoinked from Niri (thanks yall)
+                        ensure!(
+                            // The buffer prefers pixels in little endian ...
+                            buffer_data.format == wl_shm::Format::Argb8888
+                                && buffer_data.stride == screencopy.physical_region().size.w * 4
+                                && buffer_data.height == screencopy.physical_region().size.h
+                                && shm_len as i32 == buffer_data.stride * buffer_data.height,
+                            "invalid buffer format or size"
+                        );
+
+                        let buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
+                            1,
+                            Transform::Normal,
+                            &screencopy.physical_region().size.to_logical(1),
+                        );
+
+                        // On winit, we cannot just copy the EGL framebuffer because I get an
+                        // `UnsupportedPixelFormat` error. Therefore we'll blit
+                        // to this buffer and then copy it.
+                        let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                            smithay::backend::allocator::Fourcc::Argb8888,
+                            buffer_rect.size,
+                        )?;
+
+                        renderer.blit_to(
+                            offscreen.clone(),
+                            screencopy.physical_region(),
+                            Rectangle::from_loc_and_size(
+                                Point::from((0, 0)),
+                                screencopy.physical_region().size,
+                            ),
+                            TextureFilter::Nearest,
+                        )?;
+
+                        renderer.bind(offscreen)?;
+
+                        let mapping = renderer.copy_framebuffer(
+                            Rectangle::from_loc_and_size(Point::from((0, 0)), buffer_rect.size),
+                            smithay::backend::allocator::Fourcc::Argb8888,
+                        )?;
+
+                        let bytes = renderer.map_texture(&mapping)?;
+
+                        ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
+
+                        // SAFETY:
+                        //      - `bytes.as_ptr()` is valid for reads of size `shm_len` because that was
+                        //        checked above and is properly aligned because it
+                        //        originated from safe Rust
+                        //      - We are assuming `shm_ptr` is valid for writes of `shm_len` and is
+                        //        properly aligned
+                        //      - Overlapping-ness: TODO:
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
+                        }
+
+                        Ok(())
+                    },
+                );
+
+                let Ok(res) = res else {
+                    unreachable!(
+                        "buffer is guaranteed to be shm from above and managed by smithay"
+                    );
+                };
+
+                res
+            }
+            .map(|_| render_output_result.sync.clone());
+
+            // We must rebind to the underlying EGL surface for buffer swapping
+            // as it is bound to a `GlesRenderbuffer` above.
+            if let Err(err) = self.backend.bind() {
+                error!("Failed to rebind EGL surface after screencopy: {err}");
+            }
+
+            sync_point
+        };
+
+        match sync_point {
+            Ok(sync_point) if !sync_point.is_reached() => {
+                let Some(sync_fd) = sync_point.export() else {
+                    screencopy.submit(false);
+                    return;
+                };
+                let mut screencopy = Some(screencopy);
+                let source = Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
+                let res = loop_handle.insert_source(source, move |_, _, _| {
+                    let Some(screencopy) = screencopy.take() else {
+                        unreachable!("This source is removed after one run");
+                    };
+                    screencopy.submit(false);
+                    trace!("Submitted screencopy");
+                    Ok(PostAction::Remove)
+                });
+                if res.is_err() {
+                    error!("Failed to schedule screencopy submission");
+                }
+            }
+            Ok(_) => screencopy.submit(false),
+            Err(err) => error!("Failed to submit screencopy: {err}"),
         }
     }
 }

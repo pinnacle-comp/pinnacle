@@ -16,9 +16,13 @@ use smithay::{
     delegate_dmabuf,
     desktop::{
         layer_map_for_output,
-        utils::{surface_primary_scanout_output, update_surface_primary_scanout_output},
+        utils::{
+            send_frames_surface_tree, surface_primary_scanout_output,
+            update_surface_primary_scanout_output,
+        },
         Space,
     },
+    input::pointer::CursorImageStatus,
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     wayland::{
@@ -158,6 +162,7 @@ pub fn post_repaint(
     space: &Space<WindowElement>,
     dmabuf_feedback: Option<SurfaceDmabufFeedback<'_>>,
     time: Duration,
+    cursor_status: &CursorImageStatus,
 ) {
     // let throttle = Some(Duration::from_secs(1));
     let throttle = Some(Duration::ZERO);
@@ -231,6 +236,11 @@ pub fn post_repaint(
                 },
             );
         }
+    }
+
+    // Send frames to the cursor surface so it updates correctly
+    if let CursorImageStatus::Surface(surf) = cursor_status {
+        send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
     }
 }
 

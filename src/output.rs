@@ -6,6 +6,7 @@ use smithay::output::Output;
 
 use crate::{
     focus::WindowKeyboardFocusStack,
+    protocol::screencopy::Screencopy,
     state::{State, WithState},
     tag::Tag,
 };
@@ -33,6 +34,7 @@ impl OutputName {
 pub struct OutputState {
     pub tags: Vec<Tag>,
     pub focus_stack: WindowKeyboardFocusStack,
+    pub screencopy: Option<Screencopy>,
 }
 
 impl WithState for Output {
