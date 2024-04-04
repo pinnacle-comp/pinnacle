@@ -2,18 +2,14 @@
 
 use std::{ops::Deref, sync::Mutex};
 
-use anyhow::ensure;
 use smithay::{
     backend::renderer::{
-        buffer_type,
         element::{
             surface::WaylandSurfaceRenderElement,
             utils::{CropRenderElement, RelocateRenderElement, RescaleRenderElement},
             AsRenderElements, RenderElementStates, Wrap,
         },
-        gles::GlesRenderbuffer,
-        Blit, BufferType, ExportMem, ImportAll, ImportMem, Offscreen, Renderer, Texture,
-        TextureFilter,
+        ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
         layer_map_for_output,
@@ -28,16 +24,15 @@ use smithay::{
     output::Output,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
-        wayland_server::protocol::{wl_shm, wl_surface::WlSurface},
+        wayland_server::protocol::wl_surface::WlSurface,
     },
     render_elements,
-    utils::{Logical, Physical, Point, Rectangle, Scale, Transform},
+    utils::{Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
 };
 
 use crate::{
     backend::Backend,
-    protocol::screencopy::Screencopy,
     state::{State, WithState},
     window::WindowElement,
 };
@@ -404,78 +399,4 @@ impl State {
             udev.schedule_render(&self.loop_handle, output);
         }
     }
-}
-
-/// Copy the currently bound framebuffer into the given screencopy shm buffer.
-///
-/// This will bind the renderer to a [`GlesRenderbuffer`]. You may need to rebind to the previous
-/// target afterwards.
-pub fn copy_to_shm_screencopy<R>(renderer: &mut R, screencopy: &Screencopy) -> anyhow::Result<()>
-where
-    R: Renderer + Blit<GlesRenderbuffer> + ExportMem + Offscreen<GlesRenderbuffer>,
-    <R as Renderer>::Error: Send + Sync + 'static,
-{
-    ensure!(
-        matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)),
-        "screencopy does not have a shm buffer"
-    );
-
-    let res = smithay::wayland::shm::with_buffer_contents_mut(
-        &screencopy.buffer().clone(),
-        |shm_ptr, shm_len, buffer_data| {
-            // yoinked from Niri (thanks yall)
-            ensure!(
-                // The buffer prefers pixels in little endian ...
-                buffer_data.format == wl_shm::Format::Argb8888
-                    && buffer_data.stride == screencopy.physical_region().size.w * 4
-                    && buffer_data.height == screencopy.physical_region().size.h
-                    && shm_len as i32 == buffer_data.stride * buffer_data.height,
-                "invalid buffer format or size"
-            );
-
-            let buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
-                1,
-                Transform::Normal,
-                &screencopy.physical_region().size.to_logical(1),
-            );
-
-            // On winit, we cannot just copy the EGL framebuffer because I get an
-            // `UnsupportedPixelFormat` error. Therefore we'll blit
-            // to this buffer and then copy it.
-            let offscreen: GlesRenderbuffer = renderer.create_buffer(
-                smithay::backend::allocator::Fourcc::Argb8888,
-                buffer_rect.size,
-            )?;
-
-            renderer.blit_to(
-                offscreen.clone(),
-                screencopy.physical_region(),
-                Rectangle::from_loc_and_size(
-                    Point::from((0, 0)),
-                    screencopy.physical_region().size,
-                ),
-                TextureFilter::Nearest,
-            )?;
-
-            renderer.bind(offscreen)?;
-
-            let mapping = renderer.copy_framebuffer(
-                Rectangle::from_loc_and_size(Point::from((0, 0)), buffer_rect.size),
-                smithay::backend::allocator::Fourcc::Argb8888,
-            )?;
-
-            let bytes = renderer.map_texture(&mapping)?;
-
-            ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
-
-            // SAFETY: TODO: safety docs
-            unsafe {
-                std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
-            }
-
-            Ok(())
-        },
-    );
-
-    res?
 }

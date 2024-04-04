@@ -130,28 +130,31 @@ where
 
                 let output = Output::from_resource(&output).expect("no output for resource");
                 let output_transform = output.current_transform();
-                let output_physical_size =
-                    output_transform.transform_size(output.current_mode().unwrap().size);
-                let output_rect = Rectangle::from_loc_and_size((0, 0), output_physical_size);
+                let output_transformed_physical_size = output_transform
+                    .transform_size(output.current_mode().expect("output no mode").size);
+                let output_transformed_rect =
+                    Rectangle::from_loc_and_size((0, 0), output_transformed_physical_size);
 
-                let rect = Rectangle::from_loc_and_size((x, y), (width, height));
+                // This is in the transformed space
+                let screencopy_region = Rectangle::from_loc_and_size((x, y), (width, height));
 
                 let output_scale = output.current_scale().fractional_scale();
-                let physical_rect = rect.to_physical_precise_round(output_scale);
+                let physical_rect = screencopy_region.to_physical_precise_round(output_scale);
 
                 // Clamp captured region to the output.
-                let Some(clamped_rect) = physical_rect.intersection(output_rect) else {
+                let Some(clamped_rect) = physical_rect.intersection(output_transformed_rect) else {
                     trace!("screencopy client requested region outside of output");
                     let frame = data_init.init(frame, ScreencopyFrameState::Failed);
                     frame.failed();
                     return;
                 };
 
-                let untransformed_rect = output_transform
+                // Untransform the region to the actual physical rect
+                let untransformed_region = output_transform
                     .invert()
-                    .transform_rect_in(clamped_rect, &output_physical_size);
+                    .transform_rect_in(clamped_rect, &output_transformed_physical_size);
 
-                (frame, overlay_cursor, untransformed_rect, output)
+                (frame, overlay_cursor, untransformed_region, output)
             }
             zwlr_screencopy_manager_v1::Request::Destroy => return,
             _ => unreachable!(),
