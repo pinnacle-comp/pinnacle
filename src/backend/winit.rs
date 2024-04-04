@@ -34,7 +34,7 @@ use smithay::{
     utils::{IsAlive, Point, Rectangle, Transform},
     wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
-use tracing::{debug, error};
+use tracing::{error, info};
 
 use crate::{
     render::{
@@ -371,7 +371,7 @@ impl State {
                         }
 
                         let sync_fd = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
-                            debug!("Dmabuf screencopy");
+                            info!("Dmabuf screencopy");
 
                             winit
                                 .backend
@@ -393,7 +393,7 @@ impl State {
                         ) {
                             Err(anyhow!("not a shm buffer"))
                         } else {
-                            debug!("Shm screencopy");
+                            info!("Shm screencopy");
 
                             let res = copy_to_shm_screencopy(winit.backend.renderer(), &screencopy)
                                 .map(|_| render_output_result.sync.export());

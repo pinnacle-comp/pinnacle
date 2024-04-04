@@ -7,6 +7,10 @@ use std::{
 };
 
 use smithay::{
+    backend::{
+        allocator::Buffer,
+        renderer::{buffer_type, BufferType},
+    },
     output::Output,
     reexports::{
         wayland_protocols_wlr::screencopy::v1::server::{
@@ -20,7 +24,10 @@ use smithay::{
         },
     },
     utils::{Physical, Point, Rectangle},
-    wayland::shm,
+    wayland::{
+        dmabuf::get_dmabuf,
+        shm::{self, shm_format_to_fourcc},
+    },
 };
 use tracing::trace;
 
@@ -262,19 +269,52 @@ where
             _ => unreachable!(),
         };
 
-        if !shm::with_buffer_contents(&buffer, |_buf, shm_len, buffer_data| {
-            buffer_data.format == wl_shm::Format::Argb8888
-                && buffer_data.stride == info.physical_region.size.w * 4
-                && buffer_data.height == info.physical_region.size.h
-                && shm_len as i32 == buffer_data.stride * buffer_data.height
-        })
-        .unwrap_or(false)
-        {
-            frame.post_error(
-                zwlr_screencopy_frame_v1::Error::InvalidBuffer,
-                "invalid buffer",
-            );
-            return;
+        match buffer_type(&buffer) {
+            Some(BufferType::Shm) => {
+                if !shm::with_buffer_contents(&buffer, |_buf, shm_len, buffer_data| {
+                    buffer_data.format == wl_shm::Format::Argb8888
+                        && buffer_data.stride == info.physical_region.size.w * 4
+                        && buffer_data.height == info.physical_region.size.h
+                        && shm_len as i32 == buffer_data.stride * buffer_data.height
+                })
+                .unwrap_or(false)
+                {
+                    frame.post_error(
+                        zwlr_screencopy_frame_v1::Error::InvalidBuffer,
+                        "invalid buffer",
+                    );
+                    return;
+                }
+            }
+            Some(BufferType::Dma) => match get_dmabuf(&buffer) {
+                Ok(dmabuf) => {
+                    if !(Some(dmabuf.format().code)
+                        == shm_format_to_fourcc(wl_shm::Format::Argb8888)
+                        && dmabuf.width() == info.physical_region.size.w as u32
+                        && dmabuf.height() == info.physical_region.size.h as u32)
+                    {
+                        frame.post_error(
+                            zwlr_screencopy_frame_v1::Error::InvalidBuffer,
+                            "invalid buffer",
+                        );
+                        return;
+                    }
+                }
+                Err(err) => {
+                    frame.post_error(
+                        zwlr_screencopy_frame_v1::Error::InvalidBuffer,
+                        err.to_string(),
+                    );
+                    return;
+                }
+            },
+            _ => {
+                frame.post_error(
+                    zwlr_screencopy_frame_v1::Error::InvalidBuffer,
+                    "invalid buffer",
+                );
+                return;
+            }
         }
 
         copied.store(true, Ordering::SeqCst);
