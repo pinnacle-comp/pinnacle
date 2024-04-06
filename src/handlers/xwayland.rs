@@ -22,6 +22,7 @@ use smithay::{
         X11Surface, X11Wm, XwmHandler,
     },
 };
+use tracing::error;
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -134,7 +135,7 @@ impl XwmHandler for State {
             window.place_on_output(output);
             // FIXME: setting focus here may possibly muck things up
             // |      or maybe they won't idk
-            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()))
+            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
         }
 
         self.space.map_element(window.clone(), loc, true);
@@ -255,22 +256,41 @@ impl XwmHandler for State {
         &mut self,
         _xwm: XwmId,
         window: X11Surface,
-        _x: Option<i32>,
-        _y: Option<i32>,
+        x: Option<i32>,
+        y: Option<i32>,
         w: Option<u32>,
         h: Option<u32>,
         _reorder: Option<Reorder>,
     ) {
-        let mut geo = window.geometry();
-        if let Some(w) = w {
-            geo.size.w = w as i32;
-        }
-        if let Some(h) = h {
-            geo.size.h = h as i32;
-        }
+        let floating_or_override_redirect = self
+            .windows
+            .iter()
+            .find(|win| win.x11_surface() == Some(&window))
+            .map(|win| {
+                win.is_x11_override_redirect()
+                    || win.with_state(|state| state.floating_or_tiled.is_floating())
+            })
+            .unwrap_or(false);
 
-        if let Err(err) = window.configure(geo) {
-            tracing::error!("Failed to configure x11 win: {err}");
+        if floating_or_override_redirect {
+            let mut geo = window.geometry();
+
+            if let Some(x) = x {
+                geo.loc.x = x;
+            }
+            if let Some(y) = y {
+                geo.loc.y = y;
+            }
+            if let Some(w) = w {
+                geo.size.w = w as i32;
+            }
+            if let Some(h) = h {
+                geo.size.h = h as i32;
+            }
+
+            if let Err(err) = window.configure(geo) {
+                error!("Failed to configure x11 win: {err}");
+            }
         }
     }
 
@@ -428,7 +448,7 @@ impl XwmHandler for State {
         match selection {
             SelectionTarget::Clipboard => {
                 if let Err(err) = request_data_device_client_selection(&self.seat, mime_type, fd) {
-                    tracing::error!(
+                    error!(
                         ?err,
                         "Failed to request current wayland clipboard for XWayland"
                     );
@@ -436,7 +456,7 @@ impl XwmHandler for State {
             }
             SelectionTarget::Primary => {
                 if let Err(err) = request_primary_client_selection(&self.seat, mime_type, fd) {
-                    tracing::error!(
+                    error!(
                         ?err,
                         "Failed to request current wayland primary selection for XWayland"
                     );
