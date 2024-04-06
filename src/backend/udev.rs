@@ -1383,7 +1383,9 @@ impl State {
             )?;
 
             if let PrimaryPlaneElement::Swapchain(element) = &render_frame_result.primary_element {
-                element.sync.wait();
+                if let Err(err) = element.sync.wait() {
+                    warn!("Failed to wait for sync point: {err}");
+                }
             }
 
             handle_pending_screencopy(
