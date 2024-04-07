@@ -7,6 +7,7 @@ use std::{collections::HashMap, mem::Discriminant, time::Duration};
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     state::WithState,
+    window::WindowElement,
 };
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
     set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
@@ -181,87 +182,88 @@ impl State {
             .output_geometry(output)
             .expect("called output_geometry on unmapped output");
 
-        let layers = layer_map_for_output(output);
+        let mut fullscreen_and_up_split_at = 0;
 
-        let top_fullscreen_window = output
-            .with_state(|state| state.focus_stack.stack.clone())
-            .into_iter()
-            .rev()
-            .find(|win| {
-                win.with_state(|state| {
-                    state.fullscreen_or_maximized.is_fullscreen()
-                        && output.with_state(|op_state| {
-                            op_state
-                                .focused_tags()
-                                .any(|op_tag| state.tags.contains(op_tag))
-                        })
-                })
-            });
-
-        if let Some(window) = top_fullscreen_window {
-            let loc = self
-                .space
-                .element_location(&window)
-                .expect("called elem loc on unmapped win")
-                - window.geometry().loc;
-
-            window
-                .surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
-                .map(|(surf, surf_loc)| (PointerFocusTarget::WlSurface(surf), surf_loc + loc))
-        } else if let (Some(layer), _) | (None, Some(layer)) = (
-            layers.layer_under(wlr_layer::Layer::Overlay, point),
-            layers.layer_under(wlr_layer::Layer::Top, point),
-        ) {
-            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-
-            layer
-                .surface_under(
-                    point - layer_loc.to_f64() - output_geo.loc.to_f64(),
-                    WindowSurfaceType::ALL,
-                )
-                .map(|(surf, surf_loc)| {
-                    (
-                        PointerFocusTarget::WlSurface(surf),
-                        surf_loc + layer_loc + output_geo.loc,
-                    )
-                })
-        } else if let Some((surface, loc)) = self
+        for (i, win) in self
             .space
             .elements()
             .rev()
             .filter(|win| win.is_on_active_tag())
-            .find_map(|win| {
-                let loc = self
-                    .space
-                    .element_location(win)
-                    .expect("called elem loc on unmapped win")
-                    - win.geometry().loc;
-
-                win.surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
-                    .map(|(surf, surf_loc)| (surf, surf_loc + loc))
-            })
+            .enumerate()
         {
-            Some((PointerFocusTarget::WlSurface(surface), loc))
-        } else if let (Some(layer), _) | (None, Some(layer)) = (
-            layers.layer_under(wlr_layer::Layer::Overlay, point),
-            layers.layer_under(wlr_layer::Layer::Top, point),
-        ) {
-            let layer_loc = layers.layer_geometry(layer).expect("no layer geo").loc;
-
-            layer
-                .surface_under(
-                    point - layer_loc.to_f64() - output_geo.loc.to_f64(),
-                    WindowSurfaceType::ALL,
-                )
-                .map(|(surf, surf_loc)| {
-                    (
-                        PointerFocusTarget::WlSurface(surf),
-                        surf_loc + layer_loc + output_geo.loc,
-                    )
-                })
-        } else {
-            None
+            if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+                fullscreen_and_up_split_at = i + 1;
+            }
         }
+
+        let layer_under =
+            |layers: &[wlr_layer::Layer]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
+                let layer_map = layer_map_for_output(output);
+                let layer = layers
+                    .iter()
+                    .find_map(|layer| layer_map.layer_under(*layer, point))?;
+
+                let layer_loc = layer_map.layer_geometry(layer)?.loc;
+
+                layer
+                    .surface_under(
+                        point - layer_loc.to_f64() - output_geo.loc.to_f64(),
+                        WindowSurfaceType::ALL,
+                    )
+                    .map(|(surf, surf_loc)| {
+                        (
+                            PointerFocusTarget::WlSurface(surf),
+                            surf_loc + layer_loc + output_geo.loc,
+                        )
+                    })
+            };
+
+        let window_under =
+            |windows: &[WindowElement]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
+                windows.iter().find_map(|win| {
+                    let loc = self
+                        .space
+                        .element_location(win)
+                        .expect("called elem loc on unmapped win")
+                        - win.geometry().loc;
+
+                    win.surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
+                        .map(|(surf, surf_loc)| {
+                            (PointerFocusTarget::WlSurface(surf), surf_loc + loc)
+                        })
+                })
+            };
+
+        // Input and rendering go, from top to bottom,
+        // - All windows down to the bottom-most fullscreen window (this mimics Awesome)
+        // - Overlay and Top layer surfaces
+        // - The rest of the windows
+        // - Bottom and background layer surfaces
+
+        window_under(
+            &self
+                .space
+                .elements()
+                .rev()
+                .filter(|win| win.is_on_active_tag())
+                .take(fullscreen_and_up_split_at)
+                .cloned()
+                .collect::<Vec<_>>(),
+        )
+        .or_else(|| layer_under(&[wlr_layer::Layer::Overlay, wlr_layer::Layer::Top]))
+        .or_else(|| {
+            window_under(
+                &self
+                    .space
+                    .elements()
+                    .rev()
+                    .filter(|win| win.is_on_active_tag())
+                    .skip(fullscreen_and_up_split_at)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .or_else(|| layer_under(&[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background]))
     }
 
     /// Update the pointer focus if it's different from the previous one.

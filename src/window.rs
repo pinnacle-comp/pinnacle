@@ -18,7 +18,7 @@ use self::window_state::WindowElementState;
 
 pub mod window_state;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WindowElement(Window);
 
 impl Deref for WindowElement {

@@ -22,10 +22,7 @@ use smithay::{
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
-    reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel,
-        wayland_server::protocol::wl_surface::WlSurface,
-    },
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
     utils::{Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
@@ -129,22 +126,38 @@ where
 }
 
 /// Get render elements for windows on active tags.
-fn tag_render_elements<R>(
+///
+/// ret.1 contains render elements for the windows at and above the first fullscreen window.
+/// ret.2 contains the rest.
+#[allow(clippy::type_complexity)]
+fn window_render_elements<R>(
     output: &Output,
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
+) -> (
+    Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>,
+    Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>,
+)
 where
     R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
 {
-    let elements = windows
+    // bot wwwwwFFww top
+    // rev wwFFwwwww
+
+    let mut last_fullscreen_split_at = 0;
+
+    let mut elements = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .filter(|win| win.is_on_active_tag())
-        .map(|win| {
+        .enumerate()
+        .map(|(i, win)| {
+            if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+                last_fullscreen_split_at = i + 1;
+            }
             // subtract win.geometry().loc to align decorations correctly
             let loc = (
                 space.element_location(win) .unwrap_or((0, 0).into())
@@ -159,7 +172,7 @@ where
             });
 
             (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
-        }).flat_map(|(elems, rect)| {
+        }).map(|(elems, rect)| {
             // We're cropping everything down to its expected size to stop any sussy windows that
             // don't want to cooperate. Unfortunately this also truncates shadows and other
             // external decorations.
@@ -171,10 +184,15 @@ where
                 },
                 None => elems.into_iter().map(OutputRenderElements::from).collect(),
             }
-        })
-        .collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
 
-    elements
+    let rest = elements.split_off(last_fullscreen_split_at);
+
+    // PERF: bunch of allocations here
+    (
+        elements.into_iter().flatten().collect(),
+        rest.into_iter().flatten().collect(),
+    )
 }
 
 pub fn pointer_render_elements<R>(
@@ -293,67 +311,35 @@ where
     // |     base it on if it's a descendant or not
     output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
 
-    let top_fullscreen_window = windows.iter().rev().find(|win| {
-        let is_wayland_actually_fullscreen = {
-            if let Some(toplevel) = win.toplevel() {
-                toplevel
-                    .current_state()
-                    .states
-                    .contains(xdg_toplevel::State::Fullscreen)
-            } else {
-                true
-            }
-        };
+    let LayerRenderElements {
+        background,
+        bottom,
+        top,
+        overlay,
+    } = layer_render_elements(output, renderer, scale);
 
-        win.with_state(|state| {
-            state.fullscreen_or_maximized.is_fullscreen()
-                && output.with_state(|op_state| {
-                    op_state
-                        .focused_tags()
-                        .any(|op_tag| state.tags.contains(op_tag))
-                })
-        }) && is_wayland_actually_fullscreen
-    });
+    let (fullscreen_and_up_elements, rest_of_window_elements) =
+        window_render_elements::<R>(output, &windows, space, renderer, scale);
 
-    // If fullscreen windows exist, render only the topmost one
-    if let Some(window) = top_fullscreen_window {
-        let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
-            window.render_elements(renderer, (0, 0).into(), scale, 1.0);
+    // Elements render from top to bottom
 
-        output_render_elements.extend(
-            window_render_elements
-                .into_iter()
-                .map(OutputRenderElements::from),
-        );
-    } else {
-        let LayerRenderElements {
-            background,
-            bottom,
-            top,
-            overlay,
-        } = layer_render_elements(output, renderer, scale);
+    output_render_elements.extend(fullscreen_and_up_elements);
 
-        let window_render_elements =
-            tag_render_elements::<R>(output, &windows, space, renderer, scale);
+    output_render_elements.extend(
+        overlay
+            .into_iter()
+            .chain(top)
+            .map(OutputRenderElements::from),
+    );
 
-        // Elements render from top to bottom
+    output_render_elements.extend(rest_of_window_elements);
 
-        output_render_elements.extend(
-            overlay
-                .into_iter()
-                .chain(top)
-                .map(OutputRenderElements::from),
-        );
-
-        output_render_elements.extend(window_render_elements);
-
-        output_render_elements.extend(
-            bottom
-                .into_iter()
-                .chain(background)
-                .map(OutputRenderElements::from),
-        );
-    }
+    output_render_elements.extend(
+        bottom
+            .into_iter()
+            .chain(background)
+            .map(OutputRenderElements::from),
+    );
 
     output_render_elements
 }
