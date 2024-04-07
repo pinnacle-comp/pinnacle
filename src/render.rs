@@ -22,13 +22,20 @@ use smithay::{
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
     render_elements,
     utils::{Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
 };
 
-use crate::{backend::Backend, state::State, window::WindowElement};
+use crate::{
+    backend::Backend,
+    state::{State, WithState},
+    window::WindowElement,
+};
 
 use self::pointer::{PointerElement, PointerRenderElement};
 
@@ -286,32 +293,67 @@ where
     // |     base it on if it's a descendant or not
     output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
 
-    let LayerRenderElements {
-        background,
-        bottom,
-        top,
-        overlay,
-    } = layer_render_elements(output, renderer, scale);
+    let top_fullscreen_window = windows.iter().rev().find(|win| {
+        let is_wayland_actually_fullscreen = {
+            if let Some(toplevel) = win.toplevel() {
+                toplevel
+                    .current_state()
+                    .states
+                    .contains(xdg_toplevel::State::Fullscreen)
+            } else {
+                true
+            }
+        };
 
-    let window_render_elements = tag_render_elements::<R>(output, &windows, space, renderer, scale);
+        win.with_state(|state| {
+            state.fullscreen_or_maximized.is_fullscreen()
+                && output.with_state(|op_state| {
+                    op_state
+                        .focused_tags()
+                        .any(|op_tag| state.tags.contains(op_tag))
+                })
+        }) && is_wayland_actually_fullscreen
+    });
 
-    // Elements render from top to bottom
+    // If fullscreen windows exist, render only the topmost one
+    if let Some(window) = top_fullscreen_window {
+        let window_render_elements: Vec<WaylandSurfaceRenderElement<_>> =
+            window.render_elements(renderer, (0, 0).into(), scale, 1.0);
 
-    output_render_elements.extend(
-        overlay
-            .into_iter()
-            .chain(top)
-            .map(OutputRenderElements::from),
-    );
+        output_render_elements.extend(
+            window_render_elements
+                .into_iter()
+                .map(OutputRenderElements::from),
+        );
+    } else {
+        let LayerRenderElements {
+            background,
+            bottom,
+            top,
+            overlay,
+        } = layer_render_elements(output, renderer, scale);
 
-    output_render_elements.extend(window_render_elements);
+        let window_render_elements =
+            tag_render_elements::<R>(output, &windows, space, renderer, scale);
 
-    output_render_elements.extend(
-        bottom
-            .into_iter()
-            .chain(background)
-            .map(OutputRenderElements::from),
-    );
+        // Elements render from top to bottom
+
+        output_render_elements.extend(
+            overlay
+                .into_iter()
+                .chain(top)
+                .map(OutputRenderElements::from),
+        );
+
+        output_render_elements.extend(window_render_elements);
+
+        output_render_elements.extend(
+            bottom
+                .into_iter()
+                .chain(background)
+                .map(OutputRenderElements::from),
+        );
+    }
 
     output_render_elements
 }

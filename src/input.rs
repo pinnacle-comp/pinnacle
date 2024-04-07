@@ -183,7 +183,32 @@ impl State {
 
         let layers = layer_map_for_output(output);
 
-        if let (Some(layer), _) | (None, Some(layer)) = (
+        let top_fullscreen_window = output
+            .with_state(|state| state.focus_stack.stack.clone())
+            .into_iter()
+            .rev()
+            .find(|win| {
+                win.with_state(|state| {
+                    state.fullscreen_or_maximized.is_fullscreen()
+                        && output.with_state(|op_state| {
+                            op_state
+                                .focused_tags()
+                                .any(|op_tag| state.tags.contains(op_tag))
+                        })
+                })
+            });
+
+        if let Some(window) = top_fullscreen_window {
+            let loc = self
+                .space
+                .element_location(&window)
+                .expect("called elem loc on unmapped win")
+                - window.geometry().loc;
+
+            window
+                .surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
+                .map(|(surf, surf_loc)| (PointerFocusTarget::WlSurface(surf), surf_loc + loc))
+        } else if let (Some(layer), _) | (None, Some(layer)) = (
             layers.layer_under(wlr_layer::Layer::Overlay, point),
             layers.layer_under(wlr_layer::Layer::Top, point),
         ) {
