@@ -21,7 +21,7 @@
     - [Out-of-the-box configurations](#out-of-the-box-configurations)
     - [Custom configuration](#custom-configuration)
         - [Generating a config](#generating-a-config)
-    - [More on configuration and the `metaconfig.toml` file](#more-on-configuration-and-the-metaconfigtoml-file)
+    - [More on configuration](#more-on-configuration)
         - [The `metaconfig.toml` file](#the-metaconfigtoml-file)
     - [Lua Language Server completion](#lua-language-server-completion)
     - [API references](#api-references)
@@ -35,27 +35,13 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-> ### More video examples below!
-> <details>
-> 
-> <summary>Click me</summary>
->
-> All videos were recorded using [Screenkey](https://gitlab.com/screenkey/screenkey) and the Winit backend.
-> 
-> https://github.com/Ottatop/pinnacle/assets/120758733/5b6b224b-3031-4a1c-9375-1143f1bfc0e3
->
-> https://github.com/Ottatop/pinnacle/assets/120758733/7a465983-2560-412e-9154-40b3dfd20488
->
-> (This video is very crunchy in my attempts to get under the 10mb limit)
->
-> </details>
-
 ### Features
 - Tag system
-- Left master stack, corner, dwindle, and spiral layouts from Awesome
-- (Really scuffed) XWayland support
-- Layer-shell support
+- Customizable layouts, including most of the ones from Awesome
+- (Scuffed) XWayland support
+- wlr-layer-shell support
 - Configurable in Lua or Rust
+- wlr-screencopy support
 - Is very cool :thumbsup:
 
 ### Roadmap
@@ -77,7 +63,8 @@ You will need:
         ```sh
         sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
         ```
-    - NixOS: There is a really old [`shell.nix`](shell.nix) that may or may not work :skull:
+    - NixOS: There is ~~a really old~~ an ancient [`shell.nix`](shell.nix) that ~~may or may~~ absolutely does not work :skull:
+      If you happen to know some Nix any PRs are welcome!
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
     - Arch:
         ```sh
@@ -167,7 +154,7 @@ If Rust is chosen, the directory must be manually emptied to continue.
 
 Run `cargo run -- config gen --help` for information on the command.
 
-## More on configuration and the `metaconfig.toml` file
+## More on configuration
 Pinnacle is configured purely through IPC using [gRPC](https://grpc.io/). This is done through
 configuration clients that use the [Lua](api/lua) and [Rust](api/rust) interface libraries.
 
