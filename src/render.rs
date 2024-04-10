@@ -46,7 +46,7 @@ render_elements! {
 }
 
 render_elements! {
-    pub OutputRenderElements<R, E> where R: ImportAll + ImportMem;
+    pub OutputRenderElement<R, E> where R: ImportAll + ImportMem;
     Custom = Wrap<E>,
     Surface = WaylandSurfaceRenderElement<R>,
     Pointer = PointerRenderElement<R>,
@@ -137,16 +137,13 @@ fn window_render_elements<R>(
     renderer: &mut R,
     scale: Scale<f64>,
 ) -> (
-    Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>,
-    Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>,
+    Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>,
+    Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>,
 )
 where
     R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
 {
-    // bot wwwwwFFww top
-    // rev wwFFwwwww
-
     let mut last_fullscreen_split_at = 0;
 
     let mut elements = windows
@@ -180,9 +177,9 @@ where
                 Some(rect) => {
                     elems.into_iter().filter_map(|elem| {
                         CropRenderElement::from_element(elem, scale, rect.to_physical_precise_round(scale))
-                    }).map(TransformRenderElement::from).map(OutputRenderElements::from).collect::<Vec<_>>()
+                    }).map(TransformRenderElement::from).map(OutputRenderElement::from).collect::<Vec<_>>()
                 },
-                None => elems.into_iter().map(OutputRenderElements::from).collect(),
+                None => elems.into_iter().map(OutputRenderElement::from).collect(),
             }
         }).collect::<Vec<_>>();
 
@@ -203,7 +200,7 @@ pub fn pointer_render_elements<R>(
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     pointer_element: &PointerElement<<R as Renderer>::TextureId>,
-) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
+) -> Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer + ImportAll,
     <R as Renderer>::TextureId: Clone + 'static,
@@ -264,7 +261,7 @@ pub fn generate_render_elements<R, T>(
     renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-) -> Vec<OutputRenderElements<R, WaylandSurfaceRenderElement<R>>>
+) -> Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>
 where
     R: Renderer<TextureId = T> + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
@@ -272,7 +269,7 @@ where
 {
     let scale = Scale::from(output.current_scale().fractional_scale());
 
-    let mut output_render_elements: Vec<OutputRenderElements<_, _>> = Vec::new();
+    let mut output_render_elements: Vec<OutputRenderElement<_, _>> = Vec::new();
 
     let (windows, override_redirect_windows) = windows
         .iter()
@@ -309,7 +306,7 @@ where
 
     // TODO: don't unconditionally render OR windows above fullscreen ones,
     // |     base it on if it's a descendant or not
-    output_render_elements.extend(o_r_elements.map(OutputRenderElements::from));
+    output_render_elements.extend(o_r_elements.map(OutputRenderElement::from));
 
     let LayerRenderElements {
         background,
@@ -329,7 +326,7 @@ where
         overlay
             .into_iter()
             .chain(top)
-            .map(OutputRenderElements::from),
+            .map(OutputRenderElement::from),
     );
 
     output_render_elements.extend(rest_of_window_elements);
@@ -338,7 +335,7 @@ where
         bottom
             .into_iter()
             .chain(background)
-            .map(OutputRenderElements::from),
+            .map(OutputRenderElement::from),
     );
 
     output_render_elements

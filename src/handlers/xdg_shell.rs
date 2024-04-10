@@ -154,6 +154,29 @@ impl XdgShellHandler for State {
                         .unwrap_or_else(|| (0, 0).into());
                     tracing::debug!(?loc);
                     break;
+                } else {
+                    let layer_and_op = self.space.outputs().find_map(|op| {
+                        let layer_map = layer_map_for_output(op);
+
+                        let ret = layer_map
+                            .layers()
+                            .find(|l| l.wl_surface() == s)
+                            .cloned()
+                            .map(|layer| {
+                                (
+                                    layer_map.layer_geometry(&layer).unwrap_or_default(),
+                                    op.clone(),
+                                )
+                            });
+
+                        ret
+                    });
+
+                    if let Some((layer_geo, op)) = layer_and_op {
+                        let op_loc = self.space.output_geometry(&op).unwrap_or_default().loc;
+                        loc += layer_geo.loc + op_loc;
+                        break;
+                    }
                 }
             }
 

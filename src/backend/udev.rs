@@ -90,7 +90,7 @@ use crate::{
     output::OutputName,
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
-        OutputRenderElements,
+        OutputRenderElement,
     },
     state::{State, SurfaceDmabufFeedback, WithState},
 };
@@ -119,7 +119,7 @@ type UdevRenderFrameResult<'a> = RenderFrameResult<
     'a,
     BufferObject<()>,
     GbmFramebuffer,
-    OutputRenderElements<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
+    OutputRenderElement<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
 >;
 
 /// Udev state attached to each [`Output`].
@@ -513,53 +513,51 @@ pub fn setup_udev(
 
                         state.device_changed(node);
 
-                        {
-                            // Apply pending gammas
-                            //
-                            // Also welcome to some really doodoo code
+                        // Apply pending gammas
+                        //
+                        // Also welcome to some really doodoo code
 
-                            let udev = state.backend.udev_mut();
-                            let Some(backend) = udev.backends.get_mut(&node) else {
-                                unreachable!();
-                            };
-                            for (crtc, surface) in backend.surfaces.iter_mut() {
-                                match std::mem::take(&mut surface.pending_gamma_change) {
-                                    PendingGammaChange::Idle => {
-                                        debug!("Restoring from previous gamma");
-                                        if let Err(err) = Udev::set_gamma_internal(
-                                            &backend.drm,
-                                            crtc,
-                                            surface.previous_gamma.clone(),
-                                        ) {
-                                            warn!("Failed to reset gamma: {err}");
-                                            surface.previous_gamma = None;
-                                        }
-                                    }
-                                    PendingGammaChange::Restore => {
-                                        debug!("Restoring to original gamma");
-                                        if let Err(err) = Udev::set_gamma_internal(
-                                            &backend.drm,
-                                            crtc,
-                                            None::<[&[u16]; 3]>,
-                                        ) {
-                                            warn!("Failed to reset gamma: {err}");
-                                        }
+                        let udev = state.backend.udev_mut();
+                        let Some(backend) = udev.backends.get_mut(&node) else {
+                            unreachable!();
+                        };
+                        for (crtc, surface) in backend.surfaces.iter_mut() {
+                            match std::mem::take(&mut surface.pending_gamma_change) {
+                                PendingGammaChange::Idle => {
+                                    debug!("Restoring from previous gamma");
+                                    if let Err(err) = Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        surface.previous_gamma.clone(),
+                                    ) {
+                                        warn!("Failed to reset gamma: {err}");
                                         surface.previous_gamma = None;
                                     }
-                                    PendingGammaChange::Change(gamma) => {
-                                        debug!("Changing to pending gamma");
-                                        match Udev::set_gamma_internal(
-                                            &backend.drm,
-                                            crtc,
-                                            Some([&gamma[0], &gamma[1], &gamma[2]]),
-                                        ) {
-                                            Ok(()) => {
-                                                surface.previous_gamma = Some(gamma);
-                                            }
-                                            Err(err) => {
-                                                warn!("Failed to set pending gamma: {err}");
-                                                surface.previous_gamma = None;
-                                            }
+                                }
+                                PendingGammaChange::Restore => {
+                                    debug!("Restoring to original gamma");
+                                    if let Err(err) = Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        None::<[&[u16]; 3]>,
+                                    ) {
+                                        warn!("Failed to reset gamma: {err}");
+                                    }
+                                    surface.previous_gamma = None;
+                                }
+                                PendingGammaChange::Change(gamma) => {
+                                    debug!("Changing to pending gamma");
+                                    match Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        Some([&gamma[0], &gamma[1], &gamma[2]]),
+                                    ) {
+                                        Ok(()) => {
+                                            surface.previous_gamma = Some(gamma);
+                                        }
+                                        Err(err) => {
+                                            warn!("Failed to set pending gamma: {err}");
+                                            surface.previous_gamma = None;
                                         }
                                     }
                                 }
@@ -863,7 +861,7 @@ type GbmDrmCompositor = DrmCompositor<
 fn render_frame<'a>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut UdevRenderer<'a>,
-    elements: &'a [OutputRenderElements<
+    elements: &'a [OutputRenderElement<
         UdevRenderer<'a>,
         WaylandSurfaceRenderElement<UdevRenderer<'a>>,
     >],
