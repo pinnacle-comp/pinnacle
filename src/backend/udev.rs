@@ -1186,6 +1186,7 @@ impl State {
                 },
             );
             self.space.unmap_output(&output);
+            self.gamma_control_manager_state.output_removed(&output);
         }
     }
 

@@ -43,6 +43,12 @@ impl GammaControlManagerState {
             gamma_controls: HashMap::new(),
         }
     }
+
+    pub fn output_removed(&mut self, output: &Output) {
+        if let Some(gamma_control) = self.gamma_controls.remove(output) {
+            gamma_control.failed();
+        }
+    }
 }
 
 pub struct GammaControlState {
