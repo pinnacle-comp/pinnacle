@@ -219,7 +219,7 @@ impl State {
             };
 
         let window_under =
-            |windows: &[WindowElement]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
+            |windows: &[&WindowElement]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
                 windows.iter().find_map(|win| {
                     let loc = self
                         .space
@@ -235,35 +235,37 @@ impl State {
             };
 
         // Input and rendering go, from top to bottom,
+        // - Overlay layer surfaces
         // - All windows down to the bottom-most fullscreen window (this mimics Awesome)
-        // - Overlay and Top layer surfaces
+        // - Top layer surfaces
         // - The rest of the windows
         // - Bottom and background layer surfaces
 
-        window_under(
-            &self
-                .space
-                .elements()
-                .rev()
-                .filter(|win| win.is_on_active_tag())
-                .take(fullscreen_and_up_split_at)
-                .cloned()
-                .collect::<Vec<_>>(),
-        )
-        .or_else(|| layer_under(&[wlr_layer::Layer::Overlay, wlr_layer::Layer::Top]))
-        .or_else(|| {
-            window_under(
-                &self
-                    .space
-                    .elements()
-                    .rev()
-                    .filter(|win| win.is_on_active_tag())
-                    .skip(fullscreen_and_up_split_at)
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .or_else(|| layer_under(&[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background]))
+        layer_under(&[wlr_layer::Layer::Overlay])
+            .or_else(|| {
+                window_under(
+                    &self
+                        .space
+                        .elements()
+                        .rev()
+                        .filter(|win| win.is_on_active_tag())
+                        .take(fullscreen_and_up_split_at)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .or_else(|| layer_under(&[wlr_layer::Layer::Top]))
+            .or_else(|| {
+                window_under(
+                    &self
+                        .space
+                        .elements()
+                        .rev()
+                        .filter(|win| win.is_on_active_tag())
+                        .skip(fullscreen_and_up_split_at)
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .or_else(|| layer_under(&[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background]))
     }
 
     /// Update the pointer focus if it's different from the previous one.

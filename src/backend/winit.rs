@@ -41,10 +41,7 @@ use smithay::{
 use tracing::{error, trace, warn};
 
 use crate::{
-    render::{
-        generate_render_elements, pointer::PointerElement, pointer_render_elements,
-        take_presentation_feedback,
-    },
+    render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
     state::{State, WithState},
 };
 
@@ -320,7 +317,7 @@ impl State {
             output_render_elements.extend(pointer_render_elements);
         }
 
-        output_render_elements.extend(generate_render_elements(
+        output_render_elements.extend(crate::render::output_render_elements(
             output,
             winit.backend.renderer(),
             &self.space,

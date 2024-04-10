@@ -1480,7 +1480,7 @@ impl State {
             }
         }
 
-        output_render_elements.extend(crate::render::generate_render_elements(
+        output_render_elements.extend(crate::render::output_render_elements(
             output,
             &mut renderer,
             &self.space,

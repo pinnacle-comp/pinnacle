@@ -255,8 +255,7 @@ where
 ///
 /// Render elements will be pulled from the provided windows,
 /// with the first window being at the top and subsequent ones beneath.
-#[allow(clippy::too_many_arguments)]
-pub fn generate_render_elements<R, T>(
+pub fn output_render_elements<R, T>(
     output: &Output,
     renderer: &mut R,
     space: &Space<WindowElement>,
@@ -320,23 +319,12 @@ where
 
     // Elements render from top to bottom
 
+    output_render_elements.extend(overlay.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(fullscreen_and_up_elements);
-
-    output_render_elements.extend(
-        overlay
-            .into_iter()
-            .chain(top)
-            .map(OutputRenderElement::from),
-    );
-
+    output_render_elements.extend(top.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(rest_of_window_elements);
-
-    output_render_elements.extend(
-        bottom
-            .into_iter()
-            .chain(background)
-            .map(OutputRenderElement::from),
-    );
+    output_render_elements.extend(bottom.into_iter().map(OutputRenderElement::from));
+    output_render_elements.extend(background.into_iter().map(OutputRenderElement::from));
 
     output_render_elements
 }
