@@ -146,15 +146,16 @@ where
 {
     let mut last_fullscreen_split_at = 0;
 
-    let mut elements = windows
+    let mut fullscreen_and_up = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .filter(|win| win.is_on_active_tag())
         .enumerate()
-        .map(|(i, win)| {
+        .flat_map(|(i, win)| {
             if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
+
             // subtract win.geometry().loc to align decorations correctly
             let loc = (
                 space.element_location(win) .unwrap_or((0, 0).into())
@@ -163,33 +164,14 @@ where
                 )
                 .to_physical_precise_round(scale);
 
-            let elem_geo = space.element_geometry(win).map(|mut geo| {
-                geo.loc -= output.current_location();
-                geo
-            });
-
-            (win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0), elem_geo)
-        }).map(|(elems, rect)| {
-            // We're cropping everything down to its expected size to stop any sussy windows that
-            // don't want to cooperate. Unfortunately this also truncates shadows and other
-            // external decorations.
-            match rect {
-                Some(rect) => {
-                    elems.into_iter().filter_map(|elem| {
-                        CropRenderElement::from_element(elem, scale, rect.to_physical_precise_round(scale))
-                    }).map(TransformRenderElement::from).map(OutputRenderElement::from).collect::<Vec<_>>()
-                },
-                None => elems.into_iter().map(OutputRenderElement::from).collect(),
-            }
+            win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0)
+                .into_iter()
+                .map(OutputRenderElement::from)
         }).collect::<Vec<_>>();
 
-    let rest = elements.split_off(last_fullscreen_split_at);
+    let rest = fullscreen_and_up.split_off(last_fullscreen_split_at);
 
-    // PERF: bunch of allocations here
-    (
-        elements.into_iter().flatten().collect(),
-        rest.into_iter().flatten().collect(),
-    )
+    (fullscreen_and_up, rest)
 }
 
 pub fn pointer_render_elements<R>(
