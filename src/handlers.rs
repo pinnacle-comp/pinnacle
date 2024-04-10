@@ -56,12 +56,16 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
-    delegate_screencopy,
+    backend::Backend,
+    delegate_gamma_control, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
-    protocol::screencopy::{Screencopy, ScreencopyHandler},
+    protocol::{
+        gamma_control::{GammaControlHandler, GammaControlManagerState},
+        screencopy::{Screencopy, ScreencopyHandler},
+    },
     state::{ClientState, State, WithState},
 };
 
@@ -555,3 +559,54 @@ impl ScreencopyHandler for State {
     }
 }
 delegate_screencopy!(State);
+
+impl GammaControlHandler for State {
+    fn gamma_control_manager_state(&mut self) -> &mut GammaControlManagerState {
+        &mut self.gamma_control_manager_state
+    }
+
+    fn get_gamma_size(&mut self, output: &Output) -> Option<u32> {
+        let Backend::Udev(udev) = &self.backend else {
+            return None;
+        };
+
+        match udev.gamma_size(output) {
+            Ok(0) => None, // Setting gamma is not supported
+            Ok(size) => Some(size),
+            Err(err) => {
+                warn!(
+                    "Failed to get gamma size for output {}: {err}",
+                    output.name()
+                );
+                None
+            }
+        }
+    }
+
+    fn set_gamma(&mut self, output: &Output, gammas: [&[u16]; 3]) -> bool {
+        let Backend::Udev(udev) = &self.backend else {
+            warn!("Setting gamma is not supported on the winit backend");
+            return false;
+        };
+
+        match udev.set_gamma(output, Some(gammas)) {
+            Ok(_) => true,
+            Err(err) => {
+                warn!("Failed to set gamma for output {}: {err}", output.name());
+                false
+            }
+        }
+    }
+
+    fn gamma_control_destroyed(&mut self, output: &Output) {
+        let Backend::Udev(udev) = &self.backend else {
+            warn!("Resetting gamma is not supported on the winit backend");
+            return;
+        };
+
+        if let Err(err) = udev.set_gamma(output, None) {
+            warn!("Failed to set gamma for output {}: {err}", output.name());
+        }
+    }
+}
+delegate_gamma_control!(State);

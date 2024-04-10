@@ -71,6 +71,7 @@ nix = { version = "0.28.0", features = ["user", "resource"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = "0.3.16"
 chrono = "0.4.37"
+bytemuck = "1.15.0"
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay"

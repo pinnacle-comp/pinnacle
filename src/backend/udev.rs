@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 mod drm_util;
+mod gamma;
 
 use std::{
     collections::{HashMap, HashSet},
