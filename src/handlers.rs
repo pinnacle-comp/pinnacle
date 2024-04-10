@@ -584,7 +584,7 @@ impl GammaControlHandler for State {
     }
 
     fn set_gamma(&mut self, output: &Output, gammas: [&[u16]; 3]) -> bool {
-        let Backend::Udev(udev) = &self.backend else {
+        let Backend::Udev(udev) = &mut self.backend else {
             warn!("Setting gamma is not supported on the winit backend");
             return false;
         };
@@ -599,7 +599,7 @@ impl GammaControlHandler for State {
     }
 
     fn gamma_control_destroyed(&mut self, output: &Output) {
-        let Backend::Udev(udev) = &self.backend else {
+        let Backend::Udev(udev) = &mut self.backend else {
             warn!("Resetting gamma is not supported on the winit backend");
             return;
         };

@@ -2,14 +2,29 @@
 // Not that I'm Omni-man, of course.
 
 use anyhow::{ensure, Context};
-use smithay::output::Output;
-use smithay::reexports::drm::control::Device;
+use smithay::backend::drm::DrmDevice;
+use smithay::reexports::drm::control::{crtc, Device};
+use smithay::{backend::session::Session, output::Output};
+
+use crate::backend::udev::{render_surface_for_output, PendingGammaChange};
 
 use super::{Udev, UdevOutputData};
 
 impl Udev {
-    // TODO: gamma sets when session is inactive
-    pub fn set_gamma(&self, output: &Output, gamma: Option<[&[u16]; 3]>) -> anyhow::Result<()> {
+    pub fn set_gamma(&mut self, output: &Output, gamma: Option<[&[u16]; 3]>) -> anyhow::Result<()> {
+        if !self.session.is_active() {
+            render_surface_for_output(output, &mut self.backends)
+                .context("no render surface for output")?
+                .pending_gamma_change = match gamma {
+                Some([r, g, b]) => {
+                    PendingGammaChange::Change([Box::from(r), Box::from(g), Box::from(b)])
+                }
+                None => PendingGammaChange::Restore,
+            };
+            tracing::info!("SET PENDING GAMMA WOO");
+            return Ok(());
+        }
+
         let UdevOutputData { device_id, crtc } = output
             .user_data()
             .get()
@@ -20,6 +35,27 @@ impl Udev {
             .get(device_id)
             .context("no udev backend data for output")?
             .drm;
+
+        let ret = Udev::set_gamma_internal(drm_device, crtc, gamma);
+
+        render_surface_for_output(output, &mut self.backends)
+            .context("no render surface for output")?
+            .previous_gamma = match ret.is_ok() {
+            true => gamma.map(|[r, g, b]| [r.into(), g.into(), b.into()]),
+            false => None,
+        };
+
+        ret
+    }
+
+    pub(super) fn set_gamma_internal(
+        drm_device: &DrmDevice,
+        crtc: &crtc::Handle,
+        gamma: Option<[impl AsRef<[u16]>; 3]>,
+    ) -> anyhow::Result<()> {
+        let gamma = gamma
+            .as_ref()
+            .map(|[r, g, b]| [r.as_ref(), g.as_ref(), b.as_ref()]);
 
         let crtc_info = drm_device.get_crtc(*crtc)?;
         let gamma_size = crtc_info.gamma_length() as usize;
