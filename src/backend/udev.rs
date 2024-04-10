@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 mod drm_util;
+mod gamma;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -57,7 +58,7 @@ use smithay::{
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{
-            self, generic::Generic, EventLoop, Idle, Interest, LoopHandle, PostAction,
+            self, generic::Generic, Dispatcher, EventLoop, Idle, Interest, LoopHandle, PostAction,
             RegistrationToken,
         },
         drm::control::{connector, crtc, ModeTypeFlags},
@@ -81,7 +82,7 @@ use smithay::{
     },
 };
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     backend::Backend,
@@ -89,7 +90,7 @@ use crate::{
     output::OutputName,
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
-        OutputRenderElements,
+        OutputRenderElement,
     },
     state::{State, SurfaceDmabufFeedback, WithState},
 };
@@ -118,7 +119,7 @@ type UdevRenderFrameResult<'a> = RenderFrameResult<
     'a,
     BufferObject<()>,
     GbmFramebuffer,
-    OutputRenderElements<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
+    OutputRenderElement<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
 >;
 
 /// Udev state attached to each [`Output`].
@@ -133,6 +134,7 @@ struct UdevOutputData {
 // TODO: document desperately
 pub struct Udev {
     pub session: LibSeatSession,
+    udev_dispatcher: Dispatcher<'static, UdevBackend, State>,
     display_handle: DisplayHandle,
     pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     pub(super) primary_gpu: DrmNode,
@@ -192,45 +194,52 @@ impl State {
     /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         if let Backend::Udev(udev) = &mut self.backend {
-            for backend in udev.backends.values_mut() {
-                for surface in backend.surfaces.values_mut() {
-                    // Clear the overlay planes on tty switch.
-                    //
-                    // On my machine, switching a tty would leave the topmost window on the
-                    // screen. Smithay will render the topmost window on the overlay plane,
-                    // so we clear it here.
-                    let planes = surface.compositor.surface().planes().clone();
-                    tracing::debug!("Clearing overlay planes");
-                    for overlay_plane in planes.overlay {
-                        if let Err(err) = surface
-                            .compositor
-                            .surface()
-                            .clear_plane(overlay_plane.handle)
-                        {
-                            warn!("Failed to clear overlay planes: {err}");
-                        }
-                    }
-                }
+            if let Err(err) = udev.session.change_vt(vt) {
+                error!("Failed to switch to vt {vt}: {err}");
             }
 
+            // TODO: uncomment this when `RenderFrameResult::blit_frame_result` is fixed for
+            // |     overlay/cursor planes
+
+            // for backend in udev.backends.values_mut() {
+            //     for surface in backend.surfaces.values_mut() {
+            //         // Clear the overlay planes on tty switch.
+            //         //
+            //         // On my machine, switching a tty would leave the topmost window on the
+            //         // screen. Smithay will render the topmost window on the overlay plane,
+            //         // so we clear it here.
+            //         let planes = surface.compositor.surface().planes().clone();
+            //         tracing::debug!("Clearing overlay planes");
+            //         for overlay_plane in planes.overlay {
+            //             if let Err(err) = surface
+            //                 .compositor
+            //                 .surface()
+            //                 .clear_plane(overlay_plane.handle)
+            //             {
+            //                 warn!("Failed to clear overlay planes: {err}");
+            //             }
+            //         }
+            //     }
+            // }
+
             // Wait for the clear to commit before switching
-            self.schedule(
-                |state| {
-                    let udev = state.backend.udev();
-                    !udev
-                        .backends
-                        .values()
-                        .flat_map(|backend| backend.surfaces.values())
-                        .map(|surface| surface.compositor.surface())
-                        .any(|drm_surf| drm_surf.commit_pending())
-                },
-                move |state| {
-                    let udev = state.backend.udev_mut();
-                    if let Err(err) = udev.session.change_vt(vt) {
-                        error!("Failed to switch to vt {vt}: {err}");
-                    }
-                },
-            );
+            // self.schedule(
+            //     |state| {
+            //         let udev = state.backend.udev();
+            //         !udev
+            //             .backends
+            //             .values()
+            //             .flat_map(|backend| backend.surfaces.values())
+            //             .map(|surface| surface.compositor.surface())
+            //             .any(|drm_surf| drm_surf.commit_pending())
+            //     },
+            //     move |state| {
+            //         let udev = state.backend.udev_mut();
+            //         if let Err(err) = udev.session.change_vt(vt) {
+            //             error!("Failed to switch to vt {vt}: {err}");
+            //         }
+            //     },
+            // );
         }
     }
 
@@ -338,8 +347,43 @@ pub fn setup_udev(
     //     Ok(unsafe { GlesRenderer::with_capabilities(ctx, supported) }?)
     // }))?;
 
+    // Initialize the udev backend
+    let udev_backend = UdevBackend::new(session.seat())?;
+
+    let udev_dispatcher =
+        Dispatcher::new(
+            udev_backend,
+            move |event, _, state: &mut State| match event {
+                // GPU connected
+                UdevEvent::Added { device_id, path } => {
+                    if let Err(err) = DrmNode::from_dev_id(device_id)
+                        .map_err(DeviceAddError::DrmNode)
+                        .and_then(|node| state.device_added(node, &path))
+                    {
+                        error!("Skipping device {device_id}: {err}");
+                    }
+                }
+                UdevEvent::Changed { device_id } => {
+                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                        state.device_changed(node)
+                    }
+                }
+                // GPU disconnected
+                UdevEvent::Removed { device_id } => {
+                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                        state.device_removed(node)
+                    }
+                }
+            },
+        );
+
+    event_loop
+        .handle()
+        .register_dispatcher(udev_dispatcher.clone())?;
+
     let data = Udev {
         display_handle: display.handle(),
+        udev_dispatcher,
         dmabuf_state: None,
         session,
         primary_gpu,
@@ -365,46 +409,26 @@ pub fn setup_udev(
         config_dir,
     )?;
 
-    // Initialize the udev backend
-    let udev_backend = UdevBackend::new(state.seat.name())?;
+    let things = state
+        .backend
+        .udev()
+        .udev_dispatcher
+        .as_source_ref()
+        .device_list()
+        .map(|(id, path)| (id, path.to_path_buf()))
+        .collect::<Vec<_>>();
 
     // Create DrmNodes from already connected GPUs
-    for (device_id, path) in udev_backend.device_list() {
+    for (device_id, path) in things {
         if let Err(err) = DrmNode::from_dev_id(device_id)
             .map_err(DeviceAddError::DrmNode)
-            .and_then(|node| state.device_added(node, path))
+            .and_then(|node| state.device_added(node, &path))
         {
             error!("Skipping device {device_id}: {err}");
         }
     }
 
     let udev = state.backend.udev_mut();
-
-    event_loop
-        .handle()
-        .insert_source(udev_backend, move |event, _, state| match event {
-            // GPU connected
-            UdevEvent::Added { device_id, path } => {
-                if let Err(err) = DrmNode::from_dev_id(device_id)
-                    .map_err(DeviceAddError::DrmNode)
-                    .and_then(|node| state.device_added(node, &path))
-                {
-                    error!("Skipping device {device_id}: {err}");
-                }
-            }
-            UdevEvent::Changed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    state.device_changed(node)
-                }
-            }
-            // GPU disconnected
-            UdevEvent::Removed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    state.device_removed(node)
-                }
-            }
-        })
-        .expect("failed to insert udev_backend into event loop");
 
     // Initialize libinput backend
     let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
@@ -431,10 +455,9 @@ pub fn setup_udev(
     event_loop
         .handle()
         .insert_source(notifier, move |event, _, state| {
-            let udev = state.backend.udev_mut();
-
             match event {
                 session::Event::PauseSession => {
+                    let udev = state.backend.udev_mut();
                     libinput_context.suspend();
                     info!("pausing session");
 
@@ -445,44 +468,117 @@ pub fn setup_udev(
                 session::Event::ActivateSession => {
                     info!("resuming session");
 
-                    if let Err(err) = libinput_context.resume() {
-                        error!("Failed to resume libinput context: {:?}", err);
+                    if libinput_context.resume().is_err() {
+                        error!("Failed to resume libinput context");
                     }
-                    for backend in udev.backends.values_mut() {
-                        // TODO: this is false because i'm too lazy to remove the code directly
-                        // |     below it
-                        backend.drm.activate(false).expect("failed to activate drm");
-                        for surface in backend.surfaces.values_mut() {
-                            if let Err(err) = surface.compositor.surface().reset_state() {
-                                warn!("Failed to reset drm surface state: {}", err);
+
+                    // TODO: All this dance around borrowing is a consequence of the fact that I haven't
+                    // |     split the State struct into a main State and a substruct like
+                    // |     Niri and cosmic-comp have done
+
+                    let (mut device_list, connected_devices, disconnected_devices) = {
+                        let udev = state.backend.udev();
+                        let device_list = udev
+                            .udev_dispatcher
+                            .as_source_ref()
+                            .device_list()
+                            .flat_map(|(id, path)| {
+                                Some((DrmNode::from_dev_id(id).ok()?, path.to_path_buf()))
+                            })
+                            .collect::<HashMap<_, _>>();
+
+                        let (connected_devices, disconnected_devices) = udev
+                            .backends
+                            .keys()
+                            .copied()
+                            .partition::<Vec<_>, _>(|node| device_list.contains_key(node));
+
+                        (device_list, connected_devices, disconnected_devices)
+                    };
+
+                    for node in disconnected_devices {
+                        device_list.remove(&node);
+                        state.device_removed(node);
+                    }
+
+                    for node in connected_devices {
+                        device_list.remove(&node);
+
+                        // TODO: split off the big State struct to avoid this bs
+
+                        {
+                            let udev = state.backend.udev_mut();
+
+                            let Some(backend) = udev.backends.get_mut(&node) else {
+                                unreachable!();
+                            };
+
+                            if let Err(err) = backend.drm.activate(true) {
+                                error!("Error activating DRM device: {err}");
                             }
-                            // reset the buffers after resume to trigger a full redraw
-                            // this is important after a vt switch as the primary plane
-                            // has no content and damage tracking may prevent a redraw
-                            // otherwise
-                            surface.compositor.reset_buffers();
+                        }
+
+                        state.device_changed(node);
+
+                        // Apply pending gammas
+                        //
+                        // Also welcome to some really doodoo code
+
+                        let udev = state.backend.udev_mut();
+                        let Some(backend) = udev.backends.get_mut(&node) else {
+                            unreachable!();
+                        };
+                        for (crtc, surface) in backend.surfaces.iter_mut() {
+                            match std::mem::take(&mut surface.pending_gamma_change) {
+                                PendingGammaChange::Idle => {
+                                    debug!("Restoring from previous gamma");
+                                    if let Err(err) = Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        surface.previous_gamma.clone(),
+                                    ) {
+                                        warn!("Failed to reset gamma: {err}");
+                                        surface.previous_gamma = None;
+                                    }
+                                }
+                                PendingGammaChange::Restore => {
+                                    debug!("Restoring to original gamma");
+                                    if let Err(err) = Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        None::<[&[u16]; 3]>,
+                                    ) {
+                                        warn!("Failed to reset gamma: {err}");
+                                    }
+                                    surface.previous_gamma = None;
+                                }
+                                PendingGammaChange::Change(gamma) => {
+                                    debug!("Changing to pending gamma");
+                                    match Udev::set_gamma_internal(
+                                        &backend.drm,
+                                        crtc,
+                                        Some([&gamma[0], &gamma[1], &gamma[2]]),
+                                    ) {
+                                        Ok(()) => {
+                                            surface.previous_gamma = Some(gamma);
+                                        }
+                                        Err(err) => {
+                                            warn!("Failed to set pending gamma: {err}");
+                                            surface.previous_gamma = None;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    let connectors = udev
-                        .backends
-                        .iter()
-                        .map(|(node, backend)| {
-                            let connectors = backend
-                                .drm_scanner
-                                .crtcs()
-                                .map(|(info, crtc)| (info.clone(), crtc))
-                                .collect::<Vec<_>>();
-                            (*node, connectors)
-                        })
-                        .collect::<Vec<_>>();
-
-                    for (node, connectors) in connectors {
-                        for (connector, crtc) in connectors {
-                            state.connector_disconnected(node, connector.clone(), crtc);
-                            state.connector_connected(node, connector, crtc);
+                    // Newly connected devices
+                    for (node, path) in device_list.into_iter() {
+                        if let Err(err) = state.device_added(node, &path) {
+                            error!("Error adding device: {err}");
                         }
                     }
+
                     for output in state.space.outputs().cloned().collect::<Vec<_>>() {
                         state.schedule_render(&output);
                     }
@@ -727,6 +823,20 @@ struct RenderSurface {
     dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
     render_state: RenderState,
     screencopy_commit_state: ScreencopyCommitState,
+
+    previous_gamma: Option<[Box<[u16]>; 3]>,
+    pending_gamma_change: PendingGammaChange,
+}
+
+#[derive(Debug, Clone, Default)]
+enum PendingGammaChange {
+    /// No pending gamma
+    #[default]
+    Idle,
+    /// Restore the original gamma
+    Restore,
+    /// Change the gamma
+    Change([Box<[u16]>; 3]),
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -758,7 +868,7 @@ type GbmDrmCompositor = DrmCompositor<
 fn render_frame<'a>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut UdevRenderer<'a>,
-    elements: &'a [OutputRenderElements<
+    elements: &'a [OutputRenderElement<
         UdevRenderer<'a>,
         WaylandSurfaceRenderElement<UdevRenderer<'a>>,
     >],
@@ -1006,6 +1116,8 @@ impl State {
             dmabuf_feedback,
             render_state: RenderState::Idle,
             screencopy_commit_state: ScreencopyCommitState::default(),
+            previous_gamma: None,
+            pending_gamma_change: PendingGammaChange::Idle,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1074,6 +1186,7 @@ impl State {
                 },
             );
             self.space.unmap_output(&output);
+            self.gamma_control_manager_state.output_removed(&output);
         }
     }
 

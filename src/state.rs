@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    api::signal::SignalState, backend::Backend, config::Config, cursor::Cursor,
-    focus::OutputFocusStack, grab::resize_grab::ResizeSurfaceState, layout::LayoutState,
-    protocol::screencopy::ScreencopyManagerState, window::WindowElement,
+    api::signal::SignalState,
+    backend::Backend,
+    config::Config,
+    cursor::Cursor,
+    focus::OutputFocusStack,
+    grab::resize_grab::ResizeSurfaceState,
+    layout::LayoutState,
+    protocol::{gamma_control::GammaControlManagerState, screencopy::ScreencopyManagerState},
+    window::WindowElement,
 };
 use anyhow::Context;
 use smithay::{
@@ -69,6 +75,7 @@ pub struct State {
     pub layer_shell_state: WlrLayerShellState,
     pub data_control_state: DataControlState,
     pub screencopy_manager_state: ScreencopyManagerState,
+    pub gamma_control_manager_state: GammaControlManagerState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -249,6 +256,10 @@ impl State {
             layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
             data_control_state,
             screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
+                &display_handle,
+                |_| true,
+            ),
+            gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
                 &display_handle,
                 |_| true,
             ),
