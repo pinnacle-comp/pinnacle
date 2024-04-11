@@ -63,8 +63,9 @@ You will need:
         ```sh
         sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
         ```
-    - NixOS: There is ~~a really old~~ an ancient [`shell.nix`](shell.nix) that ~~may or may~~ absolutely does not work :skull:
-      If you happen to know some Nix any PRs are welcome!
+    - NixOS: There is flake [`flake.nix`](flake.nix) with a devShell. It also
+      includes the other tools needed for the build and sets up the
+      `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
     - Arch:
         ```sh
