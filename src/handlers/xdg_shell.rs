@@ -153,6 +153,7 @@ impl XdgShellHandler for State {
             state.geometry = positioner.get_geometry();
             state.positioner = positioner;
         });
+        self.position_popup(&surface);
         surface.send_repositioned(token);
     }
 
