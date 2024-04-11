@@ -3,7 +3,7 @@
 mod xdg_shell;
 mod xwayland;
 
-use std::{os::fd::OwnedFd, time::Duration};
+use std::{mem, os::fd::OwnedFd, time::Duration};
 
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
@@ -11,13 +11,14 @@ use smithay::{
     delegate_layer_shell, delegate_output, delegate_presentation, delegate_primary_selection,
     delegate_relative_pointer, delegate_seat, delegate_shm, delegate_viewporter,
     desktop::{
-        self, layer_map_for_output, utils::surface_primary_scanout_output, PopupKind,
-        WindowSurfaceType,
+        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
+        utils::surface_primary_scanout_output, PopupKind, WindowSurfaceType,
     },
     input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
         calloop::Interest,
+        wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
         wayland_server::{
             protocol::{
                 wl_buffer::WlBuffer, wl_data_source::WlDataSource, wl_output::WlOutput,
@@ -26,7 +27,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::SERIAL_COUNTER,
+    utils::{Logical, Rectangle, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -50,7 +51,7 @@ use smithay::{
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
-            xdg::{XdgPopupSurfaceData, XdgToplevelSurfaceData},
+            xdg::{PopupSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
     },
@@ -546,6 +547,11 @@ impl WlrLayerShellHandler for State {
             });
         }
     }
+
+    fn new_popup(&mut self, _parent: wlr_layer::LayerSurface, popup: PopupSurface) {
+        trace!("WlrLayerShellHandler::new_popup");
+        self.position_popup(&popup);
+    }
 }
 delegate_layer_shell!(State);
 
@@ -610,3 +616,58 @@ impl GammaControlHandler for State {
     }
 }
 delegate_gamma_control!(State);
+
+impl State {
+    fn position_popup(&self, popup: &PopupSurface) {
+        tracing::info!("State::position_popup");
+        let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
+            return;
+        };
+
+        let mut positioner = popup.with_pending_state(|state| mem::take(&mut state.positioner));
+
+        let popup_geo = (|| -> Option<Rectangle<i32, Logical>> {
+            let parent = popup.get_parent_surface()?;
+
+            if parent == root {
+                // Slide toplevel popup x's instead of flipping; this mimics Awesome
+                positioner
+                    .constraint_adjustment
+                    .remove(ConstraintAdjustment::FlipX);
+            }
+
+            let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
+                let win_geo = self.space.element_geometry(&win)?;
+                (win_geo.loc, self.focused_output()?.clone())
+            } else {
+                self.space.outputs().find_map(|op| {
+                    let layer_map = layer_map_for_output(op);
+                    let layer = layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
+                    let output_loc = self.space.output_geometry(op)?.loc;
+                    Some((
+                        layer_map.layer_geometry(layer)?.loc + output_loc,
+                        op.clone(),
+                    ))
+                })?
+            };
+
+            let parent_global_loc = if root == parent {
+                root_global_loc
+            } else {
+                root_global_loc + get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()))
+            };
+
+            let mut output_geo = self.space.output_geometry(&output)?;
+
+            // Make local to parent
+            output_geo.loc -= parent_global_loc;
+            Some(positioner.get_unconstrained_geometry(output_geo))
+        })()
+        .unwrap_or_else(|| positioner.get_geometry());
+
+        popup.with_pending_state(|state| {
+            state.geometry = popup_geo;
+            state.positioner = positioner;
+        });
+    }
+}

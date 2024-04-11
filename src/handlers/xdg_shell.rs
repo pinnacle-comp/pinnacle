@@ -7,16 +7,13 @@ use smithay::{
     input::{pointer::Focus, Seat},
     output::Output,
     reexports::{
-        wayland_protocols::xdg::shell::server::{
-            xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
-            xdg_toplevel::{self, ResizeEdge},
-        },
+        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
             Resource,
         },
     },
-    utils::{Logical, Point, Rectangle, Serial, SERIAL_COUNTER},
+    utils::{Serial, SERIAL_COUNTER},
     wayland::{
         seat::WaylandFocus,
         shell::xdg::{
@@ -24,6 +21,7 @@ use smithay::{
         },
     },
 };
+use tracing::trace;
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -98,40 +96,10 @@ impl XdgShellHandler for State {
         }
     }
 
-    // this is 500 lines there has to be a shorter way to do this
-    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
-        tracing::info!("XdgShellHandler::new_popup");
+    fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
+        trace!("XdgShellHandler::new_popup");
 
-        let popup_geo = (|| -> Option<Rectangle<i32, Logical>> {
-            let root = find_popup_root_surface(&PopupKind::Xdg(surface.clone())).ok()?;
-            let parent = surface.get_parent_surface()?;
-
-            let win = self.window_for_surface(&root)?;
-            let win_loc = self.space.element_geometry(&win)?.loc;
-            let parent_loc = if root == parent {
-                win_loc
-            } else {
-                match self.popup_manager.find_popup(&parent)? {
-                    PopupKind::Xdg(surf) => {
-                        surf.with_pending_state(|state| state.geometry.loc) + win_loc
-                    }
-                    PopupKind::InputMethod(_) => return None,
-                }
-            };
-
-            let mut output_geo = win
-                .output(self)
-                .and_then(|op| self.space.output_geometry(&op))?;
-
-            // Make local to parent
-            output_geo.loc -= dbg!(parent_loc);
-            Some(positioner.get_unconstrained_geometry(output_geo))
-        })()
-        .unwrap_or_else(|| positioner.get_geometry());
-
-        dbg!(popup_geo);
-
-        surface.with_pending_state(|state| state.geometry = popup_geo);
+        self.position_popup(&surface);
 
         if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
             tracing::warn!("failed to track popup: {}", err);
