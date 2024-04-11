@@ -136,248 +136,260 @@ mod coverage {
 
     // Process
 
-    #[tokio::main]
-    #[self::test]
-    async fn process_spawn() -> anyhow::Result<()> {
-        test_lua_api(|sender| {
-            run_lua! { |Pinnacle|
-                Pinnacle.process.spawn("foot")
-            }
+    mod process {
+        use super::*;
 
-            sleep_secs(1);
+        #[tokio::main]
+        #[self::test]
+        async fn spawn() -> anyhow::Result<()> {
+            test_lua_api(|sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.process.spawn("foot")
+                }
 
-            assert(&sender, |state| {
-                assert_eq!(state.windows.len(), 1);
-                assert_eq!(state.windows[0].class(), Some("foot".to_string()));
-            });
-        })
-    }
+                sleep_secs(1);
 
-    #[tokio::main]
-    #[self::test]
-    async fn process_set_env() -> anyhow::Result<()> {
-        test_lua_api(|sender| {
-            run_lua! { |Pinnacle|
-                Pinnacle.process.set_env("PROCESS_SET_ENV", "env value")
-            }
+                assert(&sender, |state| {
+                    assert_eq!(state.windows.len(), 1);
+                    assert_eq!(state.windows[0].class(), Some("foot".to_string()));
+                });
+            })
+        }
 
-            sleep_secs(1);
+        #[tokio::main]
+        #[self::test]
+        async fn set_env() -> anyhow::Result<()> {
+            test_lua_api(|sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.process.set_env("PROCESS_SET_ENV", "env value")
+                }
 
-            assert(&sender, |_state| {
-                assert_eq!(
-                    std::env::var("PROCESS_SET_ENV"),
-                    Ok("env value".to_string())
-                );
-            });
-        })
+                sleep_secs(1);
+
+                assert(&sender, |_state| {
+                    assert_eq!(
+                        std::env::var("PROCESS_SET_ENV"),
+                        Ok("env value".to_string())
+                    );
+                });
+            })
+        }
     }
 
     // Window
 
-    #[tokio::main]
-    #[self::test]
-    async fn window_get_all() -> anyhow::Result<()> {
-        test_lua_api(|_sender| {
-            run_lua! { |Pinnacle|
-                assert(#Pinnacle.window.get_all() == 0)
+    mod window {
+        use super::*;
 
-                for i = 1, 5 do
+        #[tokio::main]
+        #[self::test]
+        async fn get_all() -> anyhow::Result<()> {
+            test_lua_api(|_sender| {
+                run_lua! { |Pinnacle|
+                    assert(#Pinnacle.window.get_all() == 0)
+
+                    for i = 1, 5 do
+                        Pinnacle.process.spawn("foot")
+                    end
+                }
+
+                sleep_secs(1);
+
+                run_lua! { |Pinnacle|
+                    assert(#Pinnacle.window.get_all() == 5)
+                }
+            })
+        }
+
+        #[tokio::main]
+        #[self::test]
+        async fn get_focused() -> anyhow::Result<()> {
+            test_lua_api(|_sender| {
+                run_lua! { |Pinnacle|
+                    assert(not Pinnacle.window.get_focused())
+
+                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")[1]:set_active(true)
                     Pinnacle.process.spawn("foot")
-                end
-            }
+                }
 
-            sleep_secs(1);
+                sleep_secs(1);
 
-            run_lua! { |Pinnacle|
-                assert(#Pinnacle.window.get_all() == 5)
-            }
-        })
-    }
+                run_lua! { |Pinnacle|
+                    assert(Pinnacle.window.get_focused())
+                }
+            })
+        }
 
-    #[tokio::main]
-    #[self::test]
-    async fn window_get_focused() -> anyhow::Result<()> {
-        test_lua_api(|_sender| {
-            run_lua! { |Pinnacle|
-                assert(not Pinnacle.window.get_focused())
+        #[tokio::main]
+        #[self::test]
+        async fn add_window_rule() -> anyhow::Result<()> {
+            test_lua_api(|sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name")
+                    Pinnacle.window.add_window_rule({
+                        cond = { classes = { "firefox" } },
+                        rule = { tags = { Pinnacle.tag.get("Tag Name") } },
+                    })
+                }
 
-                Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")[1]:set_active(true)
-                Pinnacle.process.spawn("foot")
-            }
+                sleep_secs(1);
 
-            sleep_secs(1);
-
-            run_lua! { |Pinnacle|
-                assert(Pinnacle.window.get_focused())
-            }
-        })
-    }
-
-    #[tokio::main]
-    #[self::test]
-    async fn window_add_window_rule() -> anyhow::Result<()> {
-        test_lua_api(|sender| {
-            run_lua! { |Pinnacle|
-                Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name")
-                Pinnacle.window.add_window_rule({
-                    cond = { classes = { "firefox" } },
-                    rule = { tags = { Pinnacle.tag.get("Tag Name") } },
-                })
-            }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 1);
-                assert_eq!(
-                    state.config.window_rules[0],
-                    (
-                        WindowRuleCondition {
-                            class: Some(vec!["firefox".to_string()]),
-                            ..Default::default()
-                        },
-                        WindowRule {
-                            tags: Some(vec![TagId(0)]),
-                            ..Default::default()
-                        }
-                    )
-                );
-            });
-
-            run_lua! { |Pinnacle|
-                Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name 2")
-                Pinnacle.window.add_window_rule({
-                    cond = {
-                        all = {
-                            {
-                                classes = { "steam" },
-                                tags = {
-                                    Pinnacle.tag.get("Tag Name"),
-                                    Pinnacle.tag.get("Tag Name 2"),
-                                },
-                            }
-                        }
-                    },
-                    rule = { fullscreen_or_maximized = "fullscreen" },
-                })
-            }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 2);
-                assert_eq!(
-                    state.config.window_rules[1],
-                    (
-                        WindowRuleCondition {
-                            cond_all: Some(vec![WindowRuleCondition {
-                                class: Some(vec!["steam".to_string()]),
-                                tag: Some(vec![TagId(0), TagId(1)]),
+                assert(&sender, |state| {
+                    assert_eq!(state.config.window_rules.len(), 1);
+                    assert_eq!(
+                        state.config.window_rules[0],
+                        (
+                            WindowRuleCondition {
+                                class: Some(vec!["firefox".to_string()]),
                                 ..Default::default()
-                            }]),
-                            ..Default::default()
+                            },
+                            WindowRule {
+                                tags: Some(vec![TagId(0)]),
+                                ..Default::default()
+                            }
+                        )
+                    );
+                });
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name 2")
+                    Pinnacle.window.add_window_rule({
+                        cond = {
+                            all = {
+                                {
+                                    classes = { "steam" },
+                                    tags = {
+                                        Pinnacle.tag.get("Tag Name"),
+                                        Pinnacle.tag.get("Tag Name 2"),
+                                    },
+                                }
+                            }
                         },
-                        WindowRule {
-                            fullscreen_or_maximized: Some(FullscreenOrMaximized::Fullscreen),
-                            ..Default::default()
-                        }
-                    )
-                );
-            });
-        })
-    }
+                        rule = { fullscreen_or_maximized = "fullscreen" },
+                    })
+                }
 
-    // TODO: window_begin_move
-    // TODO: window_begin_resize
+                sleep_secs(1);
 
-    // WindowHandle
+                assert(&sender, |state| {
+                    assert_eq!(state.config.window_rules.len(), 2);
+                    assert_eq!(
+                        state.config.window_rules[1],
+                        (
+                            WindowRuleCondition {
+                                cond_all: Some(vec![WindowRuleCondition {
+                                    class: Some(vec!["steam".to_string()]),
+                                    tag: Some(vec![TagId(0), TagId(1)]),
+                                    ..Default::default()
+                                }]),
+                                ..Default::default()
+                            },
+                            WindowRule {
+                                fullscreen_or_maximized: Some(FullscreenOrMaximized::Fullscreen),
+                                ..Default::default()
+                            }
+                        )
+                    );
+                });
+            })
+        }
 
-    #[tokio::main]
-    #[self::test]
-    async fn window_handle_close() -> anyhow::Result<()> {
-        test_lua_api(|sender| {
-            run_lua! { |Pinnacle|
-                Pinnacle.process.spawn("foot")
+        // TODO: window_begin_move
+        // TODO: window_begin_resize
+
+        mod handle {
+            use super::*;
+
+            // WindowHandle
+
+            #[tokio::main]
+            #[self::test]
+            async fn close() -> anyhow::Result<()> {
+                test_lua_api(|sender| {
+                    run_lua! { |Pinnacle|
+                        Pinnacle.process.spawn("foot")
+                    }
+
+                    sleep_secs(1);
+
+                    assert(&sender, |state| {
+                        assert_eq!(state.windows.len(), 1);
+                    });
+
+                    run_lua! { |Pinnacle|
+                        Pinnacle.window.get_all()[1]:close()
+                    }
+
+                    sleep_secs(1);
+
+                    assert(&sender, |state| {
+                        assert_eq!(state.windows.len(), 0);
+                    });
+                })
             }
 
-            sleep_secs(1);
+            #[tokio::main]
+            #[self::test]
+            async fn move_to_tag() -> anyhow::Result<()> {
+                test_lua_api(|sender| {
+                    run_lua! { |Pinnacle|
+                        local tags = Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
+                        tags[1]:set_active(true)
+                        tags[2]:set_active(true)
+                        Pinnacle.process.spawn("foot")
+                    }
 
-            assert(&sender, |state| {
-                assert_eq!(state.windows.len(), 1);
-            });
+                    sleep_secs(1);
 
-            run_lua! { |Pinnacle|
-                Pinnacle.window.get_all()[1]:close()
+                    assert(&sender, |state| {
+                        assert_eq!(
+                            state.windows[0].with_state(|st| st
+                                .tags
+                                .iter()
+                                .map(|tag| tag.name())
+                                .collect::<Vec<_>>()),
+                            vec!["1", "2"]
+                        );
+                    });
+
+                    // Correct usage
+                    run_lua! { |Pinnacle|
+                        Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
+                    }
+
+                    sleep_secs(1);
+
+                    assert(&sender, |state| {
+                        assert_eq!(
+                            state.windows[0].with_state(|st| st
+                                .tags
+                                .iter()
+                                .map(|tag| tag.name())
+                                .collect::<Vec<_>>()),
+                            vec!["3"]
+                        );
+                    });
+
+                    // Move to the same tag
+                    run_lua! { |Pinnacle|
+                        Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
+                    }
+
+                    sleep_secs(1);
+
+                    assert(&sender, |state| {
+                        assert_eq!(
+                            state.windows[0].with_state(|st| st
+                                .tags
+                                .iter()
+                                .map(|tag| tag.name())
+                                .collect::<Vec<_>>()),
+                            vec!["3"]
+                        );
+                    });
+                })
             }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(state.windows.len(), 0);
-            });
-        })
-    }
-
-    #[tokio::main]
-    #[self::test]
-    async fn window_handle_move_to_tag() -> anyhow::Result<()> {
-        test_lua_api(|sender| {
-            run_lua! { |Pinnacle|
-                local tags = Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
-                tags[1]:set_active(true)
-                tags[2]:set_active(true)
-                Pinnacle.process.spawn("foot")
-            }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(
-                    state.windows[0].with_state(|st| st
-                        .tags
-                        .iter()
-                        .map(|tag| tag.name())
-                        .collect::<Vec<_>>()),
-                    vec!["1", "2"]
-                );
-            });
-
-            // Correct usage
-            run_lua! { |Pinnacle|
-                Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
-            }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(
-                    state.windows[0].with_state(|st| st
-                        .tags
-                        .iter()
-                        .map(|tag| tag.name())
-                        .collect::<Vec<_>>()),
-                    vec!["3"]
-                );
-            });
-
-            // Move to the same tag
-            run_lua! { |Pinnacle|
-                Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
-            }
-
-            sleep_secs(1);
-
-            assert(&sender, |state| {
-                assert_eq!(
-                    state.windows[0].with_state(|st| st
-                        .tags
-                        .iter()
-                        .map(|tag| tag.name())
-                        .collect::<Vec<_>>()),
-                    vec!["3"]
-                );
-            });
-        })
+        }
     }
 }
 
