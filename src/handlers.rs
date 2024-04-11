@@ -56,7 +56,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use tracing::{error, warn};
+use tracing::{error, trace, warn};
 
 use crate::{
     backend::Backend,
@@ -111,7 +111,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        tracing::trace!("commit on surface {surface:?}");
+        trace!("commit on surface {surface:?}");
 
         utils::on_commit_buffer_handler::<State>(surface);
 

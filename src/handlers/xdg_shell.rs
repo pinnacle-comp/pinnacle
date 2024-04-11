@@ -155,6 +155,7 @@ impl XdgShellHandler for State {
                     tracing::debug!(?loc);
                     break;
                 } else {
+                    // Or a layer
                     let layer_and_op = self.space.outputs().find_map(|op| {
                         let layer_map = layer_map_for_output(op);
 
@@ -607,6 +608,13 @@ impl XdgShellHandler for State {
 
         if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
             tracing::warn!("failed to track popup: {}", err);
+        }
+    }
+
+    fn popup_destroyed(&mut self, _surface: PopupSurface) {
+        // TODO: only schedule on the outputs the popup is on
+        for output in self.space.outputs().cloned().collect::<Vec<_>>() {
+            self.schedule_render(&output);
         }
     }
 

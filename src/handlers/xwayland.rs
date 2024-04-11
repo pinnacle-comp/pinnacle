@@ -22,7 +22,7 @@ use smithay::{
         X11Surface, X11Wm, XwmHandler,
     },
 };
-use tracing::error;
+use tracing::{debug, error, trace};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -40,7 +40,7 @@ impl XwmHandler for State {
     fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
-        tracing::trace!("map_window_request");
+        trace!("XwmHandler::map_window_request");
 
         assert!(!surface.is_override_redirect());
 
@@ -80,7 +80,7 @@ impl XwmHandler for State {
 
         let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
 
-        tracing::debug!("map_window_request, configuring with bbox {bbox:?}");
+        debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
             .configure(bbox)
             .expect("failed to configure x11 window");
@@ -121,7 +121,7 @@ impl XwmHandler for State {
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        tracing::trace!("mapped_override_redirect_window");
+        trace!("XwmHandler::mapped_override_redirect_window");
 
         assert!(surface.is_override_redirect());
 
@@ -142,7 +142,20 @@ impl XwmHandler for State {
         self.raise_window(window.clone(), true);
     }
 
+    fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
+        trace!("XwmHandler::map_window_notify");
+        let Some(output) = window
+            .wl_surface()
+            .and_then(|s| self.window_for_surface(&s))
+            .and_then(|win| win.output(self))
+        else {
+            return;
+        };
+        self.schedule_render(&output);
+    }
+
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
+        trace!("XwmHandler::unmapped_window");
         for output in self.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
@@ -190,12 +203,13 @@ impl XwmHandler for State {
         }
 
         if !surface.is_override_redirect() {
-            tracing::debug!("set mapped to false");
+            debug!("set mapped to false");
             surface.set_mapped(false).expect("failed to unmap x11 win");
         }
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
+        trace!("XwmHandler::destroyed_window");
         for output in self.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
@@ -217,7 +231,7 @@ impl XwmHandler for State {
             .cloned();
 
         if let Some(win) = win {
-            tracing::debug!("removing x11 window from windows");
+            debug!("removing x11 window from windows");
 
             // INFO: comparing the windows doesn't work so wlsurface it is
             // self.windows.retain(|elem| &win != elem);
@@ -249,7 +263,7 @@ impl XwmHandler for State {
                 self.schedule_render(&output);
             }
         }
-        tracing::debug!("destroyed x11 window");
+        debug!("destroyed x11 window");
     }
 
     fn configure_request(
@@ -262,6 +276,7 @@ impl XwmHandler for State {
         h: Option<u32>,
         _reorder: Option<Reorder>,
     ) {
+        trace!("XwmHandler::configure_request");
         let floating_or_override_redirect = self
             .windows
             .iter()
@@ -304,7 +319,10 @@ impl XwmHandler for State {
         let Some(win) = self
             .space
             .elements()
-            .find(|elem| matches!(elem.x11_surface(), Some(surf) if surf == &surface))
+            .find(|elem| {
+                matches!(elem.x11_surface(), Some(surf) if surf == &surface)
+                    && elem.is_x11_override_redirect()
+            })
             .cloned()
         else {
             return;
