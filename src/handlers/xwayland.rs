@@ -596,7 +596,7 @@ impl Pinnacle {
 
         let (xwayland, client) = XWayland::spawn(
             &self.display_handle,
-            None,
+            self.xdisplay.clone(),
             std::iter::empty::<(String, String)>(),
             true,
             Stdio::null(),
@@ -629,21 +629,30 @@ impl Pinnacle {
                     )
                     .expect("failed to set xwayland default cursor");
 
-                    tracing::debug!("setting xwm and xdisplay");
-
+                    tracing::debug!("setting xwm");
                     state.pinnacle.xwm = Some(wm);
-                    state.pinnacle.xdisplay = Some(display_number);
 
-                    std::env::set_var("DISPLAY", format!(":{display_number}"));
+                    if state.pinnacle.xdisplay.is_none() {
+                        tracing::debug!("setting xdisplay");
 
-                    if let Err(err) = state.pinnacle.start_config(Some(
-                        state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
-                    )) {
-                        panic!("failed to start config: {err}");
+                        state.pinnacle.xdisplay = Some(display_number);
+
+                        std::env::set_var("DISPLAY", format!(":{display_number}"));
+
+                        if let Err(err) = state.pinnacle.start_config(Some(
+                            state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
+                        )) {
+                            panic!("failed to start config: {err}");
+                        }
                     }
                 }
                 XWaylandEvent::Error => {
-                    warn!("XWayland crashed on startup");
+                    warn!("xwayland crashed or exited");
+                    state.pinnacle.loop_handle.insert_idle(move |state| {
+                        if let Err(err) = state.pinnacle.start_xwayland() {
+                            error!("failed to restart pinnacle: {}", err);
+                        }
+                    });
                 }
             })
             .map(|_| ())

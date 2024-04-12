@@ -16,7 +16,10 @@ use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     reexports::{
-        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        calloop::{
+            generic::Generic,
+            Interest, LoopHandle, LoopSignal, Mode, PostAction,
+        },
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
@@ -266,6 +269,7 @@ impl State {
 
         Ok(state)
     }
+
 }
 
 impl Pinnacle {
