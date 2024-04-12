@@ -280,6 +280,7 @@ end
 ---@field active boolean? Whether or not the tag is currently being displayed
 ---@field name string? The name of the tag
 ---@field output OutputHandle? The output the tag is on
+---@field windows WindowHandle[] The windows that have this tag
 
 ---Get all properties of this tag.
 ---
@@ -292,6 +293,8 @@ function TagHandle:props()
         name = response.name,
         ---@diagnostic disable-next-line: invisible
         output = response.output_name and require("pinnacle.output").handle.new(response.output_name),
+        ---@diagnostic disable-next-line: invisible
+        windows = require("pinnacle.window").handle.new_from_table(response.window_ids or {}),
     }
 end
 
@@ -320,6 +323,15 @@ end
 ---@return OutputHandle?
 function TagHandle:output()
     return self:props().output
+end
+
+---Get the windows that have this tag.
+---
+---Shorthand for `handle:props().windows`.
+---
+---@return WindowHandle[]
+function TagHandle:windows()
+    return self:props().windows
 end
 
 ---@nodoc

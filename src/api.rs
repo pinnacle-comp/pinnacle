@@ -874,11 +874,26 @@ impl tag_service_server::TagService for TagService {
                 .map(|output| output.name());
             let active = tag.as_ref().map(|tag| tag.active());
             let name = tag.as_ref().map(|tag| tag.name());
+            let window_ids = tag
+                .as_ref()
+                .map(|tag| {
+                    state
+                        .windows
+                        .iter()
+                        .filter_map(|win| {
+                            win.with_state(|win_state| {
+                                win_state.tags.contains(tag).then_some(win_state.id.0)
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
             tag::v0alpha1::GetPropertiesResponse {
                 active,
                 name,
                 output_name,
+                window_ids,
             }
         })
         .await

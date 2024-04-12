@@ -391,6 +391,61 @@ mod coverage {
             }
         }
     }
+
+    mod tag {
+        use super::*;
+
+        mod handle {
+            use super::*;
+
+            #[tokio::main]
+            #[self::test]
+            async fn props() -> anyhow::Result<()> {
+                test_lua_api(|_sender| {
+                    run_lua! { |Pinnacle|
+                        Pinnacle.output.connect_for_all(function(op)
+                            local tags = Pinnacle.tag.add(op, "First", "Mungus", "Potato")
+                            tags[1]:set_active(true)
+                            tags[3]:set_active(true)
+                        end)
+                    }
+
+                    sleep_secs(1);
+
+                    run_lua! { |Pinnacle|
+                        Pinnacle.process.spawn("foot")
+                        Pinnacle.process.spawn("foot")
+                    }
+
+                    sleep_secs(1);
+
+                    run_lua! { |Pinnacle|
+                        local first_props = Pinnacle.tag.get("First"):props()
+                        assert(first_props.active == true)
+                        assert(first_props.name == "First")
+                        assert(first_props.output.name == "Pinnacle Window")
+                        assert(#first_props.windows == 2)
+                        assert(first_props.windows[1]:class() == "foot")
+                        assert(first_props.windows[2]:class() == "foot")
+
+                        local mungus_props = Pinnacle.tag.get("Mungus"):props()
+                        assert(mungus_props.active == false)
+                        assert(mungus_props.name == "Mungus")
+                        assert(mungus_props.output.name == "Pinnacle Window")
+                        assert(#mungus_props.windows == 0)
+
+                        local potato_props = Pinnacle.tag.get("Potato"):props()
+                        assert(potato_props.active == true)
+                        assert(potato_props.name == "Potato")
+                        assert(potato_props.output.name == "Pinnacle Window")
+                        assert(#potato_props.windows == 2)
+                        assert(first_props.windows[1]:class() == "foot")
+                        assert(first_props.windows[2]:class() == "foot")
+                    }
+                })
+            }
+        }
+    }
 }
 
 #[tokio::main]
