@@ -955,8 +955,7 @@ impl output_service_server::OutputService for OutputService {
             if let Some(y) = y {
                 loc.y = y;
             }
-            output.change_current_state(None, None, None, Some(loc));
-            state.space.map_output(&output, loc);
+            state.change_output_state(&output, None, None, None, Some(loc));
             debug!("Mapping output {} to {loc:?}", output.name());
             state.request_layout(&output);
         })
@@ -1016,7 +1015,13 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
-            output.change_current_state(None, None, Some(Scale::Fractional(current_scale)), None);
+            state.change_output_state(
+                &output,
+                None,
+                None,
+                Some(Scale::Fractional(current_scale)),
+                None,
+            );
             layer_map_for_output(&output).arrange();
             state.request_layout(&output);
             state.schedule_render(&output);

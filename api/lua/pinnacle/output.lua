@@ -166,12 +166,17 @@ function output.connect_for_all(callback)
     })
 end
 
+---@type table<string, SignalServiceMethod>
 local signal_name_to_SignalName = {
     connect = "OutputConnect",
+    resize = "OutputResize",
+    move = "OutputMove",
 }
 
 ---@class OutputSignal Signals related to output events.
 ---@field connect fun(output: OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+---@field resize fun(output: OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
+---@field move fun(output: OutputHandle, x: integer, y: integer)? An output moved.
 
 ---Connect to an output signal.
 ---

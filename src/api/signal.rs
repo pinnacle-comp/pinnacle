@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    signal_service_server, OutputConnectRequest, OutputConnectResponse, SignalRequest,
-    StreamControl, WindowPointerEnterRequest, WindowPointerEnterResponse,
-    WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+    signal_service_server, OutputConnectRequest, OutputConnectResponse, OutputMoveRequest,
+    OutputMoveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest, StreamControl,
+    WindowPointerEnterRequest, WindowPointerEnterResponse, WindowPointerLeaveRequest,
+    WindowPointerLeaveResponse,
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
@@ -15,7 +16,12 @@ use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
 
 #[derive(Debug, Default)]
 pub struct SignalState {
+    // Output
     pub output_connect: SignalData<OutputConnectResponse, VecDeque<OutputConnectResponse>>,
+    pub output_resize: SignalData<OutputResizeResponse, VecDeque<OutputResizeResponse>>,
+    pub output_move: SignalData<OutputMoveResponse, VecDeque<OutputMoveResponse>>,
+
+    // Window
     pub window_pointer_enter:
         SignalData<WindowPointerEnterResponse, VecDeque<WindowPointerEnterResponse>>,
     pub window_pointer_leave:
@@ -171,6 +177,8 @@ impl SignalService {
 #[tonic::async_trait]
 impl signal_service_server::SignalService for SignalService {
     type OutputConnectStream = ResponseStream<OutputConnectResponse>;
+    type OutputResizeStream = ResponseStream<OutputResizeResponse>;
+    type OutputMoveStream = ResponseStream<OutputMoveResponse>;
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
 
@@ -182,6 +190,28 @@ impl signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.signal_state.output_connect
+        })
+    }
+
+    async fn output_resize(
+        &self,
+        request: Request<Streaming<OutputResizeRequest>>,
+    ) -> Result<Response<Self::OutputResizeStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.signal_state.output_resize
+        })
+    }
+
+    async fn output_move(
+        &self,
+        request: Request<Streaming<OutputMoveRequest>>,
+    ) -> Result<Response<Self::OutputMoveStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.signal_state.output_move
         })
     }
 

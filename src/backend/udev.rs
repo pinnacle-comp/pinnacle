@@ -272,7 +272,7 @@ impl State {
                 {
                     match render_surface.compositor.use_mode(drm_mode) {
                         Ok(()) => {
-                            output.change_current_state(Some(mode), None, None, None);
+                            self.change_output_state(output, Some(mode), None, None, None);
                             layer_map_for_output(output).arrange();
                         }
                         Err(err) => error!("Failed to resize output: {err}"),
@@ -280,7 +280,7 @@ impl State {
                 }
             }
         } else {
-            output.change_current_state(Some(mode), None, None, None);
+            self.change_output_state(output, Some(mode), None, None, None);
             layer_map_for_output(output).arrange();
         }
 
@@ -1042,6 +1042,8 @@ impl State {
             output.add_mode(mode);
         }
 
+        output.set_preferred(wl_mode);
+
         self.output_focus_stack.set_focus(output.clone());
 
         let x = self.space.outputs().fold(0, |acc, o| {
@@ -1051,10 +1053,6 @@ impl State {
             acc + geo.size.w
         });
         let position = (x, 0).into();
-
-        output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some(position));
-        self.space.map_output(&output, position);
 
         output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
@@ -1122,6 +1120,8 @@ impl State {
 
         device.surfaces.insert(crtc, surface);
 
+        self.change_output_state(&output, Some(wl_mode), None, None, Some(position));
+
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
         // TODO: instead of checking the connector, check the monitor's edid info instead
@@ -1131,11 +1131,8 @@ impl State {
             .get(&OutputName(output.name()))
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
-
-            output.change_current_state(None, None, *scale, Some(*loc));
-            self.space.map_output(&output, *loc);
-
             output.with_state_mut(|state| state.tags = tags.clone());
+            self.change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
             self.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {

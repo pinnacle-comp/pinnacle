@@ -2,7 +2,11 @@
 
 use std::cell::RefCell;
 
-use smithay::output::Output;
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputResizeResponse};
+use smithay::{
+    output::{Mode, Output, Scale},
+    utils::{Logical, Point, Transform},
+};
 
 use crate::{
     focus::WindowKeyboardFocusStack,
@@ -66,5 +70,40 @@ impl WithState for Output {
 impl OutputState {
     pub fn focused_tags(&self) -> impl Iterator<Item = &Tag> {
         self.tags.iter().filter(|tag| tag.active())
+    }
+}
+
+impl State {
+    /// A wrapper around [`Output::change_current_state`] that additionally sends an output
+    /// geometry signal.
+    pub fn change_output_state(
+        &mut self,
+        output: &Output,
+        mode: Option<Mode>,
+        transform: Option<Transform>,
+        scale: Option<Scale>,
+        location: Option<Point<i32, Logical>>,
+    ) {
+        output.change_current_state(mode, transform, scale, location);
+        if let Some(location) = location {
+            self.space.map_output(output, location);
+            self.signal_state.output_move.signal(|buf| {
+                buf.push_back(OutputMoveResponse {
+                    output_name: Some(output.name()),
+                    x: Some(location.x),
+                    y: Some(location.y),
+                });
+            });
+        }
+        if mode.is_some() || transform.is_some() || scale.is_some() {
+            self.signal_state.output_resize.signal(|buf| {
+                let geo = self.space.output_geometry(output);
+                buf.push_back(OutputResizeResponse {
+                    output_name: Some(output.name()),
+                    logical_width: geo.map(|geo| geo.size.w as u32),
+                    logical_height: geo.map(|geo| geo.size.h as u32),
+                });
+            });
+        }
     }
 }

@@ -6,6 +6,8 @@
 //! Some of the other modules have a `connect_signal` method that will allow you to pass in
 //! callbacks to run on each signal. Use them to connect to the signals defined here.
 
+#![allow(clippy::type_complexity)]
+
 use std::{
     collections::{btree_map, BTreeMap},
     sync::{
@@ -138,6 +140,42 @@ signals! {
                 }
             },
         }
+        /// An output's logical size changed.
+        ///
+        /// Callbacks receive the output and new width and height.
+        OutputResize = {
+            enum_name = Resize,
+            callback_type = Box<dyn FnMut(&OutputHandle, u32, u32) + Send + 'static>,
+            client_request = output_resize,
+            on_response = |response, callbacks| {
+                if let Some(output_name) = &response.output_name {
+                    let output = OUTPUT.get().expect("OUTPUT doesn't exist");
+                    let handle = output.new_handle(output_name);
+
+                    for callback in callbacks {
+                        callback(&handle, response.logical_width(), response.logical_height())
+                    }
+                }
+            },
+        }
+        /// An output's location in the global space changed.
+        ///
+        /// Callbacks receive the output and new x and y.
+        OutputMove = {
+            enum_name = Move,
+            callback_type = Box<dyn FnMut(&OutputHandle, i32, i32) + Send + 'static>,
+            client_request = output_move,
+            on_response = |response, callbacks| {
+                if let Some(output_name) = &response.output_name {
+                    let output = OUTPUT.get().expect("OUTPUT doesn't exist");
+                    let handle = output.new_handle(output_name);
+
+                    for callback in callbacks {
+                        callback(&handle, response.x(), response.y())
+                    }
+                }
+            },
+        }
     }
     /// Signals relating to window events.
     WindowSignal => {
@@ -185,6 +223,8 @@ pub(crate) type SingleWindowFn = Box<dyn FnMut(&WindowHandle) + Send + 'static>;
 
 pub(crate) struct SignalState {
     pub(crate) output_connect: SignalData<OutputConnect>,
+    pub(crate) output_resize: SignalData<OutputResize>,
+    pub(crate) output_move: SignalData<OutputMove>,
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
 }
@@ -197,6 +237,8 @@ impl SignalState {
         let client = SignalServiceClient::new(channel);
         Self {
             output_connect: SignalData::new(client.clone(), fut_sender.clone()),
+            output_resize: SignalData::new(client.clone(), fut_sender.clone()),
+            output_move: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_enter: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_leave: SignalData::new(client.clone(), fut_sender.clone()),
         }

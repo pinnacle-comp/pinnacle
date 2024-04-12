@@ -221,7 +221,8 @@ pub fn setup_winit(
                             size,
                             refresh: 144_000,
                         };
-                        output.change_current_state(
+                        state.change_output_state(
+                            &output,
                             Some(mode),
                             None,
                             Some(Scale::Fractional(scale_factor)),

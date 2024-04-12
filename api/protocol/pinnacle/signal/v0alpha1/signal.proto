@@ -17,6 +17,26 @@ message OutputConnectResponse {
   optional string output_name = 1;
 }
 
+message OutputResizeRequest {
+  optional StreamControl control = 1;
+}
+// An output's logical size changed
+message OutputResizeResponse {
+  optional string output_name = 1;
+  optional uint32 logical_width = 2;
+  optional uint32 logical_height = 3;
+}
+
+message OutputMoveRequest {
+  optional StreamControl control = 1;
+}
+// An output's location in the global space changed
+message OutputMoveResponse {
+  optional string output_name = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+}
+
 message WindowPointerEnterRequest {
   optional StreamControl control = 1;
 }
@@ -35,6 +55,8 @@ message WindowPointerLeaveResponse {
 
 service SignalService {
   rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
+  rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
+  rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
   rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
   rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
 }

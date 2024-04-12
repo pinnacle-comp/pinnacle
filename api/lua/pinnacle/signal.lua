@@ -14,6 +14,12 @@ local rpc_types = {
     OutputConnect = {
         response_type = "OutputConnectResponse",
     },
+    OutputResize = {
+        response_type = "OutputResizeResponse",
+    },
+    OutputMove = {
+        response_type = "OutputMoveResponse",
+    },
     WindowPointerEnter = {
         response_type = "WindowPointerEnterResponse",
     },
@@ -62,6 +68,28 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    OutputResize = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle, logical_width: integer, logical_height: integer))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputMove = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle, x: integer, y: integer))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
     WindowPointerEnter = {
         ---@nodoc
         ---@type H2Stream?
@@ -91,6 +119,22 @@ signals.OutputConnect.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputConnect.callbacks) do
         callback(handle)
+    end
+end
+
+signals.OutputResize.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputResize.callbacks) do
+        callback(handle, response.logical_width, response.logical_height)
+    end
+end
+
+signals.OutputMove.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputMove.callbacks) do
+        callback(handle, response.x, response.y)
     end
 end
 
