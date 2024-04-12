@@ -344,11 +344,16 @@ impl State {
 
         match render_res {
             Ok(render_output_result) => {
-                winit.handle_pending_screencopy(output, &render_output_result, &self.loop_handle);
+                Winit::handle_pending_screencopy(
+                    &mut winit.backend,
+                    output,
+                    &render_output_result,
+                    &self.loop_handle,
+                );
 
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
-                    if let Err(err) = winit.backend.submit(Some(&damage)) {
+                    if let Err(err) = winit.backend.submit(Some(damage)) {
                         error!("Failed to submit buffer: {}", err);
                     }
                 }
@@ -392,7 +397,7 @@ impl State {
 
 impl Winit {
     fn handle_pending_screencopy(
-        &mut self,
+        backend: &mut WinitGraphicsBackend<GlesRenderer>,
         output: &Output,
         render_output_result: &RenderOutputResult,
         loop_handle: &LoopHandle<'static, State>,
@@ -416,7 +421,7 @@ impl Winit {
         let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
             trace!("Dmabuf screencopy");
 
-            self.backend
+            backend
                 .renderer()
                 .blit_to(
                     dmabuf,
@@ -438,7 +443,7 @@ impl Winit {
             trace!("Shm screencopy");
 
             let sync_point = {
-                let renderer = self.backend.renderer();
+                let renderer = backend.renderer();
                 let screencopy = &screencopy;
                 if !matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)) {
                     warn!("screencopy does not have a shm buffer");
@@ -520,7 +525,7 @@ impl Winit {
 
             // We must rebind to the underlying EGL surface for buffer swapping
             // as it is bound to a `GlesRenderbuffer` above.
-            if let Err(err) = self.backend.bind() {
+            if let Err(err) = backend.bind() {
                 error!("Failed to rebind EGL surface after screencopy: {err}");
             }
 

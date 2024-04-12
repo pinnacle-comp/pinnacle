@@ -36,7 +36,7 @@ use smithay::{
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
             sync::SyncPoint,
-            utils::CommitCounter,
+            utils::{CommitCounter, DamageSet},
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
             Renderer, TextureFilter,
         },
@@ -1614,10 +1614,10 @@ fn handle_pending_screencopy<'a>(
         .unwrap_or_else(|| {
             // Returning `None` means the previous CommitCounter is too old or damage
             // was reset, so damage the whole output
-            vec![Rectangle::from_loc_and_size(
+            DamageSet::from_slice(&[Rectangle::from_loc_and_size(
                 Point::from((0, 0)),
                 untransformed_output_size,
-            )]
+            )])
         });
 
         // INFO: This code is here for if the bug where `blit_frame_result` makes the area around

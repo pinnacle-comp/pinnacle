@@ -11,7 +11,7 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"]}
 tokio-stream = { version = "0.1.15", features = ["net"] }
 # gRPC
-prost = "0.12.3"
+prost = "0.12.4"
 tonic = "0.11.0"
 tonic-reflection = "0.11.0"
 tonic-build = "0.11.0"
@@ -37,7 +37,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 # smithay is down there somewhere
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "e5f0068" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "e237b07" }
 # Tracing
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
@@ -57,7 +57,7 @@ tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { workspace = true }
 # CLI
 clap = { version = "4.5.4", features = ["derive"] }
-cliclack = "0.2.3"
+cliclack = "0.2.5"
 # Misc.
 bitflags = "2.5.0"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -66,7 +66,7 @@ shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.0", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
-sysinfo = "0.30.7"
+sysinfo = "0.30.10"
 nix = { version = "0.28.0", features = ["user", "resource"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = "0.3.16"
@@ -75,7 +75,7 @@ bytemuck = "1.15.0"
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "54208d5"
+rev = "e237b07"
 default-features = false
 features = [
     "desktop",

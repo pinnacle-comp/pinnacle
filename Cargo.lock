@@ -493,9 +493,9 @@ checksum = "98cc8fbded0c607b7ba9dd60cd98df59af97e84d24e49c8557331cfc26d301ce"
 
 [[package]]
 name = "cliclack"
-version = "0.2.3"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f719b8100982672e07acc352f388e7cd555bcc2c7bb0619d735e17b76e31dd5"
+checksum = "4febf49beeedc40528e4956995631f1bbdb4d8804ef940b44351f393a996c739"
 dependencies = [
  "console",
  "indicatif",
@@ -2247,7 +2247,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=54208d5#54208d54f67165b0d9c6c622fc28526ab5e8ff8a"
+source = "git+https://github.com/Smithay/smithay?rev=e237b07#e237b077bd922e17849eff91ba05853c7a68f958"
 dependencies = [
  "appendlist",
  "ash",
@@ -2322,7 +2322,7 @@ dependencies = [
 [[package]]
 name = "smithay-drm-extras"
 version = "0.1.0"
-source = "git+https://github.com/Smithay/smithay?rev=e5f0068#e5f006818df7ebb92d206985f45e713ba1e9c1c9"
+source = "git+https://github.com/Smithay/smithay?rev=e237b07#e237b077bd922e17849eff91ba05853c7a68f958"
 dependencies = [
  "drm",
  "edid-rs",
@@ -2372,9 +2372,9 @@ checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
 
 [[package]]
 name = "sysinfo"
-version = "0.30.8"
+version = "0.30.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b1a378e48fb3ce3a5cf04359c456c9c98ff689bcf1c1bc6e6a31f247686f275"
+checksum = "26d7c217777061d5a2d652aea771fb9ba98b6dade657204b08c4b9604d11555b"
 dependencies = [
  "cfg-if",
  "core-foundation-sys",
