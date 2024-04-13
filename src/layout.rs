@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
@@ -131,6 +134,16 @@ impl State {
 
         for (loc, window) in non_pending_wins {
             self.space.map_element(window, loc, false);
+        }
+
+        // HACK and FIXME:
+        // We are sending frames here to get offscreen windows to commit and map.
+        // Obviously this is a bad way to do this but its a bandaid solution
+        // until decent transactional layout applications are implemented.
+        for (win, _serial) in pending_wins {
+            win.send_frame(output, self.clock.now(), Some(Duration::ZERO), |_, _| {
+                Some(output.clone())
+            });
         }
 
         self.fixup_z_layering();
