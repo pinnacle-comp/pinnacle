@@ -66,6 +66,9 @@ You will need:
     - NixOS: There is flake [`flake.nix`](flake.nix) with a devShell. It also
       includes the other tools needed for the build and sets up the
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
+      > [!NOTE]
+      > The Lua API currently does not work due to some shenanigans with Luarocks and openssl directories.
+      > Fix soon, hopefully. In the meantime you can use the Rust API.
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
     - Arch:
         ```sh

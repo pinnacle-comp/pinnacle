@@ -1,5 +1,5 @@
 {
-  description = " A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
+  description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
@@ -34,25 +34,41 @@
         in
         {
           devShell = pkgs.mkShell {
-            buildInputs = [
+            nativeBuildInputs = [
+              pkgs.pkg-config
+            ];
+            buildInputs = with pkgs; [
               # rust devel tools
               combinedToolchain
-              pkgs.rust-analyzer
-              pkgs.cargo-outdated
+              rust-analyzer
+              cargo-outdated
+
+              wayland
 
               # build time stuff
-              pkgs.pkg-config
-              pkgs.protobuf
-              pkgs.luarocks
+              protobuf
+              lua54Packages.luarocks
 
               # libs
-              pkgs.seatd.dev
-              pkgs.systemdLibs.dev
-              pkgs.libxkbcommon
-              pkgs.libinput
-              pkgs.mesa
+              seatd.dev
+              systemdLibs.dev
+              libxkbcommon
+              libinput
+              mesa
+
+              # winit on x11
+              xorg.libXcursor
+              xorg.libXrandr
+              xorg.libXi
+              xorg.libX11
             ];
-            LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib";
+            runtimeDependencies = with pkgs; [
+              wayland
+              mesa
+              libglvnd # libEGL
+              xwayland
+            ];
+            LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib";
           };
         }
       );
