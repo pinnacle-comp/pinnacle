@@ -55,6 +55,7 @@
               libxkbcommon
               libinput
               mesa
+              xwayland
 
               # winit on x11
               xorg.libXcursor
@@ -66,7 +67,6 @@
               wayland
               mesa
               libglvnd # libEGL
-              xwayland
             ];
             LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib";
           };
