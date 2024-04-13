@@ -1,5 +1,10 @@
 [workspace]
-members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros"]
+members = [
+    "pinnacle-api-defs",
+    "api/rust",
+    "api/rust/pinnacle-api-macros",
+    "wlcs_pinnacle",
+]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
@@ -76,8 +81,9 @@ dircpy = { workspace = true }
 chrono = "0.4.37"
 bytemuck = "1.15.0"
 pinnacle-api = { path = "./api/rust" }
+smithay = { workspace = true }
 
-[dependencies.smithay]
+[workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
 rev = "c293ec7"
 default-features = false
