@@ -67,8 +67,9 @@ You will need:
       includes the other tools needed for the build and sets up the
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
       > [!NOTE]
-      > The Lua API currently does not work due to some shenanigans with Luarocks and openssl directories.
-      > Fix soon, hopefully. In the meantime you can use the Rust API.
+      > Luarocks currently doesn't install the Lua library due to openssh directory shenanigans.
+      > Fix soon, hopefully. In the meantime you can manually copy [`pinnacle.lua`](./api/lua/pinnacle.lua)
+      > and the [`pinnacle`](./api/lua/pinnacle) directory to `~/.luarocks/share/lua/5.4` or use the Rust API.
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
     - Arch:
         ```sh

@@ -1,5 +1,6 @@
 {
-  description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
+  description =
+    "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
@@ -12,64 +13,53 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs =
-    {
-      nixpkgs,
-      flake-utils,
-      fenix,
-      ...
-    }:
-    flake-utils.lib.eachSystem
-      [
-        "x86_64-linux"
-        "aarch64-linux"
-      ]
-      (
-        system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system};
-          fenixPkgs = fenix.packages.${system};
-          toolchain = fenixPkgs.stable;
-          combinedToolchain = toolchain.completeToolchain;
-        in
-        {
-          devShell = pkgs.mkShell {
-            nativeBuildInputs = [
-              pkgs.pkg-config
-            ];
-            buildInputs = with pkgs; [
-              # rust devel tools
-              combinedToolchain
-              rust-analyzer
-              cargo-outdated
+  outputs = { nixpkgs, flake-utils, fenix, ... }:
+    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        fenixPkgs = fenix.packages.${system};
+        toolchain = fenixPkgs.stable;
+        combinedToolchain = toolchain.completeToolchain;
+      in {
+        formatter = pkgs.nixfmt;
 
-              wayland
+        devShell = pkgs.mkShell {
+          nativeBuildInputs = [ pkgs.pkg-config ];
+          buildInputs = with pkgs; [
+            # rust devel tools
+            combinedToolchain
+            rust-analyzer
+            cargo-outdated
 
-              # build time stuff
-              protobuf
-              lua54Packages.luarocks
+            wayland
 
-              # libs
-              seatd.dev
-              systemdLibs.dev
-              libxkbcommon
-              libinput
-              mesa
-              xwayland
+            # build time stuff
+            protobuf
+            lua54Packages.luarocks
 
-              # winit on x11
-              xorg.libXcursor
-              xorg.libXrandr
-              xorg.libXi
-              xorg.libX11
-            ];
-            runtimeDependencies = with pkgs; [
-              wayland
-              mesa
-              libglvnd # libEGL
-            ];
-            LD_LIBRARY_PATH = "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib";
-          };
-        }
-      );
+            # libs
+            seatd.dev
+            systemdLibs.dev
+            libxkbcommon
+            libinput
+            mesa
+            xwayland
+
+            # winit on x11
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            xorg.libX11
+          ];
+
+          runtimeDependencies = with pkgs; [
+            wayland
+            mesa
+            libglvnd # libEGL
+          ];
+
+          LD_LIBRARY_PATH =
+            "${pkgs.wayland}/lib:${pkgs.libGL}/lib:${pkgs.libxkbcommon}/lib";
+        };
+      });
 }
