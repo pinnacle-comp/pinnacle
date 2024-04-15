@@ -9,6 +9,8 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
+use std::{collections::HashSet, sync::Arc};
+
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
@@ -24,7 +26,7 @@ use crate::{
     signal::{OutputSignal, SignalHandle},
     tag::TagHandle,
     util::Batch,
-    SIGNAL, TAG,
+    OUTPUT, SIGNAL, TAG,
 };
 
 /// A struct that allows you to get handles to connected outputs and set them up.
@@ -159,8 +161,296 @@ impl Output {
 
         match signal {
             OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
+            OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
             OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
             OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
+        }
+    }
+
+    /// Declaratively setup outputs.
+    ///
+    /// This method allows you to specify [`OutputSetup`]s that will be applied to outputs already
+    /// connected and that will be connected in the future. It handles the setting of modes,
+    /// scales, tags, and locations of your outputs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // TODO:
+    /// ```
+    pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {
+        let setups = setups.into_iter().map(Arc::new).collect::<Vec<_>>();
+        let setups_clone = setups.clone();
+
+        let apply_all_but_loc = move |output: &OutputHandle| {
+            for setup in setups.iter() {
+                if setup.output.matches(output) {
+                    setup.apply_all_but_loc(output);
+                }
+            }
+        };
+
+        let outputs = self.get_all();
+        for output in outputs {
+            apply_all_but_loc(&output);
+        }
+
+        let layout_outputs = move || {
+            let setups = setups_clone.clone().into_iter().collect::<Vec<_>>();
+            let outputs = OUTPUT.get().unwrap().get_all();
+
+            let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
+
+            // `OutputHandle`'s Hash impl only hashes the string, therefore this is a false positive
+            #[allow(clippy::mutable_key_type)]
+            let mut placed_outputs = HashSet::<OutputHandle>::new();
+
+            // Place outputs with OutputSetupLoc::Point
+            for output in outputs.iter() {
+                for setup in setups.iter() {
+                    if setup.output.matches(output) {
+                        if let Some(OutputSetupLoc::Point(x, y)) = setup.loc {
+                            output.set_location(x, y);
+                            placed_outputs.insert(output.clone());
+                            if rightmost_output_and_x.is_none()
+                                || rightmost_output_and_x
+                                    .as_ref()
+                                    .is_some_and(|(_, rm_x)| x > *rm_x)
+                            {
+                                rightmost_output_and_x = Some((output.clone(), x));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Place everything without an explicit location to the right of the rightmost output
+            for output in outputs
+                .iter()
+                .filter(|op| !placed_outputs.contains(op))
+                .collect::<Vec<_>>()
+            {
+                for setup in setups.iter() {
+                    if setup.output.matches(output) && setup.loc.is_none() {
+                        if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
+                            output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+                        } else {
+                            output.set_location(0, 0);
+                        }
+
+                        placed_outputs.insert(output.clone());
+                        let x = output.x().unwrap();
+                        if rightmost_output_and_x.is_none()
+                            || rightmost_output_and_x
+                                .as_ref()
+                                .is_some_and(|(_, rm_x)| x > *rm_x)
+                        {
+                            rightmost_output_and_x = Some((output.clone(), x));
+                        }
+                    }
+                }
+            }
+
+            // Attempt to place relative outputs
+            while let Some((output, relative_to, alignment)) = setups.iter().find_map(|setup| {
+                outputs.iter().find_map(|op| {
+                    if !placed_outputs.contains(op) && setup.output.matches(op) {
+                        match &setup.loc {
+                            Some(OutputSetupLoc::RelativeTo(matcher, alignment)) => {
+                                let first_matched_op = outputs
+                                    .iter()
+                                    .find(|o| matcher.matches(o) && placed_outputs.contains(o))?;
+                                Some((op, first_matched_op, alignment))
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    }
+                })
+            }) {
+                output.set_loc_adj_to(relative_to, *alignment);
+
+                placed_outputs.insert(output.clone());
+                let x = output.x().unwrap();
+                if rightmost_output_and_x.is_none()
+                    || rightmost_output_and_x
+                        .as_ref()
+                        .is_some_and(|(_, rm_x)| x > *rm_x)
+                {
+                    rightmost_output_and_x = Some((output.clone(), x));
+                }
+            }
+
+            // Place all remaining outputs right of the rightmost one
+            for output in outputs
+                .iter()
+                .filter(|op| !placed_outputs.contains(op))
+                .collect::<Vec<_>>()
+            {
+                if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
+                    output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+                } else {
+                    output.set_location(0, 0);
+                }
+
+                placed_outputs.insert(output.clone());
+                let x = output.x().unwrap();
+                if rightmost_output_and_x.is_none()
+                    || rightmost_output_and_x
+                        .as_ref()
+                        .is_some_and(|(_, rm_x)| x > *rm_x)
+                {
+                    rightmost_output_and_x = Some((output.clone(), x));
+                }
+            }
+        };
+
+        layout_outputs();
+
+        let layout_outputs_clone1 = layout_outputs.clone();
+        let layout_outputs_clone2 = layout_outputs.clone();
+
+        self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
+            apply_all_but_loc(output);
+            layout_outputs_clone2();
+        })));
+
+        self.connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
+            layout_outputs_clone1();
+        })));
+
+        self.connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
+            layout_outputs();
+        })));
+    }
+}
+
+/// A matcher for outputs.
+pub enum OutputMatcher {
+    /// Match outputs by name.
+    Name(String),
+    /// Match outputs by a function returning a bool.
+    Fn(Box<dyn Fn(&OutputHandle) -> bool + Send + Sync>),
+}
+
+impl OutputMatcher {
+    /// Returns whether this matcher matches the given output.
+    pub fn matches(&self, output: &OutputHandle) -> bool {
+        match self {
+            OutputMatcher::Name(name) => output.name() == name,
+            OutputMatcher::Fn(matcher) => matcher(output),
+        }
+    }
+}
+
+impl std::fmt::Debug for OutputMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(name) => f.debug_tuple("Name").field(name).finish(),
+            Self::Fn(_) => f
+                .debug_tuple("Fn")
+                .field(&"<Box<dyn Fn(&OutputHandle)> -> bool>")
+                .finish(),
+        }
+    }
+}
+
+enum OutputSetupLoc {
+    Point(i32, i32),
+    RelativeTo(OutputMatcher, Alignment),
+}
+
+/// An output setup for use in [`Output::setup`].
+pub struct OutputSetup {
+    output: OutputMatcher,
+    loc: Option<OutputSetupLoc>,
+    mode: Option<Mode>,
+    scale: Option<f32>,
+    tag_names: Option<Vec<String>>,
+}
+
+impl OutputSetup {
+    /// Creates a new `OutputSetup` that applies to the output with the given name.
+    pub fn new(output_name: impl ToString) -> Self {
+        Self {
+            output: OutputMatcher::Name(output_name.to_string()),
+            loc: None,
+            mode: None,
+            scale: None,
+            tag_names: None,
+        }
+    }
+
+    /// Creates a new `OutputSetup` that matches outputs according to the given function.
+    pub fn new_with_matcher(
+        matcher: impl Fn(&OutputHandle) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            output: OutputMatcher::Fn(Box::new(matcher)),
+            loc: None,
+            mode: None,
+            scale: None,
+            tag_names: None,
+        }
+    }
+
+    /// Makes this setup map outputs to the given location.
+    pub fn with_absolute_loc(self, x: i32, y: i32) -> Self {
+        Self {
+            loc: Some(OutputSetupLoc::Point(x, y)),
+            ..self
+        }
+    }
+
+    /// Makes this setup map outputs relative to the first output that `relative_to` matches.
+    pub fn with_relative_loc(self, relative_to: OutputMatcher, alignment: Alignment) -> Self {
+        Self {
+            loc: Some(OutputSetupLoc::RelativeTo(relative_to, alignment)),
+            ..self
+        }
+    }
+
+    /// Makes this setup apply the given [`Mode`] to its outputs.
+    pub fn with_mode(self, mode: Mode) -> Self {
+        Self {
+            mode: Some(mode),
+            ..self
+        }
+    }
+
+    /// Makes this setup apply the given scale to its outputs.
+    pub fn with_scale(self, scale: f32) -> Self {
+        Self {
+            scale: Some(scale),
+            ..self
+        }
+    }
+
+    /// Makes this setup add tags with the given names to its outputs.
+    pub fn with_tags(self, tag_names: impl IntoIterator<Item = impl ToString>) -> Self {
+        Self {
+            tag_names: Some(tag_names.into_iter().map(|s| s.to_string()).collect()),
+            ..self
+        }
+    }
+
+    fn apply_all_but_loc(&self, output: &OutputHandle) {
+        if let Some(mode) = &self.mode {
+            output.set_mode(
+                mode.pixel_width,
+                mode.pixel_height,
+                Some(mode.refresh_rate_millihertz),
+            );
+        }
+        if let Some(scale) = self.scale {
+            output.set_scale(scale);
+        }
+        if let Some(tag_names) = &self.tag_names {
+            let tags = TAG.get().unwrap().add(output, tag_names);
+            if let Some(tag) = tags.first() {
+                tag.set_active(true);
+            }
         }
     }
 }

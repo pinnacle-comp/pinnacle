@@ -166,15 +166,231 @@ function output.connect_for_all(callback)
     })
 end
 
+---@class OutputSetupArgs
+---@field [1] (string | fun(output: OutputHandle): boolean)
+---@field loc ({ x: integer, y: integer } | { [1]: (string | fun(output: OutputHandle): boolean), [2]: Alignment })?
+---@field mode Mode?
+---@field scale number?
+---@field tag_names string[]?
+
+---comment
+---@param op OutputHandle
+---@param matcher string | fun(output: OutputHandle): boolean
+---@return boolean
+local function output_matches(op, matcher)
+    return (type(matcher) == "string" and matcher == op.name) or (type(matcher) == "function" and matcher(op))
+end
+
+---Declaratively setup outputs.
+---
+---`Output.setup` allows you to specify output properties that will be applied immediately and
+---on output connection. These include location, mode, scale, and tags.
+---
+---Arguments will be applied from top to bottom.
+---
+---`loc` will not be applied to arguments with an output matching function.
+---
+---@param setup OutputSetupArgs[]
+function output.setup(setup)
+    ---@param op OutputHandle
+    local function apply_transformers(op)
+        for _, args in ipairs(setup) do
+            if output_matches(op, args[1]) then
+                if args.mode then
+                    op:set_mode(args.mode.pixel_width, args.mode.pixel_height, args.mode.refresh_rate_millihz)
+                end
+                if args.scale then
+                    op:set_scale(args.scale)
+                end
+                if args.tag_names then
+                    local tags = require("pinnacle.tag").add(op, args.tag_names)
+                    tags[1]:set_active(true)
+                end
+            end
+        end
+    end
+
+    -- Apply mode, scale, and transforms first
+    local outputs = output.get_all()
+
+    for _, op in ipairs(outputs) do
+        apply_transformers(op)
+    end
+
+    local function layout_outputs()
+        local outputs = output.get_all()
+
+        ---@type table<string, { x: integer, y: integer }>
+        local placed_outputs = {}
+
+        local rightmost_output = {
+            output = nil,
+            x = nil,
+        }
+
+        local relative_to_outputs_that_are_not_placed = {}
+
+        -- Place outputs with a specified location first
+        for _, args in ipairs(setup) do
+            for _, op in ipairs(outputs) do
+                if type(args[1]) == "string" and op.name == args[1] then
+                    if args.loc and args.loc.x and args.loc.y then
+                        local loc = { x = args.loc.x, y = args.loc.y }
+                        op:set_location(loc)
+                        placed_outputs[op.name] = loc
+
+                        local props = op:props()
+                        if not rightmost_output.x or rightmost_output.x < props.x + props.logical_width then
+                            rightmost_output.output = op
+                            rightmost_output.x = props.x + props.logical_width
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Place outputs with no specified location in a line to the rightmost
+        for _, op in ipairs(outputs) do
+            local args_contains_op = false
+
+            for _, args in ipairs(setup) do
+                if type(args[1]) == "string" and op.name == args[1] then
+                    args_contains_op = true
+                    if not args.loc then
+                        if not rightmost_output.output then
+                            op:set_location({ x = 0, y = 0 })
+                        else
+                            op:set_loc_adj_to(rightmost_output.output, "right_align_top")
+                        end
+
+                        local props = op:props()
+
+                        local loc = { x = props.x, y = props.y }
+                        rightmost_output.output = op
+                        rightmost_output.x = props.x
+
+                        placed_outputs[op.name] = loc
+
+                        goto continue_outer
+                    end
+                end
+            end
+
+            -- No match, still lay it out
+
+            if not args_contains_op and not placed_outputs[op.name] then
+                if not rightmost_output.output then
+                    op:set_location({ x = 0, y = 0 })
+                else
+                    op:set_loc_adj_to(rightmost_output.output, "right_align_top")
+                end
+
+                local props = op:props()
+
+                local loc = { x = props.x, y = props.y }
+                rightmost_output.output = op
+                rightmost_output.x = props.x
+
+                placed_outputs[op.name] = loc
+            end
+
+            ::continue_outer::
+        end
+
+        -- Place outputs that are relative to other outputs
+        for _, args in ipairs(setup) do
+            for _, op in ipairs(outputs) do
+                if type(args[1]) == "string" and op.name == args[1] then
+                    if args.loc and args.loc[1] and args.loc[2] then
+                        local matcher = args.loc[1]
+                        local alignment = args.loc[2]
+                        ---@type OutputHandle?
+                        local relative_to = nil
+
+                        for _, op in ipairs(outputs) do
+                            if output_matches(op, matcher) then
+                                relative_to = op
+                                break
+                            end
+                        end
+
+                        if not relative_to then
+                            table.insert(relative_to_outputs_that_are_not_placed, op)
+                            goto continue
+                        end
+
+                        if not placed_outputs[relative_to.name] then
+                            -- The output it's relative to hasn't been placed yet;
+                            -- Users must place outputs before ones being placed relative to them
+                            table.insert(relative_to_outputs_that_are_not_placed, op)
+                            goto continue
+                        end
+
+                        op:set_loc_adj_to(relative_to, alignment)
+
+                        local props = op:props()
+
+                        local loc = { x = props.x, y = props.y }
+
+                        if not rightmost_output.output or rightmost_output.x < props.x + props.logical_width then
+                            rightmost_output.output = op
+                            rightmost_output.x = props.x + props.logical_width
+                        end
+
+                        placed_outputs[op.name] = loc
+                    end
+                end
+                ::continue::
+            end
+        end
+
+        -- Place still-not-placed outputs
+        for _, op in ipairs(relative_to_outputs_that_are_not_placed) do
+            if not rightmost_output.output then
+                op:set_location({ x = 0, y = 0 })
+            else
+                op:set_loc_adj_to(rightmost_output.output, "right_align_top")
+            end
+
+            local props = op:props()
+
+            local loc = { x = props.x, y = props.y }
+            rightmost_output.output = op
+            rightmost_output.x = props.x
+
+            placed_outputs[op.name] = loc
+        end
+    end
+
+    layout_outputs()
+
+    output.connect_signal({
+        connect = function(op)
+            -- FIXME: This currently does not duplicate tags because the connect signal does not fire for previously connected
+            -- |      outputs. However, this is unintended behavior, so fix this when you fix that.
+            apply_transformers(op)
+            layout_outputs()
+        end,
+        disconnect = function(_)
+            layout_outputs()
+        end,
+        resize = function(_, _, _)
+            layout_outputs()
+        end,
+    })
+end
+
 ---@type table<string, SignalServiceMethod>
 local signal_name_to_SignalName = {
     connect = "OutputConnect",
+    disconnect = "OutputDisconnect",
     resize = "OutputResize",
     move = "OutputMove",
 }
 
 ---@class OutputSignal Signals related to output events.
 ---@field connect fun(output: OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+---@field disconnect fun(output: OutputHandle)? An output was disconnected.
 ---@field resize fun(output: OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
 ---@field move fun(output: OutputHandle, x: integer, y: integer)? An output moved.
 

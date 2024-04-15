@@ -82,12 +82,30 @@ require("pinnacle").setup(function(Pinnacle)
 
     local tag_names = { "1", "2", "3", "4", "5" }
 
+    Output.setup({
+        {
+            function(_)
+                return true
+            end,
+            tag_names = tag_names,
+        },
+        {
+            "DP-2",
+            scale = 2,
+        },
+        {
+            "Pinnacle Window",
+            scale = 0.5,
+            loc = { x = 300, y = 450 },
+        },
+    })
+
     -- `connect_for_all` is useful for performing setup on every monitor you have.
     -- Here, we add tags with names 1-5 and set tag 1 as active.
-    Output.connect_for_all(function(op)
-        local tags = Tag.add(op, tag_names)
-        tags[1]:set_active(true)
-    end)
+    -- Output.connect_for_all(function(op)
+    --     local tags = Tag.add(op, tag_names)
+    --     tags[1]:set_active(true)
+    -- end)
 
     -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do

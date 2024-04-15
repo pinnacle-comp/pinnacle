@@ -140,6 +140,24 @@ signals! {
                 }
             },
         }
+        /// An output was connected.
+        ///
+        /// Callbacks receive the disconnected output.
+        OutputDisconnect = {
+            enum_name = Disconnect,
+            callback_type = SingleOutputFn,
+            client_request = output_disconnect,
+            on_response = |response, callbacks| {
+                if let Some(output_name) = response.output_name {
+                    let output = OUTPUT.get().expect("OUTPUT doesn't exist");
+                    let handle = output.new_handle(output_name);
+
+                    for callback in callbacks {
+                        callback(&handle);
+                    }
+                }
+            },
+        }
         /// An output's logical size changed.
         ///
         /// Callbacks receive the output and new width and height.
@@ -223,6 +241,7 @@ pub(crate) type SingleWindowFn = Box<dyn FnMut(&WindowHandle) + Send + 'static>;
 
 pub(crate) struct SignalState {
     pub(crate) output_connect: SignalData<OutputConnect>,
+    pub(crate) output_disconnect: SignalData<OutputDisconnect>,
     pub(crate) output_resize: SignalData<OutputResize>,
     pub(crate) output_move: SignalData<OutputMove>,
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
@@ -237,6 +256,7 @@ impl SignalState {
         let client = SignalServiceClient::new(channel);
         Self {
             output_connect: SignalData::new(client.clone(), fut_sender.clone()),
+            output_disconnect: SignalData::new(client.clone(), fut_sender.clone()),
             output_resize: SignalData::new(client.clone(), fut_sender.clone()),
             output_move: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_enter: SignalData::new(client.clone(), fut_sender.clone()),

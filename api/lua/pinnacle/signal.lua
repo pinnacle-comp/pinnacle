@@ -14,6 +14,9 @@ local rpc_types = {
     OutputConnect = {
         response_type = "OutputConnectResponse",
     },
+    OutputDisconnect = {
+        response_type = "OutputDisconnectResponse",
+    },
     OutputResize = {
         response_type = "OutputResizeResponse",
     },
@@ -58,6 +61,17 @@ local stream_control = {
 ---@type table<SignalServiceMethod, { sender: H2Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputDisconnect = {
         ---@nodoc
         ---@type H2Stream?
         sender = nil,
@@ -118,6 +132,14 @@ signals.OutputConnect.on_response = function(response)
     ---@diagnostic disable-next-line: invisible
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputConnect.callbacks) do
+        callback(handle)
+    end
+end
+
+signals.OutputDisconnect.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputDisconnect.callbacks) do
         callback(handle)
     end
 end

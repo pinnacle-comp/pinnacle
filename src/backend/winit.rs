@@ -109,7 +109,7 @@ pub fn setup_winit(
         model: "Winit Window".to_string(),
     };
 
-    let output = Output::new("Pinnacle window".to_string(), physical_properties);
+    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
 
     output.change_current_state(
         Some(mode),

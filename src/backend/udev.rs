@@ -11,7 +11,9 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    OutputConnectResponse, OutputDisconnectResponse,
+};
 use smithay::{
     backend::{
         allocator::{
@@ -1184,6 +1186,12 @@ impl State {
             );
             self.space.unmap_output(&output);
             self.gamma_control_manager_state.output_removed(&output);
+
+            self.signal_state.output_disconnect.signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
         }
     }
 

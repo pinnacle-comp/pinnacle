@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    signal_service_server, OutputConnectRequest, OutputConnectResponse, OutputMoveRequest,
-    OutputMoveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest, StreamControl,
-    WindowPointerEnterRequest, WindowPointerEnterResponse, WindowPointerLeaveRequest,
-    WindowPointerLeaveResponse,
+    signal_service_server, OutputConnectRequest, OutputConnectResponse, OutputDisconnectRequest,
+    OutputDisconnectResponse, OutputMoveRequest, OutputMoveResponse, OutputResizeRequest,
+    OutputResizeResponse, SignalRequest, StreamControl, WindowPointerEnterRequest,
+    WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
@@ -18,6 +18,7 @@ use super::{run_bidirectional_streaming, ResponseStream, StateFnSender};
 pub struct SignalState {
     // Output
     pub output_connect: SignalData<OutputConnectResponse, VecDeque<OutputConnectResponse>>,
+    pub output_disconnect: SignalData<OutputDisconnectResponse, VecDeque<OutputDisconnectResponse>>,
     pub output_resize: SignalData<OutputResizeResponse, VecDeque<OutputResizeResponse>>,
     pub output_move: SignalData<OutputMoveResponse, VecDeque<OutputMoveResponse>>,
 
@@ -31,6 +32,9 @@ pub struct SignalState {
 impl SignalState {
     pub fn clear(&mut self) {
         self.output_connect.disconnect();
+        self.output_disconnect.disconnect();
+        self.output_resize.disconnect();
+        self.output_move.disconnect();
         self.window_pointer_enter.disconnect();
         self.window_pointer_leave.disconnect();
     }
@@ -177,6 +181,7 @@ impl SignalService {
 #[tonic::async_trait]
 impl signal_service_server::SignalService for SignalService {
     type OutputConnectStream = ResponseStream<OutputConnectResponse>;
+    type OutputDisconnectStream = ResponseStream<OutputDisconnectResponse>;
     type OutputResizeStream = ResponseStream<OutputResizeResponse>;
     type OutputMoveStream = ResponseStream<OutputMoveResponse>;
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
@@ -190,6 +195,17 @@ impl signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.signal_state.output_connect
+        })
+    }
+
+    async fn output_disconnect(
+        &self,
+        request: Request<Streaming<OutputDisconnectRequest>>,
+    ) -> Result<Response<Self::OutputDisconnectStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.signal_state.output_disconnect
         })
     }
 

@@ -1,6 +1,10 @@
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    OutputConnectResponse, OutputDisconnectResponse,
+};
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{Physical, Size};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -115,4 +119,46 @@ pub fn setup_dummy(
     }
 
     Ok((state, event_loop))
+}
+
+impl State {
+    pub fn new_output(&mut self, name: impl std::fmt::Display, size: Size<i32, Physical>) {
+        let mode = smithay::output::Mode {
+            size,
+            refresh: 144_000,
+        };
+
+        let physical_properties = smithay::output::PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Pinnacle".to_string(),
+            model: "Dummy Output".to_string(),
+        };
+
+        let output = Output::new(name.to_string(), physical_properties);
+
+        output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+
+        output.set_preferred(mode);
+
+        output.create_global::<State>(&self.display_handle);
+
+        self.space.map_output(&output, (0, 0));
+
+        self.signal_state.output_connect.signal(|buf| {
+            buf.push_back(OutputConnectResponse {
+                output_name: Some(output.name()),
+            });
+        });
+    }
+
+    pub fn remove_output(&mut self, output: &Output) {
+        self.space.unmap_output(output);
+
+        self.signal_state.output_disconnect.signal(|buffer| {
+            buffer.push_back(OutputDisconnectResponse {
+                output_name: Some(output.name()),
+            })
+        });
+    }
 }

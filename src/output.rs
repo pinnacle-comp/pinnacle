@@ -7,6 +7,7 @@ use smithay::{
     output::{Mode, Output, Scale},
     utils::{Logical, Point, Transform},
 };
+use tracing::info;
 
 use crate::{
     focus::WindowKeyboardFocusStack,
@@ -86,6 +87,7 @@ impl State {
     ) {
         output.change_current_state(mode, transform, scale, location);
         if let Some(location) = location {
+            info!(?location);
             self.space.map_output(output, location);
             self.signal_state.output_move.signal(|buf| {
                 buf.push_back(OutputMoveResponse {
