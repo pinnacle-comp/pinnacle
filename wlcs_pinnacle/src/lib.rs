@@ -1,34 +1,177 @@
-use wayland_sys::{client::{wl_display, wl_proxy}, common::wl_fixed_t};
+mod main_loop;
+
+use std::{
+    io,
+    os::{
+        fd::{AsRawFd, OwnedFd},
+        unix::net::UnixStream,
+    },
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc::SendError,
+        Once,
+    },
+    thread::{spawn, JoinHandle},
+};
+
+use smithay::{
+    reexports::calloop::channel::{channel, Sender},
+    utils::{Logical, Point},
+};
+use tracing::{info, warn};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use wayland_sys::{
+    client::{wayland_client_handle, wl_display, wl_proxy},
+    common::{wl_fixed_t, wl_fixed_to_double},
+    ffi_dispatch,
+};
 use wlcs::{
-    ffi_display_server_api::WlcsServerIntegration, ffi_wrappers::wlcs_server,
+    extension_list,
+    ffi_display_server_api::{
+        WlcsExtensionDescriptor, WlcsIntegrationDescriptor, WlcsServerIntegration,
+    },
+    ffi_wrappers::wlcs_server,
     wlcs_server_integration, Pointer, Touch, Wlcs,
 };
 
 wlcs_server_integration!(PinnacleHandle);
 
-struct PinnacleHandle {
-    // server: Option<(Sender<WlcsEvent>, JoinHandle<()>)>,
+#[derive(Debug)]
+pub enum WlcsEvent {
+    Stop,
+    NewClient {
+        stream: UnixStream,
+        client_id: i32,
+    },
+    PositionWindow {
+        client_id: i32,
+        surface_id: u32,
+        location: Point<i32, Logical>,
+    },
+    PointerMoveAbsolute {
+        device_id: u32,
+        location: Point<f64, Logical>,
+    },
+    PointerMoveRelative {
+        device_id: u32,
+        location: Point<f64, Logical>,
+    },
+    PointerButtonUp {
+        device_id: u32,
+        button_id: i32,
+    },
+    PointerButtonDown {
+        device_id: u32,
+        button_id: i32,
+    },
+    TouchDown {
+        device_id: u32,
+        location: Point<f64, Logical>,
+    },
+    TouchMove {
+        device_id: u32,
+        location: Point<f64, Logical>,
+    },
+    TouchUp {
+        device_id: u32,
+    },
 }
 
+struct PinnacleConnection {
+    sender: Sender<WlcsEvent>,
+    join: JoinHandle<()>,
+}
+
+impl PinnacleConnection {
+    fn start() -> Self {
+        let (sender, receiver) = channel();
+        let join = spawn(move || main_loop::run(receiver));
+        Self { sender, join }
+    }
+}
+
+struct PinnacleHandle {
+    server_conn: Option<PinnacleConnection>,
+}
+
+static SUPPORTED_EXTENSIONS: &[WlcsExtensionDescriptor] = extension_list!(
+    // ("wl_compositor", 4),
+    // ("wl_subcompositor", 1),
+    // ("wl_data_device_manager", 3),
+    // ("wl_seat", 7),
+    // ("wl_output", 4),
+    // ("xdg_wm_base", 3),
+);
+
+static DESCRIPTOR: WlcsIntegrationDescriptor = WlcsIntegrationDescriptor {
+    version: 1,
+    num_extensions: SUPPORTED_EXTENSIONS.len(),
+    supported_extensions: SUPPORTED_EXTENSIONS.as_ptr(),
+};
+
+static DEVICE_ID: AtomicU32 = AtomicU32::new(0);
+
+fn new_device_id() -> u32 {
+    DEVICE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+fn init() {
+    let env_filter = EnvFilter::try_from_default_env();
+
+    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("info"));
+    let stdout_layer = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_writer(std::io::stdout)
+        .with_filter(stdout_env_filter);
+
+    tracing_subscriber::registry().with(stdout_layer).init();
+}
+
+static INIT_ONCE: Once = Once::new();
 
 impl Wlcs for PinnacleHandle {
     type Pointer = PointerHandle;
     type Touch = TouchHandle;
 
     fn new() -> Self {
-        todo!()
+        INIT_ONCE.call_once(init);
+        Self { server_conn: None }
     }
 
     fn start(&mut self) {
-        todo!()
+        info!("starting");
+        self.server_conn = Some(PinnacleConnection::start());
+        info!("started");
     }
 
     fn stop(&mut self) {
-        todo!()
+        if let Some(conn) = self.server_conn.take() {
+            let _ = conn.sender.send(WlcsEvent::Stop);
+            conn.join.join().expect("failed to join");
+        }
     }
 
-    fn create_client_socket(&self) -> std::io::Result<std::os::unix::prelude::OwnedFd> {
-        todo!()
+    fn create_client_socket(&self) -> io::Result<OwnedFd> {
+        info!("new client start");
+        let conn = self
+            .server_conn
+            .as_ref()
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+
+        let (client, server) = UnixStream::pair()?;
+
+        conn.sender
+            .send(WlcsEvent::NewClient {
+                stream: server,
+                client_id: client.as_raw_fd(),
+            })
+            .map_err(|e| {
+                warn!("failed to send NewClient event");
+                io::Error::new(io::ErrorKind::ConnectionReset, e)
+            })?;
+
+        info!("new client end");
+        Ok(client.into())
     }
 
     fn position_window_absolute(
@@ -38,56 +181,116 @@ impl Wlcs for PinnacleHandle {
         x: i32,
         y: i32,
     ) {
-        todo!()
+        if let Some(conn) = &self.server_conn {
+            let client_id =
+                unsafe { ffi_dispatch!(wayland_client_handle(), wl_display_get_fd, display) };
+            let surface_id =
+                unsafe { ffi_dispatch!(wayland_client_handle(), wl_proxy_get_id, surface) };
+            let _ = conn.sender.send(WlcsEvent::PositionWindow {
+                client_id,
+                surface_id,
+                location: (x, y).into(),
+            });
+        }
     }
 
     fn create_pointer(&mut self) -> Option<Self::Pointer> {
-        todo!()
+        self.server_conn
+            .as_ref()
+            .map(|conn| conn.sender.clone())
+            .map(|sender| PointerHandle {
+                device_id: new_device_id(),
+                sender,
+            })
     }
 
     fn create_touch(&mut self) -> Option<Self::Touch> {
-        todo!()
+        self.server_conn
+            .as_ref()
+            .map(|conn| conn.sender.clone())
+            .map(|sender| TouchHandle {
+                device_id: new_device_id(),
+                sender,
+            })
     }
 
-    fn get_descriptor(&self) -> &wlcs::ffi_display_server_api::WlcsIntegrationDescriptor {
-        todo!()
+    fn get_descriptor(&self) -> &WlcsIntegrationDescriptor {
+        &DESCRIPTOR
     }
-
-    fn start_on_this_thread(&self, _event_loop: *mut wayland_sys::server::wl_event_loop) {}
 }
 
-struct PointerHandle {}
+struct PointerHandle {
+    device_id: u32,
+    sender: Sender<WlcsEvent>,
+}
 
 impl Pointer for PointerHandle {
     fn move_absolute(&mut self, x: wl_fixed_t, y: wl_fixed_t) {
-        todo!()
+        self.sender
+            .send(WlcsEvent::PointerMoveAbsolute {
+                device_id: self.device_id,
+                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+            })
+            .expect("failed to send move_absolute");
     }
 
     fn move_relative(&mut self, dx: wl_fixed_t, dy: wl_fixed_t) {
-        todo!()
+        self.sender
+            .send(WlcsEvent::PointerMoveRelative {
+                device_id: self.device_id,
+                location: (wl_fixed_to_double(dx), wl_fixed_to_double(dy)).into(),
+            })
+            .expect("failed to send move_relative");
     }
 
     fn button_up(&mut self, button: i32) {
-        todo!()
+        self.sender
+            .send(WlcsEvent::PointerButtonUp {
+                device_id: self.device_id,
+                button_id: button,
+            })
+            .expect("failed to send button_up");
     }
 
     fn button_down(&mut self, button: i32) {
-        todo!()
+        self.sender
+            .send(WlcsEvent::PointerButtonDown {
+                device_id: self.device_id,
+                button_id: button,
+            })
+            .expect("failed to send button_down");
     }
 }
 
-struct TouchHandle {}
+struct TouchHandle {
+    device_id: u32,
+    sender: Sender<WlcsEvent>,
+}
 
 impl Touch for TouchHandle {
-    fn touch_down(&mut self, x: wayland_sys::common::wl_fixed_t, y: wayland_sys::common::wl_fixed_t) {
-        todo!()
+    fn touch_down(&mut self, x: wl_fixed_t, y: wl_fixed_t) {
+        self.sender
+            .send(WlcsEvent::TouchDown {
+                device_id: self.device_id,
+                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+            })
+            .expect("failed to send touch_down");
     }
 
-    fn touch_move(&mut self, x: wayland_sys::common::wl_fixed_t, y: wayland_sys::common::wl_fixed_t) {
-        todo!()
+    fn touch_move(&mut self, x: wl_fixed_t, y: wl_fixed_t) {
+        self.sender
+            .send(WlcsEvent::TouchMove {
+                device_id: self.device_id,
+                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+            })
+            .expect("failed to send touch_move");
     }
 
     fn touch_up(&mut self) {
-        todo!()
+        self.sender
+            .send(WlcsEvent::TouchUp {
+                device_id: self.device_id,
+            })
+            .expect("failed to send touch_up");
     }
 }

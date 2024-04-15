@@ -43,6 +43,8 @@ use self::{udev::Udev, winit::Winit};
 
 #[cfg(feature = "testing")]
 pub mod dummy;
+#[cfg(feature = "wlcs")]
+pub mod wlcs;
 pub mod udev;
 pub mod winit;
 

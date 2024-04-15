@@ -16,6 +16,8 @@ use smithay::{
 
 use crate::state::State;
 
+#[cfg(feature = "wlcs")]
+use super::wlcs::Wlcs;
 use super::Backend;
 use super::BackendData;
 
@@ -24,12 +26,19 @@ pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
 pub struct Dummy {
     pub renderer: DummyRenderer,
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
+    #[cfg(feature = "wlcs")]
+    pub wlcs_state: Wlcs,
 }
 
 impl Backend {
-    fn dummy_mut(&mut self) -> &Dummy {
+    fn dummy_mut(&mut self) -> &mut Dummy {
         let Backend::Dummy(dummy) = self else { unreachable!() };
         dummy
+    }
+
+    #[cfg(feature = "wlcs")]
+    pub fn wlcs_mut(&mut self) -> &mut Wlcs {
+        &mut self.dummy_mut().wlcs_state
     }
 }
 
@@ -91,6 +100,8 @@ pub fn setup_dummy(
     let backend = Dummy {
         renderer,
         // dmabuf_state,
+        #[cfg(feature = "wlcs")]
+        wlcs_state: Wlcs::default(),
     };
 
     let mut state = State::init(
@@ -110,7 +121,7 @@ pub fn setup_dummy(
 
     state.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.xwayland.start(
+    /* if let Err(err) = state.xwayland.start(
         state.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
@@ -118,7 +129,7 @@ pub fn setup_dummy(
         |_| {},
     ) {
         tracing::error!("Failed to start XWayland: {err}");
-    }
+    } */
 
     Ok((state, event_loop))
 }
