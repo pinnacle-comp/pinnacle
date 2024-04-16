@@ -199,6 +199,9 @@ impl Output {
                     setup.apply(output, &tag_mod);
                 }
             }
+            if let Some(tag) = output.tags().first() {
+                tag.set_active(true);
+            }
         };
 
         let outputs = self.get_all();
@@ -211,10 +214,18 @@ impl Output {
         })));
     }
 
-    pub fn setup_locs(&self, setup: OutputLocSetup) {
+    pub fn setup_locs(
+        &self,
+        update_locs_on: UpdateLocsOn,
+        setup: impl IntoIterator<Item = (impl ToString, OutputLoc)>,
+    ) {
+        let setup: HashMap<_, _> = setup
+            .into_iter()
+            .map(|(name, align)| (name.to_string(), align))
+            .collect();
+
         let api = self.api.get().unwrap().clone();
         let layout_outputs = move || {
-            let setups = setups_clone.clone().into_iter().collect::<Vec<_>>();
             let outputs = api.output.get_all();
 
             let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
@@ -225,23 +236,19 @@ impl Output {
 
             // Place outputs with OutputSetupLoc::Point
             for output in outputs.iter() {
-                for setup in setups.iter() {
-                    if setup.output.matches(output) {
-                        if let Some(OutputLoc::Point(x, y)) = setup.loc {
-                            output.set_location(x, y);
+                if let Some(&OutputLoc::Point(x, y)) = setup.get(output.name()) {
+                    output.set_location(x, y);
 
-                            placed_outputs.insert(output.clone());
-                            let props = output.props();
-                            let x = props.x.unwrap();
-                            let width = props.logical_width.unwrap() as i32;
-                            if rightmost_output_and_x.is_none()
-                                || rightmost_output_and_x
-                                    .as_ref()
-                                    .is_some_and(|(_, rm_x)| x + width > *rm_x)
-                            {
-                                rightmost_output_and_x = Some((output.clone(), x + width));
-                            }
-                        }
+                    placed_outputs.insert(output.clone());
+                    let props = output.props();
+                    let x = props.x.unwrap();
+                    let width = props.logical_width.unwrap() as i32;
+                    if rightmost_output_and_x.is_none()
+                        || rightmost_output_and_x
+                            .as_ref()
+                            .is_some_and(|(_, rm_x)| x + width > *rm_x)
+                    {
+                        rightmost_output_and_x = Some((output.clone(), x + width));
                     }
                 }
             }
@@ -252,48 +259,48 @@ impl Output {
                 .filter(|op| !placed_outputs.contains(op))
                 .collect::<Vec<_>>()
             {
-                for setup in setups.iter() {
-                    if setup.output.matches(output) && setup.loc.is_none() {
-                        if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
-                            output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
-                        } else {
-                            output.set_location(0, 0);
-                            println!("SET LOC FOR {} TO (0, 0)", output.name());
-                        }
+                if setup.get(output.name()).is_none() {
+                    if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
+                        output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+                    } else {
+                        output.set_location(0, 0);
+                    }
 
-                        placed_outputs.insert(output.clone());
-                        let props = output.props();
-                        let x = props.x.unwrap();
-                        let width = props.logical_width.unwrap() as i32;
-                        if rightmost_output_and_x.is_none()
-                            || rightmost_output_and_x
-                                .as_ref()
-                                .is_some_and(|(_, rm_x)| x + width > *rm_x)
-                        {
-                            rightmost_output_and_x = Some((output.clone(), x + width));
-                        }
+                    placed_outputs.insert(output.clone());
+                    let props = output.props();
+                    let x = props.x.unwrap();
+                    let width = props.logical_width.unwrap() as i32;
+                    if rightmost_output_and_x.is_none()
+                        || rightmost_output_and_x
+                            .as_ref()
+                            .is_some_and(|(_, rm_x)| x + width > *rm_x)
+                    {
+                        rightmost_output_and_x = Some((output.clone(), x + width));
                     }
                 }
             }
 
             // Attempt to place relative outputs
-            while let Some((output, relative_to, alignment)) = setups.iter().find_map(|setup| {
-                outputs.iter().find_map(|op| {
-                    if !placed_outputs.contains(op) && setup.output.matches(op) {
-                        match &setup.loc {
-                            Some(OutputLoc::RelativeTo(matcher, alignment)) => {
-                                let first_matched_op = outputs
-                                    .iter()
-                                    .find(|o| matcher.matches(o) && placed_outputs.contains(o))?;
-                                Some((op, first_matched_op, alignment))
+            while let Some((output, relative_to, alignment)) =
+                setup.iter().find_map(|(setup_op_name, loc)| {
+                    outputs
+                        .iter()
+                        .find(|setup_op| {
+                            !placed_outputs.contains(setup_op) && setup_op.name() == setup_op_name
+                        })
+                        .and_then(|setup_op| match loc {
+                            OutputLoc::RelativeTo(relative_tos) => {
+                                relative_tos.iter().find_map(|(rel_name, align)| {
+                                    placed_outputs.iter().find_map(|pl_op| {
+                                        (pl_op.name() == rel_name)
+                                            .then_some((setup_op, pl_op, align))
+                                    })
+                                })
                             }
                             _ => None,
-                        }
-                    } else {
-                        None
-                    }
+                        })
                 })
-            }) {
+            {
                 output.set_loc_adj_to(relative_to, *alignment);
 
                 placed_outputs.insert(output.clone());
@@ -349,17 +356,23 @@ impl Output {
         let layout_outputs_clone1 = layout_outputs.clone();
         let layout_outputs_clone2 = layout_outputs.clone();
 
-        self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
-            layout_outputs_clone2();
-        })));
+        if update_locs_on.contains(UpdateLocsOn::CONNECT) {
+            self.connect_signal(OutputSignal::Connect(Box::new(move |_| {
+                layout_outputs_clone2();
+            })));
+        }
 
-        self.connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
-            layout_outputs_clone1();
-        })));
+        if update_locs_on.contains(UpdateLocsOn::DISCONNECT) {
+            self.connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
+                layout_outputs_clone1();
+            })));
+        }
 
-        self.connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
-            layout_outputs();
-        })));
+        if update_locs_on.contains(UpdateLocsOn::RESIZE) {
+            self.connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
+                layout_outputs();
+            })));
+        }
     }
 }
 
@@ -481,45 +494,36 @@ impl OutputSetup {
             output.set_scale(scale);
         }
         if let Some(tag_names) = &self.tag_names {
-            let tags = tag.add(output, tag_names);
-            if let Some(tag) = tags.first() {
-                tag.set_active(true);
-            }
+            tag.add(output, tag_names);
         }
     }
 }
 
+/// A location for an output.
+#[derive(Clone, Debug)]
 pub enum OutputLoc {
+    /// A specific point in the global space.
     Point(i32, i32),
+    /// A location relative to another output.
+    ///
+    /// This holds a `Vec` of output names to alignments.
+    /// The output that is relative to will be chosen from the first
+    /// connected and placed output in this `Vec`.
     RelativeTo(Vec<(String, Alignment)>),
 }
 
-pub struct OutputLocSetup {
-    update_locs_on: UpdateLocsOn,
-    setup: HashMap<String, OutputLoc>,
-}
-
-impl OutputLocSetup {
-    pub fn new(
-        update_locs_on: UpdateLocsOn,
-        setup: impl IntoIterator<Item = (impl ToString, OutputLoc)>,
-    ) -> Self {
-        Self {
-            update_locs_on,
-            setup: setup
-                .into_iter()
-                .map(|(s, loc)| (s.to_string(), loc))
-                .collect(),
-        }
-    }
-}
-
 impl OutputLoc {
-    pub fn from_point(x: i32, y: i32) -> Self {
-        Self::Point(x, y)
+    /// Creates an `OutputLoc` that will place outputs relative to
+    /// the output with the given name using the given alignment.
+    pub fn relative_to(name: impl ToString, alignment: Alignment) -> Self {
+        Self::RelativeTo(vec![(name.to_string(), alignment)])
     }
 
-    pub fn from_relatives(relatives: impl IntoIterator<Item = (impl ToString, Alignment)>) -> Self {
+    /// Creates an `OutputLoc` from multiple (output_name, alignment) pairs
+    /// that serve as fallbacks.
+    pub fn relative_to_with_fallbacks(
+        relatives: impl IntoIterator<Item = (impl ToString, Alignment)>,
+    ) -> Self {
         Self::RelativeTo(
             relatives
                 .into_iter()

@@ -1,9 +1,12 @@
 use std::{panic::UnwindSafe, time::Duration};
 
 use pinnacle::{backend::dummy::setup_dummy, state::State};
-use smithay::reexports::calloop::{
-    self,
-    channel::{Event, Sender},
+use smithay::{
+    output::Output,
+    reexports::calloop::{
+        self,
+        channel::{Event, Sender},
+    },
 };
 
 #[allow(clippy::type_complexity)]
@@ -73,4 +76,13 @@ pub fn test_api(
     }
 
     Ok(())
+}
+
+pub fn output_for_name(state: &State, name: &str) -> Output {
+    state
+        .space
+        .outputs()
+        .find(|op| op.name() == name)
+        .unwrap()
+        .clone()
 }
