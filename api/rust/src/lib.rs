@@ -67,12 +67,7 @@
 //!     // `modules` is now available in the function body.
 //!     // You can deconstruct `ApiModules` to get all the config structs.
 //!     let ApiModules {
-//!         pinnacle,
-//!         process,
-//!         window,
-//!         input,
-//!         output,
-//!         tag,
+//!         ..
 //!     } = modules;
 //! }
 //! ```
@@ -80,7 +75,7 @@
 //! ## 5. Begin crafting your config!
 //! You can peruse the documentation for things to configure.
 
-use std::{sync::OnceLock, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::{future::BoxFuture, Future, StreamExt};
 use input::Input;
@@ -115,18 +110,9 @@ pub use pinnacle_api_macros::config;
 pub use tokio;
 pub use xkbcommon;
 
-static PINNACLE: OnceLock<Pinnacle> = OnceLock::new();
-static PROCESS: OnceLock<Process> = OnceLock::new();
-static WINDOW: OnceLock<Window> = OnceLock::new();
-static INPUT: OnceLock<Input> = OnceLock::new();
-static OUTPUT: OnceLock<Output> = OnceLock::new();
-static TAG: OnceLock<Tag> = OnceLock::new();
-static SIGNAL: OnceLock<RwLock<SignalState>> = OnceLock::new();
-static LAYOUT: OnceLock<Layout> = OnceLock::new();
-static RENDER: OnceLock<Render> = OnceLock::new();
-
 /// A struct containing static references to all of the configuration structs.
-#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+#[derive(Clone)]
 pub struct ApiModules {
     /// The [`Pinnacle`] struct
     pub pinnacle: &'static Pinnacle,
@@ -144,6 +130,23 @@ pub struct ApiModules {
     pub layout: &'static Layout,
     /// The [`Render`] struct
     pub render: &'static Render,
+    signal: Arc<RwLock<SignalState>>,
+}
+
+impl std::fmt::Debug for ApiModules {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiModules")
+            .field("pinnacle", &self.pinnacle)
+            .field("process", &self.process)
+            .field("window", &self.window)
+            .field("input", &self.input)
+            .field("output", &self.output)
+            .field("tag", &self.tag)
+            .field("layout", &self.layout)
+            .field("render", &self.render)
+            .field("signal", &"...")
+            .finish()
+    }
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
@@ -164,19 +167,19 @@ pub async fn connect(
 
     let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<'static, ()>>();
 
-    let pinnacle = PINNACLE.get_or_init(|| Pinnacle::new(channel.clone()));
-    let process = PROCESS.get_or_init(|| Process::new(channel.clone(), fut_sender.clone()));
-    let window = WINDOW.get_or_init(|| Window::new(channel.clone()));
-    let input = INPUT.get_or_init(|| Input::new(channel.clone(), fut_sender.clone()));
-    let tag = TAG.get_or_init(|| Tag::new(channel.clone()));
-    let output = OUTPUT.get_or_init(|| Output::new(channel.clone()));
-    let layout = LAYOUT.get_or_init(|| Layout::new(channel.clone()));
-    let render = RENDER.get_or_init(|| Render::new(channel.clone()));
-
-    let _ = SIGNAL.set(RwLock::new(SignalState::new(
+    let signal = Arc::new(RwLock::new(SignalState::new(
         channel.clone(),
         fut_sender.clone(),
     )));
+
+    let pinnacle = Box::leak(Box::new(Pinnacle::new(channel.clone())));
+    let process = Box::leak(Box::new(Process::new(channel.clone(), fut_sender.clone())));
+    let window = Box::leak(Box::new(Window::new(channel.clone())));
+    let input = Box::leak(Box::new(Input::new(channel.clone(), fut_sender.clone())));
+    let output = Box::leak(Box::new(Output::new(channel.clone())));
+    let tag = Box::leak(Box::new(Tag::new(channel.clone())));
+    let render = Box::leak(Box::new(Render::new(channel.clone())));
+    let layout = Box::leak(Box::new(Layout::new(channel.clone())));
 
     let modules = ApiModules {
         pinnacle,
@@ -187,7 +190,14 @@ pub async fn connect(
         tag,
         layout,
         render,
+        signal: signal.clone(),
     };
+
+    window.finish_init(modules.clone());
+    output.finish_init(modules.clone());
+    tag.finish_init(modules.clone());
+    layout.finish_init(modules.clone());
+    signal.read().await.finish_init(modules.clone());
 
     Ok((modules, fut_recv))
 }
@@ -199,15 +209,13 @@ pub async fn connect(
 ///
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
-pub async fn listen(fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
+pub async fn listen(api: ApiModules, fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
-
-    let pinnacle = PINNACLE.get().unwrap();
 
     let keepalive = async move {
         loop {
             tokio::time::sleep(Duration::from_secs(60)).await;
-            if let Err(err) = pinnacle.ping().await {
+            if let Err(err) = api.pinnacle.ping().await {
                 eprintln!("Failed to ping compositor: {err}");
                 std::process::exit(1);
             }

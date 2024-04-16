@@ -29,6 +29,8 @@
 //!
 //! These [`TagHandle`]s allow you to manipulate individual tags and get their properties.
 
+use std::sync::OnceLock;
+
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::{
@@ -42,27 +44,32 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{
-    block_on_tokio, output::OutputHandle, util::Batch, window::WindowHandle, OUTPUT, WINDOW,
-};
+use crate::{block_on_tokio, output::OutputHandle, util::Batch, window::WindowHandle, ApiModules};
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
 pub struct Tag {
     tag_client: TagServiceClient<Channel>,
+    api: OnceLock<ApiModules>,
 }
 
 impl Tag {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             tag_client: TagServiceClient::new(channel.clone()),
+            api: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     pub(crate) fn new_handle(&self, id: u32) -> TagHandle {
         TagHandle {
             id,
             tag_client: self.tag_client.clone(),
+            api: self.api.get().unwrap().clone(),
         }
     }
 
@@ -158,8 +165,7 @@ impl Tag {
     /// The async version of [`Tag::get`].
     pub async fn get_async(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
-        let output_module = OUTPUT.get().expect("OUTPUT doesn't exist");
-        let focused_output = output_module.get_focused();
+        let focused_output = self.api.get().unwrap().output.get_focused();
 
         if let Some(output) = focused_output {
             self.get_on_output_async(name, &output).await
@@ -230,6 +236,7 @@ impl Tag {
 pub struct TagHandle {
     pub(crate) id: u32,
     tag_client: TagServiceClient<Channel>,
+    api: ApiModules,
 }
 
 impl PartialEq for TagHandle {
@@ -377,8 +384,8 @@ impl TagHandle {
             .unwrap()
             .into_inner();
 
-        let output = OUTPUT.get().expect("OUTPUT doesn't exist");
-        let window = WINDOW.get().expect("WINDOW doesn't exist");
+        let output = self.api.output;
+        let window = self.api.window;
 
         TagProperties {
             active: response.active,

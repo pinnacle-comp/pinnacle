@@ -9,7 +9,10 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, OnceLock},
+};
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
@@ -24,9 +27,9 @@ use tonic::transport::Channel;
 use crate::{
     block_on_tokio,
     signal::{OutputSignal, SignalHandle},
-    tag::TagHandle,
+    tag::{Tag, TagHandle},
     util::Batch,
-    OUTPUT, SIGNAL, TAG,
+    ApiModules,
 };
 
 /// A struct that allows you to get handles to connected outputs and set them up.
@@ -35,19 +38,26 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Output {
     output_client: OutputServiceClient<Channel>,
+    api: OnceLock<ApiModules>,
 }
 
 impl Output {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             output_client: OutputServiceClient::new(channel.clone()),
+            api: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     pub(crate) fn new_handle(&self, name: impl Into<String>) -> OutputHandle {
         OutputHandle {
             name: name.into(),
             output_client: self.output_client.clone(),
+            api: self.api.get().unwrap().clone(),
         }
     }
 
@@ -147,7 +157,7 @@ impl Output {
             for_all(&output);
         }
 
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
         signal_state.output_connect.add_callback(Box::new(for_all));
     }
 
@@ -157,7 +167,7 @@ impl Output {
     /// You can pass in an [`OutputSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: OutputSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
 
         match signal {
             OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
@@ -180,24 +190,32 @@ impl Output {
     /// ```
     pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {
         let setups = setups.into_iter().map(Arc::new).collect::<Vec<_>>();
-        let setups_clone = setups.clone();
+        // let setups_clone = setups.clone();
 
-        let apply_all_but_loc = move |output: &OutputHandle| {
+        let tag_mod = self.api.get().unwrap().tag.clone();
+        let apply_setups = move |output: &OutputHandle| {
             for setup in setups.iter() {
                 if setup.output.matches(output) {
-                    setup.apply_all_but_loc(output);
+                    setup.apply(output, &tag_mod);
                 }
             }
         };
 
         let outputs = self.get_all();
         for output in outputs {
-            apply_all_but_loc(&output);
+            apply_setups(&output);
         }
 
+        self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
+            apply_setups(output);
+        })));
+    }
+
+    pub fn setup_locs(&self, setup: OutputLocSetup) {
+        let api = self.api.get().unwrap().clone();
         let layout_outputs = move || {
             let setups = setups_clone.clone().into_iter().collect::<Vec<_>>();
-            let outputs = OUTPUT.get().unwrap().get_all();
+            let outputs = api.output.get_all();
 
             let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
 
@@ -209,7 +227,7 @@ impl Output {
             for output in outputs.iter() {
                 for setup in setups.iter() {
                     if setup.output.matches(output) {
-                        if let Some(OutputSetupLoc::Point(x, y)) = setup.loc {
+                        if let Some(OutputLoc::Point(x, y)) = setup.loc {
                             output.set_location(x, y);
 
                             placed_outputs.insert(output.clone());
@@ -263,7 +281,7 @@ impl Output {
                 outputs.iter().find_map(|op| {
                     if !placed_outputs.contains(op) && setup.output.matches(op) {
                         match &setup.loc {
-                            Some(OutputSetupLoc::RelativeTo(matcher, alignment)) => {
+                            Some(OutputLoc::RelativeTo(matcher, alignment)) => {
                                 let first_matched_op = outputs
                                     .iter()
                                     .find(|o| matcher.matches(o) && placed_outputs.contains(o))?;
@@ -332,8 +350,6 @@ impl Output {
         let layout_outputs_clone2 = layout_outputs.clone();
 
         self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
-            println!("GOT CONNECTION FOR OUTPUT {}", output.name());
-            apply_all_but_loc(output);
             layout_outputs_clone2();
         })));
 
@@ -351,7 +367,7 @@ impl Output {
 pub enum OutputMatcher {
     /// Match outputs by name.
     Name(String),
-    /// Match outputs by a function returning a bool.
+    /// Match outputs using a function that returns a bool.
     Fn(Box<dyn Fn(&OutputHandle) -> bool + Send + Sync>),
 }
 
@@ -362,6 +378,27 @@ impl OutputMatcher {
             OutputMatcher::Name(name) => output.name() == name,
             OutputMatcher::Fn(matcher) => matcher(output),
         }
+    }
+}
+
+impl From<&str> for OutputMatcher {
+    fn from(value: &str) -> Self {
+        Self::Name(value.to_string())
+    }
+}
+
+impl From<String> for OutputMatcher {
+    fn from(value: String) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl<F> From<F> for OutputMatcher
+where
+    F: for<'a> Fn(&'a OutputHandle) -> bool + Send + Sync + 'static,
+{
+    fn from(value: F) -> Self {
+        Self::Fn(Box::new(value))
     }
 }
 
@@ -377,15 +414,9 @@ impl std::fmt::Debug for OutputMatcher {
     }
 }
 
-enum OutputSetupLoc {
-    Point(i32, i32),
-    RelativeTo(OutputMatcher, Alignment),
-}
-
 /// An output setup for use in [`Output::setup`].
 pub struct OutputSetup {
     output: OutputMatcher,
-    loc: Option<OutputSetupLoc>,
     mode: Option<Mode>,
     scale: Option<f32>,
     tag_names: Option<Vec<String>>,
@@ -396,7 +427,6 @@ impl OutputSetup {
     pub fn new(output_name: impl ToString) -> Self {
         Self {
             output: OutputMatcher::Name(output_name.to_string()),
-            loc: None,
             mode: None,
             scale: None,
             tag_names: None,
@@ -409,26 +439,9 @@ impl OutputSetup {
     ) -> Self {
         Self {
             output: OutputMatcher::Fn(Box::new(matcher)),
-            loc: None,
             mode: None,
             scale: None,
             tag_names: None,
-        }
-    }
-
-    /// Makes this setup map outputs to the given location.
-    pub fn with_absolute_loc(self, x: i32, y: i32) -> Self {
-        Self {
-            loc: Some(OutputSetupLoc::Point(x, y)),
-            ..self
-        }
-    }
-
-    /// Makes this setup map outputs relative to the first output that `relative_to` matches.
-    pub fn with_relative_loc(self, relative_to: OutputMatcher, alignment: Alignment) -> Self {
-        Self {
-            loc: Some(OutputSetupLoc::RelativeTo(relative_to, alignment)),
-            ..self
         }
     }
 
@@ -456,7 +469,7 @@ impl OutputSetup {
         }
     }
 
-    fn apply_all_but_loc(&self, output: &OutputHandle) {
+    fn apply(&self, output: &OutputHandle, tag: &Tag) {
         if let Some(mode) = &self.mode {
             output.set_mode(
                 mode.pixel_width,
@@ -468,11 +481,60 @@ impl OutputSetup {
             output.set_scale(scale);
         }
         if let Some(tag_names) = &self.tag_names {
-            let tags = TAG.get().unwrap().add(output, tag_names);
+            let tags = tag.add(output, tag_names);
             if let Some(tag) = tags.first() {
                 tag.set_active(true);
             }
         }
+    }
+}
+
+pub enum OutputLoc {
+    Point(i32, i32),
+    RelativeTo(Vec<(String, Alignment)>),
+}
+
+pub struct OutputLocSetup {
+    update_locs_on: UpdateLocsOn,
+    setup: HashMap<String, OutputLoc>,
+}
+
+impl OutputLocSetup {
+    pub fn new(
+        update_locs_on: UpdateLocsOn,
+        setup: impl IntoIterator<Item = (impl ToString, OutputLoc)>,
+    ) -> Self {
+        Self {
+            update_locs_on,
+            setup: setup
+                .into_iter()
+                .map(|(s, loc)| (s.to_string(), loc))
+                .collect(),
+        }
+    }
+}
+
+impl OutputLoc {
+    pub fn from_point(x: i32, y: i32) -> Self {
+        Self::Point(x, y)
+    }
+
+    pub fn from_relatives(relatives: impl IntoIterator<Item = (impl ToString, Alignment)>) -> Self {
+        Self::RelativeTo(
+            relatives
+                .into_iter()
+                .map(|(name, align)| (name.to_string(), align))
+                .collect(),
+        )
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+    pub struct UpdateLocsOn: u8 {
+        const CONNECT = 1;
+        const DISCONNECT = 1 << 1;
+        const RESIZE = 1 << 2;
     }
 }
 
@@ -483,6 +545,7 @@ impl OutputSetup {
 pub struct OutputHandle {
     pub(crate) name: String,
     output_client: OutputServiceClient<Channel>,
+    api: ApiModules,
 }
 
 impl PartialEq for OutputHandle {
@@ -775,8 +838,6 @@ impl OutputHandle {
             .unwrap()
             .into_inner();
 
-        let tag = TAG.get().expect("TAG doesn't exist");
-
         OutputProperties {
             make: response.make,
             model: response.model,
@@ -815,7 +876,7 @@ impl OutputHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| tag.new_handle(id))
+                .map(|id| self.api.tag.new_handle(id))
                 .collect(),
             scale: response.scale,
         }

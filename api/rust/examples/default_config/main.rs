@@ -27,6 +27,7 @@ async fn main() {
         tag,
         layout,
         render,
+        ..
     } = modules;
 
     let mod_key = Mod::Ctrl;

@@ -12,6 +12,8 @@
 //!
 //! This module also allows you to set window rules; see the [rules] module for more information.
 
+use std::sync::OnceLock;
+
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
@@ -34,7 +36,7 @@ use crate::{
     signal::{SignalHandle, WindowSignal},
     tag::TagHandle,
     util::{Batch, Geometry},
-    SIGNAL, TAG,
+    ApiModules,
 };
 
 use self::rules::{WindowRule, WindowRuleCondition};
@@ -47,19 +49,26 @@ pub mod rules;
 #[derive(Debug, Clone)]
 pub struct Window {
     window_client: WindowServiceClient<Channel>,
+    api: OnceLock<ApiModules>,
 }
 
 impl Window {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             window_client: WindowServiceClient::new(channel.clone()),
+            api: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     pub(crate) fn new_handle(&self, id: u32) -> WindowHandle {
         WindowHandle {
             id,
             window_client: self.window_client.clone(),
+            api: self.api.get().unwrap().clone(),
         }
     }
 
@@ -180,7 +189,7 @@ impl Window {
     /// You can pass in a [`WindowSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: WindowSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
 
         match signal {
             WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
@@ -196,6 +205,7 @@ impl Window {
 pub struct WindowHandle {
     id: u32,
     window_client: WindowServiceClient<Channel>,
+    api: ApiModules,
 }
 
 impl PartialEq for WindowHandle {
@@ -572,8 +582,6 @@ impl WindowHandle {
             height: geo.height() as u32,
         });
 
-        let tag = TAG.get().expect("TAG doesn't exist");
-
         WindowProperties {
             geometry,
             class: response.class,
@@ -584,7 +592,7 @@ impl WindowHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| tag.new_handle(id))
+                .map(|id| self.api.tag.new_handle(id))
                 .collect(),
         }
     }

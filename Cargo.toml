@@ -20,6 +20,7 @@ pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 # Misc.
 xkbcommon = "0.7.0"
 xdg = "2.5.2"
+bitflags = "2.5.0"
 
 ########################################################################yo😎###########
 
@@ -59,7 +60,7 @@ tokio-stream = { workspace = true }
 clap = { version = "4.5.4", features = ["derive"] }
 cliclack = "0.2.5"
 # Misc.
-bitflags = "2.5.0"
+bitflags = { workspace = true }
 serde = { version = "1.0.197", features = ["derive"] }
 toml = "0.8.12"
 shellexpand = { version = "3.1.0", features = ["path"] }

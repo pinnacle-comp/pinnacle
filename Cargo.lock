@@ -1797,6 +1797,7 @@ dependencies = [
 name = "pinnacle-api"
 version = "0.0.2"
 dependencies = [
+ "bitflags 2.5.0",
  "futures",
  "num_enum",
  "pinnacle-api-defs",
