@@ -1,19 +1,13 @@
+mod common;
+
 use std::{
     io::Write,
-    panic::UnwindSafe,
     process::{Command, Stdio},
-    time::Duration,
 };
 
-use pinnacle::{
-    backend::dummy::setup_dummy,
-    state::{State, WithState},
-};
-use smithay::reexports::calloop::{
-    self,
-    channel::{Event, Sender},
-};
+use crate::common::{sleep_secs, test_api, with_state};
 
+use pinnacle::state::WithState;
 use test_log::test;
 
 fn run_lua(ident: &str, code: &str) {
@@ -93,18 +87,6 @@ fn setup_lua(ident: &str, code: &str) -> SetupLuaGuard {
     // }
 }
 
-#[allow(clippy::type_complexity)]
-fn with_state(
-    sender: &Sender<Box<dyn FnOnce(&mut State) + Send>>,
-    assert: impl FnOnce(&mut State) + Send + 'static,
-) {
-    sender.send(Box::new(assert)).unwrap();
-}
-
-fn sleep_secs(secs: u64) {
-    std::thread::sleep(Duration::from_secs(secs));
-}
-
 macro_rules! run_lua {
     { |$ident:ident| $($body:tt)* } => {
         run_lua(stringify!($ident), stringify!($($body)*));
@@ -115,63 +97,6 @@ macro_rules! setup_lua {
     { |$ident:ident| $($body:tt)* } => {
         let _guard = setup_lua(stringify!($ident), stringify!($($body)*));
     };
-}
-
-fn test_lua_api(
-    test: impl FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) + Send + UnwindSafe + 'static,
-) -> anyhow::Result<()> {
-    let (mut state, mut event_loop) = setup_dummy(true, None)?;
-
-    let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
-
-    event_loop
-        .handle()
-        .insert_source(recv, |event, _, state| match event {
-            Event::Msg(f) => f(state),
-            Event::Closed => (),
-        })
-        .map_err(|_| anyhow::anyhow!("failed to insert source"))?;
-
-    let tempdir = tempfile::tempdir()?;
-
-    state.start_grpc_server(tempdir.path())?;
-
-    let loop_signal = event_loop.get_signal();
-
-    let join_handle = std::thread::spawn(move || {
-        let res = std::panic::catch_unwind(|| {
-            test(sender);
-        });
-        loop_signal.stop();
-        if let Err(err) = res {
-            std::panic::resume_unwind(err);
-        }
-    });
-
-    event_loop.run(None, &mut state, |state| {
-        state.fixup_z_layering();
-        state.space.refresh();
-        state.popup_manager.cleanup();
-
-        state
-            .display_handle
-            .flush_clients()
-            .expect("failed to flush client buffers");
-
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            state.windows.len(),
-            state.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-                    If you see this, report it to the developer."
-        );
-    })?;
-
-    if let Err(err) = join_handle.join() {
-        panic!("{err:?}");
-    }
-
-    Ok(())
 }
 
 mod coverage {
@@ -188,12 +113,13 @@ mod coverage {
     // Process
 
     mod process {
+
         use super::*;
 
         #[tokio::main]
         #[self::test]
         async fn spawn() -> anyhow::Result<()> {
-            test_lua_api(|sender| {
+            test_api(|sender| {
                 run_lua! { |Pinnacle|
                     Pinnacle.process.spawn("foot")
                 }
@@ -210,7 +136,7 @@ mod coverage {
         #[tokio::main]
         #[self::test]
         async fn set_env() -> anyhow::Result<()> {
-            test_lua_api(|sender| {
+            test_api(|sender| {
                 run_lua! { |Pinnacle|
                     Pinnacle.process.set_env("PROCESS_SET_ENV", "env value")
                 }
@@ -235,7 +161,7 @@ mod coverage {
         #[tokio::main]
         #[self::test]
         async fn get_all() -> anyhow::Result<()> {
-            test_lua_api(|_sender| {
+            test_api(|_sender| {
                 run_lua! { |Pinnacle|
                     assert(#Pinnacle.window.get_all() == 0)
 
@@ -255,7 +181,7 @@ mod coverage {
         #[tokio::main]
         #[self::test]
         async fn get_focused() -> anyhow::Result<()> {
-            test_lua_api(|_sender| {
+            test_api(|_sender| {
                 run_lua! { |Pinnacle|
                     assert(not Pinnacle.window.get_focused())
 
@@ -274,7 +200,7 @@ mod coverage {
         #[tokio::main]
         #[self::test]
         async fn add_window_rule() -> anyhow::Result<()> {
-            test_lua_api(|sender| {
+            test_api(|sender| {
                 run_lua! { |Pinnacle|
                     Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name")
                     Pinnacle.window.add_window_rule({
@@ -356,7 +282,7 @@ mod coverage {
             #[tokio::main]
             #[self::test]
             async fn close() -> anyhow::Result<()> {
-                test_lua_api(|sender| {
+                test_api(|sender| {
                     run_lua! { |Pinnacle|
                         Pinnacle.process.spawn("foot")
                     }
@@ -382,7 +308,7 @@ mod coverage {
             #[tokio::main]
             #[self::test]
             async fn move_to_tag() -> anyhow::Result<()> {
-                test_lua_api(|sender| {
+                test_api(|sender| {
                     run_lua! { |Pinnacle|
                         local tags = Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
                         tags[1]:set_active(true)
@@ -452,7 +378,7 @@ mod coverage {
             #[tokio::main]
             #[self::test]
             async fn props() -> anyhow::Result<()> {
-                test_lua_api(|_sender| {
+                test_api(|_sender| {
                     run_lua! { |Pinnacle|
                         Pinnacle.output.connect_for_all(function(op)
                             local tags = Pinnacle.tag.add(op, "First", "Mungus", "Potato")
@@ -506,7 +432,7 @@ mod coverage {
         #[tokio::main]
         #[self::test]
         async fn setup() -> anyhow::Result<()> {
-            test_lua_api(|sender| {
+            test_api(|sender| {
                 setup_lua! { |Pinnacle|
                     Pinnacle.output.setup({
                         {
@@ -626,7 +552,7 @@ mod coverage {
 #[tokio::main]
 #[test]
 async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
-    test_lua_api(|sender| {
+    test_api(|sender| {
         run_lua! { |Pinnacle|
             Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")
             Pinnacle.process.spawn("foot")
@@ -651,7 +577,7 @@ async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
 #[tokio::main]
 #[test]
 async fn window_count_without_tag_is_correct() -> anyhow::Result<()> {
-    test_lua_api(|sender| {
+    test_api(|sender| {
         run_lua! { |Pinnacle|
             Pinnacle.process.spawn("foot")
         }
@@ -665,7 +591,7 @@ async fn window_count_without_tag_is_correct() -> anyhow::Result<()> {
 #[tokio::main]
 #[test]
 async fn spawned_window_on_active_tag_has_keyboard_focus() -> anyhow::Result<()> {
-    test_lua_api(|sender| {
+    test_api(|sender| {
         run_lua! { |Pinnacle|
             Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")[1]:set_active(true)
             Pinnacle.process.spawn("foot")
@@ -688,7 +614,7 @@ async fn spawned_window_on_active_tag_has_keyboard_focus() -> anyhow::Result<()>
 #[tokio::main]
 #[test]
 async fn spawned_window_on_inactive_tag_does_not_have_keyboard_focus() -> anyhow::Result<()> {
-    test_lua_api(|sender| {
+    test_api(|sender| {
         run_lua! { |Pinnacle|
             Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")
             Pinnacle.process.spawn("foot")
@@ -705,7 +631,7 @@ async fn spawned_window_on_inactive_tag_does_not_have_keyboard_focus() -> anyhow
 #[tokio::main]
 #[test]
 async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
-    test_lua_api(|sender| {
+    test_api(|sender| {
         run_lua! { |Pinnacle|
             Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
             Pinnacle.process.spawn("foot")

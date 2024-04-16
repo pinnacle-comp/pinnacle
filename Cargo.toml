@@ -109,6 +109,7 @@ temp-env = "0.3.6"
 tempfile = "3.10.1"
 test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
 pinnacle = { path = ".", features = ["testing"] }
+pinnacle-api = { path = "./api/rust" }
 
 [features]
 testing = [

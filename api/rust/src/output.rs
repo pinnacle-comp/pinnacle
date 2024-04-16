@@ -211,13 +211,17 @@ impl Output {
                     if setup.output.matches(output) {
                         if let Some(OutputSetupLoc::Point(x, y)) = setup.loc {
                             output.set_location(x, y);
+
                             placed_outputs.insert(output.clone());
+                            let props = output.props();
+                            let x = props.x.unwrap();
+                            let width = props.logical_width.unwrap() as i32;
                             if rightmost_output_and_x.is_none()
                                 || rightmost_output_and_x
                                     .as_ref()
-                                    .is_some_and(|(_, rm_x)| x > *rm_x)
+                                    .is_some_and(|(_, rm_x)| x + width > *rm_x)
                             {
-                                rightmost_output_and_x = Some((output.clone(), x));
+                                rightmost_output_and_x = Some((output.clone(), x + width));
                             }
                         }
                     }
@@ -236,16 +240,19 @@ impl Output {
                             output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
                         } else {
                             output.set_location(0, 0);
+                            println!("SET LOC FOR {} TO (0, 0)", output.name());
                         }
 
                         placed_outputs.insert(output.clone());
-                        let x = output.x().unwrap();
+                        let props = output.props();
+                        let x = props.x.unwrap();
+                        let width = props.logical_width.unwrap() as i32;
                         if rightmost_output_and_x.is_none()
                             || rightmost_output_and_x
                                 .as_ref()
-                                .is_some_and(|(_, rm_x)| x > *rm_x)
+                                .is_some_and(|(_, rm_x)| x + width > *rm_x)
                         {
-                            rightmost_output_and_x = Some((output.clone(), x));
+                            rightmost_output_and_x = Some((output.clone(), x + width));
                         }
                     }
                 }
@@ -272,36 +279,49 @@ impl Output {
                 output.set_loc_adj_to(relative_to, *alignment);
 
                 placed_outputs.insert(output.clone());
-                let x = output.x().unwrap();
+                let props = output.props();
+                let x = props.x.unwrap();
+                let width = props.logical_width.unwrap() as i32;
                 if rightmost_output_and_x.is_none()
                     || rightmost_output_and_x
                         .as_ref()
-                        .is_some_and(|(_, rm_x)| x > *rm_x)
+                        .is_some_and(|(_, rm_x)| x + width > *rm_x)
                 {
-                    rightmost_output_and_x = Some((output.clone(), x));
+                    rightmost_output_and_x = Some((output.clone(), x + width));
                 }
             }
+
+            // dbg!(&placed_outputs);
+            // dbg!(&outputs);
 
             // Place all remaining outputs right of the rightmost one
             for output in outputs
                 .iter()
-                .filter(|op| !placed_outputs.contains(op))
+                .filter(|op| {
+                    // println!("CHECKING {}", op.name());
+                    !placed_outputs.contains(op)
+                })
                 .collect::<Vec<_>>()
             {
+                // println!("ATTEMPTING TO PLACE {}", output.name());
                 if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
                     output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+                    // println!("SET LOC FOR {} TO RIGHTMOST, REMAINING", output.name());
                 } else {
                     output.set_location(0, 0);
+                    // println!("SET LOC FOR {} TO (0, 0), REMAINING", output.name());
                 }
 
                 placed_outputs.insert(output.clone());
-                let x = output.x().unwrap();
+                let props = output.props();
+                let x = props.x.unwrap();
+                let width = props.logical_width.unwrap() as i32;
                 if rightmost_output_and_x.is_none()
                     || rightmost_output_and_x
                         .as_ref()
-                        .is_some_and(|(_, rm_x)| x > *rm_x)
+                        .is_some_and(|(_, rm_x)| x + width > *rm_x)
                 {
-                    rightmost_output_and_x = Some((output.clone(), x));
+                    rightmost_output_and_x = Some((output.clone(), x + width));
                 }
             }
         };
@@ -312,6 +332,7 @@ impl Output {
         let layout_outputs_clone2 = layout_outputs.clone();
 
         self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
+            println!("GOT CONNECTION FOR OUTPUT {}", output.name());
             apply_all_but_loc(output);
             layout_outputs_clone2();
         })));

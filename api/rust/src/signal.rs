@@ -70,6 +70,7 @@ macro_rules! signals {
 
                     callback_sender
                         .send((self.current_id, callback))
+                        .map_err(|e| { println!("{e}"); e })
                         .expect("failed to send callback");
 
                     let handle = SignalHandle::new(self.current_id, remove_callback_sender);

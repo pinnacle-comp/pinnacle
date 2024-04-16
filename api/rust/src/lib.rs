@@ -173,12 +173,10 @@ pub async fn connect(
     let layout = LAYOUT.get_or_init(|| Layout::new(channel.clone()));
     let render = RENDER.get_or_init(|| Render::new(channel.clone()));
 
-    SIGNAL
-        .set(RwLock::new(SignalState::new(
-            channel.clone(),
-            fut_sender.clone(),
-        )))
-        .map_err(|_| "failed to create SIGNAL")?;
+    let _ = SIGNAL.set(RwLock::new(SignalState::new(
+        channel.clone(),
+        fut_sender.clone(),
+    )));
 
     let modules = ApiModules {
         pinnacle,
