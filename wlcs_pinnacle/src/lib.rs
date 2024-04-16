@@ -138,7 +138,7 @@ impl Wlcs for PinnacleHandle {
     fn stop(&mut self) {
         if let Some(conn) = self.server_conn.take() {
             let _ = conn.sender.send(WlcsEvent::Stop);
-            conn.join.join().expect("failed to join");
+            let _ = conn.join.join();
         }
     }
 

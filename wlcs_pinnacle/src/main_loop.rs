@@ -1,4 +1,4 @@
-use std::{sync::Arc, thread, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use pinnacle::{
     backend::dummy::setup_dummy,
