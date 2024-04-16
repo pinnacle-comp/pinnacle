@@ -108,17 +108,11 @@ mod output {
                         ("Pinnacle Window", OutputLoc::Point(0, 0)),
                         (
                             "First",
-                            OutputLoc::relative_to_with_fallbacks([(
-                                "Second",
-                                Alignment::LeftAlignTop,
-                            )]),
+                            OutputLoc::relative_to("Second", Alignment::LeftAlignTop),
                         ),
                         (
                             "Second",
-                            OutputLoc::relative_to_with_fallbacks([(
-                                "First",
-                                Alignment::RightAlignTop,
-                            )]),
+                            OutputLoc::relative_to("First", Alignment::RightAlignTop),
                         ),
                     ],
                 );
@@ -198,10 +192,11 @@ mod output {
                         ),
                         (
                             "Third",
-                            OutputLoc::relative_to_with_fallbacks([
-                                ("Second", Alignment::BottomAlignLeft),
-                                ("First", Alignment::BottomAlignLeft),
-                            ]),
+                            OutputLoc::relative_to_with_fallbacks(
+                                "Second",
+                                Alignment::BottomAlignLeft,
+                                [("First", Alignment::BottomAlignLeft)],
+                            ),
                         ),
                     ],
                 );

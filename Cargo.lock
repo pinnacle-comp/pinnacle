@@ -1799,6 +1799,7 @@ version = "0.0.2"
 dependencies = [
  "bitflags 2.5.0",
  "futures",
+ "indexmap 2.2.6",
  "num_enum",
  "pinnacle-api-defs",
  "pinnacle-api-macros",
