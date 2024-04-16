@@ -8,7 +8,6 @@ use std::{
     },
     sync::{
         atomic::{AtomicU32, Ordering},
-        mpsc::SendError,
         Once,
     },
     thread::{spawn, JoinHandle},
@@ -48,21 +47,15 @@ pub enum WlcsEvent {
         surface_id: u32,
         location: Point<i32, Logical>,
     },
-    PointerMoveAbsolute {
+    PointerMove {
         device_id: u32,
-        location: Point<f64, Logical>,
+        position: Point<f64, Logical>,
+        absolute: bool,
     },
-    PointerMoveRelative {
-        device_id: u32,
-        location: Point<f64, Logical>,
-    },
-    PointerButtonUp {
+    PointerButton {
         device_id: u32,
         button_id: i32,
-    },
-    PointerButtonDown {
-        device_id: u32,
-        button_id: i32,
+        pressed: bool,
     },
     TouchDown {
         device_id: u32,
@@ -139,9 +132,7 @@ impl Wlcs for PinnacleHandle {
     }
 
     fn start(&mut self) {
-        info!("starting");
         self.server_conn = Some(PinnacleConnection::start());
-        info!("started");
     }
 
     fn stop(&mut self) {
@@ -227,36 +218,40 @@ struct PointerHandle {
 impl Pointer for PointerHandle {
     fn move_absolute(&mut self, x: wl_fixed_t, y: wl_fixed_t) {
         self.sender
-            .send(WlcsEvent::PointerMoveAbsolute {
+            .send(WlcsEvent::PointerMove {
                 device_id: self.device_id,
-                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+                position: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+                absolute: true,
             })
             .expect("failed to send move_absolute");
     }
 
     fn move_relative(&mut self, dx: wl_fixed_t, dy: wl_fixed_t) {
         self.sender
-            .send(WlcsEvent::PointerMoveRelative {
+            .send(WlcsEvent::PointerMove {
                 device_id: self.device_id,
-                location: (wl_fixed_to_double(dx), wl_fixed_to_double(dy)).into(),
+                position: (wl_fixed_to_double(dx), wl_fixed_to_double(dy)).into(),
+                absolute: false,
             })
             .expect("failed to send move_relative");
     }
 
     fn button_up(&mut self, button: i32) {
         self.sender
-            .send(WlcsEvent::PointerButtonUp {
+            .send(WlcsEvent::PointerButton {
                 device_id: self.device_id,
                 button_id: button,
+                pressed: false,
             })
             .expect("failed to send button_up");
     }
 
     fn button_down(&mut self, button: i32) {
         self.sender
-            .send(WlcsEvent::PointerButtonDown {
+            .send(WlcsEvent::PointerButton {
                 device_id: self.device_id,
                 button_id: button,
+                pressed: true,
             })
             .expect("failed to send button_down");
     }

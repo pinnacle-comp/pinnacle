@@ -17,3 +17,5 @@ wlcs = "0.1"
 
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
+
+tokio = { workspace = true, features = ["net", "rt"] }

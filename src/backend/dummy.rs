@@ -72,7 +72,7 @@ pub fn setup_dummy(
         size: (0, 0).into(),
         subpixel: Subpixel::Unknown,
         make: "Pinnacle".to_string(),
-        model: "Winit Window".to_string(),
+        model: "Dummy Window".to_string(),
     };
 
     let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);

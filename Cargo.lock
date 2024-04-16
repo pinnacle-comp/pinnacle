@@ -3456,10 +3456,18 @@ version = "0.0.1"
 dependencies = [
  "pinnacle",
  "smithay",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "wayland-sys",
  "wlcs",
+]
+
+[[package]]
+name = "wlcs_pinnacle_config"
+version = "0.1.0"
+dependencies = [
+ "pinnacle-api",
 ]
 
 [[package]]
