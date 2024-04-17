@@ -228,7 +228,6 @@ pub fn setup_winit(
                             Some(Scale::Fractional(scale_factor)),
                             None,
                         );
-                        layer_map_for_output(&output).arrange();
                         state.request_layout(&output);
                     }
                     WinitEvent::Focus(focused) => {

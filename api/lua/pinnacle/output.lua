@@ -14,6 +14,7 @@ local rpc_types = {
     SetLocation = {},
     SetMode = {},
     SetScale = {},
+    SetTransform = {},
     ConnectForAll = {
         response_type = "ConnectForAllResponse",
     },
@@ -718,6 +719,41 @@ function OutputHandle:decrease_scale(decrease_by)
     client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = -decrease_by }))
 end
 
+---@enum (key) Transform
+local transform_name_to_code = {
+    normal = 1,
+    ["90"] = 2,
+    ["180"] = 3,
+    ["270"] = 4,
+    flipped = 5,
+    flipped_90 = 6,
+    flipped_180 = 7,
+    flipped_270 = 8,
+}
+
+local transform_code_to_name = {
+    [1] = "normal",
+    [2] = "90",
+    [3] = "180",
+    [4] = "270",
+    [5] = "flipped",
+    [6] = "flipped_90",
+    [7] = "flipped_180",
+    [8] = "flipped_270",
+}
+
+---Set this output's transform.
+---
+---@param transform Transform
+function OutputHandle:set_transform(transform)
+    client.unary_request(
+        build_grpc_request_params(
+            "SetTransform",
+            { output_name = self.name, transform = transform_name_to_code[transform] }
+        )
+    )
+end
+
 ---@class Mode
 ---@field pixel_width integer
 ---@field pixel_height integer
@@ -738,6 +774,7 @@ end
 ---@field focused boolean?
 ---@field tags TagHandle[]
 ---@field scale number?
+---@field transform Transform?
 
 ---Get all properties of this output.
 ---
@@ -751,6 +788,7 @@ function OutputHandle:props()
     response.tags = handles
     response.tag_ids = nil
     response.modes = response.modes or {}
+    response.transform = transform_code_to_name[response.transform]
 
     return response
 end
@@ -885,6 +923,15 @@ end
 ---@return number?
 function OutputHandle:scale()
     return self:props().scale
+end
+
+---Get this output's transform.
+---
+---Shorthand for `handle:props().transform`.
+---
+---@return Transform?
+function OutputHandle:transform()
+    return self:props().transform
 end
 
 ---@nodoc

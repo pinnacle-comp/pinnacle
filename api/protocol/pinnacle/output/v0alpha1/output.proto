@@ -10,6 +10,18 @@ message Mode {
   optional uint32 refresh_rate_millihz = 3;
 }
 
+enum Transform {
+  TRANSFORM_UNSPECIFIED = 0;
+  TRANSFORM_NORMAL = 1;
+  TRANSFORM_90 = 2;
+  TRANSFORM_180 = 3;
+  TRANSFORM_270 = 4;
+  TRANSFORM_FLIPPED = 5;
+  TRANSFORM_FLIPPED_90 = 6;
+  TRANSFORM_FLIPPED_180 = 7;
+  TRANSFORM_FLIPPED_270 = 8;
+}
+
 message SetLocationRequest {
   optional string output_name = 1;
   optional int32 x = 2;
@@ -30,6 +42,11 @@ message SetScaleRequest {
     float absolute = 2;
     float relative = 3;
   }
+}
+
+message SetTransformRequest {
+  optional string output_name = 1;
+  optional Transform transform = 2;
 }
 
 message GetRequest {}
@@ -72,12 +89,14 @@ message GetPropertiesResponse {
   optional bool focused = 10;
   repeated uint32 tag_ids = 11;
   optional float scale = 12;
+  optional Transform transform = 15;
 }
 
 service OutputService {
   rpc SetLocation(SetLocationRequest) returns (google.protobuf.Empty);
   rpc SetMode(SetModeRequest) returns (google.protobuf.Empty);
   rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
+  rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
   rpc Get(GetRequest) returns (GetResponse);
   rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
 }

@@ -426,6 +426,68 @@ mod output {
 
     use super::*;
 
+    mod handle {
+        use super::*;
+
+        #[tokio::main]
+        #[self::test]
+        async fn set_transform() -> anyhow::Result<()> {
+            test_api(|sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.output.get_focused():set_transform("flipped_90")
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.focused_output().unwrap();
+                    assert_eq!(op.current_transform(), smithay::utils::Transform::Flipped90);
+                });
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.output.get_focused():set_transform("normal")
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.focused_output().unwrap();
+                    assert_eq!(op.current_transform(), smithay::utils::Transform::Normal);
+                });
+            })
+        }
+
+        #[tokio::main]
+        #[self::test]
+        async fn props() -> anyhow::Result<()> {
+            test_api(|_sender| {
+                run_lua! { |Pinnacle|
+                    local props = Pinnacle.output.get_focused():props()
+
+                    assert(props.make == "Pinnacle")
+                    assert(props.model == "Winit Window")
+                    assert(props.x == 0)
+                    assert(props.y == 0)
+                    assert(props.logical_width == 1920)
+                    assert(props.logical_height == 1080)
+                    assert(props.current_mode.pixel_width == 1920)
+                    assert(props.current_mode.pixel_height == 1080)
+                    assert(props.current_mode.refresh_rate_millihz == 60000)
+                    assert(props.preferred_mode.pixel_width == 1920)
+                    assert(props.preferred_mode.pixel_height == 1080)
+                    assert(props.preferred_mode.refresh_rate_millihz == 60000)
+                    -- modes
+                    assert(props.physical_width == 0)
+                    assert(props.physical_height == 0)
+                    assert(props.focused == true)
+                    -- tags
+                    assert(props.scale == 1.0)
+                    assert(props.transform == "flipped_180")
+                }
+            })
+        }
+    }
+
     #[tokio::main]
     #[self::test]
     async fn setup() -> anyhow::Result<()> {

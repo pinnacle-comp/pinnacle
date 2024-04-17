@@ -9,6 +9,20 @@ use crate::common::output_for_name;
 use crate::common::{sleep_secs, test_api, with_state};
 
 #[tokio::main]
+async fn run_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
+    let (api, _recv) = pinnacle_api::connect().await.unwrap();
+
+    run(api.clone());
+}
+
+fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) {
+    std::thread::spawn(|| {
+        run_rust_inner(run);
+    })
+    .join();
+}
+
+#[tokio::main]
 async fn setup_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
     let (api, recv) = pinnacle_api::connect().await.unwrap();
 
@@ -268,5 +282,48 @@ mod output {
                 );
             });
         })
+    }
+
+    mod handle {
+        use pinnacle_api::output::Transform;
+
+        use super::*;
+
+        #[tokio::main]
+        #[self::test]
+        async fn set_transform() -> anyhow::Result<()> {
+            test_api(|sender| {
+                run_rust(|api| {
+                    api.output
+                        .get_focused()
+                        .unwrap()
+                        .set_transform(Transform::Flipped270);
+                });
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.focused_output().unwrap();
+                    assert_eq!(
+                        op.current_transform(),
+                        smithay::utils::Transform::Flipped270
+                    );
+                });
+
+                run_rust(|api| {
+                    api.output
+                        .get_focused()
+                        .unwrap()
+                        .set_transform(Transform::_180);
+                });
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.focused_output().unwrap();
+                    assert_eq!(op.current_transform(), smithay::utils::Transform::_180);
+                });
+            })
+        }
     }
 }

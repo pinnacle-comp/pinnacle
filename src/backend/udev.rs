@@ -275,7 +275,6 @@ impl State {
                     match render_surface.compositor.use_mode(drm_mode) {
                         Ok(()) => {
                             self.change_output_state(output, Some(mode), None, None, None);
-                            layer_map_for_output(output).arrange();
                         }
                         Err(err) => error!("Failed to resize output: {err}"),
                     }
@@ -283,7 +282,6 @@ impl State {
             }
         } else {
             self.change_output_state(output, Some(mode), None, None, None);
-            layer_map_for_output(output).arrange();
         }
 
         self.schedule_render(output);

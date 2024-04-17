@@ -17,7 +17,7 @@ use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
         output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
-        SetLocationRequest, SetModeRequest, SetScaleRequest,
+        SetLocationRequest, SetModeRequest, SetScaleRequest, SetTransformRequest,
     },
 };
 use tonic::transport::Channel;
@@ -368,7 +368,7 @@ impl Output {
         let layout_outputs_clone2 = layout_outputs.clone();
 
         if update_locs_on.contains(UpdateLocsOn::CONNECT) {
-            self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
+            self.connect_signal(OutputSignal::Connect(Box::new(move |_| {
                 layout_outputs_clone2();
             })));
         }
@@ -617,6 +617,31 @@ pub enum Alignment {
     RightAlignBottom,
 }
 
+/// An output transform.
+///
+/// This determines what orientation outputs will render at.
+#[derive(num_enum::TryFromPrimitive, Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum Transform {
+    /// No transform.
+    #[default]
+    Normal = 1,
+    /// 90 degrees counter-clockwise.
+    _90,
+    /// 180 degrees counter-clockwise.
+    _180,
+    /// 270 degrees counter-clockwise.
+    _270,
+    /// Flipped vertically (across the horizontal axis).
+    Flipped,
+    /// Flipped vertically and rotated 90 degrees counter-clockwise
+    Flipped90,
+    /// Flipped vertically and rotated 180 degrees counter-clockwise
+    Flipped180,
+    /// Flipped vertically and rotated 270 degrees counter-clockwise
+    Flipped270,
+}
+
 impl OutputHandle {
     /// Set the location of this output in the global space.
     ///
@@ -838,6 +863,25 @@ impl OutputHandle {
         self.increase_scale(-decrease_by);
     }
 
+    /// Set this output's transform.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::output::Transform;
+    ///
+    /// // Rotate 90 degrees counter-clockwise
+    /// output.set_transform(Transform::_90);
+    /// ```
+    pub fn set_transform(&self, transform: Transform) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_transform(SetTransformRequest {
+            output_name: Some(self.name.clone()),
+            transform: Some(transform as i32),
+        }))
+        .unwrap();
+    }
+
     /// Get all properties of this output.
     ///
     /// # Examples
@@ -905,6 +949,7 @@ impl OutputHandle {
                 .map(|id| self.api.tag.new_handle(id))
                 .collect(),
             scale: response.scale,
+            transform: response.transform.and_then(|tf| tf.try_into().ok()),
         }
     }
 
@@ -1100,6 +1145,7 @@ pub struct Mode {
 }
 
 /// The properties of an output.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct OutputProperties {
     /// The make of the output.
@@ -1137,4 +1183,5 @@ pub struct OutputProperties {
     pub tags: Vec<TagHandle>,
     /// This output's scaling factor.
     pub scale: Option<f32>,
+    pub transform: Option<Transform>,
 }

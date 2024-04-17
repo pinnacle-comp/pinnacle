@@ -4,6 +4,7 @@ use std::cell::RefCell;
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputResizeResponse};
 use smithay::{
+    desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
     utils::{Logical, Point, Transform},
 };
@@ -98,6 +99,7 @@ impl State {
             });
         }
         if mode.is_some() || transform.is_some() || scale.is_some() {
+            layer_map_for_output(output).arrange();
             self.signal_state.output_resize.signal(|buf| {
                 let geo = self.space.output_geometry(output);
                 buf.push_back(OutputResizeResponse {

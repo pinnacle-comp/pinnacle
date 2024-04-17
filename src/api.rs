@@ -16,7 +16,7 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
-            SetModeRequest, SetScaleRequest,
+            SetModeRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
@@ -1022,7 +1022,42 @@ impl output_service_server::OutputService for OutputService {
                 Some(Scale::Fractional(current_scale)),
                 None,
             );
-            layer_map_for_output(&output).arrange();
+            state.request_layout(&output);
+            state.schedule_render(&output);
+        })
+        .await
+    }
+
+    async fn set_transform(
+        &self,
+        request: Request<SetTransformRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let smithay_transform = match request.transform() {
+            output::v0alpha1::Transform::Unspecified => {
+                return Err(Status::invalid_argument("transform was unspecified"));
+            }
+            output::v0alpha1::Transform::Normal => smithay::utils::Transform::Normal,
+            output::v0alpha1::Transform::Transform90 => smithay::utils::Transform::_90,
+            output::v0alpha1::Transform::Transform180 => smithay::utils::Transform::_180,
+            output::v0alpha1::Transform::Transform270 => smithay::utils::Transform::_270,
+            output::v0alpha1::Transform::Flipped => smithay::utils::Transform::Flipped,
+            output::v0alpha1::Transform::Flipped90 => smithay::utils::Transform::Flipped90,
+            output::v0alpha1::Transform::Flipped180 => smithay::utils::Transform::Flipped180,
+            output::v0alpha1::Transform::Flipped270 => smithay::utils::Transform::Flipped270,
+        };
+
+        let Some(output_name) = request.output_name else {
+            return Err(Status::invalid_argument("output_name was null"));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(output) = OutputName(output_name).output(state) else {
+                return;
+            };
+
+            state.change_output_state(&output, None, Some(smithay_transform), None, None);
             state.request_layout(&output);
             state.schedule_render(&output);
         })
@@ -1129,6 +1164,23 @@ impl output_service_server::OutputService for OutputService {
                 .as_ref()
                 .map(|output| output.current_scale().fractional_scale() as f32);
 
+            let transform = output.as_ref().map(|output| {
+                (match output.current_transform() {
+                    smithay::utils::Transform::Normal => output::v0alpha1::Transform::Normal,
+                    smithay::utils::Transform::_90 => output::v0alpha1::Transform::Transform90,
+                    smithay::utils::Transform::_180 => output::v0alpha1::Transform::Transform180,
+                    smithay::utils::Transform::_270 => output::v0alpha1::Transform::Transform270,
+                    smithay::utils::Transform::Flipped => output::v0alpha1::Transform::Flipped,
+                    smithay::utils::Transform::Flipped90 => output::v0alpha1::Transform::Flipped90,
+                    smithay::utils::Transform::Flipped180 => {
+                        output::v0alpha1::Transform::Flipped180
+                    }
+                    smithay::utils::Transform::Flipped270 => {
+                        output::v0alpha1::Transform::Flipped270
+                    }
+                }) as i32
+            });
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1144,6 +1196,7 @@ impl output_service_server::OutputService for OutputService {
                 focused,
                 tag_ids,
                 scale,
+                transform,
             }
         })
         .await
