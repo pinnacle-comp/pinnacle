@@ -2,22 +2,24 @@ use std::{sync::Arc, time::Duration};
 
 use pinnacle::{
     backend::dummy::setup_dummy,
-    focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     state::{ClientState, State},
 };
 use smithay::{
-    backend::input::ButtonState,
-    input::pointer::{ButtonEvent, MotionEvent, RelativeMotionEvent},
+    backend::input::{ButtonState, DeviceCapability, InputEvent},
     reexports::{
         calloop::channel::{Channel, Event},
         wayland_server::Resource,
     },
-    utils::SERIAL_COUNTER,
     wayland::seat::WaylandFocus,
 };
-use tracing::warn;
 
-use crate::WlcsEvent;
+use crate::{
+    input_backend::{
+        WlcsDevice, WlcsInputBackend, WlcsPointerButtonEvent, WlcsPointerMotionAbsoluteEvent,
+        WlcsPointerMotionEvent, WlcsTouchDownEvent, WlcsTouchUpEvent,
+    },
+    WlcsEvent,
+};
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {
     let config_path =
@@ -95,88 +97,87 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                 state.space.map_element(toplevel.clone(), location, false);
             }
         }
-        WlcsEvent::PointerMove {
-            device_id: _,
-            position,
-            absolute,
-        } => {
-            let serial = SERIAL_COUNTER.next_serial();
-            let ptr = state.seat.get_pointer().unwrap();
-            let ptr_location = ptr.current_location();
 
-            let location = if absolute { position } else { ptr_location + position };
-
-            let under = state
-                .space
-                .element_under(location)
-                .and_then(|(w, _)| w.wl_surface())
-                .map(|surf| (PointerFocusTarget::WlSurface(surf), location.to_i32_round()));
-
-            let time = Duration::from(state.clock.now()).as_millis() as u32;
-            ptr.motion(
-                state,
-                under.clone(),
-                &MotionEvent {
-                    location,
-                    serial,
-                    time,
+        WlcsEvent::NewPointer { device_id } => {
+            state.process_input_event(InputEvent::<WlcsInputBackend>::DeviceAdded {
+                device: WlcsDevice {
+                    device_id,
+                    capability: DeviceCapability::Pointer,
                 },
-            );
-
-            if !absolute {
-                let utime = Duration::from(state.clock.now()).as_micros() as u64;
-                ptr.relative_motion(
-                    state,
-                    under,
-                    &RelativeMotionEvent {
-                        delta: position,
-                        delta_unaccel: position,
-                        utime,
-                    },
-                )
-            }
-            ptr.frame(state);
+            })
         }
+        WlcsEvent::PointerMoveAbsolute {
+            device_id,
+            position,
+        } => state.process_input_event(
+            WlcsPointerMotionAbsoluteEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+                position,
+            }
+            .into(),
+        ),
+        WlcsEvent::PointerMoveRelative { device_id, delta } => state.process_input_event(
+            WlcsPointerMotionEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+                delta,
+            }
+            .into(),
+        ),
         WlcsEvent::PointerButton {
-            device_id: _,
+            device_id,
             button_id,
             pressed,
-        } => {
-            let serial = SERIAL_COUNTER.next_serial();
-            let ptr = state.seat.get_pointer().unwrap();
-            if !ptr.is_grabbed() {
-                let ptr_location = ptr.current_location();
-                let under = state
-                    .space
-                    .element_under(ptr_location)
-                    .map(|(w, _)| w.clone());
-                if let Some(win) = &under {
-                    state.space.raise_element(win, true);
-                }
-                state.seat.get_keyboard().unwrap().set_focus(
-                    state,
-                    under.map(|w| KeyboardFocusTarget::Window(w)),
-                    serial,
-                );
-            }
-            let time = Duration::from(state.clock.now()).as_millis() as u32;
-            ptr.button(
-                state,
-                &ButtonEvent {
-                    serial,
-                    time,
-                    button: button_id as u32,
-                    state: if pressed {
-                        ButtonState::Pressed
-                    } else {
-                        ButtonState::Released
-                    },
+        } => state.process_input_event(
+            WlcsPointerButtonEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+                button_code: button_id as u32,
+                state: if pressed {
+                    ButtonState::Pressed
+                } else {
+                    ButtonState::Released
                 },
-            );
-            ptr.frame(state);
+            }
+            .into(),
+        ),
+        WlcsEvent::NewTouch { device_id } => {
+            state.process_input_event(InputEvent::<WlcsInputBackend>::DeviceAdded {
+                device: WlcsDevice {
+                    device_id,
+                    capability: DeviceCapability::Pointer,
+                },
+            })
         }
-        WlcsEvent::TouchDown { .. } => warn!("TouchDown"),
-        WlcsEvent::TouchMove { .. } => warn!("TouchMove"),
-        WlcsEvent::TouchUp { .. } => warn!("TouchUp"),
+        WlcsEvent::TouchDown {
+            device_id,
+            position,
+        } => state.process_input_event(
+            WlcsTouchDownEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+                position,
+            }
+            .into(),
+        ),
+        WlcsEvent::TouchMove {
+            device_id,
+            position,
+        } => state.process_input_event(
+            WlcsTouchDownEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+                position,
+            }
+            .into(),
+        ),
+        WlcsEvent::TouchUp { device_id } => state.process_input_event(
+            WlcsTouchUpEvent {
+                device_id,
+                time: Duration::from(state.clock.now()).as_millis() as u64,
+            }
+            .into(),
+        ),
     }
 }

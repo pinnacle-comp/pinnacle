@@ -1,3 +1,4 @@
+mod input_backend;
 mod main_loop;
 
 use std::{
@@ -47,23 +48,32 @@ pub enum WlcsEvent {
         surface_id: u32,
         location: Point<i32, Logical>,
     },
-    PointerMove {
+    NewPointer {
+        device_id: u32,
+    },
+    PointerMoveRelative {
+        device_id: u32,
+        delta: Point<f64, Logical>,
+    },
+    PointerMoveAbsolute {
         device_id: u32,
         position: Point<f64, Logical>,
-        absolute: bool,
     },
     PointerButton {
         device_id: u32,
         button_id: i32,
         pressed: bool,
     },
+    NewTouch {
+        device_id: u32,
+    },
     TouchDown {
         device_id: u32,
-        location: Point<f64, Logical>,
+        position: Point<f64, Logical>,
     },
     TouchMove {
         device_id: u32,
-        location: Point<f64, Logical>,
+        position: Point<f64, Logical>,
     },
     TouchUp {
         device_id: u32,
@@ -88,12 +98,18 @@ struct PinnacleHandle {
 }
 
 static SUPPORTED_EXTENSIONS: &[WlcsExtensionDescriptor] = extension_list!(
-    // ("wl_compositor", 4),
-    // ("wl_subcompositor", 1),
-    // ("wl_data_device_manager", 3),
-    // ("wl_seat", 7),
-    // ("wl_output", 4),
-    // ("xdg_wm_base", 3),
+    // Skip reasons:
+    //   5 Missing extension: gtk_primary_selection_device_manager>= 1
+    //   1 Missing extension: wlcs_non_existent_extension>= 1
+    //  89 Missing extension: wl_shell>= 2
+    //   1 Missing extension: xdg_not_really_an_extension>= 1
+    //  30 Missing extension: zwlr_foreign_toplevel_manager_v1>= 1
+    //  12 Missing extension: zwlr_virtual_pointer_manager_v1>= 1
+    //  15 Missing extension: zwp_pointer_constraints_v1>= 1
+    //   3 Missing extension: zwp_relative_pointer_manager_v1>= 1
+    //  12 Missing extension: zwp_text_input_manager_v2>= 1
+    //  11 Missing extension: zwp_text_input_manager_v3>= 1
+    // 180 Missing extension: zxdg_shell_v6>= 1
 );
 
 static DESCRIPTOR: WlcsIntegrationDescriptor = WlcsIntegrationDescriptor {
@@ -218,20 +234,18 @@ struct PointerHandle {
 impl Pointer for PointerHandle {
     fn move_absolute(&mut self, x: wl_fixed_t, y: wl_fixed_t) {
         self.sender
-            .send(WlcsEvent::PointerMove {
+            .send(WlcsEvent::PointerMoveAbsolute {
                 device_id: self.device_id,
                 position: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
-                absolute: true,
             })
             .expect("failed to send move_absolute");
     }
 
     fn move_relative(&mut self, dx: wl_fixed_t, dy: wl_fixed_t) {
         self.sender
-            .send(WlcsEvent::PointerMove {
+            .send(WlcsEvent::PointerMoveRelative {
                 device_id: self.device_id,
-                position: (wl_fixed_to_double(dx), wl_fixed_to_double(dy)).into(),
-                absolute: false,
+                delta: (wl_fixed_to_double(dx), wl_fixed_to_double(dy)).into(),
             })
             .expect("failed to send move_relative");
     }
@@ -267,7 +281,7 @@ impl Touch for TouchHandle {
         self.sender
             .send(WlcsEvent::TouchDown {
                 device_id: self.device_id,
-                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+                position: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
             })
             .expect("failed to send touch_down");
     }
@@ -276,7 +290,7 @@ impl Touch for TouchHandle {
         self.sender
             .send(WlcsEvent::TouchMove {
                 device_id: self.device_id,
-                location: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
+                position: (wl_fixed_to_double(x), wl_fixed_to_double(y)).into(),
             })
             .expect("failed to send touch_move");
     }

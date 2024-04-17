@@ -563,14 +563,14 @@ impl State {
                         error!("gRPC server error: {err}");
                     }
                 }));
-            },
+            }
             None => {
                 self.grpc_server_join_handle = Some(tokio::spawn(async move {
                     if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                         error!("gRPC server error: {err}");
                     }
                 }));
-            },
+            }
             // FIXME: Not really high priority but if you somehow reload the config really, REALLY
             // |      fast at startup then I think there's a chance that the gRPC server
             // |      could get started twice.
