@@ -76,12 +76,19 @@ require("pinnacle").setup(function(Pinnacle)
         end
     end)
 
-    --------------------
-    -- Tags           --
-    --------------------
+    ----------------------
+    -- Tags and Outputs --
+    ----------------------
 
     local tag_names = { "1", "2", "3", "4", "5" }
 
+    -- Setup outputs.
+    --
+    -- `Output.setup` allows you to declare things like mode, scale, and tags for outputs.
+    -- Here we give all outputs tags 1 through 5.
+    --
+    -- Note that output matching functions currently don't infer the type of the parameter,
+    -- so you may need to add `---@param <param name> OutputHandle` above it.
     Output.setup({
         {
             function(_)
@@ -89,23 +96,13 @@ require("pinnacle").setup(function(Pinnacle)
             end,
             tag_names = tag_names,
         },
-        {
-            "DP-2",
-            scale = 2,
-        },
-        {
-            "Pinnacle Window",
-            scale = 0.5,
-            loc = { x = 300, y = 450 },
-        },
     })
 
-    -- `connect_for_all` is useful for performing setup on every monitor you have.
-    -- Here, we add tags with names 1-5 and set tag 1 as active.
-    -- Output.connect_for_all(function(op)
-    --     local tags = Tag.add(op, tag_names)
-    --     tags[1]:set_active(true)
-    -- end)
+    -- If you want to declare output locations as well, you can use `Output.setup_locs`.
+    -- This will additionally allow you to recalculate output locations on signals like
+    -- output connect, disconnect, and resize.
+    --
+    -- Read the admittedly scuffed docs for more.
 
     -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do

@@ -5,7 +5,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use crate::common::{sleep_secs, test_api, with_state};
+use crate::common::{output_for_name, sleep_secs, test_api, with_state};
 
 use pinnacle::state::WithState;
 use test_log::test;
@@ -99,26 +99,186 @@ macro_rules! setup_lua {
     };
 }
 
-mod coverage {
-    use pinnacle::{
-        tag::TagId,
-        window::{
-            rules::{WindowRule, WindowRuleCondition},
-            window_state::FullscreenOrMaximized,
-        },
-    };
+use pinnacle::{
+    tag::TagId,
+    window::{
+        rules::{WindowRule, WindowRuleCondition},
+        window_state::FullscreenOrMaximized,
+    },
+};
+
+// Process
+
+mod process {
 
     use super::*;
 
-    // Process
+    #[tokio::main]
+    #[self::test]
+    async fn spawn() -> anyhow::Result<()> {
+        test_api(|sender| {
+            run_lua! { |Pinnacle|
+                Pinnacle.process.spawn("foot")
+            }
 
-    mod process {
+            sleep_secs(1);
 
+            with_state(&sender, |state| {
+                assert_eq!(state.windows.len(), 1);
+                assert_eq!(state.windows[0].class(), Some("foot".to_string()));
+            });
+        })
+    }
+
+    #[tokio::main]
+    #[self::test]
+    async fn set_env() -> anyhow::Result<()> {
+        test_api(|sender| {
+            run_lua! { |Pinnacle|
+                Pinnacle.process.set_env("PROCESS_SET_ENV", "env value")
+            }
+
+            sleep_secs(1);
+
+            with_state(&sender, |_state| {
+                assert_eq!(
+                    std::env::var("PROCESS_SET_ENV"),
+                    Ok("env value".to_string())
+                );
+            });
+        })
+    }
+}
+
+// Window
+
+mod window {
+    use super::*;
+
+    #[tokio::main]
+    #[self::test]
+    async fn get_all() -> anyhow::Result<()> {
+        test_api(|_sender| {
+            run_lua! { |Pinnacle|
+                assert(#Pinnacle.window.get_all() == 0)
+
+                for i = 1, 5 do
+                    Pinnacle.process.spawn("foot")
+                end
+            }
+
+            sleep_secs(1);
+
+            run_lua! { |Pinnacle|
+                assert(#Pinnacle.window.get_all() == 5)
+            }
+        })
+    }
+
+    #[tokio::main]
+    #[self::test]
+    async fn get_focused() -> anyhow::Result<()> {
+        test_api(|_sender| {
+            run_lua! { |Pinnacle|
+                assert(not Pinnacle.window.get_focused())
+
+                Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")[1]:set_active(true)
+                Pinnacle.process.spawn("foot")
+            }
+
+            sleep_secs(1);
+
+            run_lua! { |Pinnacle|
+                assert(Pinnacle.window.get_focused())
+            }
+        })
+    }
+
+    #[tokio::main]
+    #[self::test]
+    async fn add_window_rule() -> anyhow::Result<()> {
+        test_api(|sender| {
+            run_lua! { |Pinnacle|
+                Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name")
+                Pinnacle.window.add_window_rule({
+                    cond = { classes = { "firefox" } },
+                    rule = { tags = { Pinnacle.tag.get("Tag Name") } },
+                })
+            }
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                assert_eq!(state.config.window_rules.len(), 1);
+                assert_eq!(
+                    state.config.window_rules[0],
+                    (
+                        WindowRuleCondition {
+                            class: Some(vec!["firefox".to_string()]),
+                            ..Default::default()
+                        },
+                        WindowRule {
+                            tags: Some(vec![TagId(0)]),
+                            ..Default::default()
+                        }
+                    )
+                );
+            });
+
+            run_lua! { |Pinnacle|
+                Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name 2")
+                Pinnacle.window.add_window_rule({
+                    cond = {
+                        all = {
+                            {
+                                classes = { "steam" },
+                                tags = {
+                                    Pinnacle.tag.get("Tag Name"),
+                                    Pinnacle.tag.get("Tag Name 2"),
+                                },
+                            }
+                        }
+                    },
+                    rule = { fullscreen_or_maximized = "fullscreen" },
+                })
+            }
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                assert_eq!(state.config.window_rules.len(), 2);
+                assert_eq!(
+                    state.config.window_rules[1],
+                    (
+                        WindowRuleCondition {
+                            cond_all: Some(vec![WindowRuleCondition {
+                                class: Some(vec!["steam".to_string()]),
+                                tag: Some(vec![TagId(0), TagId(1)]),
+                                ..Default::default()
+                            }]),
+                            ..Default::default()
+                        },
+                        WindowRule {
+                            fullscreen_or_maximized: Some(FullscreenOrMaximized::Fullscreen),
+                            ..Default::default()
+                        }
+                    )
+                );
+            });
+        })
+    }
+
+    // TODO: window_begin_move
+    // TODO: window_begin_resize
+
+    mod handle {
         use super::*;
+
+        // WindowHandle
 
         #[tokio::main]
         #[self::test]
-        async fn spawn() -> anyhow::Result<()> {
+        async fn close() -> anyhow::Result<()> {
             test_api(|sender| {
                 run_lua! { |Pinnacle|
                     Pinnacle.process.spawn("foot")
@@ -128,424 +288,374 @@ mod coverage {
 
                 with_state(&sender, |state| {
                     assert_eq!(state.windows.len(), 1);
-                    assert_eq!(state.windows[0].class(), Some("foot".to_string()));
+                });
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.window.get_all()[1]:close()
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    assert_eq!(state.windows.len(), 0);
                 });
             })
         }
 
         #[tokio::main]
         #[self::test]
-        async fn set_env() -> anyhow::Result<()> {
+        async fn move_to_tag() -> anyhow::Result<()> {
             test_api(|sender| {
                 run_lua! { |Pinnacle|
-                    Pinnacle.process.set_env("PROCESS_SET_ENV", "env value")
+                    local tags = Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
+                    tags[1]:set_active(true)
+                    tags[2]:set_active(true)
+                    Pinnacle.process.spawn("foot")
                 }
 
                 sleep_secs(1);
 
-                with_state(&sender, |_state| {
+                with_state(&sender, |state| {
                     assert_eq!(
-                        std::env::var("PROCESS_SET_ENV"),
-                        Ok("env value".to_string())
+                        state.windows[0].with_state(|st| st
+                            .tags
+                            .iter()
+                            .map(|tag| tag.name())
+                            .collect::<Vec<_>>()),
+                        vec!["1", "2"]
+                    );
+                });
+
+                // Correct usage
+                run_lua! { |Pinnacle|
+                    Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    assert_eq!(
+                        state.windows[0].with_state(|st| st
+                            .tags
+                            .iter()
+                            .map(|tag| tag.name())
+                            .collect::<Vec<_>>()),
+                        vec!["3"]
+                    );
+                });
+
+                // Move to the same tag
+                run_lua! { |Pinnacle|
+                    Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    assert_eq!(
+                        state.windows[0].with_state(|st| st
+                            .tags
+                            .iter()
+                            .map(|tag| tag.name())
+                            .collect::<Vec<_>>()),
+                        vec!["3"]
                     );
                 });
             })
         }
     }
+}
 
-    // Window
+mod tag {
+    use super::*;
 
-    mod window {
+    mod handle {
         use super::*;
 
         #[tokio::main]
         #[self::test]
-        async fn get_all() -> anyhow::Result<()> {
+        async fn props() -> anyhow::Result<()> {
             test_api(|_sender| {
                 run_lua! { |Pinnacle|
-                    assert(#Pinnacle.window.get_all() == 0)
-
-                    for i = 1, 5 do
-                        Pinnacle.process.spawn("foot")
-                    end
+                    Pinnacle.output.connect_for_all(function(op)
+                        local tags = Pinnacle.tag.add(op, "First", "Mungus", "Potato")
+                        tags[1]:set_active(true)
+                        tags[3]:set_active(true)
+                    end)
                 }
 
                 sleep_secs(1);
 
                 run_lua! { |Pinnacle|
-                    assert(#Pinnacle.window.get_all() == 5)
-                }
-            })
-        }
-
-        #[tokio::main]
-        #[self::test]
-        async fn get_focused() -> anyhow::Result<()> {
-            test_api(|_sender| {
-                run_lua! { |Pinnacle|
-                    assert(not Pinnacle.window.get_focused())
-
-                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "1")[1]:set_active(true)
+                    Pinnacle.process.spawn("foot")
                     Pinnacle.process.spawn("foot")
                 }
 
                 sleep_secs(1);
 
                 run_lua! { |Pinnacle|
-                    assert(Pinnacle.window.get_focused())
+                    local first_props = Pinnacle.tag.get("First"):props()
+                    assert(first_props.active == true)
+                    assert(first_props.name == "First")
+                    assert(first_props.output.name == "Pinnacle Window")
+                    assert(#first_props.windows == 2)
+                    assert(first_props.windows[1]:class() == "foot")
+                    assert(first_props.windows[2]:class() == "foot")
+
+                    local mungus_props = Pinnacle.tag.get("Mungus"):props()
+                    assert(mungus_props.active == false)
+                    assert(mungus_props.name == "Mungus")
+                    assert(mungus_props.output.name == "Pinnacle Window")
+                    assert(#mungus_props.windows == 0)
+
+                    local potato_props = Pinnacle.tag.get("Potato"):props()
+                    assert(potato_props.active == true)
+                    assert(potato_props.name == "Potato")
+                    assert(potato_props.output.name == "Pinnacle Window")
+                    assert(#potato_props.windows == 2)
+                    assert(potato_props.windows[1]:class() == "foot")
+                    assert(potato_props.windows[2]:class() == "foot")
                 }
             })
-        }
-
-        #[tokio::main]
-        #[self::test]
-        async fn add_window_rule() -> anyhow::Result<()> {
-            test_api(|sender| {
-                run_lua! { |Pinnacle|
-                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name")
-                    Pinnacle.window.add_window_rule({
-                        cond = { classes = { "firefox" } },
-                        rule = { tags = { Pinnacle.tag.get("Tag Name") } },
-                    })
-                }
-
-                sleep_secs(1);
-
-                with_state(&sender, |state| {
-                    assert_eq!(state.config.window_rules.len(), 1);
-                    assert_eq!(
-                        state.config.window_rules[0],
-                        (
-                            WindowRuleCondition {
-                                class: Some(vec!["firefox".to_string()]),
-                                ..Default::default()
-                            },
-                            WindowRule {
-                                tags: Some(vec![TagId(0)]),
-                                ..Default::default()
-                            }
-                        )
-                    );
-                });
-
-                run_lua! { |Pinnacle|
-                    Pinnacle.tag.add(Pinnacle.output.get_focused(), "Tag Name 2")
-                    Pinnacle.window.add_window_rule({
-                        cond = {
-                            all = {
-                                {
-                                    classes = { "steam" },
-                                    tags = {
-                                        Pinnacle.tag.get("Tag Name"),
-                                        Pinnacle.tag.get("Tag Name 2"),
-                                    },
-                                }
-                            }
-                        },
-                        rule = { fullscreen_or_maximized = "fullscreen" },
-                    })
-                }
-
-                sleep_secs(1);
-
-                with_state(&sender, |state| {
-                    assert_eq!(state.config.window_rules.len(), 2);
-                    assert_eq!(
-                        state.config.window_rules[1],
-                        (
-                            WindowRuleCondition {
-                                cond_all: Some(vec![WindowRuleCondition {
-                                    class: Some(vec!["steam".to_string()]),
-                                    tag: Some(vec![TagId(0), TagId(1)]),
-                                    ..Default::default()
-                                }]),
-                                ..Default::default()
-                            },
-                            WindowRule {
-                                fullscreen_or_maximized: Some(FullscreenOrMaximized::Fullscreen),
-                                ..Default::default()
-                            }
-                        )
-                    );
-                });
-            })
-        }
-
-        // TODO: window_begin_move
-        // TODO: window_begin_resize
-
-        mod handle {
-            use super::*;
-
-            // WindowHandle
-
-            #[tokio::main]
-            #[self::test]
-            async fn close() -> anyhow::Result<()> {
-                test_api(|sender| {
-                    run_lua! { |Pinnacle|
-                        Pinnacle.process.spawn("foot")
-                    }
-
-                    sleep_secs(1);
-
-                    with_state(&sender, |state| {
-                        assert_eq!(state.windows.len(), 1);
-                    });
-
-                    run_lua! { |Pinnacle|
-                        Pinnacle.window.get_all()[1]:close()
-                    }
-
-                    sleep_secs(1);
-
-                    with_state(&sender, |state| {
-                        assert_eq!(state.windows.len(), 0);
-                    });
-                })
-            }
-
-            #[tokio::main]
-            #[self::test]
-            async fn move_to_tag() -> anyhow::Result<()> {
-                test_api(|sender| {
-                    run_lua! { |Pinnacle|
-                        local tags = Pinnacle.tag.add(Pinnacle.output.get_focused(), "1", "2", "3")
-                        tags[1]:set_active(true)
-                        tags[2]:set_active(true)
-                        Pinnacle.process.spawn("foot")
-                    }
-
-                    sleep_secs(1);
-
-                    with_state(&sender, |state| {
-                        assert_eq!(
-                            state.windows[0].with_state(|st| st
-                                .tags
-                                .iter()
-                                .map(|tag| tag.name())
-                                .collect::<Vec<_>>()),
-                            vec!["1", "2"]
-                        );
-                    });
-
-                    // Correct usage
-                    run_lua! { |Pinnacle|
-                        Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
-                    }
-
-                    sleep_secs(1);
-
-                    with_state(&sender, |state| {
-                        assert_eq!(
-                            state.windows[0].with_state(|st| st
-                                .tags
-                                .iter()
-                                .map(|tag| tag.name())
-                                .collect::<Vec<_>>()),
-                            vec!["3"]
-                        );
-                    });
-
-                    // Move to the same tag
-                    run_lua! { |Pinnacle|
-                        Pinnacle.window.get_all()[1]:move_to_tag(Pinnacle.tag.get("3"))
-                    }
-
-                    sleep_secs(1);
-
-                    with_state(&sender, |state| {
-                        assert_eq!(
-                            state.windows[0].with_state(|st| st
-                                .tags
-                                .iter()
-                                .map(|tag| tag.name())
-                                .collect::<Vec<_>>()),
-                            vec!["3"]
-                        );
-                    });
-                })
-            }
         }
     }
+}
 
-    mod tag {
-        use super::*;
+mod output {
+    use smithay::{output::Output, utils::Rectangle};
 
-        mod handle {
-            use super::*;
+    use super::*;
 
-            #[tokio::main]
-            #[self::test]
-            async fn props() -> anyhow::Result<()> {
-                test_api(|_sender| {
-                    run_lua! { |Pinnacle|
-                        Pinnacle.output.connect_for_all(function(op)
-                            local tags = Pinnacle.tag.add(op, "First", "Mungus", "Potato")
-                            tags[1]:set_active(true)
-                            tags[3]:set_active(true)
-                        end)
-                    }
-
-                    sleep_secs(1);
-
-                    run_lua! { |Pinnacle|
-                        Pinnacle.process.spawn("foot")
-                        Pinnacle.process.spawn("foot")
-                    }
-
-                    sleep_secs(1);
-
-                    run_lua! { |Pinnacle|
-                        local first_props = Pinnacle.tag.get("First"):props()
-                        assert(first_props.active == true)
-                        assert(first_props.name == "First")
-                        assert(first_props.output.name == "Pinnacle Window")
-                        assert(#first_props.windows == 2)
-                        assert(first_props.windows[1]:class() == "foot")
-                        assert(first_props.windows[2]:class() == "foot")
-
-                        local mungus_props = Pinnacle.tag.get("Mungus"):props()
-                        assert(mungus_props.active == false)
-                        assert(mungus_props.name == "Mungus")
-                        assert(mungus_props.output.name == "Pinnacle Window")
-                        assert(#mungus_props.windows == 0)
-
-                        local potato_props = Pinnacle.tag.get("Potato"):props()
-                        assert(potato_props.active == true)
-                        assert(potato_props.name == "Potato")
-                        assert(potato_props.output.name == "Pinnacle Window")
-                        assert(#potato_props.windows == 2)
-                        assert(first_props.windows[1]:class() == "foot")
-                        assert(first_props.windows[2]:class() == "foot")
-                    }
+    #[tokio::main]
+    #[self::test]
+    async fn setup() -> anyhow::Result<()> {
+        test_api(|sender| {
+            setup_lua! { |Pinnacle|
+                Pinnacle.output.setup({
+                    {
+                        function(_)
+                            return true
+                        end,
+                        tag_names = { "1", "2", "3" },
+                    },
+                    {
+                        function(op)
+                            return string.match(op.name, "Test") ~= nil
+                        end,
+                        tag_names = { "Test 4", "Test 5" },
+                    },
+                    {
+                        "Second",
+                        scale = 2.0,
+                        mode = {
+                            pixel_width = 6900,
+                            pixel_height = 420,
+                            refresh_rate_millihz = 69420,
+                        },
+                    },
                 })
             }
-        }
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                state.new_output("First", (300, 200).into());
+                state.new_output("Second", (300, 200).into());
+                state.new_output("Test Third", (300, 200).into());
+            });
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                let original_op = output_for_name(state, "Pinnacle Window");
+                let first_op = output_for_name(state, "First");
+                let second_op = output_for_name(state, "Second");
+                let test_third_op = output_for_name(state, "Test Third");
+
+                let tags_for = |output: &Output| {
+                    output
+                        .with_state(|state| state.tags.iter().map(|t| t.name()).collect::<Vec<_>>())
+                };
+
+                let focused_tags_for = |output: &Output| {
+                    output.with_state(|state| {
+                        state.focused_tags().map(|t| t.name()).collect::<Vec<_>>()
+                    })
+                };
+
+                assert_eq!(tags_for(&original_op), vec!["1", "2", "3"]);
+                assert_eq!(tags_for(&first_op), vec!["1", "2", "3"]);
+                assert_eq!(tags_for(&second_op), vec!["1", "2", "3"]);
+                assert_eq!(
+                    tags_for(&test_third_op),
+                    vec!["1", "2", "3", "Test 4", "Test 5"]
+                );
+
+                assert_eq!(focused_tags_for(&original_op), vec!["1"]);
+                assert_eq!(focused_tags_for(&test_third_op), vec!["1"]);
+
+                assert_eq!(second_op.current_scale().fractional_scale(), 2.0);
+
+                let second_mode = second_op.current_mode().unwrap();
+                assert_eq!(second_mode.size.w, 6900);
+                assert_eq!(second_mode.size.h, 420);
+                assert_eq!(second_mode.refresh, 69420);
+            });
+        })
     }
 
-    mod output {
-        use smithay::utils::Rectangle;
+    #[tokio::main]
+    #[self::test]
+    async fn setup_loc_with_cyclic_relative_locs_works() -> anyhow::Result<()> {
+        test_api(|sender| {
+            setup_lua! { |Pinnacle|
+                Pinnacle.output.setup_locs("all", {
+                    { "Pinnacle Window", loc = { x = 0, y = 0 } },
+                    { "First", loc = { "Second", "left_align_top" } },
+                    { "Second", loc = { "First", "right_align_top" } },
+                })
+            }
 
-        use super::*;
+            sleep_secs(1);
 
-        #[tokio::main]
-        #[self::test]
-        async fn setup() -> anyhow::Result<()> {
-            test_api(|sender| {
-                setup_lua! { |Pinnacle|
-                    Pinnacle.output.setup({
-                        {
-                            function(_)
-                                return true
-                            end,
-                            tag_names = { "First", "Third", "Schmurd" },
+            with_state(&sender, |state| {
+                state.new_output("First", (300, 200).into());
+            });
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                let original_op = output_for_name(state, "Pinnacle Window");
+                let first_op = output_for_name(state, "First");
+
+                let original_geo = state.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.space.output_geometry(&first_op).unwrap();
+
+                assert_eq!(
+                    original_geo,
+                    Rectangle::from_loc_and_size((0, 0), (1920, 1080))
+                );
+                assert_eq!(
+                    first_geo,
+                    Rectangle::from_loc_and_size((1920, 0), (300, 200))
+                );
+
+                state.new_output("Second", (500, 500).into());
+            });
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                let original_op = output_for_name(state, "Pinnacle Window");
+                let first_op = output_for_name(state, "First");
+                let second_op = output_for_name(state, "Second");
+
+                let original_geo = state.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.space.output_geometry(&second_op).unwrap();
+
+                assert_eq!(
+                    original_geo,
+                    Rectangle::from_loc_and_size((0, 0), (1920, 1080))
+                );
+                assert_eq!(
+                    first_geo,
+                    Rectangle::from_loc_and_size((1920, 0), (300, 200))
+                );
+                assert_eq!(
+                    second_geo,
+                    Rectangle::from_loc_and_size((1920 + 300, 0), (500, 500))
+                );
+            });
+        })
+    }
+
+    #[tokio::main]
+    #[self::test]
+    async fn setup_loc_with_relative_locs_with_more_than_one_relative_works() -> anyhow::Result<()>
+    {
+        test_api(|sender| {
+            setup_lua! { |Pinnacle|
+                Pinnacle.output.setup_locs("all", {
+                    { "Pinnacle Window", loc = { x = 0, y = 0 } },
+                    { "First", loc = { "Pinnacle Window", "bottom_align_left" } },
+                    { "Second", loc = { "First", "bottom_align_left" } },
+                    {
+                        "Third",
+                        loc = {
+                            { "Second", "bottom_align_left" },
+                            { "First", "bottom_align_left" },
                         },
-                        {
-                            "Pinnacle Window",
-                            loc = { x = 300, y = 0 },
-                        },
-                        {
-                            "Output 1",
-                            loc = { "Pinnacle Window", "bottom_align_left" },
-                        }
-                    })
-                }
+                    },
+                })
+            }
 
-                sleep_secs(1);
+            sleep_secs(1);
 
-                with_state(&sender, |state| {
-                    state.new_output("Output 1", (960, 540).into());
-                });
+            with_state(&sender, |state| {
+                state.new_output("First", (300, 200).into());
+                state.new_output("Second", (300, 700).into());
+                state.new_output("Third", (300, 400).into());
+            });
 
-                sleep_secs(1);
+            sleep_secs(1);
 
-                with_state(&sender, |state| {
-                    let original_op = state
-                        .space
-                        .outputs()
-                        .find(|op| op.name() == "Pinnacle Window")
-                        .unwrap();
-                    let output_1 = state
-                        .space
-                        .outputs()
-                        .find(|op| op.name() == "Output 1")
-                        .unwrap();
+            with_state(&sender, |state| {
+                let original_op = output_for_name(state, "Pinnacle Window");
+                let first_op = output_for_name(state, "First");
+                let second_op = output_for_name(state, "Second");
+                let third_op = output_for_name(state, "Third");
 
-                    let original_op_geo = state.space.output_geometry(original_op).unwrap();
-                    let output_1_geo = state.space.output_geometry(output_1).unwrap();
+                let original_geo = state.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.space.output_geometry(&second_op).unwrap();
+                let third_geo = state.space.output_geometry(&third_op).unwrap();
 
-                    assert_eq!(
-                        original_op_geo,
-                        Rectangle::from_loc_and_size((300, 0), (1920, 1080))
-                    );
+                assert_eq!(
+                    original_geo,
+                    Rectangle::from_loc_and_size((0, 0), (1920, 1080))
+                );
+                assert_eq!(
+                    first_geo,
+                    Rectangle::from_loc_and_size((0, 1080), (300, 200))
+                );
+                assert_eq!(
+                    second_geo,
+                    Rectangle::from_loc_and_size((0, 1080 + 200), (300, 700))
+                );
+                assert_eq!(
+                    third_geo,
+                    Rectangle::from_loc_and_size((0, 1080 + 200 + 700), (300, 400))
+                );
 
-                    assert_eq!(
-                        output_1_geo,
-                        Rectangle::from_loc_and_size((300, 1080), (960, 540))
-                    );
+                state.remove_output(&second_op);
+            });
 
-                    assert_eq!(
-                        output_1.with_state(|state| state
-                            .tags
-                            .iter()
-                            .map(|tag| tag.name())
-                            .collect::<Vec<_>>()),
-                        vec!["First", "Third", "Schmurd"]
-                    );
+            sleep_secs(1);
 
-                    state.remove_output(&original_op.clone());
-                });
+            with_state(&sender, |state| {
+                let original_op = output_for_name(state, "Pinnacle Window");
+                let first_op = output_for_name(state, "First");
+                let third_op = output_for_name(state, "Third");
 
-                sleep_secs(1);
+                let original_geo = state.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let third_geo = state.space.output_geometry(&third_op).unwrap();
 
-                with_state(&sender, |state| {
-                    let output_1 = state
-                        .space
-                        .outputs()
-                        .find(|op| op.name() == "Output 1")
-                        .unwrap();
-
-                    let output_1_geo = state.space.output_geometry(output_1).unwrap();
-
-                    assert_eq!(
-                        output_1_geo,
-                        Rectangle::from_loc_and_size((0, 0), (960, 540))
-                    );
-
-                    state.new_output("Output 2", (300, 500).into());
-                });
-
-                sleep_secs(1);
-
-                with_state(&sender, |state| {
-                    let output_1 = state
-                        .space
-                        .outputs()
-                        .find(|op| op.name() == "Output 1")
-                        .unwrap();
-
-                    let output_2 = state
-                        .space
-                        .outputs()
-                        .find(|op| op.name() == "Output 2")
-                        .unwrap();
-
-                    let output_1_geo = state.space.output_geometry(output_1).unwrap();
-                    let output_2_geo = state.space.output_geometry(output_2).unwrap();
-
-                    assert_eq!(
-                        output_2_geo,
-                        Rectangle::from_loc_and_size((0, 0), (300, 500))
-                    );
-
-                    assert_eq!(
-                        output_1_geo,
-                        Rectangle::from_loc_and_size((300, 0), (960, 540))
-                    );
-                });
-            })
-        }
+                assert_eq!(
+                    original_geo,
+                    Rectangle::from_loc_and_size((0, 0), (1920, 1080))
+                );
+                assert_eq!(
+                    first_geo,
+                    Rectangle::from_loc_and_size((0, 1080), (300, 200))
+                );
+                assert_eq!(
+                    third_geo,
+                    Rectangle::from_loc_and_size((0, 1080 + 200), (300, 400))
+                );
+            });
+        })
     }
 }
 

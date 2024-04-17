@@ -99,7 +99,7 @@ mod output {
 
     #[tokio::main]
     #[self::test]
-    async fn setup_loc_with_cyclic_relative_locs_work() -> anyhow::Result<()> {
+    async fn setup_loc_with_cyclic_relative_locs_works() -> anyhow::Result<()> {
         test_api(|sender| {
             setup_rust(|api| {
                 api.output.setup_locs(

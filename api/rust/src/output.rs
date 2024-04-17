@@ -369,9 +369,7 @@ impl Output {
 
         if update_locs_on.contains(UpdateLocsOn::CONNECT) {
             self.connect_signal(OutputSignal::Connect(Box::new(move |output| {
-                println!("GOT CONNECT SIGNAL FOR {}", output.name());
                 layout_outputs_clone2();
-                println!("FINISHED CONNECT SIGNAL FOR {}", output.name());
             })));
         }
 
