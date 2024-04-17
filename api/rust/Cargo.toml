@@ -21,4 +21,3 @@ num_enum = "0.7.2"
 xkbcommon = { workspace = true }
 rand = "0.8.5"
 bitflags = { workspace = true }
-indexmap = "2.2.6"

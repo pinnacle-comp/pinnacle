@@ -51,10 +51,7 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::{
-        layer_map_for_output,
-        utils::{send_frames_surface_tree, OutputPresentationFeedback},
-    },
+    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{

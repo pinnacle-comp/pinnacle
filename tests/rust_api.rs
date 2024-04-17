@@ -19,7 +19,8 @@ fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) {
     std::thread::spawn(|| {
         run_rust_inner(run);
     })
-    .join();
+    .join()
+    .unwrap();
 }
 
 #[tokio::main]
@@ -39,7 +40,7 @@ fn setup_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> JoinHandle<()> {
 
 mod output {
     use pinnacle::state::WithState;
-    use pinnacle_api::output::{Alignment, OutputLoc, OutputSetup, UpdateLocsOn};
+    use pinnacle_api::output::{Alignment, OutputId, OutputLoc, OutputSetup, UpdateLocsOn};
     use smithay::{output::Output, utils::Rectangle};
 
     use super::*;
@@ -53,13 +54,13 @@ mod output {
                     OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3"]),
                     OutputSetup::new_with_matcher(|op| op.name().contains("Test"))
                         .with_tags(["Test 4", "Test 5"]),
-                    OutputSetup::new("Second").with_scale(2.0).with_mode(
-                        pinnacle_api::output::Mode {
+                    OutputSetup::new(OutputId::name("Second"))
+                        .with_scale(2.0)
+                        .with_mode(pinnacle_api::output::Mode {
                             pixel_width: 6900,
                             pixel_height: 420,
                             refresh_rate_millihertz: 69420,
-                        },
-                    ),
+                        }),
                 ]);
             });
 
@@ -119,14 +120,20 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        ("Pinnacle Window", OutputLoc::Point(0, 0)),
+                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
                         (
-                            "First",
-                            OutputLoc::relative_to("Second", Alignment::LeftAlignTop),
+                            OutputId::name("First"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("Second"),
+                                Alignment::LeftAlignTop,
+                            ),
                         ),
                         (
-                            "Second",
-                            OutputLoc::relative_to("First", Alignment::RightAlignTop),
+                            OutputId::name("Second"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("First"),
+                                Alignment::RightAlignTop,
+                            ),
                         ),
                     ],
                 );
@@ -195,21 +202,33 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        ("Pinnacle Window", OutputLoc::Point(0, 0)),
+                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
                         (
-                            "First",
-                            OutputLoc::relative_to("Pinnacle Window", Alignment::BottomAlignLeft),
-                        ),
-                        (
-                            "Second",
-                            OutputLoc::relative_to("First", Alignment::BottomAlignLeft),
-                        ),
-                        (
-                            "Third",
-                            OutputLoc::relative_to_with_fallbacks(
-                                "Second",
+                            OutputId::name("First"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("Pinnacle Window"),
                                 Alignment::BottomAlignLeft,
-                                [("First", Alignment::BottomAlignLeft)],
+                            ),
+                        ),
+                        (
+                            OutputId::name("Second"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("First"),
+                                Alignment::BottomAlignLeft,
+                            ),
+                        ),
+                        (
+                            OutputId::name("Third"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("Second"),
+                                Alignment::BottomAlignLeft,
+                            ),
+                        ),
+                        (
+                            OutputId::name("Third"),
+                            OutputLoc::RelativeTo(
+                                OutputId::name("First"),
+                                Alignment::BottomAlignLeft,
                             ),
                         ),
                     ],

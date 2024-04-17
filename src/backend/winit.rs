@@ -15,7 +15,6 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::layer_map_for_output,
     input::pointer::CursorImageStatus,
     output::{Output, Scale, Subpixel},
     reexports::{

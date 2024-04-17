@@ -34,7 +34,6 @@ use pinnacle_api_defs::pinnacle::{
 };
 use smithay::{
     backend::renderer::TextureFilter,
-    desktop::layer_map_for_output,
     input::keyboard::XkbConfig,
     output::Scale,
     reexports::{calloop, input as libinput},

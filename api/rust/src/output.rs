@@ -12,7 +12,6 @@
 use std::sync::OnceLock;
 
 use futures::FutureExt;
-use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
@@ -181,6 +180,8 @@ impl Output {
     /// connected and that will be connected in the future. It handles the setting of modes,
     /// scales, tags, and more.
     ///
+    /// Setups will be applied top to bottom.
+    ///
     /// See [`OutputSetup`] for more information.
     ///
     /// # Examples
@@ -233,27 +234,28 @@ impl Output {
     /// ```
     /// use pinnacle_api::output::UpdateLocsOn;
     /// use pinnacle_api::output::OutputLoc;
+    /// use pinnacle_api::output::OutputId;
     ///
     /// output.setup_locs(
     ///     // Relayout all outputs when outputs are connected, disconnected, and resized
     ///     UpdateLocsOn::all(),
     ///     [
     ///         // Anchor eDP-1 to (0, 0) so other outputs can be placed relative to it
-    ///         ("eDP-1", OutputLoc::Point(0, 0)),
+    ///         (OutputId::name("eDP-1"), OutputLoc::Point(0, 0)),
     ///         // Place HDMI-A-1 below it centered
     ///         (
-    ///             "HDMI-A-1",
-    ///             OutputLoc::relative_to("eDP-1", Alignment::BottomAlignCenter),
+    ///             OutputId::name("HDMI-A-1"),
+    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
     ///         ),
     ///         // Place HDMI-A-2 below HDMI-A-1.
+    ///         (
+    ///             OutputId::name("HDMI-A-2"),
+    ///             OutputLoc::RelativeTo(OutputId::name("HDMI-A-1"), Alignment::BottomAlignCenter),
+    ///         ),
     ///         // Additionally, if HDMI-A-1 isn't connected, place it below eDP-1 instead.
     ///         (
-    ///             "HDMI-A-2",
-    ///             OutputLoc::relative_to_with_fallbacks(
-    ///                 "HDMI-A-1",
-    ///                 Alignment::BottomAlignCenter,
-    ///                 [("eDP-1", Alignment::BottomAlignCenter)],
-    ///             ),
+    ///             OutputId::name("HDMI-A-2"),
+    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
     ///         ),
     ///     ]
     /// );
@@ -261,12 +263,9 @@ impl Output {
     pub fn setup_locs(
         &self,
         update_locs_on: UpdateLocsOn,
-        setup: impl IntoIterator<Item = (impl ToString, OutputLoc)>,
+        setup: impl IntoIterator<Item = (OutputId, OutputLoc)>,
     ) {
-        let setup: IndexMap<_, _> = setup
-            .into_iter()
-            .map(|(name, align)| (name.to_string(), align))
-            .collect();
+        let setup: Vec<_> = setup.into_iter().collect();
 
         let api = self.api.get().unwrap().clone();
         let layout_outputs = move || {
@@ -278,7 +277,9 @@ impl Output {
 
             // Place outputs with OutputSetupLoc::Point
             for output in outputs.iter() {
-                if let Some(&OutputLoc::Point(x, y)) = setup.get(output.name()) {
+                if let Some(&(_, OutputLoc::Point(x, y))) =
+                    setup.iter().find(|(op_id, _)| op_id.matches(output))
+                {
                     output.set_location(x, y);
 
                     placed_outputs.push(output.clone());
@@ -299,22 +300,19 @@ impl Output {
             //
             // Because this code is hideous I'm gonna comment what it does
             while let Some((output, relative_to, alignment)) =
-                setup.iter().find_map(|(setup_op_name, loc)| {
+                setup.iter().find_map(|(setup_op_id, loc)| {
                     // For every location setup,
                     // find the first unplaced output it refers to that has a relative location
                     outputs
                         .iter()
                         .find(|setup_op| {
-                            !placed_outputs.contains(setup_op) && setup_op.name() == setup_op_name
+                            !placed_outputs.contains(setup_op) && setup_op_id.matches(setup_op)
                         })
                         .and_then(|setup_op| match loc {
-                            OutputLoc::RelativeTo(relative_tos) => {
-                                // Return the first placed output in the relative-to list
-                                relative_tos.iter().find_map(|(rel_name, align)| {
-                                    placed_outputs.iter().find_map(|pl_op| {
-                                        (pl_op.name() == rel_name)
-                                            .then_some((setup_op, pl_op, align))
-                                    })
+                            OutputLoc::RelativeTo(rel_id, alignment) => {
+                                placed_outputs.iter().find_map(|placed_op| {
+                                    (rel_id.matches(placed_op))
+                                        .then_some((setup_op, placed_op, alignment))
                                 })
                             }
                             _ => None,
@@ -389,8 +387,8 @@ impl Output {
 
 /// A matcher for outputs.
 enum OutputMatcher {
-    /// Match outputs by name.
-    Name(String),
+    /// Match outputs by unique id.
+    Id(OutputId),
     /// Match outputs using a function that returns a bool.
     Fn(Box<dyn Fn(&OutputHandle) -> bool + Send + Sync>),
 }
@@ -399,7 +397,7 @@ impl OutputMatcher {
     /// Returns whether this matcher matches the given output.
     fn matches(&self, output: &OutputHandle) -> bool {
         match self {
-            OutputMatcher::Name(name) => output.name() == name,
+            OutputMatcher::Id(id) => id.matches(output),
             OutputMatcher::Fn(matcher) => matcher(output),
         }
     }
@@ -408,7 +406,7 @@ impl OutputMatcher {
 impl std::fmt::Debug for OutputMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Name(name) => f.debug_tuple("Name").field(name).finish(),
+            Self::Id(name) => f.debug_tuple("Name").field(name).finish(),
             Self::Fn(_) => f
                 .debug_tuple("Fn")
                 .field(&"<Box<dyn Fn(&OutputHandle)> -> bool>")
@@ -427,9 +425,9 @@ pub struct OutputSetup {
 
 impl OutputSetup {
     /// Creates a new `OutputSetup` that applies to the output with the given name.
-    pub fn new(output_name: impl ToString) -> Self {
+    pub fn new(id: OutputId) -> Self {
         Self {
-            output: OutputMatcher::Name(output_name.to_string()),
+            output: OutputMatcher::Id(id),
             mode: None,
             scale: None,
             tag_names: None,
@@ -492,62 +490,34 @@ impl OutputSetup {
 /// A location for an output.
 #[derive(Clone, Debug)]
 pub enum OutputLoc {
-    /// A specific point in the global space.
+    /// A specific point in the global space of the form (x, y).
     Point(i32, i32),
-    /// A location relative to another output.
-    ///
-    /// This holds a `Vec` of output names to alignments.
-    /// The output that is relative to will be chosen from the first
-    /// connected and placed output in this `Vec`.
-    RelativeTo(Vec<(String, Alignment)>),
+    /// A location relative to another output of the form (output_name, alignment).
+    RelativeTo(OutputId, Alignment),
 }
 
-impl OutputLoc {
-    /// Creates an `OutputLoc` that will place outputs relative to
-    /// the output with the given name using the given alignment.
+/// An identifier for an output.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OutputId {
+    /// Identify using the output's name.
+    Name(String),
+    // TODO: serial
+}
+
+impl OutputId {
+    /// Creates an [`OutputId::Name`].
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::output::OutputLoc;
-    /// use pinnacle_api::output::Alignment;
-    ///
-    /// let output_loc = OutputLoc::relative_to("HDMI-1", Alignment::LeftAlignBottom);
-    /// ```
-    pub fn relative_to(name: impl ToString, alignment: Alignment) -> Self {
-        Self::RelativeTo(vec![(name.to_string(), alignment)])
+    /// This is a convenience function so you don't have to call `.into()`
+    /// or `.to_string()`.
+    pub fn name(name: impl ToString) -> Self {
+        Self::Name(name.to_string())
     }
 
-    /// Like [`OutputLoc::relative_to`] but will additionally try to place outputs
-    /// relative to the specified fallbacks if the given output is not connected.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::output::OutputLoc;
-    /// use pinnacle_api::output::Alignment;
-    ///
-    /// let output_loc = OutputLoc::relative_to_with_fallbacks(
-    ///     "HDMI-1",
-    ///     Alignment::LeftAlignBottom,
-    ///     [
-    ///         ("HDMI-2", Alignment::LeftAlignBottom),
-    ///         ("HDMI-3", Alignment::LeftAlignBottom),
-    ///     ],
-    /// );
-    /// ```
-    pub fn relative_to_with_fallbacks(
-        name: impl ToString,
-        alignment: Alignment,
-        fallbacks: impl IntoIterator<Item = (impl ToString, Alignment)>,
-    ) -> Self {
-        let mut relatives = vec![(name.to_string(), alignment)];
-        relatives.extend(
-            fallbacks
-                .into_iter()
-                .map(|(name, align)| (name.to_string(), align)),
-        );
-        Self::RelativeTo(relatives)
+    /// Returns whether `output` is identified by this `OutputId`.
+    pub fn matches(&self, output: &OutputHandle) -> bool {
+        match self {
+            OutputId::Name(name) => name == output.name(),
+        }
     }
 }
 
@@ -1183,5 +1153,6 @@ pub struct OutputProperties {
     pub tags: Vec<TagHandle>,
     /// This output's scaling factor.
     pub scale: Option<f32>,
+    /// This output's transform.
     pub transform: Option<Transform>,
 }
