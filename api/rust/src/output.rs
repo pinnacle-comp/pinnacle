@@ -9,7 +9,7 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use std::sync::OnceLock;
+use std::{num::NonZeroU32, sync::OnceLock};
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
@@ -516,7 +516,13 @@ pub enum OutputLoc {
 pub enum OutputId {
     /// Identify using the output's name.
     Name(String),
-    // TODO: serial
+    /// Identify using the output's EDID serial number.
+    ///
+    /// Note: some displays (like laptop screens) don't have a serial number, in which case this won't match it.
+    /// Additionally the Rust API assumes monitor serial numbers are unique.
+    /// If you're unlucky enough to have two monitors with the same serial number,
+    /// use [`OutputId::Name`] instead.
+    Serial(NonZeroU32),
 }
 
 impl OutputId {
@@ -532,6 +538,7 @@ impl OutputId {
     pub fn matches(&self, output: &OutputHandle) -> bool {
         match self {
             OutputId::Name(name) => name == output.name(),
+            OutputId::Serial(serial) => Some(serial.get()) == output.serial(),
         }
     }
 }
@@ -1109,6 +1116,30 @@ impl OutputHandle {
     /// The async version of [`OutputHandle::scale`].
     pub async fn scale_async(&self) -> Option<f32> {
         self.props_async().await.scale
+    }
+
+    /// Get this output's transform.
+    ///
+    /// Shorthand for `self.props().transform`
+    pub fn transform(&self) -> Option<Transform> {
+        self.props().transform
+    }
+
+    /// The async version of [`OutputHandle::transform`].
+    pub async fn transform_async(&self) -> Option<Transform> {
+        self.props_async().await.transform
+    }
+
+    /// Get this output's EDID serial number.
+    ///
+    /// Shorthand for `self.props().serial`
+    pub fn serial(&self) -> Option<u32> {
+        self.props().serial
+    }
+
+    /// The async version of [`OutputHandle::serial`].
+    pub async fn serial_async(&self) -> Option<u32> {
+        self.props_async().await.serial
     }
 
     /// Get this output's unique name (the name of its connector).

@@ -167,6 +167,19 @@ function output.connect_for_all(callback)
     })
 end
 
+---@param id_str string
+---@param op OutputHandle
+---
+---@return boolean
+local function output_id_matches(id_str, op)
+    if id_str:match("^serial:") then
+        local serial = tonumber(id_str:sub(8))
+        return serial and serial == op:serial() or false
+    else
+        return id_str == op.name
+    end
+end
+
 ---@class OutputSetup
 ---@field filter (fun(output: OutputHandle): boolean)?
 ---@field mode Mode?
@@ -242,7 +255,9 @@ function output.setup(setups)
         if op_id:match("^%d+:") then
             ---@type string
             local index = op_id:match("^%d+")
+            ---@diagnostic disable-next-line: redefined-local
             local op_id = op_id:sub(index:len() + 2)
+            ---@diagnostic disable-next-line: redefined-local
             local index = tonumber(index)
 
             ---@cast index number
@@ -280,7 +295,7 @@ function output.setup(setups)
     ---@param op OutputHandle
     local function apply_setups(op)
         for _, op_setup in ipairs(op_setups) do
-            if op_setup[1] == op.name or op_setup[1] == "*" then
+            if output_id_matches(op_setup[1], op) or op_setup[1] == "*" then
                 local setup = op_setup.setup
 
                 if setup.filter and not setup.filter(op) then
@@ -380,7 +395,9 @@ function output.setup_locs(update_locs_on, locs)
         if op_id:match("^%d+:") then
             ---@type string
             local index = op_id:match("^%d+")
+            ---@diagnostic disable-next-line: redefined-local
             local op_id = op_id:sub(index:len() + 2)
+            ---@diagnostic disable-next-line: redefined-local
             local index = tonumber(index)
 
             ---@cast index number
@@ -417,7 +434,7 @@ function output.setup_locs(update_locs_on, locs)
         ---@diagnostic disable-next-line: redefined-local
         for _, setup in ipairs(setups) do
             for _, op in ipairs(outputs) do
-                if op.name == setup[1] then
+                if output_id_matches(setup[1], op) then
                     if type(setup.loc[1]) == "number" then
                         local loc = { x = setup.loc[1], y = setup.loc[2] }
                         op:set_location(loc)
@@ -445,7 +462,7 @@ function output.setup_locs(update_locs_on, locs)
                         end
                     end
 
-                    if op.name ~= setup[1] or type(setup.loc[1]) == "number" then
+                    if not output_id_matches(setup[1], op) or type(setup.loc[1]) == "number" then
                         goto continue
                     end
 
@@ -1028,7 +1045,7 @@ function OutputHandle:transform()
     return self:props().transform
 end
 
----Get this output's serial.
+---Get this output's EDID serial number.
 ---
 ---Shorthand for `handle:props().serial`.
 ---

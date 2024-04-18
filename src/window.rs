@@ -2,7 +2,7 @@
 
 pub mod rules;
 
-use std::{ops::Deref, sync::RwLock};
+use std::{cell::RefCell, ops::Deref};
 
 use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
@@ -192,9 +192,9 @@ impl WithState for WindowElement {
     {
         let state = self
             .user_data()
-            .get_or_insert_threadsafe(|| RwLock::new(WindowElementState::new()));
+            .get_or_insert(|| RefCell::new(WindowElementState::new()));
 
-        func(&state.read().expect("with_state already locked"))
+        func(&state.borrow())
     }
 
     fn with_state_mut<F, T>(&self, func: F) -> T
@@ -203,9 +203,9 @@ impl WithState for WindowElement {
     {
         let state = self
             .user_data()
-            .get_or_insert(|| RwLock::new(WindowElementState::new()));
+            .get_or_insert(|| RefCell::new(WindowElementState::new()));
 
-        func(&mut state.write().expect("with_state already locked"))
+        func(&mut state.borrow_mut())
     }
 }
 
