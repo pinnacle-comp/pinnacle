@@ -9,12 +9,14 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
+use std::{num::NonZeroU32, sync::OnceLock};
+
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
         output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
-        SetLocationRequest, SetModeRequest, SetScaleRequest,
+        SetLocationRequest, SetModeRequest, SetScaleRequest, SetTransformRequest,
     },
 };
 use tonic::transport::Channel;
@@ -22,9 +24,9 @@ use tonic::transport::Channel;
 use crate::{
     block_on_tokio,
     signal::{OutputSignal, SignalHandle},
-    tag::TagHandle,
+    tag::{Tag, TagHandle},
     util::Batch,
-    SIGNAL, TAG,
+    ApiModules,
 };
 
 /// A struct that allows you to get handles to connected outputs and set them up.
@@ -33,19 +35,26 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Output {
     output_client: OutputServiceClient<Channel>,
+    api: OnceLock<ApiModules>,
 }
 
 impl Output {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             output_client: OutputServiceClient::new(channel.clone()),
+            api: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     pub(crate) fn new_handle(&self, name: impl Into<String>) -> OutputHandle {
         OutputHandle {
             name: name.into(),
             output_client: self.output_client.clone(),
+            api: self.api.get().unwrap().clone(),
         }
     }
 
@@ -145,7 +154,7 @@ impl Output {
             for_all(&output);
         }
 
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
         signal_state.output_connect.add_callback(Box::new(for_all));
     }
 
@@ -155,11 +164,395 @@ impl Output {
     /// You can pass in an [`OutputSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: OutputSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(SIGNAL.get().expect("SIGNAL doesn't exist").write());
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
 
         match signal {
             OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
+            OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
+            OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
+            OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
         }
+    }
+
+    /// Declaratively setup outputs.
+    ///
+    /// This method allows you to specify [`OutputSetup`]s that will be applied to outputs already
+    /// connected and that will be connected in the future. It handles the setting of modes,
+    /// scales, tags, and more.
+    ///
+    /// Setups will be applied top to bottom.
+    ///
+    /// See [`OutputSetup`] for more information.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::output::OutputSetup;
+    /// use pinnacle_api::output::OutputId;
+    ///
+    /// output.setup([
+    ///     // Give all outputs tags 1 through 5
+    ///     OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3", "4", "5"]),
+    ///     // Give outputs with a preferred mode of 4K a scale of 2.0
+    ///     OutputSetup::new_with_matcher(|op| op.preferred_mode().unwrap().pixel_width == 2160)
+    ///         .with_scale(2.0),
+    ///     // Additionally give eDP-1 tags 6 and 7
+    ///     OutputSetup::new(OutputId::name("eDP-1")).with_tags(["6", "7"]),
+    /// ]);
+    /// ```
+    pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {
+        let setups = setups.into_iter().collect::<Vec<_>>();
+
+        let tag_mod = self.api.get().unwrap().tag.clone();
+        let apply_setups = move |output: &OutputHandle| {
+            for setup in setups.iter() {
+                if setup.output.matches(output) {
+                    setup.apply(output, &tag_mod);
+                }
+            }
+            if let Some(tag) = output.tags().first() {
+                tag.set_active(true);
+            }
+        };
+
+        self.connect_for_all(move |output| {
+            apply_setups(output);
+        });
+    }
+
+    /// Specify locations for outputs and when they should be laid out.
+    ///
+    /// This method allows you to specify locations for outputs, either as a specific point
+    /// or relative to another output.
+    ///
+    /// This will relayout outputs according to the given [`UpdateLocsOn`] flags.
+    ///
+    /// Layouts not specified in `setup` or that have cyclic relative-to outputs will be
+    /// laid out in a line to the right of the rightmost output.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::output::UpdateLocsOn;
+    /// use pinnacle_api::output::OutputLoc;
+    /// use pinnacle_api::output::OutputId;
+    ///
+    /// output.setup_locs(
+    ///     // Relayout all outputs when outputs are connected, disconnected, and resized
+    ///     UpdateLocsOn::all(),
+    ///     [
+    ///         // Anchor eDP-1 to (0, 0) so other outputs can be placed relative to it
+    ///         (OutputId::name("eDP-1"), OutputLoc::Point(0, 0)),
+    ///         // Place HDMI-A-1 below it centered
+    ///         (
+    ///             OutputId::name("HDMI-A-1"),
+    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
+    ///         ),
+    ///         // Place HDMI-A-2 below HDMI-A-1.
+    ///         (
+    ///             OutputId::name("HDMI-A-2"),
+    ///             OutputLoc::RelativeTo(OutputId::name("HDMI-A-1"), Alignment::BottomAlignCenter),
+    ///         ),
+    ///         // Additionally, if HDMI-A-1 isn't connected, place it below eDP-1 instead.
+    ///         (
+    ///             OutputId::name("HDMI-A-2"),
+    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
+    ///         ),
+    ///     ]
+    /// );
+    /// ```
+    pub fn setup_locs(
+        &self,
+        update_locs_on: UpdateLocsOn,
+        setup: impl IntoIterator<Item = (OutputId, OutputLoc)>,
+    ) {
+        let setup: Vec<_> = setup.into_iter().collect();
+
+        let api = self.api.get().unwrap().clone();
+        let layout_outputs = move || {
+            let outputs = api.output.get_all();
+
+            let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
+
+            let mut placed_outputs = Vec::<OutputHandle>::new();
+
+            // Place outputs with OutputSetupLoc::Point
+            for output in outputs.iter() {
+                if let Some(&(_, OutputLoc::Point(x, y))) =
+                    setup.iter().find(|(op_id, _)| op_id.matches(output))
+                {
+                    output.set_location(x, y);
+
+                    placed_outputs.push(output.clone());
+                    let props = output.props();
+                    let x = props.x.unwrap();
+                    let width = props.logical_width.unwrap() as i32;
+                    if rightmost_output_and_x.is_none()
+                        || rightmost_output_and_x
+                            .as_ref()
+                            .is_some_and(|(_, rm_x)| x + width > *rm_x)
+                    {
+                        rightmost_output_and_x = Some((output.clone(), x + width));
+                    }
+                }
+            }
+
+            // Attempt to place relative outputs
+            //
+            // Because this code is hideous I'm gonna comment what it does
+            while let Some((output, relative_to, alignment)) =
+                setup.iter().find_map(|(setup_op_id, loc)| {
+                    // For every location setup,
+                    // find the first unplaced output it refers to that has a relative location
+                    outputs
+                        .iter()
+                        .find(|setup_op| {
+                            !placed_outputs.contains(setup_op) && setup_op_id.matches(setup_op)
+                        })
+                        .and_then(|setup_op| match loc {
+                            OutputLoc::RelativeTo(rel_id, alignment) => {
+                                placed_outputs.iter().find_map(|placed_op| {
+                                    (rel_id.matches(placed_op))
+                                        .then_some((setup_op, placed_op, alignment))
+                                })
+                            }
+                            _ => None,
+                        })
+                })
+            {
+                output.set_loc_adj_to(relative_to, *alignment);
+
+                placed_outputs.push(output.clone());
+                let props = output.props();
+                let x = props.x.unwrap();
+                let width = props.logical_width.unwrap() as i32;
+                if rightmost_output_and_x.is_none()
+                    || rightmost_output_and_x
+                        .as_ref()
+                        .is_some_and(|(_, rm_x)| x + width > *rm_x)
+                {
+                    rightmost_output_and_x = Some((output.clone(), x + width));
+                }
+            }
+
+            // Place all remaining outputs right of the rightmost one
+            for output in outputs
+                .iter()
+                .filter(|op| !placed_outputs.contains(op))
+                .collect::<Vec<_>>()
+            {
+                if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
+                    output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+                } else {
+                    output.set_location(0, 0);
+                }
+
+                placed_outputs.push(output.clone());
+                let props = output.props();
+                let x = props.x.unwrap();
+                let width = props.logical_width.unwrap() as i32;
+                if rightmost_output_and_x.is_none()
+                    || rightmost_output_and_x
+                        .as_ref()
+                        .is_some_and(|(_, rm_x)| x + width > *rm_x)
+                {
+                    rightmost_output_and_x = Some((output.clone(), x + width));
+                }
+            }
+        };
+
+        layout_outputs();
+
+        let layout_outputs_clone1 = layout_outputs.clone();
+        let layout_outputs_clone2 = layout_outputs.clone();
+
+        if update_locs_on.contains(UpdateLocsOn::CONNECT) {
+            self.connect_signal(OutputSignal::Connect(Box::new(move |_| {
+                layout_outputs_clone2();
+            })));
+        }
+
+        if update_locs_on.contains(UpdateLocsOn::DISCONNECT) {
+            self.connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
+                layout_outputs_clone1();
+            })));
+        }
+
+        if update_locs_on.contains(UpdateLocsOn::RESIZE) {
+            self.connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
+                layout_outputs();
+            })));
+        }
+    }
+}
+
+/// A matcher for outputs.
+enum OutputMatcher {
+    /// Match outputs by unique id.
+    Id(OutputId),
+    /// Match outputs using a function that returns a bool.
+    Fn(Box<dyn Fn(&OutputHandle) -> bool + Send + Sync>),
+}
+
+impl OutputMatcher {
+    /// Returns whether this matcher matches the given output.
+    fn matches(&self, output: &OutputHandle) -> bool {
+        match self {
+            OutputMatcher::Id(id) => id.matches(output),
+            OutputMatcher::Fn(matcher) => matcher(output),
+        }
+    }
+}
+
+impl std::fmt::Debug for OutputMatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(name) => f.debug_tuple("Name").field(name).finish(),
+            Self::Fn(_) => f
+                .debug_tuple("Fn")
+                .field(&"<Box<dyn Fn(&OutputHandle)> -> bool>")
+                .finish(),
+        }
+    }
+}
+
+/// An output setup for use in [`Output::setup`].
+pub struct OutputSetup {
+    output: OutputMatcher,
+    mode: Option<Mode>,
+    scale: Option<f32>,
+    tag_names: Option<Vec<String>>,
+    transform: Option<Transform>,
+}
+
+impl OutputSetup {
+    /// Creates a new `OutputSetup` that applies to the output with the given name.
+    pub fn new(id: OutputId) -> Self {
+        Self {
+            output: OutputMatcher::Id(id),
+            mode: None,
+            scale: None,
+            tag_names: None,
+            transform: None,
+        }
+    }
+
+    /// Creates a new `OutputSetup` that matches outputs according to the given function.
+    pub fn new_with_matcher(
+        matcher: impl Fn(&OutputHandle) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            output: OutputMatcher::Fn(Box::new(matcher)),
+            mode: None,
+            scale: None,
+            tag_names: None,
+            transform: None,
+        }
+    }
+
+    /// Makes this setup apply the given [`Mode`] to its outputs.
+    pub fn with_mode(self, mode: Mode) -> Self {
+        Self {
+            mode: Some(mode),
+            ..self
+        }
+    }
+
+    /// Makes this setup apply the given scale to its outputs.
+    pub fn with_scale(self, scale: f32) -> Self {
+        Self {
+            scale: Some(scale),
+            ..self
+        }
+    }
+
+    /// Makes this setup add tags with the given names to its outputs.
+    pub fn with_tags(self, tag_names: impl IntoIterator<Item = impl ToString>) -> Self {
+        Self {
+            tag_names: Some(tag_names.into_iter().map(|s| s.to_string()).collect()),
+            ..self
+        }
+    }
+
+    /// Makes this setup apply the given transform to its outputs.
+    pub fn with_transform(self, transform: Transform) -> Self {
+        Self {
+            transform: Some(transform),
+            ..self
+        }
+    }
+
+    fn apply(&self, output: &OutputHandle, tag: &Tag) {
+        if let Some(mode) = &self.mode {
+            output.set_mode(
+                mode.pixel_width,
+                mode.pixel_height,
+                Some(mode.refresh_rate_millihertz),
+            );
+        }
+        if let Some(scale) = self.scale {
+            output.set_scale(scale);
+        }
+        if let Some(tag_names) = &self.tag_names {
+            tag.add(output, tag_names);
+        }
+        if let Some(transform) = self.transform {
+            output.set_transform(transform);
+        }
+    }
+}
+
+/// A location for an output.
+#[derive(Clone, Debug)]
+pub enum OutputLoc {
+    /// A specific point in the global space of the form (x, y).
+    Point(i32, i32),
+    /// A location relative to another output with an [`Alignment`].
+    RelativeTo(OutputId, Alignment),
+}
+
+/// An identifier for an output.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum OutputId {
+    /// Identify using the output's name.
+    Name(String),
+    /// Identify using the output's EDID serial number.
+    ///
+    /// Note: some displays (like laptop screens) don't have a serial number, in which case this won't match it.
+    /// Additionally the Rust API assumes monitor serial numbers are unique.
+    /// If you're unlucky enough to have two monitors with the same serial number,
+    /// use [`OutputId::Name`] instead.
+    Serial(NonZeroU32),
+}
+
+impl OutputId {
+    /// Creates an [`OutputId::Name`].
+    ///
+    /// This is a convenience function so you don't have to call `.into()`
+    /// or `.to_string()`.
+    pub fn name(name: impl ToString) -> Self {
+        Self::Name(name.to_string())
+    }
+
+    /// Returns whether `output` is identified by this `OutputId`.
+    pub fn matches(&self, output: &OutputHandle) -> bool {
+        match self {
+            OutputId::Name(name) => name == output.name(),
+            OutputId::Serial(serial) => Some(serial.get()) == output.serial(),
+        }
+    }
+}
+
+bitflags::bitflags! {
+    /// Flags for when [`Output::setup_locs`] should relayout outputs.
+    #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+    pub struct UpdateLocsOn: u8 {
+        /// Relayout when an output is connected.
+        const CONNECT = 1;
+        /// Relayout when an output is disconnected.
+        const DISCONNECT = 1 << 1;
+        /// Relayout when an output is resized, either through a scale or mode change.
+        const RESIZE = 1 << 2;
     }
 }
 
@@ -170,6 +563,7 @@ impl Output {
 pub struct OutputHandle {
     pub(crate) name: String,
     output_client: OutputServiceClient<Channel>,
+    api: ApiModules,
 }
 
 impl PartialEq for OutputHandle {
@@ -213,6 +607,31 @@ pub enum Alignment {
     RightAlignCenter,
     /// Set to right, align bottom borders
     RightAlignBottom,
+}
+
+/// An output transform.
+///
+/// This determines what orientation outputs will render at.
+#[derive(num_enum::TryFromPrimitive, Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum Transform {
+    /// No transform.
+    #[default]
+    Normal = 1,
+    /// 90 degrees counter-clockwise.
+    _90,
+    /// 180 degrees counter-clockwise.
+    _180,
+    /// 270 degrees counter-clockwise.
+    _270,
+    /// Flipped vertically (across the horizontal axis).
+    Flipped,
+    /// Flipped vertically and rotated 90 degrees counter-clockwise
+    Flipped90,
+    /// Flipped vertically and rotated 180 degrees counter-clockwise
+    Flipped180,
+    /// Flipped vertically and rotated 270 degrees counter-clockwise
+    Flipped270,
 }
 
 impl OutputHandle {
@@ -436,6 +855,25 @@ impl OutputHandle {
         self.increase_scale(-decrease_by);
     }
 
+    /// Set this output's transform.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::output::Transform;
+    ///
+    /// // Rotate 90 degrees counter-clockwise
+    /// output.set_transform(Transform::_90);
+    /// ```
+    pub fn set_transform(&self, transform: Transform) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_transform(SetTransformRequest {
+            output_name: Some(self.name.clone()),
+            transform: Some(transform as i32),
+        }))
+        .unwrap();
+    }
+
     /// Get all properties of this output.
     ///
     /// # Examples
@@ -461,8 +899,6 @@ impl OutputHandle {
             .await
             .unwrap()
             .into_inner();
-
-        let tag = TAG.get().expect("TAG doesn't exist");
 
         OutputProperties {
             make: response.make,
@@ -502,9 +938,11 @@ impl OutputHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| tag.new_handle(id))
+                .map(|id| self.api.tag.new_handle(id))
                 .collect(),
             scale: response.scale,
+            transform: response.transform.and_then(|tf| tf.try_into().ok()),
+            serial: response.serial,
         }
     }
 
@@ -680,6 +1118,30 @@ impl OutputHandle {
         self.props_async().await.scale
     }
 
+    /// Get this output's transform.
+    ///
+    /// Shorthand for `self.props().transform`
+    pub fn transform(&self) -> Option<Transform> {
+        self.props().transform
+    }
+
+    /// The async version of [`OutputHandle::transform`].
+    pub async fn transform_async(&self) -> Option<Transform> {
+        self.props_async().await.transform
+    }
+
+    /// Get this output's EDID serial number.
+    ///
+    /// Shorthand for `self.props().serial`
+    pub fn serial(&self) -> Option<u32> {
+        self.props().serial
+    }
+
+    /// The async version of [`OutputHandle::serial`].
+    pub async fn serial_async(&self) -> Option<u32> {
+        self.props_async().await.serial
+    }
+
     /// Get this output's unique name (the name of its connector).
     pub fn name(&self) -> &str {
         &self.name
@@ -700,6 +1162,7 @@ pub struct Mode {
 }
 
 /// The properties of an output.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct OutputProperties {
     /// The make of the output.
@@ -737,4 +1200,8 @@ pub struct OutputProperties {
     pub tags: Vec<TagHandle>,
     /// This output's scaling factor.
     pub scale: Option<f32>,
+    /// This output's transform.
+    pub transform: Option<Transform>,
+    /// This output's EDID serial number.
+    pub serial: Option<u32>,
 }

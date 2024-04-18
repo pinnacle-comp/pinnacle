@@ -11,7 +11,9 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    OutputConnectResponse, OutputDisconnectResponse,
+};
 use smithay::{
     backend::{
         allocator::{
@@ -49,10 +51,7 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::{
-        layer_map_for_output,
-        utils::{send_frames_surface_tree, OutputPresentationFeedback},
-    },
+    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
@@ -272,16 +271,14 @@ impl State {
                 {
                     match render_surface.compositor.use_mode(drm_mode) {
                         Ok(()) => {
-                            output.change_current_state(Some(mode), None, None, None);
-                            layer_map_for_output(output).arrange();
+                            self.change_output_state(output, Some(mode), None, None, None);
                         }
                         Err(err) => error!("Failed to resize output: {err}"),
                     }
                 }
             }
         } else {
-            output.change_current_state(Some(mode), None, None, None);
-            layer_map_for_output(output).arrange();
+            self.change_output_state(output, Some(mode), None, None, None);
         }
 
         self.schedule_render(output);
@@ -1010,11 +1007,11 @@ impl State {
             connector.interface_id()
         );
 
-        let (make, model) = EdidInfo::try_from_connector(&device.drm, connector.handle())
-            .map(|info| (info.manufacturer, info.model))
+        let (make, model, serial) = EdidInfo::try_from_connector(&device.drm, connector.handle())
+            .map(|info| (info.manufacturer, info.model, info.serial))
             .unwrap_or_else(|err| {
                 warn!("Failed to parse EDID info: {err}");
-                ("Unknown".into(), "Unknown".into())
+                ("Unknown".into(), "Unknown".into(), None)
             });
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
@@ -1038,9 +1035,13 @@ impl State {
         );
         let global = output.create_global::<State>(&udev.display_handle);
 
+        output.with_state_mut(|state| state.serial = serial);
+
         for mode in modes {
             output.add_mode(mode);
         }
+
+        output.set_preferred(wl_mode);
 
         self.output_focus_stack.set_focus(output.clone());
 
@@ -1051,10 +1052,6 @@ impl State {
             acc + geo.size.w
         });
         let position = (x, 0).into();
-
-        output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some(position));
-        self.space.map_output(&output, position);
 
         output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
@@ -1122,6 +1119,8 @@ impl State {
 
         device.surfaces.insert(crtc, surface);
 
+        self.change_output_state(&output, Some(wl_mode), None, None, Some(position));
+
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
         // TODO: instead of checking the connector, check the monitor's edid info instead
@@ -1131,11 +1130,8 @@ impl State {
             .get(&OutputName(output.name()))
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
-
-            output.change_current_state(None, None, *scale, Some(*loc));
-            self.space.map_output(&output, *loc);
-
             output.with_state_mut(|state| state.tags = tags.clone());
+            self.change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
             self.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {
@@ -1187,6 +1183,12 @@ impl State {
             );
             self.space.unmap_output(&output);
             self.gamma_control_manager_state.output_removed(&output);
+
+            self.signal_state.output_disconnect.signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
         }
     }
 

@@ -131,11 +131,13 @@ pub fn config(
         #(#attrs)*
         #tokio_attr
         #vis #sig {
-            let (#module_ident, __fut_receiver) = ::pinnacle_api::connect().await.unwrap();
+            let (__api, __fut_receiver) = ::pinnacle_api::connect().await.unwrap();
+
+            let #module_ident = __api.clone();
 
             #(#stmts)*
 
-            ::pinnacle_api::listen(__fut_receiver).await;
+            ::pinnacle_api::listen(__api, __fut_receiver).await;
         }
     }
     .into()

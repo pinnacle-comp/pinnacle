@@ -16,7 +16,7 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
-            SetModeRequest, SetScaleRequest,
+            SetModeRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
@@ -30,11 +30,13 @@ use pinnacle_api_defs::pinnacle::{
             SwitchToRequest,
         },
     },
-    v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
+    v0alpha1::{
+        pinnacle_service_server, PingRequest, PingResponse, QuitRequest, ReloadConfigRequest,
+        SetOrToggle,
+    },
 };
 use smithay::{
     backend::renderer::TextureFilter,
-    desktop::layer_map_for_output,
     input::keyboard::XkbConfig,
     output::Scale,
     reexports::{calloop, input as libinput},
@@ -189,6 +191,18 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
 
         run_unary_no_response(&self.sender, |state| {
             state.shutdown();
+        })
+        .await
+    }
+
+    async fn reload_config(
+        &self,
+        _request: Request<ReloadConfigRequest>,
+    ) -> Result<Response<()>, Status> {
+        run_unary_no_response(&self.sender, |state| {
+            state
+                .start_config(state.config.dir(&state.xdg_base_dirs))
+                .expect("failed to restart config");
         })
         .await
     }
@@ -707,9 +721,9 @@ impl tag_service_server::TagService for TagService {
             };
 
             match set_or_toggle {
-                SetOrToggle::Set => tag.set_active(true),
-                SetOrToggle::Unset => tag.set_active(false),
-                SetOrToggle::Toggle => tag.set_active(!tag.active()),
+                SetOrToggle::Set => tag.set_active(true, state),
+                SetOrToggle::Unset => tag.set_active(false, state),
+                SetOrToggle::Toggle => tag.set_active(!tag.active(), state),
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
@@ -737,11 +751,11 @@ impl tag_service_server::TagService for TagService {
             let Some(tag) = tag_id.tag(state) else { return };
             let Some(output) = tag.output(state) else { return };
 
-            output.with_state_mut(|state| {
-                for op_tag in state.tags.iter_mut() {
-                    op_tag.set_active(false);
+            output.with_state_mut(|op_state| {
+                for op_tag in op_state.tags.iter_mut() {
+                    op_tag.set_active(false, state);
                 }
-                tag.set_active(true);
+                tag.set_active(true, state);
             });
 
             state.request_layout(&output);
@@ -874,11 +888,26 @@ impl tag_service_server::TagService for TagService {
                 .map(|output| output.name());
             let active = tag.as_ref().map(|tag| tag.active());
             let name = tag.as_ref().map(|tag| tag.name());
+            let window_ids = tag
+                .as_ref()
+                .map(|tag| {
+                    state
+                        .windows
+                        .iter()
+                        .filter_map(|win| {
+                            win.with_state(|win_state| {
+                                win_state.tags.contains(tag).then_some(win_state.id.0)
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
             tag::v0alpha1::GetPropertiesResponse {
                 active,
                 name,
                 output_name,
+                window_ids,
             }
         })
         .await
@@ -940,8 +969,7 @@ impl output_service_server::OutputService for OutputService {
             if let Some(y) = y {
                 loc.y = y;
             }
-            output.change_current_state(None, None, None, Some(loc));
-            state.space.map_output(&output, loc);
+            state.change_output_state(&output, None, None, None, Some(loc));
             debug!("Mapping output {} to {loc:?}", output.name());
             state.request_layout(&output);
         })
@@ -1001,8 +1029,49 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
-            output.change_current_state(None, None, Some(Scale::Fractional(current_scale)), None);
-            layer_map_for_output(&output).arrange();
+            state.change_output_state(
+                &output,
+                None,
+                None,
+                Some(Scale::Fractional(current_scale)),
+                None,
+            );
+            state.request_layout(&output);
+            state.schedule_render(&output);
+        })
+        .await
+    }
+
+    async fn set_transform(
+        &self,
+        request: Request<SetTransformRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let smithay_transform = match request.transform() {
+            output::v0alpha1::Transform::Unspecified => {
+                return Err(Status::invalid_argument("transform was unspecified"));
+            }
+            output::v0alpha1::Transform::Normal => smithay::utils::Transform::Normal,
+            output::v0alpha1::Transform::Transform90 => smithay::utils::Transform::_90,
+            output::v0alpha1::Transform::Transform180 => smithay::utils::Transform::_180,
+            output::v0alpha1::Transform::Transform270 => smithay::utils::Transform::_270,
+            output::v0alpha1::Transform::Flipped => smithay::utils::Transform::Flipped,
+            output::v0alpha1::Transform::Flipped90 => smithay::utils::Transform::Flipped90,
+            output::v0alpha1::Transform::Flipped180 => smithay::utils::Transform::Flipped180,
+            output::v0alpha1::Transform::Flipped270 => smithay::utils::Transform::Flipped270,
+        };
+
+        let Some(output_name) = request.output_name else {
+            return Err(Status::invalid_argument("output_name was null"));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(output) = OutputName(output_name).output(state) else {
+                return;
+            };
+
+            state.change_output_state(&output, None, Some(smithay_transform), None, None);
             state.request_layout(&output);
             state.schedule_render(&output);
         })
@@ -1109,6 +1178,27 @@ impl output_service_server::OutputService for OutputService {
                 .as_ref()
                 .map(|output| output.current_scale().fractional_scale() as f32);
 
+            let transform = output.as_ref().map(|output| {
+                (match output.current_transform() {
+                    smithay::utils::Transform::Normal => output::v0alpha1::Transform::Normal,
+                    smithay::utils::Transform::_90 => output::v0alpha1::Transform::Transform90,
+                    smithay::utils::Transform::_180 => output::v0alpha1::Transform::Transform180,
+                    smithay::utils::Transform::_270 => output::v0alpha1::Transform::Transform270,
+                    smithay::utils::Transform::Flipped => output::v0alpha1::Transform::Flipped,
+                    smithay::utils::Transform::Flipped90 => output::v0alpha1::Transform::Flipped90,
+                    smithay::utils::Transform::Flipped180 => {
+                        output::v0alpha1::Transform::Flipped180
+                    }
+                    smithay::utils::Transform::Flipped270 => {
+                        output::v0alpha1::Transform::Flipped270
+                    }
+                }) as i32
+            });
+
+            let serial = output.as_ref().and_then(|output| {
+                output.with_state(|state| state.serial.map(|serial| serial.get()))
+            });
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1124,6 +1214,8 @@ impl output_service_server::OutputService for OutputService {
                 focused,
                 tag_ids,
                 scale,
+                transform,
+                serial,
             }
         })
         .await

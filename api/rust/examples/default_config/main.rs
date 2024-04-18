@@ -1,7 +1,9 @@
+use pinnacle_api::input::libinput::LibinputSetting;
 use pinnacle_api::layout::{
     CornerLayout, CornerLocation, CyclingLayoutManager, DwindleLayout, FairLayout, MasterSide,
     MasterStackLayout, SpiralLayout,
 };
+use pinnacle_api::output::OutputSetup;
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::xkbcommon::xkb::Keysym;
@@ -26,6 +28,7 @@ async fn main() {
         tag,
         layout,
         render,
+        ..
     } = modules;
 
     let mod_key = Mod::Ctrl;
@@ -53,6 +56,11 @@ async fn main() {
     // `mod_key + alt + q` quits Pinnacle
     input.keybind([mod_key, Mod::Alt], 'q', || {
         pinnacle.quit();
+    });
+
+    // `mod_key + alt + r` reloads the config
+    input.keybind([mod_key, Mod::Alt], 'r', || {
+        pinnacle.reload_config();
     });
 
     // `mod_key + alt + c` closes the focused window
@@ -206,12 +214,7 @@ async fn main() {
     let tag_names = ["1", "2", "3", "4", "5"];
 
     // Setup all monitors with tags "1" through "5"
-    output.connect_for_all(move |op| {
-        let tags = tag.add(op, tag_names);
-
-        // Be sure to set a tag to active or windows won't display
-        tags.first().unwrap().set_active(true);
-    });
+    output.setup([OutputSetup::new_with_matcher(|_| true).with_tags(tag_names)]);
 
     for tag_name in tag_names {
         // `mod_key + 1-5` switches to tag "1" to "5"
@@ -246,6 +249,8 @@ async fn main() {
             }
         });
     }
+
+    input.set_libinput_setting(LibinputSetting::Tap(true));
 
     // Enable sloppy focus
     window.connect_signal(WindowSignal::PointerEnter(Box::new(|win| {

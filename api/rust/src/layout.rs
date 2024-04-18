@@ -8,7 +8,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
@@ -26,20 +26,26 @@ use crate::{
     tag::TagHandle,
     util::{Axis, Geometry},
     window::WindowHandle,
-    OUTPUT, TAG, WINDOW,
+    ApiModules,
 };
 
 /// A struct that allows you to manage layouts.
 #[derive(Clone, Debug)]
 pub struct Layout {
+    api: OnceLock<ApiModules>,
     layout_client: LayoutServiceClient<Channel>,
 }
 
 impl Layout {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
+            api: OnceLock::new(),
             layout_client: LayoutServiceClient::new(channel.clone()),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     /// Consume the given [`LayoutManager`] and set it as the global layout handler.
@@ -61,7 +67,10 @@ impl Layout {
 
         let manager = Arc::new(Mutex::new(manager));
 
+        let api = self.api.get().unwrap().clone();
+
         let requester = LayoutRequester {
+            api: api.clone(),
             sender: from_client_clone,
             manager: manager.clone(),
         };
@@ -69,16 +78,16 @@ impl Layout {
         let thing = async move {
             while let Some(Ok(response)) = from_server.next().await {
                 let args = LayoutArgs {
-                    output: OUTPUT.get().unwrap().new_handle(response.output_name()),
+                    output: api.output.new_handle(response.output_name()),
                     windows: response
                         .window_ids
                         .into_iter()
-                        .map(|id| WINDOW.get().unwrap().new_handle(id))
+                        .map(|id| api.window.new_handle(id))
                         .collect(),
                     tags: response
                         .tag_ids
                         .into_iter()
-                        .map(|id| TAG.get().unwrap().new_handle(id))
+                        .map(|id| api.tag.new_handle(id))
                         .collect(),
                     output_width: response.output_width.unwrap_or_default(),
                     output_height: response.output_height.unwrap_or_default(),
@@ -225,6 +234,7 @@ impl LayoutManager for CyclingLayoutManager {
 /// A struct that can request layouts and provides access to a consumed [`LayoutManager`].
 #[derive(Debug)]
 pub struct LayoutRequester<T> {
+    api: ApiModules,
     sender: UnboundedSender<LayoutRequest>,
     /// The manager that was consumed, wrapped in an `Arc<Mutex>`.
     pub manager: Arc<Mutex<T>>,
@@ -233,6 +243,7 @@ pub struct LayoutRequester<T> {
 impl<T> Clone for LayoutRequester<T> {
     fn clone(&self) -> Self {
         Self {
+            api: self.api.clone(),
             sender: self.sender.clone(),
             manager: self.manager.clone(),
         }
@@ -245,7 +256,7 @@ impl<T> LayoutRequester<T> {
     /// This uses the focused output for the request.
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
-        let output_name = OUTPUT.get().unwrap().get_focused().map(|op| op.name);
+        let output_name = self.api.output.get_focused().map(|op| op.name);
         self.sender
             .send(LayoutRequest {
                 body: Some(Body::Layout(ExplicitLayout { output_name })),

@@ -15,7 +15,6 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    desktop::layer_map_for_output,
     input::pointer::CursorImageStatus,
     output::{Output, Scale, Subpixel},
     reexports::{
@@ -109,7 +108,7 @@ pub fn setup_winit(
         model: "Winit Window".to_string(),
     };
 
-    let output = Output::new("Pinnacle window".to_string(), physical_properties);
+    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
 
     output.change_current_state(
         Some(mode),
@@ -221,13 +220,13 @@ pub fn setup_winit(
                             size,
                             refresh: 144_000,
                         };
-                        output.change_current_state(
+                        state.change_output_state(
+                            &output,
                             Some(mode),
                             None,
                             Some(Scale::Fractional(scale_factor)),
                             None,
                         );
-                        layer_map_for_output(&output).arrange();
                         state.request_layout(&output);
                     }
                     WinitEvent::Focus(focused) => {

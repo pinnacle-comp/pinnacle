@@ -14,6 +14,7 @@ local rpc_types = {
     SetLocation = {},
     SetMode = {},
     SetScale = {},
+    SetTransform = {},
     ConnectForAll = {
         response_type = "ConnectForAllResponse",
     },
@@ -166,12 +167,465 @@ function output.connect_for_all(callback)
     })
 end
 
+---@param id_str string
+---@param op OutputHandle
+---
+---@return boolean
+local function output_id_matches(id_str, op)
+    if id_str:match("^serial:") then
+        local serial = tonumber(id_str:sub(8))
+        return serial and serial == op:serial() or false
+    else
+        return id_str == op.name
+    end
+end
+
+---@class OutputSetup
+---@field filter (fun(output: OutputHandle): boolean)? -- A filter for wildcard matches that should return true if this setup should apply to the passed in output.
+---@field mode Mode? -- Makes this setup apply the given mode to outputs.
+---@field scale number? -- Makes this setup apply the given scale to outputs.
+---@field tags string[]? -- Makes this setup add tags with the given name to outputs.
+---@field transform Transform? -- Makes this setup applt the given transform to outputs.
+
+---Declaratively setup outputs.
+---
+---`Output.setup` allows you to specify output properties that will be applied immediately and
+---on output connection. These include mode, scale, tags, and more.
+---
+---`setups` is a table of output identifier strings to `OutputSetup`s.
+---
+---### Keys
+---
+---Keys attempt to match outputs.
+---
+---Wildcard keys (`"*"`) will match all outputs. You can additionally filter these outputs
+---by setting a `filter` function in the setup that returns true if it should apply to the output.
+---(See the example.)
+---
+---Otherwise, keys will attempt to match the exact name of an output.
+---
+---Use "serial:<number>" to match outputs by their EDID serial. For example, "serial:143256".
+---Note that not all displays have EDID serials. Also, serials are not guaranteed to be unique.
+---If you're unlucky enough to have two displays with the same serial, you'll have to use their names
+---or filter with wildcards instead.
+---
+---### Setups
+---
+---If an output is matched, the corresponding `OutputSetup` entry will be applied to it.
+---Any given `tags` will be added, and things like `transform`s, `scale`s, and `mode`s will be set.
+---
+---### Ordering setups
+---
+---You may need to specify multiple wildcard matches for different setup applications.
+---You can't just add another key of `"*"`, because that would overwrite the old `"*"`.
+---In this case, you can order setups by prepending `n:` to the key, where n is an ordering number.
+---`n` should be between `1` and `#setups`. Setting higher orders without setting lower ones
+---will cause entries without orders to fill up lower numbers in an arbitrary order. Setting
+---orders above `#setups` may cause their entries to not apply.
+---
+---
+---### Example
+---```lua
+---Output.setup({
+---    -- Give all outputs tags 1 through 5
+---    ["1:*"] = {
+---        tags = { "1", "2", "3", "4", "5" },
+---    },
+---    -- Give outputs with a preferred mode of 4K a scale of 2.0
+---    ["2:*"] = {
+---        filter = function(op)
+---            return op:preferred_mode().pixel_height == 2160
+---        end,
+---        scale = 2.0,
+---    },
+---    -- Additionally give eDP-1 tags 6 and 7
+---    ["eDP-1"] = {
+---        tags = { "6", "7" },
+---    },
+---    -- Match an output by its EDID serial number
+---    ["serial:235987"] = { ... }
+---})
+---```
+---
+---@param setups table<string, OutputSetup>
+function output.setup(setups)
+    ---@type { [1]: string, setup: OutputSetup }[]
+    local op_setups = {}
+
+    local setup_len = 0
+
+    -- Index entries with an index
+    for op_id, op_setup in pairs(setups) do
+        setup_len = setup_len + 1
+
+        ---@type string|nil
+        if op_id:match("^%d+:") then
+            ---@type string
+            local index = op_id:match("^%d+")
+            ---@diagnostic disable-next-line: redefined-local
+            local op_id = op_id:sub(index:len() + 2)
+            ---@diagnostic disable-next-line: redefined-local
+            local index = tonumber(index)
+
+            ---@cast index number
+
+            op_setups[index] = { op_id, setup = op_setup }
+        end
+    end
+
+    -- Insert *s first
+    for op_id, op_setup in pairs(setups) do
+        if op_id:match("^*$") then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not op_setups[i] then
+                    op_setups[i] = { op_id, setup = op_setup }
+                    break
+                end
+            end
+        end
+    end
+
+    -- Insert rest of the entries
+    for op_id, op_setup in pairs(setups) do
+        if not op_id:match("^%d+:") and op_id ~= "*" then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not op_setups[i] then
+                    op_setups[i] = { op_id, setup = op_setup }
+                    break
+                end
+            end
+        end
+    end
+
+    ---@param op OutputHandle
+    local function apply_setups(op)
+        for _, op_setup in ipairs(op_setups) do
+            if output_id_matches(op_setup[1], op) or op_setup[1] == "*" then
+                local setup = op_setup.setup
+
+                if setup.filter and not setup.filter(op) then
+                    goto continue
+                end
+
+                if setup.mode then
+                    op:set_mode(setup.mode.pixel_width, setup.mode.pixel_height, setup.mode.refresh_rate_millihz)
+                end
+                if setup.scale then
+                    op:set_scale(setup.scale)
+                end
+                if setup.tags then
+                    require("pinnacle.tag").add(op, setup.tags)
+                end
+                if setup.transform then
+                    op:set_transform(setup.transform)
+                end
+            end
+
+            ::continue::
+        end
+
+        local tags = op:tags() or {}
+        if tags[1] then
+            tags[1]:set_active(true)
+        end
+    end
+
+    output.connect_for_all(function(op)
+        apply_setups(op)
+    end)
+end
+
+---@alias OutputLoc
+---| { [1]: integer, [2]: integer } -- A specific point
+---| { [1]: string, [2]: Alignment } -- A location relative to another output
+
+---@alias UpdateLocsOn
+---| "connect" -- Update output locations on output connect
+---| "disconnect" -- Update output locations on output disconnect
+---| "resize" -- Update output locations on output resize
+
+---Setup locations for outputs.
+---
+---This function lets you declare positions for outputs, either as a specific point in the global
+---space or relative to another output.
+---
+---### Choosing when to recompute output positions
+---
+---`update_locs_on` specifies when output positions should be recomputed. It can be `"all"`, signaling you
+---want positions to update on all of output connect, disconnect, and resize, or it can be a table
+---containing `"connect"`, `"disconnect"`, and/or `"resize"`.
+---
+---### Specifying locations
+---
+---`locs` should be a table of output identifiers to locations.
+---
+---#### Output identifiers
+---
+---Keys for `locs` should be output identifiers. These are strings of
+---the name of the output, for example "eDP-1" or "HDMI-A-1".
+---Additionally, if you want to match the EDID serial of an output,
+---prepend the serial with "serial:", for example "serial:174652".
+---You can find this by doing `get-edid | edid-decode`.
+---
+---#### Fallback relative-tos
+---
+---Sometimes you have an output with a relative location, but the output
+---it's relative to isn't connected. In this case you can specify an
+---order that locations will be placed by prepending "n:" to the key.
+---For example, "4:HDMI-1" will be applied before "5:HDMI-1", allowing
+---you to specify more than one relative output. The first connected
+---relative output will be chosen for placement. See the example below.
+---
+---### Example
+---```lua
+---               -- vvvvv Relayout on output connect, disconnect, and resize
+---Output.setup_locs("all", {
+---    -- Anchor eDP-1 to (0, 0) so we can place other outputs relative to it
+---    ["eDP-1"] = { 0, 0 },
+---    -- Place HDMI-A-1 below it centered
+---    ["HDMI-A-1"] = { "eDP-1", "bottom_align_center" },
+---    -- Place HDMI-A-2 below HDMI-A-1.
+---    ["3:HDMI-A-2"] = { "HDMI-A-1", "bottom_align_center" },
+---    -- Additionally, if HDMI-A-1 isn't connected, fallback to placing it below eDP-1 instead.
+---    ["4:HDMI-A-2"] = { "eDP-1", "bottom_align_center" },
+---
+---    -- Note that the last two have a number followed by a colon. This dictates the order of application.
+---    -- Because Lua tables with string keys don't index by declaration order, this is needed to specify that.
+---    -- You can also put a "1:" and "2:" in front of "eDP-1" and "HDMI-A-1" if you want to be explicit
+---    -- about their ordering.
+---    --
+---    -- Just note that orders must be from 1 to the length of the array. Entries without an order
+---    -- will be filled in from 1 upwards, taking any open slots. Entries with orders above
+---    -- #locs may not be applied.
+---})
+---
+--- -- Only relayout on output connect and resize
+---Output.setup_locs({ "connect", "resize" }, { ... })
+---
+--- -- Use EDID serials for identification.
+--- -- You can run
+--- -- require("pinnacle").run(function(Pinnacle)
+--- --     print(Pinnacle.output.get_focused():serial())
+--- -- end)
+--- -- in a Lua repl to find the EDID serial of the focused output.
+---Output.setup_locs("all" {
+---    ["serial:139487"] = { ... },
+---})
+---```
+---
+---@param update_locs_on (UpdateLocsOn)[] | "all"
+---@param locs table<string, OutputLoc>
+function output.setup_locs(update_locs_on, locs)
+    ---@type { [1]: string, loc: OutputLoc }[]
+    local setups = {}
+
+    local setup_len = 0
+
+    -- Index entries with an index
+    for op_id, op_loc in pairs(locs) do
+        setup_len = setup_len + 1
+
+        ---@type string|nil
+        if op_id:match("^%d+:") then
+            ---@type string
+            local index = op_id:match("^%d+")
+            ---@diagnostic disable-next-line: redefined-local
+            local op_id = op_id:sub(index:len() + 2)
+            ---@diagnostic disable-next-line: redefined-local
+            local index = tonumber(index)
+
+            ---@cast index number
+
+            setups[index] = { op_id, loc = op_loc }
+        end
+    end
+
+    -- Insert rest of the entries
+    for op_id, op_loc in pairs(locs) do
+        if not op_id:match("^%d+:") then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not setups[i] then
+                    setups[i] = { op_id, loc = op_loc }
+                    break
+                end
+            end
+        end
+    end
+
+    local function layout_outputs()
+        local outputs = output.get_all()
+
+        ---@type OutputHandle[]
+        local placed_outputs = {}
+
+        local rightmost_output = {
+            output = nil,
+            x = nil,
+        }
+
+        -- Place outputs with a specified location first
+        ---@diagnostic disable-next-line: redefined-local
+        for _, setup in ipairs(setups) do
+            for _, op in ipairs(outputs) do
+                if output_id_matches(setup[1], op) then
+                    if type(setup.loc[1]) == "number" then
+                        local loc = { x = setup.loc[1], y = setup.loc[2] }
+                        op:set_location(loc)
+                        table.insert(placed_outputs, op)
+
+                        local props = op:props()
+                        if not rightmost_output.x or rightmost_output.x < props.x + props.logical_width then
+                            rightmost_output.output = op
+                            rightmost_output.x = props.x + props.logical_width
+                        end
+                    end
+                    break
+                end
+            end
+        end
+
+        -- Place outputs that are relative to other outputs
+        local function next_output_with_relative_to()
+            ---@diagnostic disable-next-line: redefined-local
+            for _, setup in ipairs(setups) do
+                for _, op in ipairs(outputs) do
+                    for _, placed_op in ipairs(placed_outputs) do
+                        if placed_op.name == op.name then
+                            goto continue
+                        end
+                    end
+
+                    if not output_id_matches(setup[1], op) or type(setup.loc[1]) == "number" then
+                        goto continue
+                    end
+
+                    local relative_to_name = setup.loc[1]
+                    local alignment = setup.loc[2]
+                    for _, placed_op in ipairs(placed_outputs) do
+                        if placed_op.name == relative_to_name then
+                            return op, placed_op, alignment
+                        end
+                    end
+
+                    goto continue_outer
+
+                    ::continue::
+                end
+                ::continue_outer::
+            end
+
+            return nil, nil, nil
+        end
+
+        while true do
+            local op, relative_to, alignment = next_output_with_relative_to()
+            if not op then
+                break
+            end
+
+            ---@cast relative_to OutputHandle
+            ---@cast alignment Alignment
+
+            op:set_loc_adj_to(relative_to, alignment)
+            table.insert(placed_outputs, op)
+
+            local props = op:props()
+            if not rightmost_output.x or rightmost_output.x < props.x + props.logical_width then
+                rightmost_output.output = op
+                rightmost_output.x = props.x + props.logical_width
+            end
+        end
+
+        -- Place still-not-placed outputs
+        for _, op in ipairs(outputs) do
+            for _, placed_op in ipairs(placed_outputs) do
+                if placed_op.name == op.name then
+                    goto continue
+                end
+            end
+
+            if not rightmost_output.output then
+                op:set_location({ x = 0, y = 0 })
+            else
+                op:set_loc_adj_to(rightmost_output.output, "right_align_top")
+            end
+
+            local props = op:props()
+
+            rightmost_output.output = op
+            rightmost_output.x = props.x
+
+            table.insert(placed_outputs, op)
+
+            ::continue::
+        end
+    end
+
+    layout_outputs()
+
+    local layout_on_connect = false
+    local layout_on_disconnect = false
+    local layout_on_resize = false
+
+    if update_locs_on == "all" then
+        layout_on_connect = true
+        layout_on_disconnect = true
+        layout_on_resize = true
+    else
+        ---@cast update_locs_on UpdateLocsOn[]
+
+        for _, update_on in ipairs(update_locs_on) do
+            if update_on == "connect" then
+                layout_on_connect = true
+            elseif update_on == "disconnect" then
+                layout_on_disconnect = true
+            elseif update_on == "resize" then
+                layout_on_resize = true
+            end
+        end
+    end
+
+    if layout_on_connect then
+        -- FIXME: This currently does not duplicate tags because the connect signal does not fire for
+        -- |      previously connected outputs. However, this is unintended behavior, so fix this when you fix that.
+        output.connect_signal({
+            connect = function(_)
+                layout_outputs()
+            end,
+        })
+    end
+    if layout_on_disconnect then
+        output.connect_signal({
+            disconnect = function(_)
+                layout_outputs()
+            end,
+        })
+    end
+    if layout_on_resize then
+        output.connect_signal({
+            resize = function(_)
+                layout_outputs()
+            end,
+        })
+    end
+end
+
+---@type table<string, SignalServiceMethod>
 local signal_name_to_SignalName = {
     connect = "OutputConnect",
+    disconnect = "OutputDisconnect",
+    resize = "OutputResize",
+    move = "OutputMove",
 }
 
 ---@class OutputSignal Signals related to output events.
 ---@field connect fun(output: OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+---@field disconnect fun(output: OutputHandle)? An output was disconnected.
+---@field resize fun(output: OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
+---@field move fun(output: OutputHandle, x: integer, y: integer)? An output moved.
 
 ---Connect to an output signal.
 ---
@@ -411,6 +865,41 @@ function OutputHandle:decrease_scale(decrease_by)
     client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = -decrease_by }))
 end
 
+---@enum (key) Transform
+local transform_name_to_code = {
+    normal = 1,
+    ["90"] = 2,
+    ["180"] = 3,
+    ["270"] = 4,
+    flipped = 5,
+    flipped_90 = 6,
+    flipped_180 = 7,
+    flipped_270 = 8,
+}
+
+local transform_code_to_name = {
+    [1] = "normal",
+    [2] = "90",
+    [3] = "180",
+    [4] = "270",
+    [5] = "flipped",
+    [6] = "flipped_90",
+    [7] = "flipped_180",
+    [8] = "flipped_270",
+}
+
+---Set this output's transform.
+---
+---@param transform Transform
+function OutputHandle:set_transform(transform)
+    client.unary_request(
+        build_grpc_request_params(
+            "SetTransform",
+            { output_name = self.name, transform = transform_name_to_code[transform] }
+        )
+    )
+end
+
 ---@class Mode
 ---@field pixel_width integer
 ---@field pixel_height integer
@@ -431,6 +920,8 @@ end
 ---@field focused boolean?
 ---@field tags TagHandle[]
 ---@field scale number?
+---@field transform Transform?
+---@field serial integer?
 
 ---Get all properties of this output.
 ---
@@ -444,6 +935,7 @@ function OutputHandle:props()
     response.tags = handles
     response.tag_ids = nil
     response.modes = response.modes or {}
+    response.transform = transform_code_to_name[response.transform]
 
     return response
 end
@@ -578,6 +1070,24 @@ end
 ---@return number?
 function OutputHandle:scale()
     return self:props().scale
+end
+
+---Get this output's transform.
+---
+---Shorthand for `handle:props().transform`.
+---
+---@return Transform?
+function OutputHandle:transform()
+    return self:props().transform
+end
+
+---Get this output's EDID serial number.
+---
+---Shorthand for `handle:props().serial`.
+---
+---@return integer?
+function OutputHandle:serial()
+    return self:props().serial
 end
 
 ---@nodoc

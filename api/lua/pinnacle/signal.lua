@@ -14,11 +14,25 @@ local rpc_types = {
     OutputConnect = {
         response_type = "OutputConnectResponse",
     },
+    OutputDisconnect = {
+        response_type = "OutputDisconnectResponse",
+    },
+    OutputResize = {
+        response_type = "OutputResizeResponse",
+    },
+    OutputMove = {
+        response_type = "OutputMoveResponse",
+    },
+
     WindowPointerEnter = {
         response_type = "WindowPointerEnterResponse",
     },
     WindowPointerLeave = {
         response_type = "WindowPointerLeaveResponse",
+    },
+
+    TagActive = {
+        response_type = "TagActiveResponse",
     },
 }
 
@@ -62,6 +76,39 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    OutputDisconnect = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputResize = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle, logical_width: integer, logical_height: integer))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    OutputMove = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(output: OutputHandle, x: integer, y: integer))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
     WindowPointerEnter = {
         ---@nodoc
         ---@type H2Stream?
@@ -84,6 +131,17 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    TagActive = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(tag: TagHandle, active: boolean))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
 }
 
 signals.OutputConnect.on_response = function(response)
@@ -91,6 +149,30 @@ signals.OutputConnect.on_response = function(response)
     local handle = require("pinnacle.output").handle.new(response.output_name)
     for _, callback in ipairs(signals.OutputConnect.callbacks) do
         callback(handle)
+    end
+end
+
+signals.OutputDisconnect.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputDisconnect.callbacks) do
+        callback(handle)
+    end
+end
+
+signals.OutputResize.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputResize.callbacks) do
+        callback(handle, response.logical_width, response.logical_height)
+    end
+end
+
+signals.OutputMove.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local handle = require("pinnacle.output").handle.new(response.output_name)
+    for _, callback in ipairs(signals.OutputMove.callbacks) do
+        callback(handle, response.x, response.y)
     end
 end
 
@@ -109,6 +191,15 @@ signals.WindowPointerLeave.on_response = function(response)
 
     for _, callback in ipairs(signals.WindowPointerLeave.callbacks) do
         callback(window_handle)
+    end
+end
+
+signals.TagActive.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local tag_handle = require("pinnacle.tag").handle.new(response.tag_id)
+
+    for _, callback in ipairs(signals.TagActive.callbacks) do
+        callback(tag_handle, response.active)
     end
 end
 

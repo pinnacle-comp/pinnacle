@@ -29,8 +29,9 @@
 //!
 //! These [`TagHandle`]s allow you to manipulate individual tags and get their properties.
 
+use std::sync::OnceLock;
+
 use futures::FutureExt;
-use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
     tag::{
         self,
@@ -43,25 +44,39 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{block_on_tokio, output::OutputHandle, util::Batch, OUTPUT};
+use crate::{
+    block_on_tokio,
+    output::OutputHandle,
+    signal::{SignalHandle, TagSignal},
+    util::Batch,
+    window::WindowHandle,
+    ApiModules,
+};
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
 pub struct Tag {
     tag_client: TagServiceClient<Channel>,
+    api: OnceLock<ApiModules>,
 }
 
 impl Tag {
     pub(crate) fn new(channel: Channel) -> Self {
         Self {
             tag_client: TagServiceClient::new(channel.clone()),
+            api: OnceLock::new(),
         }
+    }
+
+    pub(crate) fn finish_init(&self, api: ApiModules) {
+        self.api.set(api).unwrap();
     }
 
     pub(crate) fn new_handle(&self, id: u32) -> TagHandle {
         TagHandle {
             id,
             tag_client: self.tag_client.clone(),
+            api: self.api.get().unwrap().clone(),
         }
     }
 
@@ -157,8 +172,7 @@ impl Tag {
     /// The async version of [`Tag::get`].
     pub async fn get_async(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
-        let output_module = OUTPUT.get().expect("OUTPUT doesn't exist");
-        let focused_output = output_module.get_focused();
+        let focused_output = self.api.get().unwrap().output.get_focused();
 
         if let Some(output) = focused_output {
             self.get_on_output_async(name, &output).await
@@ -220,6 +234,19 @@ impl Tag {
 
         block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
     }
+
+    /// Connect to a tag signal.
+    ///
+    /// The compositor will fire off signals that your config can listen for and act upon.
+    /// You can pass in a [`TagSignal`] along with a callback and it will get run
+    /// with the necessary arguments every time a signal of that type is received.
+    pub fn connect_signal(&self, signal: TagSignal) -> SignalHandle {
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
+
+        match signal {
+            TagSignal::Active(f) => signal_state.tag_active.add_callback(f),
+        }
+    }
 }
 
 /// A handle to a tag.
@@ -229,6 +256,7 @@ impl Tag {
 pub struct TagHandle {
     pub(crate) id: u32,
     tag_client: TagServiceClient<Channel>,
+    api: ApiModules,
 }
 
 impl PartialEq for TagHandle {
@@ -243,26 +271,6 @@ impl std::hash::Hash for TagHandle {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
-}
-
-/// Various static layouts.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, TryFromPrimitive)]
-pub enum Layout {
-    /// One master window on the left with all other windows stacked to the right
-    MasterStack = 1,
-    /// Windows split in half towards the bottom right corner
-    Dwindle,
-    /// Windows split in half in a spiral
-    Spiral,
-    /// One main corner window in the top left with a column of windows on the right and a row on the bottom
-    CornerTopLeft,
-    /// One main corner window in the top right with a column of windows on the left and a row on the bottom
-    CornerTopRight,
-    /// One main corner window in the bottom left with a column of windows on the right and a row on the top.
-    CornerBottomLeft,
-    /// One main corner window in the bottom right with a column of windows on the left and a row on the top.
-    CornerBottomRight,
 }
 
 impl TagHandle {
@@ -396,12 +404,18 @@ impl TagHandle {
             .unwrap()
             .into_inner();
 
-        let output = OUTPUT.get().expect("OUTPUT doesn't exist");
+        let output = self.api.output;
+        let window = self.api.window;
 
         TagProperties {
             active: response.active,
             name: response.name,
             output: response.output_name.map(|name| output.new_handle(name)),
+            windows: response
+                .window_ids
+                .into_iter()
+                .map(|id| window.new_handle(id))
+                .collect(),
         }
     }
 
@@ -440,6 +454,18 @@ impl TagHandle {
     pub async fn output_async(&self) -> Option<OutputHandle> {
         self.props_async().await.output
     }
+
+    /// Get all windows with this tag.
+    ///
+    /// Shorthand for `self.props().windows`.
+    pub fn windows(&self) -> Vec<WindowHandle> {
+        self.props().windows
+    }
+
+    /// The async version of [`TagHandle::windows`].
+    pub async fn windows_async(&self) -> Vec<WindowHandle> {
+        self.props_async().await.windows
+    }
 }
 
 /// Properties of a tag.
@@ -451,4 +477,6 @@ pub struct TagProperties {
     pub name: Option<String>,
     /// The output the tag is on
     pub output: Option<OutputHandle>,
+    /// The windows that have this tag
+    pub windows: Vec<WindowHandle>,
 }

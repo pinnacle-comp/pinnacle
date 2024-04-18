@@ -36,6 +36,11 @@ require("pinnacle").setup(function(Pinnacle)
         Pinnacle.quit()
     end)
 
+    -- mod_key + alt + r = Reload config
+    Input.keybind({ mod_key, "alt" }, "r", function()
+        Pinnacle.reload_config()
+    end)
+
     -- mod_key + alt + c = Close window
     Input.keybind({ mod_key, "alt" }, "c", function()
         local focused = Window.get_focused()
@@ -76,18 +81,26 @@ require("pinnacle").setup(function(Pinnacle)
         end
     end)
 
-    --------------------
-    -- Tags           --
-    --------------------
+    ----------------------
+    -- Tags and Outputs --
+    ----------------------
 
     local tag_names = { "1", "2", "3", "4", "5" }
 
-    -- `connect_for_all` is useful for performing setup on every monitor you have.
-    -- Here, we add tags with names 1-5 and set tag 1 as active.
-    Output.connect_for_all(function(op)
-        local tags = Tag.add(op, tag_names)
-        tags[1]:set_active(true)
-    end)
+    -- Setup outputs.
+    --
+    -- `Output.setup` allows you to declare things like mode, scale, and tags for outputs.
+    -- Here we give all outputs tags 1 through 5.
+    Output.setup({
+        -- "*" matches all outputs
+        ["*"] = { tags = tag_names },
+    })
+
+    -- If you want to declare output locations as well, you can use `Output.setup_locs`.
+    -- This will additionally allow you to recalculate output locations on signals like
+    -- output connect, disconnect, and resize.
+    --
+    -- Read the admittedly scuffed docs for more.
 
     -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do
@@ -245,6 +258,10 @@ require("pinnacle").setup(function(Pinnacle)
             end
         end
     end)
+
+    Input.set_libinput_settings({
+        tap = true,
+    })
 
     -- Enable sloppy focus
     Window.connect_signal({

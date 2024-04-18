@@ -16,6 +16,34 @@ message OutputConnectRequest {
 message OutputConnectResponse {
   optional string output_name = 1;
 }
+message OutputDisconnectRequest {
+  optional StreamControl control = 1;
+}
+message OutputDisconnectResponse {
+  optional string output_name = 1;
+}
+
+message OutputResizeRequest {
+  optional StreamControl control = 1;
+}
+
+// An output's logical size changed
+message OutputResizeResponse {
+  optional string output_name = 1;
+  optional uint32 logical_width = 2;
+  optional uint32 logical_height = 3;
+}
+
+message OutputMoveRequest {
+  optional StreamControl control = 1;
+}
+
+// An output's location in the global space changed
+message OutputMoveResponse {
+  optional string output_name = 1;
+  optional int32 x = 2;
+  optional int32 y = 3;
+}
 
 message WindowPointerEnterRequest {
   optional StreamControl control = 1;
@@ -33,8 +61,23 @@ message WindowPointerLeaveResponse {
   optional uint32 window_id = 1;
 }
 
+message TagActiveRequest {
+  optional StreamControl control = 1;
+}
+message TagActiveResponse {
+  optional uint32 tag_id = 1;
+  // The tag was set to active or inactive.
+  optional bool active = 2;
+}
+
 service SignalService {
   rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
+  rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
+  rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
+  rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
+
   rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
   rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
+
+  rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
 }

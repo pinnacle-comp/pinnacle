@@ -35,9 +35,14 @@ message GetPropertiesRequest {
   optional uint32 tag_id = 1;
 }
 message GetPropertiesResponse {
+  // Whether or not this tag is active
   optional bool active = 1;
+  // The name of this tag
   optional string name = 2;
+  // The output this tag is on
   optional string output_name = 3;
+  // All windows that have this tag
+  repeated uint32 window_ids = 4;
 }
 
 service TagService {

@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use smithay::reexports::drm::control::{connector, property, Device, ResourceHandle};
 
 // A bunch of this stuff is from cosmic-comp
@@ -6,6 +8,7 @@ use smithay::reexports::drm::control::{connector, property, Device, ResourceHand
 pub struct EdidInfo {
     pub model: String,
     pub manufacturer: String,
+    pub serial: Option<NonZeroU32>,
 }
 
 impl EdidInfo {
@@ -55,6 +58,9 @@ fn parse_edid(buffer: &[u8]) -> anyhow::Result<EdidInfo> {
 
     let manufacturer = get_manufacturer([char1 as char, char2 as char, char3 as char]);
 
+    // INFO: This probably *isn't* completely unique between all monitors
+    let serial = u32::from_le_bytes(buffer[12..=15].try_into()?);
+
     // Monitor names are inside of these display/monitor descriptors at bytes 72..=125.
     // Each descriptor is 18 bytes long.
     let descriptor1 = &buffer[72..=89];
@@ -99,6 +105,7 @@ fn parse_edid(buffer: &[u8]) -> anyhow::Result<EdidInfo> {
     Ok(EdidInfo {
         model,
         manufacturer,
+        serial: NonZeroU32::new(serial),
     })
 }
 

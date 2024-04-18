@@ -21,6 +21,8 @@ enum SetOrToggle {
 
 message QuitRequest {}
 
+message ReloadConfigRequest {}
+
 // A manual ping request independent of any HTTP keepalive.
 //
 // Tonic does not seems to give you the means to run something
@@ -36,5 +38,6 @@ message PingResponse {
 
 service PinnacleService {
   rpc Quit(QuitRequest) returns (google.protobuf.Empty);
+  rpc ReloadConfig(ReloadConfigRequest) returns (google.protobuf.Empty);
   rpc Ping(PingRequest) returns (PingResponse);
 }
