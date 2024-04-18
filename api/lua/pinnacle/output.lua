@@ -194,7 +194,7 @@ end
 ---
 ---`setups` is a table of output identifier strings to `OutputSetup`s.
 ---
----## Keys
+---### Keys
 ---
 ---Keys attempt to match outputs.
 ---
@@ -204,19 +204,24 @@ end
 ---
 ---Otherwise, keys will attempt to match the exact name of an output.
 ---
----## Setups
+---Use "serial:<number>" to match outputs by their EDID serial. For example, "serial:143256".
+---Note that not all displays have EDID serials. Also, serials are not guaranteed to be unique.
+---If you're unlucky enough to have two displays with the same serial, you'll have to use their names
+---or filter with wildcards instead.
+---
+---### Setups
 ---
 ---If an output is matched, the corresponding `OutputSetup` entry will be applied to it.
 ---Any given `tags` will be added, and things like `transform`s, `scale`s, and `mode`s will be set.
 ---
----## Ordering setups
+---### Ordering setups
 ---
 ---You may need to specify multiple wildcard matches for different setup applications.
 ---You can't just add another key of `"*"`, because that would overwrite the old `"*"`.
----In this case, you can order setups by prepending `n:` to the key, where n is a priority number.
----`n` should be between `1` and `#setups`. Setting higher priorities without setting lower ones
----will cause entries without priorities to fill up lower priorities in an arbitrary order. Setting
----priorities above `#setups` may cause their entries to not apply.
+---In this case, you can order setups by prepending `n:` to the key, where n is an ordering number.
+---`n` should be between `1` and `#setups`. Setting higher orders without setting lower ones
+---will cause entries without orders to fill up lower numbers in an arbitrary order. Setting
+---orders above `#setups` may cause their entries to not apply.
 ---
 ---
 ---### Example
@@ -237,6 +242,8 @@ end
 ---    ["eDP-1"] = {
 ---        tags = { "6", "7" },
 ---    },
+---    -- Match an output by its EDID serial number
+---    ["serial:235987"] = { ... }
 ---})
 ---```
 ---
@@ -344,7 +351,7 @@ end
 ---This function lets you declare positions for outputs, either as a specific point in the global
 ---space or relative to another output.
 ---
----## Choosing when to recompute output positions
+---### Choosing when to recompute output positions
 ---
 ---`update_locs_on` specifies when output positions should be recomputed. It can be `"all"`, signaling you
 ---want positions to update on all of output connect, disconnect, and resize, or it can be a table
@@ -360,6 +367,7 @@ end
 ---the name of the output, for example "eDP-1" or "HDMI-A-1".
 ---Additionally, if you want to match the EDID serial of an output,
 ---prepend the serial with "serial:", for example "serial:174652".
+---You can find this by doing `get-edid | edid-decode`.
 ---
 ---#### Fallback relative-tos
 ---

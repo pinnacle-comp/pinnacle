@@ -36,6 +36,11 @@ require("pinnacle").setup(function(Pinnacle)
         Pinnacle.quit()
     end)
 
+    -- mod_key + alt + r = Reload config
+    Input.keybind({ mod_key, "alt" }, "r", function()
+        Pinnacle.reload_config()
+    end)
+
     -- mod_key + alt + c = Close window
     Input.keybind({ mod_key, "alt" }, "c", function()
         local focused = Window.get_focused()
@@ -253,6 +258,10 @@ require("pinnacle").setup(function(Pinnacle)
             end
         end
     end)
+
+    Input.set_libinput_settings({
+        tap = true,
+    })
 
     -- Enable sloppy focus
     Window.connect_signal({
