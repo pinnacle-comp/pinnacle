@@ -494,26 +494,23 @@ mod output {
         test_api(|sender| {
             setup_lua! { |Pinnacle|
                 Pinnacle.output.setup({
-                    {
-                        function(_)
-                            return true
-                        end,
-                        tag_names = { "1", "2", "3" },
+                    ["1:*"] = {
+                        tags = { "1", "2", "3" },
                     },
-                    {
-                        function(op)
+                    ["2:*"] = {
+                        filter = function(op)
                             return string.match(op.name, "Test") ~= nil
                         end,
-                        tag_names = { "Test 4", "Test 5" },
+                        tags = { "Test 4", "Test 5" },
                     },
-                    {
-                        "Second",
+                    ["Second"] = {
                         scale = 2.0,
                         mode = {
                             pixel_width = 6900,
                             pixel_height = 420,
                             refresh_rate_millihz = 69420,
                         },
+                        transform = "90",
                     },
                 })
             }
@@ -562,6 +559,47 @@ mod output {
                 assert_eq!(second_mode.size.w, 6900);
                 assert_eq!(second_mode.size.h, 420);
                 assert_eq!(second_mode.refresh, 69420);
+
+                assert_eq!(
+                    second_op.current_transform(),
+                    smithay::utils::Transform::_90
+                );
+            });
+        })
+    }
+
+    #[tokio::main]
+    #[self::test]
+    async fn setup_has_wildcard_first() -> anyhow::Result<()> {
+        test_api(|sender| {
+            setup_lua! { |Pinnacle|
+                Pinnacle.output.setup({
+                    ["*"] = {
+                        tags = { "1", "2", "3" },
+                    },
+                    ["First"] = {
+                        tags = { "A", "B" },
+                    },
+                })
+            }
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                state.new_output("First", (300, 200).into());
+            });
+
+            sleep_secs(1);
+
+            with_state(&sender, |state| {
+                let first_op = output_for_name(state, "First");
+
+                let tags_for = |output: &Output| {
+                    output
+                        .with_state(|state| state.tags.iter().map(|t| t.name()).collect::<Vec<_>>())
+                };
+
+                assert_eq!(tags_for(&first_op), vec!["1", "2", "3", "A", "B"]);
             });
         })
     }
@@ -572,9 +610,9 @@ mod output {
         test_api(|sender| {
             setup_lua! { |Pinnacle|
                 Pinnacle.output.setup_locs("all", {
-                    { "Pinnacle Window", loc = { x = 0, y = 0 } },
-                    { "First", loc = { "Second", "left_align_top" } },
-                    { "Second", loc = { "First", "right_align_top" } },
+                    ["Pinnacle Window"] = { x = 0, y = 0 },
+                    ["First"] = { "Second", "left_align_top" },
+                    ["Second"] = { "First", "right_align_top" },
                 })
             }
 
@@ -639,16 +677,11 @@ mod output {
         test_api(|sender| {
             setup_lua! { |Pinnacle|
                 Pinnacle.output.setup_locs("all", {
-                    { "Pinnacle Window", loc = { x = 0, y = 0 } },
-                    { "First", loc = { "Pinnacle Window", "bottom_align_left" } },
-                    { "Second", loc = { "First", "bottom_align_left" } },
-                    {
-                        "Third",
-                        loc = {
-                            { "Second", "bottom_align_left" },
-                            { "First", "bottom_align_left" },
-                        },
-                    },
+                    ["Pinnacle Window"] = { 0, 0 },
+                    ["First"] = { "Pinnacle Window", "bottom_align_left" },
+                    ["Second"] = { "First", "bottom_align_left" },
+                    ["4:Third"] = { "Second", "bottom_align_left" },
+                    ["5:Third"] = { "First", "bottom_align_left" },
                 })
             }
 

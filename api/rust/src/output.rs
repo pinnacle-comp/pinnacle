@@ -188,6 +188,7 @@ impl Output {
     ///
     /// ```
     /// use pinnacle_api::output::OutputSetup;
+    /// use pinnacle_api::output::OutputId;
     ///
     /// output.setup([
     ///     // Give all outputs tags 1 through 5
@@ -196,7 +197,7 @@ impl Output {
     ///     OutputSetup::new_with_matcher(|op| op.preferred_mode().unwrap().pixel_width == 2160)
     ///         .with_scale(2.0),
     ///     // Additionally give eDP-1 tags 6 and 7
-    ///     OutputSetup::new("eDP-1").with_tags(["6", "7"]),
+    ///     OutputSetup::new(OutputId::name("eDP-1")).with_tags(["6", "7"]),
     /// ]);
     /// ```
     pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {

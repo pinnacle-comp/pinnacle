@@ -168,72 +168,142 @@ function output.connect_for_all(callback)
 end
 
 ---@class OutputSetup
----@field [1] (string | fun(output: OutputHandle): boolean)
----@field loc ({ x: integer, y: integer } | { [1]: (string | fun(output: OutputHandle): boolean), [2]: Alignment })?
+---@field filter (fun(output: OutputHandle): boolean)?
 ---@field mode Mode?
 ---@field scale number?
----@field tag_names string[]?
-
----comment
----@param op OutputHandle
----@param matcher string | fun(output: OutputHandle): boolean
----@return boolean
-local function output_matches(op, matcher)
-    return (type(matcher) == "string" and matcher == op.name) or (type(matcher) == "function" and matcher(op))
-end
+---@field tags string[]?
+---@field transform Transform?
 
 ---Declaratively setup outputs.
 ---
 ---`Output.setup` allows you to specify output properties that will be applied immediately and
 ---on output connection. These include mode, scale, tags, and more.
 ---
----Setups will be applied from top to bottom.
+---`setups` is a table of output identifier strings to `OutputSetup`s.
 ---
----`setups` is an array of `OutputSetup` tables.
----The table entry at [1] in an `OutputSetup` table should be either a string or a function
----that takes in an `OutputHandle` and returns a boolean. Strings will match output names directly,
----while the function matches outputs based on custom logic. You can specify keys such as
----`tag_names`, `scale`, and others to customize output properties.
+---## Keys
+---
+---Keys attempt to match outputs.
+---
+---Wildcard keys (`"*"`) will match all outputs. You can additionally filter these outputs
+---by setting a `filter` function in the setup that returns true if it should apply to the output.
+---(See the example.)
+---
+---Otherwise, keys will attempt to match the exact name of an output.
+---
+---## Setups
+---
+---If an output is matched, the corresponding `OutputSetup` entry will be applied to it.
+---Any given `tags` will be added, and things like `transform`s, `scale`s, and `mode`s will be set.
+---
+---## Ordering setups
+---
+---You may need to specify multiple wildcard matches for different setup applications.
+---You can't just add another key of `"*"`, because that would overwrite the old `"*"`.
+---In this case, you can order setups by prepending `n:` to the key, where n is a priority number.
+---`n` should be between `1` and `#setups`. Setting higher priorities without setting lower ones
+---will cause entries without priorities to fill up lower priorities in an arbitrary order. Setting
+---priorities above `#setups` may cause their entries to not apply.
+---
 ---
 ---### Example
 ---```lua
 ---Output.setup({
 ---    -- Give all outputs tags 1 through 5
----    {
----        function(_) return true end,
----        tag_names = { "1", "2", "3", "4", "5" },
----    }
+---    ["1:*"] = {
+---        tags = { "1", "2", "3", "4", "5" },
+---    },
 ---    -- Give outputs with a preferred mode of 4K a scale of 2.0
----    {
----        function(op)
----            return op:preferred_mode().pixel_width == 2160
+---    ["2:*"] = {
+---        filter = function(op)
+---            return op:preferred_mode().pixel_height == 2160
 ---        end,
 ---        scale = 2.0,
 ---    },
 ---    -- Additionally give eDP-1 tags 6 and 7
----    {
----        "eDP-1",
----        tag_names = { "6", "7" },
+---    ["eDP-1"] = {
+---        tags = { "6", "7" },
 ---    },
 ---})
 ---```
 ---
----@param setups OutputSetup[]
+---@param setups table<string, OutputSetup>
 function output.setup(setups)
+    ---@type { [1]: string, setup: OutputSetup }[]
+    local op_setups = {}
+
+    local setup_len = 0
+
+    -- Index entries with an index
+    for op_id, op_setup in pairs(setups) do
+        setup_len = setup_len + 1
+
+        ---@type string|nil
+        if op_id:match("^%d+:") then
+            ---@type string
+            local index = op_id:match("^%d+")
+            local op_id = op_id:sub(index:len() + 2)
+            local index = tonumber(index)
+
+            ---@cast index number
+
+            op_setups[index] = { op_id, setup = op_setup }
+        end
+    end
+
+    -- Insert *s first
+    for op_id, op_setup in pairs(setups) do
+        if op_id:match("^*$") then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not op_setups[i] then
+                    print(op_id, i)
+                    op_setups[i] = { op_id, setup = op_setup }
+                    break
+                end
+            end
+        end
+    end
+
+    -- Insert rest of the entries
+    for op_id, op_setup in pairs(setups) do
+        if not op_id:match("^%d+:") and op_id ~= "*" then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not op_setups[i] then
+                    print(op_id, i)
+                    op_setups[i] = { op_id, setup = op_setup }
+                    break
+                end
+            end
+        end
+    end
+
     ---@param op OutputHandle
     local function apply_setups(op)
-        for _, setup in ipairs(setups) do
-            if output_matches(op, setup[1]) then
+        for _, op_setup in ipairs(op_setups) do
+            if op_setup[1] == op.name or op_setup[1] == "*" then
+                local setup = op_setup.setup
+
+                if setup.filter and not setup.filter(op) then
+                    goto continue
+                end
+
                 if setup.mode then
                     op:set_mode(setup.mode.pixel_width, setup.mode.pixel_height, setup.mode.refresh_rate_millihz)
                 end
                 if setup.scale then
                     op:set_scale(setup.scale)
                 end
-                if setup.tag_names then
-                    require("pinnacle.tag").add(op, setup.tag_names)
+                if setup.tags then
+                    require("pinnacle.tag").add(op, setup.tags)
+                end
+                if setup.transform then
+                    op:set_transform(setup.transform)
                 end
             end
+
+            ::continue::
         end
 
         local tags = op:tags() or {}
@@ -248,9 +318,8 @@ function output.setup(setups)
 end
 
 ---@alias OutputLoc
----| { x: integer, y: integer } -- A specific point
+---| { [1]: integer, [2]: integer } -- A specific point
 ---| { [1]: string, [2]: Alignment } -- A location relative to another output
----| { [1]: string, [2]: Alignment }[] -- A location relative to another output with fallbacks
 
 ---@alias UpdateLocsOn
 ---| "connect" -- Update output locations on output connect
@@ -275,19 +344,22 @@ end
 ---               -- vvvvv Relayout on output connect, disconnect, and resize
 ---Output.setup_locs("all", {
 ---    -- Anchor eDP-1 to (0, 0) so we can place other outputs relative to it
----    { "eDP-1", loc = { x = 0, y = 0 } },
+---    ["eDP-1"] = { 0, 0 },
 ---    -- Place HDMI-A-1 below it centered
----    { "HDMI-A-1", loc = { "eDP-1", "bottom_align_center" } },
+---    ["HDMI-A-1"] = { "eDP-1", "bottom_align_center" },
 ---    -- Place HDMI-A-2 below HDMI-A-1.
----    -- Additionally, if HDMI-A-1 isn't connected, fallback to placing
----    -- it below eDP-1 instead.
----    {
----        "HDMI-A-2",
----        loc = {
----            { "HDMI-A-1", "bottom_align_center" },
----            { "eDP-1", "bottom_align_center" },
----        },
----    },
+---    ["3:HDMI-A-2"] = { "HDMI-A-1", "bottom_align_center" },
+---    -- Additionally, if HDMI-A-1 isn't connected, fallback to placing it below eDP-1 instead.
+---    ["4:HDMI-A-2"] = { "eDP-1", "bottom_align_center" },
+---
+---    -- Note that the last two have a number followed by a colon. This dictates the priority of application.
+---    -- Because Lua tables with string keys don't index by declaration order, this is needed to specify that.
+---    -- You can also put a "1:" and "2:" in front of "eDP-1" and "HDMI-A-1" if you want to be explicit
+---    -- about their ordering.
+---    --
+---    -- Just note that priorities must be from 1 to the length of the array. Entries without a priority
+---    -- will be filled in from 1 upwards, taking any open priorities. Entries with priorities above
+---    -- #locs may not be applied.
 ---})
 ---
 --- -- Only relayout on output connect and resize
@@ -295,15 +367,40 @@ end
 ---```
 ---
 ---@param update_locs_on (UpdateLocsOn)[] | "all"
----@param setup { [1]: string, loc: OutputLoc }[]
-function output.setup_locs(update_locs_on, setup)
-    ---@type { [1]: string, loc: ({ x: integer, y: integer } | { [1]: string, [2]: Alignment }[]) }[]
+---@param locs table<string, OutputLoc>
+function output.setup_locs(update_locs_on, locs)
+    ---@type { [1]: string, loc: OutputLoc }[]
     local setups = {}
-    for _, s in ipairs(setup) do
-        if type(s.loc[1]) == "string" then
-            table.insert(setups, { s[1], loc = { s.loc } })
-        else
-            table.insert(setups, s)
+
+    local setup_len = 0
+
+    -- Index entries with an index
+    for op_id, op_loc in pairs(locs) do
+        setup_len = setup_len + 1
+
+        ---@type string|nil
+        if op_id:match("^%d+:") then
+            ---@type string
+            local index = op_id:match("^%d+")
+            local op_id = op_id:sub(index:len() + 2)
+            local index = tonumber(index)
+
+            ---@cast index number
+
+            setups[index] = { op_id, loc = op_loc }
+        end
+    end
+
+    -- Insert rest of the entries
+    for op_id, op_loc in pairs(locs) do
+        if not op_id:match("^%d+:") then
+            -- Fill up holes if there are any
+            for i = 1, setup_len do
+                if not setups[i] then
+                    setups[i] = { op_id, loc = op_loc }
+                    break
+                end
+            end
         end
     end
 
@@ -323,8 +420,8 @@ function output.setup_locs(update_locs_on, setup)
         for _, setup in ipairs(setups) do
             for _, op in ipairs(outputs) do
                 if op.name == setup[1] then
-                    if setup.loc and setup.loc.x and setup.loc.y then
-                        local loc = { x = setup.loc.x, y = setup.loc.y }
+                    if type(setup.loc[1]) == "number" then
+                        local loc = { x = setup.loc[1], y = setup.loc[2] }
                         op:set_location(loc)
                         table.insert(placed_outputs, op)
 
@@ -350,17 +447,15 @@ function output.setup_locs(update_locs_on, setup)
                         end
                     end
 
-                    if op.name ~= setup[1] or type(setup.loc[1]) ~= "table" then
+                    if op.name ~= setup[1] or type(setup.loc[1]) == "number" then
                         goto continue
                     end
 
-                    for _, loc in ipairs(setup.loc) do
-                        local relative_to_name = loc[1]
-                        local alignment = loc[2]
-                        for _, placed_op in ipairs(placed_outputs) do
-                            if placed_op.name == relative_to_name then
-                                return op, placed_op, alignment
-                            end
+                    local relative_to_name = setup.loc[1]
+                    local alignment = setup.loc[2]
+                    for _, placed_op in ipairs(placed_outputs) do
+                        if placed_op.name == relative_to_name then
+                            return op, placed_op, alignment
                         end
                     end
 
