@@ -86,16 +86,9 @@ require("pinnacle").setup(function(Pinnacle)
     --
     -- `Output.setup` allows you to declare things like mode, scale, and tags for outputs.
     -- Here we give all outputs tags 1 through 5.
-    --
-    -- Note that output matching functions currently don't infer the type of the parameter,
-    -- so you may need to add `---@param <param name> OutputHandle` above it.
     Output.setup({
-        {
-            function(_)
-                return true
-            end,
-            tag_names = tag_names,
-        },
+        -- "*" matches all outputs
+        ["*"] = { tags = tag_names },
     })
 
     -- If you want to declare output locations as well, you can use `Output.setup_locs`.
