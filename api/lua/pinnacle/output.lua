@@ -344,13 +344,31 @@ end
 ---This function lets you declare positions for outputs, either as a specific point in the global
 ---space or relative to another output.
 ---
+---## Choosing when to recompute output positions
+---
 ---`update_locs_on` specifies when output positions should be recomputed. It can be `"all"`, signaling you
 ---want positions to update on all of output connect, disconnect, and resize, or it can be a table
 ---containing `"connect"`, `"disconnect"`, and/or `"resize"`.
 ---
----`setup` is an array of tables of the form `{ [1]: string, loc: OutputLoc }`, where `OutputLoc` is either
----the table `{ x: integer, y: integer }`, `{ [1]: string, [2]: Alignment }`, or an array of the latter table.
----See the examples for information.
+---### Specifying locations
+---
+---`locs` should be a table of output identifiers to locations.
+---
+---#### Output identifiers
+---
+---Keys for `locs` should be output identifiers. These are strings of
+---the name of the output, for example "eDP-1" or "HDMI-A-1".
+---Additionally, if you want to match the EDID serial of an output,
+---prepend the serial with "serial:", for example "serial:174652".
+---
+---#### Fallback relative-tos
+---
+---Sometimes you have an output with a relative location, but the output
+---it's relative to isn't connected. In this case you can specify an
+---order that locations will be placed by prepending "n:" to the key.
+---For example, "4:HDMI-1" will be applied before "5:HDMI-1", allowing
+---you to specify more than one relative output. The first connected
+---relative output will be chosen for placement. See the example below.
 ---
 ---### Example
 ---```lua
@@ -365,18 +383,28 @@ end
 ---    -- Additionally, if HDMI-A-1 isn't connected, fallback to placing it below eDP-1 instead.
 ---    ["4:HDMI-A-2"] = { "eDP-1", "bottom_align_center" },
 ---
----    -- Note that the last two have a number followed by a colon. This dictates the priority of application.
+---    -- Note that the last two have a number followed by a colon. This dictates the order of application.
 ---    -- Because Lua tables with string keys don't index by declaration order, this is needed to specify that.
 ---    -- You can also put a "1:" and "2:" in front of "eDP-1" and "HDMI-A-1" if you want to be explicit
 ---    -- about their ordering.
 ---    --
----    -- Just note that priorities must be from 1 to the length of the array. Entries without a priority
----    -- will be filled in from 1 upwards, taking any open priorities. Entries with priorities above
+---    -- Just note that orders must be from 1 to the length of the array. Entries without an order
+---    -- will be filled in from 1 upwards, taking any open slots. Entries with orders above
 ---    -- #locs may not be applied.
 ---})
 ---
 --- -- Only relayout on output connect and resize
 ---Output.setup_locs({ "connect", "resize" }, { ... })
+---
+--- -- Use EDID serials for identification.
+--- -- You can run
+--- -- require("pinnacle").run(function(Pinnacle)
+--- --     print(Pinnacle.output.get_focused():serial())
+--- -- end)
+--- -- in a Lua repl to find the EDID serial of the focused output.
+---Output.setup_locs("all" {
+---    ["serial:139487"] = { ... },
+---})
 ---```
 ---
 ---@param update_locs_on (UpdateLocsOn)[] | "all"

@@ -507,7 +507,7 @@ impl OutputSetup {
 pub enum OutputLoc {
     /// A specific point in the global space of the form (x, y).
     Point(i32, i32),
-    /// A location relative to another output of the form (output_name, alignment).
+    /// A location relative to another output with an [`Alignment`].
     RelativeTo(OutputId, Alignment),
 }
 
