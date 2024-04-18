@@ -1,3 +1,4 @@
+use pinnacle_api::input::libinput::LibinputSetting;
 use pinnacle_api::layout::{
     CornerLayout, CornerLocation, CyclingLayoutManager, DwindleLayout, FairLayout, MasterSide,
     MasterStackLayout, SpiralLayout,
@@ -55,6 +56,11 @@ async fn main() {
     // `mod_key + alt + q` quits Pinnacle
     input.keybind([mod_key, Mod::Alt], 'q', || {
         pinnacle.quit();
+    });
+
+    // `mod_key + alt + r` reloads the config
+    input.keybind([mod_key, Mod::Alt], 'r', || {
+        pinnacle.reload_config();
     });
 
     // `mod_key + alt + c` closes the focused window
@@ -243,6 +249,8 @@ async fn main() {
             }
         });
     }
+
+    input.set_libinput_setting(LibinputSetting::Tap(true));
 
     // Enable sloppy focus
     window.connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
