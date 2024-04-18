@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::cell::RefCell;
+use std::{num::NonZeroU32, sync::RwLock};
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputResizeResponse};
 use smithay::{
@@ -41,6 +41,7 @@ pub struct OutputState {
     pub tags: Vec<Tag>,
     pub focus_stack: WindowKeyboardFocusStack,
     pub screencopy: Option<Screencopy>,
+    pub serial: Option<NonZeroU32>,
 }
 
 impl WithState for Output {
@@ -52,9 +53,9 @@ impl WithState for Output {
     {
         let state = self
             .user_data()
-            .get_or_insert(RefCell::<Self::State>::default);
+            .get_or_insert_threadsafe(RwLock::<Self::State>::default);
 
-        func(&state.borrow())
+        func(&state.read().expect("with_state already locked"))
     }
 
     fn with_state_mut<F, T>(&self, func: F) -> T
@@ -63,9 +64,9 @@ impl WithState for Output {
     {
         let state = self
             .user_data()
-            .get_or_insert(RefCell::<Self::State>::default);
+            .get_or_insert_threadsafe(RwLock::<Self::State>::default);
 
-        func(&mut state.borrow_mut())
+        func(&mut state.write().expect("with_state already locked"))
     }
 }
 

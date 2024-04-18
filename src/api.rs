@@ -1180,6 +1180,10 @@ impl output_service_server::OutputService for OutputService {
                 }) as i32
             });
 
+            let serial = output.as_ref().and_then(|output| {
+                output.with_state(|state| state.serial.map(|serial| serial.get()))
+            });
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1196,6 +1200,7 @@ impl output_service_server::OutputService for OutputService {
                 tag_ids,
                 scale,
                 transform,
+                serial,
             }
         })
         .await

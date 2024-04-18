@@ -257,7 +257,6 @@ function output.setup(setups)
             -- Fill up holes if there are any
             for i = 1, setup_len do
                 if not op_setups[i] then
-                    print(op_id, i)
                     op_setups[i] = { op_id, setup = op_setup }
                     break
                 end
@@ -271,7 +270,6 @@ function output.setup(setups)
             -- Fill up holes if there are any
             for i = 1, setup_len do
                 if not op_setups[i] then
-                    print(op_id, i)
                     op_setups[i] = { op_id, setup = op_setup }
                     break
                 end
@@ -870,6 +868,7 @@ end
 ---@field tags TagHandle[]
 ---@field scale number?
 ---@field transform Transform?
+---@field serial integer?
 
 ---Get all properties of this output.
 ---
@@ -1027,6 +1026,15 @@ end
 ---@return Transform?
 function OutputHandle:transform()
     return self:props().transform
+end
+
+---Get this output's serial.
+---
+---Shorthand for `handle:props().serial`.
+---
+---@return integer?
+function OutputHandle:serial()
+    return self:props().serial
 end
 
 ---@nodoc

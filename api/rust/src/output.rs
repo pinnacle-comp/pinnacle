@@ -935,6 +935,7 @@ impl OutputHandle {
                 .collect(),
             scale: response.scale,
             transform: response.transform.and_then(|tf| tf.try_into().ok()),
+            serial: response.serial,
         }
     }
 
@@ -1170,4 +1171,6 @@ pub struct OutputProperties {
     pub scale: Option<f32>,
     /// This output's transform.
     pub transform: Option<Transform>,
+    /// This output's EDID serial number.
+    pub serial: Option<u32>,
 }

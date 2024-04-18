@@ -1007,11 +1007,11 @@ impl State {
             connector.interface_id()
         );
 
-        let (make, model) = EdidInfo::try_from_connector(&device.drm, connector.handle())
-            .map(|info| (info.manufacturer, info.model))
+        let (make, model, serial) = EdidInfo::try_from_connector(&device.drm, connector.handle())
+            .map(|info| (info.manufacturer, info.model, info.serial))
             .unwrap_or_else(|err| {
                 warn!("Failed to parse EDID info: {err}");
-                ("Unknown".into(), "Unknown".into())
+                ("Unknown".into(), "Unknown".into(), None)
             });
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
@@ -1034,6 +1034,8 @@ impl State {
             },
         );
         let global = output.create_global::<State>(&udev.display_handle);
+
+        output.with_state_mut(|state| state.serial = serial);
 
         for mode in modes {
             output.add_mode(mode);

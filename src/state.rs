@@ -40,7 +40,11 @@ use smithay::{
     },
     xwayland::{X11Wm, XWayland, XWaylandEvent},
 };
-use std::{cell::RefCell, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{error, info};
 use xdg::BaseDirectories;
@@ -378,9 +382,9 @@ impl WithState for WlSurface {
         compositor::with_states(self, |states| {
             let state = states
                 .data_map
-                .get_or_insert(RefCell::<Self::State>::default);
+                .get_or_insert_threadsafe(RwLock::<Self::State>::default);
 
-            func(&state.borrow())
+            func(&state.read().expect("with_state already locked"))
         })
     }
 
@@ -391,9 +395,9 @@ impl WithState for WlSurface {
         compositor::with_states(self, |states| {
             let state = states
                 .data_map
-                .get_or_insert(RefCell::<Self::State>::default);
+                .get_or_insert_threadsafe(RwLock::<Self::State>::default);
 
-            func(&mut state.borrow_mut())
+            func(&mut state.write().expect("with_state already locked"))
         })
     }
 }

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    cell::RefCell,
     hash::Hash,
-    rc::Rc,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use smithay::output::Output;
@@ -63,31 +64,37 @@ impl Eq for TagInner {}
 ///
 /// A window may have 0 or more tags, and you can display 0 or more tags
 /// on each output at a time.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Tag(Rc<RefCell<TagInner>>);
+#[derive(Debug, Clone)]
+pub struct Tag(Arc<Mutex<TagInner>>);
+
+impl PartialEq for Tag {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
 
 // RefCell Safety: These methods should never panic because they are all self-contained or Copy.
 impl Tag {
     pub fn id(&self) -> TagId {
-        self.0.borrow().id
+        self.0.lock().expect("tag already locked").id
     }
 
     pub fn name(&self) -> String {
-        self.0.borrow().name.clone()
+        self.0.lock().expect("tag already locked").name.clone()
     }
 
     pub fn active(&self) -> bool {
-        self.0.borrow().active
+        self.0.lock().expect("tag already locked").active
     }
 
     pub fn set_active(&self, active: bool) {
-        self.0.borrow_mut().active = active;
+        self.0.lock().expect("tag already locked").active = active;
     }
 }
 
 impl Tag {
     pub fn new(name: String) -> Self {
-        Self(Rc::new(RefCell::new(TagInner {
+        Self(Arc::new(Mutex::new(TagInner {
             id: TagId::next(),
             name,
             active: false,

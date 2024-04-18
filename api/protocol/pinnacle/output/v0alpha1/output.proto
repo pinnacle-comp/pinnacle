@@ -90,6 +90,10 @@ message GetPropertiesResponse {
   repeated uint32 tag_ids = 11;
   optional float scale = 12;
   optional Transform transform = 15;
+  // NULLABLE
+  //
+  // The EDID serial number of this output, if it exists.
+  optional uint32 serial = 16;
 }
 
 service OutputService {
