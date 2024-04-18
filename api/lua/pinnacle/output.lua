@@ -181,11 +181,11 @@ local function output_id_matches(id_str, op)
 end
 
 ---@class OutputSetup
----@field filter (fun(output: OutputHandle): boolean)?
----@field mode Mode?
----@field scale number?
----@field tags string[]?
----@field transform Transform?
+---@field filter (fun(output: OutputHandle): boolean)? -- A filter for wildcard matches that should return true if this setup should apply to the passed in output.
+---@field mode Mode? -- Makes this setup apply the given mode to outputs.
+---@field scale number? -- Makes this setup apply the given scale to outputs.
+---@field tags string[]? -- Makes this setup add tags with the given name to outputs.
+---@field transform Transform? -- Makes this setup applt the given transform to outputs.
 
 ---Declaratively setup outputs.
 ---
