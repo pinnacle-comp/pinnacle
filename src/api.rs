@@ -30,7 +30,10 @@ use pinnacle_api_defs::pinnacle::{
             SwitchToRequest,
         },
     },
-    v0alpha1::{pinnacle_service_server, PingRequest, PingResponse, QuitRequest, SetOrToggle},
+    v0alpha1::{
+        pinnacle_service_server, PingRequest, PingResponse, QuitRequest, ReloadConfigRequest,
+        SetOrToggle,
+    },
 };
 use smithay::{
     backend::renderer::TextureFilter,
@@ -188,6 +191,18 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
 
         run_unary_no_response(&self.sender, |state| {
             state.shutdown();
+        })
+        .await
+    }
+
+    async fn reload_config(
+        &self,
+        _request: Request<ReloadConfigRequest>,
+    ) -> Result<Response<()>, Status> {
+        run_unary_no_response(&self.sender, |state| {
+            state
+                .start_config(state.config.dir(&state.xdg_base_dirs))
+                .expect("failed to restart config");
         })
         .await
     }

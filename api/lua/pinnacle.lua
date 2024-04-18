@@ -37,6 +37,16 @@ function pinnacle.quit()
     })
 end
 
+---Reload the active config.
+function pinnacle.reload_config()
+    client.unary_request({
+        service = "pinnacle.v0alpha1.PinnacleService",
+        method = "ReloadConfig",
+        request_type = "pinnacle.v0alpha1.ReloadConfigRequest",
+        data = {},
+    })
+end
+
 ---Setup a Pinnacle config.
 ---
 ---You must pass in a function that takes in the `Pinnacle` table. This table is how you'll access the other config modules.
