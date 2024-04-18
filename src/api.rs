@@ -706,9 +706,9 @@ impl tag_service_server::TagService for TagService {
             };
 
             match set_or_toggle {
-                SetOrToggle::Set => tag.set_active(true),
-                SetOrToggle::Unset => tag.set_active(false),
-                SetOrToggle::Toggle => tag.set_active(!tag.active()),
+                SetOrToggle::Set => tag.set_active(true, state),
+                SetOrToggle::Unset => tag.set_active(false, state),
+                SetOrToggle::Toggle => tag.set_active(!tag.active(), state),
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
@@ -736,11 +736,11 @@ impl tag_service_server::TagService for TagService {
             let Some(tag) = tag_id.tag(state) else { return };
             let Some(output) = tag.output(state) else { return };
 
-            output.with_state_mut(|state| {
-                for op_tag in state.tags.iter_mut() {
-                    op_tag.set_active(false);
+            output.with_state_mut(|op_state| {
+                for op_tag in op_state.tags.iter_mut() {
+                    op_tag.set_active(false, state);
                 }
-                tag.set_active(true);
+                tag.set_active(true, state);
             });
 
             state.request_layout(&output);

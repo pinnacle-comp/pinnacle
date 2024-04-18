@@ -87,8 +87,17 @@ impl Tag {
         self.0.lock().expect("tag already locked").active
     }
 
-    pub fn set_active(&self, active: bool) {
+    pub fn set_active(&self, active: bool, state: &mut State) {
         self.0.lock().expect("tag already locked").active = active;
+
+        state.signal_state.tag_active.signal(|buf| {
+            buf.push_back(
+                pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                    tag_id: Some(self.id().0),
+                    active: Some(self.active()),
+                },
+            );
+        })
     }
 }
 

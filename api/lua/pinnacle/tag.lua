@@ -210,6 +210,52 @@ function tag.remove(tags)
     client.unary_request(build_grpc_request_params("Remove", { tag_ids = ids }))
 end
 
+---@type table<string, SignalServiceMethod>
+local signal_name_to_SignalName = {
+    active = "TagActive",
+}
+
+---@class TagSignal Signals related to tag events.
+---@field active fun(tag: TagHandle, active: boolean)? A tag was set to active or not active.
+
+---Connect to a tag signal.
+---
+---The compositor sends signals about various events. Use this function to run a callback when
+---some tag signal occurs.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Tag.connect_signal({
+---    active = function(tag, active)
+---        print("Activity for " .. tag:name() .. " was set to", active)
+---    end
+---})
+---```
+---
+---@param signals TagSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
+function tag.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        ---@diagnostic disable-next-line: invisible
+        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
+    end
+
+    return handles
+end
+
+--------------------------------------------------------------
+
 ---Remove this tag.
 ---
 ---### Example

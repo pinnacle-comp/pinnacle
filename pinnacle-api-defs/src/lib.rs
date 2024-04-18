@@ -67,7 +67,8 @@ pub mod pinnacle {
                 OutputResizeRequest,
                 OutputMoveRequest,
                 WindowPointerEnterRequest,
-                WindowPointerLeaveRequest
+                WindowPointerLeaveRequest,
+                TagActiveRequest
             );
         }
     }

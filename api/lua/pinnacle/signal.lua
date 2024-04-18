@@ -23,11 +23,16 @@ local rpc_types = {
     OutputMove = {
         response_type = "OutputMoveResponse",
     },
+
     WindowPointerEnter = {
         response_type = "WindowPointerEnterResponse",
     },
     WindowPointerLeave = {
         response_type = "WindowPointerLeaveResponse",
+    },
+
+    TagActive = {
+        response_type = "TagActiveResponse",
     },
 }
 
@@ -126,6 +131,17 @@ local signals = {
         ---@type fun(response: table)
         on_response = nil,
     },
+    TagActive = {
+        ---@nodoc
+        ---@type H2Stream?
+        sender = nil,
+        ---@nodoc
+        ---@type (fun(tag: TagHandle, active: boolean))[]
+        callbacks = {},
+        ---@nodoc
+        ---@type fun(response: table)
+        on_response = nil,
+    },
 }
 
 signals.OutputConnect.on_response = function(response)
@@ -175,6 +191,15 @@ signals.WindowPointerLeave.on_response = function(response)
 
     for _, callback in ipairs(signals.WindowPointerLeave.callbacks) do
         callback(window_handle)
+    end
+end
+
+signals.TagActive.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local tag_handle = require("pinnacle.tag").handle.new(response.tag_id)
+
+    for _, callback in ipairs(signals.TagActive.callbacks) do
+        callback(tag_handle, response.active)
     end
 end
 

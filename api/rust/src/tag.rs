@@ -44,7 +44,14 @@ use pinnacle_api_defs::pinnacle::{
 };
 use tonic::transport::Channel;
 
-use crate::{block_on_tokio, output::OutputHandle, util::Batch, window::WindowHandle, ApiModules};
+use crate::{
+    block_on_tokio,
+    output::OutputHandle,
+    signal::{SignalHandle, TagSignal},
+    util::Batch,
+    window::WindowHandle,
+    ApiModules,
+};
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
 #[derive(Clone, Debug)]
@@ -226,6 +233,19 @@ impl Tag {
         let mut client = self.tag_client.clone();
 
         block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
+    }
+
+    /// Connect to a tag signal.
+    ///
+    /// The compositor will fire off signals that your config can listen for and act upon.
+    /// You can pass in a [`TagSignal`] along with a callback and it will get run
+    /// with the necessary arguments every time a signal of that type is received.
+    pub fn connect_signal(&self, signal: TagSignal) -> SignalHandle {
+        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
+
+        match signal {
+            TagSignal::Active(f) => signal_state.tag_active.add_callback(f),
+        }
     }
 }
 

@@ -3,8 +3,9 @@ use std::collections::VecDeque;
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     signal_service_server, OutputConnectRequest, OutputConnectResponse, OutputDisconnectRequest,
     OutputDisconnectResponse, OutputMoveRequest, OutputMoveResponse, OutputResizeRequest,
-    OutputResizeResponse, SignalRequest, StreamControl, WindowPointerEnterRequest,
-    WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+    OutputResizeResponse, SignalRequest, StreamControl, TagActiveRequest, TagActiveResponse,
+    WindowPointerEnterRequest, WindowPointerEnterResponse, WindowPointerLeaveRequest,
+    WindowPointerLeaveResponse,
 };
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tonic::{Request, Response, Status, Streaming};
@@ -27,6 +28,9 @@ pub struct SignalState {
         SignalData<WindowPointerEnterResponse, VecDeque<WindowPointerEnterResponse>>,
     pub window_pointer_leave:
         SignalData<WindowPointerLeaveResponse, VecDeque<WindowPointerLeaveResponse>>,
+
+    // Tag
+    pub tag_active: SignalData<TagActiveResponse, VecDeque<TagActiveResponse>>,
 }
 
 impl SignalState {
@@ -184,8 +188,11 @@ impl signal_service_server::SignalService for SignalService {
     type OutputDisconnectStream = ResponseStream<OutputDisconnectResponse>;
     type OutputResizeStream = ResponseStream<OutputResizeResponse>;
     type OutputMoveStream = ResponseStream<OutputMoveResponse>;
+
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
+
+    type TagActiveStream = ResponseStream<TagActiveResponse>;
 
     async fn output_connect(
         &self,
@@ -250,6 +257,17 @@ impl signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.signal_state.window_pointer_leave
+        })
+    }
+
+    async fn tag_active(
+        &self,
+        request: Request<Streaming<TagActiveRequest>>,
+    ) -> Result<Response<Self::TagActiveStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.signal_state.tag_active
         })
     }
 }

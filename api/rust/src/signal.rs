@@ -27,7 +27,9 @@ use tokio::sync::{
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::{transport::Channel, Streaming};
 
-use crate::{block_on_tokio, output::OutputHandle, window::WindowHandle, ApiModules};
+use crate::{
+    block_on_tokio, output::OutputHandle, tag::TagHandle, window::WindowHandle, ApiModules,
+};
 
 pub(crate) trait Signal {
     type Callback;
@@ -229,6 +231,24 @@ signals! {
             },
         }
     }
+    /// Signals relating to tag events.
+    TagSignal => {
+        /// A tag was set to active or not active.
+        TagActive = {
+            enum_name = Active,
+            callback_type = Box<dyn FnMut(&TagHandle, bool) + Send + 'static>,
+            client_request = tag_active,
+            on_response = |response, callbacks, api| {
+                if let Some(tag_id) = response.tag_id {
+                    let handle = api.tag.new_handle(tag_id);
+
+                    for callback in callbacks {
+                        callback(&handle, response.active.unwrap());
+                    }
+                }
+            },
+        }
+    }
 }
 
 pub(crate) type SingleOutputFn = Box<dyn FnMut(&OutputHandle) + Send + 'static>;
@@ -239,8 +259,11 @@ pub(crate) struct SignalState {
     pub(crate) output_disconnect: SignalData<OutputDisconnect>,
     pub(crate) output_resize: SignalData<OutputResize>,
     pub(crate) output_move: SignalData<OutputMove>,
+
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
+
+    pub(crate) tag_active: SignalData<TagActive>,
 }
 
 impl std::fmt::Debug for SignalState {
@@ -262,6 +285,7 @@ impl SignalState {
             output_move: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_enter: SignalData::new(client.clone(), fut_sender.clone()),
             window_pointer_leave: SignalData::new(client.clone(), fut_sender.clone()),
+            tag_active: SignalData::new(client.clone(), fut_sender.clone()),
         }
     }
 
@@ -272,6 +296,7 @@ impl SignalState {
         self.output_move.api.set(api.clone()).unwrap();
         self.window_pointer_enter.api.set(api.clone()).unwrap();
         self.window_pointer_leave.api.set(api.clone()).unwrap();
+        self.tag_active.api.set(api.clone()).unwrap();
     }
 }
 
