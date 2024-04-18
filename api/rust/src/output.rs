@@ -422,6 +422,7 @@ pub struct OutputSetup {
     mode: Option<Mode>,
     scale: Option<f32>,
     tag_names: Option<Vec<String>>,
+    transform: Option<Transform>,
 }
 
 impl OutputSetup {
@@ -432,6 +433,7 @@ impl OutputSetup {
             mode: None,
             scale: None,
             tag_names: None,
+            transform: None,
         }
     }
 
@@ -444,6 +446,7 @@ impl OutputSetup {
             mode: None,
             scale: None,
             tag_names: None,
+            transform: None,
         }
     }
 
@@ -471,6 +474,14 @@ impl OutputSetup {
         }
     }
 
+    /// Makes this setup apply the given transform to its outputs.
+    pub fn with_transform(self, transform: Transform) -> Self {
+        Self {
+            transform: Some(transform),
+            ..self
+        }
+    }
+
     fn apply(&self, output: &OutputHandle, tag: &Tag) {
         if let Some(mode) = &self.mode {
             output.set_mode(
@@ -484,6 +495,9 @@ impl OutputSetup {
         }
         if let Some(tag_names) = &self.tag_names {
             tag.add(output, tag_names);
+        }
+        if let Some(transform) = self.transform {
+            output.set_transform(transform);
         }
     }
 }

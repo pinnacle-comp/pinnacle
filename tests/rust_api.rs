@@ -60,7 +60,8 @@ mod output {
                             pixel_width: 6900,
                             pixel_height: 420,
                             refresh_rate_millihertz: 69420,
-                        }),
+                        })
+                        .with_transform(pinnacle_api::output::Transform::_90),
                 ]);
             });
 
@@ -108,6 +109,11 @@ mod output {
                 assert_eq!(second_mode.size.w, 6900);
                 assert_eq!(second_mode.size.h, 420);
                 assert_eq!(second_mode.refresh, 69420);
+
+                assert_eq!(
+                    second_op.current_transform(),
+                    smithay::utils::Transform::_90
+                );
             });
         })
     }
