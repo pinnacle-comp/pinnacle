@@ -73,6 +73,8 @@ impl State {
 
         self.z_index_stack.retain(|win| win != &window);
         self.z_index_stack.push(window);
+
+        self.fixup_xwayland_internal_z_indices();
     }
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.

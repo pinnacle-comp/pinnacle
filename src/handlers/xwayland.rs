@@ -22,7 +22,7 @@ use smithay::{
         X11Surface, X11Wm, XwmHandler,
     },
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -505,6 +505,28 @@ impl XwmHandler for State {
                 if current_primary_selection_userdata(&self.seat).is_some() {
                     clear_primary_selection(&self.display_handle, &self.seat);
                 }
+            }
+        }
+    }
+}
+
+impl State {
+    pub fn fixup_xwayland_internal_z_indices(&mut self) {
+        let Some(xwm) = self.xwm.as_mut() else {
+            return;
+        };
+
+        let x11_wins = self
+            .space
+            .elements()
+            .filter(|win| win.is_on_active_tag())
+            .filter_map(|win| win.x11_surface())
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for x11_win in x11_wins {
+            if let Err(err) = xwm.raise_window(&x11_win) {
+                warn!("Failed to raise xwayland window: {err}");
             }
         }
     }

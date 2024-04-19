@@ -731,6 +731,8 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
+            state.fixup_xwayland_internal_z_indices();
+
             state.request_layout(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
@@ -757,6 +759,8 @@ impl tag_service_server::TagService for TagService {
                 }
                 tag.set_active(true, state);
             });
+
+            state.fixup_xwayland_internal_z_indices();
 
             state.request_layout(&output);
             state.update_focus(&output);
