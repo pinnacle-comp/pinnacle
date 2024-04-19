@@ -29,6 +29,7 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
+        relative_pointer::RelativePointerManagerState,
         selection::{
             data_device::DataDeviceState, primary_selection::PrimarySelectionState,
             wlr_data_control::DataControlState,
@@ -76,6 +77,7 @@ pub struct State {
     pub data_control_state: DataControlState,
     pub screencopy_manager_state: ScreencopyManagerState,
     pub gamma_control_manager_state: GammaControlManagerState,
+    pub relative_pointer_manager_state: RelativePointerManagerState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -262,6 +264,9 @@ impl State {
             gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
                 &display_handle,
                 |_| true,
+            ),
+            relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
+                &display_handle,
             ),
 
             input_state: InputState::new(),
