@@ -31,14 +31,9 @@ pub struct Dummy {
 }
 
 impl Backend {
-    fn dummy_mut(&mut self) -> &mut Dummy {
+    fn dummy_mut(&mut self) -> &Dummy {
         let Backend::Dummy(dummy) = self else { unreachable!() };
         dummy
-    }
-
-    #[cfg(feature = "wlcs")]
-    pub fn wlcs_mut(&mut self) -> &mut Wlcs {
-        &mut self.dummy_mut().wlcs_state
     }
 }
 
@@ -121,7 +116,7 @@ pub fn setup_dummy(
 
     state.space.map_output(&output, (0, 0));
 
-    /* if let Err(err) = state.xwayland.start(
+    if let Err(err) = state.xwayland.start(
         state.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
@@ -129,7 +124,7 @@ pub fn setup_dummy(
         |_| {},
     ) {
         tracing::error!("Failed to start XWayland: {err}");
-    } */
+    }
 
     Ok((state, event_loop))
 }

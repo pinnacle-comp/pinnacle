@@ -1,14 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
 use pinnacle::{
-    backend::dummy::setup_dummy,
+    backend::wlcs::setup_wlcs_dummy,
     state::{ClientState, State},
 };
 use smithay::{
     backend::input::{ButtonState, DeviceCapability, InputEvent},
     reexports::{
         calloop::channel::{Channel, Event},
-        wayland_server::Resource,
+        wayland_server::{Client, Resource},
     },
     wayland::seat::WaylandFocus,
 };
@@ -26,7 +26,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
         &std::env::var("PINNACLE_WLCS_CONFIG_PATH").expect("PINNACLE_WLCS_CONFIG_PATH not set");
 
     let (mut state, mut event_loop) =
-        setup_dummy(false, Some(config_path.into())).expect("failed to setup dummy backend");
+        setup_wlcs_dummy(false, Some(config_path.into())).expect("failed to setup dummy backend");
 
     event_loop
         .handle()
@@ -40,18 +40,26 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     let _handle = rt.enter();
 
+    // FIXME: once starting pinnacle without xwayland is a thing, handle this
+    // |      properly; in this case, we probably no longer need to start the
+    // |      config manually anymore either, as this is only needed now,
+    // |      because the config is started after xwayland reports its ready
+
+    // when xdiplay is None when starting the config, the grpc server is not
+    // started, until it is set; this bypasses this for now
+    state.xdisplay = Some(u32::MAX);
     if let Err(err) = state.start_config(config_path) {
         panic!("failed to start config: {err}");
     }
 
-    // FIXME: different sock_dir per instance?
+    // FIXME: use a custom socker_dir to avoid having to number sockets
+
+    // wait for the config to connect to the layout service
     while state.layout_state.layout_request_sender.is_none() {
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut state)
             .expect("event_loop error while waiting for config");
     }
-
-    // TODO: handle no-xwayland properly
 
     event_loop
         .run(None, &mut state, |state| {
@@ -72,7 +80,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
     match event {
         WlcsEvent::Stop => state.shutdown(),
         WlcsEvent::NewClient { stream, client_id } => {
-            let client: smithay::reexports::wayland_server::Client = state
+            let client: Client = state
                 .display_handle
                 .insert_client(stream, Arc::new(ClientState::default()))
                 .expect("failed to insert new client");

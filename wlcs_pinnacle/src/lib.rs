@@ -202,22 +202,28 @@ impl Wlcs for PinnacleHandle {
     }
 
     fn create_pointer(&mut self) -> Option<Self::Pointer> {
+        let device_id = new_device_id();
         self.server_conn
             .as_ref()
             .map(|conn| conn.sender.clone())
-            .map(|sender| PointerHandle {
-                device_id: new_device_id(),
-                sender,
+            .map(|sender| {
+                sender
+                    .send(WlcsEvent::NewPointer { device_id })
+                    .expect("failed to send new_pointer");
+                PointerHandle { device_id, sender }
             })
     }
 
     fn create_touch(&mut self) -> Option<Self::Touch> {
+        let device_id = new_device_id();
         self.server_conn
             .as_ref()
             .map(|conn| conn.sender.clone())
-            .map(|sender| TouchHandle {
-                device_id: new_device_id(),
-                sender,
+            .map(|sender| {
+                sender
+                    .send(WlcsEvent::NewTouch { device_id })
+                    .expect("failed to send new_touch");
+                TouchHandle { device_id, sender }
             })
     }
 
