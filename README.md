@@ -66,6 +66,7 @@ You will need:
     - NixOS: There is flake [`flake.nix`](flake.nix) with a devShell. It also
       includes the other tools needed for the build and sets up the
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
+
       > [!NOTE]
       > Luarocks currently doesn't install the Lua library and its dependencies due to openssh directory
       > shenanigans. Fix soon, hopefully. In the meantime you can use the Rust API.
