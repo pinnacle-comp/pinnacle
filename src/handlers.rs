@@ -199,7 +199,7 @@ impl CompositorHandler for State {
 
         ensure_initial_configure(surface, self);
 
-        crate::grab::resize_grab::handle_commit(self, surface);
+        crate::grab::resize_grab::move_surface_if_resized(self, surface);
 
         let outputs = if let Some(window) = self.window_for_surface(surface) {
             let mut outputs = self.space.outputs_for_element(&window);
@@ -619,7 +619,7 @@ delegate_gamma_control!(State);
 
 impl State {
     fn position_popup(&self, popup: &PopupSurface) {
-        tracing::info!("State::position_popup");
+        trace!("State::position_popup");
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
         };

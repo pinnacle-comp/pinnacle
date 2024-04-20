@@ -38,7 +38,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 # smithay is down there somewhere
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "e237b07" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "c293ec7" }
 # Tracing
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
@@ -76,7 +76,7 @@ bytemuck = "1.15.0"
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "e237b07"
+rev = "c293ec7"
 default-features = false
 features = [
     "desktop",

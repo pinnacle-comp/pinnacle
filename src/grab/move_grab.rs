@@ -46,7 +46,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.motion(state, None, event);
 
         if !self.window.alive() {
-            handle.unset_grab(state, event.serial, event.time, true);
+            handle.unset_grab(self, state, event.serial, event.time, true);
             return;
         }
 
@@ -171,7 +171,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.button(data, event);
 
         if !handle.current_pressed().contains(&self.start_data.button) {
-            handle.unset_grab(data, event.serial, event.time, true);
+            handle.unset_grab(self, data, event.serial, event.time, true);
         }
     }
 
@@ -187,6 +187,8 @@ impl PointerGrab<State> for MoveSurfaceGrab {
     fn start_data(&self) -> &GrabStartData<State> {
         &self.start_data
     }
+
+    fn unset(&mut self, _data: &mut State) {}
 
     fn gesture_swipe_begin(
         &mut self,

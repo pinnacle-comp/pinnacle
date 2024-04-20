@@ -56,7 +56,7 @@ render_elements! {
 impl<R> AsRenderElements<R> for WindowElement
 where
     R: Renderer + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: Texture + 'static,
+    <R as Renderer>::TextureId: Texture + Clone + 'static,
 {
     type RenderElement = WaylandSurfaceRenderElement<R>;
 
@@ -72,7 +72,7 @@ where
     }
 }
 
-struct LayerRenderElements<R> {
+struct LayerRenderElements<R: Renderer> {
     background: Vec<WaylandSurfaceRenderElement<R>>,
     bottom: Vec<WaylandSurfaceRenderElement<R>>,
     top: Vec<WaylandSurfaceRenderElement<R>>,
@@ -86,7 +86,7 @@ fn layer_render_elements<R>(
 ) -> LayerRenderElements<R>
 where
     R: Renderer + ImportAll,
-    <R as Renderer>::TextureId: 'static,
+    <R as Renderer>::TextureId: Clone + 'static,
 {
     let layer_map = layer_map_for_output(output);
     let mut overlay = vec![];
@@ -142,7 +142,7 @@ fn window_render_elements<R>(
 )
 where
     R: Renderer + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: 'static,
+    <R as Renderer>::TextureId: Clone + 'static,
 {
     let mut last_fullscreen_split_at = 0;
 

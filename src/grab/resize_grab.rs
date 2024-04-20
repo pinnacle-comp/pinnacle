@@ -85,6 +85,43 @@ impl ResizeSurfaceGrab {
             button_used,
         })
     }
+
+    fn ungrab(&mut self) {
+        if !self.window.alive() {
+            return;
+        }
+
+        match self.window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                toplevel.with_pending_state(|state| {
+                    state.states.unset(xdg_toplevel::State::Resizing);
+                    state.size = Some(self.last_window_size);
+                });
+
+                toplevel.send_pending_configure();
+
+                toplevel.wl_surface().with_state_mut(|state| {
+                    // TODO: validate resize state
+                    state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
+                        edges: self.edges,
+                        initial_window_rect: self.initial_window_rect,
+                    };
+                });
+            }
+            WindowSurface::X11(surface) => {
+                if surface.is_override_redirect() {
+                    return;
+                }
+                let Some(surface) = surface.wl_surface() else { return };
+                surface.with_state_mut(|state| {
+                    state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
+                        edges: self.edges,
+                        initial_window_rect: self.initial_window_rect,
+                    };
+                });
+            }
+        }
+    }
 }
 
 impl PointerGrab<State> for ResizeSurfaceGrab {
@@ -102,7 +139,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         handle.motion(data, None, event);
 
         if !self.window.alive() {
-            handle.unset_grab(data, event.serial, event.time, true);
+            handle.unset_grab(self, data, event.serial, event.time, true);
             return;
         }
 
@@ -197,42 +234,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         handle.button(data, event);
 
         if !handle.current_pressed().contains(&self.button_used) {
-            handle.unset_grab(data, event.serial, event.time, true);
-
-            if !self.window.alive() {
-                return;
-            }
-
-            match self.window.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.with_pending_state(|state| {
-                        state.states.unset(xdg_toplevel::State::Resizing);
-                        state.size = Some(self.last_window_size);
-                    });
-
-                    toplevel.send_pending_configure();
-
-                    toplevel.wl_surface().with_state_mut(|state| {
-                        // TODO: validate resize state
-                        state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
-                            edges: self.edges,
-                            initial_window_rect: self.initial_window_rect,
-                        };
-                    });
-                }
-                WindowSurface::X11(surface) => {
-                    if surface.is_override_redirect() {
-                        return;
-                    }
-                    let Some(surface) = surface.wl_surface() else { return };
-                    surface.with_state_mut(|state| {
-                        state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
-                            edges: self.edges,
-                            initial_window_rect: self.initial_window_rect,
-                        };
-                    });
-                }
-            }
+            handle.unset_grab(self, data, event.serial, event.time, true);
         }
     }
 
@@ -247,6 +249,10 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
     fn start_data(&self) -> &GrabStartData<State> {
         &self.start_data
+    }
+
+    fn unset(&mut self, _data: &mut State) {
+        self.ungrab();
     }
 
     fn gesture_swipe_begin(
@@ -337,7 +343,7 @@ pub enum ResizeSurfaceState {
 }
 
 impl ResizeSurfaceState {
-    fn commit(&mut self) -> Option<(ResizeEdge, Rectangle<i32, Logical>)> {
+    fn on_commit(&mut self) -> Option<(ResizeEdge, Rectangle<i32, Logical>)> {
         match *self {
             Self::Idle => None,
             Self::Resizing {
@@ -355,11 +361,15 @@ impl ResizeSurfaceState {
     }
 }
 
-// TODO: refactor this into something readable
-pub fn handle_commit(state: &mut State, surface: &WlSurface) {
+pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
     let Some(window) = state.window_for_surface(surface) else {
         return;
     };
+
+    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+        return;
+    }
+
     let Some(mut window_loc) = state.space.element_location(&window) else {
         return;
     };
@@ -368,7 +378,7 @@ pub fn handle_commit(state: &mut State, surface: &WlSurface) {
     let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
         state
             .resize_state
-            .commit()
+            .on_commit()
             .map(|(edges, initial_window_rect)| {
                 let mut new_x: Option<i32> = None;
                 let mut new_y: Option<i32> = None;
