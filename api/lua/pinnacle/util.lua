@@ -232,4 +232,21 @@ function util.deep_copy(obj)
     return deep_copy_rec(obj, nil)
 end
 
+---Create a table with entries key->value and value->key for all given pairs.
+---
+---@generic T
+---@param key_value_pairs T
+---
+---@return T bijective_table A table with pairs key->value and value->key
+function util.bijective_table(key_value_pairs)
+    local ret = {}
+
+    for key, value in pairs(key_value_pairs) do
+        ret[key] = value
+        ret[value] = key
+    end
+
+    return ret
+end
+
 return util

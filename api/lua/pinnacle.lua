@@ -3,6 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
+local defs = require("pinnacle.grpc.defs")
 
 ---The entry point to configuration.
 ---
@@ -32,7 +33,7 @@ function pinnacle.quit()
     client.unary_request({
         service = "pinnacle.v0alpha1.PinnacleService",
         method = "Quit",
-        request_type = "pinnacle.v0alpha1.QuitRequest",
+        request_type = defs.pinnacle.v0alpha1.PinnacleService.Quit.request,
         data = {},
     })
 end
@@ -42,7 +43,7 @@ function pinnacle.reload_config()
     client.unary_request({
         service = "pinnacle.v0alpha1.PinnacleService",
         method = "ReloadConfig",
-        request_type = "pinnacle.v0alpha1.ReloadConfigRequest",
+        request_type = defs.pinnacle.v0alpha1.PinnacleService.ReloadConfig.request,
         data = {},
     })
 end
