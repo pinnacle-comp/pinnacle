@@ -428,20 +428,22 @@ local pinnacle_signal_v0alpha1_StreamControl = {
 defs.pinnacle = {
     v0alpha1 = {
         SetOrToggle = util.bijective_table(pinnacle_v0alpha1_SetOrToggle),
-        ---@type table<string, GrpcRequestArgs>
         PinnacleService = {
+            ---@type GrpcRequestArgs
             Quit = {
                 service = "pinnacle.v0alpha1.PinnacleService",
                 method = "Quit",
                 request = "pinnacle.v0alpha1.QuitRequest",
                 response = "google.protobuf.Empty",
             },
+            ---@type GrpcRequestArgs
             ReloadConfig = {
                 service = "pinnacle.v0alpha1.PinnacleService",
                 method = "ReloadConfig",
                 request = "pinnacle.v0alpha1.ReloadConfigRequest",
                 response = "google.protobuf.Empty",
             },
+            ---@type GrpcRequestArgs
             Ping = {
                 service = "pinnacle.v0alpha1.PinnacleService",
                 method = "Ping",
@@ -453,38 +455,43 @@ defs.pinnacle = {
     output = {
         v0alpha1 = {
             Transform = util.bijective_table(pinnacle_output_v0alpha1_Transform),
-            ---@type table<string, GrpcRequestArgs>
             OutputService = {
+                ---@type GrpcRequestArgs
                 SetLocation = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetLocation",
                     request = "pinnacle.output.v0alpha1.SetLocationRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetMode = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetMode",
                     request = "pinnacle.output.v0alpha1.SetModeRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetScale = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetScale",
                     request = "pinnacle.output.v0alpha1.SetScaleRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetTransform = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetTransform",
                     request = "pinnacle.output.v0alpha1.SetTransformRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 Get = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "Get",
                     request = "pinnacle.output.v0alpha1.GetRequest",
                     response = "pinnacle.output.v0alpha1.GetResponse",
                 },
+                ---@type GrpcRequestArgs
                 GetProperties = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "GetProperties",
@@ -496,87 +503,102 @@ defs.pinnacle = {
     },
     window = {
         v0alpha1 = {
-            FullscreenOrMaximized = util.bijective_table(pinnacle_window_v0alpha1_FullscreenOrMaximized),
-            ---@type table<string, GrpcRequestArgs>
+            FullscreenOrMaximized = util.bijective_table(
+                pinnacle_window_v0alpha1_FullscreenOrMaximized
+            ),
             WindowService = {
+                ---@type GrpcRequestArgs
                 Close = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "Close",
                     request = "pinnacle.window.v0alpha1.CloseRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetGeometry = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetGeometry",
                     request = "pinnacle.window.v0alpha1.SetGeometryRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetFullscreen = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetFullscreen",
                     request = "pinnacle.window.v0alpha1.SetFullscreenRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetMaximized = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetMaximized",
                     request = "pinnacle.window.v0alpha1.SetMaximizedRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetFloating = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetFloating",
                     request = "pinnacle.window.v0alpha1.SetFloatingRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetFocused = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetFocused",
                     request = "pinnacle.window.v0alpha1.SetFocusedRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 MoveToTag = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "MoveToTag",
                     request = "pinnacle.window.v0alpha1.MoveToTagRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetTag = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "SetTag",
                     request = "pinnacle.window.v0alpha1.SetTagRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 Raise = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "Raise",
                     request = "pinnacle.window.v0alpha1.RaiseRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 MoveGrab = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "MoveGrab",
                     request = "pinnacle.window.v0alpha1.MoveGrabRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 ResizeGrab = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "ResizeGrab",
                     request = "pinnacle.window.v0alpha1.ResizeGrabRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 Get = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "Get",
                     request = "pinnacle.window.v0alpha1.GetRequest",
                     response = "pinnacle.window.v0alpha1.GetResponse",
                 },
+                ---@type GrpcRequestArgs
                 GetProperties = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "GetProperties",
                     request = "pinnacle.window.v0alpha1.GetPropertiesRequest",
                     response = "pinnacle.window.v0alpha1.GetPropertiesResponse",
                 },
+                ---@type GrpcRequestArgs
                 AddWindowRule = {
                     service = "pinnacle.window.v0alpha1.WindowService",
                     method = "AddWindowRule",
@@ -588,38 +610,43 @@ defs.pinnacle = {
     },
     tag = {
         v0alpha1 = {
-            ---@type table<string, GrpcRequestArgs>
             TagService = {
+                ---@type GrpcRequestArgs
                 SetActive = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "SetActive",
                     request = "pinnacle.tag.v0alpha1.SetActiveRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SwitchTo = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "SwitchTo",
                     request = "pinnacle.tag.v0alpha1.SwitchToRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 Add = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "Add",
                     request = "pinnacle.tag.v0alpha1.AddRequest",
                     response = "pinnacle.tag.v0alpha1.AddResponse",
                 },
+                ---@type GrpcRequestArgs
                 Remove = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "Remove",
                     request = "pinnacle.tag.v0alpha1.RemoveRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 Get = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "Get",
                     request = "pinnacle.tag.v0alpha1.GetRequest",
                     response = "pinnacle.tag.v0alpha1.GetResponse",
                 },
+                ---@type GrpcRequestArgs
                 GetProperties = {
                     service = "pinnacle.tag.v0alpha1.TagService",
                     method = "GetProperties",
@@ -633,40 +660,54 @@ defs.pinnacle = {
         v0alpha1 = {
             Modifier = util.bijective_table(pinnacle_input_v0alpha1_Modifier),
             SetMousebindRequest = {
-                MouseEdge = util.bijective_table(pinnacle_input_v0alpha1_SetMousebindRequest_MouseEdge),
+                MouseEdge = util.bijective_table(
+                    pinnacle_input_v0alpha1_SetMousebindRequest_MouseEdge
+                ),
             },
             SetLibinputSettingRequest = {
-                AccelProfile = util.bijective_table(pinnacle_input_v0alpha1_SetLibinputSettingRequest_AccelProfile),
-                ClickMethod = util.bijective_table(pinnacle_input_v0alpha1_SetLibinputSettingRequest_ClickMethod),
-                ScrollMethod = util.bijective_table(pinnacle_input_v0alpha1_SetLibinputSettingRequest_ScrollMethod),
-                TapButtonMap = util.bijective_table(pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap),
+                AccelProfile = util.bijective_table(
+                    pinnacle_input_v0alpha1_SetLibinputSettingRequest_AccelProfile
+                ),
+                ClickMethod = util.bijective_table(
+                    pinnacle_input_v0alpha1_SetLibinputSettingRequest_ClickMethod
+                ),
+                ScrollMethod = util.bijective_table(
+                    pinnacle_input_v0alpha1_SetLibinputSettingRequest_ScrollMethod
+                ),
+                TapButtonMap = util.bijective_table(
+                    pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap
+                ),
             },
-            ---@type table<string, GrpcRequestArgs>
             InputService = {
+                ---@type GrpcRequestArgs
                 SetKeybind = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetKeybind",
                     request = "pinnacle.input.v0alpha1.SetKeybindRequest",
                     response = "pinnacle.input.v0alpha1.SetKeybindResponse",
                 },
+                ---@type GrpcRequestArgs
                 SetMousebind = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetMousebind",
                     request = "pinnacle.input.v0alpha1.SetMousebindRequest",
                     response = "pinnacle.input.v0alpha1.SetMousebindResponse",
                 },
+                ---@type GrpcRequestArgs
                 SetXkbConfig = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetXkbConfig",
                     request = "pinnacle.input.v0alpha1.SetXkbConfigRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetRepeatRate = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetRepeatRate",
                     request = "pinnacle.input.v0alpha1.SetRepeatRateRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetLibinputSetting = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetLibinputSetting",
@@ -678,14 +719,15 @@ defs.pinnacle = {
     },
     process = {
         v0alpha1 = {
-            ---@type table<string, GrpcRequestArgs>
             ProcessService = {
+                ---@type GrpcRequestArgs
                 Spawn = {
                     service = "pinnacle.process.v0alpha1.ProcessService",
                     method = "Spawn",
                     request = "pinnacle.process.v0alpha1.SpawnRequest",
                     response = "pinnacle.process.v0alpha1.SpawnResponse",
                 },
+                ---@type GrpcRequestArgs
                 SetEnv = {
                     service = "pinnacle.process.v0alpha1.ProcessService",
                     method = "SetEnv",
@@ -697,8 +739,8 @@ defs.pinnacle = {
     },
     layout = {
         v0alpha1 = {
-            ---@type table<string, GrpcRequestArgs>
             LayoutService = {
+                ---@type GrpcRequestArgs
                 Layout = {
                     service = "pinnacle.layout.v0alpha1.LayoutService",
                     method = "Layout",
@@ -711,14 +753,15 @@ defs.pinnacle = {
     render = {
         v0alpha1 = {
             Filter = util.bijective_table(pinnacle_render_v0alpha1_Filter),
-            ---@type table<string, GrpcRequestArgs>
             RenderService = {
+                ---@type GrpcRequestArgs
                 SetUpscaleFilter = {
                     service = "pinnacle.render.v0alpha1.RenderService",
                     method = "SetUpscaleFilter",
                     request = "pinnacle.render.v0alpha1.SetUpscaleFilterRequest",
                     response = "google.protobuf.Empty",
                 },
+                ---@type GrpcRequestArgs
                 SetDownscaleFilter = {
                     service = "pinnacle.render.v0alpha1.RenderService",
                     method = "SetDownscaleFilter",
@@ -731,42 +774,56 @@ defs.pinnacle = {
     signal = {
         v0alpha1 = {
             StreamControl = util.bijective_table(pinnacle_signal_v0alpha1_StreamControl),
+            ---@enum (key) SignalServiceMethod
             SignalService = {
+                ---@type GrpcRequestArgs
                 OutputConnect = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "OutputConnect",
                     request = "pinnacle.signal.v0alpha1.OutputConnectRequest",
                     response = "pinnacle.signal.v0alpha1.OutputConnectResponse",
                 },
+                ---@type GrpcRequestArgs
                 OutputDisconnect = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "OutputDisconnect",
                     request = "pinnacle.signal.v0alpha1.OutputDisconnectRequest",
                     response = "pinnacle.signal.v0alpha1.OutputDisconnectResponse",
                 },
+                ---@type GrpcRequestArgs
                 OutputResize = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "OutputResize",
                     request = "pinnacle.signal.v0alpha1.OutputResizeRequest",
                     response = "pinnacle.signal.v0alpha1.OutputResizeResponse",
                 },
+                ---@type GrpcRequestArgs
                 OutputMove = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "OutputMove",
                     request = "pinnacle.signal.v0alpha1.OutputMoveRequest",
                     response = "pinnacle.signal.v0alpha1.OutputMoveResponse",
                 },
+                ---@type GrpcRequestArgs
                 WindowPointerEnter = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "WindowPointerEnter",
                     request = "pinnacle.signal.v0alpha1.WindowPointerEnterRequest",
                     response = "pinnacle.signal.v0alpha1.WindowPointerEnterResponse",
                 },
+                ---@type GrpcRequestArgs
                 WindowPointerLeave = {
                     service = "pinnacle.signal.v0alpha1.SignalService",
                     method = "WindowPointerLeave",
                     request = "pinnacle.signal.v0alpha1.WindowPointerLeaveRequest",
                     response = "pinnacle.signal.v0alpha1.WindowPointerLeaveResponse",
+                },
+                ---@type GrpcRequestArgs
+                TagActive = {
+                    service = "pinnacle.signal.v0alpha1.SignalService",
+                    method = "TagActive",
+                    request = "pinnacle.signal.v0alpha1.TagActiveRequest",
+                    response = "pinnacle.signal.v0alpha1.TagActiveResponse",
                 },
             },
         },

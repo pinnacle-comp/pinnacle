@@ -3,46 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.output." .. client.version .. "."
-local service = prefix .. "OutputService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) OutputServiceMethod
-local rpc_types = {
-    SetLocation = {},
-    SetMode = {},
-    SetScale = {},
-    SetTransform = {},
-    ConnectForAll = {
-        response_type = "ConnectForAllResponse",
-    },
-    Get = {
-        response_type = "GetResponse",
-    },
-    GetProperties = {
-        response_type = "GetPropertiesResponse",
-    },
-}
-
----Build GrpcRequestParams
----@param method OutputServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local output_service = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1.OutputService
 
 ---@nodoc
 ---@class OutputHandleModule
@@ -81,7 +42,7 @@ output.handle = output_handle
 function output.get_all()
     -- Not going to batch these because I doubt people would have that many monitors
 
-    local response = client.unary_request(build_grpc_request_params("Get", {}))
+    local response = client.unary_request(output_service.Get, {})
 
     ---@type OutputHandle[]
     local handles = {}
@@ -310,7 +271,11 @@ function output.setup(setups)
                 end
 
                 if setup.mode then
-                    op:set_mode(setup.mode.pixel_width, setup.mode.pixel_height, setup.mode.refresh_rate_millihz)
+                    op:set_mode(
+                        setup.mode.pixel_width,
+                        setup.mode.pixel_height,
+                        setup.mode.refresh_rate_millihz
+                    )
                 end
                 if setup.scale then
                     op:set_scale(setup.scale)
@@ -477,7 +442,10 @@ function output.setup_locs(update_locs_on, locs)
                         table.insert(placed_outputs, op)
 
                         local props = op:props()
-                        if not rightmost_output.x or rightmost_output.x < props.x + props.logical_width then
+                        if
+                            not rightmost_output.x
+                            or rightmost_output.x < props.x + props.logical_width
+                        then
                             rightmost_output.output = op
                             rightmost_output.x = props.x + props.logical_width
                         end
@@ -655,8 +623,9 @@ function output.connect_signal(signals)
 
     for signal, callback in pairs(signals) do
         require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
-        ---@diagnostic disable-next-line: invisible
-        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        local handle =
+            ---@diagnostic disable-next-line: invisible
+            require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
         handles[signal] = handle
     end
 
@@ -699,11 +668,11 @@ end
 ---
 ---@see OutputHandle.set_loc_adj_to
 function OutputHandle:set_location(loc)
-    client.unary_request(build_grpc_request_params("SetLocation", {
+    client.unary_request(output_service.SetLocation, {
         output_name = self.name,
         x = loc.x,
         y = loc.y,
-    }))
+    })
 end
 
 ---@alias Alignment
@@ -836,33 +805,36 @@ end
 ---@param pixel_height integer
 ---@param refresh_rate_millihz integer?
 function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
-    client.unary_request(build_grpc_request_params("SetMode", {
+    client.unary_request(output_service.SetMode, {
         output_name = self.name,
         pixel_width = pixel_width,
         pixel_height = pixel_height,
         refresh_rate_millihz = refresh_rate_millihz,
-    }))
+    })
 end
 
 ---Set this output's scaling factor.
 ---
 ---@param scale number
 function OutputHandle:set_scale(scale)
-    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, absolute = scale }))
+    client.unary_request(output_service.SetScale, { output_name = self.name, absolute = scale })
 end
 
 ---Increase this output's scaling factor.
 ---
 ---@param increase_by number
 function OutputHandle:increase_scale(increase_by)
-    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = increase_by }))
+    client.unary_request(
+        output_service.SetScale,
+        { output_name = self.name, relative = increase_by }
+    )
 end
 
 ---Decrease this output's scaling factor.
 ---
 ---@param decrease_by number
 function OutputHandle:decrease_scale(decrease_by)
-    client.unary_request(build_grpc_request_params("SetScale", { output_name = self.name, relative = -decrease_by }))
+    self:increase_scale(-decrease_by)
 end
 
 ---@enum (key) Transform
@@ -893,10 +865,8 @@ local transform_code_to_name = {
 ---@param transform Transform
 function OutputHandle:set_transform(transform)
     client.unary_request(
-        build_grpc_request_params(
-            "SetTransform",
-            { output_name = self.name, transform = transform_name_to_code[transform] }
-        )
+        output_service.SetTransform,
+        { output_name = self.name, transform = transform_name_to_code[transform] }
     )
 end
 
@@ -927,7 +897,7 @@ end
 ---
 ---@return OutputProperties
 function OutputHandle:props()
-    local response = client.unary_request(build_grpc_request_params("GetProperties", { output_name = self.name }))
+    local response = client.unary_request(output_service.GetProperties, { output_name = self.name })
 
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})

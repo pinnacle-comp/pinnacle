@@ -3,51 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.window." .. client.version .. "."
-local service = prefix .. "WindowService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) WindowServiceMethod
-local rpc_types = {
-    Close = {},
-    SetGeometry = {},
-    SetFullscreen = {},
-    SetMaximized = {},
-    SetFloating = {},
-    SetFocused = {},
-    MoveToTag = {},
-    SetTag = {},
-    Raise = {},
-    MoveGrab = {},
-    ResizeGrab = {},
-    Get = {
-        response_type = "GetResponse",
-    },
-    GetProperties = {
-        response_type = "GetPropertiesResponse",
-    },
-    AddWindowRule = {},
-}
-
----Build GrpcRequestParams
----@param method WindowServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local window_service = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowService
 
 local set_or_toggle = {
     SET = 1,
@@ -94,7 +50,7 @@ window.handle = window_handle
 ---```
 ---@return WindowHandle[] windows Handles to all windows
 function window.get_all()
-    local response = client.unary_request(build_grpc_request_params("Get", {}))
+    local response = client.unary_request(window_service.Get, {})
 
     local handles = window_handle.new_from_table(response.window_ids or {})
 
@@ -149,7 +105,7 @@ end
 function window.begin_move(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    client.unary_request(build_grpc_request_params("MoveGrab", { button = button }))
+    client.unary_request(window_service.MoveGrab, { button = button })
 end
 
 ---Begin resizing this window using the specified mouse button.
@@ -167,7 +123,7 @@ end
 function window.begin_resize(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    client.unary_request(build_grpc_request_params("ResizeGrab", { button = button }))
+    client.unary_request(window_service.ResizeGrab, { button = button })
 end
 
 ---@class WindowRuleCondition
@@ -337,10 +293,10 @@ function window.add_window_rule(rule)
 
     process_window_rule_cond(rule.cond)
 
-    client.unary_request(build_grpc_request_params("AddWindowRule", {
+    client.unary_request(window_service.AddWindowRule, {
         cond = rule.cond,
         rule = rule.rule,
-    }))
+    })
 end
 
 local signal_name_to_SignalName = {
@@ -380,8 +336,9 @@ function window.connect_signal(signals)
 
     for signal, callback in pairs(signals) do
         require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
-        ---@diagnostic disable-next-line: invisible
-        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        local handle =
+            ---@diagnostic disable-next-line: invisible
+            require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
         handles[signal] = handle
     end
 
@@ -398,7 +355,7 @@ end
 ---if focused then focused:close() end
 ---```
 function WindowHandle:close()
-    client.unary_request(build_grpc_request_params("Close", { window_id = self.id }))
+    client.unary_request(window_service.Close, { window_id = self.id })
 end
 
 ---Set this window's location and/or size.
@@ -428,7 +385,7 @@ end
 ---```
 ---@param geo { x: integer?, y: integer?, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
-    client.unary_request(build_grpc_request_params("SetGeometry", { window_id = self.id, geometry = geo }))
+    client.unary_request(window_service.SetGeometry, { window_id = self.id, geometry = geo })
 end
 
 ---Set this window to fullscreen or not.
@@ -445,7 +402,8 @@ end
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
     client.unary_request(
-        build_grpc_request_params("SetFullscreen", { window_id = self.id, set_or_toggle = set_or_toggle[fullscreen] })
+        window_service.SetFullscreen,
+        { window_id = self.id, set_or_toggle = set_or_toggle[fullscreen] }
     )
 end
 
@@ -460,7 +418,8 @@ end
 ---```
 function WindowHandle:toggle_fullscreen()
     client.unary_request(
-        build_grpc_request_params("SetFullscreen", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+        window_service.SetFullscreen,
+        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -478,7 +437,8 @@ end
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
     client.unary_request(
-        build_grpc_request_params("SetMaximized", { window_id = self.id, set_or_toggle = set_or_toggle[maximized] })
+        window_service.SetMaximized,
+        { window_id = self.id, set_or_toggle = set_or_toggle[maximized] }
     )
 end
 
@@ -493,7 +453,8 @@ end
 ---```
 function WindowHandle:toggle_maximized()
     client.unary_request(
-        build_grpc_request_params("SetMaximized", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+        window_service.SetMaximized,
+        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -511,7 +472,8 @@ end
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
     client.unary_request(
-        build_grpc_request_params("SetFloating", { window_id = self.id, set_or_toggle = set_or_toggle[floating] })
+        window_service.SetFloating,
+        { window_id = self.id, set_or_toggle = set_or_toggle[floating] }
     )
 end
 
@@ -526,7 +488,8 @@ end
 ---```
 function WindowHandle:toggle_floating()
     client.unary_request(
-        build_grpc_request_params("SetFloating", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+        window_service.SetFloating,
+        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -543,7 +506,8 @@ end
 ---@param focused boolean
 function WindowHandle:set_focused(focused)
     client.unary_request(
-        build_grpc_request_params("SetFocused", { window_id = self.id, set_or_toggle = set_or_toggle[focused] })
+        window_service.SetFocused,
+        { window_id = self.id, set_or_toggle = set_or_toggle[focused] }
     )
 end
 
@@ -558,7 +522,8 @@ end
 ---```
 function WindowHandle:toggle_focused()
     client.unary_request(
-        build_grpc_request_params("SetFocused", { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+        window_service.SetFocused,
+        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -577,7 +542,7 @@ end
 ---
 ---@param tag TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
-    client.unary_request(build_grpc_request_params("MoveToTag", { window_id = self.id, tag_id = tag.id }))
+    client.unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
 end
 
 ---Tag or untag the given tag on this window.
@@ -600,10 +565,8 @@ end
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
     client.unary_request(
-        build_grpc_request_params(
-            "SetTag",
-            { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle[set] }
-        )
+        window_service.SetTag,
+        { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle[set] }
     )
 end
 
@@ -627,10 +590,8 @@ end
 ---@param tag TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
     client.unary_request(
-        build_grpc_request_params(
-            "SetTag",
-            { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
-        )
+        window_service.SetTag,
+        { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -646,7 +607,7 @@ end
 ---end
 ---```
 function WindowHandle:raise()
-    client.unary_request(build_grpc_request_params("Raise", { window_id = self.id }))
+    client.unary_request(window_service.Raise, { window_id = self.id })
 end
 
 ---@class WindowProperties
@@ -662,12 +623,14 @@ end
 ---
 ---@return WindowProperties
 function WindowHandle:props()
-    local response = client.unary_request(build_grpc_request_params("GetProperties", { window_id = self.id }))
+    local response = client.unary_request(window_service.GetProperties, { window_id = self.id })
 
-    response.fullscreen_or_maximized = _fullscreen_or_maximized_keys[response.fullscreen_or_maximized]
+    response.fullscreen_or_maximized =
+        _fullscreen_or_maximized_keys[response.fullscreen_or_maximized]
 
-    ---@diagnostic disable-next-line: invisible
-    response.tags = response.tag_ids and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
+    response.tags = response.tag_ids
+        ---@diagnostic disable-next-line: invisible
+        and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
     response.tag_ids = nil
 
     return response

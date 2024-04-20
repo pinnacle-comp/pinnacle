@@ -3,45 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.tag." .. client.version .. "."
-local service = prefix .. "TagService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) TagServiceMethod
-local rpc_types = {
-    SetActive = {},
-    SwitchTo = {},
-    Add = {
-        response_type = "AddResponse",
-    },
-    Remove = {},
-    Get = {
-        response_type = "GetResponse",
-    },
-    GetProperties = {
-        response_type = "GetPropertiesResponse",
-    },
-}
-
----Build GrpcRequestParams
----@param method TagServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local tag_service = require("pinnacle.grpc.defs").pinnacle.tag.v0alpha1.TagService
 
 local set_or_toggle = {
     SET = 1,
@@ -89,7 +51,7 @@ tag.handle = tag_handle
 ---
 ---@return TagHandle[]
 function tag.get_all()
-    local response = client.unary_request(build_grpc_request_params("Get", {}))
+    local response = client.unary_request(tag_service.Get, {})
 
     ---@type TagHandle[]
     local handles = {}
@@ -174,10 +136,10 @@ function tag.add(output, ...)
         tag_names = tag_names[1] --[=[@as string[]]=]
     end
 
-    local response = client.unary_request(build_grpc_request_params("Add", {
+    local response = client.unary_request(tag_service.Add, {
         output_name = output.name,
         tag_names = tag_names,
-    }))
+    })
 
     ---@type TagHandle[]
     local handles = {}
@@ -207,7 +169,7 @@ function tag.remove(tags)
         table.insert(ids, tg.id)
     end
 
-    client.unary_request(build_grpc_request_params("Remove", { tag_ids = ids }))
+    client.unary_request(tag_service.Remove, { tag_ids = ids })
 end
 
 ---@type table<string, SignalServiceMethod>
@@ -246,8 +208,9 @@ function tag.connect_signal(signals)
 
     for signal, callback in pairs(signals) do
         require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
-        ---@diagnostic disable-next-line: invisible
-        local handle = require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        local handle =
+            ---@diagnostic disable-next-line: invisible
+            require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
         handles[signal] = handle
     end
 
@@ -267,7 +230,7 @@ end
 --- -- "HDMI-1" now only has tags "1" and "Buckle"
 ---```
 function TagHandle:remove()
-    client.unary_request(build_grpc_request_params("Remove", { tag_ids = { self.id } }))
+    tag.remove({ self })
 end
 
 ---Activate this tag and deactivate all other ones on the same output.
@@ -282,7 +245,7 @@ end
 ---Tag.get("3"):switch_to() -- Displays Steam
 ---```
 function TagHandle:switch_to()
-    client.unary_request(build_grpc_request_params("SwitchTo", { tag_id = self.id }))
+    client.unary_request(tag_service.SwitchTo, { tag_id = self.id })
 end
 
 ---Set whether or not this tag is active.
@@ -301,7 +264,8 @@ end
 ---@param active boolean
 function TagHandle:set_active(active)
     client.unary_request(
-        build_grpc_request_params("SetActive", { tag_id = self.id, set_or_toggle = set_or_toggle[active] })
+        tag_service.SetActive,
+        { tag_id = self.id, set_or_toggle = set_or_toggle[active] }
     )
 end
 
@@ -318,7 +282,8 @@ end
 ---```
 function TagHandle:toggle_active()
     client.unary_request(
-        build_grpc_request_params("SetActive", { tag_id = self.id, set_or_toggle = set_or_toggle.TOGGLE })
+        tag_service.SetActive,
+        { tag_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
 end
 
@@ -332,13 +297,14 @@ end
 ---
 ---@return TagProperties
 function TagHandle:props()
-    local response = client.unary_request(build_grpc_request_params("GetProperties", { tag_id = self.id }))
+    local response = client.unary_request(tag_service.GetProperties, { tag_id = self.id })
 
     return {
         active = response.active,
         name = response.name,
-        ---@diagnostic disable-next-line: invisible
-        output = response.output_name and require("pinnacle.output").handle.new(response.output_name),
+        output = response.output_name
+            ---@diagnostic disable-next-line: invisible
+            and require("pinnacle.output").handle.new(response.output_name),
         ---@diagnostic disable-next-line: invisible
         windows = require("pinnacle.window").handle.new_from_table(response.window_ids or {}),
     }

@@ -1,35 +1,6 @@
 local client = require("pinnacle.grpc.client")
 local protobuf = require("pinnacle.grpc.protobuf")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.layout." .. client.version .. "."
-local service = prefix .. "LayoutService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) LayoutServiceMethod
-local rpc_types = {
-    Layout = {
-        response_type = "LayoutResponse",
-    },
-}
-
----Build GrpcRequestParams
----@param method LayoutServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v0alpha1.LayoutService
 
 ---@class LayoutArgs
 ---@field output OutputHandle
@@ -158,13 +129,17 @@ function MasterStack:layout(args)
     local gaps = ((not inner_gaps and outer_gaps) or 0)
 
     if self.master_side == "left" then
-        master_rect, stack_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+        master_rect, stack_rect =
+            rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
     elseif self.master_side == "right" then
-        stack_rect, master_rect = rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+        stack_rect, master_rect =
+            rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
     elseif self.master_side == "top" then
-        master_rect, stack_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+        master_rect, stack_rect =
+            rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
     else
-        stack_rect, master_rect = rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+        stack_rect, master_rect =
+            rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
     end
 
     if not master_rect then
@@ -517,10 +492,14 @@ function Corner:layout(args)
         local corner_rect, vert_stack_rect
 
         if self.corner_loc == "top_left" or self.corner_loc == "bottom_left" then
-            local x_slice_point = rect.x + math.floor(rect.width * self.corner_width_factor + 0.5) - gaps // 2
+            local x_slice_point = rect.x
+                + math.floor(rect.width * self.corner_width_factor + 0.5)
+                - gaps // 2
             corner_rect, vert_stack_rect = rect:split_at("vertical", x_slice_point, gaps)
         else
-            local x_slice_point = rect.x + math.floor(rect.width * (1 - self.corner_width_factor) + 0.5) - gaps // 2
+            local x_slice_point = rect.x
+                + math.floor(rect.width * (1 - self.corner_width_factor) + 0.5)
+                - gaps // 2
             vert_stack_rect, corner_rect = rect:split_at("vertical", x_slice_point, gaps)
         end
 
@@ -533,13 +512,17 @@ function Corner:layout(args)
             local horiz_stack_rect
 
             if self.corner_loc == "top_left" or self.corner_loc == "top_right" then
-                local y_slice_point = rect.y + math.floor(rect.height * self.corner_height_factor + 0.5) - gaps // 2
-                corner_rect, horiz_stack_rect = corner_rect:split_at("horizontal", y_slice_point, gaps)
+                local y_slice_point = rect.y
+                    + math.floor(rect.height * self.corner_height_factor + 0.5)
+                    - gaps // 2
+                corner_rect, horiz_stack_rect =
+                    corner_rect:split_at("horizontal", y_slice_point, gaps)
             else
                 local y_slice_point = rect.y
                     + math.floor(rect.height * (1 - self.corner_height_factor) + 0.5)
                     - gaps // 2
-                horiz_stack_rect, corner_rect = corner_rect:split_at("horizontal", y_slice_point, gaps)
+                horiz_stack_rect, corner_rect =
+                    corner_rect:split_at("horizontal", y_slice_point, gaps)
             end
 
             assert(horiz_stack_rect)
@@ -993,50 +976,48 @@ local layout = {
 ---
 ---@param manager LayoutManager
 function layout.set_manager(manager)
-    layout.stream = client.bidirectional_streaming_request(
-        build_grpc_request_params("Layout", {
-            layout = {},
-        }),
-        function(response, stream)
-            local request_id = response.request_id
+    layout.stream = client.bidirectional_streaming_request(layout_service.Layout, {
+        layout = {},
+    }, function(response, stream)
+        local request_id = response.request_id
 
+        ---@diagnostic disable-next-line: invisible
+        local output_handle = require("pinnacle.output").handle.new(response.output_name)
+
+        local window_handles =
             ---@diagnostic disable-next-line: invisible
-            local output_handle = require("pinnacle.output").handle.new(response.output_name)
+            require("pinnacle.window").handle.new_from_table(response.window_ids or {})
 
-            ---@diagnostic disable-next-line: invisible
-            local window_handles = require("pinnacle.window").handle.new_from_table(response.window_ids or {})
+        ---@diagnostic disable-next-line: invisible
+        local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
 
-            ---@diagnostic disable-next-line: invisible
-            local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
+        ---@type LayoutArgs
+        local args = {
+            output = output_handle,
+            windows = window_handles,
+            tags = tag_handles,
+            output_width = response.output_width,
+            output_height = response.output_height,
+        }
 
-            ---@type LayoutArgs
-            local args = {
-                output = output_handle,
-                windows = window_handles,
-                tags = tag_handles,
-                output_width = response.output_width,
-                output_height = response.output_height,
-            }
+        local a = manager:get_active(args)
+        local success, geos = pcall(a.layout, a, args)
 
-            local a = manager:get_active(args)
-            local success, geos = pcall(a.layout, a, args)
-
-            if not success then
-                print(geos)
-                os.exit(1)
-            end
-
-            local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
-                geometries = {
-                    request_id = request_id,
-                    geometries = geos,
-                    output_name = response.output_name,
-                },
-            })
-
-            stream:write_chunk(body, false)
+        if not success then
+            print(geos)
+            os.exit(1)
         end
-    )
+
+        local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
+            geometries = {
+                request_id = request_id,
+                geometries = geos,
+                output_name = response.output_name,
+            },
+        })
+
+        stream:write_chunk(body, false)
+    end)
 end
 
 ---Request a layout on the given output, or the focused output if nil.

@@ -3,56 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.signal." .. client.version .. "."
-local service = prefix .. "SignalService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) SignalServiceMethod
-local rpc_types = {
-    OutputConnect = {
-        response_type = "OutputConnectResponse",
-    },
-    OutputDisconnect = {
-        response_type = "OutputDisconnectResponse",
-    },
-    OutputResize = {
-        response_type = "OutputResizeResponse",
-    },
-    OutputMove = {
-        response_type = "OutputMoveResponse",
-    },
-
-    WindowPointerEnter = {
-        response_type = "WindowPointerEnterResponse",
-    },
-    WindowPointerLeave = {
-        response_type = "WindowPointerLeaveResponse",
-    },
-
-    TagActive = {
-        response_type = "TagActiveResponse",
-    },
-}
-
----Build GrpcRequestParams
----@param method SignalServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.SignalService
 
 local stream_control = {
     UNSPECIFIED = 0,
@@ -299,27 +250,28 @@ end
 ---@param request SignalServiceMethod
 ---@param callback fun(response: table)
 function signal.connect(request, callback)
-    local stream = client.bidirectional_streaming_request(
-        build_grpc_request_params(request, {
-            control = stream_control.READY,
-        }),
-        function(response)
-            callback(response)
+    local stream = client.bidirectional_streaming_request(signal_service[request], {
+        control = stream_control.READY,
+    }, function(response)
+        callback(response)
 
-            if signals[request].sender then
-                local chunk = require("pinnacle.grpc.protobuf").encode(prefix .. request .. "Request", {
+        if signals[request].sender then
+            local chunk = require("pinnacle.grpc.protobuf").encode(
+                "pinnacle.signal.v0alpha1." .. request .. "Request",
+                {
                     control = stream_control.READY,
-                })
+                }
+            )
 
-                local success, err = pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
+            local success, err =
+                pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
 
-                if not success then
-                    print("error sending to stream:", err)
-                    os.exit(1)
-                end
+            if not success then
+                print("error sending to stream:", err)
+                os.exit(1)
             end
         end
-    )
+    end)
 
     signals[request].sender = stream
 end
@@ -329,11 +281,15 @@ end
 ---@param request SignalServiceMethod
 function signal.disconnect(request)
     if signals[request].sender then
-        local chunk = require("pinnacle.grpc.protobuf").encode(prefix .. request .. "Request", {
-            control = stream_control.DISCONNECT,
-        })
+        local chunk = require("pinnacle.grpc.protobuf").encode(
+            "pinnacle.signal.v0alpha1." .. request .. "Request",
+            {
+                control = stream_control.DISCONNECT,
+            }
+        )
 
-        local success, err = pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
+        local success, err =
+            pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
         if not success then
             print("error sending to stream:", err)
             os.exit(1)

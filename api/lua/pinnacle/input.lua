@@ -3,42 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.input." .. client.version .. "."
-local service = prefix .. "InputService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) InputServiceMethod
-local rpc_types = {
-    SetKeybind = {
-        response_type = "SetKeybindResponse",
-    },
-    SetMousebind = {
-        response_type = "SetMousebindResponse",
-    },
-    SetXkbConfig = {},
-    SetRepeatRate = {},
-    SetLibinputSetting = {},
-}
-
----Build GrpcRequestParams
----@param method InputServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local input_service = require("pinnacle.grpc.defs").pinnacle.input.v0alpha1.InputService
 
 -- This is an @enum and not an @alias because with an @alias the completion replaces tables with a string,
 -- which is annoying
@@ -161,14 +126,11 @@ function input.keybind(mods, key, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(
-        build_grpc_request_params("SetKeybind", {
-            modifiers = mod_values,
-            raw_code = raw_code,
-            xkb_name = xkb_name,
-        }),
-        action
-    )
+    client.server_streaming_request(input_service.SetKeybind, {
+        modifiers = mod_values,
+        raw_code = raw_code,
+        xkb_name = xkb_name,
+    }, action)
 end
 
 ---Set a mousebind. If called with an already existing mousebind, it gets replaced.
@@ -196,14 +158,11 @@ function input.mousebind(mods, button, edge, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(
-        build_grpc_request_params("SetMousebind", {
-            modifiers = mod_values,
-            button = mouse_button_values[button],
-            edge = edge,
-        }),
-        action
-    )
+    client.server_streaming_request(input_service.SetMousebind, {
+        modifiers = mod_values,
+        button = mouse_button_values[button],
+        edge = edge,
+    }, action)
 end
 
 ---@class XkbConfig
@@ -229,7 +188,7 @@ end
 ---
 ---@param xkb_config XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
-    client.unary_request(build_grpc_request_params("SetXkbConfig", xkb_config))
+    client.unary_request(input_service.SetXkbConfig, xkb_config)
 end
 
 ---Set the keyboard's repeat rate and delay.
@@ -242,10 +201,10 @@ end
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
 function input.set_repeat_rate(rate, delay)
-    client.unary_request(build_grpc_request_params("SetRepeatRate", {
+    client.unary_request(input_service.SetRepeatRate, {
         rate = rate,
         delay = delay,
-    }))
+    })
 end
 
 local accel_profile_values = {
@@ -319,24 +278,31 @@ function input.set_libinput_settings(settings)
     for setting, value in pairs(settings) do
         if setting == "accel_profile" then
             client.unary_request(
-                build_grpc_request_params("SetLibinputSetting", { [setting] = accel_profile_values[value] })
+                input_service.SetLibinputSetting,
+                { [setting] = accel_profile_values[value] }
             )
         elseif setting == "calibration_matrix" then
-            client.unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = { matrix = value } }))
+            client.unary_request(
+                input_service.SetLibinputSetting,
+                { [setting] = { matrix = value } }
+            )
         elseif setting == "click_method" then
             client.unary_request(
-                build_grpc_request_params("SetLibinputSetting", { [setting] = click_method_values[value] })
+                input_service.SetLibinputSetting,
+                { [setting] = click_method_values[value] }
             )
         elseif setting == "scroll_method" then
             client.unary_request(
-                build_grpc_request_params("SetLibinputSetting", { [setting] = scroll_method_values[value] })
+                input_service.SetLibinputSetting,
+                { [setting] = scroll_method_values[value] }
             )
         elseif setting == "tap_button_map" then
             client.unary_request(
-                build_grpc_request_params("SetLibinputSetting", { [setting] = tap_button_map_values[value] })
+                input_service.SetLibinputSetting,
+                { [setting] = tap_button_map_values[value] }
             )
         else
-            client.unary_request(build_grpc_request_params("SetLibinputSetting", { [setting] = value }))
+            client.unary_request(input_service.SetLibinputSetting, { [setting] = value })
         end
     end
 end

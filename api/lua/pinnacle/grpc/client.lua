@@ -65,21 +65,16 @@ local client = {
 ---@nodoc
 ---Send a synchronous unary request to the compositor.
 ---
----If `request_type` is not specified then it will default to
----`method` .. "Request".
----
----If `response_type` is not specified then it will default to
----`google.protobuf.Empty`.
----@param grpc_request_params GrpcRequestParams
+---@param grpc_request_args GrpcRequestArgs
+---@param data table
 ---@return table
-function client.unary_request(grpc_request_params)
+function client.unary_request(grpc_request_args, data)
     local stream = client.conn:new_stream()
 
-    local service = grpc_request_params.service
-    local method = grpc_request_params.method
-    local request_type = grpc_request_params.request_type
-    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
-    local data = grpc_request_params.data
+    local service = grpc_request_args.service
+    local method = grpc_request_args.method
+    local request_type = grpc_request_args.request
+    local response_type = grpc_request_args.response
 
     local body = protobuf.encode(request_type, data)
 
@@ -113,18 +108,16 @@ end
 ---
 ---`callback` will be called with every streamed response.
 ---
----If `response_type` is not specified then it will default to
----`google.protobuf.Empty`.
----@param grpc_request_params GrpcRequestParams
+---@param grpc_request_args GrpcRequestArgs
+---@param data table
 ---@param callback fun(response: table)
-function client.server_streaming_request(grpc_request_params, callback)
+function client.server_streaming_request(grpc_request_args, data, callback)
     local stream = client.conn:new_stream()
 
-    local service = grpc_request_params.service
-    local method = grpc_request_params.method
-    local request_type = grpc_request_params.request_type
-    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
-    local data = grpc_request_params.data
+    local service = grpc_request_args.service
+    local method = grpc_request_args.method
+    local request_type = grpc_request_args.request
+    local response_type = grpc_request_args.response
 
     local body = protobuf.encode(request_type, data)
 
@@ -169,18 +162,17 @@ function client.server_streaming_request(grpc_request_params, callback)
 end
 
 ---@nodoc
----@param grpc_request_params GrpcRequestParams
+---@param grpc_request_args GrpcRequestArgs
 ---@param callback fun(response: table, stream: H2Stream)
 ---
 ---@return H2Stream
-function client.bidirectional_streaming_request(grpc_request_params, callback)
+function client.bidirectional_streaming_request(grpc_request_args, data, callback)
     local stream = client.conn:new_stream()
 
-    local service = grpc_request_params.service
-    local method = grpc_request_params.method
-    local request_type = grpc_request_params.request_type
-    local response_type = grpc_request_params.response_type or "google.protobuf.Empty"
-    local data = grpc_request_params.data
+    local service = grpc_request_args.service
+    local method = grpc_request_args.method
+    local request_type = grpc_request_args.request
+    local response_type = grpc_request_args.response
 
     local body = protobuf.encode(request_type, data)
 

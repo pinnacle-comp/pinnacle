@@ -3,37 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client")
-
----The protobuf absolute path prefix
-local prefix = "pinnacle.process." .. client.version .. "."
-local service = prefix .. "ProcessService"
-
----@type table<string, { request_type: string?, response_type: string? }>
----@enum (key) ProcessServiceMethod
-local rpc_types = {
-    Spawn = {
-        response_type = "SpawnResponse",
-    },
-    SetEnv = {},
-}
-
----Build GrpcRequestParams
----@param method ProcessServiceMethod
----@param data table
----@return GrpcRequestParams
-local function build_grpc_request_params(method, data)
-    local req_type = rpc_types[method].request_type
-    local resp_type = rpc_types[method].response_type
-
-    ---@type GrpcRequestParams
-    return {
-        service = service,
-        method = method,
-        request_type = req_type and prefix .. req_type or prefix .. method .. "Request",
-        response_type = resp_type and prefix .. resp_type,
-        data = data,
-    }
-end
+local process_service = require("pinnacle.grpc.defs").pinnacle.process.v0alpha1.ProcessService
 
 ---Process management.
 ---
@@ -61,14 +31,11 @@ local function spawn_inner(args, callbacks, once)
         end
     end
 
-    client.server_streaming_request(
-        build_grpc_request_params("Spawn", {
-            args = args,
-            once = once,
-            has_callback = callbacks ~= nil,
-        }),
-        callback
-    )
+    client.server_streaming_request(process_service.Spawn, {
+        args = args,
+        once = once,
+        has_callback = callbacks ~= nil,
+    }, callback)
 end
 
 ---Spawn a program with optional callbacks for its stdout, stderr, and exit information.
@@ -139,10 +106,10 @@ end
 ---@param key string The environment variable key
 ---@param value string The environment variable value
 function process.set_env(key, value)
-    client.unary_request(build_grpc_request_params("SetEnv", {
+    client.unary_request(process_service.SetEnv, {
         key = key,
         value = value,
-    }))
+    })
 end
 
 return process
