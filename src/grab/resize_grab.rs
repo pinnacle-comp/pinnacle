@@ -366,10 +366,6 @@ pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
         return;
     };
 
-    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-        return;
-    }
-
     let Some(mut window_loc) = state.space.element_location(&window) else {
         return;
     };
@@ -402,6 +398,10 @@ pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
                 (new_x, new_y)
             })
     });
+
+    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+        return;
+    }
 
     let Some(new_loc) = new_loc else { return };
 
