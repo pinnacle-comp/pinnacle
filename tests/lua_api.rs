@@ -79,12 +79,6 @@ fn setup_lua(ident: &str, code: &str) -> SetupLuaGuard {
     drop(stdin);
 
     SetupLuaGuard { child }
-
-    // let exit_status = child.wait().unwrap();
-    //
-    // if exit_status.code().is_some_and(|code| code != 0) {
-    //     panic!("lua code panicked");
-    // }
 }
 
 macro_rules! run_lua {

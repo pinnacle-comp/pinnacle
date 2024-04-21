@@ -1,5 +1,5 @@
 [workspace]
-members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros"]
+members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros", "xtask"]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
@@ -21,6 +21,8 @@ pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 xkbcommon = "0.7.0"
 xdg = "2.5.2"
 bitflags = "2.5.0"
+clap = { version = "4.5.4", features = ["derive"] }
+dircpy = "0.3.16"
 
 ########################################################################yo😎###########
 
@@ -57,7 +59,7 @@ tonic-reflection = { workspace = true }
 tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { workspace = true }
 # CLI
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { workspace = true }
 cliclack = "0.2.5"
 # Misc.
 bitflags = { workspace = true }
@@ -70,7 +72,7 @@ xdg = { workspace = true }
 sysinfo = "0.30.10"
 nix = { version = "0.28.0", features = ["user", "resource"] }
 pinnacle-api-defs = { workspace = true }
-dircpy = "0.3.16"
+dircpy = { workspace = true }
 chrono = "0.4.37"
 bytemuck = "1.15.0"
 
