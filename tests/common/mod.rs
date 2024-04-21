@@ -42,14 +42,9 @@ pub fn test_api(
 
     let loop_signal = event_loop.get_signal();
 
-    let join_handle = std::thread::spawn(move || {
-        let res = std::panic::catch_unwind(|| {
-            test(sender);
-        });
+    let join_handle = tokio::task::spawn_blocking(move || {
+        test(sender);
         loop_signal.stop();
-        if let Err(err) = res {
-            std::panic::resume_unwind(err);
-        }
     });
 
     event_loop.run(None, &mut state, |state| {
@@ -71,7 +66,10 @@ pub fn test_api(
         );
     })?;
 
-    if let Err(err) = join_handle.join() {
+    if let Err(err) = tokio::task::block_in_place(|| {
+        let handle = tokio::runtime::Handle::current();
+        handle.block_on(join_handle)
+    }) {
         panic!("{err:?}");
     }
 
