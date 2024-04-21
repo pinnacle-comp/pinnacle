@@ -22,11 +22,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev
-      - name: Setup Lua
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev lua5.4
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Build
@@ -44,11 +40,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot
-      - name: Setup Lua
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot lua5.4
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Build
@@ -82,11 +74,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev
-      - name: Setup Lua
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
+        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev lua5.4
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Clippy check
