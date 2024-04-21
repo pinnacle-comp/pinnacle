@@ -1,8 +1,12 @@
 mod common;
 
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
+
 use crate::common::{output_for_name, sleep_secs, test_api, with_state};
 
-use mlua::Lua;
 use pinnacle::state::WithState;
 use test_log::test;
 
@@ -17,16 +21,39 @@ fn run_lua(ident: &str, code: &str) {
             local success, err = pcall(run, {ident})
 
             if not success then
-                error(err)
+                print(err)
+                os.exit(1)
             end
         end)
     "#);
 
-    let lua = unsafe { Lua::unsafe_new() };
-    lua.load(code).exec().unwrap();
+    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn().unwrap();
+
+    let mut stdin = child.stdin.take().unwrap();
+
+    stdin.write_all(code.as_bytes()).unwrap();
+
+    drop(stdin);
+
+    let exit_status = child.wait().unwrap();
+
+    if exit_status.code().is_some_and(|code| code != 0) {
+        panic!("lua code panicked");
+    }
 }
 
-fn setup_lua(ident: &str, code: &str) {
+struct SetupLuaGuard {
+    child: std::process::Child,
+}
+
+impl Drop for SetupLuaGuard {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
+#[must_use]
+fn setup_lua(ident: &str, code: &str) -> SetupLuaGuard {
     #[rustfmt::skip]
     let code = format!(r#"
         require("pinnacle").setup(function({ident})
@@ -43,10 +70,21 @@ fn setup_lua(ident: &str, code: &str) {
         end)
     "#);
 
-    std::thread::spawn(|| {
-        let lua = unsafe { Lua::unsafe_new() };
-        lua.load(code).exec().unwrap();
-    });
+    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn().unwrap();
+
+    let mut stdin = child.stdin.take().unwrap();
+
+    stdin.write_all(code.as_bytes()).unwrap();
+
+    drop(stdin);
+
+    SetupLuaGuard { child }
+
+    // let exit_status = child.wait().unwrap();
+    //
+    // if exit_status.code().is_some_and(|code| code != 0) {
+    //     panic!("lua code panicked");
+    // }
 }
 
 macro_rules! run_lua {

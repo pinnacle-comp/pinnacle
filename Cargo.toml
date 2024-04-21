@@ -111,7 +111,6 @@ tempfile = "3.10.1"
 test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
 pinnacle = { path = ".", features = ["testing"] }
 pinnacle-api = { path = "./api/rust" }
-mlua = { version = "0.9.7", features = ["lua54", "send", "macros"] }
 
 [features]
 testing = [
