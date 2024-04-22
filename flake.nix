@@ -53,44 +53,33 @@
           strictDeps = true;
 
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = with pkgs;
-            [
+          buildInputs = with pkgs; [
 
-              wayland
+            wayland
 
-              # build time stuff
-              protobuf
-              lua54Packages.luarocks
+            # build time stuff
+            protobuf
+            lua54Packages.luarocks
 
-              # libs
-              seatd.dev
-              systemdLibs.dev
-              libxkbcommon
-              libinput
-              mesa
-              xwayland
+            # libs
+            seatd.dev
+            systemdLibs.dev
+            libxkbcommon
+            libinput
+            mesa
+            xwayland
 
-              # winit on x11
-              xorg.libXcursor
-              xorg.libXrandr
-              xorg.libXi
-              xorg.libX11
-              # Add additional build inputs here
-            ] ++ lib.optionals pkgs.stdenv.isDarwin [
-              # Additional darwin specific inputs can be set here
-              pkgs.libiconv
-            ];
+            # winit on x11
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            xorg.libX11
+          ];
 
-          # Additional environment variables can be set directly
+          # Enironment Variables to set as necessary
           PROTOC = "${pkgs.protobuf}/bin/protoc";
         };
 
-        craneLibLLvmTools = craneLib.overrideToolchain
-          (fenix.packages.${system}.complete.withComponents [
-            "cargo"
-            "llvm-tools"
-            "rustc"
-          ]);
 
         # Build *just* the cargo dependencies (of the entire workspace),
         # so we can reuse all of that work (e.g. via cachix) when running in CI
