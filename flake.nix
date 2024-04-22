@@ -156,21 +156,6 @@
           #   partitionType = "count";
           # });
 
-          # Ensure that cargo-hakari is up to date
-          my-workspace-hakari = craneLib.mkCargoDerivation {
-            inherit src;
-            pname = "my-workspace-hakari";
-            cargoArtifacts = null;
-            doInstallCargoArtifacts = false;
-
-            buildPhaseCargoCommand = ''
-              cargo hakari generate --diff  # workspace-hack Cargo.toml is up-to-date
-              cargo hakari manage-deps --dry-run  # all workspace crates depend on workspace-hack
-              cargo hakari verify
-            '';
-
-            nativeBuildInputs = [ pkgs.cargo-hakari ];
-          };
         };
 
         packages = {
@@ -187,7 +172,6 @@
           # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
 
           # Extra inputs can be added here; cargo and rustc are provided by default.
-          packages = [ pkgs.cargo-hakari ];
         };
       });
 }
