@@ -35,6 +35,18 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain combinedToolchain;
 
+        # things in the filter are allowed in the nix build
+        src = lib.cleanSourceWith {
+          src = ./.; # The original, unfiltered source
+          filter = path: type:
+            (lib.hasSuffix ".lua" path) || (lib.hasSuffix ".rpckspec" path)
+            || # keep lua in build
+            (lib.hasInfix "/protocol/" path) || # protobuf stuff
+            (lib.hasInfix "/resources/" path)
+            || # some resources are needed at build time
+            # Default filter from crane (allow .rs files)
+            (craneLib.filterCargoSources path type);
+        };
         # Common arguments can be set here to avoid repeating them later
         commonArgs = {
           inherit src;
