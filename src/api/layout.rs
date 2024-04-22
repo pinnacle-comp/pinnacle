@@ -53,7 +53,15 @@ impl layout_service_server::LayoutService for LayoutService {
                         }
                     }
                 }
-                Err(err) => tracing::error!("{err}"),
+                Err(err) => {
+                    // Ignore broken pipes here, they have a code of `Unknown`
+                    //
+                    // Silences errors when reloading the config, unfortunately also ignores other
+                    // `Unknown` errors
+                    if err.code() != tonic::Code::Unknown {
+                        tracing::error!("{err}")
+                    }
+                }
             },
             |state, sender, _join_handle| {
                 state.layout_state.layout_request_sender = Some(sender);
