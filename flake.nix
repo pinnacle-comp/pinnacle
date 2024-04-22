@@ -80,7 +80,6 @@
           PROTOC = "${pkgs.protobuf}/bin/protoc";
         };
 
-
         # Build *just* the cargo dependencies (of the entire workspace),
         # so we can reuse all of that work (e.g. via cachix) when running in CI
         # It is *highly* recommended to use something like cargo-hakari to avoid
@@ -93,7 +92,6 @@
           # NB: we disable tests since we'll run them all via cargo-nextest
           doCheck = false;
         };
-
 
         # Build the top-level crates of the workspace as individual derivations.
         # This allows consumers to only depend on (and build) only what they need.
