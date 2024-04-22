@@ -94,11 +94,6 @@
           doCheck = false;
         };
 
-        fileSetForCrate = crate:
-          lib.fileset.toSource {
-            root = ./.;
-            fileset = lib.fileset.unions [ ./Cargo.toml ./Cargo.lock crate ];
-          };
 
         # Build the top-level crates of the workspace as individual derivations.
         # This allows consumers to only depend on (and build) only what they need.
@@ -107,7 +102,6 @@
         pinnacle = craneLib.buildPackage (individualCrateArgs // {
           pname = "pinnacle";
           cargoExtraArgs = "-p pinnacle";
-          src = fileSetForCrate ./.;
         });
       in {
         checks = {
