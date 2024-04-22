@@ -104,10 +104,25 @@
           cargoExtraArgs = "-p pinnacle";
           inherit src;
         });
+        pinnacle-api-defs = craneLib.buildPackage (individualCrateArgs // {
+          pname = "pinnacle-api-defs";
+          cargoExtraArgs = "-p pinnacle-api-defs";
+          inherit src;
+        });
+        pinnacle-api-macros = craneLib.buildPackage (individualCrateArgs // {
+          pname = "pinnacle-api-macros";
+          cargoExtraArgs = "-p pinnacle-api-macros";
+          inherit src;
+        });
+        pinnacle-api = craneLib.buildPackage (individualCrateArgs // {
+          pname = "pinnacle-api";
+          cargoExtraArgs = "-p pinnacle-api";
+          inherit src;
+        });
       in {
         checks = {
           # Build the crates as part of `nix flake check` for convenience
-          inherit pinnacle;
+          inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api;
 
           # Run clippy (and deny all warnings) on the workspace source,
           # again, reusing the dependency artifacts from above.
@@ -159,10 +174,7 @@
         };
 
         packages = {
-          inherit pinnacle;
-        } // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-          my-workspace-llvm-coverage = craneLibLLvmTools.cargoLlvmCov
-            (commonArgs // { inherit cargoArtifacts; });
+          inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api;
         };
 
         apps = { pinnacle = flake-utils.lib.mkApp { drv = pinnacle; }; };
