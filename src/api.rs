@@ -32,7 +32,7 @@ use pinnacle_api_defs::pinnacle::{
     },
     v0alpha1::{
         pinnacle_service_server, PingRequest, PingResponse, QuitRequest, ReloadConfigRequest,
-        SetOrToggle,
+        SetOrToggle, ShutdownWatchRequest, ShutdownWatchResponse,
     },
 };
 use smithay::{
@@ -186,6 +186,8 @@ impl PinnacleService {
 
 #[tonic::async_trait]
 impl pinnacle_service_server::PinnacleService for PinnacleService {
+    type ShutdownWatchStream = ResponseStream<ShutdownWatchResponse>;
+
     async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
         tracing::trace!("PinnacleService.quit");
 
@@ -201,7 +203,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
     ) -> Result<Response<()>, Status> {
         run_unary_no_response(&self.sender, |state| {
             state
-                .start_config(state.config.dir(&state.xdg_base_dirs))
+                .start_config(Some(state.config.dir(&state.xdg_base_dirs)))
                 .expect("failed to restart config");
         })
         .await
@@ -210,6 +212,15 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let payload = request.into_inner().payload;
         Ok(Response::new(PingResponse { payload }))
+    }
+
+    async fn shutdown_watch(
+        &self,
+        _request: Request<ShutdownWatchRequest>,
+    ) -> Result<Response<Self::ShutdownWatchStream>, Status> {
+        run_server_streaming(&self.sender, |state, sender| {
+            state.config.shutdown_sender.replace(sender);
+        })
     }
 }
 

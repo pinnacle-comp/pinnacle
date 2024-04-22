@@ -211,21 +211,44 @@ pub async fn connect(
 /// You should use the macro instead of this function directly.
 pub async fn listen(api: ApiModules, fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
+    let mut set = futures::stream::FuturesUnordered::new();
 
     let keepalive = async move {
         loop {
             tokio::time::sleep(Duration::from_secs(60)).await;
             if let Err(err) = api.pinnacle.ping().await {
                 eprintln!("Failed to ping compositor: {err}");
-                std::process::exit(1);
+                panic!("failed to ping compositor");
             }
         }
     };
 
-    tokio::spawn(keepalive);
+    let mut shutdown_stream = api.pinnacle.shutdown_watch();
 
-    while let Some(fut) = fut_recv.next().await {
-        tokio::spawn(fut);
+    let shutdown_watcher = async move {
+        shutdown_stream.next().await;
+        panic!("Shutdown received");
+    };
+
+    set.push(tokio::spawn(keepalive));
+    set.push(tokio::spawn(shutdown_watcher));
+
+    loop {
+        tokio::select! {
+            fut = fut_recv.next() => {
+                if let Some(fut) = fut {
+                    set.push(tokio::spawn(fut));
+                } else {
+                    break;
+                }
+            }
+            res = set.next() => {
+                match res {
+                    Some(Err(_)) | None => break,
+                    _ => (),
+                }
+            }
+        }
     }
 }
 

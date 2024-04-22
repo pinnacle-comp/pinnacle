@@ -10,9 +10,10 @@ use std::time::Duration;
 
 use pinnacle_api_defs::pinnacle::v0alpha1::{
     pinnacle_service_client::PinnacleServiceClient, PingRequest, QuitRequest, ReloadConfigRequest,
+    ShutdownWatchRequest, ShutdownWatchResponse,
 };
 use rand::RngCore;
-use tonic::{transport::Channel, Request};
+use tonic::{transport::Channel, Request, Streaming};
 
 use crate::block_on_tokio;
 
@@ -46,6 +47,13 @@ impl Pinnacle {
     pub fn reload_config(&self) {
         let mut client = self.client.clone();
         block_on_tokio(client.reload_config(ReloadConfigRequest {})).unwrap();
+    }
+
+    pub(crate) fn shutdown_watch(&self) -> Streaming<ShutdownWatchResponse> {
+        let mut client = self.client.clone();
+        block_on_tokio(client.shutdown_watch(ShutdownWatchRequest {}))
+            .unwrap()
+            .into_inner()
     }
 
     pub(super) async fn ping(&self) -> Result<(), String> {

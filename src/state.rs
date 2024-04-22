@@ -213,7 +213,9 @@ impl State {
 
                     std::env::set_var("DISPLAY", format!(":{display}"));
 
-                    if let Err(err) = state.start_config(state.config.dir(&state.xdg_base_dirs)) {
+                    if let Err(err) =
+                        state.start_config(Some(state.config.dir(&state.xdg_base_dirs)))
+                    {
                         panic!("failed to start config: {err}");
                     }
                 }
@@ -323,9 +325,19 @@ impl State {
         });
     }
 
-    pub fn shutdown(&self) {
+    pub fn shutdown(&mut self) {
         info!("Shutting down Pinnacle");
         self.loop_signal.stop();
+        if let Some(join_handle) = self.config.config_join_handle.take() {
+            join_handle.abort();
+        }
+        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
+            shutdown_sender
+                .send(Ok(
+                    pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse {},
+                ))
+                .expect("failed to send shutdown signal to config");
+        }
     }
 }
 
