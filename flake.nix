@@ -102,6 +102,7 @@
         pinnacle = craneLib.buildPackage (individualCrateArgs // {
           pname = "pinnacle";
           cargoExtraArgs = "-p pinnacle";
+          inherit src;
         });
       in {
         checks = {
