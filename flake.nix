@@ -147,13 +147,14 @@
           pinnacle-audit = craneLib.cargoAudit { inherit src advisory-db; };
 
           # Run tests with cargo-nextest
-          # Consider setting `doCheck = false` on other crate derivations
-          # if you do not want the tests to run twice
-          my-workspace-nextest = craneLib.cargoNextest (commonArgs // {
-            inherit cargoArtifacts;
-            partitions = 1;
-            partitionType = "count";
-          });
+          #
+          # test currently modify state, so I've disabled them in the check
+          #
+          # pinnacle-nextest = craneLib.cargoNextest (commonArgs // {
+          #   inherit cargoArtifacts;
+          #   partitions = 1;
+          #   partitionType = "count";
+          # });
 
           # Ensure that cargo-hakari is up to date
           my-workspace-hakari = craneLib.mkCargoDerivation {
