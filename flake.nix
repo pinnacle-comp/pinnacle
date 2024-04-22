@@ -120,6 +120,7 @@
           inherit src;
         });
       in {
+        formatter = pkgs.nixfmt;
         checks = {
           # Build the crates as part of `nix flake check` for convenience
           inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api;
