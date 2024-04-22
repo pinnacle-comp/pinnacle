@@ -131,22 +131,20 @@
           # Note that this is done as a separate derivation so that
           # we can block the CI if there are issues here, but not
           # prevent downstream consumers from building our crate by itself.
-          my-workspace-clippy = craneLib.cargoClippy (commonArgs // {
+          pinnacle-clippy = craneLib.cargoClippy (commonArgs // {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
-          my-workspace-doc =
+          pinnacle-doc =
             craneLib.cargoDoc (commonArgs // { inherit cargoArtifacts; });
 
           # Check formatting
-          my-workspace-fmt = craneLib.cargoFmt { inherit src; };
+          pinnacle-fmt = craneLib.cargoFmt { inherit src; };
 
           # Audit dependencies
-          my-workspace-audit = craneLib.cargoAudit { inherit src advisory-db; };
 
-          # Audit licenses
-          my-workspace-deny = craneLib.cargoDeny { inherit src; };
+          pinnacle-audit = craneLib.cargoAudit { inherit src advisory-db; };
 
           # Run tests with cargo-nextest
           # Consider setting `doCheck = false` on other crate derivations
