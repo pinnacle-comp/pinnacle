@@ -75,6 +75,13 @@ You will need:
         ```sh
         sudo apt install protobuf-compiler
         ```
+- [just](https://github.com/casey/just), to automate installation of libraries and files
+    - You don't *need* this but without installation you will not be able to run `cargo run -- config gen` or
+      use the Lua API (it requires the protobuf definitions at runtime)
+    - Arch:
+      ```sh
+      sudo pacman -S just
+      ```
 
 If you would like to use the Lua API, you will additionally need:
 
@@ -99,20 +106,18 @@ Build the project with:
 cargo build [--release]
 ```
 
-> [!NOTE]
-> On build, [`build.rs`](build.rs) will: 
-> - Copy Protobuf definition files to `$XDG_DATA_HOME/pinnacle/protobuf`
-> - Copy the [Lua default config](api/lua/examples/default) and 
->   [Rust default config](api/rust/examples/default_config/for_copying) to
->   `$XDG_DATA_HOME/pinnacle/default_config/{lua,rust}`
+To additionally install the default configs, protobuf definitions, and Lua API, run:
+```sh
+just install build [--release] # Order matters, put build/run/test last to pass through arguments
+```
 
 # Running
 > [!TIP]
 > Before running, read the information in [Configuration](#configuration).
 
 > [!IMPORTANT]
-> If you are going to use a Lua config, you must `cd` into [`api/lua`](api/lua)
-> and run `luarocks make [--local]` to install Pinnacle's Lua library.
+> If you are going to use a Lua config, you must run `just install` to install the protobuf definitions
+> and Lua library.
 
 After building, run the executable located in either:
 ```sh
@@ -123,9 +128,12 @@ After building, run the executable located in either:
 Or, run the project directly with 
 ```sh
 cargo run [--release]
+
+# With installation:
+just install run [--release]
 ```
 
-See flags you can pass in by running `cargo run -- --help` (or `-h`).
+See flags Pinnacle accepts by running `cargo run -- --help` (or `-h`).
 
 # Configuration
 Pinnacle is configured in your choice of Lua or Rust.
@@ -137,9 +145,11 @@ the Lua or Rust default configs standalone, run one of the following in the crat
 ```sh
 # For a Lua configuration
 cargo run -- -c "./api/lua/examples/default"
+just install run -- -c "./api/lua/examples/default"
 
 # For a Rust configuration
 cargo run -- -c "./api/rust/examples/default_config"
+just install run -- -c "./api/rust/examples/default_config"
 ```
 
 ## Custom configuration
@@ -149,6 +159,12 @@ cargo run -- -c "./api/rust/examples/default_config"
 > until I release version 0.1, at which point there will be an API stability spec in place.
 
 ### Generating a config
+
+> [!NOTE]
+> The default configs must be installed for them to be copied:
+> ```sh
+> just install-configs # Or alternatively, `just install` which installs everything
+> ```
 
 Run the following command to open up the interactive config generator:
 ```sh
@@ -175,7 +191,7 @@ that exists from the following:
 1. The directory passed in through `--config-dir`/`-c`
 2. `$PINNACLE_CONFIG_DIR`
 3. `$XDG_CONFIG_HOME/pinnacle`
-4. `~/.config/pinnacle` if $XDG_CONFIG_HOME is not defined
+4. `~/.config/pinnacle` if `$XDG_CONFIG_HOME` is not defined
 
 If there is no `metaconfig.toml` file in that directory, Pinnacle will start the embedded
 Rust config.
