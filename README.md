@@ -177,10 +177,10 @@ that exists from the following:
 3. `$XDG_CONFIG_HOME/pinnacle`
 4. `~/.config/pinnacle` if $XDG_CONFIG_HOME is not defined
 
-If there is no `metaconfig.toml` file in that directory, Pinnacle will start the default Lua config
-at `$XDG_DATA_HOME/pinnacle/default_config/lua` (typically `~/.local/share/pinnacle/default_config/lua`).
+If there is no `metaconfig.toml` file in that directory, Pinnacle will start the embedded
+Rust config.
 
-Additionally, if your config crashes, Pinnacle will also start the default Lua config.
+Additionally, if your config crashes, Pinnacle will also start the embedded Rust config.
 
 > [!NOTE]
 > If you have not run `eval $(luarocks path --lua-version 5.4)`, Pinnacle will fallback to the
