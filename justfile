@@ -1,7 +1,7 @@
 set shell := ["bash", "-c"]
 
 rootdir := justfile_directory()
-xdg_data_dir := `echo "${XDG_DATA_HOME:-~/.local/share}/pinnacle"`
+xdg_data_dir := `echo "${XDG_DATA_HOME:-$HOME/.local/share}/pinnacle"`
 root_xdg_data_dir := "/usr/share/pinnacle"
 root_xdg_config_dir := "/etc/xdg/pinnacle"
 
@@ -29,7 +29,7 @@ install-protos:
     set -euxo pipefail
     proto_dir="{{xdg_data_dir}}/protobuf"
     rm -rf "${proto_dir}"
-    mkdir -p "${proto_dir}"
+    mkdir -p "{{xdg_data_dir}}"
     cp -r "{{rootdir}}/api/protocol" "${proto_dir}"
 
 # Install the Lua library (requires Luarocks)
@@ -70,7 +70,7 @@ install-protos-root:
     set -euxo pipefail
     proto_dir="{{root_xdg_data_dir}}/protobuf"
     rm -rf "${proto_dir}"
-    mkdir -p "${proto_dir}"
+    mkdir -p "{{root_xdg_data_dir}}"
     cp -r "{{rootdir}}/api/protocol" "${proto_dir}"
 
 # [root] Install the Lua library (requires Luarocks)
