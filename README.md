@@ -50,9 +50,7 @@ for Wayland.
 # Dependencies
 You will need:
 
-- [Rust](https://www.rust-lang.org/) 1.74 or newer
-    - If you want to use the Rust API, you will need Rust 1.75 or newer
-- [Lua](https://www.lua.org/) 5.4 or newer, to use the Lua API
+- [Rust](https://www.rust-lang.org/) 1.75 or newer
 - Packages for [Smithay](https://github.com/Smithay/smithay):
   `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
     - Arch:
@@ -66,8 +64,6 @@ You will need:
     - NixOS: There is flake [`flake.nix`](flake.nix) with a devShell. It also
       includes the other tools needed for the build and sets up the
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
-
-      > [!NOTE]
       > Luarocks currently doesn't install the Lua library and its dependencies due to openssh directory
       > shenanigans. Fix soon, hopefully. In the meantime you can use the Rust API.
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
@@ -79,7 +75,11 @@ You will need:
         ```sh
         sudo apt install protobuf-compiler
         ```
-- [LuaRocks](https://luarocks.org/), the Lua package manager, to use the Lua API
+
+If you would like to use the Lua API, you will additionally need:
+
+- [Lua](https://www.lua.org/) 5.4 or newer
+- [LuaRocks](https://luarocks.org/), the Lua package manager
     - Arch:
         ```sh
         sudo pacman -S luarocks
@@ -105,11 +105,14 @@ cargo build [--release]
 > - Copy the [Lua default config](api/lua/examples/default) and 
 >   [Rust default config](api/rust/examples/default_config/for_copying) to
 >   `$XDG_DATA_HOME/pinnacle/default_config/{lua,rust}`
-> - `cd` into [`api/lua`](api/lua) and run `luarocks make` to install the Lua library to `~/.luarocks/share/lua/5.4`
 
 # Running
-> [!IMPORTANT]
+> [!TIP]
 > Before running, read the information in [Configuration](#configuration).
+
+> [!IMPORTANT]
+> If you are going to use a Lua config, you must `cd` into [`api/lua`](api/lua)
+> and run `luarocks make [--local]` to install Pinnacle's Lua library.
 
 After building, run the executable located in either:
 ```sh
@@ -128,8 +131,8 @@ See flags you can pass in by running `cargo run -- --help` (or `-h`).
 Pinnacle is configured in your choice of Lua or Rust.
 
 ## Out-of-the-box configurations
-If you just want to test Pinnacle out without copying stuff to your config directory,
-run one of the following in the crate root:
+Pinnacle embeds the default Rust config into the binary. If you would like to use
+the Lua or Rust default configs standalone, run one of the following in the crate root:
 
 ```sh
 # For a Lua configuration
@@ -209,7 +212,7 @@ Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 > Documentation for other branches can be reached by replacing `main` with the branch you want.
 
 # Controls
-The following are the default controls in the [`default_config`](api/lua/examples/default/default_config.lua).
+The following are the default controls in the [`default_config`](api/rust/examples/default_config/main.rs).
 | Binding                                      | Action                             |
 |----------------------------------------------|------------------------------------|
 | <kbd>Ctrl</kbd> + <kbd>Mouse left drag</kbd> | Move window                        |
