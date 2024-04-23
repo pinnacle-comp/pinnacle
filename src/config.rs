@@ -270,11 +270,22 @@ impl State {
     ///
     /// If `config_dir` is `None`, the builtin Rust config will be used.
     pub fn start_config(&mut self, mut config_dir: Option<impl AsRef<Path>>) -> anyhow::Result<()> {
-        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
-            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
-                warn!("Failed to send shutdown signal to config: {err}");
-            }
+        // Clear state
+
+        debug!("Clearing tags");
+        for output in self.space.outputs() {
+            output.with_state_mut(|state| state.tags.clear());
         }
+
+        TagId::reset();
+
+        debug!("Clearing input state");
+
+        self.input_state.clear();
+
+        self.config.clear(&self.loop_handle);
+
+        self.signal_state.clear();
 
         let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
         let load_default_config = |state: &mut State, reason: &str| {
@@ -304,23 +315,6 @@ impl State {
             None => toml::from_str(builtin::METACONFIG)
                 .expect("builtin metaconfig was malformed; this is a bug"),
         };
-
-        // Clear state
-
-        debug!("Clearing tags");
-        for output in self.space.outputs() {
-            output.with_state_mut(|state| state.tags.clear());
-        }
-
-        TagId::reset();
-
-        debug!("Clearing input state");
-
-        self.input_state.clear();
-
-        self.config.clear(&self.loop_handle);
-
-        self.signal_state.clear();
 
         let reload_keybind = metaconfig.reload_keybind;
         let kill_keybind = metaconfig.kill_keybind;
