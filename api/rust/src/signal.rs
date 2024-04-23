@@ -298,6 +298,16 @@ impl SignalState {
         self.window_pointer_leave.api.set(api.clone()).unwrap();
         self.tag_active.api.set(api.clone()).unwrap();
     }
+
+    pub(crate) fn shutdown(&mut self) {
+        self.output_connect.reset();
+        self.output_disconnect.reset();
+        self.output_resize.reset();
+        self.output_move.reset();
+        self.window_pointer_enter.reset();
+        self.window_pointer_leave.reset();
+        self.tag_active.reset();
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -413,7 +423,7 @@ where
                     }
                 }
                 _dc = dc_ping_recv_fuse => {
-                    control_sender.send(Req::from_control(StreamControl::Disconnect)).expect("send failed");
+                    let _ = control_sender.send(Req::from_control(StreamControl::Disconnect));
                     break;
                 }
             }

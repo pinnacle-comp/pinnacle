@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
+use futures::{future::BoxFuture, FutureExt};
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
     layout_request::{Body, ExplicitLayout, Geometries},
     layout_service_client::LayoutServiceClient,
@@ -34,13 +35,18 @@ use crate::{
 pub struct Layout {
     api: OnceLock<ApiModules>,
     layout_client: LayoutServiceClient<Channel>,
+    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
 
 impl Layout {
-    pub(crate) fn new(channel: Channel) -> Self {
+    pub(crate) fn new(
+        channel: Channel,
+        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
+    ) -> Self {
         Self {
             api: OnceLock::new(),
             layout_client: LayoutServiceClient::new(channel.clone()),
+            fut_sender,
         }
     }
 
@@ -111,9 +117,10 @@ impl Layout {
                     })
                     .unwrap();
             }
-        };
+        }
+        .boxed();
 
-        tokio::spawn(thing);
+        self.fut_sender.send(thing).unwrap();
         requester
     }
 }

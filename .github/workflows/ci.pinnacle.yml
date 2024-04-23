@@ -51,10 +51,12 @@ jobs:
           luaVersion: "5.4"
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
-      - name: Build
+      - name: Install Lua library
+        run: cd ./api/lua && luarocks make --local
+      - name: Test
         if: ${{ runner.debug != '1' }}
         run: cargo test -- --test-threads=1
-      - name: Build (debug)
+      - name: Test (debug)
         if: ${{ runner.debug == '1' }}
         run: RUST_LOG=debug cargo test -- --nocapture --test-threads=1
   check-format:

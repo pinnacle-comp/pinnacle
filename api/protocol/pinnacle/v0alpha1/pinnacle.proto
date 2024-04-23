@@ -36,8 +36,12 @@ message PingResponse {
   optional bytes payload = 1;
 }
 
+message ShutdownWatchRequest {}
+message ShutdownWatchResponse {}
+
 service PinnacleService {
   rpc Quit(QuitRequest) returns (google.protobuf.Empty);
   rpc ReloadConfig(ReloadConfigRequest) returns (google.protobuf.Empty);
   rpc Ping(PingRequest) returns (PingResponse);
+  rpc ShutdownWatch(ShutdownWatchRequest) returns (stream ShutdownWatchResponse);
 }

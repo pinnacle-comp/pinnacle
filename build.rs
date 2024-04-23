@@ -55,13 +55,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .spawn()?
         .wait()?;
 
-    std::env::set_current_dir("api/lua").unwrap();
-    Command::new("luarocks")
-        .arg("make")
-        .arg("--local")
-        .spawn()
-        .expect("Luarocks is not installed")
-        .wait()?;
-
     Ok(())
 }
