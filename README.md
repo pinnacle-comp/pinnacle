@@ -183,8 +183,8 @@ at `$XDG_DATA_HOME/pinnacle/default_config/lua` (typically `~/.local/share/pinna
 Additionally, if your config crashes, Pinnacle will also start the default Lua config.
 
 > [!NOTE]
-> If you have not run `eval $(luarocks path --lua-version 5.4)`, Pinnacle will go into an endless loop of
-> starting the default Lua config only for it to crash because it can't find the Lua library.
+> If you have not run `eval $(luarocks path --lua-version 5.4)`, Pinnacle will fallback to the
+> embedded Rust config.
 
 ### The `metaconfig.toml` file
 A `metaconfig.toml` file must contain the following entries:
