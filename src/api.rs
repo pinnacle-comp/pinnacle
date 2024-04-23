@@ -49,7 +49,7 @@ use tokio::{
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     backend::BackendData,
@@ -87,7 +87,7 @@ where
     let f = Box::new(|state: &mut State| {
         // TODO: find a way to handle this error
         if sender.send(with_state(state)).is_err() {
-            panic!("failed to send result to config");
+            warn!("failed to send result of API call to config; receiver already dropped");
         }
     });
 
@@ -189,7 +189,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
     type ShutdownWatchStream = ResponseStream<ShutdownWatchResponse>;
 
     async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
-        tracing::trace!("PinnacleService.quit");
+        trace!("PinnacleService.quit");
 
         run_unary_no_response(&self.sender, |state| {
             state.shutdown();
@@ -202,6 +202,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
         _request: Request<ReloadConfigRequest>,
     ) -> Result<Response<()>, Status> {
         run_unary_no_response(&self.sender, |state| {
+            info!("Reloading config");
             state
                 .start_config(Some(state.config.dir(&state.xdg_base_dirs)))
                 .expect("failed to restart config");

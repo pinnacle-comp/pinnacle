@@ -35,7 +35,7 @@ use sysinfo::ProcessRefreshKind;
 use tokio::task::JoinHandle;
 use toml::Table;
 
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
@@ -215,11 +215,9 @@ impl Config {
             join_handle.abort();
         }
         if let Some(shutdown_sender) = self.shutdown_sender.take() {
-            shutdown_sender
-                .send(Ok(
-                    pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse {},
-                ))
-                .expect("failed to send shutdown signal to config");
+            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
+                warn!("Failed to send shutdown signal to config: {err}");
+            }
         }
         if let Some(token) = self.config_reload_on_crash_token.take() {
             loop_handle.remove(token);
@@ -273,11 +271,9 @@ impl State {
     /// If `config_dir` is `None`, the builtin Rust config will be used.
     pub fn start_config(&mut self, mut config_dir: Option<impl AsRef<Path>>) -> anyhow::Result<()> {
         if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
-            shutdown_sender
-                .send(Ok(
-                    pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse {},
-                ))
-                .expect("failed to send shutdown signal to config");
+            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
+                warn!("Failed to send shutdown signal to config: {err}");
+            }
         }
 
         let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
@@ -434,7 +430,7 @@ impl State {
                 let token = self
                     .loop_handle
                     .insert_source(ping_source, move |_, _, state| {
-                        error!("Config crashed! Falling back to default Lua config");
+                        error!("Config crashed! Falling back to default config");
                         state
                             .start_config(None::<PathBuf>)
                             .expect("failed to start default config");
@@ -456,11 +452,12 @@ impl State {
                         panic!("builtin rust config crashed; this is a bug");
                     })?;
 
-                self.config.config_join_handle = Some(tokio::task::spawn_blocking(move || {
+                std::thread::spawn(move || {
                     info!("Starting builtin Rust config");
                     builtin::run();
+                    info!("Builtin config exited");
                     pinger.ping();
-                }));
+                });
 
                 self.config.config_reload_on_crash_token = Some(token);
             }

@@ -40,22 +40,28 @@ impl Pinnacle {
     /// ```
     pub fn quit(&self) {
         let mut client = self.client.clone();
-        block_on_tokio(client.quit(QuitRequest {})).unwrap();
+        // Ignore errors here, the config is meant to be killed
+        let _ = block_on_tokio(client.quit(QuitRequest {}));
     }
 
     /// Reload the currently active config.
     pub fn reload_config(&self) {
         let mut client = self.client.clone();
-        block_on_tokio(client.reload_config(ReloadConfigRequest {})).unwrap();
+        // Ignore errors here, the config is meant to be killed
+        let _ = block_on_tokio(client.reload_config(ReloadConfigRequest {}));
     }
 
-    pub(crate) fn shutdown_watch(&self) -> Streaming<ShutdownWatchResponse> {
+    pub(crate) async fn shutdown_watch(&self) -> Streaming<ShutdownWatchResponse> {
         let mut client = self.client.clone();
-        block_on_tokio(client.shutdown_watch(ShutdownWatchRequest {}))
+        client
+            .shutdown_watch(ShutdownWatchRequest {})
+            .await
             .unwrap()
             .into_inner()
     }
 
+    /// TODO: eval if this is necessary
+    #[allow(dead_code)]
     pub(super) async fn ping(&self) -> Result<(), String> {
         let mut client = self.client.clone();
         let mut payload = [0u8; 8];

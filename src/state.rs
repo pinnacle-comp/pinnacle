@@ -12,6 +12,7 @@ use crate::{
     window::WindowElement,
 };
 use anyhow::Context;
+use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
@@ -43,7 +44,7 @@ use smithay::{
 };
 use std::{cell::RefCell, path::PathBuf, sync::Arc, time::Duration};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use xdg::BaseDirectories;
 
 use crate::input::InputState;
@@ -332,11 +333,9 @@ impl State {
             join_handle.abort();
         }
         if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
-            shutdown_sender
-                .send(Ok(
-                    pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse {},
-                ))
-                .expect("failed to send shutdown signal to config");
+            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
+                warn!("Failed to send shutdown signal to config: {err}");
+            }
         }
     }
 }
