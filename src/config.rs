@@ -279,7 +279,7 @@ impl State {
         let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
         let load_default_config = |state: &mut State, reason: &str| {
             match &config_dir_clone {
-                Some(dir) => error!("Unable to load config at {}: {reason}", dir.display()),
+                Some(dir) => warn!("Unable to load config at {}: {reason}", dir.display()),
                 None => panic!(
                     "builtin rust config crashed; this is a bug and you should open an issue"
                 ),
@@ -455,7 +455,6 @@ impl State {
                 std::thread::spawn(move || {
                     info!("Starting builtin Rust config");
                     builtin::run();
-                    info!("Builtin config exited");
                     pinger.ping();
                 });
 

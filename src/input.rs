@@ -31,6 +31,7 @@ use smithay::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::info;
 use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
@@ -427,6 +428,7 @@ impl State {
                 self.shutdown();
             }
             Some(KeyAction::ReloadConfig) => {
+                info!("Reloading config");
                 self.start_config(Some(self.config.dir(&self.xdg_base_dirs)))
                     .expect("failed to restart config");
             }
