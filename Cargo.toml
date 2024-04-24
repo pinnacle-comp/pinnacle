@@ -1,5 +1,5 @@
 [workspace]
-members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros", "xtask"]
+members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros"]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
