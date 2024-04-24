@@ -42,7 +42,10 @@ impl XwmHandler for State {
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::map_window_request");
 
-        assert!(!surface.is_override_redirect());
+        if surface.is_override_redirect() {
+            // Steam games that reach this: Ori and the Will of the Wisps, Pizza Tower
+            return;
+        }
 
         let window = WindowElement::new(Window::new_x11_window(surface));
         self.space.map_element(window.clone(), (0, 0), true);
