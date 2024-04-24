@@ -329,6 +329,7 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
 
     let xdg_base_dirs = xdg::BaseDirectories::with_prefix("pinnacle")?;
     let mut default_config_dir = xdg_base_dirs.get_data_file("default_config");
+    std::fs::create_dir_all(&default_config_dir)?;
 
     // %F = %Y-%m-%d or year-month-day in ISO 8601
     // %T = %H:%M:%S
