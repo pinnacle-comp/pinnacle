@@ -2,7 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use pinnacle::{
     backend::wlcs::setup_wlcs_dummy,
-    state::{ClientState, State},
+    state::{ClientState, State, WithState},
+    window::window_state::FloatingOrTiled,
 };
 use smithay::{
     backend::input::{ButtonState, DeviceCapability, InputEvent},
@@ -10,19 +11,21 @@ use smithay::{
         calloop::channel::{Channel, Event},
         wayland_server::{Client, Resource},
     },
+    utils::Rectangle,
     wayland::seat::WaylandFocus,
 };
 
 use crate::{
-    config::run_config, input_backend::{
+    config::run_config,
+    input_backend::{
         WlcsDevice, WlcsInputBackend, WlcsPointerButtonEvent, WlcsPointerMotionAbsoluteEvent,
         WlcsPointerMotionEvent, WlcsTouchDownEvent, WlcsTouchUpEvent,
-    }, WlcsEvent
+    },
+    WlcsEvent,
 };
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {
-    let (mut state, mut event_loop) =
-        setup_wlcs_dummy().expect("failed to setup dummy backend");
+    let (mut state, mut event_loop) = setup_wlcs_dummy().expect("failed to setup dummy backend");
 
     event_loop
         .handle()
@@ -45,8 +48,6 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     // started, until it is set; this bypasses this for now
     state.xdisplay = Some(u32::MAX);
     run_config(&mut state);
-
-    // FIXME: use a custom socker_dir to avoid having to number sockets
 
     // wait for the config to connect to the layout service
     while state.layout_state.layout_request_sender.is_none() {
@@ -71,6 +72,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
 }
 
 fn handle_event(event: WlcsEvent, state: &mut State) {
+    tracing::debug!("handle_event {:?}", event);
     match event {
         WlcsEvent::Stop => state.shutdown(),
         WlcsEvent::NewClient { stream, client_id } => {
@@ -85,19 +87,41 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
             surface_id,
             location,
         } => {
-            // TODO: handle this in a Pinnacle-applicable way (LayoutManager?)
             let client = state.backend.wlcs_mut().clients.get(&client_id);
-            let toplevel = state.space.elements().find(|w| {
-                if let Some(surface) = w.wl_surface() {
-                    state.display_handle.get_client(surface.id()).ok().as_ref() == client
-                        && surface.id().protocol_id() == surface_id
-                } else {
-                    false
-                }
-            });
+            let window = state
+                .space
+                .elements()
+                .find(|w| {
+                    if let Some(surface) = w.wl_surface() {
+                        state.display_handle.get_client(surface.id()).ok().as_ref() == client
+                            && surface.id().protocol_id() == surface_id
+                    } else {
+                        false
+                    }
+                })
+                .cloned();
 
-            if let Some(toplevel) = toplevel {
-                state.space.map_element(toplevel.clone(), location, false);
+            if let Some(window) = window {
+                state.space.map_element(window.clone(), location, false);
+
+                let size = state
+                    .space
+                    .element_geometry(&window)
+                    .expect("window to be positioned was not mapped")
+                    .size;
+
+                if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+                    window.toggle_floating();
+                }
+
+                window.with_state_mut(|state| {
+                    state.floating_or_tiled =
+                        FloatingOrTiled::Floating(Rectangle::from_loc_and_size(location, size));
+                });
+
+                for output in state.space.outputs_for_element(&window) {
+                    state.schedule_render(&output);
+                }
             }
         }
 

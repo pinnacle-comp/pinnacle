@@ -1,6 +1,6 @@
+pub(crate) mod config;
 mod input_backend;
 mod main_loop;
-pub(crate) mod config;
 
 use std::{
     io,
@@ -111,6 +111,19 @@ static SUPPORTED_EXTENSIONS: &[WlcsExtensionDescriptor] = extension_list!(
     //  12 Missing extension: zwp_text_input_manager_v2>= 1
     //  11 Missing extension: zwp_text_input_manager_v3>= 1
     // 180 Missing extension: zxdg_shell_v6>= 1
+
+    // mostly from https://github.com/Smithay/smithay/issues/781
+    ("wl_compositor", 6),
+    ("wl_subcompositor", 1),
+    ("wl_shm", 1),
+    ("wl_data_device_manager", 3),
+    ("wl_seat", 9),
+    ("wl_output", 4),
+    ("wp_presentation", 1),
+    ("wp_viewporter", 1),
+    ("xdg_shell", 6),
+    ("linux-dmabuf-v1", 5),
+    ("xdg_shell", 6),
 );
 
 static DESCRIPTOR: WlcsIntegrationDescriptor = WlcsIntegrationDescriptor {
@@ -194,11 +207,13 @@ impl Wlcs for PinnacleHandle {
                 unsafe { ffi_dispatch!(wayland_client_handle(), wl_display_get_fd, display) };
             let surface_id =
                 unsafe { ffi_dispatch!(wayland_client_handle(), wl_proxy_get_id, surface) };
-            let _ = conn.sender.send(WlcsEvent::PositionWindow {
-                client_id,
-                surface_id,
-                location: (x, y).into(),
-            });
+            conn.sender
+                .send(WlcsEvent::PositionWindow {
+                    client_id,
+                    surface_id,
+                    location: (x, y).into(),
+                })
+                .expect("failed to send position_window_absolute");
         }
     }
 
