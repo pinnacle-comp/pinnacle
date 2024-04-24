@@ -4,7 +4,6 @@ members = [
     "api/rust",
     "api/rust/pinnacle-api-macros",
     "wlcs_pinnacle",
-    "wlcs_pinnacle/config",
 ]
 
 [workspace.package]

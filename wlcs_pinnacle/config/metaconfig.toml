@@ -1,6 +1,0 @@
-command = ["./pinnacle-config"]
-
-reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
-
-[envs]

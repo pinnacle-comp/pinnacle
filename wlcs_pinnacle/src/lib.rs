@@ -1,5 +1,6 @@
 mod input_backend;
 mod main_loop;
+pub(crate) mod config;
 
 use std::{
     io,

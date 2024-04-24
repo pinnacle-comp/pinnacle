@@ -3455,19 +3455,14 @@ name = "wlcs_pinnacle"
 version = "0.0.1"
 dependencies = [
  "pinnacle",
+ "pinnacle-api",
  "smithay",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "wayland-sys",
  "wlcs",
-]
-
-[[package]]
-name = "wlcs_pinnacle_config"
-version = "0.1.0"
-dependencies = [
- "pinnacle-api",
 ]
 
 [[package]]

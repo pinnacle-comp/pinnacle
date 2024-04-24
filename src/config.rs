@@ -184,7 +184,7 @@ pub struct Config {
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 
     pub config_join_handle: Option<JoinHandle<()>>,
-    config_reload_on_crash_token: Option<RegistrationToken>,
+    pub(crate) config_reload_on_crash_token: Option<RegistrationToken>,
 
     pub shutdown_sender:
         Option<tokio::sync::mpsc::UnboundedSender<Result<ShutdownWatchResponse, tonic::Status>>>,
@@ -208,7 +208,7 @@ impl Config {
             .unwrap_or_else(|| get_config_dir(xdg_base_dirs))
     }
 
-    fn clear(&mut self, loop_handle: &LoopHandle<State>) {
+    pub(crate) fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {

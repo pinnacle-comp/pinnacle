@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 smithay = { workspace = true }
 pinnacle = { path = "..", features = [ "wlcs" ] }
+pinnacle-api = { path = "../api/rust" }
 wayland-sys = { version = "0.31.1", features = ["client", "server"] }
 wlcs = "0.1"
 
@@ -19,3 +20,5 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
 
 tokio = { workspace = true, features = ["net", "rt"] }
+
+tempfile = "3.10.1"

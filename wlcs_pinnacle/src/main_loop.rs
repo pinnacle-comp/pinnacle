@@ -14,19 +14,15 @@ use smithay::{
 };
 
 use crate::{
-    input_backend::{
+    config::run_config, input_backend::{
         WlcsDevice, WlcsInputBackend, WlcsPointerButtonEvent, WlcsPointerMotionAbsoluteEvent,
         WlcsPointerMotionEvent, WlcsTouchDownEvent, WlcsTouchUpEvent,
-    },
-    WlcsEvent,
+    }, WlcsEvent
 };
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {
-    let config_path =
-        &std::env::var("PINNACLE_WLCS_CONFIG_PATH").expect("PINNACLE_WLCS_CONFIG_PATH not set");
-
     let (mut state, mut event_loop) =
-        setup_wlcs_dummy(false, Some(config_path.into())).expect("failed to setup dummy backend");
+        setup_wlcs_dummy().expect("failed to setup dummy backend");
 
     event_loop
         .handle()
@@ -48,9 +44,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     // when xdiplay is None when starting the config, the grpc server is not
     // started, until it is set; this bypasses this for now
     state.xdisplay = Some(u32::MAX);
-    if let Err(err) = state.start_config(config_path) {
-        panic!("failed to start config: {err}");
-    }
+    run_config(&mut state);
 
     // FIXME: use a custom socker_dir to avoid having to number sockets
 
@@ -91,6 +85,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
             surface_id,
             location,
         } => {
+            // TODO: handle this in a Pinnacle-applicable way (LayoutManager?)
             let client = state.backend.wlcs_mut().clients.get(&client_id);
             let toplevel = state.space.elements().find(|w| {
                 if let Some(surface) = w.wl_surface() {
