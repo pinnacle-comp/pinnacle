@@ -985,11 +985,6 @@ impl State {
         let drm_mode = connector.modes()[mode_id];
         let wl_mode = smithay::output::Mode::from(drm_mode);
 
-        let modes = connector
-            .modes()
-            .iter()
-            .map(|mode| smithay::output::Mode::from(*mode));
-
         let surface = match device
             .drm
             .create_surface(crtc, drm_mode, &[connector.handle()])
@@ -1036,10 +1031,6 @@ impl State {
         let global = output.create_global::<State>(&udev.display_handle);
 
         output.with_state_mut(|state| state.serial = serial);
-
-        for mode in modes {
-            output.add_mode(mode);
-        }
 
         output.set_preferred(wl_mode);
 

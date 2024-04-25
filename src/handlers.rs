@@ -309,6 +309,8 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
         map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
             .is_some()
     }) {
+        layer_map_for_output(output).arrange();
+
         let initial_configure_sent = compositor::with_states(surface, |states| {
             states
                 .data_map
@@ -319,12 +321,9 @@ fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
                 .initial_configure_sent
         });
 
-        let mut map = layer_map_for_output(output);
-
-        map.arrange();
-
         if !initial_configure_sent {
-            map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+            layer_map_for_output(output)
+                .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
                 .expect("no layer for surface")
                 .layer_surface()
                 .send_configure();

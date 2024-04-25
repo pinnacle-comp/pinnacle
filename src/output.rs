@@ -110,5 +110,8 @@ impl State {
                 });
             });
         }
+        if let Some(mode) = mode {
+            output.set_preferred(mode);
+        }
     }
 }
