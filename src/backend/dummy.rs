@@ -19,6 +19,8 @@ use crate::state::State;
 use super::Backend;
 use super::BackendData;
 
+pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
+
 pub struct Dummy {
     pub renderer: DummyRenderer,
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
@@ -64,7 +66,7 @@ pub fn setup_dummy(
         model: "Winit Window".to_string(),
     };
 
-    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
+    let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
 
     output.create_global::<State>(&display_handle);
 

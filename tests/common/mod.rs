@@ -1,5 +1,6 @@
 use std::{panic::UnwindSafe, time::Duration};
 
+use anyhow::anyhow;
 use pinnacle::{backend::dummy::setup_dummy, state::State};
 use smithay::{
     output::Output,
@@ -21,9 +22,13 @@ pub fn sleep_secs(secs: u64) {
     std::thread::sleep(Duration::from_secs(secs));
 }
 
-pub fn test_api(
-    test: impl FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) + Send + UnwindSafe + 'static,
-) -> anyhow::Result<()> {
+pub fn test_api<F>(test: F) -> anyhow::Result<()>
+where
+    F: FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) -> anyhow::Result<()>
+        + Send
+        + UnwindSafe
+        + 'static,
+{
     let (mut state, mut event_loop) = setup_dummy(true, None)?;
 
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
@@ -42,9 +47,10 @@ pub fn test_api(
 
     let loop_signal = event_loop.get_signal();
 
-    let join_handle = tokio::task::spawn_blocking(move || {
-        test(sender);
+    let join_handle = std::thread::spawn(move || -> anyhow::Result<()> {
+        let res = test(sender);
         loop_signal.stop();
+        res
     });
 
     event_loop.run(None, &mut state, |state| {
@@ -66,14 +72,7 @@ pub fn test_api(
         );
     })?;
 
-    if let Err(err) = tokio::task::block_in_place(|| {
-        let handle = tokio::runtime::Handle::current();
-        handle.block_on(join_handle)
-    }) {
-        panic!("{err:?}");
-    }
-
-    Ok(())
+    join_handle.join().map_err(|_| anyhow!("thread panicked"))?
 }
 
 pub fn output_for_name(state: &State, name: &str) -> Output {

@@ -2,6 +2,7 @@ mod common;
 
 use std::thread::JoinHandle;
 
+use pinnacle::backend::dummy::DUMMY_OUTPUT_NAME;
 use pinnacle_api::ApiModules;
 use test_log::test;
 
@@ -76,7 +77,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let test_third_op = output_for_name(state, "Test Third");
@@ -115,6 +116,8 @@ mod output {
                     smithay::utils::Transform::_90
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -126,7 +129,7 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
+                        (OutputId::name(DUMMY_OUTPUT_NAME), OutputLoc::Point(0, 0)),
                         (
                             OutputId::name("First"),
                             OutputLoc::RelativeTo(
@@ -154,7 +157,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
 
                 let original_geo = state.space.output_geometry(&original_op).unwrap();
@@ -175,7 +178,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
 
@@ -196,6 +199,8 @@ mod output {
                     Rectangle::from_loc_and_size((1920 + 300, 0), (500, 500))
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -208,11 +213,11 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
+                        (OutputId::name(DUMMY_OUTPUT_NAME), OutputLoc::Point(0, 0)),
                         (
                             OutputId::name("First"),
                             OutputLoc::RelativeTo(
-                                OutputId::name("Pinnacle Window"),
+                                OutputId::name(DUMMY_OUTPUT_NAME),
                                 Alignment::BottomAlignLeft,
                             ),
                         ),
@@ -252,7 +257,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let third_op = output_for_name(state, "Third");
@@ -285,7 +290,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let third_op = output_for_name(state, "Third");
 
@@ -306,6 +311,8 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200), (300, 400))
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -348,6 +355,8 @@ mod output {
                     let op = state.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::_180);
                 });
+
+                Ok(())
             })
         }
     }
