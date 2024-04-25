@@ -483,7 +483,7 @@ mod output {
                     local props = Pinnacle.output.get_focused():props()
 
                     assert(props.make == "Pinnacle")
-                    assert(props.model == "Winit Window")
+                    assert(props.model == "Dummy Window")
                     assert(props.x == 0)
                     assert(props.y == 0)
                     assert(props.logical_width == 1920)

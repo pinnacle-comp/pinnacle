@@ -92,7 +92,7 @@ pub fn setup_wlcs_dummy() -> anyhow::Result<(State, EventLoop<'static, State>)> 
 impl State {
     pub fn start_wlcs_config<F>(&mut self, socket_dir: &Path, run_config: F) -> anyhow::Result<()>
     where
-        F: FnOnce() -> () + Send + 'static,
+        F: FnOnce() + Send + 'static,
     {
         // Clear state
         debug!("Clearing tags");
