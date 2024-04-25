@@ -53,11 +53,11 @@ impl Hash for WlcsDevice {
 
 impl Device for WlcsDevice {
     fn id(&self) -> String {
-        format!("{}", self.device_id).into()
+        format!("{}", self.device_id)
     }
 
     fn name(&self) -> String {
-        format!("wlcs-device-{}", self.device_id).into()
+        format!("wlcs-device-{}", self.device_id)
     }
 
     fn has_capability(&self, capability: DeviceCapability) -> bool {
@@ -80,9 +80,9 @@ pub struct WlcsPointerButtonEvent {
     pub state: ButtonState,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsPointerButtonEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::PointerButton { event: self }
+impl From<WlcsPointerButtonEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsPointerButtonEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::PointerButton { event }
     }
 }
 
@@ -115,9 +115,9 @@ pub struct WlcsPointerMotionEvent {
     pub delta: Point<f64, Logical>,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsPointerMotionEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::PointerMotion { event: self }
+impl From<WlcsPointerMotionEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsPointerMotionEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::PointerMotion { event }
     }
 }
 
@@ -158,9 +158,9 @@ pub struct WlcsPointerMotionAbsoluteEvent {
     pub position: Point<f64, Logical>,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsPointerMotionAbsoluteEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::PointerMotionAbsolute { event: self }
+impl From<WlcsPointerMotionAbsoluteEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsPointerMotionAbsoluteEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::PointerMotionAbsolute { event }
     }
 }
 
@@ -203,9 +203,9 @@ pub struct WlcsTouchDownEvent {
     pub position: Point<f64, Logical>,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsTouchDownEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::TouchDown { event: self }
+impl From<WlcsTouchDownEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsTouchDownEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::TouchDown { event }
     }
 }
 
@@ -253,9 +253,9 @@ pub struct WlcsTouchUpEvent {
     pub time: u64,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsTouchUpEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::TouchUp { event: self }
+impl From<WlcsTouchUpEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsTouchUpEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::TouchUp { event }
     }
 }
 
@@ -286,9 +286,9 @@ pub struct WlcsTouchMotionEvent {
     pub position: Point<f64, Logical>,
 }
 
-impl Into<InputEvent<WlcsInputBackend>> for WlcsTouchMotionEvent {
-    fn into(self) -> InputEvent<WlcsInputBackend> {
-        InputEvent::<WlcsInputBackend>::TouchMotion { event: self }
+impl From<WlcsTouchMotionEvent> for InputEvent<WlcsInputBackend> {
+    fn from(event: WlcsTouchMotionEvent) -> Self {
+        InputEvent::<WlcsInputBackend>::TouchMotion { event }
     }
 }
 

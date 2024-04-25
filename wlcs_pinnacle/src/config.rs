@@ -14,10 +14,9 @@ mod inner {
             WindowRule::new().floating(true),
         );
 
-        let _layout_requester =
-            layout.set_manager(CyclingLayoutManager::new([
-                Box::new(MasterStackLayout::default()) as _,
-            ]));
+        let _layout_requester = layout.set_manager(CyclingLayoutManager::new([
+            Box::<MasterStackLayout>::default() as _,
+        ]));
     }
 
     pub(crate) fn start_config() {
