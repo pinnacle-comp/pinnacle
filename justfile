@@ -5,6 +5,8 @@ xdg_data_dir := `echo "${XDG_DATA_HOME:-$HOME/.local/share}/pinnacle"`
 root_xdg_data_dir := "/usr/share/pinnacle"
 root_xdg_config_dir := "/etc/xdg/pinnacle"
 
+lua_version := "5.4"
+
 list:
     @just --list --unsorted
 
@@ -36,7 +38,7 @@ install-protos:
 install-lua-lib:
     #!/usr/bin/env bash
     cd "{{rootdir}}/api/lua"
-    luarocks make --local
+    luarocks make --local --lua-version "{{lua_version}}"
 
 # Remove installed configs and the Lua API (requires Luarocks)
 clean:
@@ -77,7 +79,7 @@ install-protos-root:
 install-lua-lib-root:
     #!/usr/bin/env bash
     cd "{{rootdir}}/api/lua"
-    luarocks make
+    luarocks make --lua-version "{{lua_version}}"
 
 # Run `cargo build`
 build *args:

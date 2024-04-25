@@ -2,6 +2,8 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+require("compat53")
+
 local pb = require("pb")
 
 local protobuf = {}
@@ -23,7 +25,9 @@ function protobuf.build_protos()
         PINNACLE_PROTO_DIR .. "/google/protobuf/empty.proto",
     }
 
-    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. PINNACLE_PROTO_DIR .. " "
+    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path="
+        .. PINNACLE_PROTO_DIR
+        .. " "
 
     for _, file_path in ipairs(proto_file_paths) do
         cmd = cmd .. file_path .. " "
