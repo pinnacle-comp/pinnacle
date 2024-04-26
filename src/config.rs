@@ -32,10 +32,13 @@ use smithay::{
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::task::JoinHandle;
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    task::JoinHandle,
+};
 use toml::Table;
 
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, info_span, warn, warn_span, Instrument};
 use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
@@ -403,8 +406,8 @@ impl State {
                 cmd.args(command)
                     .envs(envs)
                     .current_dir(config_dir)
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
                     .kill_on_drop(true);
 
                 let mut child = match cmd.spawn() {
@@ -416,6 +419,30 @@ impl State {
                         )
                     }
                 };
+
+                if let Some(stdout) = child.stdout.take() {
+                    let mut reader = BufReader::new(stdout).lines();
+                    tokio::spawn(
+                        async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                info!("{line}");
+                            }
+                        }
+                        .instrument(info_span!("config_stdout")),
+                    );
+                }
+
+                if let Some(stderr) = child.stderr.take() {
+                    let mut reader = BufReader::new(stderr).lines();
+                    tokio::spawn(
+                        async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                warn!("{line}");
+                            }
+                        }
+                        .instrument(warn_span!("config_stderr")),
+                    );
+                }
 
                 info!("Started config with {:?}", metaconfig.command);
 

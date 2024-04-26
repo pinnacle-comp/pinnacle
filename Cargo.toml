@@ -48,7 +48,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
 # Smithay
-# smithay is down there somewhere
+smithay = { workspace = true }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "c293ec7" }
 # Tracing
 tracing = { workspace = true }
@@ -85,7 +85,7 @@ dircpy = { workspace = true }
 chrono = "0.4.37"
 bytemuck = "1.15.0"
 pinnacle-api = { path = "./api/rust" }
-smithay = { workspace = true }
+gag = "1.0.0"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
