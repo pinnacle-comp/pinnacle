@@ -31,7 +31,7 @@ use crate::{
 
 impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
-        &mut self.xdg_shell_state
+        &mut self.pinnacle.xdg_shell_state
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
@@ -43,24 +43,24 @@ impl XdgShellHandler for State {
         });
 
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
-        self.new_windows.push(window);
+        self.pinnacle.new_windows.push(window);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
-        self.windows.retain(|window| {
+        self.pinnacle.windows.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
 
-        self.z_index_stack.retain(|window| {
+        self.pinnacle.z_index_stack.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
 
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|window| {
                     window
@@ -87,7 +87,8 @@ impl XdgShellHandler for State {
                     toplevel.send_configure();
                 }
             }
-            self.seat
+            self.pinnacle
+                .seat
                 .get_keyboard()
                 .expect("Seat had no keyboard")
                 .set_focus(self, focus, SERIAL_COUNTER.next_serial());
@@ -101,14 +102,18 @@ impl XdgShellHandler for State {
 
         self.position_popup(&surface);
 
-        if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
+        if let Err(err) = self
+            .pinnacle
+            .popup_manager
+            .track_popup(PopupKind::from(surface))
+        {
             tracing::warn!("failed to track popup: {}", err);
         }
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {
         // TODO: only schedule on the outputs the popup is on
-        for output in self.space.outputs().cloned().collect::<Vec<_>>() {
+        for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
             self.schedule_render(&output);
         }
     }
@@ -164,7 +169,7 @@ impl XdgShellHandler for State {
             self.window_for_surface(&root)
                 .map(KeyboardFocusTarget::Window)
                 .or_else(|| {
-                    self.space.outputs().find_map(|op| {
+                    self.pinnacle.space.outputs().find_map(|op| {
                         layer_map_for_output(op)
                             .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
                             .cloned()
@@ -173,6 +178,7 @@ impl XdgShellHandler for State {
                 })
         }) {
             if let Ok(mut grab) = self
+                .pinnacle
                 .popup_manager
                 .grab_popup(root, popup_kind, &seat, serial)
             {
@@ -217,17 +223,23 @@ impl XdgShellHandler for State {
             .as_ref()
             .and_then(Output::from_resource)
             .or_else(|| {
-                self.window_for_surface(wl_surface)
-                    .and_then(|window| self.space.outputs_for_element(&window).first().cloned())
+                self.window_for_surface(wl_surface).and_then(|window| {
+                    self.pinnacle
+                        .space
+                        .outputs_for_element(&window)
+                        .first()
+                        .cloned()
+                })
             });
 
         if let Some(output) = output {
-            let Some(geometry) = self.space.output_geometry(&output) else {
+            let Some(geometry) = self.pinnacle.space.output_geometry(&output) else {
                 surface.send_configure();
                 return;
             };
 
             let client = self
+                .pinnacle
                 .display_handle
                 .get_client(wl_surface.id())
                 .expect("wl_surface had no client");

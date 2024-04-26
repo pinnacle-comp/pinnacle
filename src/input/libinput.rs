@@ -8,7 +8,8 @@ impl State {
         let mut device = match event {
             InputEvent::DeviceAdded { device } => device.clone(),
             InputEvent::DeviceRemoved { device } => {
-                self.input_state
+                self.pinnacle
+                    .input_state
                     .libinput_devices
                     .retain(|dev| dev != device);
                 return;
@@ -16,14 +17,14 @@ impl State {
             _ => return,
         };
 
-        if self.input_state.libinput_devices.contains(&device) {
+        if self.pinnacle.input_state.libinput_devices.contains(&device) {
             return;
         }
 
-        for setting in self.input_state.libinput_settings.values() {
+        for setting in self.pinnacle.input_state.libinput_settings.values() {
             setting(&mut device);
         }
 
-        self.input_state.libinput_devices.push(device);
+        self.pinnacle.input_state.libinput_devices.push(device);
     }
 }

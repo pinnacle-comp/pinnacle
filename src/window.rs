@@ -212,11 +212,13 @@ impl WithState for WindowElement {
 impl State {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.space
+        self.pinnacle
+            .space
             .elements()
             .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
             .or_else(|| {
-                self.windows
+                self.pinnacle
+                    .windows
                     .iter()
                     .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
             })
@@ -227,7 +229,8 @@ impl State {
     ///
     /// Currently only used in `ensure_initial_configure` in [`handlers`][crate::handlers].
     pub fn new_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.new_windows
+        self.pinnacle
+            .new_windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
             .cloned()

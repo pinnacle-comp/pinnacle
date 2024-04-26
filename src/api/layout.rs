@@ -64,7 +64,7 @@ impl layout_service_server::LayoutService for LayoutService {
                 }
             },
             |state, sender, _join_handle| {
-                state.layout_state.layout_request_sender = Some(sender);
+                state.pinnacle.layout_state.layout_request_sender = Some(sender);
             },
         )
     }

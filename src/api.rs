@@ -204,7 +204,9 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
         run_unary_no_response(&self.sender, |state| {
             info!("Reloading config");
             state
-                .start_config(Some(state.config.dir(&state.xdg_base_dirs)))
+                .start_config(Some(
+                    state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
+                ))
                 .expect("failed to restart config");
         })
         .await
@@ -220,7 +222,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
         _request: Request<ShutdownWatchRequest>,
     ) -> Result<Response<Self::ShutdownWatchStream>, Status> {
         run_server_streaming(&self.sender, |state, sender| {
-            state.config.shutdown_sender.replace(sender);
+            state.pinnacle.config.shutdown_sender.replace(sender);
         })
     }
 }
@@ -291,6 +293,7 @@ impl input_service_server::InputService for InputService {
 
         run_server_streaming(&self.sender, move |state, sender| {
             state
+                .pinnacle
                 .input_state
                 .keybinds
                 .insert((modifiers, keysym), sender);
@@ -334,6 +337,7 @@ impl input_service_server::InputService for InputService {
 
         run_server_streaming(&self.sender, move |state, sender| {
             state
+                .pinnacle
                 .input_state
                 .mousebinds
                 .insert((modifiers, button, edge), sender);
@@ -354,7 +358,7 @@ impl input_service_server::InputService for InputService {
                 layout: request.layout(),
                 options: request.options.clone(),
             };
-            if let Some(kb) = state.seat.get_keyboard() {
+            if let Some(kb) = state.pinnacle.seat.get_keyboard() {
                 if let Err(err) = kb.set_xkb_config(state, new_config) {
                     error!("Failed to set xkbconfig: {err}");
                 }
@@ -377,7 +381,7 @@ impl input_service_server::InputService for InputService {
             .ok_or_else(|| Status::invalid_argument("no rate specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            if let Some(kb) = state.seat.get_keyboard() {
+            if let Some(kb) = state.pinnacle.seat.get_keyboard() {
                 kb.change_repeat_info(rate, delay);
             }
         })
@@ -518,11 +522,12 @@ impl input_service_server::InputService for InputService {
         };
 
         run_unary_no_response(&self.sender, move |state| {
-            for device in state.input_state.libinput_devices.iter_mut() {
+            for device in state.pinnacle.input_state.libinput_devices.iter_mut() {
                 apply_setting(device);
             }
 
             state
+                .pinnacle
                 .input_state
                 .libinput_settings
                 .insert(discriminant, apply_setting);
@@ -562,18 +567,19 @@ impl process_service_server::ProcessService for ProcessService {
         run_server_streaming(&self.sender, move |state, sender| {
             if once {
                 state
+                    .pinnacle
                     .system_processes
                     .refresh_processes_specifics(ProcessRefreshKind::new());
 
                 let compositor_pid = std::process::id();
-                let already_running =
-                    state
-                        .system_processes
-                        .processes_by_exact_name(&arg0)
-                        .any(|proc| {
-                            proc.parent()
-                                .is_some_and(|parent_pid| parent_pid.as_u32() == compositor_pid)
-                        });
+                let already_running = state
+                    .pinnacle
+                    .system_processes
+                    .processes_by_exact_name(&arg0)
+                    .any(|proc| {
+                        proc.parent()
+                            .is_some_and(|parent_pid| parent_pid.as_u32() == compositor_pid)
+                    });
 
                 if already_running {
                     return;
@@ -743,7 +749,7 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            state.fixup_xwayland_internal_z_indices();
+            state.fixup_xwayland_window_layering();
 
             state.request_layout(&output);
             state.update_focus(&output);
@@ -772,7 +778,7 @@ impl tag_service_server::TagService for TagService {
                 tag.set_active(true, state);
             });
 
-            state.fixup_xwayland_internal_z_indices();
+            state.fixup_xwayland_window_layering();
 
             state.request_layout(&output);
             state.update_focus(&output);
@@ -804,6 +810,7 @@ impl tag_service_server::TagService for TagService {
                 .collect::<Vec<_>>();
 
             state
+                .pinnacle
                 .config
                 .connector_saved_states
                 .entry(output_name.clone())
@@ -819,7 +826,7 @@ impl tag_service_server::TagService for TagService {
             }
 
             for tag in new_tags {
-                for window in state.windows.iter() {
+                for window in state.pinnacle.windows.iter() {
                     window.with_state_mut(|state| {
                         for win_tag in state.tags.iter_mut() {
                             if win_tag.id() == tag.id() {
@@ -844,7 +851,7 @@ impl tag_service_server::TagService for TagService {
         run_unary_no_response(&self.sender, move |state| {
             let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
 
-            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                 // TODO: seriously, convert state.tags into a hashset
                 output.with_state_mut(|state| {
                     for tag_to_remove in tags_to_remove.iter() {
@@ -856,7 +863,7 @@ impl tag_service_server::TagService for TagService {
                 state.schedule_render(&output);
             }
 
-            for conn_saved_state in state.config.connector_saved_states.values_mut() {
+            for conn_saved_state in state.pinnacle.config.connector_saved_states.values_mut() {
                 for tag_to_remove in tags_to_remove.iter() {
                     conn_saved_state.tags.retain(|tag| tag != tag_to_remove);
                 }
@@ -871,6 +878,7 @@ impl tag_service_server::TagService for TagService {
     ) -> Result<Response<tag::v0alpha1::GetResponse>, Status> {
         run_unary(&self.sender, move |state| {
             let tag_ids = state
+                .pinnacle
                 .space
                 .outputs()
                 .flat_map(|op| op.with_state(|state| state.tags.clone()))
@@ -908,6 +916,7 @@ impl tag_service_server::TagService for TagService {
                 .as_ref()
                 .map(|tag| {
                     state
+                        .pinnacle
                         .windows
                         .iter()
                         .filter_map(|win| {
@@ -958,7 +967,12 @@ impl output_service_server::OutputService for OutputService {
         let y = request.y;
 
         run_unary_no_response(&self.sender, move |state| {
-            if let Some(saved_state) = state.config.connector_saved_states.get_mut(&output_name) {
+            if let Some(saved_state) = state
+                .pinnacle
+                .config
+                .connector_saved_states
+                .get_mut(&output_name)
+            {
                 if let Some(x) = x {
                     saved_state.loc.x = x;
                 }
@@ -966,7 +980,7 @@ impl output_service_server::OutputService for OutputService {
                     saved_state.loc.y = y;
                 }
             } else {
-                state.config.connector_saved_states.insert(
+                state.pinnacle.config.connector_saved_states.insert(
                     output_name.clone(),
                     ConnectorSavedState {
                         loc: (x.unwrap_or_default(), y.unwrap_or_default()).into(),
@@ -1100,6 +1114,7 @@ impl output_service_server::OutputService for OutputService {
     ) -> Result<Response<output::v0alpha1::GetResponse>, Status> {
         run_unary(&self.sender, move |state| {
             let output_names = state
+                .pinnacle
                 .space
                 .outputs()
                 .map(|output| output.name())
@@ -1135,7 +1150,7 @@ impl output_service_server::OutputService for OutputService {
 
             let logical_size = output
                 .as_ref()
-                .and_then(|output| state.space.output_geometry(output))
+                .and_then(|output| state.pinnacle.space.output_geometry(output))
                 .map(|geo| (geo.size.w, geo.size.h));
 
             let current_mode = output
@@ -1267,7 +1282,7 @@ impl render_service_server::RenderService for RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_upscale_filter(filter);
-            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }
@@ -1292,7 +1307,7 @@ impl render_service_server::RenderService for RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_downscale_filter(filter);
-            for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }

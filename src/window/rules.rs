@@ -170,7 +170,7 @@ pub enum FloatingOrTiled {
 impl State {
     pub fn apply_window_rules(&mut self, window: &WindowElement) {
         tracing::debug!("Applying window rules");
-        for (cond, rule) in self.config.window_rules.iter() {
+        for (cond, rule) in self.pinnacle.config.window_rules.iter() {
             if cond.is_met(self, window) {
                 let WindowRule {
                     output,
@@ -253,7 +253,7 @@ impl State {
                                 state.floating_or_tiled =
                                     window_state::FloatingOrTiled::Floating(rect)
                             });
-                            self.space.map_element(window.clone(), *loc, false);
+                            self.pinnacle.space.map_element(window.clone(), *loc, false);
                         }
                         window_state::FloatingOrTiled::Tiled(rect) => {
                             // If the window is tiled, don't set the size. Instead, set

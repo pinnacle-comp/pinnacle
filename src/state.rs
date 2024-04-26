@@ -53,11 +53,14 @@ use crate::input::InputState;
 pub struct State {
     /// Which backend is currently running
     pub backend: Backend,
+    pub pinnacle: Pinnacle,
+}
 
+pub struct Pinnacle {
     /// A loop signal used to stop the compositor
     pub loop_signal: LoopSignal,
     /// A handle to the event loop
-    pub loop_handle: LoopHandle<'static, Self>,
+    pub loop_handle: LoopHandle<'static, State>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
 
@@ -67,7 +70,7 @@ pub struct State {
 
     pub compositor_state: CompositorState,
     pub data_device_state: DataDeviceState,
-    pub seat_state: SeatState<Self>,
+    pub seat_state: SeatState<State>,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
     pub xdg_shell_state: XdgShellState,
@@ -150,8 +153,10 @@ impl State {
             info!("Fd raise success!");
         }
 
-        loop_handle.insert_source(socket, |stream, _metadata, data| {
-            data.display_handle
+        loop_handle.insert_source(socket, |stream, _metadata, state| {
+            state
+                .pinnacle
+                .display_handle
                 .insert_client(stream, Arc::new(ClientState::default()))
                 .expect("Could not insert client into loop handle");
         })?;
@@ -191,7 +196,7 @@ impl State {
                     display,
                 } => {
                     let mut wm = X11Wm::start_wm(
-                        state.loop_handle.clone(),
+                        state.pinnacle.loop_handle.clone(),
                         dh_clone.clone(),
                         connection,
                         client,
@@ -209,19 +214,19 @@ impl State {
 
                     tracing::debug!("setting xwm and xdisplay");
 
-                    state.xwm = Some(wm);
-                    state.xdisplay = Some(display);
+                    state.pinnacle.xwm = Some(wm);
+                    state.pinnacle.xdisplay = Some(display);
 
                     std::env::set_var("DISPLAY", format!(":{display}"));
 
-                    if let Err(err) =
-                        state.start_config(Some(state.config.dir(&state.xdg_base_dirs)))
-                    {
+                    if let Err(err) = state.start_config(Some(
+                        state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
+                    )) {
                         panic!("failed to start config: {err}");
                     }
                 }
                 XWaylandEvent::Exited => {
-                    state.xwm.take();
+                    state.pinnacle.xwm.take();
                 }
             });
             if let Err(err) = res {
@@ -241,69 +246,74 @@ impl State {
 
         let state = Self {
             backend,
-            loop_signal,
-            loop_handle,
-            display_handle: display_handle.clone(),
-            clock: Clock::<Monotonic>::new(),
-            compositor_state: CompositorState::new::<Self>(&display_handle),
-            data_device_state: DataDeviceState::new::<Self>(&display_handle),
-            seat_state,
-            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
-            space: Space::<WindowElement>::default(),
-            cursor_status: CursorImageStatus::default_named(),
-            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
-            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
-            viewporter_state: ViewporterState::new::<Self>(&display_handle),
-            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
-                &display_handle,
-            ),
-            primary_selection_state,
-            layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
-            data_control_state,
-            screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
-                &display_handle,
-                |_| true,
-            ),
-            gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
-                &display_handle,
-                |_| true,
-            ),
-            relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
-                &display_handle,
-            ),
 
-            input_state: InputState::new(),
+            pinnacle: Pinnacle {
+                loop_signal,
+                loop_handle,
+                display_handle: display_handle.clone(),
+                clock: Clock::<Monotonic>::new(),
+                compositor_state: CompositorState::new::<Self>(&display_handle),
+                data_device_state: DataDeviceState::new::<Self>(&display_handle),
+                seat_state,
+                shm_state: ShmState::new::<Self>(&display_handle, vec![]),
+                space: Space::<WindowElement>::default(),
+                cursor_status: CursorImageStatus::default_named(),
+                output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(
+                    &display_handle,
+                ),
+                xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
+                viewporter_state: ViewporterState::new::<Self>(&display_handle),
+                fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
+                    &display_handle,
+                ),
+                primary_selection_state,
+                layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
+                data_control_state,
+                screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
+                    &display_handle,
+                    |_| true,
+                ),
+                gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
+                    &display_handle,
+                    |_| true,
+                ),
+                relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
+                    &display_handle,
+                ),
 
-            output_focus_stack: OutputFocusStack::default(),
-            z_index_stack: Vec::new(),
+                input_state: InputState::new(),
 
-            config: Config::new(no_config, config_dir),
+                output_focus_stack: OutputFocusStack::default(),
+                z_index_stack: Vec::new(),
 
-            seat,
+                config: Config::new(no_config, config_dir),
 
-            dnd_icon: None,
+                seat,
 
-            popup_manager: PopupManager::default(),
+                dnd_icon: None,
 
-            windows: Vec::new(),
-            new_windows: Vec::new(),
+                popup_manager: PopupManager::default(),
 
-            xwayland,
-            xwm: None,
-            xdisplay: None,
+                windows: Vec::new(),
+                new_windows: Vec::new(),
 
-            system_processes: sysinfo::System::new_with_specifics(
-                RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-            ),
+                xwayland,
+                xwm: None,
+                xdisplay: None,
 
-            grpc_server_join_handle: None,
+                system_processes: sysinfo::System::new_with_specifics(
+                    RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+                ),
 
-            xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
-                .context("couldn't create xdg BaseDirectories")?,
+                grpc_server_join_handle: None,
 
-            signal_state: SignalState::default(),
+                xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
+                    .context("couldn't create xdg BaseDirectories")?,
 
-            layout_state: LayoutState::default(),
+                signal_state: SignalState::default(),
+
+                layout_state: LayoutState::default(),
+            },
         };
 
         Ok(state)
@@ -317,7 +327,7 @@ impl State {
         F1: Fn(&mut Self) -> bool + 'static,
         F2: FnOnce(&mut Self) + 'static,
     {
-        self.loop_handle.insert_idle(|state| {
+        self.pinnacle.loop_handle.insert_idle(|state| {
             if !condition(state) {
                 state.schedule(condition, run);
             } else {
@@ -328,11 +338,11 @@ impl State {
 
     pub fn shutdown(&mut self) {
         info!("Shutting down Pinnacle");
-        self.loop_signal.stop();
-        if let Some(join_handle) = self.config.config_join_handle.take() {
+        self.pinnacle.loop_signal.stop();
+        if let Some(join_handle) = self.pinnacle.config.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
+        if let Some(shutdown_sender) = self.pinnacle.config.shutdown_sender.take() {
             if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
                 warn!("Failed to send shutdown signal to config: {err}");
             }

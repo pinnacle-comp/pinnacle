@@ -80,11 +80,11 @@ pub fn setup_wlcs_dummy() -> anyhow::Result<(State, EventLoop<'static, State>)> 
         None,
     )?;
 
-    state.output_focus_stack.set_focus(output.clone());
+    state.pinnacle.output_focus_stack.set_focus(output.clone());
 
-    state.shm_state.update_formats(shm_formats);
+    state.pinnacle.shm_state.update_formats(shm_formats);
 
-    state.space.map_output(&output, (0, 0));
+    state.pinnacle.space.map_output(&output, (0, 0));
 
     Ok((state, event_loop))
 }
@@ -96,7 +96,7 @@ impl State {
     {
         // Clear state
         debug!("Clearing tags");
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| state.tags.clear());
         }
 
@@ -104,22 +104,23 @@ impl State {
 
         debug!("Clearing input state");
 
-        self.input_state.clear();
+        self.pinnacle.input_state.clear();
 
-        self.config.clear(&self.loop_handle);
+        self.pinnacle.config.clear(&self.pinnacle.loop_handle);
 
-        self.signal_state.clear();
+        self.pinnacle.signal_state.clear();
 
-        self.input_state.reload_keybind = None;
-        self.input_state.kill_keybind = None;
+        self.pinnacle.input_state.reload_keybind = None;
+        self.pinnacle.input_state.kill_keybind = None;
 
-        if self.grpc_server_join_handle.is_none() {
+        if self.pinnacle.grpc_server_join_handle.is_none() {
             self.start_grpc_server(socket_dir)?;
         }
 
         let (pinger, ping_source) = calloop::ping::make_ping()?;
 
         let token = self
+            .pinnacle
             .loop_handle
             .insert_source(ping_source, move |_, _, _state| {})?;
 
@@ -128,7 +129,7 @@ impl State {
             pinger.ping();
         });
 
-        self.config.config_reload_on_crash_token = Some(token);
+        self.pinnacle.config.config_reload_on_crash_token = Some(token);
 
         Ok(())
     }

@@ -276,7 +276,7 @@ impl State {
         // Clear state
 
         debug!("Clearing tags");
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| state.tags.clear());
         }
 
@@ -284,11 +284,11 @@ impl State {
 
         debug!("Clearing input state");
 
-        self.input_state.clear();
+        self.pinnacle.input_state.clear();
 
-        self.config.clear(&self.loop_handle);
+        self.pinnacle.config.clear(&self.pinnacle.loop_handle);
 
-        self.signal_state.clear();
+        self.pinnacle.signal_state.clear();
 
         let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
         let load_default_config = |state: &mut State, reason: &str| {
@@ -304,7 +304,7 @@ impl State {
         };
 
         // If `--no-config` was set, still load the keybinds from the default metaconfig
-        if self.config.no_config {
+        if self.pinnacle.config.no_config {
             config_dir = None;
         }
 
@@ -328,17 +328,17 @@ impl State {
         let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
         let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
 
-        self.input_state.reload_keybind = Some(reload_keybind);
-        self.input_state.kill_keybind = Some(kill_keybind);
+        self.pinnacle.input_state.reload_keybind = Some(reload_keybind);
+        self.pinnacle.input_state.kill_keybind = Some(kill_keybind);
 
-        if self.config.no_config {
+        if self.pinnacle.config.no_config {
             info!("`--no-config` was set, not spawning config");
             return Ok(());
         }
 
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
-        if self.grpc_server_join_handle.is_none() {
+        if self.pinnacle.grpc_server_join_handle.is_none() {
             // If a socket is provided in the metaconfig, use it.
             let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
                 let Some(config_dir) = &config_dir else {
@@ -356,7 +356,8 @@ impl State {
                 socket_dir
             } else {
                 // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-                self.xdg_base_dirs
+                self.pinnacle
+                    .xdg_base_dirs
                     .get_runtime_directory()
                     .cloned()
                     .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
@@ -448,30 +449,32 @@ impl State {
 
                 let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-                let token = self
-                    .loop_handle
-                    .insert_source(ping_source, move |_, _, state| {
-                        error!("Config crashed! Falling back to default config");
-                        state
-                            .start_config(None::<PathBuf>)
-                            .expect("failed to start default config");
-                    })?;
+                let token =
+                    self.pinnacle
+                        .loop_handle
+                        .insert_source(ping_source, move |_, _, state| {
+                            error!("Config crashed! Falling back to default config");
+                            state
+                                .start_config(None::<PathBuf>)
+                                .expect("failed to start default config");
+                        })?;
 
-                self.config.config_join_handle = Some(tokio::spawn(async move {
+                self.pinnacle.config.config_join_handle = Some(tokio::spawn(async move {
                     let _ = child.wait().await;
                     pinger.ping();
                 }));
 
-                self.config.config_reload_on_crash_token = Some(token);
+                self.pinnacle.config.config_reload_on_crash_token = Some(token);
             }
             None => {
                 let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-                let token = self
-                    .loop_handle
-                    .insert_source(ping_source, move |_, _, _state| {
-                        panic!("builtin rust config crashed; this is a bug");
-                    })?;
+                let token =
+                    self.pinnacle
+                        .loop_handle
+                        .insert_source(ping_source, move |_, _, _state| {
+                            panic!("builtin rust config crashed; this is a bug");
+                        })?;
 
                 std::thread::spawn(move || {
                     info!("Starting builtin Rust config");
@@ -479,7 +482,7 @@ impl State {
                     pinger.ping();
                 });
 
-                self.config.config_reload_on_crash_token = Some(token);
+                self.pinnacle.config.config_reload_on_crash_token = Some(token);
             }
         }
 
@@ -487,10 +490,12 @@ impl State {
     }
 
     pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
-        self.system_processes
+        self.pinnacle
+            .system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
         let multiple_instances = self
+            .pinnacle
             .system_processes
             .processes_by_exact_name("pinnacle")
             .filter(|proc| proc.thread_kind().is_none())
@@ -539,13 +544,14 @@ impl State {
 
         std::env::set_var(
             "PINNACLE_PROTO_DIR",
-            self.xdg_base_dirs.get_data_file("protobuf"),
+            self.pinnacle.xdg_base_dirs.get_data_file("protobuf"),
         );
 
         let (grpc_sender, grpc_receiver) =
             calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
 
-        self.loop_handle
+        self.pinnacle
+            .loop_handle
             .insert_source(grpc_receiver, |msg, _, state| match msg {
                 Event::Msg(f) => f(state),
                 Event::Closed => error!("grpc receiver was closed"),
@@ -583,9 +589,9 @@ impl State {
             .add_service(LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));
 
-        match self.xdisplay.as_ref() {
+        match self.pinnacle.xdisplay.as_ref() {
             Some(_) => {
-                self.grpc_server_join_handle = Some(tokio::spawn(async move {
+                self.pinnacle.grpc_server_join_handle = Some(tokio::spawn(async move {
                     if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                         error!("gRPC server error: {err}");
                     }
@@ -595,9 +601,9 @@ impl State {
             // |      fast at startup then I think there's a chance that the gRPC server
             // |      could get started twice.
             None => self.schedule(
-                |state| state.xdisplay.is_some(),
+                |state| state.pinnacle.xdisplay.is_some(),
                 move |state| {
-                    state.grpc_server_join_handle = Some(tokio::spawn(async move {
+                    state.pinnacle.grpc_server_join_handle = Some(tokio::spawn(async move {
                         if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                             error!("gRPC server error: {err}");
                         }

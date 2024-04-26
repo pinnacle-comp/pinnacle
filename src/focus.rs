@@ -47,16 +47,20 @@ impl State {
             }
         }
 
-        self.seat.get_keyboard().expect("no keyboard").set_focus(
-            self,
-            current_focus.map(|win| win.into()),
-            SERIAL_COUNTER.next_serial(),
-        );
+        self.pinnacle
+            .seat
+            .get_keyboard()
+            .expect("no keyboard")
+            .set_focus(
+                self,
+                current_focus.map(|win| win.into()),
+                SERIAL_COUNTER.next_serial(),
+            );
     }
 
     pub fn fixup_z_layering(&mut self) {
-        for win in self.z_index_stack.iter() {
-            self.space.raise_element(win, false);
+        for win in self.pinnacle.z_index_stack.iter() {
+            self.pinnacle.space.raise_element(win, false);
         }
     }
 
@@ -64,25 +68,26 @@ impl State {
     ///
     /// This does nothing if the window is unmapped.
     pub fn raise_window(&mut self, window: WindowElement, activate: bool) {
-        if self.space.elements().all(|win| win != &window) {
+        if self.pinnacle.space.elements().all(|win| win != &window) {
             warn!("Tried to raise an unmapped window");
             return;
         }
 
-        self.space.raise_element(&window, activate);
+        self.pinnacle.space.raise_element(&window, activate);
 
-        self.z_index_stack.retain(|win| win != &window);
-        self.z_index_stack.push(window);
+        self.pinnacle.z_index_stack.retain(|win| win != &window);
+        self.pinnacle.z_index_stack.push(window);
 
-        self.fixup_xwayland_internal_z_indices();
+        self.fixup_xwayland_window_layering();
     }
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.
     pub fn focused_output(&self) -> Option<&Output> {
-        self.output_focus_stack
+        self.pinnacle
+            .output_focus_stack
             .stack
             .last()
-            .or_else(|| self.space.outputs().next())
+            .or_else(|| self.pinnacle.space.outputs().next())
     }
 }
 

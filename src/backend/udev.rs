@@ -432,7 +432,7 @@ pub fn setup_udev(
         udev.session.clone().into(),
     );
     libinput_context
-        .udev_assign_seat(state.seat.name())
+        .udev_assign_seat(state.pinnacle.seat.name())
         .expect("failed to assign seat to libinput");
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
@@ -576,7 +576,7 @@ pub fn setup_udev(
                         }
                     }
 
-                    for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                    for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                         state.schedule_render(&output);
                     }
                 }
@@ -584,7 +584,7 @@ pub fn setup_udev(
         })
         .expect("failed to insert libinput notifier into event loop");
 
-    state.shm_state.update_formats(
+    state.pinnacle.shm_state.update_formats(
         udev.gpu_manager
             .single_renderer(&primary_gpu)?
             .shm_formats(),
@@ -676,8 +676,8 @@ pub fn setup_udev(
         });
     });
 
-    if let Err(err) = state.xwayland.start(
-        state.loop_handle.clone(),
+    if let Err(err) = state.pinnacle.xwayland.start(
+        state.pinnacle.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
         true,
@@ -903,6 +903,7 @@ impl State {
         let gbm = GbmDevice::new(fd).map_err(DeviceAddError::GbmDevice)?;
 
         let registration_token = self
+            .pinnacle
             .loop_handle
             .insert_source(notifier, move |event, metadata, state| match event {
                 DrmEvent::VBlank(crtc) => {
@@ -1011,7 +1012,7 @@ impl State {
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
-        if self.space.outputs().any(|op| {
+        if self.pinnacle.space.outputs().any(|op| {
             op.user_data()
                 .get::<UdevOutputData>()
                 .is_some_and(|op_id| op_id.crtc == crtc)
@@ -1034,10 +1035,10 @@ impl State {
 
         output.set_preferred(wl_mode);
 
-        self.output_focus_stack.set_focus(output.clone());
+        self.pinnacle.output_focus_stack.set_focus(output.clone());
 
-        let x = self.space.outputs().fold(0, |acc, o| {
-            let Some(geo) = self.space.output_geometry(o) else {
+        let x = self.pinnacle.space.outputs().fold(0, |acc, o| {
+            let Some(geo) = self.pinnacle.space.output_geometry(o) else {
                 unreachable!()
             };
             acc + geo.size.w
@@ -1116,6 +1117,7 @@ impl State {
         // In this case, restore its tags and location.
         // TODO: instead of checking the connector, check the monitor's edid info instead
         if let Some(saved_state) = self
+            .pinnacle
             .config
             .connector_saved_states
             .get(&OutputName(output.name()))
@@ -1124,7 +1126,7 @@ impl State {
             output.with_state_mut(|state| state.tags = tags.clone());
             self.change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
-            self.signal_state.output_connect.signal(|buffer| {
+            self.pinnacle.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {
                     output_name: Some(output.name()),
                 })
@@ -1152,6 +1154,7 @@ impl State {
         device.surfaces.remove(&crtc);
 
         let output = self
+            .pinnacle
             .space
             .outputs()
             .find(|o| {
@@ -1164,7 +1167,7 @@ impl State {
 
         if let Some(output) = output {
             // Save this output's state. It will be restored if the monitor gets replugged.
-            self.config.connector_saved_states.insert(
+            self.pinnacle.config.connector_saved_states.insert(
                 OutputName(output.name()),
                 ConnectorSavedState {
                     loc: output.current_location(),
@@ -1172,14 +1175,19 @@ impl State {
                     scale: Some(output.current_scale()),
                 },
             );
-            self.space.unmap_output(&output);
-            self.gamma_control_manager_state.output_removed(&output);
+            self.pinnacle.space.unmap_output(&output);
+            self.pinnacle
+                .gamma_control_manager_state
+                .output_removed(&output);
 
-            self.signal_state.output_disconnect.signal(|buffer| {
-                buffer.push_back(OutputDisconnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
+            self.pinnacle
+                .signal_state
+                .output_disconnect
+                .signal(|buffer| {
+                    buffer.push_back(OutputDisconnectResponse {
+                        output_name: Some(output.name()),
+                    })
+                });
         }
     }
 
@@ -1241,7 +1249,9 @@ impl State {
                 .as_mut()
                 .remove_node(&backend_data.render_node);
 
-            self.loop_handle.remove(backend_data.registration_token);
+            self.pinnacle
+                .loop_handle
+                .remove(backend_data.registration_token);
 
             tracing::debug!("Dropping device");
         }
@@ -1264,7 +1274,7 @@ impl State {
             return;
         };
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
+        let output = if let Some(output) = self.pinnacle.space.outputs().find(|o| {
             let udev_op_data = o.user_data().get::<UdevOutputData>();
             udev_op_data
                 .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
@@ -1299,7 +1309,10 @@ impl State {
                                 | wp_presentation_feedback::Kind::HwCompletion,
                         )
                     } else {
-                        (self.clock.now(), wp_presentation_feedback::Kind::Vsync)
+                        (
+                            self.pinnacle.clock.now(),
+                            wp_presentation_feedback::Kind::Vsync,
+                        )
                     };
 
                     feedback.presented(
@@ -1330,10 +1343,13 @@ impl State {
         if dirty {
             self.schedule_render(&output);
         } else {
-            for window in self.windows.iter() {
-                window.send_frame(&output, self.clock.now(), Some(Duration::ZERO), |_, _| {
-                    Some(output.clone())
-                });
+            for window in self.pinnacle.windows.iter() {
+                window.send_frame(
+                    &output,
+                    self.pinnacle.clock.now(),
+                    Some(Duration::ZERO),
+                    |_, _| Some(output.clone()),
+                );
             }
         }
     }
@@ -1353,7 +1369,7 @@ impl State {
         let frame = udev.pointer_image.get_image(
             1,
             // output.current_scale().integer_scale() as u32,
-            self.clock.now().into(),
+            self.pinnacle.clock.now().into(),
         );
 
         let render_node = surface.render_node;
@@ -1398,9 +1414,10 @@ impl State {
                 texture
             });
 
-        let windows = self.space.elements().cloned().collect::<Vec<_>>();
+        let windows = self.pinnacle.space.elements().cloned().collect::<Vec<_>>();
 
         let pointer_location = self
+            .pinnacle
             .seat
             .get_pointer()
             .map(|ptr| ptr.current_location())
@@ -1411,21 +1428,22 @@ impl State {
 
         // draw the cursor as relevant and
         // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &self.cursor_status {
+        if let CursorImageStatus::Surface(surface) = &self.pinnacle.cursor_status {
             if !surface.alive() {
-                self.cursor_status = CursorImageStatus::default_named();
+                self.pinnacle.cursor_status = CursorImageStatus::default_named();
             } else {
                 send_frames_surface_tree(
                     surface,
                     output,
-                    self.clock.now(),
+                    self.pinnacle.clock.now(),
                     Some(Duration::ZERO),
                     |_, _| None,
                 );
             }
         }
 
-        udev.pointer_element.set_status(self.cursor_status.clone());
+        udev.pointer_element
+            .set_status(self.pinnacle.cursor_status.clone());
 
         let pending_screencopy_with_cursor =
             output.with_state(|state| state.screencopy.as_ref().map(|sc| sc.overlay_cursor()));
@@ -1449,10 +1467,10 @@ impl State {
                     let pointer_render_elements = pointer_render_elements(
                         output,
                         &mut renderer,
-                        &self.space,
+                        &self.pinnacle.space,
                         pointer_location,
-                        &mut self.cursor_status,
-                        self.dnd_icon.as_ref(),
+                        &mut self.pinnacle.cursor_status,
+                        self.pinnacle.dnd_icon.as_ref(),
                         &udev.pointer_element,
                     );
                     udev.pointer_element.set_element_kind(element::Kind::Cursor);
@@ -1463,10 +1481,10 @@ impl State {
                 let pointer_render_elements = pointer_render_elements(
                     output,
                     &mut renderer,
-                    &self.space,
+                    &self.pinnacle.space,
                     pointer_location,
-                    &mut self.cursor_status,
-                    self.dnd_icon.as_ref(),
+                    &mut self.pinnacle.cursor_status,
+                    self.pinnacle.dnd_icon.as_ref(),
                     &udev.pointer_element,
                 );
                 output_render_elements.extend(pointer_render_elements);
@@ -1476,7 +1494,7 @@ impl State {
         output_render_elements.extend(crate::render::output_render_elements(
             output,
             &mut renderer,
-            &self.space,
+            &self.pinnacle.space,
             &windows,
         ));
 
@@ -1499,13 +1517,13 @@ impl State {
                 output,
                 surface,
                 &render_frame_result,
-                &self.loop_handle,
+                &self.pinnacle.loop_handle,
             );
 
             super::post_repaint(
                 output,
                 &render_frame_result.states,
-                &self.space,
+                &self.pinnacle.space,
                 surface
                     .dmabuf_feedback
                     .as_ref()
@@ -1513,15 +1531,18 @@ impl State {
                         render_feedback: &feedback.render_feedback,
                         scanout_feedback: &feedback.scanout_feedback,
                     }),
-                Duration::from(self.clock.now()),
-                &self.cursor_status,
+                Duration::from(self.pinnacle.clock.now()),
+                &self.pinnacle.cursor_status,
             );
 
             let rendered = !render_frame_result.is_empty;
 
             if rendered {
-                let output_presentation_feedback =
-                    take_presentation_feedback(output, &self.space, &render_frame_result.states);
+                let output_presentation_feedback = take_presentation_feedback(
+                    output,
+                    &self.pinnacle.space,
+                    &render_frame_result.states,
+                );
 
                 surface
                     .compositor

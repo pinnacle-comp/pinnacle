@@ -124,8 +124,8 @@ mod process {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.windows.len(), 1);
-                assert_eq!(state.windows[0].class(), Some("foot".to_string()));
+                assert_eq!(state.pinnacle.windows.len(), 1);
+                assert_eq!(state.pinnacle.windows[0].class(), Some("foot".to_string()));
             });
 
             Ok(())
@@ -217,9 +217,9 @@ mod window {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 1);
+                assert_eq!(state.pinnacle.config.window_rules.len(), 1);
                 assert_eq!(
-                    state.config.window_rules[0],
+                    state.pinnacle.config.window_rules[0],
                     (
                         WindowRuleCondition {
                             class: Some(vec!["firefox".to_string()]),
@@ -254,9 +254,9 @@ mod window {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 2);
+                assert_eq!(state.pinnacle.config.window_rules.len(), 2);
                 assert_eq!(
-                    state.config.window_rules[1],
+                    state.pinnacle.config.window_rules[1],
                     (
                         WindowRuleCondition {
                             cond_all: Some(vec![WindowRuleCondition {
@@ -297,7 +297,7 @@ mod window {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    assert_eq!(state.windows.len(), 1);
+                    assert_eq!(state.pinnacle.windows.len(), 1);
                 });
 
                 run_lua! { |Pinnacle|
@@ -307,7 +307,7 @@ mod window {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    assert_eq!(state.windows.len(), 0);
+                    assert_eq!(state.pinnacle.windows.len(), 0);
                 });
 
                 Ok(())
@@ -329,7 +329,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -347,7 +347,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -365,7 +365,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -652,8 +652,8 @@ mod output {
                 let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -674,9 +674,9 @@ mod output {
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -727,10 +727,10 @@ mod output {
                 let second_op = output_for_name(state, "Second");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -759,9 +759,9 @@ mod output {
                 let first_op = output_for_name(state, "First");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -793,7 +793,7 @@ async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 1));
+        with_state(&sender, |state| assert_eq!(state.pinnacle.windows.len(), 1));
 
         run_lua! { |Pinnacle|
             for i = 1, 20 do
@@ -803,7 +803,9 @@ async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 21));
+        with_state(&sender, |state| {
+            assert_eq!(state.pinnacle.windows.len(), 21)
+        });
 
         Ok(())
     })
@@ -819,7 +821,7 @@ async fn window_count_without_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 1));
+        with_state(&sender, |state| assert_eq!(state.pinnacle.windows.len(), 1));
 
         Ok(())
     })
@@ -881,8 +883,8 @@ async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.windows.len(), 1);
-            assert_eq!(state.windows[0].with_state(|st| st.tags.len()), 1);
+            assert_eq!(state.pinnacle.windows.len(), 1);
+            assert_eq!(state.pinnacle.windows[0].with_state(|st| st.tags.len()), 1);
         });
 
         run_lua! { |Pinnacle|
@@ -894,10 +896,10 @@ async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.windows.len(), 2);
-            assert_eq!(state.windows[1].with_state(|st| st.tags.len()), 2);
+            assert_eq!(state.pinnacle.windows.len(), 2);
+            assert_eq!(state.pinnacle.windows[1].with_state(|st| st.tags.len()), 2);
             assert_eq!(
-                state.windows[1].with_state(|st| st
+                state.pinnacle.windows[1].with_state(|st| st
                     .tags
                     .iter()
                     .map(|tag| tag.name())

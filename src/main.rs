@@ -132,18 +132,19 @@ async fn main() -> anyhow::Result<()> {
     event_loop.run(None, &mut state, |state| {
         state.update_pointer_focus();
         state.fixup_z_layering();
-        state.space.refresh();
-        state.popup_manager.cleanup();
+        state.pinnacle.space.refresh();
+        state.pinnacle.popup_manager.cleanup();
 
         state
+            .pinnacle
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
 
         // TODO: couple these or something, this is really error-prone
         assert_eq!(
-            state.windows.len(),
-            state.z_index_stack.len(),
+            state.pinnacle.windows.len(),
+            state.pinnacle.z_index_stack.len(),
             "Length of `windows` and `z_index_stack` are different. \
             If you see this, report it to the developer."
         );
@@ -157,6 +158,8 @@ async fn main() -> anyhow::Result<()> {
 fn set_log_panic_hook() {
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        let _span = tracing::error_span!("panic");
+        let _span = _span.enter();
         error!("Panic occurred! Attempting to log backtrace");
         let buffer = gag::BufferRedirect::stderr();
         if let Ok(buffer) = buffer {

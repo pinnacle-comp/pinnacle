@@ -349,7 +349,7 @@ impl State {
     /// Schedule a new render. This does nothing on the winit backend.
     pub fn schedule_render(&mut self, output: &Output) {
         if let Backend::Udev(udev) = &mut self.backend {
-            udev.schedule_render(&self.loop_handle, output);
+            udev.schedule_render(&self.pinnacle.loop_handle, output);
         }
     }
 }

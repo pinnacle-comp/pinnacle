@@ -32,7 +32,7 @@ use crate::{
 
 impl XwmHandler for State {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-        self.xwm.as_mut().expect("xwm not in state")
+        self.pinnacle.xwm.as_mut().expect("xwm not in state")
     }
 
     fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
@@ -48,15 +48,18 @@ impl XwmHandler for State {
         }
 
         let window = WindowElement::new(Window::new_x11_window(surface));
-        self.space.map_element(window.clone(), (0, 0), true);
+        self.pinnacle
+            .space
+            .map_element(window.clone(), (0, 0), true);
         let bbox = self
+            .pinnacle
             .space
             .element_bbox(&window)
             .expect("called element_bbox on an unmapped window");
 
         let output_size = self
             .focused_output()
-            .and_then(|op| self.space.output_geometry(op))
+            .and_then(|op| self.pinnacle.space.output_geometry(op))
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
@@ -78,7 +81,7 @@ impl XwmHandler for State {
             unreachable!()
         };
 
-        self.space.map_element(window.clone(), loc, true);
+        self.pinnacle.space.map_element(window.clone(), loc, true);
         surface.set_mapped(true).expect("failed to map x11 window");
 
         let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
@@ -100,7 +103,7 @@ impl XwmHandler for State {
         }
 
         // TODO: will an unmap -> map duplicate the window
-        self.windows.push(window.clone());
+        self.pinnacle.windows.push(window.clone());
         self.raise_window(window.clone(), true);
 
         self.apply_window_rules(&window);
@@ -110,8 +113,9 @@ impl XwmHandler for State {
             self.request_layout(&output);
         }
 
-        self.loop_handle.insert_idle(move |state| {
+        self.pinnacle.loop_handle.insert_idle(move |state| {
             state
+                .pinnacle
                 .seat
                 .get_keyboard()
                 .expect("Seat had no keyboard") // FIXME: actually handle error
@@ -132,7 +136,7 @@ impl XwmHandler for State {
 
         let window = WindowElement::new(Window::new_x11_window(surface));
 
-        self.windows.push(window.clone());
+        self.pinnacle.windows.push(window.clone());
 
         if let Some(output) = self.focused_output() {
             window.place_on_output(output);
@@ -141,7 +145,7 @@ impl XwmHandler for State {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
         }
 
-        self.space.map_element(window.clone(), loc, true);
+        self.pinnacle.space.map_element(window.clone(), loc, true);
         self.raise_window(window.clone(), true);
     }
 
@@ -159,7 +163,7 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::unmapped_window");
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
@@ -169,18 +173,21 @@ impl XwmHandler for State {
         }
 
         let win = self
+            .pinnacle
             .space
             .elements()
             .find(|elem| matches!(elem.x11_surface(), Some(surf) if surf == &surface))
             .cloned();
 
         if let Some(win) = win {
-            self.windows
+            self.pinnacle
+                .windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
-            self.z_index_stack
+            self.pinnacle
+                .z_index_stack
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
-            self.space.unmap_elem(&win);
+            self.pinnacle.space.unmap_elem(&win);
 
             if let Some(output) = win.output(self) {
                 self.request_layout(&output);
@@ -196,7 +203,8 @@ impl XwmHandler for State {
                     }
                 }
 
-                self.seat
+                self.pinnacle
+                    .seat
                     .get_keyboard()
                     .expect("Seat had no keyboard")
                     .set_focus(self, focus, SERIAL_COUNTER.next_serial());
@@ -213,7 +221,7 @@ impl XwmHandler for State {
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::destroyed_window");
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|win| {
                     win.wl_surface()
@@ -223,6 +231,7 @@ impl XwmHandler for State {
         }
 
         let win = self
+            .pinnacle
             .windows
             .iter()
             .find(|elem| {
@@ -238,10 +247,12 @@ impl XwmHandler for State {
 
             // INFO: comparing the windows doesn't work so wlsurface it is
             // self.windows.retain(|elem| &win != elem);
-            self.windows
+            self.pinnacle
+                .windows
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
-            self.z_index_stack
+            self.pinnacle
+                .z_index_stack
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
             if let Some(output) = win.output(self) {
@@ -258,7 +269,8 @@ impl XwmHandler for State {
                     }
                 }
 
-                self.seat
+                self.pinnacle
+                    .seat
                     .get_keyboard()
                     .expect("Seat had no keyboard")
                     .set_focus(self, focus, SERIAL_COUNTER.next_serial());
@@ -281,6 +293,7 @@ impl XwmHandler for State {
     ) {
         trace!("XwmHandler::configure_request");
         let floating_or_override_redirect = self
+            .pinnacle
             .windows
             .iter()
             .find(|win| win.x11_surface() == Some(&window))
@@ -320,6 +333,7 @@ impl XwmHandler for State {
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
         let Some(win) = self
+            .pinnacle
             .space
             .elements()
             .find(|elem| {
@@ -331,7 +345,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.space.map_element(win, geometry.loc, true);
+        self.pinnacle.space.map_element(win, geometry.loc, true);
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -416,7 +430,7 @@ impl XwmHandler for State {
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
         let Some(wl_surf) = window.wl_surface() else { return };
-        let seat = self.seat.clone();
+        let seat = self.pinnacle.seat.clone();
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
@@ -432,7 +446,7 @@ impl XwmHandler for State {
 
     fn move_request(&mut self, _xwm: XwmId, window: X11Surface, button: u32) {
         let Some(wl_surf) = window.wl_surface() else { return };
-        let seat = self.seat.clone();
+        let seat = self.pinnacle.seat.clone();
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
@@ -446,7 +460,8 @@ impl XwmHandler for State {
     }
 
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
-        self.seat
+        self.pinnacle
+            .seat
             .get_keyboard()
             .and_then(|kb| kb.current_focus())
             .is_some_and(|focus| {
@@ -468,7 +483,9 @@ impl XwmHandler for State {
     ) {
         match selection {
             SelectionTarget::Clipboard => {
-                if let Err(err) = request_data_device_client_selection(&self.seat, mime_type, fd) {
+                if let Err(err) =
+                    request_data_device_client_selection(&self.pinnacle.seat, mime_type, fd)
+                {
                     error!(
                         ?err,
                         "Failed to request current wayland clipboard for XWayland"
@@ -476,7 +493,9 @@ impl XwmHandler for State {
                 }
             }
             SelectionTarget::Primary => {
-                if let Err(err) = request_primary_client_selection(&self.seat, mime_type, fd) {
+                if let Err(err) =
+                    request_primary_client_selection(&self.pinnacle.seat, mime_type, fd)
+                {
                     error!(
                         ?err,
                         "Failed to request current wayland primary selection for XWayland"
@@ -489,10 +508,20 @@ impl XwmHandler for State {
     fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
         match selection {
             SelectionTarget::Clipboard => {
-                set_data_device_selection(&self.display_handle, &self.seat, mime_types, ());
+                set_data_device_selection(
+                    &self.pinnacle.display_handle,
+                    &self.pinnacle.seat,
+                    mime_types,
+                    (),
+                );
             }
             SelectionTarget::Primary => {
-                set_primary_selection(&self.display_handle, &self.seat, mime_types, ());
+                set_primary_selection(
+                    &self.pinnacle.display_handle,
+                    &self.pinnacle.seat,
+                    mime_types,
+                    (),
+                );
             }
         }
     }
@@ -500,13 +529,13 @@ impl XwmHandler for State {
     fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
         match selection {
             SelectionTarget::Clipboard => {
-                if current_data_device_selection_userdata(&self.seat).is_some() {
-                    clear_data_device_selection(&self.display_handle, &self.seat);
+                if current_data_device_selection_userdata(&self.pinnacle.seat).is_some() {
+                    clear_data_device_selection(&self.pinnacle.display_handle, &self.pinnacle.seat);
                 }
             }
             SelectionTarget::Primary => {
-                if current_primary_selection_userdata(&self.seat).is_some() {
-                    clear_primary_selection(&self.display_handle, &self.seat);
+                if current_primary_selection_userdata(&self.pinnacle.seat).is_some() {
+                    clear_primary_selection(&self.pinnacle.display_handle, &self.pinnacle.seat);
                 }
             }
         }
@@ -514,12 +543,13 @@ impl XwmHandler for State {
 }
 
 impl State {
-    pub fn fixup_xwayland_internal_z_indices(&mut self) {
-        let Some(xwm) = self.xwm.as_mut() else {
+    pub fn fixup_xwayland_window_layering(&mut self) {
+        let Some(xwm) = self.pinnacle.xwm.as_mut() else {
             return;
         };
 
         let x11_wins = self
+            .pinnacle
             .space
             .elements()
             .filter(|win| win.is_on_active_tag())

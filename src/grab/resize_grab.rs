@@ -204,6 +204,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             WindowSurface::X11(surface) => {
                 if !surface.is_override_redirect() {
                     let loc = data
+                        .pinnacle
                         .space
                         .element_location(&self.window)
                         .expect("failed to get x11 win loc");
@@ -366,7 +367,7 @@ pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
         return;
     };
 
-    let Some(mut window_loc) = state.space.element_location(&window) else {
+    let Some(mut window_loc) = state.pinnacle.space.element_location(&window) else {
         return;
     };
     let geometry = window.geometry();
@@ -413,6 +414,7 @@ pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
     }
 
     let size = state
+        .pinnacle
         .space
         .element_geometry(&window)
         .expect("called element_geometry on unmapped window")
@@ -426,7 +428,10 @@ pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
     });
 
     if new_loc.0.is_some() || new_loc.1.is_some() {
-        state.space.map_element(window.clone(), window_loc, false);
+        state
+            .pinnacle
+            .space
+            .map_element(window.clone(), window_loc, false);
 
         if let Some(surface) = window.x11_surface() {
             if !surface.is_override_redirect() {
@@ -463,6 +468,7 @@ pub fn resize_request_client(
         }
 
         let initial_window_loc = state
+            .pinnacle
             .space
             .element_location(&window)
             .expect("resize request called on unmapped window");
@@ -513,6 +519,7 @@ pub fn resize_request_server(
     }
 
     let initial_window_loc = state
+        .pinnacle
         .space
         .element_location(&window)
         .expect("resize request called on unmapped window");

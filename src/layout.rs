@@ -33,7 +33,8 @@ impl State {
     ) {
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
-            self.windows
+            self.pinnacle
+                .windows
                 .iter()
                 .filter(|win| !win.is_x11_override_redirect())
                 .filter(|win| {
@@ -52,7 +53,11 @@ impl State {
             })
             .cloned();
 
-        let output_geo = self.space.output_geometry(output).expect("no output geo");
+        let output_geo = self
+            .pinnacle
+            .space
+            .output_geometry(output)
+            .expect("no output geo");
 
         let non_exclusive_geo = {
             let map = layer_map_for_output(output);
@@ -125,7 +130,7 @@ impl State {
                     WindowSurface::X11(_) => {
                         let loc = win.with_state_mut(|state| state.target_loc.take());
                         if let Some(loc) = loc {
-                            self.space.map_element(win.clone(), loc, false);
+                            self.pinnacle.space.map_element(win.clone(), loc, false);
                         }
                     }
                 }
@@ -133,17 +138,20 @@ impl State {
         }
 
         for (loc, window) in non_pending_wins {
-            self.space.map_element(window, loc, false);
+            self.pinnacle.space.map_element(window, loc, false);
         }
 
-        // HACK and FIXME:
+        // FIXME:
         // We are sending frames here to get offscreen windows to commit and map.
         // Obviously this is a bad way to do this but its a bandaid solution
         // until decent transactional layout applications are implemented.
         for (win, _serial) in pending_wins {
-            win.send_frame(output, self.clock.now(), Some(Duration::ZERO), |_, _| {
-                Some(output.clone())
-            });
+            win.send_frame(
+                output,
+                self.pinnacle.clock.now(),
+                Some(Duration::ZERO),
+                |_, _| Some(output.clone()),
+            );
         }
 
         self.fixup_z_layering();
@@ -151,15 +159,15 @@ impl State {
 
     /// Swaps two windows in the main window vec and updates all windows.
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
-        let win1_index = self.windows.iter().position(|win| win == win1);
-        let win2_index = self.windows.iter().position(|win| win == win2);
+        let win1_index = self.pinnacle.windows.iter().position(|win| win == win1);
+        let win2_index = self.pinnacle.windows.iter().position(|win| win == win2);
 
         if let (Some(first), Some(second)) = (win1_index, win2_index) {
-            self.windows.swap(first, second);
+            self.pinnacle.windows.swap(first, second);
             if let Some(output) = win1.output(self) {
                 self.request_layout(&output);
             }
-            self.layout_state.pending_swap = true;
+            self.pinnacle.layout_state.pending_swap = true;
         }
     }
 }
@@ -179,14 +187,15 @@ pub struct LayoutState {
 
 impl State {
     pub fn request_layout(&mut self, output: &Output) {
-        let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
+        let Some(sender) = self.pinnacle.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
             return;
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
-            self.windows
+            self.pinnacle
+                .windows
                 .iter()
                 .filter(|win| !win.is_x11_override_redirect())
                 .filter(|win| {
@@ -221,12 +230,14 @@ impl State {
             output.with_state(|state| state.focused_tags().map(|tag| tag.id().0).collect());
 
         let id = self
+            .pinnacle
             .layout_state
             .id_maps
             .entry(output.clone())
             .or_insert(LayoutRequestId(0));
 
-        self.layout_state
+        self.pinnacle
+            .layout_state
             .pending_requests
             .entry(output.clone())
             .or_default()
@@ -261,6 +272,7 @@ impl State {
         };
 
         let old_requests = self
+            .pinnacle
             .layout_state
             .old_requests
             .entry(output.clone())
@@ -271,6 +283,7 @@ impl State {
         }
 
         let pending = self
+            .pinnacle
             .layout_state
             .pending_requests
             .entry(output.clone())
@@ -312,7 +325,7 @@ impl State {
 
         self.schedule_render(&output);
 
-        self.layout_state.pending_swap = false;
+        self.pinnacle.layout_state.pending_swap = false;
 
         Ok(())
     }

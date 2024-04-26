@@ -160,8 +160,8 @@ mod output {
                 let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -182,9 +182,9 @@ mod output {
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -262,10 +262,10 @@ mod output {
                 let second_op = output_for_name(state, "Second");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -294,9 +294,9 @@ mod output {
                 let first_op = output_for_name(state, "First");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,

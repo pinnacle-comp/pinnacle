@@ -30,6 +30,7 @@ impl WindowId {
     /// Get the window that has this WindowId.
     pub fn window(&self, state: &State) -> Option<WindowElement> {
         state
+            .pinnacle
             .windows
             .iter()
             .find(|win| win.with_state(|state| &state.id == self))

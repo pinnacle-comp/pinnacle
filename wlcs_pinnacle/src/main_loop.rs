@@ -46,11 +46,11 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
 
     // when xdiplay is None when starting the config, the grpc server is not
     // started, until it is set; this bypasses this for now
-    state.xdisplay = Some(u32::MAX);
+    state.pinnacle.xdisplay = Some(u32::MAX);
     run_config(&mut state);
 
     // wait for the config to connect to the layout service
-    while state.layout_state.layout_request_sender.is_none() {
+    while state.pinnacle.layout_state.layout_request_sender.is_none() {
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut state)
             .expect("event_loop error while waiting for config");
@@ -60,10 +60,11 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
         .run(None, &mut state, |state| {
             state.update_pointer_focus();
             state.fixup_z_layering();
-            state.space.refresh();
-            state.popup_manager.cleanup();
+            state.pinnacle.space.refresh();
+            state.pinnacle.popup_manager.cleanup();
 
             state
+                .pinnacle
                 .display_handle
                 .flush_clients()
                 .expect("failed to flush client buffers");
@@ -77,6 +78,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         WlcsEvent::Stop => state.shutdown(),
         WlcsEvent::NewClient { stream, client_id } => {
             let client: Client = state
+                .pinnacle
                 .display_handle
                 .insert_client(stream, Arc::new(ClientState::default()))
                 .expect("failed to insert new client");
@@ -89,11 +91,18 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         } => {
             let client = state.backend.wlcs_mut().clients.get(&client_id);
             let window = state
+                .pinnacle
                 .space
                 .elements()
                 .find(|w| {
                     if let Some(surface) = w.wl_surface() {
-                        state.display_handle.get_client(surface.id()).ok().as_ref() == client
+                        state
+                            .pinnacle
+                            .display_handle
+                            .get_client(surface.id())
+                            .ok()
+                            .as_ref()
+                            == client
                             && surface.id().protocol_id() == surface_id
                     } else {
                         false
@@ -102,9 +111,13 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                 .cloned();
 
             if let Some(window) = window {
-                state.space.map_element(window.clone(), location, false);
+                state
+                    .pinnacle
+                    .space
+                    .map_element(window.clone(), location, false);
 
                 let size = state
+                    .pinnacle
                     .space
                     .element_geometry(&window)
                     .expect("window to be positioned was not mapped")
@@ -119,7 +132,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                         FloatingOrTiled::Floating(Rectangle::from_loc_and_size(location, size));
                 });
 
-                for output in state.space.outputs_for_element(&window) {
+                for output in state.pinnacle.space.outputs_for_element(&window) {
                     state.schedule_render(&output);
                 }
             }
@@ -139,7 +152,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         } => state.process_input_event(
             WlcsPointerMotionAbsoluteEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
                 position,
             }
             .into(),
@@ -147,7 +160,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         WlcsEvent::PointerMoveRelative { device_id, delta } => state.process_input_event(
             WlcsPointerMotionEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
                 delta,
             }
             .into(),
@@ -159,7 +172,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         } => state.process_input_event(
             WlcsPointerButtonEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
                 button_code: button_id as u32,
                 state: if pressed {
                     ButtonState::Pressed
@@ -183,7 +196,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         } => state.process_input_event(
             WlcsTouchDownEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
                 position,
             }
             .into(),
@@ -194,7 +207,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         } => state.process_input_event(
             WlcsTouchDownEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
                 position,
             }
             .into(),
@@ -202,7 +215,7 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
         WlcsEvent::TouchUp { device_id } => state.process_input_event(
             WlcsTouchUpEvent {
                 device_id,
-                time: Duration::from(state.clock.now()).as_millis() as u64,
+                time: Duration::from(state.pinnacle.clock.now()).as_millis() as u64,
             }
             .into(),
         ),

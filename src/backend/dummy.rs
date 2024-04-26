@@ -108,16 +108,19 @@ pub fn setup_dummy(
         config_dir,
     )?;
 
-    state.output_focus_stack.set_focus(output.clone());
+    state.pinnacle.output_focus_stack.set_focus(output.clone());
 
     let dummy = state.backend.dummy_mut();
 
-    state.shm_state.update_formats(dummy.renderer.shm_formats());
+    state
+        .pinnacle
+        .shm_state
+        .update_formats(dummy.renderer.shm_formats());
 
-    state.space.map_output(&output, (0, 0));
+    state.pinnacle.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.xwayland.start(
-        state.loop_handle.clone(),
+    if let Err(err) = state.pinnacle.xwayland.start(
+        state.pinnacle.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
         true,
@@ -149,11 +152,11 @@ impl State {
 
         output.set_preferred(mode);
 
-        output.create_global::<State>(&self.display_handle);
+        output.create_global::<State>(&self.pinnacle.display_handle);
 
-        self.space.map_output(&output, (0, 0));
+        self.pinnacle.space.map_output(&output, (0, 0));
 
-        self.signal_state.output_connect.signal(|buf| {
+        self.pinnacle.signal_state.output_connect.signal(|buf| {
             buf.push_back(OutputConnectResponse {
                 output_name: Some(output.name()),
             });
@@ -161,12 +164,15 @@ impl State {
     }
 
     pub fn remove_output(&mut self, output: &Output) {
-        self.space.unmap_output(output);
+        self.pinnacle.space.unmap_output(output);
 
-        self.signal_state.output_disconnect.signal(|buffer| {
-            buffer.push_back(OutputDisconnectResponse {
-                output_name: Some(output.name()),
-            })
-        });
+        self.pinnacle
+            .signal_state
+            .output_disconnect
+            .signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
     }
 }

@@ -56,6 +56,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             // INFO: can you raise OR windows or no idk
             if !surface.is_override_redirect() {
                 state
+                    .pinnacle
                     .xwm
                     .as_mut()
                     .expect("no xwm")
@@ -72,11 +73,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             // INFO: this is being used instead of space.element_under(event.location) because that
             // |     uses the bounding box, which is different from the actual geometry
             let window_under = state
+                .pinnacle
                 .space
                 .elements()
                 .rev()
                 .find(|&win| {
-                    if let Some(loc) = state.space.element_location(win) {
+                    if let Some(loc) = state.pinnacle.space.element_location(win) {
                         let size = win.geometry().size;
                         let rect = Rectangle { size, loc };
                         rect.contains(event.location.to_i32_round())
@@ -87,7 +89,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .cloned();
 
             if let Some(window_under) = window_under {
-                if state.layout_state.pending_swap {
+                if state.pinnacle.layout_state.pending_swap {
                     return;
                 }
 
@@ -96,10 +98,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
 
                 if state
+                    .pinnacle
                     .space
                     .element_geometry(&self.window)
                     .is_some_and(|geo| {
                         state
+                            .pinnacle
                             .space
                             .element_geometry(&window_under)
                             .is_some_and(|geo2| geo.overlaps(geo2))
@@ -120,9 +124,13 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         } else {
             let delta = event.location - self.start_data.location;
             let new_loc = (self.initial_window_loc.to_f64() + delta).to_i32_round();
-            state.space.map_element(self.window.clone(), new_loc, true);
+            state
+                .pinnacle
+                .space
+                .map_element(self.window.clone(), new_loc, true);
 
             let size = state
+                .pinnacle
                 .space
                 .element_geometry(&self.window)
                 .expect("window wasn't mapped")
@@ -145,7 +153,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
             }
 
-            let outputs = state.space.outputs_for_element(&self.window);
+            let outputs = state.pinnacle.space.outputs_for_element(&self.window);
             for output in outputs {
                 state.schedule_render(&output);
             }
@@ -278,6 +286,7 @@ pub fn move_request_client(
         };
 
         let initial_window_loc = state
+            .pinnacle
             .space
             .element_location(&window)
             .expect("move request was called on an unmapped window");
@@ -309,6 +318,7 @@ pub fn move_request_server(
     };
 
     let initial_window_loc = state
+        .pinnacle
         .space
         .element_location(&window)
         .expect("move request was called on an unmapped window");
