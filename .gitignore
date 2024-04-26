@@ -9,5 +9,9 @@ target/
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
+# Don't push local doc builds
 api/lua/doc/doc
+# This is a library
 api/rust/Cargo.lock
+# Don't push compiled WLCS
+wlcs
