@@ -37,11 +37,6 @@
               ${wlcs}/libexec/wlcs/wlcs "$@"
             '')
 
-            # build time stuff
-            pkg-config
-            protobuf
-            luarocks
-
             wayland
 
             # build time stuff

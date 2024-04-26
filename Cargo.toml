@@ -20,6 +20,9 @@ prost = "0.12.4"
 tonic = "0.11.0"
 tonic-reflection = "0.11.0"
 tonic-build = "0.11.0"
+# Tracing
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
 # API definitions
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 # Misc.
@@ -28,6 +31,7 @@ xdg = "2.5.2"
 bitflags = "2.5.0"
 clap = { version = "4.5.4", features = ["derive"] }
 dircpy = "0.3.16"
+tempfile = "3.10.1"
 
 ########################################################################yo😎###########
 
@@ -47,8 +51,8 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 # smithay is down there somewhere
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "c293ec7" }
 # Tracing
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
 anyhow = { version = "1.0.81", features = ["backtrace"] }
@@ -116,7 +120,7 @@ xdg = { workspace = true }
 
 [dev-dependencies]
 temp-env = "0.3.6"
-tempfile = "3.10.1"
+tempfile = { workspace = true }
 test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
 pinnacle = { path = ".", features = ["wlcs"] }
 pinnacle-api = { path = "./api/rust" }
