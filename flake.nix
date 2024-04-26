@@ -31,6 +31,12 @@
             rust-analyzer
             cargo-outdated
 
+            # wlcs
+            (writeScriptBin "wlcs" ''
+              #!/bin/sh
+              ${wlcs}/libexec/wlcs/wlcs "$@"
+            '')
+
             wayland
 
             # build time stuff

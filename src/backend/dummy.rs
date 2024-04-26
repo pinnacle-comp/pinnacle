@@ -16,6 +16,8 @@ use smithay::{
 
 use crate::state::State;
 
+#[cfg(feature = "wlcs")]
+use super::wlcs::Wlcs;
 use super::Backend;
 use super::BackendData;
 
@@ -24,6 +26,8 @@ pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
 pub struct Dummy {
     pub renderer: DummyRenderer,
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
+    #[cfg(feature = "wlcs")]
+    pub wlcs_state: Wlcs,
 }
 
 impl Backend {
@@ -63,7 +67,7 @@ pub fn setup_dummy(
         size: (0, 0).into(),
         subpixel: Subpixel::Unknown,
         make: "Pinnacle".to_string(),
-        model: "Winit Window".to_string(),
+        model: "Dummy Window".to_string(),
     };
 
     let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
@@ -91,6 +95,8 @@ pub fn setup_dummy(
     let backend = Dummy {
         renderer,
         // dmabuf_state,
+        #[cfg(feature = "wlcs")]
+        wlcs_state: Wlcs::default(),
     };
 
     let mut state = State::init(
