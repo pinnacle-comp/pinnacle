@@ -8,13 +8,17 @@ use std::{mem, os::fd::OwnedFd, time::Duration};
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
-    delegate_layer_shell, delegate_output, delegate_presentation, delegate_primary_selection,
-    delegate_relative_pointer, delegate_seat, delegate_shm, delegate_viewporter,
+    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
+    delegate_viewporter,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         utils::surface_primary_scanout_output, PopupKind, WindowSurfaceType,
     },
-    input::{pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
+    input::{
+        pointer::{CursorImageStatus, PointerHandle},
+        Seat, SeatHandler, SeatState,
+    },
     output::Output,
     reexports::{
         calloop::Interest,
@@ -27,7 +31,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{Logical, Rectangle, SERIAL_COUNTER},
+    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -37,6 +41,7 @@ use smithay::{
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
         output::OutputHandler,
+        pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
         seat::WaylandFocus,
         selection::{
             data_device::{
@@ -638,6 +643,14 @@ impl GammaControlHandler for State {
 }
 delegate_gamma_control!(State);
 
+impl PointerConstraintsHandler for State {
+    fn new_constraint(&mut self, _surface: &WlSurface, pointer: &PointerHandle<Self>) {
+        self.pinnacle
+            .maybe_activate_pointer_constraint(pointer.current_location());
+    }
+}
+delegate_pointer_constraints!(State);
+
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
         trace!("State::position_popup");
@@ -689,6 +702,34 @@ impl Pinnacle {
         popup.with_pending_state(|state| {
             state.geometry = popup_geo;
             state.positioner = positioner;
+        });
+    }
+
+    // From Niri
+    /// Attempt to activate any pointer constraint on the pointer focus at `new_pos`.
+    pub fn maybe_activate_pointer_constraint(&self, new_pos: Point<f64, Logical>) {
+        let Some((surface, surface_loc)) = self.pointer_focus_target_under(new_pos) else {
+            return;
+        };
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        let Some(surface) = surface.wl_surface() else { return };
+        with_pointer_constraint(&surface, &pointer, |constraint| {
+            let Some(constraint) = constraint else { return };
+            if !constraint.is_active() {
+                return;
+            }
+
+            // Constraint does not apply if not within region.
+            if let Some(region) = constraint.region() {
+                let new_pos_within_surface = new_pos.to_i32_round() - surface_loc;
+                if !region.contains(new_pos_within_surface) {
+                    return;
+                }
+            }
+
+            constraint.activate();
         });
     }
 }

@@ -6,7 +6,7 @@ use std::{collections::HashMap, mem::Discriminant, time::Duration};
 
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
-    state::WithState,
+    state::{Pinnacle, WithState},
     window::WindowElement,
 };
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
@@ -23,10 +23,15 @@ use smithay::{
         keyboard::{keysyms, FilterResult, ModifiersState},
         pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
     },
-    reexports::input::{self, Led},
-    utils::{IsAlive, Logical, Point, SERIAL_COUNTER},
+    reexports::{
+        input::{self, Led},
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
+    utils::{IsAlive, Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
-        compositor,
+        compositor::{self, RegionAttributes},
+        pointer_constraints::{with_pointer_constraint, PointerConstraint},
+        seat::WaylandFocus,
         shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
     },
 };
@@ -144,23 +149,7 @@ enum KeyAction {
     ReloadConfig,
 }
 
-impl State {
-    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
-        match event {
-            // TODO: rest of input events
-
-            // InputEvent::DeviceAdded { device } => todo!(),
-            // InputEvent::DeviceRemoved { device } => todo!(),
-            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
-            InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
-            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
-            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
-            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
-
-            _ => (),
-        }
-    }
-
+impl Pinnacle {
     /// Get the [`PointerFocusTarget`] under `point` along with its origin in the global space.
     pub fn pointer_focus_target_under<P>(
         &self,
@@ -171,16 +160,14 @@ impl State {
     {
         let point: Point<f64, Logical> = point.into();
 
-        let output = self.pinnacle.space.outputs().find(|op| {
-            self.pinnacle
-                .space
+        let output = self.space.outputs().find(|op| {
+            self.space
                 .output_geometry(op)
                 .expect("called output_geometry on unmapped output (this shouldn't happen here)")
                 .contains(point.to_i32_round())
         })?;
 
         let output_geo = self
-            .pinnacle
             .space
             .output_geometry(output)
             .expect("called output_geometry on unmapped output");
@@ -188,7 +175,6 @@ impl State {
         let mut fullscreen_and_up_split_at = 0;
 
         for (i, win) in self
-            .pinnacle
             .space
             .elements()
             .rev()
@@ -226,7 +212,6 @@ impl State {
             |windows: &[&WindowElement]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
                 windows.iter().find_map(|win| {
                     let loc = self
-                        .pinnacle
                         .space
                         .element_location(win)
                         .expect("called elem loc on unmapped win")
@@ -250,7 +235,6 @@ impl State {
             .or_else(|| {
                 window_under(
                     &self
-                        .pinnacle
                         .space
                         .elements()
                         .rev()
@@ -263,7 +247,6 @@ impl State {
             .or_else(|| {
                 window_under(
                     &self
-                        .pinnacle
                         .space
                         .elements()
                         .rev()
@@ -274,6 +257,24 @@ impl State {
             })
             .or_else(|| layer_under(&[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background]))
     }
+}
+
+impl State {
+    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
+        match event {
+            // TODO: rest of input events
+
+            // InputEvent::DeviceAdded { device } => todo!(),
+            // InputEvent::DeviceRemoved { device } => todo!(),
+            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
+            InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
+            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
+            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
+            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
+
+            _ => (),
+        }
+    }
 
     /// Update the pointer focus if it's different from the previous one.
     pub fn update_pointer_focus(&mut self) {
@@ -282,7 +283,7 @@ impl State {
         };
 
         let location = pointer.current_location();
-        let surface_under = self.pointer_focus_target_under(location);
+        let surface_under = self.pinnacle.pointer_focus_target_under(location);
 
         if pointer
             .current_focus()
@@ -465,16 +466,12 @@ impl State {
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
-        let pointer = self
-            .pinnacle
-            .seat
-            .get_pointer()
-            .expect("Seat has no pointer"); // FIXME: handle err
-        let keyboard = self
-            .pinnacle
-            .seat
-            .get_keyboard()
-            .expect("Seat has no keyboard"); // FIXME: handle err
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
 
         let serial = SERIAL_COUNTER.next_serial();
 
@@ -501,16 +498,8 @@ impl State {
             return;
         }
 
-        // If the button was clicked, focus on the window below if exists, else
-        // unfocus on windows.
         if button_state == ButtonState::Pressed {
-            if let Some((focus, _)) = self.pointer_focus_target_under(pointer_loc) {
-                // NOTE: *Do not* set keyboard focus to an override redirect window. This leads
-                // |     to wonky things like right-click menus not correctly getting pointer
-                // |     clicks or showing up at all.
-
-                // TODO: use update_keyboard_focus from anvil
-
+            if let Some((focus, _)) = self.pinnacle.pointer_focus_target_under(pointer_loc) {
                 if let Some(window) = focus.window_for(self) {
                     self.pinnacle.raise_window(window.clone(), true);
                     if let Some(output) = window.output(&self.pinnacle) {
@@ -603,39 +592,6 @@ impl State {
         pointer.frame(self);
     }
 
-    /// Clamp pointer coordinates inside outputs.
-    ///
-    /// This returns the nearest point inside an output.
-    fn clamp_coords(&self, pos: Point<f64, Logical>) -> Point<f64, Logical> {
-        if self.pinnacle.space.outputs().next().is_none() {
-            return pos;
-        }
-
-        let (pos_x, pos_y) = pos.into();
-
-        let nearest_points = self.pinnacle.space.outputs().map(|op| {
-            let size = self
-                .pinnacle
-                .space
-                .output_geometry(op)
-                .expect("called output_geometry on unmapped output")
-                .size;
-            let loc = op.current_location();
-            let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
-            let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
-            (pos_x, pos_y)
-        });
-
-        let nearest_point = nearest_points.min_by(|(x1, y1), (x2, y2)| {
-            f64::total_cmp(
-                &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
-                &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
-            )
-        });
-
-        nearest_point.map(|point| point.into()).unwrap_or(pos)
-    }
-
     /// Handle an absolute pointer motion event.
     ///
     /// This *should* only be generated on the winit backend.
@@ -667,7 +623,7 @@ impl State {
             self.pinnacle.output_focus_stack.set_focus(output);
         }
 
-        let pointer_focus = self.pointer_focus_target_under(pointer_loc);
+        let pointer_focus = self.pinnacle.pointer_focus_target_under(pointer_loc);
 
         pointer.motion(
             self,
@@ -689,11 +645,107 @@ impl State {
         };
 
         let mut pointer_loc = pointer.current_location();
+
+        let mut pointer_confined_to: Option<(
+            WlSurface,
+            Point<i32, Logical>,
+            Option<RegionAttributes>,
+        )> = None;
+
+        // TODO: possibly cache the current pointer focus and location?
+        if let Some((surface, surface_loc)) = self.pinnacle.pointer_focus_target_under(pointer_loc)
+        {
+            if let Some(wl_surface) = surface.wl_surface() {
+                let mut pointer_locked_to: Option<Option<Point<f64, Logical>>> = None;
+
+                with_pointer_constraint(&wl_surface, &pointer, |constraint| {
+                    let Some(constraint) = constraint else { return };
+                    if !constraint.is_active() {
+                        return;
+                    }
+
+                    let pointer_loc_relative_to_surf = surface_loc - pointer_loc.to_i32_round();
+
+                    // Constraint does not apply if not within region.
+                    if let Some(region) = constraint.region() {
+                        if !region.contains(pointer_loc_relative_to_surf) {
+                            return;
+                        }
+                    }
+
+                    match &*constraint {
+                        PointerConstraint::Confined(confined) => {
+                            pointer_confined_to =
+                                Some((wl_surface.clone(), surface_loc, confined.region().cloned()));
+                        }
+                        PointerConstraint::Locked(locked) => {
+                            pointer_locked_to = Some(
+                                locked
+                                    .cursor_position_hint()
+                                    .map(|hint| hint + surface_loc.to_f64()),
+                            );
+                        }
+                    }
+                });
+
+                if let Some(lock_loc) = pointer_locked_to {
+                    if let Some(lock_loc) = lock_loc {
+                        if pointer_loc != lock_loc {}
+                    }
+
+                    pointer.relative_motion(
+                        self,
+                        Some((surface, surface_loc)),
+                        &RelativeMotionEvent {
+                            delta: event.delta(),
+                            delta_unaccel: event.delta_unaccel(),
+                            utime: event.time(),
+                        },
+                    );
+
+                    pointer.frame(self);
+
+                    return;
+                }
+            }
+        }
+
         pointer_loc += event.delta();
 
         // clamp to screen limits
         // this event is never generated by winit
-        pointer_loc = self.clamp_coords(pointer_loc);
+        let output_locs = self
+            .pinnacle
+            .space
+            .outputs()
+            .flat_map(|op| self.pinnacle.space.output_geometry(op));
+        pointer_loc = clamp_coords_inside_rects(pointer_loc, output_locs);
+
+        let surface_under = self.pinnacle.pointer_focus_target_under(pointer_loc);
+
+        if let Some((surf, surf_loc, Some(region))) = pointer_confined_to {
+            let mut prevent = false;
+
+            // compute closest point
+            let mut region_rects = Vec::<Rectangle<i32, Logical>>::new();
+
+            // TODO: ADD UNIT TEST
+
+            for (kind, mut rect) in region.rects {
+                rect.loc = surf_loc - rect.loc;
+                match kind {
+                    compositor::RectangleKind::Add => {
+                        region_rects.push(rect);
+                    }
+                    compositor::RectangleKind::Subtract => {
+                        region_rects =
+                            Rectangle::subtract_rects_many_in_place(region_rects, [rect]);
+                    }
+                }
+            }
+
+            pointer_loc = clamp_coords_inside_rects(pointer_loc, region_rects);
+        }
 
         if let Some(output) = self
             .pinnacle
@@ -704,8 +756,6 @@ impl State {
         {
             self.pinnacle.output_focus_stack.set_focus(output);
         }
-
-        let surface_under = self.pointer_focus_target_under(pointer_loc);
 
         pointer.motion(
             self,
@@ -733,4 +783,31 @@ impl State {
             self.schedule_render(&output);
         }
     }
+}
+
+/// Clamp the given point within the given rects.
+///
+/// This returns the nearest point inside the rects.
+fn clamp_coords_inside_rects(
+    pos: Point<f64, Logical>,
+    rects: impl IntoIterator<Item = Rectangle<i32, Logical>>,
+) -> Point<f64, Logical> {
+    let (pos_x, pos_y) = pos.into();
+
+    let nearest_points = rects.into_iter().map(|rect| {
+        let loc = rect.loc;
+        let size = rect.size;
+        let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
+        let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
+        (pos_x, pos_y)
+    });
+
+    let nearest_point = nearest_points.min_by(|(x1, y1), (x2, y2)| {
+        f64::total_cmp(
+            &((pos_x - x1).powi(2) + (pos_y - y1).powi(2)).sqrt(),
+            &((pos_x - x2).powi(2) + (pos_y - y2).powi(2)).sqrt(),
+        )
+    });
+
+    nearest_point.map(|point| point.into()).unwrap_or(pos)
 }

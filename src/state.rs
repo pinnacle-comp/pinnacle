@@ -30,6 +30,7 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
+        pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerManagerState,
         selection::{
             data_device::DataDeviceState, primary_selection::PrimarySelectionState,
@@ -82,6 +83,7 @@ pub struct Pinnacle {
     pub screencopy_manager_state: ScreencopyManagerState,
     pub gamma_control_manager_state: GammaControlManagerState,
     pub relative_pointer_manager_state: RelativePointerManagerState,
+    pub pointer_constraints_state: PointerConstraintsState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -280,6 +282,7 @@ impl State {
                 relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
                     &display_handle,
                 ),
+                pointer_constraints_state: PointerConstraintsState::new::<Self>(&display_handle),
 
                 input_state: InputState::new(),
 
