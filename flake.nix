@@ -1,53 +1,80 @@
 {
-  description =
-    "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
+  description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM and configured in Lua or Rust";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.rust-analyzer-src.follows = "";
     };
 
     flake-utils.url = "github:numtide/flake-utils";
+
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { nixpkgs, flake-utils, fenix, ... }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        fenixPkgs = fenix.packages.${system};
-        toolchain = fenixPkgs.stable;
-        combinedToolchain = toolchain.completeToolchain;
-      in {
-        formatter = pkgs.nixfmt;
+  outputs = {
+    self,
+    nixpkgs,
+    crane,
+    fenix,
+    flake-utils,
+    advisory-db,
+    ...
+  }:
+    flake-utils.lib.eachSystem ["x86_64-linux" "aarch64-linux"] (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+      fenixPkgs = fenix.packages.${system};
+      toolchain = fenixPkgs.stable;
+      combinedToolchain = toolchain.completeToolchain;
+      inherit (pkgs) lib;
 
-        inherit (pkgs) lib;
+      craneLib = (crane.mkLib pkgs).overrideToolchain combinedToolchain;
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain combinedToolchain;
+      # Get the relevant files for the rust build
+      src = lib.cleanSourceWith {
+        src = ./.; # The original, unfiltered source
+        filter = path: type:
+          (lib.hasSuffix ".rockspec" path)
+          || # keep lua in build
+          (lib.hasInfix "/protocol/" path)
+          || # protobuf stuff
+          (lib.hasInfix "/resources/" path)
+          || # some resources are needed at build time
+          
+          # Default filter from crane (allow .rs files)
+          (craneLib.filterCargoSources path type);
+      };
+      # Common arguments can be set here to avoid repeating them later
+      commonArgs = {
+        inherit src;
+        strictDeps = true;
 
-        # things in the filter are allowed in the nix build
-        src = lib.cleanSourceWith {
-          src = ./.; # The original, unfiltered source
-          filter = path: type:
-            (lib.hasSuffix ".lua" path) || (lib.hasSuffix ".rockspec" path)
-            || # keep lua in build
-            (lib.hasInfix "/protocol/" path) || # protobuf stuff
-            (lib.hasInfix "/resources/" path)
-            || # some resources are needed at build time
+        nativeBuildInputs = [pkgs.pkg-config];
+        buildInputs = with pkgs; [
+          wayland
 
-            # Default filter from crane (allow .rs files)
-            (craneLib.filterCargoSources path type);
-        };
-        # Common arguments can be set here to avoid repeating them later
-        commonArgs = {
-          inherit src;
-          strictDeps = true;
+          # build time stuff
+          protobuf
+          lua54Packages.luarocks
 
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = with pkgs; [
-            wayland
+          # libs
+          seatd.dev
+          systemdLibs.dev
+          libxkbcommon
+          libinput
+          mesa
+          xwayland
 
           # winit on x11
           xorg.libXcursor
@@ -122,16 +149,7 @@
 
       # LUA
 
-      luaPinnacleApi = pkgs.callPackage ./nix/packages/pinnacle-api-lua.nix {};
-
-      luaWithApi = pkgs.lua.override {
-        packageOverrides = luaself: luaprev: {
-          pinnacle = luaPinnacleApi;
-        };
-      };
-      luaEnv =
-        pkgs.lua.withPackages (luaPackaes:
-          with luaPackaes; (lib.lists.flatten [inspect (lib.attrVals (map (drv: drv.pname) luaPinnacleApi.propagatedBuildInputs) luaPackaes)]));
+      luaPinnacleApi = import ./nix/packages/pinnacle-api-lua.nix;
 
       buildPinnacleLuaConfig = {
         src ? ./api/lua/examples/test,
@@ -142,12 +160,12 @@
         pname = "pinnacle-config";
 
         #luaPackages = lua.pkgs;
-        luaEnv =
-          pkgs.lua.withPackages (luaPackaes:
-            with luaPackaes; (lib.lists.flatten [inspect (lib.attrVals (map (drv: drv.pname) luaPinnacleApi.propagatedBuildInputs) luaPackaes)]));
-        luaPathFormer = luaPath: lib.foldr (path: str: path + ";" + str) "" (builtins.map (path: "${luaPinnacleApi}/${path}") luaPath);
-        pinncaleApiCPaths = luaPinnacleApi.luaModule.LuaCPathSearchPaths;
-        pinnacleApiPaths = luaPathFormer luaPinnacleApi.luaModule.LuaPathSearchPaths;
+        luaEnv = pkgs.lua.withPackages (
+          luaPackages: let
+            lp = luaPackages // {pinnacle = luaPackages.callPackage ./nix/packages/pinnacle-api-lua.nix {};};
+          in
+            (lib.attrVals extraLuaDeps lp) ++ [(lp.callPackage luaPinnacleApi {})]
+        );
       in
         pkgs.stdenv.mkDerivation {
           inherit src name pname;
@@ -157,14 +175,31 @@
             mkdir -p $out/bin
             mkdir -p $out/share/pinnacle/config
             cp * $out/share/pinnacle/config/ # placing this here for now, not sure if there's a better space
-            makeWrapper ${luaEnv}/bin/lua $out/bin/${pname} --add-flags $out/share/pinnacle/config/${entrypoint} \
-            --prefix LUA_CPATH = "${luaEnv}/lib/lua/${pkgs.lua.luaversion}/?.so;${luaWithApi}/lib/lua/${luaWithApi.luaversion}/?.so" \
-            --prefix LUA_PATH  = "${luaEnv}/share/lua/${pkgs.lua.luaversion}/?.lua;${pinnacleApiPaths};"
+            makeWrapper ${luaEnv}/bin/lua $out/bin/${pname} --add-flags $out/share/pinnacle/config/${entrypoint}
+            ln $out/bin/${pname} $out/share/pinnacle/config/${pname};
           '';
         };
 
-      # merge rust config together with the unwrapped version - unwrapped version is overrideable
-      mergePinnacleRustConfig = {
+      # General functions to build stuff
+      # Protobuffs
+      #
+      protobuffs = let
+        fs = pkgs.lib.fileset;
+        sourceFiles = ./api/protocol;
+      in
+        pkgs.stdenv.mkDerivation rec {
+          name = "protobuffs";
+          src = fs.toSource {
+            root = ./api/protocol;
+            fileset = sourceFiles;
+          };
+          protobuffOutDir = "$out/share/config/pinnacle/protobuffs";
+          postInstall = ''
+            mkdir -p ${protobuffOutDir}
+            cp -rv * ${protobuffOutDir}
+          '';
+        };
+      mergePinnacleConfig = {
         # helper to join stuff together
         #symlinkJoin,
         #makeWrapper,
@@ -209,13 +244,16 @@
           paths = [
             pinnalcle-unwrapped
             pinnacle-config
+            protobuffs # protobuffs
             #manifestDerivation # currently treated as a function rather than a derivation, should be fixable.
             # For now it's copied over in pinnacle-config
           ];
           buildInputs = [pkgs.makeWrapper];
           postBuild = ''
             wrapProgram $out/bin/pinnacle \
-              --add-flags "--config-dir $out/share/config"
+              --add-flags "--config-dir $out/share/pinnacle/config"\
+              --set PINNACLE_PROTO_DIR ${protobuffs.protobuffOutDir}\
+              --prefix PATH ${pkgs.lib.makeBinPath (with pkgs; [xwayland protobuf])} # adds protobuffs to path
           '';
         };
     in {
@@ -258,22 +296,23 @@
       };
 
       packages = rec {
-        inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api luaPinnacleApi buildPinnacleLuaConfig luaWithApi luaEnv;
+        inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api buildPinnacleLuaConfig protobuffs;
         # function to build with inputs - callable from other flakes and whatnot
         buildPinnacleRustConfig = {
           src,
           manifest ? null,
-        }: (mergePinnacleRustConfig {
+        }: (mergePinnacleConfig {
           pinnacle-config = buildPinnacleRustConfigPackage {inherit src;};
           inherit manifest;
         });
         # example of how one could use this
-        exampleRustBuild = buildPinnacleRustConfig {
-          src = ./api/rust/examples/pinnacle-nix/config;
-        }; # Source needs cargo toml and lock
-        exampleLuaBuild = buildPinnacleLuaConfig {
-          src = ./api/lua/examples/test;
+        exampleLuaBuild = mergePinnacleConfig {
+          pinnacle-config = buildPinnacleLuaConfig {
+            src = ./api/lua/examples/test;
+            extraLuaDeps = ["inspect"];
+          };
         };
+        luaAPI = pkgs.luaPackages.callPackage luaPinnacleApi {};
       };
 
       apps = {pinnacle = flake-utils.lib.mkApp {drv = pinnacle;};};
