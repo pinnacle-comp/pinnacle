@@ -51,7 +51,10 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
+    desktop::{
+        layer_map_for_output,
+        utils::{send_frames_surface_tree, OutputPresentationFeedback},
+    },
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
@@ -1181,6 +1184,12 @@ impl Udev {
                     scale: Some(output.current_scale()),
                 },
             );
+
+            // TODO: extract into a `remove_output` function and unify with dummy backend
+            for layer in layer_map_for_output(&output).layers() {
+                layer.layer_surface().send_close();
+            }
+
             pinnacle.space.unmap_output(&output);
             pinnacle.gamma_control_manager_state.output_removed(&output);
 
