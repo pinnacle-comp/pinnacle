@@ -78,6 +78,7 @@ install-protos-root:
 # [root] Install the Lua library (requires Luarocks)
 install-lua-lib-root:
     #!/usr/bin/env bash
+    set -euxo pipefail
     cd "{{rootdir}}/api/lua"
     luarocks make --lua-version "{{lua_version}}"
 
@@ -92,3 +93,29 @@ run *args:
 # Run `cargo test`
 test *args:
     cargo test {{args}}
+
+compile-wlcs:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+
+    WLCS_SHA=26c5a8cfef265b4ae021adebfec90d758c08792e
+
+    cd "{{rootdir}}"
+
+    if [ -f "./wlcs/wlcs" ] && [ "$(cd wlcs; git rev-parse HEAD)" = "${WLCS_SHA}" ] ; then
+        echo "WLCS commit 26c5a8c is already compiled"
+    else
+        echo "Compiling WLCS"
+        git clone https://github.com/canonical/wlcs
+        cd wlcs || exit
+        # checkout a specific revision
+        git reset --hard "${WLCS_SHA}"
+        cmake -DWLCS_BUILD_ASAN=False -DWLCS_BUILD_TSAN=False -DWLCS_BUILD_UBSAN=False -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .
+        make
+    fi
+
+wlcs *args: compile-wlcs
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cargo build -p wlcs_pinnacle
+    RUST_BACKTRACE=1 RUST_LOG=warn ./wlcs/wlcs target/debug/libwlcs_pinnacle.so {{args}}
