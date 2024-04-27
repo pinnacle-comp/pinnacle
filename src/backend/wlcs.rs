@@ -12,7 +12,7 @@ use smithay::{
 use tracing::debug;
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     tag::TagId,
 };
 
@@ -89,14 +89,14 @@ pub fn setup_wlcs_dummy() -> anyhow::Result<(State, EventLoop<'static, State>)> 
     Ok((state, event_loop))
 }
 
-impl State {
+impl Pinnacle {
     pub fn start_wlcs_config<F>(&mut self, socket_dir: &Path, run_config: F) -> anyhow::Result<()>
     where
         F: FnOnce() + Send + 'static,
     {
         // Clear state
         debug!("Clearing tags");
-        for output in self.pinnacle.space.outputs() {
+        for output in self.space.outputs() {
             output.with_state_mut(|state| state.tags.clear());
         }
 
@@ -104,23 +104,22 @@ impl State {
 
         debug!("Clearing input state");
 
-        self.pinnacle.input_state.clear();
+        self.input_state.clear();
 
-        self.pinnacle.config.clear(&self.pinnacle.loop_handle);
+        self.config.clear(&self.loop_handle);
 
-        self.pinnacle.signal_state.clear();
+        self.signal_state.clear();
 
-        self.pinnacle.input_state.reload_keybind = None;
-        self.pinnacle.input_state.kill_keybind = None;
+        self.input_state.reload_keybind = None;
+        self.input_state.kill_keybind = None;
 
-        if self.pinnacle.grpc_server_join_handle.is_none() {
+        if self.grpc_server_join_handle.is_none() {
             self.start_grpc_server(socket_dir)?;
         }
 
         let (pinger, ping_source) = calloop::ping::make_ping()?;
 
         let token = self
-            .pinnacle
             .loop_handle
             .insert_source(ping_source, move |_, _, _state| {})?;
 
@@ -129,7 +128,7 @@ impl State {
             pinger.ping();
         });
 
-        self.pinnacle.config.config_reload_on_crash_token = Some(token);
+        self.config.config_reload_on_crash_token = Some(token);
 
         Ok(())
     }

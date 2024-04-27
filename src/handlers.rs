@@ -67,7 +67,7 @@ use crate::{
         gamma_control::{GammaControlHandler, GammaControlManagerState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
-    state::{ClientState, State, WithState},
+    state::{ClientState, Pinnacle, State, WithState},
 };
 
 impl BufferHandler for State {
@@ -130,7 +130,7 @@ impl CompositorHandler for State {
         }
 
         if !compositor::is_sync_subsurface(surface) {
-            if let Some(window) = self.window_for_surface(&root) {
+            if let Some(window) = self.pinnacle.window_for_surface(&root) {
                 window.on_commit();
                 if let Some(loc) = window.with_state_mut(|state| state.target_loc.take()) {
                     self.pinnacle.space.map_element(window.clone(), loc, false);
@@ -157,7 +157,7 @@ impl CompositorHandler for State {
                 self.pinnacle.new_windows.retain(|win| win != &new_window);
                 self.pinnacle.windows.push(new_window.clone());
 
-                if let Some(output) = self.focused_output() {
+                if let Some(output) = self.pinnacle.focused_output() {
                     tracing::debug!("Placing toplevel");
                     new_window.place_on_output(output);
                     output.with_state_mut(|state| state.focus_stack.set_focus(new_window.clone()));
@@ -170,12 +170,12 @@ impl CompositorHandler for State {
                     .space
                     .map_element(new_window.clone(), (1000000, 0), true);
 
-                self.raise_window(new_window.clone(), true);
+                self.pinnacle.raise_window(new_window.clone(), true);
 
-                self.apply_window_rules(&new_window);
+                self.pinnacle.apply_window_rules(&new_window);
 
-                if let Some(focused_output) = self.focused_output().cloned() {
-                    self.request_layout(&focused_output);
+                if let Some(focused_output) = self.pinnacle.focused_output().cloned() {
+                    self.pinnacle.request_layout(&focused_output);
                     new_window.send_frame(
                         &focused_output,
                         self.pinnacle.clock.now(),
@@ -198,28 +198,28 @@ impl CompositorHandler for State {
                 });
             } else if new_window.toplevel().is_some() {
                 new_window.on_commit();
-                ensure_initial_configure(surface, self);
+                self.pinnacle.ensure_initial_configure(surface);
             }
 
             return;
         }
 
-        ensure_initial_configure(surface, self);
+        self.pinnacle.ensure_initial_configure(surface);
 
-        crate::grab::resize_grab::move_surface_if_resized(self, surface);
+        self.pinnacle.move_surface_if_resized(surface);
 
-        let outputs = if let Some(window) = self.window_for_surface(surface) {
+        let outputs = if let Some(window) = self.pinnacle.window_for_surface(surface) {
             let mut outputs = self.pinnacle.space.outputs_for_element(&window);
 
             // When the window hasn't been mapped `outputs` is empty,
             // so also trigger a render using the window's tags' output
-            if let Some(output) = window.output(self) {
+            if let Some(output) = window.output(&self.pinnacle) {
                 outputs.push(output);
             }
             outputs // surface is a window
-        } else if let Some(window) = self.window_for_surface(&root) {
+        } else if let Some(window) = self.pinnacle.window_for_surface(&root) {
             let mut outputs = self.pinnacle.space.outputs_for_element(&window);
-            if let Some(output) = window.output(self) {
+            if let Some(output) = window.output(&self.pinnacle) {
                 outputs.push(output);
             }
             outputs // surface is a root window
@@ -270,72 +270,74 @@ impl CompositorHandler for State {
 }
 delegate_compositor!(State);
 
-fn ensure_initial_configure(surface: &WlSurface, state: &mut State) {
-    if let (Some(window), _) | (None, Some(window)) = (
-        state.window_for_surface(surface),
-        state.new_window_for_surface(surface),
-    ) {
-        if let Some(toplevel) = window.toplevel() {
+impl Pinnacle {
+    fn ensure_initial_configure(&mut self, surface: &WlSurface) {
+        if let (Some(window), _) | (None, Some(window)) = (
+            self.window_for_surface(surface),
+            self.new_window_for_surface(surface),
+        ) {
+            if let Some(toplevel) = window.toplevel() {
+                let initial_configure_sent = compositor::with_states(surface, |states| {
+                    states
+                        .data_map
+                        .get::<XdgToplevelSurfaceData>()
+                        .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                        .lock()
+                        .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                        .initial_configure_sent
+                });
+
+                if !initial_configure_sent {
+                    tracing::debug!("Initial configure");
+                    toplevel.send_configure();
+                }
+            }
+            return;
+        }
+
+        if let Some(popup) = self.popup_manager.find_popup(surface) {
+            let PopupKind::Xdg(popup) = &popup else { return };
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
                     .data_map
-                    .get::<XdgToplevelSurfaceData>()
-                    .expect("XdgToplevelSurfaceData wasn't in surface's data map")
+                    .get::<XdgPopupSurfaceData>()
+                    .expect("XdgPopupSurfaceData wasn't in popup's data map")
                     .lock()
-                    .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
+                    .expect("Failed to lock Mutex<XdgPopupSurfaceData>")
+                    .initial_configure_sent
+            });
+            if !initial_configure_sent {
+                popup
+                    .send_configure()
+                    .expect("popup initial configure failed");
+            }
+            return;
+        }
+
+        if let Some(output) = self.space.outputs().find(|op| {
+            let map = layer_map_for_output(op);
+            map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                .is_some()
+        }) {
+            layer_map_for_output(output).arrange();
+
+            let initial_configure_sent = compositor::with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<LayerSurfaceData>()
+                    .expect("no LayerSurfaceData")
+                    .lock()
+                    .expect("failed to lock data")
                     .initial_configure_sent
             });
 
             if !initial_configure_sent {
-                tracing::debug!("Initial configure");
-                toplevel.send_configure();
+                layer_map_for_output(output)
+                    .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                    .expect("no layer for surface")
+                    .layer_surface()
+                    .send_configure();
             }
-        }
-        return;
-    }
-
-    if let Some(popup) = state.pinnacle.popup_manager.find_popup(surface) {
-        let PopupKind::Xdg(popup) = &popup else { return };
-        let initial_configure_sent = compositor::with_states(surface, |states| {
-            states
-                .data_map
-                .get::<XdgPopupSurfaceData>()
-                .expect("XdgPopupSurfaceData wasn't in popup's data map")
-                .lock()
-                .expect("Failed to lock Mutex<XdgPopupSurfaceData>")
-                .initial_configure_sent
-        });
-        if !initial_configure_sent {
-            popup
-                .send_configure()
-                .expect("popup initial configure failed");
-        }
-        return;
-    }
-
-    if let Some(output) = state.pinnacle.space.outputs().find(|op| {
-        let map = layer_map_for_output(op);
-        map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-            .is_some()
-    }) {
-        layer_map_for_output(output).arrange();
-
-        let initial_configure_sent = compositor::with_states(surface, |states| {
-            states
-                .data_map
-                .get::<LayerSurfaceData>()
-                .expect("no LayerSurfaceData")
-                .lock()
-                .expect("failed to lock data")
-                .initial_configure_sent
-        });
-
-        if !initial_configure_sent {
-            layer_map_for_output(output)
-                .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-                .expect("no layer for surface")
-                .layer_surface()
-                .send_configure();
         }
     }
 }
@@ -477,7 +479,7 @@ impl FractionalScaleHandler for State {
                             compositor::with_states(&root, |states| {
                                 desktop::utils::surface_primary_scanout_output(&root, states)
                                     .or_else(|| {
-                                        self.window_for_surface(&root).and_then(|window| {
+                                        self.pinnacle.window_for_surface(&root).and_then(|window| {
                                             self.pinnacle
                                                 .space
                                                 .outputs_for_element(&window)
@@ -487,7 +489,7 @@ impl FractionalScaleHandler for State {
                                     })
                             })
                         } else {
-                            self.window_for_surface(&root).and_then(|window| {
+                            self.pinnacle.window_for_surface(&root).and_then(|window| {
                                 self.pinnacle
                                     .space
                                     .outputs_for_element(&window)
@@ -542,7 +544,7 @@ impl WlrLayerShellHandler for State {
         }
 
         self.pinnacle.loop_handle.insert_idle(move |state| {
-            state.request_layout(&output);
+            state.pinnacle.request_layout(&output);
         });
     }
 
@@ -562,14 +564,14 @@ impl WlrLayerShellHandler for State {
 
         if let Some(output) = output {
             self.pinnacle.loop_handle.insert_idle(move |state| {
-                state.request_layout(&output);
+                state.pinnacle.request_layout(&output);
             });
         }
     }
 
     fn new_popup(&mut self, _parent: wlr_layer::LayerSurface, popup: PopupSurface) {
         trace!("WlrLayerShellHandler::new_popup");
-        self.position_popup(&popup);
+        self.pinnacle.position_popup(&popup);
     }
 }
 delegate_layer_shell!(State);
@@ -636,7 +638,7 @@ impl GammaControlHandler for State {
 }
 delegate_gamma_control!(State);
 
-impl State {
+impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
         trace!("State::position_popup");
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
@@ -656,13 +658,13 @@ impl State {
             }
 
             let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
-                let win_geo = self.pinnacle.space.element_geometry(&win)?;
+                let win_geo = self.space.element_geometry(&win)?;
                 (win_geo.loc, self.focused_output()?.clone())
             } else {
-                self.pinnacle.space.outputs().find_map(|op| {
+                self.space.outputs().find_map(|op| {
                     let layer_map = layer_map_for_output(op);
                     let layer = layer_map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
-                    let output_loc = self.pinnacle.space.output_geometry(op)?.loc;
+                    let output_loc = self.space.output_geometry(op)?.loc;
                     Some((
                         layer_map.layer_geometry(layer)?.loc + output_loc,
                         op.clone(),
@@ -676,7 +678,7 @@ impl State {
                 root_global_loc + get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()))
             };
 
-            let mut output_geo = self.pinnacle.space.output_geometry(&output)?;
+            let mut output_geo = self.space.output_geometry(&output)?;
 
             // Make local to parent
             output_geo.loc -= parent_global_loc;

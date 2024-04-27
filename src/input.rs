@@ -452,11 +452,12 @@ impl State {
                 self.switch_vt(vt);
             }
             Some(KeyAction::Quit) => {
-                self.shutdown();
+                self.pinnacle.shutdown();
             }
             Some(KeyAction::ReloadConfig) => {
                 info!("Reloading config");
-                self.start_config(Some(self.pinnacle.config.dir(&self.pinnacle.xdg_base_dirs)))
+                self.pinnacle
+                    .start_config(Some(self.pinnacle.config.dir(&self.pinnacle.xdg_base_dirs)))
                     .expect("failed to restart config");
             }
             None => (),
@@ -511,8 +512,8 @@ impl State {
                 // TODO: use update_keyboard_focus from anvil
 
                 if let Some(window) = focus.window_for(self) {
-                    self.raise_window(window.clone(), true);
-                    if let Some(output) = window.output(self) {
+                    self.pinnacle.raise_window(window.clone(), true);
+                    if let Some(output) = window.output(&self.pinnacle) {
                         output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                     }
                 }
@@ -531,7 +532,7 @@ impl State {
                     }
                 }
             } else {
-                if let Some(focused_op) = self.focused_output() {
+                if let Some(focused_op) = self.pinnacle.focused_output() {
                     focused_op.with_state_mut(|state| {
                         state.focus_stack.unset_focus();
                         for window in state.focus_stack.stack.iter() {
@@ -728,7 +729,7 @@ impl State {
 
         pointer.frame(self);
 
-        if let Some(output) = self.focused_output().cloned() {
+        if let Some(output) = self.pinnacle.focused_output().cloned() {
             self.schedule_render(&output);
         }
     }

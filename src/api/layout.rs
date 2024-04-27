@@ -44,10 +44,10 @@ impl layout_service_server::LayoutService for LayoutService {
                             layout_request::Body::Layout(ExplicitLayout { output_name }) => {
                                 if let Some(output) = output_name
                                     .map(OutputName)
-                                    .and_then(|name| name.output(state))
-                                    .or_else(|| state.focused_output().cloned())
+                                    .and_then(|name| name.output(&state.pinnacle))
+                                    .or_else(|| state.pinnacle.focused_output().cloned())
                                 {
-                                    state.request_layout(&output);
+                                    state.pinnacle.request_layout(&output);
                                 }
                             }
                         }

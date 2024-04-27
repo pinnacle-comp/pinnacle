@@ -1,4 +1,4 @@
-use pinnacle::state::State;
+use pinnacle::state::Pinnacle;
 mod inner {
     use pinnacle_api::layout::{CyclingLayoutManager, MasterStackLayout};
     use pinnacle_api::window::rules::{WindowRule, WindowRuleCondition};
@@ -24,10 +24,10 @@ mod inner {
     }
 }
 
-pub fn run_config(state: &mut State) {
+pub fn run_config(pinnacle: &mut Pinnacle) {
     let temp_dir = tempfile::tempdir().expect("failed to setup temp dir for socket");
     let socket_dir = temp_dir.path().to_owned();
-    state
+    pinnacle
         .start_wlcs_config(&socket_dir, move || {
             inner::start_config();
             drop(temp_dir);

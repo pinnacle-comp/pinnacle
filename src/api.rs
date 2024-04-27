@@ -192,7 +192,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
         trace!("PinnacleService.quit");
 
         run_unary_no_response(&self.sender, |state| {
-            state.shutdown();
+            state.pinnacle.shutdown();
         })
         .await
     }
@@ -204,6 +204,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
         run_unary_no_response(&self.sender, |state| {
             info!("Reloading config");
             state
+                .pinnacle
                 .start_config(Some(
                     state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
                 ))
@@ -734,7 +735,7 @@ impl tag_service_server::TagService for TagService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(tag) = tag_id.tag(state) else {
+            let Some(tag) = tag_id.tag(&state.pinnacle) else {
                 return;
             };
 
@@ -745,13 +746,13 @@ impl tag_service_server::TagService for TagService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = tag.output(state) else {
+            let Some(output) = tag.output(&state.pinnacle) else {
                 return;
             };
 
-            state.fixup_xwayland_window_layering();
+            state.pinnacle.fixup_xwayland_window_layering();
 
-            state.request_layout(&output);
+            state.pinnacle.request_layout(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
         })
@@ -768,8 +769,10 @@ impl tag_service_server::TagService for TagService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(tag) = tag_id.tag(state) else { return };
-            let Some(output) = tag.output(state) else { return };
+            let Some(tag) = tag_id.tag(&state.pinnacle) else { return };
+            let Some(output) = tag.output(&state.pinnacle) else {
+                return;
+            };
 
             output.with_state_mut(|op_state| {
                 for op_tag in op_state.tags.iter_mut() {
@@ -778,9 +781,9 @@ impl tag_service_server::TagService for TagService {
                 tag.set_active(true, state);
             });
 
-            state.fixup_xwayland_window_layering();
+            state.pinnacle.fixup_xwayland_window_layering();
 
-            state.request_layout(&output);
+            state.pinnacle.request_layout(&output);
             state.update_focus(&output);
             state.schedule_render(&output);
         })
@@ -818,7 +821,7 @@ impl tag_service_server::TagService for TagService {
                 .tags
                 .extend(new_tags.clone());
 
-            if let Some(output) = output_name.output(state) {
+            if let Some(output) = output_name.output(&state.pinnacle) {
                 output.with_state_mut(|state| {
                     state.tags.extend(new_tags.clone());
                     debug!("tags added, are now {:?}", state.tags);
@@ -849,7 +852,9 @@ impl tag_service_server::TagService for TagService {
         let tag_ids = request.tag_ids.into_iter().map(TagId);
 
         run_unary_no_response(&self.sender, move |state| {
-            let tags_to_remove = tag_ids.flat_map(|id| id.tag(state)).collect::<Vec<_>>();
+            let tags_to_remove = tag_ids
+                .flat_map(|id| id.tag(&state.pinnacle))
+                .collect::<Vec<_>>();
 
             for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                 // TODO: seriously, convert state.tags into a hashset
@@ -859,7 +864,7 @@ impl tag_service_server::TagService for TagService {
                     }
                 });
 
-                state.request_layout(&output);
+                state.pinnacle.request_layout(&output);
                 state.schedule_render(&output);
             }
 
@@ -904,11 +909,11 @@ impl tag_service_server::TagService for TagService {
         );
 
         run_unary(&self.sender, move |state| {
-            let tag = tag_id.tag(state);
+            let tag = tag_id.tag(&state.pinnacle);
 
             let output_name = tag
                 .as_ref()
-                .and_then(|tag| tag.output(state))
+                .and_then(|tag| tag.output(&state.pinnacle))
                 .map(|output| output.name());
             let active = tag.as_ref().map(|tag| tag.active());
             let name = tag.as_ref().map(|tag| tag.name());
@@ -989,7 +994,7 @@ impl output_service_server::OutputService for OutputService {
                 );
             }
 
-            let Some(output) = output_name.output(state) else {
+            let Some(output) = output_name.output(&state.pinnacle) else {
                 return;
             };
             let mut loc = output.current_location();
@@ -999,9 +1004,11 @@ impl output_service_server::OutputService for OutputService {
             if let Some(y) = y {
                 loc.y = y;
             }
-            state.change_output_state(&output, None, None, None, Some(loc));
+            state
+                .pinnacle
+                .change_output_state(&output, None, None, None, Some(loc));
             debug!("Mapping output {} to {loc:?}", output.name());
-            state.request_layout(&output);
+            state.pinnacle.request_layout(&output);
         })
         .await
     }
@@ -1014,7 +1021,7 @@ impl output_service_server::OutputService for OutputService {
                 .output_name
                 .clone()
                 .map(OutputName)
-                .and_then(|name| name.output(state))
+                .and_then(|name| name.output(&state.pinnacle))
             else {
                 return;
             };
@@ -1046,7 +1053,7 @@ impl output_service_server::OutputService for OutputService {
         };
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(output) = OutputName(output_name).output(state) else {
+            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
                 return;
             };
 
@@ -1059,14 +1066,14 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
-            state.change_output_state(
+            state.pinnacle.change_output_state(
                 &output,
                 None,
                 None,
                 Some(Scale::Fractional(current_scale)),
                 None,
             );
-            state.request_layout(&output);
+            state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -1097,12 +1104,14 @@ impl output_service_server::OutputService for OutputService {
         };
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(output) = OutputName(output_name).output(state) else {
+            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
                 return;
             };
 
-            state.change_output_state(&output, None, Some(smithay_transform), None, None);
-            state.request_layout(&output);
+            state
+                .pinnacle
+                .change_output_state(&output, None, Some(smithay_transform), None, None);
+            state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -1146,7 +1155,7 @@ impl output_service_server::OutputService for OutputService {
         };
 
         run_unary(&self.sender, move |state| {
-            let output = output_name.output(state);
+            let output = output_name.output(&state.pinnacle);
 
             let logical_size = output
                 .as_ref()
@@ -1193,6 +1202,7 @@ impl output_service_server::OutputService for OutputService {
             let y = output.as_ref().map(|output| output.current_location().y);
 
             let focused = state
+                .pinnacle
                 .focused_output()
                 .and_then(|foc_op| output.as_ref().map(|op| op == foc_op));
 

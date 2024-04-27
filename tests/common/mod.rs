@@ -43,7 +43,7 @@ where
 
     let tempdir = tempfile::tempdir()?;
 
-    state.start_grpc_server(tempdir.path())?;
+    state.pinnacle.start_grpc_server(tempdir.path())?;
 
     let loop_signal = event_loop.get_signal();
 
@@ -54,7 +54,7 @@ where
     });
 
     event_loop.run(None, &mut state, |state| {
-        state.fixup_z_layering();
+        state.pinnacle.fixup_z_layering();
         state.pinnacle.space.refresh();
         state.pinnacle.popup_manager.cleanup();
 

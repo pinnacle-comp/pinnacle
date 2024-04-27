@@ -4,7 +4,7 @@ use smithay::{output::Output, utils::SERIAL_COUNTER};
 use tracing::warn;
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::WindowElement,
 };
 
@@ -12,6 +12,31 @@ pub mod keyboard;
 pub mod pointer;
 
 impl State {
+    /// Update the keyboard focus.
+    pub fn update_focus(&mut self, output: &Output) {
+        let current_focus = self.pinnacle.focused_window(output);
+
+        if let Some(win) = &current_focus {
+            assert!(!win.is_x11_override_redirect());
+
+            if let Some(toplevel) = win.toplevel() {
+                toplevel.send_configure();
+            }
+        }
+
+        self.pinnacle
+            .seat
+            .get_keyboard()
+            .expect("no keyboard")
+            .set_focus(
+                self,
+                current_focus.map(|win| win.into()),
+                SERIAL_COUNTER.next_serial(),
+            );
+    }
+}
+
+impl Pinnacle {
     /// Get the currently focused window on `output`.
     ///
     /// This returns the topmost window on the keyboard focus stack that is on an active tag.
@@ -35,32 +60,9 @@ impl State {
             .flatten()
     }
 
-    /// Update the keyboard focus.
-    pub fn update_focus(&mut self, output: &Output) {
-        let current_focus = self.focused_window(output);
-
-        if let Some(win) = &current_focus {
-            assert!(!win.is_x11_override_redirect());
-
-            if let Some(toplevel) = win.toplevel() {
-                toplevel.send_configure();
-            }
-        }
-
-        self.pinnacle
-            .seat
-            .get_keyboard()
-            .expect("no keyboard")
-            .set_focus(
-                self,
-                current_focus.map(|win| win.into()),
-                SERIAL_COUNTER.next_serial(),
-            );
-    }
-
     pub fn fixup_z_layering(&mut self) {
-        for win in self.pinnacle.z_index_stack.iter() {
-            self.pinnacle.space.raise_element(win, false);
+        for win in self.z_index_stack.iter() {
+            self.space.raise_element(win, false);
         }
     }
 
@@ -68,26 +70,25 @@ impl State {
     ///
     /// This does nothing if the window is unmapped.
     pub fn raise_window(&mut self, window: WindowElement, activate: bool) {
-        if self.pinnacle.space.elements().all(|win| win != &window) {
+        if self.space.elements().all(|win| win != &window) {
             warn!("Tried to raise an unmapped window");
             return;
         }
 
-        self.pinnacle.space.raise_element(&window, activate);
+        self.space.raise_element(&window, activate);
 
-        self.pinnacle.z_index_stack.retain(|win| win != &window);
-        self.pinnacle.z_index_stack.push(window);
+        self.z_index_stack.retain(|win| win != &window);
+        self.z_index_stack.push(window);
 
         self.fixup_xwayland_window_layering();
     }
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.
     pub fn focused_output(&self) -> Option<&Output> {
-        self.pinnacle
-            .output_focus_stack
+        self.output_focus_stack
             .stack
             .last()
-            .or_else(|| self.pinnacle.space.outputs().next())
+            .or_else(|| self.space.outputs().next())
     }
 }
 

@@ -14,7 +14,7 @@ use smithay::{
     utils::Transform,
 };
 
-use crate::state::State;
+use crate::state::{Pinnacle, State};
 
 #[cfg(feature = "wlcs")]
 use super::wlcs::Wlcs;
@@ -132,7 +132,7 @@ pub fn setup_dummy(
     Ok((state, event_loop))
 }
 
-impl State {
+impl Pinnacle {
     pub fn new_output(&mut self, name: impl std::fmt::Display, size: Size<i32, Physical>) {
         let mode = smithay::output::Mode {
             size,
@@ -152,11 +152,11 @@ impl State {
 
         output.set_preferred(mode);
 
-        output.create_global::<State>(&self.pinnacle.display_handle);
+        output.create_global::<State>(&self.display_handle);
 
-        self.pinnacle.space.map_output(&output, (0, 0));
+        self.space.map_output(&output, (0, 0));
 
-        self.pinnacle.signal_state.output_connect.signal(|buf| {
+        self.signal_state.output_connect.signal(|buf| {
             buf.push_back(OutputConnectResponse {
                 output_name: Some(output.name()),
             });
@@ -164,15 +164,12 @@ impl State {
     }
 
     pub fn remove_output(&mut self, output: &Output) {
-        self.pinnacle.space.unmap_output(output);
+        self.space.unmap_output(output);
 
-        self.pinnacle
-            .signal_state
-            .output_disconnect
-            .signal(|buffer| {
-                buffer.push_back(OutputDisconnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
+        self.signal_state.output_disconnect.signal(|buffer| {
+            buffer.push_back(OutputDisconnectResponse {
+                output_name: Some(output.name()),
+            })
+        });
     }
 }

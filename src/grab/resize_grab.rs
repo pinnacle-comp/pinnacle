@@ -21,7 +21,7 @@ use smithay::{
 };
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
 
@@ -362,119 +362,171 @@ impl ResizeSurfaceState {
     }
 }
 
-pub fn move_surface_if_resized(state: &mut State, surface: &WlSurface) {
-    let Some(window) = state.window_for_surface(surface) else {
-        return;
-    };
+impl Pinnacle {
+    pub fn move_surface_if_resized(&mut self, surface: &WlSurface) {
+        let Some(window) = self.window_for_surface(surface) else {
+            return;
+        };
 
-    let Some(mut window_loc) = state.pinnacle.space.element_location(&window) else {
-        return;
-    };
-    let geometry = window.geometry();
+        let Some(mut window_loc) = self.space.element_location(&window) else {
+            return;
+        };
+        let geometry = window.geometry();
 
-    let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
-        state
-            .resize_state
-            .on_commit()
-            .map(|(edges, initial_window_rect)| {
-                let mut new_x: Option<i32> = None;
-                let mut new_y: Option<i32> = None;
-                if let xdg_toplevel::ResizeEdge::Left
-                | xdg_toplevel::ResizeEdge::TopLeft
-                | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
-                {
-                    new_x = Some(
-                        initial_window_rect.loc.x + (initial_window_rect.size.w - geometry.size.w),
-                    );
-                }
-                if let xdg_toplevel::ResizeEdge::Top
-                | xdg_toplevel::ResizeEdge::TopLeft
-                | xdg_toplevel::ResizeEdge::TopRight = edges.0
-                {
-                    new_y = Some(
-                        initial_window_rect.loc.y + (initial_window_rect.size.h - geometry.size.h),
-                    );
-                }
+        let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
+            state
+                .resize_state
+                .on_commit()
+                .map(|(edges, initial_window_rect)| {
+                    let mut new_x: Option<i32> = None;
+                    let mut new_y: Option<i32> = None;
+                    if let xdg_toplevel::ResizeEdge::Left
+                    | xdg_toplevel::ResizeEdge::TopLeft
+                    | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
+                    {
+                        new_x = Some(
+                            initial_window_rect.loc.x
+                                + (initial_window_rect.size.w - geometry.size.w),
+                        );
+                    }
+                    if let xdg_toplevel::ResizeEdge::Top
+                    | xdg_toplevel::ResizeEdge::TopLeft
+                    | xdg_toplevel::ResizeEdge::TopRight = edges.0
+                    {
+                        new_y = Some(
+                            initial_window_rect.loc.y
+                                + (initial_window_rect.size.h - geometry.size.h),
+                        );
+                    }
 
-                (new_x, new_y)
-            })
-    });
+                    (new_x, new_y)
+                })
+        });
 
-    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-        return;
-    }
-
-    let Some(new_loc) = new_loc else { return };
-
-    if let Some(new_x) = new_loc.0 {
-        window_loc.x = new_x;
-    }
-    if let Some(new_y) = new_loc.1 {
-        window_loc.y = new_y;
-    }
-
-    let size = state
-        .pinnacle
-        .space
-        .element_geometry(&window)
-        .expect("called element_geometry on unmapped window")
-        .size;
-
-    window.with_state_mut(|state| {
-        if state.floating_or_tiled.is_floating() {
-            state.floating_or_tiled =
-                FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
+        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+            return;
         }
-    });
 
-    if new_loc.0.is_some() || new_loc.1.is_some() {
-        state
-            .pinnacle
+        let Some(new_loc) = new_loc else { return };
+
+        if let Some(new_x) = new_loc.0 {
+            window_loc.x = new_x;
+        }
+        if let Some(new_y) = new_loc.1 {
+            window_loc.y = new_y;
+        }
+
+        let size = self
             .space
-            .map_element(window.clone(), window_loc, false);
+            .element_geometry(&window)
+            .expect("called element_geometry on unmapped window")
+            .size;
 
-        if let Some(surface) = window.x11_surface() {
-            if !surface.is_override_redirect() {
-                let geo = surface.geometry();
-                let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
-                surface
-                    .configure(new_geo)
-                    .expect("failed to configure x11 win");
+        window.with_state_mut(|state| {
+            if state.floating_or_tiled.is_floating() {
+                state.floating_or_tiled =
+                    FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
+            }
+        });
+
+        if new_loc.0.is_some() || new_loc.1.is_some() {
+            self.space.map_element(window.clone(), window_loc, false);
+
+            if let Some(surface) = window.x11_surface() {
+                if !surface.is_override_redirect() {
+                    let geo = surface.geometry();
+                    let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
+                    surface
+                        .configure(new_geo)
+                        .expect("failed to configure x11 win");
+                }
             }
         }
     }
 }
 
-/// The application requests a resize e.g. when you drag the edges of a window.
-pub fn resize_request_client(
-    state: &mut State,
-    surface: &WlSurface,
-    seat: &Seat<State>,
-    serial: smithay::utils::Serial,
-    edges: self::ResizeEdge,
-    button_used: u32,
-) {
-    let pointer = seat.get_pointer().expect("seat had no pointer");
+impl State {
+    /// The application requests a resize e.g. when you drag the edges of a window.
+    pub fn resize_request_client(
+        &mut self,
+        surface: &WlSurface,
+        seat: &Seat<State>,
+        serial: smithay::utils::Serial,
+        edges: self::ResizeEdge,
+        button_used: u32,
+    ) {
+        let pointer = seat.get_pointer().expect("seat had no pointer");
 
-    if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
-        let Some(window) = state.window_for_surface(surface) else {
+        if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
+            let Some(window) = self.pinnacle.window_for_surface(surface) else {
+                tracing::error!("Surface had no window, cancelling resize request");
+                return;
+            };
+
+            // TODO: check for fullscreen/maximized (probably shouldn't matter)
+            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+                return;
+            }
+
+            let initial_window_loc = self
+                .pinnacle
+                .space
+                .element_location(&window)
+                .expect("resize request called on unmapped window");
+            let initial_window_size = window.geometry().size;
+
+            if let Some(window) = self.pinnacle.window_for_surface(surface) {
+                if let Some(toplevel) = window.toplevel() {
+                    toplevel.with_pending_state(|state| {
+                        state.states.set(xdg_toplevel::State::Resizing);
+                    });
+
+                    toplevel.send_pending_configure();
+                }
+            }
+
+            let grab = ResizeSurfaceGrab::start(
+                start_data,
+                window,
+                edges,
+                Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
+                button_used,
+            );
+
+            if let Some(grab) = grab {
+                pointer.set_grab(self, grab, serial, Focus::Clear);
+            }
+        }
+    }
+
+    /// The compositor requested a resize e.g. you hold the mod key and right-click drag.
+    pub fn resize_request_server(
+        &mut self,
+        surface: &WlSurface,
+        seat: &Seat<State>,
+        serial: smithay::utils::Serial,
+        edges: self::ResizeEdge,
+        button_used: u32,
+    ) {
+        let pointer = seat.get_pointer().expect("seat had no pointer");
+
+        let Some(window) = self.pinnacle.window_for_surface(surface) else {
             tracing::error!("Surface had no window, cancelling resize request");
             return;
         };
 
-        // TODO: check for fullscreen/maximized (probably shouldn't matter)
         if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
             return;
         }
 
-        let initial_window_loc = state
+        let initial_window_loc = self
             .pinnacle
             .space
             .element_location(&window)
             .expect("resize request called on unmapped window");
         let initial_window_size = window.geometry().size;
 
-        if let Some(window) = state.window_for_surface(surface) {
+        if let Some(window) = self.pinnacle.window_for_surface(surface) {
             if let Some(toplevel) = window.toplevel() {
                 toplevel.with_pending_state(|state| {
                     state.states.set(xdg_toplevel::State::Resizing);
@@ -483,6 +535,14 @@ pub fn resize_request_client(
                 toplevel.send_pending_configure();
             }
         }
+
+        let start_data = smithay::input::pointer::GrabStartData {
+            focus: pointer
+                .current_focus()
+                .map(|focus| (focus, initial_window_loc)),
+            button: button_used,
+            location: pointer.current_location(),
+        };
 
         let grab = ResizeSurfaceGrab::start(
             start_data,
@@ -493,65 +553,7 @@ pub fn resize_request_client(
         );
 
         if let Some(grab) = grab {
-            pointer.set_grab(state, grab, serial, Focus::Clear);
+            pointer.set_grab(self, grab, serial, Focus::Clear);
         }
-    }
-}
-
-/// The compositor requested a resize e.g. you hold the mod key and right-click drag.
-pub fn resize_request_server(
-    state: &mut State,
-    surface: &WlSurface,
-    seat: &Seat<State>,
-    serial: smithay::utils::Serial,
-    edges: self::ResizeEdge,
-    button_used: u32,
-) {
-    let pointer = seat.get_pointer().expect("seat had no pointer");
-
-    let Some(window) = state.window_for_surface(surface) else {
-        tracing::error!("Surface had no window, cancelling resize request");
-        return;
-    };
-
-    if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-        return;
-    }
-
-    let initial_window_loc = state
-        .pinnacle
-        .space
-        .element_location(&window)
-        .expect("resize request called on unmapped window");
-    let initial_window_size = window.geometry().size;
-
-    if let Some(window) = state.window_for_surface(surface) {
-        if let Some(toplevel) = window.toplevel() {
-            toplevel.with_pending_state(|state| {
-                state.states.set(xdg_toplevel::State::Resizing);
-            });
-
-            toplevel.send_pending_configure();
-        }
-    }
-
-    let start_data = smithay::input::pointer::GrabStartData {
-        focus: pointer
-            .current_focus()
-            .map(|focus| (focus, initial_window_loc)),
-        button: button_used,
-        location: pointer.current_location(),
-    };
-
-    let grab = ResizeSurfaceGrab::start(
-        start_data,
-        window,
-        edges,
-        Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
-        button_used,
-    );
-
-    if let Some(grab) = grab {
-        pointer.set_grab(state, grab, serial, Focus::Clear);
     }
 }

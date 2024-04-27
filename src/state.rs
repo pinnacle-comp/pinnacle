@@ -219,7 +219,7 @@ impl State {
 
                     std::env::set_var("DISPLAY", format!(":{display}"));
 
-                    if let Err(err) = state.start_config(Some(
+                    if let Err(err) = state.pinnacle.start_config(Some(
                         state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
                     )) {
                         panic!("failed to start config: {err}");
@@ -318,18 +318,20 @@ impl State {
 
         Ok(state)
     }
+}
 
+impl Pinnacle {
     /// Schedule `run` to run when `condition` returns true.
     ///
     /// This will continually reschedule `run` in the event loop if `condition` returns false.
     pub fn schedule<F1, F2>(&self, condition: F1, run: F2)
     where
-        F1: Fn(&mut Self) -> bool + 'static,
-        F2: FnOnce(&mut Self) + 'static,
+        F1: Fn(&mut State) -> bool + 'static,
+        F2: FnOnce(&mut State) + 'static,
     {
-        self.pinnacle.loop_handle.insert_idle(|state| {
+        self.loop_handle.insert_idle(|state| {
             if !condition(state) {
-                state.schedule(condition, run);
+                state.pinnacle.schedule(condition, run);
             } else {
                 run(state);
             }
@@ -338,11 +340,11 @@ impl State {
 
     pub fn shutdown(&mut self) {
         info!("Shutting down Pinnacle");
-        self.pinnacle.loop_signal.stop();
-        if let Some(join_handle) = self.pinnacle.config.config_join_handle.take() {
+        self.loop_signal.stop();
+        if let Some(join_handle) = self.config.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.pinnacle.config.shutdown_sender.take() {
+        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
             if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
                 warn!("Failed to send shutdown signal to config: {err}");
             }

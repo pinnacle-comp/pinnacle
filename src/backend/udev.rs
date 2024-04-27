@@ -271,18 +271,20 @@ impl State {
                 {
                     match render_surface.compositor.use_mode(drm_mode) {
                         Ok(()) => {
-                            self.change_output_state(output, Some(mode), None, None, None);
+                            self.pinnacle
+                                .change_output_state(output, Some(mode), None, None, None);
                         }
                         Err(err) => error!("Failed to resize output: {err}"),
                     }
                 }
             }
         } else {
-            self.change_output_state(output, Some(mode), None, None, None);
+            self.pinnacle
+                .change_output_state(output, Some(mode), None, None, None);
         }
 
+        self.pinnacle.request_layout(output);
         self.schedule_render(output);
-        self.request_layout(output);
     }
 }
 
@@ -441,7 +443,7 @@ pub fn setup_udev(
     let insert_ret = event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, state| {
-            state.apply_libinput_settings(&event);
+            state.pinnacle.apply_libinput_settings(&event);
             state.process_input_event(event);
         });
 
@@ -1111,7 +1113,8 @@ impl State {
 
         device.surfaces.insert(crtc, surface);
 
-        self.change_output_state(&output, Some(wl_mode), None, None, Some(position));
+        self.pinnacle
+            .change_output_state(&output, Some(wl_mode), None, None, Some(position));
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
@@ -1124,7 +1127,8 @@ impl State {
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
             output.with_state_mut(|state| state.tags = tags.clone());
-            self.change_output_state(&output, None, None, *scale, Some(*loc));
+            self.pinnacle
+                .change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
             self.pinnacle.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {

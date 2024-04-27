@@ -456,7 +456,7 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::Flipped90);
                 });
 
@@ -467,7 +467,7 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::Normal);
                 });
 
@@ -538,9 +538,9 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 200).into());
-                state.new_output("Test Third", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 200).into());
+                state.pinnacle.new_output("Test Third", (300, 200).into());
             });
 
             sleep_secs(1);
@@ -608,7 +608,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
             });
 
             sleep_secs(1);
@@ -643,7 +643,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
             });
 
             sleep_secs(1);
@@ -664,7 +664,7 @@ mod output {
                     Rectangle::from_loc_and_size((1920, 0), (300, 200))
                 );
 
-                state.new_output("Second", (500, 500).into());
+                state.pinnacle.new_output("Second", (500, 500).into());
             });
 
             sleep_secs(1);
@@ -714,9 +714,9 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 700).into());
-                state.new_output("Third", (300, 400).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 700).into());
+                state.pinnacle.new_output("Third", (300, 400).into());
             });
 
             sleep_secs(1);
@@ -749,7 +749,7 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200 + 700), (300, 400))
                 );
 
-                state.remove_output(&second_op);
+                state.pinnacle.remove_output(&second_op);
             });
 
             sleep_secs(1);
@@ -841,7 +841,8 @@ async fn spawned_window_on_active_tag_has_keyboard_focus() -> anyhow::Result<()>
         with_state(&sender, |state| {
             assert_eq!(
                 state
-                    .focused_window(state.focused_output().unwrap())
+                    .pinnacle
+                    .focused_window(state.pinnacle.focused_output().unwrap())
                     .unwrap()
                     .class(),
                 Some("foot".to_string())
@@ -864,7 +865,12 @@ async fn spawned_window_on_inactive_tag_does_not_have_keyboard_focus() -> anyhow
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.focused_window(state.focused_output().unwrap()), None);
+            assert_eq!(
+                state
+                    .pinnacle
+                    .focused_window(state.pinnacle.focused_output().unwrap()),
+                None
+            );
         });
 
         Ok(())

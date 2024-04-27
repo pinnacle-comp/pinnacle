@@ -18,14 +18,14 @@ use tracing::warn;
 
 use crate::{
     output::OutputName,
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized},
         WindowElement,
     },
 };
 
-impl State {
+impl Pinnacle {
     fn update_windows_with_geometries(
         &mut self,
         output: &Output,
@@ -33,8 +33,7 @@ impl State {
     ) {
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
-            self.pinnacle
-                .windows
+            self.windows
                 .iter()
                 .filter(|win| !win.is_x11_override_redirect())
                 .filter(|win| {
@@ -53,11 +52,7 @@ impl State {
             })
             .cloned();
 
-        let output_geo = self
-            .pinnacle
-            .space
-            .output_geometry(output)
-            .expect("no output geo");
+        let output_geo = self.space.output_geometry(output).expect("no output geo");
 
         let non_exclusive_geo = {
             let map = layer_map_for_output(output);
@@ -130,7 +125,7 @@ impl State {
                     WindowSurface::X11(_) => {
                         let loc = win.with_state_mut(|state| state.target_loc.take());
                         if let Some(loc) = loc {
-                            self.pinnacle.space.map_element(win.clone(), loc, false);
+                            self.space.map_element(win.clone(), loc, false);
                         }
                     }
                 }
@@ -138,7 +133,7 @@ impl State {
         }
 
         for (loc, window) in non_pending_wins {
-            self.pinnacle.space.map_element(window, loc, false);
+            self.space.map_element(window, loc, false);
         }
 
         // FIXME:
@@ -146,12 +141,9 @@ impl State {
         // Obviously this is a bad way to do this but its a bandaid solution
         // until decent transactional layout applications are implemented.
         for (win, _serial) in pending_wins {
-            win.send_frame(
-                output,
-                self.pinnacle.clock.now(),
-                Some(Duration::ZERO),
-                |_, _| Some(output.clone()),
-            );
+            win.send_frame(output, self.clock.now(), Some(Duration::ZERO), |_, _| {
+                Some(output.clone())
+            });
         }
 
         self.fixup_z_layering();
@@ -159,15 +151,15 @@ impl State {
 
     /// Swaps two windows in the main window vec and updates all windows.
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
-        let win1_index = self.pinnacle.windows.iter().position(|win| win == win1);
-        let win2_index = self.pinnacle.windows.iter().position(|win| win == win2);
+        let win1_index = self.windows.iter().position(|win| win == win1);
+        let win2_index = self.windows.iter().position(|win| win == win2);
 
         if let (Some(first), Some(second)) = (win1_index, win2_index) {
-            self.pinnacle.windows.swap(first, second);
+            self.windows.swap(first, second);
             if let Some(output) = win1.output(self) {
                 self.request_layout(&output);
             }
-            self.pinnacle.layout_state.pending_swap = true;
+            self.layout_state.pending_swap = true;
         }
     }
 }
@@ -185,17 +177,16 @@ pub struct LayoutState {
     old_requests: HashMap<Output, HashSet<LayoutRequestId>>,
 }
 
-impl State {
+impl Pinnacle {
     pub fn request_layout(&mut self, output: &Output) {
-        let Some(sender) = self.pinnacle.layout_state.layout_request_sender.as_ref() else {
+        let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
             return;
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
-            self.pinnacle
-                .windows
+            self.windows
                 .iter()
                 .filter(|win| !win.is_x11_override_redirect())
                 .filter(|win| {
@@ -230,14 +221,12 @@ impl State {
             output.with_state(|state| state.focused_tags().map(|tag| tag.id().0).collect());
 
         let id = self
-            .pinnacle
             .layout_state
             .id_maps
             .entry(output.clone())
             .or_insert(LayoutRequestId(0));
 
-        self.pinnacle
-            .layout_state
+        self.layout_state
             .pending_requests
             .entry(output.clone())
             .or_default()
@@ -255,7 +244,9 @@ impl State {
 
         *id = LayoutRequestId(id.0 + 1);
     }
+}
 
+impl State {
     pub fn apply_layout(&mut self, geometries: Geometries) -> anyhow::Result<()> {
         let Geometries {
             request_id: Some(request_id),
@@ -267,7 +258,7 @@ impl State {
         };
 
         let request_id = LayoutRequestId(request_id);
-        let Some(output) = OutputName(output_name).output(self) else {
+        let Some(output) = OutputName(output_name).output(&self.pinnacle) else {
             anyhow::bail!("Output was invalid");
         };
 
@@ -321,7 +312,8 @@ impl State {
             anyhow::bail!("Attempted to layout but one or more dimensions were null");
         };
 
-        self.update_windows_with_geometries(&output, geometries);
+        self.pinnacle
+            .update_windows_with_geometries(&output, geometries);
 
         self.schedule_render(&output);
 

@@ -47,7 +47,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     // when xdiplay is None when starting the config, the grpc server is not
     // started, until it is set; this bypasses this for now
     state.pinnacle.xdisplay = Some(u32::MAX);
-    run_config(&mut state);
+    run_config(&mut state.pinnacle);
 
     // wait for the config to connect to the layout service
     while state.pinnacle.layout_state.layout_request_sender.is_none() {
@@ -59,7 +59,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     event_loop
         .run(None, &mut state, |state| {
             state.update_pointer_focus();
-            state.fixup_z_layering();
+            state.pinnacle.fixup_z_layering();
             state.pinnacle.space.refresh();
             state.pinnacle.popup_manager.cleanup();
 
@@ -75,7 +75,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
 fn handle_event(event: WlcsEvent, state: &mut State) {
     tracing::debug!("handle_event {:?}", event);
     match event {
-        WlcsEvent::Stop => state.shutdown(),
+        WlcsEvent::Stop => state.pinnacle.shutdown(),
         WlcsEvent::NewClient { stream, client_id } => {
             let client: Client = state
                 .pinnacle

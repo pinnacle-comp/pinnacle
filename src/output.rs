@@ -13,7 +13,7 @@ use tracing::info;
 use crate::{
     focus::WindowKeyboardFocusStack,
     protocol::screencopy::Screencopy,
-    state::{State, WithState},
+    state::{Pinnacle, WithState},
     tag::Tag,
 };
 
@@ -26,9 +26,8 @@ pub struct OutputName(pub String);
 
 impl OutputName {
     /// Get the output with this name.
-    pub fn output(&self, state: &State) -> Option<Output> {
-        state
-            .pinnacle
+    pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        pinnacle
             .space
             .outputs()
             .find(|output| output.name() == self.0)
@@ -77,7 +76,7 @@ impl OutputState {
     }
 }
 
-impl State {
+impl Pinnacle {
     /// A wrapper around [`Output::change_current_state`] that additionally sends an output
     /// geometry signal.
     pub fn change_output_state(
@@ -91,8 +90,8 @@ impl State {
         output.change_current_state(mode, transform, scale, location);
         if let Some(location) = location {
             info!(?location);
-            self.pinnacle.space.map_output(output, location);
-            self.pinnacle.signal_state.output_move.signal(|buf| {
+            self.space.map_output(output, location);
+            self.signal_state.output_move.signal(|buf| {
                 buf.push_back(OutputMoveResponse {
                     output_name: Some(output.name()),
                     x: Some(location.x),
@@ -102,8 +101,8 @@ impl State {
         }
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
-            self.pinnacle.signal_state.output_resize.signal(|buf| {
-                let geo = self.pinnacle.space.output_geometry(output);
+            self.signal_state.output_resize.signal(|buf| {
+                let geo = self.space.output_geometry(output);
                 buf.push_back(OutputResizeResponse {
                     output_name: Some(output.name()),
                     logical_width: geo.map(|geo| geo.size.w as u32),

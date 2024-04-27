@@ -5,6 +5,7 @@ use crate::{
     },
     input::ModifierMask,
     output::OutputName,
+    state::Pinnacle,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
 };
@@ -266,7 +267,7 @@ fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
     config_dir.unwrap_or(xdg_base_dirs.get_config_home())
 }
 
-impl State {
+impl Pinnacle {
     /// Start the config in `config_dir`.
     ///
     /// If this method is called while a config is already running, it will be replaced.
@@ -276,7 +277,7 @@ impl State {
         // Clear state
 
         debug!("Clearing tags");
-        for output in self.pinnacle.space.outputs() {
+        for output in self.space.outputs() {
             output.with_state_mut(|state| state.tags.clear());
         }
 
@@ -284,14 +285,14 @@ impl State {
 
         debug!("Clearing input state");
 
-        self.pinnacle.input_state.clear();
+        self.input_state.clear();
 
-        self.pinnacle.config.clear(&self.pinnacle.loop_handle);
+        self.config.clear(&self.loop_handle);
 
-        self.pinnacle.signal_state.clear();
+        self.signal_state.clear();
 
         let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
-        let load_default_config = |state: &mut State, reason: &str| {
+        let load_default_config = |pinnacle: &mut Pinnacle, reason: &str| {
             match &config_dir_clone {
                 Some(dir) => warn!("Unable to load config at {}: {reason}", dir.display()),
                 None => panic!(
@@ -300,11 +301,11 @@ impl State {
             }
 
             info!("Falling back to builtin Rust config");
-            state.start_config(None::<PathBuf>)
+            pinnacle.start_config(None::<PathBuf>)
         };
 
         // If `--no-config` was set, still load the keybinds from the default metaconfig
-        if self.pinnacle.config.no_config {
+        if self.config.no_config {
             config_dir = None;
         }
 
@@ -328,17 +329,17 @@ impl State {
         let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
         let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
 
-        self.pinnacle.input_state.reload_keybind = Some(reload_keybind);
-        self.pinnacle.input_state.kill_keybind = Some(kill_keybind);
+        self.input_state.reload_keybind = Some(reload_keybind);
+        self.input_state.kill_keybind = Some(kill_keybind);
 
-        if self.pinnacle.config.no_config {
+        if self.config.no_config {
             info!("`--no-config` was set, not spawning config");
             return Ok(());
         }
 
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
-        if self.pinnacle.grpc_server_join_handle.is_none() {
+        if self.grpc_server_join_handle.is_none() {
             // If a socket is provided in the metaconfig, use it.
             let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
                 let Some(config_dir) = &config_dir else {
@@ -356,8 +357,7 @@ impl State {
                 socket_dir
             } else {
                 // Otherwise, use $XDG_RUNTIME_DIR. If that doesn't exist, use /tmp.
-                self.pinnacle
-                    .xdg_base_dirs
+                self.xdg_base_dirs
                     .get_runtime_directory()
                     .cloned()
                     .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
@@ -449,32 +449,31 @@ impl State {
 
                 let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-                let token =
-                    self.pinnacle
-                        .loop_handle
-                        .insert_source(ping_source, move |_, _, state| {
-                            error!("Config crashed! Falling back to default config");
-                            state
-                                .start_config(None::<PathBuf>)
-                                .expect("failed to start default config");
-                        })?;
+                let token = self
+                    .loop_handle
+                    .insert_source(ping_source, move |_, _, state| {
+                        error!("Config crashed! Falling back to default config");
+                        state
+                            .pinnacle
+                            .start_config(None::<PathBuf>)
+                            .expect("failed to start default config");
+                    })?;
 
-                self.pinnacle.config.config_join_handle = Some(tokio::spawn(async move {
+                self.config.config_join_handle = Some(tokio::spawn(async move {
                     let _ = child.wait().await;
                     pinger.ping();
                 }));
 
-                self.pinnacle.config.config_reload_on_crash_token = Some(token);
+                self.config.config_reload_on_crash_token = Some(token);
             }
             None => {
                 let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-                let token =
-                    self.pinnacle
-                        .loop_handle
-                        .insert_source(ping_source, move |_, _, _state| {
-                            panic!("builtin rust config crashed; this is a bug");
-                        })?;
+                let token = self
+                    .loop_handle
+                    .insert_source(ping_source, move |_, _, _state| {
+                        panic!("builtin rust config crashed; this is a bug");
+                    })?;
 
                 std::thread::spawn(move || {
                     info!("Starting builtin Rust config");
@@ -482,7 +481,7 @@ impl State {
                     pinger.ping();
                 });
 
-                self.pinnacle.config.config_reload_on_crash_token = Some(token);
+                self.config.config_reload_on_crash_token = Some(token);
             }
         }
 
@@ -490,12 +489,10 @@ impl State {
     }
 
     pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
-        self.pinnacle
-            .system_processes
+        self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
         let multiple_instances = self
-            .pinnacle
             .system_processes
             .processes_by_exact_name("pinnacle")
             .filter(|proc| proc.thread_kind().is_none())
@@ -544,14 +541,13 @@ impl State {
 
         std::env::set_var(
             "PINNACLE_PROTO_DIR",
-            self.pinnacle.xdg_base_dirs.get_data_file("protobuf"),
+            self.xdg_base_dirs.get_data_file("protobuf"),
         );
 
         let (grpc_sender, grpc_receiver) =
-            calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
+            calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
-        self.pinnacle
-            .loop_handle
+        self.loop_handle
             .insert_source(grpc_receiver, |msg, _, state| match msg {
                 Event::Msg(f) => f(state),
                 Event::Closed => error!("grpc receiver was closed"),
@@ -589,9 +585,9 @@ impl State {
             .add_service(LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));
 
-        match self.pinnacle.xdisplay.as_ref() {
+        match self.xdisplay.as_ref() {
             Some(_) => {
-                self.pinnacle.grpc_server_join_handle = Some(tokio::spawn(async move {
+                self.grpc_server_join_handle = Some(tokio::spawn(async move {
                     if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                         error!("gRPC server error: {err}");
                     }

@@ -26,7 +26,7 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
 
@@ -58,12 +58,14 @@ impl XwmHandler for State {
             .expect("called element_bbox on an unmapped window");
 
         let output_size = self
+            .pinnacle
             .focused_output()
             .and_then(|op| self.pinnacle.space.output_geometry(op))
             .map(|geo| geo.size)
             .unwrap_or((2, 2).into());
 
         let output_loc = self
+            .pinnacle
             .focused_output()
             .map(|op| op.current_location())
             .unwrap_or((0, 0).into());
@@ -92,7 +94,7 @@ impl XwmHandler for State {
             .expect("failed to configure x11 window");
         // TODO: ssd
 
-        if let Some(output) = self.focused_output() {
+        if let Some(output) = self.pinnacle.focused_output() {
             window.place_on_output(output);
         }
 
@@ -104,13 +106,13 @@ impl XwmHandler for State {
 
         // TODO: will an unmap -> map duplicate the window
         self.pinnacle.windows.push(window.clone());
-        self.raise_window(window.clone(), true);
+        self.pinnacle.raise_window(window.clone(), true);
 
-        self.apply_window_rules(&window);
+        self.pinnacle.apply_window_rules(&window);
 
-        if let Some(output) = window.output(self) {
+        if let Some(output) = window.output(&self.pinnacle) {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-            self.request_layout(&output);
+            self.pinnacle.request_layout(&output);
         }
 
         self.pinnacle.loop_handle.insert_idle(move |state| {
@@ -138,7 +140,7 @@ impl XwmHandler for State {
 
         self.pinnacle.windows.push(window.clone());
 
-        if let Some(output) = self.focused_output() {
+        if let Some(output) = self.pinnacle.focused_output() {
             window.place_on_output(output);
             // FIXME: setting focus here may possibly muck things up
             // |      or maybe they won't idk
@@ -146,15 +148,15 @@ impl XwmHandler for State {
         }
 
         self.pinnacle.space.map_element(window.clone(), loc, true);
-        self.raise_window(window.clone(), true);
+        self.pinnacle.raise_window(window.clone(), true);
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
         trace!("XwmHandler::map_window_notify");
         let Some(output) = window
             .wl_surface()
-            .and_then(|s| self.window_for_surface(&s))
-            .and_then(|win| win.output(self))
+            .and_then(|s| self.pinnacle.window_for_surface(&s))
+            .and_then(|win| win.output(&self.pinnacle))
         else {
             return;
         };
@@ -189,15 +191,16 @@ impl XwmHandler for State {
 
             self.pinnacle.space.unmap_elem(&win);
 
-            if let Some(output) = win.output(self) {
-                self.request_layout(&output);
+            if let Some(output) = win.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
 
                 let focus = self
+                    .pinnacle
                     .focused_window(&output)
                     .map(KeyboardFocusTarget::Window);
 
                 if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.raise_window(win.clone(), true);
+                    self.pinnacle.raise_window(win.clone(), true);
                     if let Some(toplevel) = win.toplevel() {
                         toplevel.send_configure();
                     }
@@ -255,15 +258,16 @@ impl XwmHandler for State {
                 .z_index_stack
                 .retain(|elem| win.wl_surface() != elem.wl_surface());
 
-            if let Some(output) = win.output(self) {
-                self.request_layout(&output);
+            if let Some(output) = win.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
 
                 let focus = self
+                    .pinnacle
                     .focused_window(&output)
                     .map(KeyboardFocusTarget::Window);
 
                 if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.raise_window(win.clone(), true);
+                    self.pinnacle.raise_window(win.clone(), true);
                     if let Some(toplevel) = win.toplevel() {
                         toplevel.send_configure();
                     }
@@ -355,7 +359,7 @@ impl XwmHandler for State {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
         else {
             return;
         };
@@ -372,7 +376,7 @@ impl XwmHandler for State {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
         else {
             return;
         };
@@ -389,15 +393,15 @@ impl XwmHandler for State {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
         else {
             return;
         };
 
         if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
             window.toggle_fullscreen();
-            if let Some(output) = window.output(self) {
-                self.request_layout(&output);
+            if let Some(output) = window.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
             }
         }
     }
@@ -409,15 +413,15 @@ impl XwmHandler for State {
 
         let Some(window) = window
             .wl_surface()
-            .and_then(|surf| self.window_for_surface(&surf))
+            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
         else {
             return;
         };
 
         if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
             window.toggle_fullscreen();
-            if let Some(output) = window.output(self) {
-                self.request_layout(&output);
+            if let Some(output) = window.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
             }
         }
     }
@@ -434,8 +438,7 @@ impl XwmHandler for State {
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
-        crate::grab::resize_grab::resize_request_server(
-            self,
+        self.resize_request_server(
             &wl_surf,
             &seat,
             SERIAL_COUNTER.next_serial(),
@@ -450,13 +453,7 @@ impl XwmHandler for State {
 
         // We use the server one and not the client because windows like Steam don't provide
         // GrabStartData, so we need to create it ourselves.
-        crate::grab::move_grab::move_request_server(
-            self,
-            &wl_surf,
-            &seat,
-            SERIAL_COUNTER.next_serial(),
-            button,
-        );
+        self.move_request_server(&wl_surf, &seat, SERIAL_COUNTER.next_serial(), button);
     }
 
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
@@ -542,14 +539,13 @@ impl XwmHandler for State {
     }
 }
 
-impl State {
+impl Pinnacle {
     pub fn fixup_xwayland_window_layering(&mut self) {
-        let Some(xwm) = self.pinnacle.xwm.as_mut() else {
+        let Some(xwm) = self.xwm.as_mut() else {
             return;
         };
 
         let x11_wins = self
-            .pinnacle
             .space
             .elements()
             .filter(|win| win.is_on_active_tag())

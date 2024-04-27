@@ -220,14 +220,14 @@ pub fn setup_winit(
                         size,
                         refresh: 144_000,
                     };
-                    state.change_output_state(
+                    state.pinnacle.change_output_state(
                         &output,
                         Some(mode),
                         None,
                         Some(Scale::Fractional(scale_factor)),
                         None,
                     );
-                    state.request_layout(&output);
+                    state.pinnacle.request_layout(&output);
                 }
                 WinitEvent::Focus(focused) => {
                     if focused {
@@ -241,12 +241,12 @@ pub fn setup_winit(
                     state.render_winit_window(&output);
                 }
                 WinitEvent::CloseRequested => {
-                    state.shutdown();
+                    state.pinnacle.shutdown();
                 }
             });
 
             if let PumpStatus::Exit(_) = status {
-                state.shutdown();
+                state.pinnacle.shutdown();
             }
 
             state.render_winit_window(&output);

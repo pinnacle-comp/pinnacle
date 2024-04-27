@@ -50,7 +50,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             return;
         }
 
-        state.raise_window(self.window.clone(), false);
+        state.pinnacle.raise_window(self.window.clone(), false);
 
         if let Some(surface) = self.window.x11_surface() {
             // INFO: can you raise OR windows or no idk
@@ -119,7 +119,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
 
                 debug!("Swapping window positions");
-                state.swap_window_positions(&self.window, &window_under);
+                state
+                    .pinnacle
+                    .swap_window_positions(&self.window, &window_under);
             }
         } else {
             let delta = event.location - self.start_data.location;
@@ -271,25 +273,61 @@ impl PointerGrab<State> for MoveSurfaceGrab {
     }
 }
 
-/// The application initiated a move grab e.g. when you drag a titlebar.
-pub fn move_request_client(
-    state: &mut State,
-    surface: &WlSurface,
-    seat: &Seat<State>,
-    serial: Serial,
-) {
-    let pointer = seat.get_pointer().expect("seat had no pointer");
-    if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
-        let Some(window) = state.window_for_surface(surface) else {
+impl State {
+    /// The application initiated a move grab e.g. when you drag a titlebar.
+    pub fn move_request_client(&mut self, surface: &WlSurface, seat: &Seat<State>, serial: Serial) {
+        let pointer = seat.get_pointer().expect("seat had no pointer");
+        if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
+            let Some(window) = self.pinnacle.window_for_surface(surface) else {
+                warn!("Surface had no window, cancelling move request");
+                return;
+            };
+
+            let initial_window_loc = self
+                .pinnacle
+                .space
+                .element_location(&window)
+                .expect("move request was called on an unmapped window");
+
+            let grab = MoveSurfaceGrab {
+                start_data,
+                window,
+                initial_window_loc,
+            };
+
+            pointer.set_grab(self, grab, serial, Focus::Clear);
+        } else {
+            debug!("No grab start data for grab, cancelling");
+        }
+    }
+
+    /// The compositor initiated a move grab e.g. you hold the mod key and drag.
+    pub fn move_request_server(
+        &mut self,
+        surface: &WlSurface,
+        seat: &Seat<State>,
+        serial: Serial,
+        button_used: u32,
+    ) {
+        let pointer = seat.get_pointer().expect("seat had no pointer");
+        let Some(window) = self.pinnacle.window_for_surface(surface) else {
             warn!("Surface had no window, cancelling move request");
             return;
         };
 
-        let initial_window_loc = state
+        let initial_window_loc = self
             .pinnacle
             .space
             .element_location(&window)
             .expect("move request was called on an unmapped window");
+
+        let start_data = smithay::input::pointer::GrabStartData {
+            focus: pointer
+                .current_focus()
+                .map(|focus| (focus, initial_window_loc)),
+            button: button_used,
+            location: pointer.current_location(),
+        };
 
         let grab = MoveSurfaceGrab {
             start_data,
@@ -297,45 +335,6 @@ pub fn move_request_client(
             initial_window_loc,
         };
 
-        pointer.set_grab(state, grab, serial, Focus::Clear);
-    } else {
-        debug!("No grab start data for grab, cancelling");
+        pointer.set_grab(self, grab, serial, Focus::Clear);
     }
-}
-
-/// The compositor initiated a move grab e.g. you hold the mod key and drag.
-pub fn move_request_server(
-    state: &mut State,
-    surface: &WlSurface,
-    seat: &Seat<State>,
-    serial: Serial,
-    button_used: u32,
-) {
-    let pointer = seat.get_pointer().expect("seat had no pointer");
-    let Some(window) = state.window_for_surface(surface) else {
-        warn!("Surface had no window, cancelling move request");
-        return;
-    };
-
-    let initial_window_loc = state
-        .pinnacle
-        .space
-        .element_location(&window)
-        .expect("move request was called on an unmapped window");
-
-    let start_data = smithay::input::pointer::GrabStartData {
-        focus: pointer
-            .current_focus()
-            .map(|focus| (focus, initial_window_loc)),
-        button: button_used,
-        location: pointer.current_location(),
-    };
-
-    let grab = MoveSurfaceGrab {
-        start_data,
-        window,
-        initial_window_loc,
-    };
-
-    pointer.set_grab(state, grab, serial, Focus::Clear);
 }

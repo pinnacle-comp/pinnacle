@@ -9,7 +9,7 @@ use smithay::{
 };
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, WithState},
     tag::Tag,
 };
 
@@ -28,9 +28,8 @@ impl WindowId {
     }
 
     /// Get the window that has this WindowId.
-    pub fn window(&self, state: &State) -> Option<WindowElement> {
-        state
-            .pinnacle
+    pub fn window(&self, pinnacle: &Pinnacle) -> Option<WindowElement> {
+        pinnacle
             .windows
             .iter()
             .find(|win| win.with_state(|state| &state.id == self))
