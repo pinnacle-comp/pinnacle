@@ -29,14 +29,14 @@ use smithay::{
     },
     utils::{IsAlive, Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
-        compositor::{self, RegionAttributes},
+        compositor::{self, RegionAttributes, SurfaceAttributes},
         pointer_constraints::{with_pointer_constraint, PointerConstraint},
         seat::WaylandFocus,
         shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::info;
+use tracing::{error, info};
 use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
@@ -598,7 +598,7 @@ impl State {
     /// Unless there's a case where it's generated on udev that I'm unaware of.
     fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
-            tracing::error!("Pointer motion absolute received with no pointer on seat");
+            error!("Pointer motion absolute received with no pointer on seat");
             return;
         };
 
@@ -640,7 +640,7 @@ impl State {
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
-            tracing::error!("Pointer motion received with no pointer on seat");
+            error!("Pointer motion received with no pointer on seat");
             return;
         };
 
@@ -659,12 +659,14 @@ impl State {
                 let mut pointer_locked_to: Option<Option<Point<f64, Logical>>> = None;
 
                 with_pointer_constraint(&wl_surface, &pointer, |constraint| {
-                    let Some(constraint) = constraint else { return };
+                    let Some(constraint) = constraint else {
+                        return;
+                    };
                     if !constraint.is_active() {
                         return;
                     }
 
-                    let pointer_loc_relative_to_surf = surface_loc - pointer_loc.to_i32_round();
+                    let pointer_loc_relative_to_surf = pointer_loc.to_i32_round() - surface_loc;
 
                     // Constraint does not apply if not within region.
                     if let Some(region) = constraint.region() {
@@ -723,29 +725,41 @@ impl State {
 
         let surface_under = self.pinnacle.pointer_focus_target_under(pointer_loc);
 
-        if let Some((surf, surf_loc, Some(region))) = pointer_confined_to {
-            let mut prevent = false;
+        if let Some((surf, surf_loc, region)) = pointer_confined_to {
+            let region = region.or_else(|| {
+                compositor::with_states(&surf, |states| {
+                    states
+                        .cached_state
+                        .current::<SurfaceAttributes>()
+                        .input_region
+                        .clone()
+                })
+            });
 
-            // compute closest point
-            let mut region_rects = Vec::<Rectangle<i32, Logical>>::new();
+            if let Some(region) = region {
+                // compute closest point
+                let mut region_rects = Vec::<Rectangle<i32, Logical>>::new();
 
-            // TODO: ADD UNIT TEST
+                // TODO: ADD UNIT TEST
 
-            for (kind, mut rect) in region.rects {
-                rect.loc = surf_loc - rect.loc;
-                match kind {
-                    compositor::RectangleKind::Add => {
-                        region_rects.push(rect);
-                    }
-                    compositor::RectangleKind::Subtract => {
-                        region_rects =
-                            Rectangle::subtract_rects_many_in_place(region_rects, [rect]);
+                for (kind, mut rect) in region.rects {
+                    rect.loc += surf_loc;
+                    match kind {
+                        compositor::RectangleKind::Add => {
+                            region_rects.push(rect);
+                        }
+                        compositor::RectangleKind::Subtract => {
+                            region_rects =
+                                Rectangle::subtract_rects_many_in_place(region_rects, [rect]);
+                        }
                     }
                 }
-            }
 
-            pointer_loc = clamp_coords_inside_rects(pointer_loc, region_rects);
+                pointer_loc = clamp_coords_inside_rects(pointer_loc, region_rects);
+            }
         }
+
+        self.pinnacle.maybe_activate_pointer_constraint(pointer_loc);
 
         if let Some(output) = self
             .pinnacle
@@ -797,8 +811,8 @@ fn clamp_coords_inside_rects(
     let nearest_points = rects.into_iter().map(|rect| {
         let loc = rect.loc;
         let size = rect.size;
-        let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w) as f64);
-        let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h) as f64);
+        let pos_x = pos_x.clamp(loc.x as f64, (loc.x + size.w - 1) as f64);
+        let pos_y = pos_y.clamp(loc.y as f64, (loc.y + size.h - 1) as f64);
         (pos_x, pos_y)
     });
 

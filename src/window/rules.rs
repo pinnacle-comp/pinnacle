@@ -51,8 +51,6 @@ impl WindowRuleCondition {
         window: &WindowElement,
         all_or_any: AllOrAny,
     ) -> bool {
-        tracing::debug!("{self:#?}");
-
         let WindowRuleCondition {
             cond_any,
             cond_all,
@@ -98,7 +96,6 @@ impl WindowRuleCondition {
                     true
                 };
 
-                tracing::debug!("{cond_all} {cond_any} {classes} {titles} {tags}");
                 cond_all && cond_any && classes && titles && tags
             }
             AllOrAny::Any => {
