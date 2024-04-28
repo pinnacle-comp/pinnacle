@@ -2,17 +2,17 @@
 # helper to join stuff together
 #symlinkJoin,
 #makeWrapper,
-pinnalcle-unwrapped ? null,
+pinnacle-unwrapped,
 #writeTextFile,
-pinnacle-config ? null, protobuffs ? null,
-# should be a derivation of pinnacle config - i.e. api/rust/examples/default_config.
-manifest ? null, lib, symlinkJoin, formats, writeTextFile, makeWrapper, xwayland
-, protobuf,
+protobuffs,
+# should be a derivation of pinnacle config - i.e. api/rust/examples/default_config. 
+lib, symlinkJoin, formats, writeTextFile, makeWrapper, xwayland, protobuf,
 
 # This is a derivation that contains:
 # 1. a metaconfig that has the correct runnable stuff set, such as a wrapped lua or path to the compiled rust binary
 # 2. the lua or compiled rust binary needed
 ... }:
+{ manifest ? { }, pinnacle-config ? null }:
 let
   defaultManifest = {
     #TODO: get this working with writeTextFile
@@ -33,7 +33,7 @@ let
   # I would prefer choosing a metaconfig in the order of speciifed metaconfig -> metaconfig in config directory -> default.
   # For now, the behavior is specified metaconfig -> metaconfig in directory
   manifestToml =
-    formats.toml.generate "metaconfig.toml" (manifest ? defaultManifest);
+    formats.toml.generate "metaconfig.toml" (defaultManifest // manifest);
   manifestDerivation = writeTextFile rec {
     name = "metaconfig.toml";
     text = builtins.readFile manifestToml;
@@ -42,10 +42,10 @@ let
 in symlinkJoin {
   name = "pinnacle";
   paths = [
-    pinnalcle-unwrapped
+    pinnacle-unwrapped
     pinnacle-config
     protobuffs # protobuffs
-    #manifestDerivation # currently treated as a function rather than a derivation, should be fixable.
+    #(manifestDerivation) # currently treated as a function rather than a derivation, should be fixable.
     # For now it's copied over in pinnacle-config
   ];
   buildInputs = [ makeWrapper ];

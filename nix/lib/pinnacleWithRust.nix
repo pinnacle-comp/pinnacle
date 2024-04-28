@@ -1,5 +1,6 @@
-{ src, manifest ? null, pinnacleWithConfig, buildRustConfig }:
+{ pinnacleWithConfig, buildRustConfig }:
+{ src, manifest ? null }:
 pinnacleWithConfig {
-  pinnacle-config = buildRustConfig { inherit src; };
   inherit manifest;
+  pinnacle-config = buildRustConfig { inherit src; };
 }

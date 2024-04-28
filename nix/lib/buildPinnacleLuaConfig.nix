@@ -1,5 +1,5 @@
-{ src ? ./api/lua/examples/test, extraLuaDeps ? [ ], entrypoint ? "init.lua"
-, lua, luaPinnacleApi, lib, stdenv, makeWrapper }:
+{ lua, luaPinnacleApi, lib, stdenv, makeWrapper }:
+{ src, extraLuaDeps ? [ ], entrypoint ? "init.lua" }:
 let
   name = "pinnacle-config";
   pname = "pinnacle-config";

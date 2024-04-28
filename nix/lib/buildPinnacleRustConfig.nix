@@ -1,4 +1,5 @@
-{ src, craneLib, crateArgs, pinnacle-api }:
+{ craneLib, crateArgs, pinnacle-api }:
+{ src }:
 (craneLib.buildPackage (crateArgs // {
   inherit src;
   inherit (pinnacle-api) cargoArtifacts; # use pinnacle api cargo artifacts

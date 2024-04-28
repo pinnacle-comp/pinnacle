@@ -1,5 +1,6 @@
-{ src, manifest ? null, pinnacleWithConfig, buildLuaConfig, extraLuaDeps ? [ ]
-, entryp }:
+{ pinnacleWithConfig, buildLuaConfig }:
+{ src, manifest ? null, extraLuaDeps ? [ ], entrypoint }:
 pinnacleWithConfig {
-  pinnacle-config = buildLuaConfig { inherit src extraLuaDeps; };
+  inherit manifest;
+  pinnacle-config = buildLuaConfig { inherit src extraLuaDeps entrypoint; };
 }
