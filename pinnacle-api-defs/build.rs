@@ -7,15 +7,15 @@ fn main() {
 
     const VERSION: &str = "v0alpha1";
     const PROTOS: &[&str] = &[
-        formatcp!("../api/protocol/pinnacle/{VERSION}/pinnacle.proto"),
-        formatcp!("../api/protocol/pinnacle/input/{VERSION}/input.proto"),
-        formatcp!("../api/protocol/pinnacle/output/{VERSION}/output.proto"),
-        formatcp!("../api/protocol/pinnacle/process/{VERSION}/process.proto"),
-        formatcp!("../api/protocol/pinnacle/tag/{VERSION}/tag.proto"),
-        formatcp!("../api/protocol/pinnacle/window/{VERSION}/window.proto"),
-        formatcp!("../api/protocol/pinnacle/signal/{VERSION}/signal.proto"),
-        formatcp!("../api/protocol/pinnacle/layout/{VERSION}/layout.proto"),
-        formatcp!("../api/protocol/pinnacle/render/{VERSION}/render.proto"),
+        formatcp!("./protocol/pinnacle/{VERSION}/pinnacle.proto"),
+        formatcp!("./protocol/pinnacle/input/{VERSION}/input.proto"),
+        formatcp!("./protocol/pinnacle/output/{VERSION}/output.proto"),
+        formatcp!("./protocol/pinnacle/process/{VERSION}/process.proto"),
+        formatcp!("./protocol/pinnacle/tag/{VERSION}/tag.proto"),
+        formatcp!("./protocol/pinnacle/window/{VERSION}/window.proto"),
+        formatcp!("./protocol/pinnacle/signal/{VERSION}/signal.proto"),
+        formatcp!("./protocol/pinnacle/layout/{VERSION}/layout.proto"),
+        formatcp!("./protocol/pinnacle/render/{VERSION}/render.proto"),
     ];
 
     let descriptor_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("pinnacle.bin");
