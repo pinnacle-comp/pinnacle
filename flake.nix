@@ -30,20 +30,19 @@
         fenixPkgs = fenix.packages.${system};
         toolchain = fenixPkgs.stable;
         combinedToolchain = toolchain.completeToolchain;
-
         inherit (pkgs) lib;
 
         craneLib = (crane.mkLib pkgs).overrideToolchain combinedToolchain;
 
-        # things in the filter are allowed in the nix build
+        # Get the relevant files for the rust build
         src = lib.cleanSourceWith {
           src = ./.; # The original, unfiltered source
           filter = path: type:
-            (lib.hasSuffix ".lua" path) || (lib.hasSuffix ".rpckspec" path)
-            || # keep lua in build
+            (lib.hasSuffix ".rockspec" path) || # keep lua in build
             (lib.hasInfix "/protocol/" path) || # protobuf stuff
             (lib.hasInfix "/resources/" path)
             || # some resources are needed at build time
+
             # Default filter from crane (allow .rs files)
             (craneLib.filterCargoSources path type);
         };
@@ -54,13 +53,6 @@
 
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = with pkgs; [
-
-            # wlcs
-            (writeScriptBin "wlcs" ''
-              #!/bin/sh
-              ${wlcs}/libexec/wlcs/wlcs "$@"
-            '')
-
             wayland
 
             # build time stuff
@@ -123,6 +115,16 @@
           cargoExtraArgs = "-p pinnacle-api";
           inherit src;
         });
+
+        protobuffs = pkgs.callPackage ./nix/packages/protobuffs.nix { };
+        luaPinnacleApi = import ./nix/packages/pinnacle-api-lua.nix;
+
+        pinnacleLib = import ./nix/lib {
+          inherit (pkgs) lib newScope;
+          inherit craneLib pinnacle-api luaPinnacleApi pinnacle protobuffs;
+          crateArgs = individualCrateArgs;
+        };
+
       in {
         formatter = pkgs.nixfmt;
         checks = {
@@ -133,7 +135,7 @@
           # again, reusing the dependency artifacts from above.
           #
           # Note that this is done as a separate derivation so that
-          # we can block the CI if there are issues here, but not
+          # we can block the  {}CI if there are issues here, but not
           # prevent downstream consumers from building our crate by itself.
           pinnacle-clippy = craneLib.cargoClippy (commonArgs // {
             inherit cargoArtifacts;
@@ -159,11 +161,11 @@
           #   partitions = 1;
           #   partitionType = "count";
           # });
-
         };
-
+        lib = pinnacleLib;
         packages = {
-          inherit pinnacle pinnacle-api-defs pinnacle-api-macros pinnacle-api;
+          inherit pinnacle protobuffs;
+          inherit (pinnacleLib) pinnacleWithRust pinnacleWithLua;
         };
 
         apps = { pinnacle = flake-utils.lib.mkApp { drv = pinnacle; }; };
