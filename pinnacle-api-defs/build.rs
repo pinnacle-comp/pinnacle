@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use const_format::formatcp;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../api/protocol");
+    println!("cargo:rerun-if-changed=./protocol");
 
     const VERSION: &str = "v0alpha1";
     const PROTOS: &[&str] = &[
