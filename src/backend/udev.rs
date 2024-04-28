@@ -5,7 +5,6 @@ mod gamma;
 
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsString,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -684,13 +683,7 @@ pub fn setup_udev(
         });
     });
 
-    if let Err(err) = state.pinnacle.xwayland.start(
-        state.pinnacle.loop_handle.clone(),
-        None,
-        std::iter::empty::<(OsString, OsString)>(),
-        true,
-        |_| {},
-    ) {
+    if let Err(err) = state.pinnacle.start_xwayland() {
         error!("Failed to start XWayland: {err}");
     }
 

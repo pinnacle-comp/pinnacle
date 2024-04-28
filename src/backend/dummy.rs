@@ -5,7 +5,6 @@ use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Physical, Size};
-use std::ffi::OsString;
 use std::path::PathBuf;
 
 use smithay::{
@@ -119,13 +118,7 @@ pub fn setup_dummy(
 
     state.pinnacle.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.pinnacle.xwayland.start(
-        state.pinnacle.loop_handle.clone(),
-        None,
-        std::iter::empty::<(OsString, OsString)>(),
-        true,
-        |_| {},
-    ) {
+    if let Err(err) = state.pinnacle.start_xwayland() {
         tracing::error!("Failed to start XWayland: {err}");
     }
 

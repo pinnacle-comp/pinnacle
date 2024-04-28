@@ -49,7 +49,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "c293ec7" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "f3e442c" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -89,7 +89,7 @@ gag = "1.0.0"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "c293ec7"
+rev = "f3e442c"
 default-features = false
 features = [
     "desktop",
