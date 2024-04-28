@@ -5,7 +5,7 @@ let
 in stdenv.mkDerivation rec {
   name = "protobuffs";
   src = fs.toSource {
-    root = ../../api/protocol;
+    root = ../../pinnacle-api-defs/protocol;
     fileset = sourceFiles;
   };
   protobuffOutDir = "$out/share/config/pinnacle/protobuffs";
