@@ -154,7 +154,7 @@
       buildPinnacleLuaConfig = {
         src ? ./api/lua/examples/test,
         extraLuaDeps ? [],
-        entrypoint ? "init.lua",
+        entrypoint ? "default_config.lua",
       }: let
         name = "pinnacle-config";
         pname = "pinnacle-config";
@@ -308,7 +308,7 @@
         # example of how one could use this
         exampleLuaBuild = mergePinnacleConfig {
           pinnacle-config = buildPinnacleLuaConfig {
-            src = ./api/lua/examples/test;
+            src = ./api/lua/examples/default;
             extraLuaDeps = ["inspect"];
           };
         };
