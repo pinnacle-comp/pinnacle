@@ -75,9 +75,9 @@
 //! ## 5. Begin crafting your config!
 //! You can peruse the documentation for things to configure.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use futures::{future::BoxFuture, Future, StreamExt};
+use futures::{future::BoxFuture, Future, FutureExt, StreamExt};
 use input::Input;
 use layout::Layout;
 use output::Output;
@@ -179,7 +179,7 @@ pub async fn connect(
     let output = Box::leak(Box::new(Output::new(channel.clone())));
     let tag = Box::leak(Box::new(Tag::new(channel.clone())));
     let render = Box::leak(Box::new(Render::new(channel.clone())));
-    let layout = Box::leak(Box::new(Layout::new(channel.clone())));
+    let layout = Box::leak(Box::new(Layout::new(channel.clone(), fut_sender.clone())));
 
     let modules = ApiModules {
         pinnacle,
@@ -211,21 +211,38 @@ pub async fn connect(
 /// You should use the macro instead of this function directly.
 pub async fn listen(api: ApiModules, fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
+    let mut set = futures::stream::FuturesUnordered::new();
 
-    let keepalive = async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            if let Err(err) = api.pinnacle.ping().await {
-                eprintln!("Failed to ping compositor: {err}");
-                std::process::exit(1);
+    let mut shutdown_stream = api.pinnacle.shutdown_watch().await;
+
+    let mut shutdown_watcher = async move {
+        // This will trigger either when the compositor sends the shutdown signal
+        // or when it exits (in which case the stream received an error)
+        shutdown_stream.next().await;
+    }
+    .boxed();
+
+    loop {
+        tokio::select! {
+            fut = fut_recv.next() => {
+                if let Some(fut) = fut {
+                    set.push(tokio::spawn(fut));
+                } else {
+                    break;
+                }
+            }
+            res = set.next() => {
+                if let Some(Err(join_err)) = res {
+                    eprintln!("tokio task panicked: {join_err}");
+                    api.signal.write().await.shutdown();
+                    break;
+                }
+            }
+            _ = &mut shutdown_watcher => {
+                api.signal.write().await.shutdown();
+                break;
             }
         }
-    };
-
-    tokio::spawn(keepalive);
-
-    while let Some(fut) = fut_recv.next().await {
-        tokio::spawn(fut);
     }
 }
 

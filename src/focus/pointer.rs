@@ -35,6 +35,7 @@ impl PointerFocusTarget {
     pub fn window_for(&self, state: &State) -> Option<WindowElement> {
         match self {
             PointerFocusTarget::WlSurface(surf) => state
+                .pinnacle
                 .windows
                 .iter()
                 .find(|win| {
@@ -51,6 +52,7 @@ impl PointerFocusTarget {
                 })
                 .cloned(),
             PointerFocusTarget::X11Surface(surf) => state
+                .pinnacle
                 .windows
                 .iter()
                 .find(|win| win.x11_surface() == Some(surf))
@@ -61,7 +63,7 @@ impl PointerFocusTarget {
     pub fn layer_for(&self, state: &State) -> Option<LayerSurface> {
         match self {
             PointerFocusTarget::WlSurface(surf) => {
-                for output in state.space.outputs() {
+                for output in state.pinnacle.space.outputs() {
                     let map = layer_map_for_output(output);
                     for layer in map.layers() {
                         let mut found = false;
@@ -83,7 +85,7 @@ impl PointerFocusTarget {
 
     pub fn popup_for(&self, state: &State) -> Option<PopupKind> {
         match self {
-            PointerFocusTarget::WlSurface(surf) => state.popup_manager.find_popup(surf),
+            PointerFocusTarget::WlSurface(surf) => state.pinnacle.popup_manager.find_popup(surf),
             PointerFocusTarget::X11Surface(_) => None,
         }
     }
@@ -121,7 +123,8 @@ impl PointerTarget<State> for PointerFocusTarget {
         if let Some(window) = self.window_for(data) {
             let window_id = Some(window.with_state(|state| state.id.0));
 
-            data.signal_state
+            data.pinnacle
+                .signal_state
                 .window_pointer_enter
                 .signal(|buffer| buffer.push_back(WindowPointerEnterResponse { window_id }));
         }
@@ -312,7 +315,8 @@ impl PointerTarget<State> for PointerFocusTarget {
         if let Some(window) = self.window_for(data) {
             let window_id = Some(window.with_state(|state| state.id.0));
 
-            data.signal_state
+            data.pinnacle
+                .signal_state
                 .window_pointer_leave
                 .signal(|buffer| buffer.push_back(WindowPointerLeaveResponse { window_id }));
         }

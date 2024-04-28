@@ -55,6 +55,12 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = with pkgs; [
 
+            # wlcs
+            (writeScriptBin "wlcs" ''
+              #!/bin/sh
+              ${wlcs}/libexec/wlcs/wlcs "$@"
+            '')
+
             wayland
 
             # build time stuff

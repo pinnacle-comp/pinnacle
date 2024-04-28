@@ -2,6 +2,8 @@ local client = require("pinnacle.grpc.client")
 local protobuf = require("pinnacle.grpc.protobuf")
 local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v0alpha1.LayoutService
 
+local mfloor = math.floor
+
 ---@class LayoutArgs
 ---@field output OutputHandle
 ---@field windows WindowHandle[]
@@ -130,16 +132,16 @@ function MasterStack:layout(args)
 
     if self.master_side == "left" then
         master_rect, stack_rect =
-            rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+            rect:split_at("vertical", mfloor(width * master_factor) - mfloor(gaps / 2), gaps)
     elseif self.master_side == "right" then
         stack_rect, master_rect =
-            rect:split_at("vertical", math.floor(width * master_factor) - gaps // 2, gaps)
+            rect:split_at("vertical", mfloor(width * master_factor) - mfloor(gaps / 2), gaps)
     elseif self.master_side == "top" then
         master_rect, stack_rect =
-            rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+            rect:split_at("horizontal", mfloor(height * master_factor) - mfloor(gaps / 2), gaps)
     else
         stack_rect, master_rect =
-            rect:split_at("horizontal", math.floor(height * master_factor) - gaps // 2, gaps)
+            rect:split_at("horizontal", mfloor(height * master_factor) - mfloor(gaps / 2), gaps)
     end
 
     if not master_rect then
@@ -166,17 +168,17 @@ function MasterStack:layout(args)
 
         if self.master_side == "left" or self.master_side == "right" then
             coord = master_rect.y
-            len = master_rect.height // (master_slice_count + 1)
+            len = mfloor(master_rect.height / (master_slice_count + 1))
             axis = "horizontal"
         else
             coord = master_rect.x
-            len = master_rect.width // (master_slice_count + 1)
+            len = mfloor(master_rect.width / (master_slice_count + 1))
             axis = "vertical"
         end
 
         for i = 1, master_slice_count do
-            local slice_point = coord + math.floor(len * i + 0.5)
-            slice_point = slice_point - gaps // 2
+            local slice_point = coord + mfloor(len * i + 0.5)
+            slice_point = slice_point - mfloor(gaps / 2)
             local to_push, rest = master_rect:split_at(axis, slice_point, gaps)
             table.insert(geos, to_push)
             master_rect = rest
@@ -203,8 +205,8 @@ function MasterStack:layout(args)
             end
 
             for i = 1, stack_slice_count do
-                local slice_point = coord + math.floor(len * i + 0.5)
-                slice_point = slice_point - gaps // 2
+                local slice_point = coord + mfloor(len * i + 0.5)
+                slice_point = slice_point - mfloor(gaps / 2)
                 local to_push, rest = stack_rect:split_at(axis, slice_point, gaps)
                 table.insert(geos, to_push)
                 stack_rect = rest
@@ -341,12 +343,12 @@ function Dwindle:layout(args)
             local split_coord
             if i % 2 == 1 then
                 axis = "vertical"
-                split_coord = rest.x + math.floor(rest.width * factor + 0.5)
+                split_coord = rest.x + mfloor(rest.width * factor + 0.5)
             else
                 axis = "horizontal"
-                split_coord = rest.y + math.floor(rest.height * factor + 0.5)
+                split_coord = rest.y + mfloor(rest.height * factor + 0.5)
             end
-            split_coord = split_coord - gaps // 2
+            split_coord = split_coord - mfloor(gaps / 2)
 
             local to_push
 
@@ -493,13 +495,13 @@ function Corner:layout(args)
 
         if self.corner_loc == "top_left" or self.corner_loc == "bottom_left" then
             local x_slice_point = rect.x
-                + math.floor(rect.width * self.corner_width_factor + 0.5)
-                - gaps // 2
+                + mfloor(rect.width * self.corner_width_factor + 0.5)
+                - mfloor(gaps / 2)
             corner_rect, vert_stack_rect = rect:split_at("vertical", x_slice_point, gaps)
         else
             local x_slice_point = rect.x
-                + math.floor(rect.width * (1 - self.corner_width_factor) + 0.5)
-                - gaps // 2
+                + mfloor(rect.width * (1 - self.corner_width_factor) + 0.5)
+                - mfloor(gaps / 2)
             vert_stack_rect, corner_rect = rect:split_at("vertical", x_slice_point, gaps)
         end
 
@@ -513,14 +515,14 @@ function Corner:layout(args)
 
             if self.corner_loc == "top_left" or self.corner_loc == "top_right" then
                 local y_slice_point = rect.y
-                    + math.floor(rect.height * self.corner_height_factor + 0.5)
-                    - gaps // 2
+                    + mfloor(rect.height * self.corner_height_factor + 0.5)
+                    - mfloor(gaps / 2)
                 corner_rect, horiz_stack_rect =
                     corner_rect:split_at("horizontal", y_slice_point, gaps)
             else
                 local y_slice_point = rect.y
-                    + math.floor(rect.height * (1 - self.corner_height_factor) + 0.5)
-                    - gaps // 2
+                    + mfloor(rect.height * (1 - self.corner_height_factor) + 0.5)
+                    - mfloor(gaps / 2)
                 horiz_stack_rect, corner_rect =
                     corner_rect:split_at("horizontal", y_slice_point, gaps)
             end
@@ -539,14 +541,14 @@ function Corner:layout(args)
             local horiz_geos = {}
 
             local vert_stack_count = math.ceil((win_count - 1) / 2)
-            local horiz_stack_count = math.floor((win_count - 1) / 2)
+            local horiz_stack_count = mfloor((win_count - 1) / 2)
 
             local vert_stack_y = vert_stack_rect.y
             local vert_win_height = vert_stack_rect.height / vert_stack_count
 
             for i = 1, vert_stack_count - 1 do
-                local slice_point = vert_stack_y + math.floor(vert_win_height * i + 0.5)
-                slice_point = slice_point - gaps // 2
+                local slice_point = vert_stack_y + mfloor(vert_win_height * i + 0.5)
+                slice_point = slice_point - mfloor(gaps / 2)
                 local to_push, rest = vert_stack_rect:split_at("horizontal", slice_point, gaps)
                 table.insert(vert_geos, to_push)
                 vert_stack_rect = rest
@@ -558,8 +560,8 @@ function Corner:layout(args)
             local horiz_win_width = horiz_stack_rect.width / horiz_stack_count
 
             for i = 1, horiz_stack_count - 1 do
-                local slice_point = horiz_stack_x + math.floor(horiz_win_width * i + 0.5)
-                slice_point = slice_point - gaps // 2
+                local slice_point = horiz_stack_x + mfloor(horiz_win_width * i + 0.5)
+                slice_point = slice_point - mfloor(gaps / 2)
                 local to_push, rest = horiz_stack_rect:split_at("vertical", slice_point, gaps)
                 table.insert(horiz_geos, to_push)
                 horiz_stack_rect = rest
@@ -707,12 +709,12 @@ function Spiral:layout(args)
             local split_coord
             if i % 2 == 1 then
                 axis = "vertical"
-                split_coord = rest.x + math.floor(rest.width * factor + 0.5)
+                split_coord = rest.x + mfloor(rest.width * factor + 0.5)
             else
                 axis = "horizontal"
-                split_coord = rest.y + math.floor(rest.height * factor + 0.5)
+                split_coord = rest.y + mfloor(rest.height * factor + 0.5)
             end
-            split_coord = split_coord - gaps // 2
+            split_coord = split_coord - mfloor(gaps / 2)
 
             local to_push
 
@@ -856,13 +858,14 @@ function Fair:layout(args)
             coord = rect.y
         end
         -- Two windows is special cased to create a new line rather than increase to 2 in a line
-        local rect1, rect2 = rect:split_at(self.direction, coord + len // 2 - gaps // 2, gaps)
+        local rect1, rect2 =
+            rect:split_at(self.direction, coord + mfloor(len / 2) - mfloor(gaps / 2), gaps)
         if rect1 and rect2 then
             table.insert(geos, rect1)
             table.insert(geos, rect2)
         end
     else
-        local line_count = math.floor(math.sqrt(win_count) + 0.5)
+        local line_count = mfloor(math.sqrt(win_count) + 0.5)
         local wins_per_line = {}
         local max_per_line = line_count
         if win_count > line_count * line_count then
@@ -895,8 +898,8 @@ function Fair:layout(args)
         end
 
         for i = 1, line_count - 1 do
-            local slice_point = coord + math.floor(len * i + 0.5)
-            slice_point = slice_point - gaps // 2
+            local slice_point = coord + mfloor(len * i + 0.5)
+            slice_point = slice_point - mfloor(gaps / 2)
             local to_push, rest = rect:split_at(axis, slice_point, gaps)
             table.insert(line_rects, to_push)
             if not rest then
@@ -922,8 +925,8 @@ function Fair:layout(args)
             end
 
             for j = 1, wins_per_line[i] - 1 do
-                local slice_point = coord + math.floor(len * j + 0.5)
-                slice_point = slice_point - gaps // 2
+                local slice_point = coord + mfloor(len * j + 0.5)
+                slice_point = slice_point - mfloor(gaps / 2)
                 local to_push, rest = line_rect:split_at(axis, slice_point, gaps)
                 table.insert(geos, to_push)
                 if not rest then

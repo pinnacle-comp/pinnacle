@@ -11,13 +11,15 @@
 // #![deny(unused_imports)] // this has remained commented out for months lol
 #![warn(clippy::unwrap_used)]
 
+use std::io::{BufRead, BufReader};
+
 use anyhow::Context;
 use nix::unistd::Uid;
 use pinnacle::{
     backend::{udev::setup_udev, winit::setup_winit},
     cli::{self, Cli},
 };
-use tracing::{info, level_filters::LevelFilter, warn};
+use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use xdg::BaseDirectories;
@@ -37,19 +39,15 @@ async fn main() -> anyhow::Result<()> {
 
     let env_filter = EnvFilter::try_from_default_env();
 
-    let file_log_env_filter = match env_filter.as_ref() {
-        Ok(filter) if filter.max_level_hint() == Some(LevelFilter::TRACE) => {
-            EnvFilter::new("trace")
-        }
-        _ => EnvFilter::new("debug"),
-    };
+    let file_log_env_filter = EnvFilter::new("debug,h2=warn,smithay::xwayland::xwm=warn");
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
+        .with_ansi(false)
         .with_writer(appender)
         .with_filter(file_log_env_filter);
 
-    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("info"));
+    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info"));
     let stdout_layer = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stdout)
@@ -59,6 +57,8 @@ async fn main() -> anyhow::Result<()> {
         .with(file_log_layer)
         .with(stdout_layer)
         .init();
+
+    set_log_panic_hook();
 
     let Some(cli) = Cli::parse_and_prompt() else {
         return Ok(());
@@ -131,23 +131,46 @@ async fn main() -> anyhow::Result<()> {
 
     event_loop.run(None, &mut state, |state| {
         state.update_pointer_focus();
-        state.fixup_z_layering();
-        state.space.refresh();
-        state.popup_manager.cleanup();
+        state.pinnacle.fixup_z_layering();
+        state.pinnacle.space.refresh();
+        state.pinnacle.popup_manager.cleanup();
 
         state
+            .pinnacle
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
 
         // TODO: couple these or something, this is really error-prone
         assert_eq!(
-            state.windows.len(),
-            state.z_index_stack.len(),
+            state.pinnacle.windows.len(),
+            state.pinnacle.z_index_stack.len(),
             "Length of `windows` and `z_index_stack` are different. \
             If you see this, report it to the developer."
         );
     })?;
 
     Ok(())
+}
+
+/// Augment the default panic hook to attempt logging the panic message
+/// using tracing. Allows the message to be written to file logs.
+fn set_log_panic_hook() {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _span = tracing::error_span!("panic");
+        let _span = _span.enter();
+        error!("Panic occurred! Attempting to log backtrace");
+        let buffer = gag::BufferRedirect::stderr();
+        if let Ok(buffer) = buffer {
+            hook(info);
+            let mut reader = BufReader::new(buffer).lines();
+            while let Some(Ok(line)) = reader.next() {
+                error!("{line}");
+            }
+        } else {
+            error!("Attempt failed, printing normally");
+            hook(info);
+        }
+    }));
 }

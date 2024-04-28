@@ -4,7 +4,7 @@ use smithay::{output::Output, utils::SERIAL_COUNTER};
 use tracing::warn;
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::WindowElement,
 };
 
@@ -12,6 +12,31 @@ pub mod keyboard;
 pub mod pointer;
 
 impl State {
+    /// Update the keyboard focus.
+    pub fn update_focus(&mut self, output: &Output) {
+        let current_focus = self.pinnacle.focused_window(output);
+
+        if let Some(win) = &current_focus {
+            assert!(!win.is_x11_override_redirect());
+
+            if let Some(toplevel) = win.toplevel() {
+                toplevel.send_configure();
+            }
+        }
+
+        self.pinnacle
+            .seat
+            .get_keyboard()
+            .expect("no keyboard")
+            .set_focus(
+                self,
+                current_focus.map(|win| win.into()),
+                SERIAL_COUNTER.next_serial(),
+            );
+    }
+}
+
+impl Pinnacle {
     /// Get the currently focused window on `output`.
     ///
     /// This returns the topmost window on the keyboard focus stack that is on an active tag.
@@ -35,25 +60,6 @@ impl State {
             .flatten()
     }
 
-    /// Update the keyboard focus.
-    pub fn update_focus(&mut self, output: &Output) {
-        let current_focus = self.focused_window(output);
-
-        if let Some(win) = &current_focus {
-            assert!(!win.is_x11_override_redirect());
-
-            if let Some(toplevel) = win.toplevel() {
-                toplevel.send_configure();
-            }
-        }
-
-        self.seat.get_keyboard().expect("no keyboard").set_focus(
-            self,
-            current_focus.map(|win| win.into()),
-            SERIAL_COUNTER.next_serial(),
-        );
-    }
-
     pub fn fixup_z_layering(&mut self) {
         for win in self.z_index_stack.iter() {
             self.space.raise_element(win, false);
@@ -74,7 +80,7 @@ impl State {
         self.z_index_stack.retain(|win| win != &window);
         self.z_index_stack.push(window);
 
-        self.fixup_xwayland_internal_z_indices();
+        self.fixup_xwayland_window_layering();
     }
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.

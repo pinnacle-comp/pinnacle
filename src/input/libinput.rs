@@ -1,8 +1,8 @@
 use smithay::backend::{input::InputEvent, libinput::LibinputInputBackend};
 
-use crate::state::State;
+use crate::state::Pinnacle;
 
-impl State {
+impl Pinnacle {
     /// Apply current libinput settings to new devices.
     pub fn apply_libinput_settings(&mut self, event: &InputEvent<LibinputInputBackend>) {
         let mut device = match event {

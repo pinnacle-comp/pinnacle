@@ -7,10 +7,12 @@ use std::{
 
 use crate::common::{output_for_name, sleep_secs, test_api, with_state};
 
+use anyhow::anyhow;
+use pinnacle::backend::dummy::DUMMY_OUTPUT_NAME;
 use pinnacle::state::WithState;
 use test_log::test;
 
-fn run_lua(ident: &str, code: &str) {
+fn run_lua(ident: &str, code: &str) -> anyhow::Result<()> {
     #[rustfmt::skip]
     let code = format!(r#"
         require("pinnacle").run(function({ident})
@@ -22,24 +24,28 @@ fn run_lua(ident: &str, code: &str) {
 
             if not success then
                 print(err)
+                print("exiting")
                 os.exit(1)
             end
         end)
     "#);
 
-    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn()?;
 
-    let mut stdin = child.stdin.take().unwrap();
+    let mut stdin = child.stdin.take().ok_or(anyhow!("child had no stdin"))?;
 
-    stdin.write_all(code.as_bytes()).unwrap();
+    stdin.write_all(code.as_bytes())?;
 
     drop(stdin);
 
-    let exit_status = child.wait().unwrap();
+    let exit_status = child.wait()?;
+    println!("exit status is {exit_status:?}");
 
     if exit_status.code().is_some_and(|code| code != 0) {
-        panic!("lua code panicked");
+        return Err(anyhow!("lua code panicked"));
     }
+
+    Ok(())
 }
 
 struct SetupLuaGuard {
@@ -52,8 +58,7 @@ impl Drop for SetupLuaGuard {
     }
 }
 
-#[must_use]
-fn setup_lua(ident: &str, code: &str) -> SetupLuaGuard {
+fn setup_lua(ident: &str, code: &str) -> anyhow::Result<SetupLuaGuard> {
     #[rustfmt::skip]
     let code = format!(r#"
         require("pinnacle").setup(function({ident})
@@ -65,31 +70,32 @@ fn setup_lua(ident: &str, code: &str) -> SetupLuaGuard {
 
             if not success then
                 print(err)
+                print("exiting")
                 os.exit(1)
             end
         end)
     "#);
 
-    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn()?;
 
-    let mut stdin = child.stdin.take().unwrap();
+    let mut stdin = child.stdin.take().ok_or(anyhow!("child had no stdin"))?;
 
-    stdin.write_all(code.as_bytes()).unwrap();
+    stdin.write_all(code.as_bytes())?;
 
     drop(stdin);
 
-    SetupLuaGuard { child }
+    Ok(SetupLuaGuard { child })
 }
 
 macro_rules! run_lua {
     { |$ident:ident| $($body:tt)* } => {
-        run_lua(stringify!($ident), stringify!($($body)*));
+        run_lua(stringify!($ident), stringify!($($body)*))?;
     };
 }
 
 macro_rules! setup_lua {
     { |$ident:ident| $($body:tt)* } => {
-        let _guard = setup_lua(stringify!($ident), stringify!($($body)*));
+        let _guard = setup_lua(stringify!($ident), stringify!($($body)*))?;
     };
 }
 
@@ -118,9 +124,11 @@ mod process {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.windows.len(), 1);
-                assert_eq!(state.windows[0].class(), Some("foot".to_string()));
+                assert_eq!(state.pinnacle.windows.len(), 1);
+                assert_eq!(state.pinnacle.windows[0].class(), Some("foot".to_string()));
             });
+
+            Ok(())
         })
     }
 
@@ -140,6 +148,8 @@ mod process {
                     Ok("env value".to_string())
                 );
             });
+
+            Ok(())
         })
     }
 }
@@ -166,6 +176,8 @@ mod window {
             run_lua! { |Pinnacle|
                 assert(#Pinnacle.window.get_all() == 5)
             }
+
+            Ok(())
         })
     }
 
@@ -185,6 +197,8 @@ mod window {
             run_lua! { |Pinnacle|
                 assert(Pinnacle.window.get_focused())
             }
+
+            Ok(())
         })
     }
 
@@ -203,9 +217,9 @@ mod window {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 1);
+                assert_eq!(state.pinnacle.config.window_rules.len(), 1);
                 assert_eq!(
-                    state.config.window_rules[0],
+                    state.pinnacle.config.window_rules[0],
                     (
                         WindowRuleCondition {
                             class: Some(vec!["firefox".to_string()]),
@@ -240,9 +254,9 @@ mod window {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                assert_eq!(state.config.window_rules.len(), 2);
+                assert_eq!(state.pinnacle.config.window_rules.len(), 2);
                 assert_eq!(
-                    state.config.window_rules[1],
+                    state.pinnacle.config.window_rules[1],
                     (
                         WindowRuleCondition {
                             cond_all: Some(vec![WindowRuleCondition {
@@ -259,6 +273,8 @@ mod window {
                     )
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -281,7 +297,7 @@ mod window {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    assert_eq!(state.windows.len(), 1);
+                    assert_eq!(state.pinnacle.windows.len(), 1);
                 });
 
                 run_lua! { |Pinnacle|
@@ -291,8 +307,10 @@ mod window {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    assert_eq!(state.windows.len(), 0);
+                    assert_eq!(state.pinnacle.windows.len(), 0);
                 });
+
+                Ok(())
             })
         }
 
@@ -311,7 +329,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -329,7 +347,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -347,7 +365,7 @@ mod window {
 
                 with_state(&sender, |state| {
                     assert_eq!(
-                        state.windows[0].with_state(|st| st
+                        state.pinnacle.windows[0].with_state(|st| st
                             .tags
                             .iter()
                             .map(|tag| tag.name())
@@ -355,6 +373,8 @@ mod window {
                         vec!["3"]
                     );
                 });
+
+                Ok(())
             })
         }
     }
@@ -391,7 +411,7 @@ mod tag {
                     local first_props = Pinnacle.tag.get("First"):props()
                     assert(first_props.active == true)
                     assert(first_props.name == "First")
-                    assert(first_props.output.name == "Pinnacle Window")
+                    assert(first_props.output.name == "Dummy Window")
                     assert(#first_props.windows == 2)
                     assert(first_props.windows[1]:class() == "foot")
                     assert(first_props.windows[2]:class() == "foot")
@@ -399,17 +419,19 @@ mod tag {
                     local mungus_props = Pinnacle.tag.get("Mungus"):props()
                     assert(mungus_props.active == false)
                     assert(mungus_props.name == "Mungus")
-                    assert(mungus_props.output.name == "Pinnacle Window")
+                    assert(mungus_props.output.name == "Dummy Window")
                     assert(#mungus_props.windows == 0)
 
                     local potato_props = Pinnacle.tag.get("Potato"):props()
                     assert(potato_props.active == true)
                     assert(potato_props.name == "Potato")
-                    assert(potato_props.output.name == "Pinnacle Window")
+                    assert(potato_props.output.name == "Dummy Window")
                     assert(#potato_props.windows == 2)
                     assert(potato_props.windows[1]:class() == "foot")
                     assert(potato_props.windows[2]:class() == "foot")
                 }
+
+                Ok(())
             })
         }
     }
@@ -434,7 +456,7 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::Flipped90);
                 });
 
@@ -445,9 +467,11 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::Normal);
                 });
+
+                Ok(())
             })
         }
 
@@ -459,7 +483,7 @@ mod output {
                     local props = Pinnacle.output.get_focused():props()
 
                     assert(props.make == "Pinnacle")
-                    assert(props.model == "Winit Window")
+                    assert(props.model == "Dummy Window")
                     assert(props.x == 0)
                     assert(props.y == 0)
                     assert(props.logical_width == 1920)
@@ -478,6 +502,8 @@ mod output {
                     assert(props.scale == 1.0)
                     assert(props.transform == "flipped_180")
                 }
+
+                Ok(())
             })
         }
     }
@@ -512,15 +538,15 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 200).into());
-                state.new_output("Test Third", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 200).into());
+                state.pinnacle.new_output("Test Third", (300, 200).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let test_third_op = output_for_name(state, "Test Third");
@@ -559,6 +585,8 @@ mod output {
                     smithay::utils::Transform::_90
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -580,7 +608,7 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
             });
 
             sleep_secs(1);
@@ -595,6 +623,8 @@ mod output {
 
                 assert_eq!(tags_for(&first_op), vec!["1", "2", "3", "A", "B"]);
             });
+
+            Ok(())
         })
     }
 
@@ -604,7 +634,7 @@ mod output {
         test_api(|sender| {
             setup_lua! { |Pinnacle|
                 Pinnacle.output.setup_locs("all", {
-                    ["Pinnacle Window"] = { x = 0, y = 0 },
+                    ["Dummy Window"] = { x = 0, y = 0 },
                     ["First"] = { "Second", "left_align_top" },
                     ["Second"] = { "First", "right_align_top" },
                 })
@@ -613,17 +643,17 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -634,19 +664,19 @@ mod output {
                     Rectangle::from_loc_and_size((1920, 0), (300, 200))
                 );
 
-                state.new_output("Second", (500, 500).into());
+                state.pinnacle.new_output("Second", (500, 500).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -661,6 +691,8 @@ mod output {
                     Rectangle::from_loc_and_size((1920 + 300, 0), (500, 500))
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -671,8 +703,8 @@ mod output {
         test_api(|sender| {
             setup_lua! { |Pinnacle|
                 Pinnacle.output.setup_locs("all", {
-                    ["Pinnacle Window"] = { 0, 0 },
-                    ["First"] = { "Pinnacle Window", "bottom_align_left" },
+                    ["Dummy Window"] = { 0, 0 },
+                    ["First"] = { "Dummy Window", "bottom_align_left" },
                     ["Second"] = { "First", "bottom_align_left" },
                     ["4:Third"] = { "Second", "bottom_align_left" },
                     ["5:Third"] = { "First", "bottom_align_left" },
@@ -682,23 +714,23 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 700).into());
-                state.new_output("Third", (300, 400).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 700).into());
+                state.pinnacle.new_output("Third", (300, 400).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -717,19 +749,19 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200 + 700), (300, 400))
                 );
 
-                state.remove_output(&second_op);
+                state.pinnacle.remove_output(&second_op);
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -744,6 +776,8 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200), (300, 400))
                 );
             });
+
+            Ok(())
         })
     }
 }
@@ -759,7 +793,7 @@ async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 1));
+        with_state(&sender, |state| assert_eq!(state.pinnacle.windows.len(), 1));
 
         run_lua! { |Pinnacle|
             for i = 1, 20 do
@@ -769,7 +803,11 @@ async fn window_count_with_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 21));
+        with_state(&sender, |state| {
+            assert_eq!(state.pinnacle.windows.len(), 21)
+        });
+
+        Ok(())
     })
 }
 
@@ -783,7 +821,9 @@ async fn window_count_without_tag_is_correct() -> anyhow::Result<()> {
 
         sleep_secs(1);
 
-        with_state(&sender, |state| assert_eq!(state.windows.len(), 1));
+        with_state(&sender, |state| assert_eq!(state.pinnacle.windows.len(), 1));
+
+        Ok(())
     })
 }
 
@@ -801,12 +841,15 @@ async fn spawned_window_on_active_tag_has_keyboard_focus() -> anyhow::Result<()>
         with_state(&sender, |state| {
             assert_eq!(
                 state
-                    .focused_window(state.focused_output().unwrap())
+                    .pinnacle
+                    .focused_window(state.pinnacle.focused_output().unwrap())
                     .unwrap()
                     .class(),
                 Some("foot".to_string())
             );
         });
+
+        Ok(())
     })
 }
 
@@ -822,8 +865,15 @@ async fn spawned_window_on_inactive_tag_does_not_have_keyboard_focus() -> anyhow
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.focused_window(state.focused_output().unwrap()), None);
+            assert_eq!(
+                state
+                    .pinnacle
+                    .focused_window(state.pinnacle.focused_output().unwrap()),
+                None
+            );
         });
+
+        Ok(())
     })
 }
 
@@ -839,8 +889,8 @@ async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.windows.len(), 1);
-            assert_eq!(state.windows[0].with_state(|st| st.tags.len()), 1);
+            assert_eq!(state.pinnacle.windows.len(), 1);
+            assert_eq!(state.pinnacle.windows[0].with_state(|st| st.tags.len()), 1);
         });
 
         run_lua! { |Pinnacle|
@@ -852,10 +902,10 @@ async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
         sleep_secs(1);
 
         with_state(&sender, |state| {
-            assert_eq!(state.windows.len(), 2);
-            assert_eq!(state.windows[1].with_state(|st| st.tags.len()), 2);
+            assert_eq!(state.pinnacle.windows.len(), 2);
+            assert_eq!(state.pinnacle.windows[1].with_state(|st| st.tags.len()), 2);
             assert_eq!(
-                state.windows[1].with_state(|st| st
+                state.pinnacle.windows[1].with_state(|st| st
                     .tags
                     .iter()
                     .map(|tag| tag.name())
@@ -863,5 +913,7 @@ async fn spawned_window_has_correct_tags() -> anyhow::Result<()> {
                 vec!["1", "3"]
             );
         });
+
+        Ok(())
     })
 }

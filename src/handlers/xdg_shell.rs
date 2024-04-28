@@ -31,7 +31,7 @@ use crate::{
 
 impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
-        &mut self.xdg_shell_state
+        &mut self.pinnacle.xdg_shell_state
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
@@ -43,24 +43,24 @@ impl XdgShellHandler for State {
         });
 
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
-        self.new_windows.push(window);
+        self.pinnacle.new_windows.push(window);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
-        self.windows.retain(|window| {
+        self.pinnacle.windows.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
 
-        self.z_index_stack.retain(|window| {
+        self.pinnacle.z_index_stack.retain(|window| {
             window
                 .wl_surface()
                 .is_some_and(|surf| &surf != surface.wl_surface())
         });
 
-        for output in self.space.outputs() {
+        for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
                 state.focus_stack.stack.retain(|window| {
                     window
@@ -70,24 +70,26 @@ impl XdgShellHandler for State {
             });
         }
 
-        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
 
-        if let Some(output) = window.output(self) {
-            self.request_layout(&output);
+        if let Some(output) = window.output(&self.pinnacle) {
+            self.pinnacle.request_layout(&output);
             let focus = self
+                .pinnacle
                 .focused_window(&output)
                 .map(KeyboardFocusTarget::Window);
             if let Some(KeyboardFocusTarget::Window(window)) = &focus {
                 tracing::debug!("Focusing on prev win");
                 // TODO:
-                self.raise_window(window.clone(), true);
+                self.pinnacle.raise_window(window.clone(), true);
                 if let Some(toplevel) = window.toplevel() {
                     toplevel.send_configure();
                 }
             }
-            self.seat
+            self.pinnacle
+                .seat
                 .get_keyboard()
                 .expect("Seat had no keyboard")
                 .set_focus(self, focus, SERIAL_COUNTER.next_serial());
@@ -99,24 +101,27 @@ impl XdgShellHandler for State {
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
         trace!("XdgShellHandler::new_popup");
 
-        self.position_popup(&surface);
+        self.pinnacle.position_popup(&surface);
 
-        if let Err(err) = self.popup_manager.track_popup(PopupKind::from(surface)) {
+        if let Err(err) = self
+            .pinnacle
+            .popup_manager
+            .track_popup(PopupKind::from(surface))
+        {
             tracing::warn!("failed to track popup: {}", err);
         }
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {
         // TODO: only schedule on the outputs the popup is on
-        for output in self.space.outputs().cloned().collect::<Vec<_>>() {
+        for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
             self.schedule_render(&output);
         }
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
         tracing::debug!("move_request_client");
-        crate::grab::move_grab::move_request_client(
-            self,
+        self.move_request_client(
             surface.wl_surface(),
             &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
@@ -131,8 +136,7 @@ impl XdgShellHandler for State {
         edges: ResizeEdge,
     ) {
         const BUTTON_LEFT: u32 = 0x110;
-        crate::grab::resize_grab::resize_request_client(
-            self,
+        self.resize_request_client(
             surface.wl_surface(),
             &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
             serial,
@@ -153,7 +157,7 @@ impl XdgShellHandler for State {
             state.geometry = positioner.get_geometry();
             state.positioner = positioner;
         });
-        self.position_popup(&surface);
+        self.pinnacle.position_popup(&surface);
         surface.send_repositioned(token);
     }
 
@@ -161,10 +165,11 @@ impl XdgShellHandler for State {
         let seat: Seat<Self> = Seat::from_resource(&seat).expect("couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
-            self.window_for_surface(&root)
+            self.pinnacle
+                .window_for_surface(&root)
                 .map(KeyboardFocusTarget::Window)
                 .or_else(|| {
-                    self.space.outputs().find_map(|op| {
+                    self.pinnacle.space.outputs().find_map(|op| {
                         layer_map_for_output(op)
                             .layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)
                             .cloned()
@@ -173,6 +178,7 @@ impl XdgShellHandler for State {
                 })
         }) {
             if let Ok(mut grab) = self
+                .pinnacle
                 .popup_manager
                 .grab_popup(root, popup_kind, &seat, serial)
             {
@@ -217,17 +223,25 @@ impl XdgShellHandler for State {
             .as_ref()
             .and_then(Output::from_resource)
             .or_else(|| {
-                self.window_for_surface(wl_surface)
-                    .and_then(|window| self.space.outputs_for_element(&window).first().cloned())
+                self.pinnacle
+                    .window_for_surface(wl_surface)
+                    .and_then(|window| {
+                        self.pinnacle
+                            .space
+                            .outputs_for_element(&window)
+                            .first()
+                            .cloned()
+                    })
             });
 
         if let Some(output) = output {
-            let Some(geometry) = self.space.output_geometry(&output) else {
+            let Some(geometry) = self.pinnacle.space.output_geometry(&output) else {
                 surface.send_configure();
                 return;
             };
 
             let client = self
+                .pinnacle
                 .display_handle
                 .get_client(wl_surface.id())
                 .expect("wl_surface had no client");
@@ -241,14 +255,14 @@ impl XdgShellHandler for State {
                 state.fullscreen_output = wl_output;
             });
 
-            let Some(window) = self.window_for_surface(wl_surface) else {
+            let Some(window) = self.pinnacle.window_for_surface(wl_surface) else {
                 tracing::error!("wl_surface had no window");
                 return;
             };
 
             if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
                 window.toggle_fullscreen();
-                self.request_layout(&output);
+                self.pinnacle.request_layout(&output);
             }
         }
 
@@ -272,21 +286,21 @@ impl XdgShellHandler for State {
 
         surface.send_pending_configure();
 
-        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             tracing::error!("wl_surface had no window");
             return;
         };
 
         if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
             window.toggle_fullscreen();
-            if let Some(output) = window.output(self) {
-                self.request_layout(&output);
+            if let Some(output) = window.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
             }
         }
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
 
@@ -294,12 +308,14 @@ impl XdgShellHandler for State {
             window.toggle_maximized();
         }
 
-        let Some(output) = window.output(self) else { return };
-        self.request_layout(&output);
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+        self.pinnacle.request_layout(&output);
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
-        let Some(window) = self.window_for_surface(surface.wl_surface()) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
 
@@ -307,8 +323,10 @@ impl XdgShellHandler for State {
             window.toggle_maximized();
         }
 
-        let Some(output) = window.output(self) else { return };
-        self.request_layout(&output);
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+        self.pinnacle.request_layout(&output);
     }
 
     fn minimize_request(&mut self, _surface: ToplevelSurface) {

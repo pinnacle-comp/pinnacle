@@ -8,10 +8,11 @@ description = {
     license = "MPL 2.0",
 }
 dependencies = {
-    "lua ~> 5.4",
+    "lua >= 5.2",
     "cqueues ~> 20200726",
     "http ~> 0.4",
     "lua-protobuf ~> 0.5",
+    "compat53 ~> 0.13",
 }
 build = {
     type = "builtin",

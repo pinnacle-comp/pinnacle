@@ -51,7 +51,10 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
+    desktop::{
+        layer_map_for_output,
+        utils::{send_frames_surface_tree, OutputPresentationFeedback},
+    },
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
@@ -91,7 +94,7 @@ use crate::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
         OutputRenderElement,
     },
-    state::{State, SurfaceDmabufFeedback, WithState},
+    state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
 };
 
 use self::drm_util::EdidInfo;
@@ -171,7 +174,10 @@ impl Udev {
             RenderState::Idle => {
                 let output = output.clone();
                 let token = loop_handle.insert_idle(move |state| {
-                    state.render_surface(&output);
+                    state
+                        .backend
+                        .udev_mut()
+                        .render_surface(&mut state.pinnacle, &output);
                 });
 
                 surface.render_state = RenderState::Scheduled(token);
@@ -271,18 +277,20 @@ impl State {
                 {
                     match render_surface.compositor.use_mode(drm_mode) {
                         Ok(()) => {
-                            self.change_output_state(output, Some(mode), None, None, None);
+                            self.pinnacle
+                                .change_output_state(output, Some(mode), None, None, None);
                         }
                         Err(err) => error!("Failed to resize output: {err}"),
                     }
                 }
             }
         } else {
-            self.change_output_state(output, Some(mode), None, None, None);
+            self.pinnacle
+                .change_output_state(output, Some(mode), None, None, None);
         }
 
+        self.pinnacle.request_layout(output);
         self.schedule_render(output);
-        self.request_layout(output);
     }
 }
 
@@ -347,32 +355,32 @@ pub fn setup_udev(
     // Initialize the udev backend
     let udev_backend = UdevBackend::new(session.seat())?;
 
-    let udev_dispatcher =
-        Dispatcher::new(
-            udev_backend,
-            move |event, _, state: &mut State| match event {
-                // GPU connected
-                UdevEvent::Added { device_id, path } => {
-                    if let Err(err) = DrmNode::from_dev_id(device_id)
-                        .map_err(DeviceAddError::DrmNode)
-                        .and_then(|node| state.device_added(node, &path))
-                    {
-                        error!("Skipping device {device_id}: {err}");
-                    }
+    let udev_dispatcher = Dispatcher::new(udev_backend, move |event, _, state: &mut State| {
+        let udev = state.backend.udev_mut();
+        let pinnacle = &mut state.pinnacle;
+        match event {
+            // GPU connected
+            UdevEvent::Added { device_id, path } => {
+                if let Err(err) = DrmNode::from_dev_id(device_id)
+                    .map_err(DeviceAddError::DrmNode)
+                    .and_then(|node| udev.device_added(pinnacle, node, &path))
+                {
+                    error!("Skipping device {device_id}: {err}");
                 }
-                UdevEvent::Changed { device_id } => {
-                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                        state.device_changed(node)
-                    }
+            }
+            UdevEvent::Changed { device_id } => {
+                if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                    udev.device_changed(pinnacle, node)
                 }
-                // GPU disconnected
-                UdevEvent::Removed { device_id } => {
-                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                        state.device_removed(node)
-                    }
+            }
+            // GPU disconnected
+            UdevEvent::Removed { device_id } => {
+                if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                    udev.device_removed(pinnacle, node)
                 }
-            },
-        );
+            }
+        }
+    });
 
     event_loop
         .handle()
@@ -415,24 +423,24 @@ pub fn setup_udev(
         .map(|(id, path)| (id, path.to_path_buf()))
         .collect::<Vec<_>>();
 
+    let udev = state.backend.udev_mut();
+
     // Create DrmNodes from already connected GPUs
     for (device_id, path) in things {
         if let Err(err) = DrmNode::from_dev_id(device_id)
             .map_err(DeviceAddError::DrmNode)
-            .and_then(|node| state.device_added(node, &path))
+            .and_then(|node| udev.device_added(&mut state.pinnacle, node, &path))
         {
             error!("Skipping device {device_id}: {err}");
         }
     }
-
-    let udev = state.backend.udev_mut();
 
     // Initialize libinput backend
     let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
         udev.session.clone().into(),
     );
     libinput_context
-        .udev_assign_seat(state.seat.name())
+        .udev_assign_seat(state.pinnacle.seat.name())
         .expect("failed to assign seat to libinput");
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
@@ -441,7 +449,7 @@ pub fn setup_udev(
     let insert_ret = event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, state| {
-            state.apply_libinput_settings(&event);
+            state.pinnacle.apply_libinput_settings(&event);
             state.process_input_event(event);
         });
 
@@ -469,12 +477,10 @@ pub fn setup_udev(
                         error!("Failed to resume libinput context");
                     }
 
-                    // TODO: All this dance around borrowing is a consequence of the fact that I haven't
-                    // |     split the State struct into a main State and a substruct like
-                    // |     Niri and cosmic-comp have done
+                    let udev = state.backend.udev_mut();
+                    let pinnacle = &mut state.pinnacle;
 
                     let (mut device_list, connected_devices, disconnected_devices) = {
-                        let udev = state.backend.udev();
                         let device_list = udev
                             .udev_dispatcher
                             .as_source_ref()
@@ -495,17 +501,14 @@ pub fn setup_udev(
 
                     for node in disconnected_devices {
                         device_list.remove(&node);
-                        state.device_removed(node);
+                        udev.device_removed(pinnacle, node);
                     }
 
                     for node in connected_devices {
                         device_list.remove(&node);
 
-                        // TODO: split off the big State struct to avoid this bs
-
+                        // INFO: see if this can be moved below udev.device_changed
                         {
-                            let udev = state.backend.udev_mut();
-
                             let Some(backend) = udev.backends.get_mut(&node) else {
                                 unreachable!();
                             };
@@ -515,16 +518,16 @@ pub fn setup_udev(
                             }
                         }
 
-                        state.device_changed(node);
+                        udev.device_changed(pinnacle, node);
+
+                        let Some(backend) = udev.backends.get_mut(&node) else {
+                            unreachable!();
+                        };
 
                         // Apply pending gammas
                         //
                         // Also welcome to some really doodoo code
 
-                        let udev = state.backend.udev_mut();
-                        let Some(backend) = udev.backends.get_mut(&node) else {
-                            unreachable!();
-                        };
                         for (crtc, surface) in backend.surfaces.iter_mut() {
                             match std::mem::take(&mut surface.pending_gamma_change) {
                                 PendingGammaChange::Idle => {
@@ -571,12 +574,17 @@ pub fn setup_udev(
 
                     // Newly connected devices
                     for (node, path) in device_list.into_iter() {
-                        if let Err(err) = state.device_added(node, &path) {
+                        if let Err(err) =
+                            state
+                                .backend
+                                .udev_mut()
+                                .device_added(&mut state.pinnacle, node, &path)
+                        {
                             error!("Error adding device: {err}");
                         }
                     }
 
-                    for output in state.space.outputs().cloned().collect::<Vec<_>>() {
+                    for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
                         state.schedule_render(&output);
                     }
                 }
@@ -584,7 +592,7 @@ pub fn setup_udev(
         })
         .expect("failed to insert libinput notifier into event loop");
 
-    state.shm_state.update_formats(
+    state.pinnacle.shm_state.update_formats(
         udev.gpu_manager
             .single_renderer(&primary_gpu)?
             .shm_formats(),
@@ -676,8 +684,8 @@ pub fn setup_udev(
         });
     });
 
-    if let Err(err) = state.xwayland.start(
-        state.loop_handle.clone(),
+    if let Err(err) = state.pinnacle.xwayland.start(
+        state.pinnacle.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
         true,
@@ -882,13 +890,16 @@ fn render_frame<'a>(
         })
 }
 
-impl State {
+impl Udev {
     /// A GPU was plugged in.
-    fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        let udev = self.backend.udev_mut();
-
+    fn device_added(
+        &mut self,
+        pinnacle: &mut Pinnacle,
+        node: DrmNode,
+        path: &Path,
+    ) -> Result<(), DeviceAddError> {
         // Try to open the device
-        let fd = udev
+        let fd = self
             .session
             .open(
                 path,
@@ -902,11 +913,14 @@ impl State {
             DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
         let gbm = GbmDevice::new(fd).map_err(DeviceAddError::GbmDevice)?;
 
-        let registration_token = self
+        let registration_token = pinnacle
             .loop_handle
             .insert_source(notifier, move |event, metadata, state| match event {
                 DrmEvent::VBlank(crtc) => {
-                    state.on_vblank(node, crtc, metadata);
+                    state
+                        .backend
+                        .udev_mut()
+                        .on_vblank(&state.pinnacle, node, crtc, metadata);
                 }
                 DrmEvent::Error(error) => {
                     error!("{:?}", error);
@@ -922,12 +936,12 @@ impl State {
         .and_then(|x| x.try_get_render_node().ok().flatten())
         .unwrap_or(node);
 
-        udev.gpu_manager
+        self.gpu_manager
             .as_mut()
             .add_node(render_node, gbm.clone())
             .map_err(DeviceAddError::AddNode)?;
 
-        udev.backends.insert(
+        self.backends.insert(
             node,
             UdevBackendData {
                 registration_token,
@@ -939,7 +953,7 @@ impl State {
             },
         );
 
-        self.device_changed(node);
+        self.device_changed(pinnacle, node);
 
         Ok(())
     }
@@ -947,19 +961,18 @@ impl State {
     /// A display was plugged in.
     fn connector_connected(
         &mut self,
+        pinnacle: &mut Pinnacle,
         node: DrmNode,
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let udev = self.backend.udev_mut();
-
-        let device = if let Some(device) = udev.backends.get_mut(&node) {
+        let device = if let Some(device) = self.backends.get_mut(&node) {
             device
         } else {
             return;
         };
 
-        let mut renderer = udev
+        let mut renderer = self
             .gpu_manager
             .single_renderer(&device.render_node)
             .expect("failed to get primary gpu MultiRenderer");
@@ -984,11 +997,6 @@ impl State {
 
         let drm_mode = connector.modes()[mode_id];
         let wl_mode = smithay::output::Mode::from(drm_mode);
-
-        let modes = connector
-            .modes()
-            .iter()
-            .map(|mode| smithay::output::Mode::from(*mode));
 
         let surface = match device
             .drm
@@ -1016,7 +1024,7 @@ impl State {
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
-        if self.space.outputs().any(|op| {
+        if pinnacle.space.outputs().any(|op| {
             op.user_data()
                 .get::<UdevOutputData>()
                 .is_some_and(|op_id| op_id.crtc == crtc)
@@ -1033,20 +1041,16 @@ impl State {
                 model,
             },
         );
-        let global = output.create_global::<State>(&udev.display_handle);
+        let global = output.create_global::<State>(&self.display_handle);
 
         output.with_state_mut(|state| state.serial = serial);
 
-        for mode in modes {
-            output.add_mode(mode);
-        }
-
         output.set_preferred(wl_mode);
 
-        self.output_focus_stack.set_focus(output.clone());
+        pinnacle.output_focus_stack.set_focus(output.clone());
 
-        let x = self.space.outputs().fold(0, |acc, o| {
-            let Some(geo) = self.space.output_geometry(o) else {
+        let x = pinnacle.space.outputs().fold(0, |acc, o| {
+            let Some(geo) = pinnacle.space.output_geometry(o) else {
                 unreachable!()
             };
             acc + geo.size.w
@@ -1098,14 +1102,14 @@ impl State {
         };
 
         let dmabuf_feedback = get_surface_dmabuf_feedback(
-            udev.primary_gpu,
+            self.primary_gpu,
             device.render_node,
-            &mut udev.gpu_manager,
+            &mut self.gpu_manager,
             &compositor,
         );
 
         let surface = RenderSurface {
-            display_handle: udev.display_handle.clone(),
+            display_handle: self.display_handle.clone(),
             device_id: node,
             render_node: device.render_node,
             global: Some(global),
@@ -1119,21 +1123,21 @@ impl State {
 
         device.surfaces.insert(crtc, surface);
 
-        self.change_output_state(&output, Some(wl_mode), None, None, Some(position));
+        pinnacle.change_output_state(&output, Some(wl_mode), None, None, Some(position));
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
         // TODO: instead of checking the connector, check the monitor's edid info instead
-        if let Some(saved_state) = self
+        if let Some(saved_state) = pinnacle
             .config
             .connector_saved_states
             .get(&OutputName(output.name()))
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
             output.with_state_mut(|state| state.tags = tags.clone());
-            self.change_output_state(&output, None, None, *scale, Some(*loc));
+            pinnacle.change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
-            self.signal_state.output_connect.signal(|buffer| {
+            pinnacle.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {
                     output_name: Some(output.name()),
                 })
@@ -1144,15 +1148,14 @@ impl State {
     /// A display was unplugged.
     fn connector_disconnected(
         &mut self,
+        pinnacle: &mut Pinnacle,
         node: DrmNode,
         _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
         tracing::debug!(?crtc, "connector_disconnected");
 
-        let udev = self.backend.udev_mut();
-
-        let device = if let Some(device) = udev.backends.get_mut(&node) {
+        let device = if let Some(device) = self.backends.get_mut(&node) {
             device
         } else {
             return;
@@ -1160,7 +1163,7 @@ impl State {
 
         device.surfaces.remove(&crtc);
 
-        let output = self
+        let output = pinnacle
             .space
             .outputs()
             .find(|o| {
@@ -1173,7 +1176,7 @@ impl State {
 
         if let Some(output) = output {
             // Save this output's state. It will be restored if the monitor gets replugged.
-            self.config.connector_saved_states.insert(
+            pinnacle.config.connector_saved_states.insert(
                 OutputName(output.name()),
                 ConnectorSavedState {
                     loc: output.current_location(),
@@ -1181,10 +1184,16 @@ impl State {
                     scale: Some(output.current_scale()),
                 },
             );
-            self.space.unmap_output(&output);
-            self.gamma_control_manager_state.output_removed(&output);
 
-            self.signal_state.output_disconnect.signal(|buffer| {
+            // TODO: extract into a `remove_output` function and unify with dummy backend
+            for layer in layer_map_for_output(&output).layers() {
+                layer.layer_surface().send_close();
+            }
+
+            pinnacle.space.unmap_output(&output);
+            pinnacle.gamma_control_manager_state.output_removed(&output);
+
+            pinnacle.signal_state.output_disconnect.signal(|buffer| {
                 buffer.push_back(OutputDisconnectResponse {
                     output_name: Some(output.name()),
                 })
@@ -1192,10 +1201,8 @@ impl State {
         }
     }
 
-    fn device_changed(&mut self, node: DrmNode) {
-        let udev = self.backend.udev_mut();
-
-        let device = if let Some(device) = udev.backends.get_mut(&node) {
+    fn device_changed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
+        let device = if let Some(device) = self.backends.get_mut(&node) {
             device
         } else {
             return;
@@ -1207,13 +1214,13 @@ impl State {
                     connector,
                     crtc: Some(crtc),
                 } => {
-                    self.connector_connected(node, connector, crtc);
+                    self.connector_connected(pinnacle, node, connector, crtc);
                 }
                 DrmScanEvent::Disconnected {
                     connector,
                     crtc: Some(crtc),
                 } => {
-                    self.connector_disconnected(node, connector, crtc);
+                    self.connector_disconnected(pinnacle, node, connector, crtc);
                 }
                 _ => {}
             }
@@ -1221,36 +1228,30 @@ impl State {
     }
 
     /// A GPU was unplugged.
-    fn device_removed(&mut self, node: DrmNode) {
-        let crtcs = {
-            let udev = self.backend.udev();
-
-            let Some(device) = udev.backends.get(&node) else {
-                return;
-            };
-
-            device
-                .drm_scanner
-                .crtcs()
-                .map(|(info, crtc)| (info.clone(), crtc))
-                .collect::<Vec<_>>()
+    fn device_removed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
+        let Some(device) = self.backends.get(&node) else {
+            return;
         };
 
+        let crtcs = device
+            .drm_scanner
+            .crtcs()
+            .map(|(info, crtc)| (info.clone(), crtc))
+            .collect::<Vec<_>>();
+
         for (connector, crtc) in crtcs {
-            self.connector_disconnected(node, connector, crtc);
+            self.connector_disconnected(pinnacle, node, connector, crtc);
         }
 
         tracing::debug!("Surfaces dropped");
 
-        let udev = self.backend.udev_mut();
-
         // drop the backends on this side
-        if let Some(backend_data) = udev.backends.remove(&node) {
-            udev.gpu_manager
+        if let Some(backend_data) = self.backends.remove(&node) {
+            self.gpu_manager
                 .as_mut()
                 .remove_node(&backend_data.render_node);
 
-            self.loop_handle.remove(backend_data.registration_token);
+            pinnacle.loop_handle.remove(backend_data.registration_token);
 
             tracing::debug!("Dropping device");
         }
@@ -1259,13 +1260,12 @@ impl State {
     /// Mark [`OutputPresentationFeedback`]s as presented and schedule a new render on idle.
     fn on_vblank(
         &mut self,
+        pinnacle: &Pinnacle,
         dev_id: DrmNode,
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
     ) {
-        let udev = self.backend.udev_mut();
-
-        let Some(surface) = udev
+        let Some(surface) = self
             .backends
             .get_mut(&dev_id)
             .and_then(|device| device.surfaces.get_mut(&crtc))
@@ -1273,7 +1273,7 @@ impl State {
             return;
         };
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
+        let output = if let Some(output) = pinnacle.space.outputs().find(|o| {
             let udev_op_data = o.user_data().get::<UdevOutputData>();
             udev_op_data
                 .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
@@ -1308,7 +1308,7 @@ impl State {
                                 | wp_presentation_feedback::Kind::HwCompletion,
                         )
                     } else {
-                        (self.clock.now(), wp_presentation_feedback::Kind::Vsync)
+                        (pinnacle.clock.now(), wp_presentation_feedback::Kind::Vsync)
                     };
 
                     feedback.presented(
@@ -1337,49 +1337,50 @@ impl State {
         surface.render_state = RenderState::Idle;
 
         if dirty {
-            self.schedule_render(&output);
+            self.schedule_render(&pinnacle.loop_handle, &output);
         } else {
-            for window in self.windows.iter() {
-                window.send_frame(&output, self.clock.now(), Some(Duration::ZERO), |_, _| {
-                    Some(output.clone())
-                });
+            for window in pinnacle.windows.iter() {
+                window.send_frame(
+                    &output,
+                    pinnacle.clock.now(),
+                    Some(Duration::ZERO),
+                    |_, _| Some(output.clone()),
+                );
             }
         }
     }
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
-    #[tracing::instrument(level = "debug", skip(self), fields(output = output.name()))]
-    fn render_surface(&mut self, output: &Output) {
-        let udev = self.backend.udev_mut();
-
-        let Some(surface) = render_surface_for_output(output, &mut udev.backends) else {
+    #[tracing::instrument(level = "debug", skip(self, pinnacle), fields(output = output.name()))]
+    fn render_surface(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
 
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = udev.pointer_image.get_image(
+        let frame = self.pointer_image.get_image(
             1,
             // output.current_scale().integer_scale() as u32,
-            self.clock.now().into(),
+            pinnacle.clock.now().into(),
         );
 
         let render_node = surface.render_node;
-        let primary_gpu = udev.primary_gpu;
+        let primary_gpu = self.primary_gpu;
         let mut renderer = if primary_gpu == render_node {
-            udev.gpu_manager.single_renderer(&render_node)
+            self.gpu_manager.single_renderer(&render_node)
         } else {
             let format = surface.compositor.format();
-            udev.gpu_manager
+            self.gpu_manager
                 .renderer(&primary_gpu, &render_node, format)
         }
         .expect("failed to create MultiRenderer");
 
-        let _ = renderer.upscale_filter(udev.upscale_filter);
-        let _ = renderer.downscale_filter(udev.downscale_filter);
+        let _ = renderer.upscale_filter(self.upscale_filter);
+        let _ = renderer.downscale_filter(self.downscale_filter);
 
-        let pointer_images = &mut udev.pointer_images;
+        let pointer_images = &mut self.pointer_images;
         let pointer_image = pointer_images
             .iter()
             .find_map(
@@ -1407,34 +1408,35 @@ impl State {
                 texture
             });
 
-        let windows = self.space.elements().cloned().collect::<Vec<_>>();
+        let windows = pinnacle.space.elements().cloned().collect::<Vec<_>>();
 
-        let pointer_location = self
+        let pointer_location = pinnacle
             .seat
             .get_pointer()
             .map(|ptr| ptr.current_location())
             .unwrap_or((0.0, 0.0).into());
 
         // set cursor
-        udev.pointer_element.set_texture(pointer_image.clone());
+        self.pointer_element.set_texture(pointer_image.clone());
 
         // draw the cursor as relevant and
         // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &self.cursor_status {
+        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_status {
             if !surface.alive() {
-                self.cursor_status = CursorImageStatus::default_named();
+                pinnacle.cursor_status = CursorImageStatus::default_named();
             } else {
                 send_frames_surface_tree(
                     surface,
                     output,
-                    self.clock.now(),
+                    pinnacle.clock.now(),
                     Some(Duration::ZERO),
                     |_, _| None,
                 );
             }
         }
 
-        udev.pointer_element.set_status(self.cursor_status.clone());
+        self.pointer_element
+            .set_status(pinnacle.cursor_status.clone());
 
         let pending_screencopy_with_cursor =
             output.with_state(|state| state.screencopy.as_ref().map(|sc| sc.overlay_cursor()));
@@ -1453,18 +1455,18 @@ impl State {
                     // |     Unfortunately that means I can't composite the cursor separately from
                     // |     the screencopy, meaning if you have an active screencopy recording
                     // |     without cursor overlay then the cursor will dim/flicker out/disappear.
-                    udev.pointer_element
+                    self.pointer_element
                         .set_element_kind(element::Kind::Unspecified);
                     let pointer_render_elements = pointer_render_elements(
                         output,
                         &mut renderer,
-                        &self.space,
+                        &pinnacle.space,
                         pointer_location,
-                        &mut self.cursor_status,
-                        self.dnd_icon.as_ref(),
-                        &udev.pointer_element,
+                        &mut pinnacle.cursor_status,
+                        pinnacle.dnd_icon.as_ref(),
+                        &self.pointer_element,
                     );
-                    udev.pointer_element.set_element_kind(element::Kind::Cursor);
+                    self.pointer_element.set_element_kind(element::Kind::Cursor);
                     output_render_elements.extend(pointer_render_elements);
                 }
             }
@@ -1472,11 +1474,11 @@ impl State {
                 let pointer_render_elements = pointer_render_elements(
                     output,
                     &mut renderer,
-                    &self.space,
+                    &pinnacle.space,
                     pointer_location,
-                    &mut self.cursor_status,
-                    self.dnd_icon.as_ref(),
-                    &udev.pointer_element,
+                    &mut pinnacle.cursor_status,
+                    pinnacle.dnd_icon.as_ref(),
+                    &self.pointer_element,
                 );
                 output_render_elements.extend(pointer_render_elements);
             }
@@ -1485,7 +1487,7 @@ impl State {
         output_render_elements.extend(crate::render::output_render_elements(
             output,
             &mut renderer,
-            &self.space,
+            &pinnacle.space,
             &windows,
         ));
 
@@ -1508,13 +1510,13 @@ impl State {
                 output,
                 surface,
                 &render_frame_result,
-                &self.loop_handle,
+                &pinnacle.loop_handle,
             );
 
             super::post_repaint(
                 output,
                 &render_frame_result.states,
-                &self.space,
+                &pinnacle.space,
                 surface
                     .dmabuf_feedback
                     .as_ref()
@@ -1522,15 +1524,18 @@ impl State {
                         render_feedback: &feedback.render_feedback,
                         scanout_feedback: &feedback.scanout_feedback,
                     }),
-                Duration::from(self.clock.now()),
-                &self.cursor_status,
+                Duration::from(pinnacle.clock.now()),
+                &pinnacle.cursor_status,
             );
 
             let rendered = !render_frame_result.is_empty;
 
             if rendered {
-                let output_presentation_feedback =
-                    take_presentation_feedback(output, &self.space, &render_frame_result.states);
+                let output_presentation_feedback = take_presentation_feedback(
+                    output,
+                    &pinnacle.space,
+                    &render_frame_result.states,
+                );
 
                 surface
                     .compositor
@@ -1724,14 +1729,13 @@ fn handle_pending_screencopy<'a>(
                 // renderer.wait(&sync_point)?; // no-op
 
                 // INFO: I have literally no idea why but doing
-                // |     a blit_to offscreen -> dmabuf leads to some weird
-                // |     artifacting within the first few frames of a wf-recorder
-                // |     recording, but doing it with the targets reversed
-                // |     is completely fine???? Bruh that essentially runs the same internal
-                // |     code and I don't understand why there's different behavior.
-                // |.
-                // |     I can see in the code that `blit_to` is missing a `self.unbind()?`
-                // |     call, but adding that back in doesn't fix anything. So strange
+                // a blit_to offscreen -> dmabuf leads to some weird
+                // artifacting within the first few frames of a wf-recorder
+                // recording, but doing it with the targets reversed
+                // is completely fine???? Bruh that essentially runs the same internal
+                // code and I don't understand why there's different behavior.
+                // I can see in the code that `blit_to` is missing a `self.unbind()?`
+                // call, but adding that back in doesn't fix anything. So strange
                 renderer.bind(dmabuf)?;
 
                 renderer.blit_from(

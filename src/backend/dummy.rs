@@ -14,14 +14,20 @@ use smithay::{
     utils::Transform,
 };
 
-use crate::state::State;
+use crate::state::{Pinnacle, State};
 
+#[cfg(feature = "wlcs")]
+use super::wlcs::Wlcs;
 use super::Backend;
 use super::BackendData;
+
+pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
 
 pub struct Dummy {
     pub renderer: DummyRenderer,
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
+    #[cfg(feature = "wlcs")]
+    pub wlcs_state: Wlcs,
 }
 
 impl Backend {
@@ -61,10 +67,10 @@ pub fn setup_dummy(
         size: (0, 0).into(),
         subpixel: Subpixel::Unknown,
         make: "Pinnacle".to_string(),
-        model: "Winit Window".to_string(),
+        model: "Dummy Window".to_string(),
     };
 
-    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
+    let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
 
     output.create_global::<State>(&display_handle);
 
@@ -89,6 +95,8 @@ pub fn setup_dummy(
     let backend = Dummy {
         renderer,
         // dmabuf_state,
+        #[cfg(feature = "wlcs")]
+        wlcs_state: Wlcs::default(),
     };
 
     let mut state = State::init(
@@ -100,16 +108,19 @@ pub fn setup_dummy(
         config_dir,
     )?;
 
-    state.output_focus_stack.set_focus(output.clone());
+    state.pinnacle.output_focus_stack.set_focus(output.clone());
 
     let dummy = state.backend.dummy_mut();
 
-    state.shm_state.update_formats(dummy.renderer.shm_formats());
+    state
+        .pinnacle
+        .shm_state
+        .update_formats(dummy.renderer.shm_formats());
 
-    state.space.map_output(&output, (0, 0));
+    state.pinnacle.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.xwayland.start(
-        state.loop_handle.clone(),
+    if let Err(err) = state.pinnacle.xwayland.start(
+        state.pinnacle.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
         true,
@@ -121,7 +132,7 @@ pub fn setup_dummy(
     Ok((state, event_loop))
 }
 
-impl State {
+impl Pinnacle {
     pub fn new_output(&mut self, name: impl std::fmt::Display, size: Size<i32, Physical>) {
         let mode = smithay::output::Mode {
             size,

@@ -12,7 +12,7 @@ use smithay::{
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 
-use crate::state::{State, WithState};
+use crate::state::{Pinnacle, WithState};
 
 use self::window_state::WindowElementState;
 
@@ -103,8 +103,8 @@ impl WindowElement {
     /// This method gets the first tag the window has and returns its output.
     ///
     /// RefCell Safety: This method uses a [`RefCell`] on this window and every mapped output.
-    pub fn output(&self, state: &State) -> Option<Output> {
-        self.with_state(|st| st.tags.first().and_then(|tag| tag.output(state)))
+    pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        self.with_state(|st| st.tags.first().and_then(|tag| tag.output(pinnacle)))
     }
 
     /// Returns whether or not this window has an active tag.
@@ -209,7 +209,7 @@ impl WithState for WindowElement {
     }
 }
 
-impl State {
+impl Pinnacle {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.space

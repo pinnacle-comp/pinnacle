@@ -44,19 +44,27 @@ impl layout_service_server::LayoutService for LayoutService {
                             layout_request::Body::Layout(ExplicitLayout { output_name }) => {
                                 if let Some(output) = output_name
                                     .map(OutputName)
-                                    .and_then(|name| name.output(state))
-                                    .or_else(|| state.focused_output().cloned())
+                                    .and_then(|name| name.output(&state.pinnacle))
+                                    .or_else(|| state.pinnacle.focused_output().cloned())
                                 {
-                                    state.request_layout(&output);
+                                    state.pinnacle.request_layout(&output);
                                 }
                             }
                         }
                     }
                 }
-                Err(err) => tracing::error!("{err}"),
+                Err(err) => {
+                    // Ignore broken pipes here, they have a code of `Unknown`
+                    //
+                    // Silences errors when reloading the config, unfortunately also ignores other
+                    // `Unknown` errors
+                    if err.code() != tonic::Code::Unknown {
+                        tracing::error!("{err}")
+                    }
+                }
             },
             |state, sender, _join_handle| {
-                state.layout_state.layout_request_sender = Some(sender);
+                state.pinnacle.layout_state.layout_request_sender = Some(sender);
             },
         )
     }

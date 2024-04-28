@@ -1,5 +1,6 @@
 use std::{panic::UnwindSafe, time::Duration};
 
+use anyhow::anyhow;
 use pinnacle::{backend::dummy::setup_dummy, state::State};
 use smithay::{
     output::Output,
@@ -21,9 +22,13 @@ pub fn sleep_secs(secs: u64) {
     std::thread::sleep(Duration::from_secs(secs));
 }
 
-pub fn test_api(
-    test: impl FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) + Send + UnwindSafe + 'static,
-) -> anyhow::Result<()> {
+pub fn test_api<F>(test: F) -> anyhow::Result<()>
+where
+    F: FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) -> anyhow::Result<()>
+        + Send
+        + UnwindSafe
+        + 'static,
+{
     let (mut state, mut event_loop) = setup_dummy(true, None)?;
 
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
@@ -38,46 +43,42 @@ pub fn test_api(
 
     let tempdir = tempfile::tempdir()?;
 
-    state.start_grpc_server(tempdir.path())?;
+    state.pinnacle.start_grpc_server(tempdir.path())?;
 
     let loop_signal = event_loop.get_signal();
 
-    let join_handle = tokio::task::spawn_blocking(move || {
-        test(sender);
+    let join_handle = std::thread::spawn(move || -> anyhow::Result<()> {
+        let res = test(sender);
         loop_signal.stop();
+        res
     });
 
     event_loop.run(None, &mut state, |state| {
-        state.fixup_z_layering();
-        state.space.refresh();
-        state.popup_manager.cleanup();
+        state.pinnacle.fixup_z_layering();
+        state.pinnacle.space.refresh();
+        state.pinnacle.popup_manager.cleanup();
 
         state
+            .pinnacle
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
 
         // TODO: couple these or something, this is really error-prone
         assert_eq!(
-            state.windows.len(),
-            state.z_index_stack.len(),
+            state.pinnacle.windows.len(),
+            state.pinnacle.z_index_stack.len(),
             "Length of `windows` and `z_index_stack` are different. \
                     If you see this, report it to the developer."
         );
     })?;
 
-    if let Err(err) = tokio::task::block_in_place(|| {
-        let handle = tokio::runtime::Handle::current();
-        handle.block_on(join_handle)
-    }) {
-        panic!("{err:?}");
-    }
-
-    Ok(())
+    join_handle.join().map_err(|_| anyhow!("thread panicked"))?
 }
 
 pub fn output_for_name(state: &State, name: &str) -> Output {
     state
+        .pinnacle
         .space
         .outputs()
         .find(|op| op.name() == name)

@@ -4,7 +4,7 @@ use smithay::{
 };
 
 use crate::{
-    state::{State, WithState},
+    state::{Pinnacle, WithState},
     window::window_state,
 };
 
@@ -41,11 +41,16 @@ enum AllOrAny {
 
 impl WindowRuleCondition {
     /// RefCell Safety: This method uses RefCells on `window`.
-    pub fn is_met(&self, state: &State, window: &WindowElement) -> bool {
-        Self::is_met_inner(self, state, window, AllOrAny::All)
+    pub fn is_met(&self, pinnacle: &Pinnacle, window: &WindowElement) -> bool {
+        Self::is_met_inner(self, pinnacle, window, AllOrAny::All)
     }
 
-    fn is_met_inner(&self, state: &State, window: &WindowElement, all_or_any: AllOrAny) -> bool {
+    fn is_met_inner(
+        &self,
+        pinnacle: &Pinnacle,
+        window: &WindowElement,
+        all_or_any: AllOrAny,
+    ) -> bool {
         tracing::debug!("{self:#?}");
 
         let WindowRuleCondition {
@@ -61,14 +66,14 @@ impl WindowRuleCondition {
                 let cond_any = if let Some(cond_any) = cond_any {
                     cond_any
                         .iter()
-                        .any(|cond| Self::is_met_inner(cond, state, window, AllOrAny::Any))
+                        .any(|cond| Self::is_met_inner(cond, pinnacle, window, AllOrAny::Any))
                 } else {
                     true
                 };
                 let cond_all = if let Some(cond_all) = cond_all {
                     cond_all
                         .iter()
-                        .all(|cond| Self::is_met_inner(cond, state, window, AllOrAny::All))
+                        .all(|cond| Self::is_met_inner(cond, pinnacle, window, AllOrAny::All))
                 } else {
                     true
                 };
@@ -87,7 +92,7 @@ impl WindowRuleCondition {
                     true
                 };
                 let tags = if let Some(tag_ids) = tag {
-                    let mut tags = tag_ids.iter().filter_map(|tag_id| tag_id.tag(state));
+                    let mut tags = tag_ids.iter().filter_map(|tag_id| tag_id.tag(pinnacle));
                     tags.all(|tag| window.with_state(|state| state.tags.contains(&tag)))
                 } else {
                     true
@@ -100,14 +105,14 @@ impl WindowRuleCondition {
                 let cond_any = if let Some(cond_any) = cond_any {
                     cond_any
                         .iter()
-                        .any(|cond| Self::is_met_inner(cond, state, window, AllOrAny::Any))
+                        .any(|cond| Self::is_met_inner(cond, pinnacle, window, AllOrAny::Any))
                 } else {
                     false
                 };
                 let cond_all = if let Some(cond_all) = cond_all {
                     cond_all
                         .iter()
-                        .all(|cond| Self::is_met_inner(cond, state, window, AllOrAny::All))
+                        .all(|cond| Self::is_met_inner(cond, pinnacle, window, AllOrAny::All))
                 } else {
                     false
                 };
@@ -126,7 +131,7 @@ impl WindowRuleCondition {
                     false
                 };
                 let tags = if let Some(tag_ids) = tag {
-                    let mut tags = tag_ids.iter().filter_map(|tag_id| tag_id.tag(state));
+                    let mut tags = tag_ids.iter().filter_map(|tag_id| tag_id.tag(pinnacle));
                     tags.any(|tag| window.with_state(|state| state.tags.contains(&tag)))
                 } else {
                     false
@@ -167,7 +172,7 @@ pub enum FloatingOrTiled {
     Tiled,
 }
 
-impl State {
+impl Pinnacle {
     pub fn apply_window_rules(&mut self, window: &WindowElement) {
         tracing::debug!("Applying window rules");
         for (cond, rule) in self.config.window_rules.iter() {

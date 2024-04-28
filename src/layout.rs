@@ -18,14 +18,14 @@ use tracing::warn;
 
 use crate::{
     output::OutputName,
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized},
         WindowElement,
     },
 };
 
-impl State {
+impl Pinnacle {
     fn update_windows_with_geometries(
         &mut self,
         output: &Output,
@@ -136,7 +136,7 @@ impl State {
             self.space.map_element(window, loc, false);
         }
 
-        // HACK and FIXME:
+        // FIXME:
         // We are sending frames here to get offscreen windows to commit and map.
         // Obviously this is a bad way to do this but its a bandaid solution
         // until decent transactional layout applications are implemented.
@@ -177,7 +177,7 @@ pub struct LayoutState {
     old_requests: HashMap<Output, HashSet<LayoutRequestId>>,
 }
 
-impl State {
+impl Pinnacle {
     pub fn request_layout(&mut self, output: &Output) {
         let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
@@ -244,7 +244,9 @@ impl State {
 
         *id = LayoutRequestId(id.0 + 1);
     }
+}
 
+impl State {
     pub fn apply_layout(&mut self, geometries: Geometries) -> anyhow::Result<()> {
         let Geometries {
             request_id: Some(request_id),
@@ -256,11 +258,12 @@ impl State {
         };
 
         let request_id = LayoutRequestId(request_id);
-        let Some(output) = OutputName(output_name).output(self) else {
+        let Some(output) = OutputName(output_name).output(&self.pinnacle) else {
             anyhow::bail!("Output was invalid");
         };
 
         let old_requests = self
+            .pinnacle
             .layout_state
             .old_requests
             .entry(output.clone())
@@ -271,6 +274,7 @@ impl State {
         }
 
         let pending = self
+            .pinnacle
             .layout_state
             .pending_requests
             .entry(output.clone())
@@ -308,11 +312,12 @@ impl State {
             anyhow::bail!("Attempted to layout but one or more dimensions were null");
         };
 
-        self.update_windows_with_geometries(&output, geometries);
+        self.pinnacle
+            .update_windows_with_geometries(&output, geometries);
 
         self.schedule_render(&output);
 
-        self.layout_state.pending_swap = false;
+        self.pinnacle.layout_state.pending_swap = false;
 
         Ok(())
     }

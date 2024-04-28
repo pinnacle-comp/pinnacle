@@ -5,6 +5,7 @@ use crate::{
     },
     input::ModifierMask,
     output::OutputName,
+    state::Pinnacle,
     tag::Tag,
     window::rules::{WindowRule, WindowRuleCondition},
 };
@@ -23,7 +24,7 @@ use pinnacle_api_defs::pinnacle::{
     render::v0alpha1::render_service_server::RenderServiceServer,
     signal::v0alpha1::signal_service_server::SignalServiceServer,
     tag::v0alpha1::tag_service_server::TagServiceServer,
-    v0alpha1::pinnacle_service_server::PinnacleServiceServer,
+    v0alpha1::{pinnacle_service_server::PinnacleServiceServer, ShutdownWatchResponse},
     window::v0alpha1::window_service_server::WindowServiceServer,
 };
 use smithay::{
@@ -32,10 +33,13 @@ use smithay::{
     utils::{Logical, Point},
 };
 use sysinfo::ProcessRefreshKind;
-use tokio::task::JoinHandle;
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    task::JoinHandle,
+};
 use toml::Table;
 
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, info_span, warn, warn_span, Instrument};
 use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
@@ -45,6 +49,17 @@ use crate::{
 };
 
 const DEFAULT_SOCKET_DIR: &str = "/tmp";
+
+mod builtin {
+    include!("../api/rust/examples/default_config/main.rs");
+
+    pub fn run() {
+        main();
+    }
+
+    pub const METACONFIG: &str =
+        include_str!("../api/rust/examples/default_config/metaconfig.toml");
+}
 
 /// The metaconfig struct containing what to run, what envs to run it with, various keybinds, and
 /// the target socket directory.
@@ -172,8 +187,11 @@ pub struct Config {
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 
-    config_join_handle: Option<JoinHandle<()>>,
-    config_reload_on_crash_token: Option<RegistrationToken>,
+    pub config_join_handle: Option<JoinHandle<()>>,
+    pub(crate) config_reload_on_crash_token: Option<RegistrationToken>,
+
+    pub shutdown_sender:
+        Option<tokio::sync::mpsc::UnboundedSender<Result<ShutdownWatchResponse, tonic::Status>>>,
 
     pub no_config: bool,
     config_dir: Option<PathBuf>,
@@ -194,11 +212,16 @@ impl Config {
             .unwrap_or_else(|| get_config_dir(xdg_base_dirs))
     }
 
-    fn clear(&mut self, loop_handle: &LoopHandle<State>) {
+    pub(crate) fn clear(&mut self, loop_handle: &LoopHandle<State>) {
         self.window_rules.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();
+        }
+        if let Some(shutdown_sender) = self.shutdown_sender.take() {
+            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
+                warn!("Failed to send shutdown signal to config: {err}");
+            }
         }
         if let Some(token) = self.config_reload_on_crash_token.take() {
             loop_handle.remove(token);
@@ -244,48 +267,13 @@ fn get_config_dir(xdg_base_dirs: &BaseDirectories) -> PathBuf {
     config_dir.unwrap_or(xdg_base_dirs.get_config_home())
 }
 
-impl State {
+impl Pinnacle {
     /// Start the config in `config_dir`.
     ///
     /// If this method is called while a config is already running, it will be replaced.
-    pub fn start_config(&mut self, config_dir: impl AsRef<Path>) -> anyhow::Result<()> {
-        let mut config_dir = config_dir.as_ref();
-
-        let default_lua_config_dir = self
-            .xdg_base_dirs
-            .get_data_file("default_config")
-            .join("lua");
-
-        let load_default_config = |state: &mut State, reason: &str| {
-            error!(
-                "Unable to load config at {}: {reason}",
-                config_dir.display()
-            );
-            info!("Falling back to default Lua config");
-            state.start_config(&default_lua_config_dir)
-        };
-
-        // If `--no-config` was set, still load the keybinds from the default metaconfig
-        if self.config.no_config {
-            config_dir = &default_lua_config_dir
-        }
-
-        let metaconfig = match parse_metaconfig(config_dir) {
-            Ok(metaconfig) => metaconfig,
-            Err(err) => {
-                // Stops infinite recursion if somehow the default_config dir is screwed up
-                if config_dir == default_lua_config_dir {
-                    error!("The metaconfig at the default Lua config directory is either malformed or missing.");
-                    error!(
-                        "If you have not touched {}, this is a bug and you should file an issue (pretty please with a cherry on top?).",
-                        default_lua_config_dir.display()
-                    );
-                    anyhow::bail!("default lua config dir does not work");
-                }
-                return load_default_config(self, &format!("{}, {}", err, err.root_cause()));
-            }
-        };
-
+    ///
+    /// If `config_dir` is `None`, the builtin Rust config will be used.
+    pub fn start_config(&mut self, mut config_dir: Option<impl AsRef<Path>>) -> anyhow::Result<()> {
         // Clear state
 
         debug!("Clearing tags");
@@ -302,6 +290,35 @@ impl State {
         self.config.clear(&self.loop_handle);
 
         self.signal_state.clear();
+
+        let config_dir_clone = config_dir.as_ref().map(|dir| dir.as_ref().to_path_buf());
+        let load_default_config = |pinnacle: &mut Pinnacle, reason: &str| {
+            match &config_dir_clone {
+                Some(dir) => warn!("Unable to load config at {}: {reason}", dir.display()),
+                None => panic!(
+                    "builtin rust config crashed; this is a bug and you should open an issue"
+                ),
+            }
+
+            info!("Falling back to builtin Rust config");
+            pinnacle.start_config(None::<PathBuf>)
+        };
+
+        // If `--no-config` was set, still load the keybinds from the default metaconfig
+        if self.config.no_config {
+            config_dir = None;
+        }
+
+        let metaconfig = match &config_dir {
+            Some(dir) => match parse_metaconfig(dir.as_ref()) {
+                Ok(metaconfig) => metaconfig,
+                Err(err) => {
+                    return load_default_config(self, &format!("{}, {}", err, err.root_cause()));
+                }
+            },
+            None => toml::from_str(builtin::METACONFIG)
+                .expect("builtin metaconfig was malformed; this is a bug"),
+        };
 
         let reload_keybind = metaconfig.reload_keybind;
         let kill_keybind = metaconfig.kill_keybind;
@@ -320,13 +337,14 @@ impl State {
             return Ok(());
         }
 
-        assert!(!self.config.no_config);
-
         // Because the grpc server is implemented to only start once,
         // any updates to `socket_dir` won't be applied until restart.
         if self.grpc_server_join_handle.is_none() {
             // If a socket is provided in the metaconfig, use it.
             let socket_dir = if let Some(socket_dir) = &metaconfig.socket_dir {
+                let Some(config_dir) = &config_dir else {
+                    panic!("builtin config should not have `socket_dir` set");
+                };
                 let socket_dir = shellexpand::full(socket_dir)?.to_string();
 
                 // cd into the metaconfig dir and canonicalize to preserve relative paths
@@ -348,77 +366,124 @@ impl State {
             self.start_grpc_server(socket_dir.as_path())?;
         }
 
-        let mut command = metaconfig.command.iter();
+        match &config_dir {
+            Some(config_dir) => {
+                let config_dir = config_dir.as_ref();
+                let mut command = metaconfig.command.iter();
 
-        let arg0 = match command.next() {
-            Some(arg0) => arg0,
-            None => return load_default_config(self, "no command specified"),
-        };
+                let arg0 = match command.next() {
+                    Some(arg0) => arg0,
+                    None => return load_default_config(self, "no command specified"),
+                };
 
-        let command = command.collect::<Vec<_>>();
+                let command = command.collect::<Vec<_>>();
 
-        debug!(arg0, ?command);
+                debug!(arg0, ?command);
 
-        let envs = metaconfig
-            .envs
-            .unwrap_or(toml::map::Map::new())
-            .into_iter()
-            .map(|(key, val)| -> anyhow::Result<Option<(String, String)>> {
-                if let toml::Value::String(string) = val {
-                    Ok(Some((key, shellexpand::full(&string)?.to_string())))
-                } else {
-                    Ok(None)
+                let envs = metaconfig
+                    .envs
+                    .unwrap_or(toml::map::Map::new())
+                    .into_iter()
+                    .map(|(key, val)| -> anyhow::Result<Option<(String, String)>> {
+                        if let toml::Value::String(string) = val {
+                            Ok(Some((key, shellexpand::full(&string)?.to_string())))
+                        } else {
+                            Ok(None)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .flatten();
+
+                debug!("Config envs are {envs:?}");
+
+                info!(
+                    "Starting config process at {} with {:?}",
+                    config_dir.display(),
+                    metaconfig.command
+                );
+
+                let mut cmd = tokio::process::Command::new(arg0);
+                cmd.args(command)
+                    .envs(envs)
+                    .current_dir(config_dir)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .kill_on_drop(true);
+
+                let mut child = match cmd.spawn() {
+                    Ok(child) => child,
+                    Err(err) => {
+                        return load_default_config(
+                            self,
+                            &format!("failed to start config process {cmd:?}: {err}"),
+                        )
+                    }
+                };
+
+                if let Some(stdout) = child.stdout.take() {
+                    let mut reader = BufReader::new(stdout).lines();
+                    tokio::spawn(
+                        async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                info!("{line}");
+                            }
+                        }
+                        .instrument(info_span!("config_stdout")),
+                    );
                 }
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten();
 
-        debug!("Config envs are {envs:?}");
+                if let Some(stderr) = child.stderr.take() {
+                    let mut reader = BufReader::new(stderr).lines();
+                    tokio::spawn(
+                        async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                warn!("{line}");
+                            }
+                        }
+                        .instrument(warn_span!("config_stderr")),
+                    );
+                }
 
-        info!(
-            "Starting config process at {} with {:?}",
-            config_dir.display(),
-            metaconfig.command
-        );
+                info!("Started config with {:?}", metaconfig.command);
 
-        let mut cmd = tokio::process::Command::new(arg0);
-        cmd.args(command)
-            .envs(envs)
-            .current_dir(config_dir)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true);
+                let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(err) => {
-                return load_default_config(
-                    self,
-                    &format!("failed to start config process {cmd:?}: {err}"),
-                )
+                let token = self
+                    .loop_handle
+                    .insert_source(ping_source, move |_, _, state| {
+                        error!("Config crashed! Falling back to default config");
+                        state
+                            .pinnacle
+                            .start_config(None::<PathBuf>)
+                            .expect("failed to start default config");
+                    })?;
+
+                self.config.config_join_handle = Some(tokio::spawn(async move {
+                    let _ = child.wait().await;
+                    pinger.ping();
+                }));
+
+                self.config.config_reload_on_crash_token = Some(token);
             }
-        };
+            None => {
+                let (pinger, ping_source) = calloop::ping::make_ping()?;
 
-        info!("Started config with {:?}", metaconfig.command);
+                let token = self
+                    .loop_handle
+                    .insert_source(ping_source, move |_, _, _state| {
+                        panic!("builtin rust config crashed; this is a bug");
+                    })?;
 
-        let (pinger, ping_source) = calloop::ping::make_ping()?;
+                std::thread::spawn(move || {
+                    info!("Starting builtin Rust config");
+                    builtin::run();
+                    pinger.ping();
+                });
 
-        let token = self
-            .loop_handle
-            .insert_source(ping_source, move |_, _, state| {
-                error!("Config crashed! Falling back to default Lua config");
-                state
-                    .start_config(&default_lua_config_dir)
-                    .expect("failed to start default lua config");
-            })?;
-
-        self.config.config_join_handle = Some(tokio::spawn(async move {
-            let _ = child.wait().await;
-            pinger.ping();
-        }));
-
-        self.config.config_reload_on_crash_token = Some(token);
+                self.config.config_reload_on_crash_token = Some(token);
+            }
+        }
 
         Ok(())
     }
@@ -480,7 +545,7 @@ impl State {
         );
 
         let (grpc_sender, grpc_receiver) =
-            calloop::channel::channel::<Box<dyn FnOnce(&mut Self) + Send>>();
+            calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
         self.loop_handle
             .insert_source(grpc_receiver, |msg, _, state| match msg {
@@ -532,9 +597,9 @@ impl State {
             // |      fast at startup then I think there's a chance that the gRPC server
             // |      could get started twice.
             None => self.schedule(
-                |state| state.xdisplay.is_some(),
+                |state| state.pinnacle.xdisplay.is_some(),
                 move |state| {
-                    state.grpc_server_join_handle = Some(tokio::spawn(async move {
+                    state.pinnacle.grpc_server_join_handle = Some(tokio::spawn(async move {
                         if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                             error!("gRPC server error: {err}");
                         }

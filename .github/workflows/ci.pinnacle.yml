@@ -51,12 +51,14 @@ jobs:
           luaVersion: "5.4"
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
-      - name: Build
+      - name: Setup just
+        uses: extractions/setup-just@v1
+      - name: Test
         if: ${{ runner.debug != '1' }}
-        run: cargo test -- --test-threads=1
-      - name: Build (debug)
+        run: just install test -- --test-threads=1
+      - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug cargo test -- --nocapture --test-threads=1
+        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --test-threads=1
   check-format:
     runs-on: ubuntu-latest
     name: Check formatting
@@ -90,4 +92,4 @@ jobs:
       - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
       - name: Clippy check
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all -- -D warnings

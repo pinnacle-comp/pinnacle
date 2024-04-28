@@ -1,0 +1,24 @@
+[package]
+name = "wlcs_pinnacle"
+version = "0.0.1"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+smithay = { workspace = true }
+pinnacle = { path = "..", features = [ "wlcs" ] }
+pinnacle-api = { path = "../api/rust" }
+wayland-sys = { version = "0.31.1", features = ["client", "server"] }
+wlcs = "0.1"
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+tokio = { workspace = true, features = ["net", "rt"] }
+
+tempfile = { workspace = true }

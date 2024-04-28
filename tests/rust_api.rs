@@ -2,6 +2,7 @@ mod common;
 
 use std::thread::JoinHandle;
 
+use pinnacle::backend::dummy::DUMMY_OUTPUT_NAME;
 use pinnacle_api::ApiModules;
 use test_log::test;
 
@@ -68,15 +69,15 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 200).into());
-                state.new_output("Test Third", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 200).into());
+                state.pinnacle.new_output("Test Third", (300, 200).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let test_third_op = output_for_name(state, "Test Third");
@@ -115,6 +116,8 @@ mod output {
                     smithay::utils::Transform::_90
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -126,7 +129,7 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
+                        (OutputId::name(DUMMY_OUTPUT_NAME), OutputLoc::Point(0, 0)),
                         (
                             OutputId::name("First"),
                             OutputLoc::RelativeTo(
@@ -148,17 +151,17 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("First", (300, 200).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -169,19 +172,19 @@ mod output {
                     Rectangle::from_loc_and_size((1920, 0), (300, 200))
                 );
 
-                state.new_output("Second", (500, 500).into());
+                state.pinnacle.new_output("Second", (500, 500).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -196,6 +199,8 @@ mod output {
                     Rectangle::from_loc_and_size((1920 + 300, 0), (500, 500))
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -208,11 +213,11 @@ mod output {
                 api.output.setup_locs(
                     UpdateLocsOn::all(),
                     [
-                        (OutputId::name("Pinnacle Window"), OutputLoc::Point(0, 0)),
+                        (OutputId::name(DUMMY_OUTPUT_NAME), OutputLoc::Point(0, 0)),
                         (
                             OutputId::name("First"),
                             OutputLoc::RelativeTo(
-                                OutputId::name("Pinnacle Window"),
+                                OutputId::name(DUMMY_OUTPUT_NAME),
                                 Alignment::BottomAlignLeft,
                             ),
                         ),
@@ -244,23 +249,23 @@ mod output {
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                state.new_output("First", (300, 200).into());
-                state.new_output("Second", (300, 700).into());
-                state.new_output("Third", (300, 400).into());
+                state.pinnacle.new_output("First", (300, 200).into());
+                state.pinnacle.new_output("Second", (300, 700).into());
+                state.pinnacle.new_output("Third", (300, 400).into());
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let second_op = output_for_name(state, "Second");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let second_geo = state.space.output_geometry(&second_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let second_geo = state.pinnacle.space.output_geometry(&second_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -279,19 +284,19 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200 + 700), (300, 400))
                 );
 
-                state.remove_output(&second_op);
+                state.pinnacle.remove_output(&second_op);
             });
 
             sleep_secs(1);
 
             with_state(&sender, |state| {
-                let original_op = output_for_name(state, "Pinnacle Window");
+                let original_op = output_for_name(state, DUMMY_OUTPUT_NAME);
                 let first_op = output_for_name(state, "First");
                 let third_op = output_for_name(state, "Third");
 
-                let original_geo = state.space.output_geometry(&original_op).unwrap();
-                let first_geo = state.space.output_geometry(&first_op).unwrap();
-                let third_geo = state.space.output_geometry(&third_op).unwrap();
+                let original_geo = state.pinnacle.space.output_geometry(&original_op).unwrap();
+                let first_geo = state.pinnacle.space.output_geometry(&first_op).unwrap();
+                let third_geo = state.pinnacle.space.output_geometry(&third_op).unwrap();
 
                 assert_eq!(
                     original_geo,
@@ -306,6 +311,8 @@ mod output {
                     Rectangle::from_loc_and_size((0, 1080 + 200), (300, 400))
                 );
             });
+
+            Ok(())
         })
     }
 
@@ -328,7 +335,7 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(
                         op.current_transform(),
                         smithay::utils::Transform::Flipped270
@@ -345,9 +352,11 @@ mod output {
                 sleep_secs(1);
 
                 with_state(&sender, |state| {
-                    let op = state.focused_output().unwrap();
+                    let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::_180);
                 });
+
+                Ok(())
             })
         }
     }

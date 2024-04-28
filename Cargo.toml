@@ -1,5 +1,10 @@
 [workspace]
-members = ["pinnacle-api-defs", "api/rust", "api/rust/pinnacle-api-macros", "xtask"]
+members = [
+    "pinnacle-api-defs",
+    "api/rust",
+    "api/rust/pinnacle-api-macros",
+    "wlcs_pinnacle",
+]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
@@ -15,6 +20,9 @@ prost = "0.12.4"
 tonic = "0.11.0"
 tonic-reflection = "0.11.0"
 tonic-build = "0.11.0"
+# Tracing
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
 # API definitions
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 # Misc.
@@ -23,6 +31,7 @@ xdg = "2.5.2"
 bitflags = "2.5.0"
 clap = { version = "4.5.4", features = ["derive"] }
 dircpy = "0.3.16"
+tempfile = "3.10.1"
 
 ########################################################################yo😎###########
 
@@ -39,11 +48,11 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 
 [dependencies]
 # Smithay
-# smithay is down there somewhere
+smithay = { workspace = true }
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "c293ec7" }
 # Tracing
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
 anyhow = { version = "1.0.81", features = ["backtrace"] }
@@ -70,13 +79,15 @@ x11rb = { version = "0.13.0", default-features = false, features = ["composite"]
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
 sysinfo = "0.30.10"
-nix = { version = "0.28.0", features = ["user", "resource"] }
+nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.37"
 bytemuck = "1.15.0"
+pinnacle-api = { path = "./api/rust" }
+gag = "1.0.0"
 
-[dependencies.smithay]
+[workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
 rev = "c293ec7"
 default-features = false
@@ -109,12 +120,13 @@ xdg = { workspace = true }
 
 [dev-dependencies]
 temp-env = "0.3.6"
-tempfile = "3.10.1"
+tempfile = { workspace = true }
 test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
-pinnacle = { path = ".", features = ["testing"] }
+pinnacle = { path = ".", features = ["wlcs"] }
 pinnacle-api = { path = "./api/rust" }
 
 [features]
 testing = [
     "smithay/renderer_test",
 ]
+wlcs = [ "testing" ]

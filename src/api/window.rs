@@ -50,7 +50,9 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else { return };
+            let Some(window) = window_id.window(&state.pinnacle) else {
+                return;
+            };
 
             match window.underlying_surface() {
                 WindowSurface::Wayland(toplevel) => toplevel.send_close(),
@@ -89,10 +91,16 @@ impl window_service_server::WindowService for WindowService {
         let height = geometry.height;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else { return };
+            let Some(window) = window_id.window(&state.pinnacle) else {
+                return;
+            };
 
             // TODO: with no x or y, defaults unmapped windows to 0, 0
-            let mut window_loc = state.space.element_location(&window).unwrap_or_default();
+            let mut window_loc = state
+                .pinnacle
+                .space
+                .element_location(&window)
+                .unwrap_or_default();
             window_loc.x = x.unwrap_or(window_loc.x);
             window_loc.y = y.unwrap_or(window_loc.y);
 
@@ -110,8 +118,8 @@ impl window_service_server::WindowService for WindowService {
                 }
             });
 
-            for output in state.space.outputs_for_element(&window) {
-                state.request_layout(&output);
+            for output in state.pinnacle.space.outputs_for_element(&window) {
+                state.pinnacle.request_layout(&output);
                 state.schedule_render(&output);
             }
         })
@@ -137,7 +145,8 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else {
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
                 return;
             };
 
@@ -156,11 +165,11 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = window.output(state) else {
+            let Some(output) = window.output(pinnacle) else {
                 return;
             };
 
-            state.request_layout(&output);
+            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -185,7 +194,8 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else {
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
                 return;
             };
 
@@ -204,11 +214,11 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = window.output(state) else {
+            let Some(output) = window.output(pinnacle) else {
                 return;
             };
 
-            state.request_layout(&output);
+            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -233,7 +243,8 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else {
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
                 return;
             };
 
@@ -252,11 +263,11 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = window.output(state) else {
+            let Some(output) = window.output(pinnacle) else {
                 return;
             };
 
-            state.request_layout(&output);
+            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -281,7 +292,7 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
@@ -289,11 +300,11 @@ impl window_service_server::WindowService for WindowService {
                 return;
             }
 
-            let Some(output) = window.output(state) else {
+            let Some(output) = window.output(&state.pinnacle) else {
                 return;
             };
 
-            for win in state.space.elements() {
+            for win in state.pinnacle.space.elements() {
                 win.set_activate(false);
             }
 
@@ -301,8 +312,8 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Set => {
                     window.set_activate(true);
                     output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-                    state.output_focus_stack.set_focus(output.clone());
-                    if let Some(keyboard) = state.seat.get_keyboard() {
+                    state.pinnacle.output_focus_stack.set_focus(output.clone());
+                    if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
                         keyboard.set_focus(
                             state,
                             Some(KeyboardFocusTarget::Window(window)),
@@ -311,24 +322,24 @@ impl window_service_server::WindowService for WindowService {
                     }
                 }
                 SetOrToggle::Unset => {
-                    if state.focused_window(&output) == Some(window) {
+                    if state.pinnacle.focused_window(&output) == Some(window) {
                         output.with_state_mut(|state| state.focus_stack.unset_focus());
-                        if let Some(keyboard) = state.seat.get_keyboard() {
+                        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
                             keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                         }
                     }
                 }
                 SetOrToggle::Toggle => {
-                    if state.focused_window(&output).as_ref() == Some(&window) {
+                    if state.pinnacle.focused_window(&output).as_ref() == Some(&window) {
                         output.with_state_mut(|state| state.focus_stack.unset_focus());
-                        if let Some(keyboard) = state.seat.get_keyboard() {
+                        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
                             keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
                         }
                     } else {
                         window.set_activate(true);
                         output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-                        state.output_focus_stack.set_focus(output.clone());
-                        if let Some(keyboard) = state.seat.get_keyboard() {
+                        state.pinnacle.output_focus_stack.set_focus(output.clone());
+                        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
                             keyboard.set_focus(
                                 state,
                                 Some(KeyboardFocusTarget::Window(window)),
@@ -340,7 +351,7 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            for window in state.space.elements() {
+            for window in state.pinnacle.space.elements() {
                 if let Some(toplevel) = window.toplevel() {
                     toplevel.send_configure();
                 }
@@ -370,13 +381,16 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else { return };
-            let Some(tag) = tag_id.tag(state) else { return };
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
+                return;
+            };
+            let Some(tag) = tag_id.tag(pinnacle) else { return };
             window.with_state_mut(|state| {
                 state.tags = vec![tag.clone()];
             });
-            let Some(output) = tag.output(state) else { return };
-            state.request_layout(&output);
+            let Some(output) = tag.output(pinnacle) else { return };
+            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -404,8 +418,11 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else { return };
-            let Some(tag) = tag_id.tag(state) else { return };
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
+                return;
+            };
+            let Some(tag) = tag_id.tag(pinnacle) else { return };
 
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
@@ -426,8 +443,8 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = tag.output(state) else { return };
-            state.request_layout(&output);
+            let Some(output) = tag.output(pinnacle) else { return };
+            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -443,12 +460,13 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(window) = window_id.window(state) else {
+            let pinnacle = &mut state.pinnacle;
+            let Some(window) = window_id.window(pinnacle) else {
                 warn!("`raise` was called on a nonexistent window");
                 return;
             };
 
-            state.raise_window(window, false);
+            pinnacle.raise_window(window, false);
         })
         .await
     }
@@ -461,7 +479,11 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(pointer_location) = state.seat.get_pointer().map(|ptr| ptr.current_location())
+            let Some(pointer_location) = state
+                .pinnacle
+                .seat
+                .get_pointer()
+                .map(|ptr| ptr.current_location())
             else {
                 return;
             };
@@ -476,15 +498,9 @@ impl window_service_server::WindowService for WindowService {
             let Some(wl_surf) = window.wl_surface() else {
                 return;
             };
-            let seat = state.seat.clone();
+            let seat = state.pinnacle.seat.clone();
 
-            crate::grab::move_grab::move_request_server(
-                state,
-                &wl_surf,
-                &seat,
-                SERIAL_COUNTER.next_serial(),
-                button,
-            );
+            state.move_request_server(&wl_surf, &seat, SERIAL_COUNTER.next_serial(), button);
         })
         .await
     }
@@ -500,7 +516,11 @@ impl window_service_server::WindowService for WindowService {
             .ok_or_else(|| Status::invalid_argument("no button specified"))?;
 
         run_unary_no_response(&self.sender, move |state| {
-            let Some(pointer_loc) = state.seat.get_pointer().map(|ptr| ptr.current_location())
+            let Some(pointer_loc) = state
+                .pinnacle
+                .seat
+                .get_pointer()
+                .map(|ptr| ptr.current_location())
             else {
                 return;
             };
@@ -554,10 +574,9 @@ impl window_service_server::WindowService for WindowService {
                 _ => server::xdg_toplevel::ResizeEdge::None,
             };
 
-            crate::grab::resize_grab::resize_request_server(
-                state,
+            state.resize_request_server(
                 &wl_surf,
-                &state.seat.clone(),
+                &state.pinnacle.seat.clone(),
                 SERIAL_COUNTER.next_serial(),
                 edges.into(),
                 button,
@@ -572,6 +591,7 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<window::v0alpha1::GetResponse>, Status> {
         run_unary(&self.sender, move |state| {
             let window_ids = state
+                .pinnacle
                 .windows
                 .iter()
                 .map(|win| win.with_state(|state| state.id.0))
@@ -595,7 +615,8 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary(&self.sender, move |state| {
-            let window = window_id.window(state);
+            let pinnacle = &state.pinnacle;
+            let window = window_id.window(pinnacle);
 
             let width = window.as_ref().map(|win| win.geometry().size.w);
 
@@ -603,12 +624,12 @@ impl window_service_server::WindowService for WindowService {
 
             let x = window
                 .as_ref()
-                .and_then(|win| state.space.element_location(win))
+                .and_then(|win| state.pinnacle.space.element_location(win))
                 .map(|loc| loc.x);
 
             let y = window
                 .as_ref()
-                .and_then(|win| state.space.element_location(win))
+                .and_then(|win| state.pinnacle.space.element_location(win))
                 .map(|loc| loc.y);
 
             let geometry = if width.is_none() && height.is_none() && x.is_none() && y.is_none() {
@@ -626,9 +647,9 @@ impl window_service_server::WindowService for WindowService {
             let title = window.as_ref().and_then(|win| win.title());
 
             let focused = window.as_ref().and_then(|win| {
-                state
+                pinnacle
                     .focused_output()
-                    .and_then(|output| state.focused_window(output))
+                    .and_then(|output| pinnacle.focused_window(output))
                     .map(|foc_win| win == &foc_win)
             });
 
@@ -691,7 +712,7 @@ impl window_service_server::WindowService for WindowService {
             .into();
 
         run_unary_no_response(&self.sender, move |state| {
-            state.config.window_rules.push((cond, rule));
+            state.pinnacle.config.window_rules.push((cond, rule));
         })
         .await
     }

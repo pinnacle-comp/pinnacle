@@ -9,7 +9,7 @@ use std::{
 
 use smithay::output::Output;
 
-use crate::state::{State, WithState};
+use crate::state::{Pinnacle, State, WithState};
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -24,8 +24,8 @@ impl TagId {
     }
 
     /// Get the tag associated with this id.
-    pub fn tag(&self, state: &State) -> Option<Tag> {
-        state
+    pub fn tag(&self, pinnacle: &Pinnacle) -> Option<Tag> {
+        pinnacle
             .space
             .outputs()
             .flat_map(|op| op.with_state(|state| state.tags.clone()))
@@ -83,7 +83,7 @@ impl Tag {
     pub fn set_active(&self, active: bool, state: &mut State) {
         self.0.borrow_mut().active = active;
 
-        state.signal_state.tag_active.signal(|buf| {
+        state.pinnacle.signal_state.tag_active.signal(|buf| {
             buf.push_back(
                 pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
                     tag_id: Some(self.id().0),
@@ -106,8 +106,8 @@ impl Tag {
     /// Get the output this tag is on.
     ///
     /// RefCell Safety: This uses RefCells on every mapped output.
-    pub fn output(&self, state: &State) -> Option<Output> {
-        state
+    pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        pinnacle
             .space
             .outputs()
             .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == self)))

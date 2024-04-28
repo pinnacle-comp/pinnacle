@@ -190,18 +190,19 @@ pub fn setup_winit(
     // wl-mirror segfaults if it gets a wl-output global before the xdg output manager global
     output.create_global::<State>(&display_handle);
 
-    state.output_focus_stack.set_focus(output.clone());
+    state.pinnacle.output_focus_stack.set_focus(output.clone());
 
     let winit = state.backend.winit_mut();
 
     state
+        .pinnacle
         .shm_state
         .update_formats(winit.backend.renderer().shm_formats());
 
-    state.space.map_output(&output, (0, 0));
+    state.pinnacle.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.xwayland.start(
-        state.loop_handle.clone(),
+    if let Err(err) = state.pinnacle.xwayland.start(
+        state.pinnacle.loop_handle.clone(),
         None,
         std::iter::empty::<(OsString, OsString)>(),
         true,
@@ -210,49 +211,49 @@ pub fn setup_winit(
         error!("Failed to start XWayland: {err}");
     }
 
-    let insert_ret =
-        state
-            .loop_handle
-            .insert_source(Timer::immediate(), move |_instant, _metadata, state| {
-                let status = winit_evt_loop.dispatch_new_events(|event| match event {
-                    WinitEvent::Resized { size, scale_factor } => {
-                        let mode = smithay::output::Mode {
-                            size,
-                            refresh: 144_000,
-                        };
-                        state.change_output_state(
-                            &output,
-                            Some(mode),
-                            None,
-                            Some(Scale::Fractional(scale_factor)),
-                            None,
-                        );
-                        state.request_layout(&output);
-                    }
-                    WinitEvent::Focus(focused) => {
-                        if focused {
-                            state.backend.winit_mut().reset_buffers(&output);
-                        }
-                    }
-                    WinitEvent::Input(input_evt) => {
-                        state.process_input_event(input_evt);
-                    }
-                    WinitEvent::Redraw => {
-                        state.render_winit_window(&output);
-                    }
-                    WinitEvent::CloseRequested => {
-                        state.shutdown();
-                    }
-                });
-
-                if let PumpStatus::Exit(_) = status {
-                    state.shutdown();
+    let insert_ret = state.pinnacle.loop_handle.insert_source(
+        Timer::immediate(),
+        move |_instant, _metadata, state| {
+            let status = winit_evt_loop.dispatch_new_events(|event| match event {
+                WinitEvent::Resized { size, scale_factor } => {
+                    let mode = smithay::output::Mode {
+                        size,
+                        refresh: 144_000,
+                    };
+                    state.pinnacle.change_output_state(
+                        &output,
+                        Some(mode),
+                        None,
+                        Some(Scale::Fractional(scale_factor)),
+                        None,
+                    );
+                    state.pinnacle.request_layout(&output);
                 }
-
-                state.render_winit_window(&output);
-
-                TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
+                WinitEvent::Focus(focused) => {
+                    if focused {
+                        state.backend.winit_mut().reset_buffers(&output);
+                    }
+                }
+                WinitEvent::Input(input_evt) => {
+                    state.process_input_event(input_evt);
+                }
+                WinitEvent::Redraw => {
+                    state.render_winit_window(&output);
+                }
+                WinitEvent::CloseRequested => {
+                    state.pinnacle.shutdown();
+                }
             });
+
+            if let PumpStatus::Exit(_) = status {
+                state.pinnacle.shutdown();
+            }
+
+            state.render_winit_window(&output);
+
+            TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
+        },
+    );
     if let Err(err) = insert_ret {
         anyhow::bail!("Failed to insert winit events into event loop: {err}");
     }
@@ -267,21 +268,21 @@ impl State {
         let full_redraw = &mut winit.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
-        if let CursorImageStatus::Surface(surface) = &self.cursor_status {
+        if let CursorImageStatus::Surface(surface) = &self.pinnacle.cursor_status {
             if !surface.alive() {
-                self.cursor_status = CursorImageStatus::default_named();
+                self.pinnacle.cursor_status = CursorImageStatus::default_named();
             }
         }
 
-        let cursor_visible = !matches!(self.cursor_status, CursorImageStatus::Surface(_));
+        let cursor_visible = !matches!(self.pinnacle.cursor_status, CursorImageStatus::Surface(_));
 
         let mut pointer_element = PointerElement::<GlesTexture>::new();
 
-        pointer_element.set_status(self.cursor_status.clone());
+        pointer_element.set_status(self.pinnacle.cursor_status.clone());
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
-        let windows = self.space.elements().cloned().collect::<Vec<_>>();
+        let windows = self.pinnacle.space.elements().cloned().collect::<Vec<_>>();
 
         let mut output_render_elements = Vec::new();
 
@@ -299,6 +300,7 @@ impl State {
         // but it shouldn't meaningfully affect anything.
         if !pending_screencopy_without_cursor {
             let pointer_location = self
+                .pinnacle
                 .seat
                 .get_pointer()
                 .map(|ptr| ptr.current_location())
@@ -307,10 +309,10 @@ impl State {
             let pointer_render_elements = pointer_render_elements(
                 output,
                 winit.backend.renderer(),
-                &self.space,
+                &self.pinnacle.space,
                 pointer_location,
-                &mut self.cursor_status,
-                self.dnd_icon.as_ref(),
+                &mut self.pinnacle.cursor_status,
+                self.pinnacle.dnd_icon.as_ref(),
                 &pointer_element,
             );
             output_render_elements.extend(pointer_render_elements);
@@ -319,7 +321,7 @@ impl State {
         output_render_elements.extend(crate::render::output_render_elements(
             output,
             winit.backend.renderer(),
-            &self.space,
+            &self.pinnacle.space,
             &windows,
         ));
 
@@ -347,7 +349,7 @@ impl State {
                     &mut winit.backend,
                     output,
                     &render_output_result,
-                    &self.loop_handle,
+                    &self.pinnacle.loop_handle,
                 );
 
                 let has_rendered = render_output_result.damage.is_some();
@@ -359,21 +361,21 @@ impl State {
 
                 winit.backend.window().set_cursor_visible(cursor_visible);
 
-                let time = self.clock.now();
+                let time = self.pinnacle.clock.now();
 
                 super::post_repaint(
                     output,
                     &render_output_result.states,
-                    &self.space,
+                    &self.pinnacle.space,
                     None,
                     time.into(),
-                    &self.cursor_status,
+                    &self.pinnacle.cursor_status,
                 );
 
                 if has_rendered {
                     let mut output_presentation_feedback = take_presentation_feedback(
                         output,
-                        &self.space,
+                        &self.pinnacle.space,
                         &render_output_result.states,
                     );
                     output_presentation_feedback.presented(

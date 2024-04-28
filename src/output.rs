@@ -13,7 +13,7 @@ use tracing::info;
 use crate::{
     focus::WindowKeyboardFocusStack,
     protocol::screencopy::Screencopy,
-    state::{State, WithState},
+    state::{Pinnacle, WithState},
     tag::Tag,
 };
 
@@ -26,8 +26,8 @@ pub struct OutputName(pub String);
 
 impl OutputName {
     /// Get the output with this name.
-    pub fn output(&self, state: &State) -> Option<Output> {
-        state
+    pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        pinnacle
             .space
             .outputs()
             .find(|output| output.name() == self.0)
@@ -76,7 +76,7 @@ impl OutputState {
     }
 }
 
-impl State {
+impl Pinnacle {
     /// A wrapper around [`Output::change_current_state`] that additionally sends an output
     /// geometry signal.
     pub fn change_output_state(
@@ -109,6 +109,9 @@ impl State {
                     logical_height: geo.map(|geo| geo.size.h as u32),
                 });
             });
+        }
+        if let Some(mode) = mode {
+            output.set_preferred(mode);
         }
     }
 }

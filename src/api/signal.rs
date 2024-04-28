@@ -201,7 +201,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.output_connect
+            &mut state.pinnacle.signal_state.output_connect
         })
     }
 
@@ -212,7 +212,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.output_disconnect
+            &mut state.pinnacle.signal_state.output_disconnect
         })
     }
 
@@ -223,7 +223,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.output_resize
+            &mut state.pinnacle.signal_state.output_resize
         })
     }
 
@@ -234,7 +234,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.output_move
+            &mut state.pinnacle.signal_state.output_move
         })
     }
 
@@ -245,7 +245,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.window_pointer_enter
+            &mut state.pinnacle.signal_state.window_pointer_enter
         })
     }
 
@@ -256,7 +256,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.window_pointer_leave
+            &mut state.pinnacle.signal_state.window_pointer_leave
         })
     }
 
@@ -267,7 +267,7 @@ impl signal_service_server::SignalService for SignalService {
         let in_stream = request.into_inner();
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
-            &mut state.signal_state.tag_active
+            &mut state.pinnacle.signal_state.tag_active
         })
     }
 }
