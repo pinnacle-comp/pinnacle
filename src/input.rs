@@ -662,7 +662,7 @@ impl State {
         if let Some((surface, surface_loc)) = &current_under {
             let surface_loc = *surface_loc;
             if let Some(wl_surface) = surface.wl_surface() {
-                let mut pointer_locked_to: Option<Option<Point<f64, Logical>>> = None;
+                let mut pointer_locked = false;
 
                 with_pointer_constraint(&wl_surface, &pointer, |constraint| {
                     let Some(constraint) = constraint else {
@@ -687,19 +687,13 @@ impl State {
                             pointer_confined_to =
                                 Some((surface.clone(), surface_loc, confined.region().cloned()));
                         }
-                        PointerConstraint::Locked(locked) => {
-                            tracing::debug!("POINTER IS LOCKED");
-                            pointer_locked_to = Some(
-                                locked
-                                    .cursor_position_hint()
-                                    .map(|hint| hint + surface_loc.to_f64()),
-                            );
+                        PointerConstraint::Locked(_) => {
+                            pointer_locked = true;
                         }
                     }
                 });
 
-                if let Some(lock_loc) = pointer_locked_to {
-                    tracing::debug!(?lock_loc);
+                if pointer_locked {
                     pointer.relative_motion(
                         self,
                         Some((surface.clone(), surface_loc)),
@@ -851,15 +845,11 @@ fn constrain_point_inside_rects(
         .map(|(rect, mut x, mut y)| {
             let rect = rect.to_f64();
 
-            // If the passed in point is to the right/bottom, nudge the nearest point by 1
-            // in the other direction to make it actually inside the rect and not touching
-            // its edge.
-            if pos_x >= rect.loc.x + rect.size.w {
-                x -= 1.0;
-            }
-            if pos_y >= rect.loc.y + rect.size.h {
-                y -= 1.0;
-            }
+            // Clamp the point to actually be in the rect and not
+            // touching its edge.
+            x = f64::min(x, rect.loc.x + rect.size.w - 1.0);
+            y = f64::min(y, rect.loc.y + rect.size.h - 1.0);
+
             (x, y).into()
         })
         .unwrap_or(pos)

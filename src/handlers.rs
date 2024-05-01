@@ -648,6 +648,16 @@ impl PointerConstraintsHandler for State {
         self.pinnacle
             .maybe_activate_pointer_constraint(pointer.current_location());
     }
+
+    // Testing a smithay patch
+    // fn constraint_removed(
+    //     &mut self,
+    //     surface: &WlSurface,
+    //     pointer: &PointerHandle<Self>,
+    //     constraint: smithay::wayland::pointer_constraints::PointerConstraint,
+    // ) {
+    //     // tracing::info!(?constraint);
+    // }
 }
 delegate_pointer_constraints!(State);
 
