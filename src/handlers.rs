@@ -645,7 +645,6 @@ delegate_gamma_control!(State);
 
 impl PointerConstraintsHandler for State {
     fn new_constraint(&mut self, _surface: &WlSurface, pointer: &PointerHandle<Self>) {
-        tracing::info!("NEW POINTER CONSTRAINT ON {_surface:?}");
         self.pinnacle
             .maybe_activate_pointer_constraint(pointer.current_location());
     }
@@ -720,14 +719,15 @@ impl Pinnacle {
         };
         with_pointer_constraint(&surface, &pointer, |constraint| {
             let Some(constraint) = constraint else { return };
+            tracing::debug!(constraint = ?*constraint);
             if constraint.is_active() {
                 return;
             }
 
             // Constraint does not apply if not within region.
             if let Some(region) = constraint.region() {
-                let new_pos_within_surface = new_pos.to_i32_round() - surface_loc;
-                if !region.contains(new_pos_within_surface) {
+                let new_pos_surface_local = new_pos.to_i32_round() - surface_loc;
+                if !region.contains(new_pos_surface_local) {
                     return;
                 }
             }

@@ -4,7 +4,7 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
 use smithay::{
     desktop::{
         layer_map_for_output, utils::with_surfaces_surface_tree, LayerSurface, PopupKind,
-        WindowSurface,
+        WindowSurface, WindowSurfaceType,
     },
     input::{
         pointer::{self, PointerTarget},
@@ -62,23 +62,10 @@ impl PointerFocusTarget {
 
     pub fn layer_for(&self, state: &State) -> Option<LayerSurface> {
         match self {
-            PointerFocusTarget::WlSurface(surf) => {
-                for output in state.pinnacle.space.outputs() {
-                    let map = layer_map_for_output(output);
-                    for layer in map.layers() {
-                        let mut found = false;
-                        with_surfaces_surface_tree(layer.wl_surface(), |surface, _| {
-                            if surface == surf {
-                                found = true;
-                            }
-                        });
-                        if found {
-                            return Some(layer.clone());
-                        }
-                    }
-                }
-                None
-            }
+            PointerFocusTarget::WlSurface(surf) => state.pinnacle.space.outputs().find_map(|op| {
+                let map = layer_map_for_output(op);
+                map.layer_for_surface(surf, WindowSurfaceType::ALL).cloned()
+            }),
             PointerFocusTarget::X11Surface(_) => None,
         }
     }

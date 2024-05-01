@@ -6,19 +6,16 @@ use anyhow::anyhow;
 use smithay::{
     desktop::Window,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
-    wayland::{
-        seat::WaylandFocus,
-        selection::{
-            data_device::{
-                clear_data_device_selection, current_data_device_selection_userdata,
-                request_data_device_client_selection, set_data_device_selection,
-            },
-            primary_selection::{
-                clear_primary_selection, current_primary_selection_userdata,
-                request_primary_client_selection, set_primary_selection,
-            },
-            SelectionTarget,
+    wayland::selection::{
+        data_device::{
+            clear_data_device_selection, current_data_device_selection_userdata,
+            request_data_device_client_selection, set_data_device_selection,
         },
+        primary_selection::{
+            clear_primary_selection, current_primary_selection_userdata,
+            request_primary_client_selection, set_primary_selection,
+        },
+        SelectionTarget,
     },
     xwayland::{
         xwm::{Reorder, WmWindowType, XwmId},
@@ -171,10 +168,10 @@ impl XwmHandler for State {
         trace!("XwmHandler::unmapped_window");
         for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
-                state.focus_stack.stack.retain(|win| {
-                    win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
-                })
+                state
+                    .focus_stack
+                    .stack
+                    .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
             });
         }
 
@@ -182,16 +179,16 @@ impl XwmHandler for State {
             .pinnacle
             .space
             .elements()
-            .find(|elem| matches!(elem.x11_surface(), Some(surf) if surf == &surface))
+            .find(|win| win.x11_surface() == Some(&surface))
             .cloned();
 
         if let Some(win) = win {
             self.pinnacle
                 .windows
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
+                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
             self.pinnacle
                 .z_index_stack
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
+                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
 
             self.pinnacle.space.unmap_elem(&win);
 
@@ -230,10 +227,10 @@ impl XwmHandler for State {
         trace!("XwmHandler::destroyed_window");
         for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
-                state.focus_stack.stack.retain(|win| {
-                    win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
-                })
+                state
+                    .focus_stack
+                    .stack
+                    .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
             });
         }
 
@@ -241,26 +238,19 @@ impl XwmHandler for State {
             .pinnacle
             .windows
             .iter()
-            .find(|elem| {
-                matches!(
-                    elem.x11_surface(),
-                    Some(surf) if surf.wl_surface() == surface.wl_surface()
-                )
-            })
+            .find(|win| win.x11_surface() == Some(&surface))
             .cloned();
 
         if let Some(win) = win {
             debug!("removing x11 window from windows");
 
-            // INFO: comparing the windows doesn't work so wlsurface it is
-            // self.windows.retain(|elem| &win != elem);
             self.pinnacle
                 .windows
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
+                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
 
             self.pinnacle
                 .z_index_stack
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
+                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
 
             if let Some(output) = win.output(&self.pinnacle) {
                 self.pinnacle.request_layout(&output);
