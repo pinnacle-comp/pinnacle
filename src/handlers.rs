@@ -3,14 +3,14 @@
 mod xdg_shell;
 mod xwayland;
 
-use std::{mem, os::fd::OwnedFd, time::Duration};
+use std::{mem, os::fd::OwnedFd, sync::Arc, time::Duration};
 
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
     delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_viewporter,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_security_context, delegate_shm, delegate_viewporter,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         utils::surface_primary_scanout_output, PopupKind, WindowSurfaceType,
@@ -43,6 +43,9 @@ use smithay::{
         output::OutputHandler,
         pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
         seat::WaylandFocus,
+        security_context::{
+            SecurityContext, SecurityContextHandler, SecurityContextListenerSource,
+        },
         selection::{
             data_device::{
                 set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
@@ -642,6 +645,31 @@ impl GammaControlHandler for State {
     }
 }
 delegate_gamma_control!(State);
+
+impl SecurityContextHandler for State {
+    fn context_created(&mut self, source: SecurityContextListenerSource, context: SecurityContext) {
+        self.pinnacle
+            .loop_handle
+            .insert_source(source, move |client, _, state| {
+                let client_state = Arc::new(ClientState {
+                    is_restricted: true,
+                    ..Default::default()
+                });
+
+                if let Err(err) = state
+                    .pinnacle
+                    .display_handle
+                    .insert_client(client, client_state)
+                {
+                    warn!("Failed to insert a restricted client: {err}");
+                } else {
+                    trace!("Inserted a restricted client, context={context:?}");
+                }
+            })
+            .expect("Failed to insert security context listener source into event loop");
+    }
+}
+delegate_security_context!(State);
 
 impl PointerConstraintsHandler for State {
     fn new_constraint(&mut self, _surface: &WlSurface, pointer: &PointerHandle<Self>) {

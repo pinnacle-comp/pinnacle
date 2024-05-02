@@ -20,7 +20,7 @@ use smithay::{
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
-            Display, DisplayHandle,
+            Client, Display, DisplayHandle,
         },
     },
     utils::{Clock, Monotonic},
@@ -31,6 +31,7 @@ use smithay::{
         output::OutputManagerState,
         pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerManagerState,
+        security_context::SecurityContextState,
         selection::{
             data_device::DataDeviceState, primary_selection::PrimarySelectionState,
             wlr_data_control::DataControlState,
@@ -40,7 +41,7 @@ use smithay::{
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
     },
-    xwayland::X11Wm,
+    xwayland::{X11Wm, XWaylandClientData},
 };
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
@@ -81,6 +82,7 @@ pub struct Pinnacle {
     pub data_control_state: DataControlState,
     pub screencopy_manager_state: ScreencopyManagerState,
     pub gamma_control_manager_state: GammaControlManagerState,
+    pub security_context_state: SecurityContextState,
     pub relative_pointer_manager_state: RelativePointerManagerState,
     pub pointer_constraints_state: PointerConstraintsState,
 
@@ -189,7 +191,7 @@ impl State {
         let data_control_state = DataControlState::new::<Self, _>(
             &display_handle,
             Some(&primary_selection_state),
-            |_| true,
+            Self::is_client_restricted,
         );
 
         let state = Self {
@@ -215,15 +217,22 @@ impl State {
                     &display_handle,
                 ),
                 primary_selection_state,
-                layer_shell_state: WlrLayerShellState::new::<Self>(&display_handle),
+                layer_shell_state: WlrLayerShellState::new_with_filter::<Self, _>(
+                    &display_handle,
+                    Self::is_client_restricted,
+                ),
                 data_control_state,
                 screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
                     &display_handle,
-                    |_| true,
+                    Self::is_client_restricted,
                 ),
                 gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
                     &display_handle,
-                    |_| true,
+                    Self::is_client_restricted,
+                ),
+                security_context_state: SecurityContextState::new::<Self, _>(
+                    &display_handle,
+                    Self::is_client_restricted,
                 ),
                 relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
                     &display_handle,
@@ -266,6 +275,16 @@ impl State {
 
         Ok(state)
     }
+
+    fn is_client_restricted(client: &Client) -> bool {
+        if let Some(state) = client.get_data::<ClientState>() {
+            return state.is_restricted;
+        }
+        if client.get_data::<XWaylandClientData>().is_some() {
+            return false;
+        }
+        panic!("Unknown client data type");
+    }
 }
 
 impl Pinnacle {
@@ -303,6 +322,8 @@ impl Pinnacle {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
+    /// True, if the client may NOT access restricted protocols
+    pub is_restricted: bool,
 }
 
 impl ClientData for ClientState {
