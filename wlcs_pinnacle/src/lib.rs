@@ -124,6 +124,7 @@ static SUPPORTED_EXTENSIONS: &[WlcsExtensionDescriptor] = extension_list!(
     ("xdg_shell", 6),
     ("linux-dmabuf-v1", 5),
     ("xdg_shell", 6),
+    ("security-context", 1),
 );
 
 static DESCRIPTOR: WlcsIntegrationDescriptor = WlcsIntegrationDescriptor {
