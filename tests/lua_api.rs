@@ -39,7 +39,6 @@ fn run_lua(ident: &str, code: &str) -> anyhow::Result<()> {
     drop(stdin);
 
     let exit_status = child.wait()?;
-    println!("exit status is {exit_status:?}");
 
     if exit_status.code().is_some_and(|code| code != 0) {
         return Err(anyhow!("lua code panicked"));
@@ -121,7 +120,7 @@ mod process {
                 Pinnacle.process.spawn("foot")
             }
 
-            sleep_secs(1);
+            sleep_secs(3);
 
             with_state(&sender, |state| {
                 assert_eq!(state.pinnacle.windows.len(), 1);

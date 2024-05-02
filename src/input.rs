@@ -285,10 +285,7 @@ impl State {
         let location = pointer.current_location();
         let surface_under = self.pinnacle.pointer_focus_target_under(location);
 
-        if pointer
-            .current_focus()
-            .is_some_and(|foc| matches!(&surface_under, Some((f, _)) if f == &foc))
-        {
+        if pointer.current_focus().as_ref() == surface_under.as_ref().map(|foc| &foc.0) {
             return;
         }
 
@@ -713,12 +710,21 @@ impl State {
 
         let mut new_pointer_loc = pointer_loc + event.delta();
 
-        let output_locs = self
+        // Place the pointer inside the nearest output if it would be outside one
+        if self
             .pinnacle
             .space
-            .outputs()
-            .flat_map(|op| self.pinnacle.space.output_geometry(op));
-        new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
+            .output_under(new_pointer_loc)
+            .next()
+            .is_none()
+        {
+            let output_locs = self
+                .pinnacle
+                .space
+                .outputs()
+                .flat_map(|op| self.pinnacle.space.output_geometry(op));
+            new_pointer_loc = constrain_point_inside_rects(new_pointer_loc, output_locs);
+        }
 
         let new_under = self.pinnacle.pointer_focus_target_under(new_pointer_loc);
 
@@ -735,18 +741,17 @@ impl State {
                     })
                 })
                 .or_else(|| {
+                    // No region or input region means constrain within the whole surface
                     let surface_size =
                         with_renderer_surface_state(&focus.wl_surface()?, |state| {
                             state.surface_size()
-                        })?;
+                        })??;
 
                     let mut attrs = RegionAttributes::default();
-                    if let Some(size) = surface_size {
-                        attrs.rects.push((
-                            compositor::RectangleKind::Add,
-                            Rectangle::from_loc_and_size((0, 0), size),
-                        ));
-                    }
+                    attrs.rects.push((
+                        compositor::RectangleKind::Add,
+                        Rectangle::from_loc_and_size((0, 0), surface_size),
+                    ));
                     Some(attrs)
                 })
                 .unwrap_or_default();
@@ -826,12 +831,8 @@ fn constrain_point_inside_rects(
     let (pos_x, pos_y) = pos.into();
 
     let nearest_points = rects.into_iter().map(|rect| {
-        // TODO: replace with constrain once fix is merged
-        // let pos = pos.constrain(rect.to_f64());
-        // (rect, pos.x, pos.y)
-        let pos_x = pos_x.clamp(rect.loc.x as f64, (rect.loc.x + rect.size.w) as f64);
-        let pos_y = pos_y.clamp(rect.loc.y as f64, (rect.loc.y + rect.size.h) as f64);
-        (rect, pos_x, pos_y)
+        let pos = pos.constrain(rect.to_f64());
+        (rect, pos.x, pos.y)
     });
 
     let nearest_point = nearest_points.min_by(|(_, x1, y1), (_, x2, y2)| {

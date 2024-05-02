@@ -729,7 +729,7 @@ impl Pinnacle {
         };
         with_pointer_constraint(&surface, &pointer, |constraint| {
             let Some(constraint) = constraint else { return };
-            tracing::debug!(constraint = ?*constraint);
+
             if constraint.is_active() {
                 return;
             }
