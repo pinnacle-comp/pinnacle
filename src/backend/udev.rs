@@ -1127,7 +1127,7 @@ impl Udev {
             .get(&OutputName(output.name()))
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
-            output.with_state_mut(|state| state.tags = tags.clone());
+            output.with_state_mut(|state| state.tags.clone_from(tags));
             pinnacle.change_output_state(&output, None, None, *scale, Some(*loc));
         } else {
             pinnacle.signal_state.output_connect.signal(|buffer| {

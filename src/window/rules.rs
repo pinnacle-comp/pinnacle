@@ -191,7 +191,7 @@ impl Pinnacle {
                         let tags = output
                             .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
 
-                        window.with_state_mut(|state| state.tags = tags.clone());
+                        window.with_state_mut(|state| state.tags.clone_from(&tags));
                     }
                 }
 
@@ -201,7 +201,7 @@ impl Pinnacle {
                         .filter_map(|tag_id| tag_id.tag(self))
                         .collect::<Vec<_>>();
 
-                    window.with_state_mut(|state| state.tags = tags.clone());
+                    window.with_state_mut(|state| state.tags.clone_from(&tags));
                 }
 
                 if let Some(floating_or_tiled) = floating_or_tiled {
