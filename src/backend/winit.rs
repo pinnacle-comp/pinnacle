@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{ffi::OsString, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, ensure};
 use smithay::{
@@ -201,13 +201,7 @@ pub fn setup_winit(
 
     state.pinnacle.space.map_output(&output, (0, 0));
 
-    if let Err(err) = state.pinnacle.xwayland.start(
-        state.pinnacle.loop_handle.clone(),
-        None,
-        std::iter::empty::<(OsString, OsString)>(),
-        true,
-        |_| {},
-    ) {
+    if let Err(err) = state.pinnacle.start_xwayland() {
         error!("Failed to start XWayland: {err}");
     }
 

@@ -4,7 +4,6 @@ use crate::{
     api::signal::SignalState,
     backend::Backend,
     config::Config,
-    cursor::Cursor,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
     layout::LayoutState,
@@ -24,12 +23,13 @@ use smithay::{
             Display, DisplayHandle,
         },
     },
-    utils::{Clock, Monotonic, Point, Size},
+    utils::{Clock, Monotonic},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         output::OutputManagerState,
+        pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerManagerState,
         selection::{
             data_device::DataDeviceState, primary_selection::PrimarySelectionState,
@@ -40,9 +40,9 @@ use smithay::{
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
     },
-    xwayland::{X11Wm, XWayland, XWaylandEvent},
+    xwayland::X11Wm,
 };
-use std::{cell::RefCell, path::PathBuf, sync::Arc, time::Duration};
+use std::{cell::RefCell, path::PathBuf, sync::Arc};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{error, info, warn};
 use xdg::BaseDirectories;
@@ -82,6 +82,7 @@ pub struct Pinnacle {
     pub screencopy_manager_state: ScreencopyManagerState,
     pub gamma_control_manager_state: GammaControlManagerState,
     pub relative_pointer_manager_state: RelativePointerManagerState,
+    pub pointer_constraints_state: PointerConstraintsState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -101,7 +102,6 @@ pub struct Pinnacle {
     pub config: Config,
 
     // xwayland stuff
-    pub xwayland: XWayland,
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
@@ -184,58 +184,6 @@ impl State {
 
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
-        let xwayland = {
-            let (xwayland, channel) = XWayland::new(&display_handle);
-            let dh_clone = display_handle.clone();
-
-            let res = loop_handle.insert_source(channel, move |event, _, state| match event {
-                XWaylandEvent::Ready {
-                    connection,
-                    client,
-                    client_fd: _,
-                    display,
-                } => {
-                    let mut wm = X11Wm::start_wm(
-                        state.pinnacle.loop_handle.clone(),
-                        dh_clone.clone(),
-                        connection,
-                        client,
-                    )
-                    .expect("failed to attach x11wm");
-
-                    let cursor = Cursor::load();
-                    let image = cursor.get_image(1, Duration::ZERO);
-                    wm.set_cursor(
-                        &image.pixels_rgba,
-                        Size::from((image.width as u16, image.height as u16)),
-                        Point::from((image.xhot as u16, image.yhot as u16)),
-                    )
-                    .expect("failed to set xwayland default cursor");
-
-                    tracing::debug!("setting xwm and xdisplay");
-
-                    state.pinnacle.xwm = Some(wm);
-                    state.pinnacle.xdisplay = Some(display);
-
-                    std::env::set_var("DISPLAY", format!(":{display}"));
-
-                    if let Err(err) = state.pinnacle.start_config(Some(
-                        state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
-                    )) {
-                        panic!("failed to start config: {err}");
-                    }
-                }
-                XWaylandEvent::Exited => {
-                    state.pinnacle.xwm.take();
-                }
-            });
-            if let Err(err) = res {
-                error!("Failed to insert XWayland source into loop: {err}");
-            }
-            xwayland
-        };
-        tracing::debug!("xwayland set up");
-
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
 
         let data_control_state = DataControlState::new::<Self, _>(
@@ -280,6 +228,7 @@ impl State {
                 relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
                     &display_handle,
                 ),
+                pointer_constraints_state: PointerConstraintsState::new::<Self>(&display_handle),
 
                 input_state: InputState::new(),
 
@@ -297,7 +246,6 @@ impl State {
                 windows: Vec::new(),
                 new_windows: Vec::new(),
 
-                xwayland,
                 xwm: None,
                 xdisplay: None,
 

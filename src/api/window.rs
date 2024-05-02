@@ -487,7 +487,8 @@ impl window_service_server::WindowService for WindowService {
             else {
                 return;
             };
-            let Some((pointer_focus, _)) = state.pointer_focus_target_under(pointer_location)
+            let Some((pointer_focus, _)) =
+                state.pinnacle.pointer_focus_target_under(pointer_location)
             else {
                 return;
             };
@@ -524,7 +525,8 @@ impl window_service_server::WindowService for WindowService {
             else {
                 return;
             };
-            let Some((pointer_focus, window_loc)) = state.pointer_focus_target_under(pointer_loc)
+            let Some((pointer_focus, window_loc)) =
+                state.pinnacle.pointer_focus_target_under(pointer_loc)
             else {
                 return;
             };

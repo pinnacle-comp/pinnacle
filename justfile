@@ -118,4 +118,4 @@ wlcs *args: compile-wlcs
     #!/usr/bin/env bash
     set -euxo pipefail
     cargo build -p wlcs_pinnacle
-    RUST_BACKTRACE=1 RUST_LOG=warn ./wlcs/wlcs target/debug/libwlcs_pinnacle.so {{args}}
+    RUST_BACKTRACE=1 ./wlcs/wlcs target/debug/libwlcs_pinnacle.so {{args}}

@@ -1,30 +1,31 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::{process::Stdio, time::Duration};
+
+use anyhow::anyhow;
 use smithay::{
     desktop::Window,
-    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
-    wayland::{
-        seat::WaylandFocus,
-        selection::{
-            data_device::{
-                clear_data_device_selection, current_data_device_selection_userdata,
-                request_data_device_client_selection, set_data_device_selection,
-            },
-            primary_selection::{
-                clear_primary_selection, current_primary_selection_userdata,
-                request_primary_client_selection, set_primary_selection,
-            },
-            SelectionTarget,
+    utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
+    wayland::selection::{
+        data_device::{
+            clear_data_device_selection, current_data_device_selection_userdata,
+            request_data_device_client_selection, set_data_device_selection,
         },
+        primary_selection::{
+            clear_primary_selection, current_primary_selection_userdata,
+            request_primary_client_selection, set_primary_selection,
+        },
+        SelectionTarget,
     },
     xwayland::{
         xwm::{Reorder, WmWindowType, XwmId},
-        X11Surface, X11Wm, XwmHandler,
+        X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler,
     },
 };
 use tracing::{debug, error, trace, warn};
 
 use crate::{
+    cursor::Cursor,
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
@@ -165,124 +166,18 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::unmapped_window");
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| {
-                state.focus_stack.stack.retain(|win| {
-                    win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
-                })
-            });
-        }
-
-        let win = self
-            .pinnacle
-            .space
-            .elements()
-            .find(|elem| matches!(elem.x11_surface(), Some(surf) if surf == &surface))
-            .cloned();
-
-        if let Some(win) = win {
-            self.pinnacle
-                .windows
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
-            self.pinnacle
-                .z_index_stack
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
-
-            self.pinnacle.space.unmap_elem(&win);
-
-            if let Some(output) = win.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-
-                let focus = self
-                    .pinnacle
-                    .focused_window(&output)
-                    .map(KeyboardFocusTarget::Window);
-
-                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.pinnacle.raise_window(win.clone(), true);
-                    if let Some(toplevel) = win.toplevel() {
-                        toplevel.send_configure();
-                    }
-                }
-
-                self.pinnacle
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
-
-                self.schedule_render(&output);
-            }
-        }
 
         if !surface.is_override_redirect() {
             debug!("set mapped to false");
             surface.set_mapped(false).expect("failed to unmap x11 win");
         }
+
+        self.remove_xwayland_window(surface);
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::destroyed_window");
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| {
-                state.focus_stack.stack.retain(|win| {
-                    win.wl_surface()
-                        .is_some_and(|surf| Some(surf) != surface.wl_surface())
-                })
-            });
-        }
-
-        let win = self
-            .pinnacle
-            .windows
-            .iter()
-            .find(|elem| {
-                matches!(
-                    elem.x11_surface(),
-                    Some(surf) if surf.wl_surface() == surface.wl_surface()
-                )
-            })
-            .cloned();
-
-        if let Some(win) = win {
-            debug!("removing x11 window from windows");
-
-            // INFO: comparing the windows doesn't work so wlsurface it is
-            // self.windows.retain(|elem| &win != elem);
-            self.pinnacle
-                .windows
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
-
-            self.pinnacle
-                .z_index_stack
-                .retain(|elem| win.wl_surface() != elem.wl_surface());
-
-            if let Some(output) = win.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-
-                let focus = self
-                    .pinnacle
-                    .focused_window(&output)
-                    .map(KeyboardFocusTarget::Window);
-
-                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.pinnacle.raise_window(win.clone(), true);
-                    if let Some(toplevel) = win.toplevel() {
-                        toplevel.send_configure();
-                    }
-                }
-
-                self.pinnacle
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
-
-                self.schedule_render(&output);
-            }
-        }
-        debug!("destroyed x11 window");
+        self.remove_xwayland_window(surface);
     }
 
     fn configure_request(
@@ -539,6 +434,54 @@ impl XwmHandler for State {
     }
 }
 
+impl State {
+    fn remove_xwayland_window(&mut self, surface: X11Surface) {
+        let win = self
+            .pinnacle
+            .windows
+            .iter()
+            .find(|elem| elem.x11_surface() == Some(&surface))
+            .cloned();
+
+        if let Some(win) = win {
+            debug!("removing x11 window from windows");
+            for output in self.pinnacle.space.outputs() {
+                output.with_state_mut(|state| {
+                    state.focus_stack.stack.retain(|w| w != &win);
+                });
+            }
+
+            self.pinnacle.windows.retain(|w| w != &win);
+
+            self.pinnacle.z_index_stack.retain(|w| w != &win);
+
+            if let Some(output) = win.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
+
+                let focus = self
+                    .pinnacle
+                    .focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
+
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
+                    self.pinnacle.raise_window(win.clone(), true);
+                    if let Some(toplevel) = win.toplevel() {
+                        toplevel.send_configure();
+                    }
+                }
+
+                self.pinnacle
+                    .seat
+                    .get_keyboard()
+                    .expect("Seat had no keyboard")
+                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+
+                self.schedule_render(&output);
+            }
+        }
+    }
+}
+
 impl Pinnacle {
     pub fn fixup_xwayland_window_layering(&mut self) {
         let Some(xwm) = self.xwm.as_mut() else {
@@ -584,4 +527,67 @@ fn should_float(surface: &X11Surface) -> bool {
         min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
     });
     surface.is_popup() || is_popup_by_type || is_popup_by_size
+}
+
+impl Pinnacle {
+    pub fn start_xwayland(&mut self) -> anyhow::Result<()> {
+        // TODO: xwayland keybaord grab state
+
+        let (xwayland, client) = XWayland::spawn(
+            &self.display_handle,
+            None,
+            std::iter::empty::<(String, String)>(),
+            true,
+            Stdio::null(),
+            Stdio::null(),
+            |_| (),
+        )?;
+
+        let display_handle = self.display_handle.clone();
+
+        self.loop_handle
+            .insert_source(xwayland, move |event, _, state| match event {
+                XWaylandEvent::Ready {
+                    x11_socket,
+                    display_number,
+                } => {
+                    let mut wm = X11Wm::start_wm(
+                        state.pinnacle.loop_handle.clone(),
+                        display_handle.clone(),
+                        x11_socket,
+                        client.clone(),
+                    )
+                    .expect("failed to attach x11wm");
+
+                    let cursor = Cursor::load();
+                    let image = cursor.get_image(1, Duration::ZERO);
+                    wm.set_cursor(
+                        &image.pixels_rgba,
+                        Size::from((image.width as u16, image.height as u16)),
+                        Point::from((image.xhot as u16, image.yhot as u16)),
+                    )
+                    .expect("failed to set xwayland default cursor");
+
+                    tracing::debug!("setting xwm and xdisplay");
+
+                    state.pinnacle.xwm = Some(wm);
+                    state.pinnacle.xdisplay = Some(display_number);
+
+                    std::env::set_var("DISPLAY", format!(":{display_number}"));
+
+                    if let Err(err) = state.pinnacle.start_config(Some(
+                        state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
+                    )) {
+                        panic!("failed to start config: {err}");
+                    }
+                }
+                XWaylandEvent::Error => {
+                    warn!("XWayland crashed on startup");
+                }
+            })
+            .map(|_| ())
+            .map_err(|err| {
+                anyhow!("Failed to insert the XWaylandSource into the event loop: {err}")
+            })
+    }
 }
