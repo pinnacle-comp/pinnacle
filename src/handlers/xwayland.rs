@@ -166,117 +166,18 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::unmapped_window");
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| {
-                state
-                    .focus_stack
-                    .stack
-                    .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-            });
-        }
-
-        let win = self
-            .pinnacle
-            .space
-            .elements()
-            .find(|win| win.x11_surface() == Some(&surface))
-            .cloned();
-
-        if let Some(win) = win {
-            self.pinnacle
-                .windows
-                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-            self.pinnacle
-                .z_index_stack
-                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-
-            self.pinnacle.space.unmap_elem(&win);
-
-            if let Some(output) = win.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-
-                let focus = self
-                    .pinnacle
-                    .focused_window(&output)
-                    .map(KeyboardFocusTarget::Window);
-
-                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.pinnacle.raise_window(win.clone(), true);
-                    if let Some(toplevel) = win.toplevel() {
-                        toplevel.send_configure();
-                    }
-                }
-
-                self.pinnacle
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
-
-                self.schedule_render(&output);
-            }
-        }
 
         if !surface.is_override_redirect() {
             debug!("set mapped to false");
             surface.set_mapped(false).expect("failed to unmap x11 win");
         }
+
+        self.remove_xwayland_window(surface);
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         trace!("XwmHandler::destroyed_window");
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| {
-                state
-                    .focus_stack
-                    .stack
-                    .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-            });
-        }
-
-        let win = self
-            .pinnacle
-            .windows
-            .iter()
-            .find(|win| win.x11_surface() == Some(&surface))
-            .cloned();
-
-        if let Some(win) = win {
-            debug!("removing x11 window from windows");
-
-            self.pinnacle
-                .windows
-                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-
-            self.pinnacle
-                .z_index_stack
-                .retain(|win| win.x11_surface().is_some_and(|surf| surf != &surface));
-
-            if let Some(output) = win.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-
-                let focus = self
-                    .pinnacle
-                    .focused_window(&output)
-                    .map(KeyboardFocusTarget::Window);
-
-                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.pinnacle.raise_window(win.clone(), true);
-                    if let Some(toplevel) = win.toplevel() {
-                        toplevel.send_configure();
-                    }
-                }
-
-                self.pinnacle
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
-
-                self.schedule_render(&output);
-            }
-        }
-        debug!("destroyed x11 window");
+        self.remove_xwayland_window(surface);
     }
 
     fn configure_request(
@@ -528,6 +429,54 @@ impl XwmHandler for State {
                 if current_primary_selection_userdata(&self.pinnacle.seat).is_some() {
                     clear_primary_selection(&self.pinnacle.display_handle, &self.pinnacle.seat);
                 }
+            }
+        }
+    }
+}
+
+impl State {
+    fn remove_xwayland_window(&mut self, surface: X11Surface) {
+        let win = self
+            .pinnacle
+            .windows
+            .iter()
+            .find(|elem| elem.x11_surface() == Some(&surface))
+            .cloned();
+
+        if let Some(win) = win {
+            debug!("removing x11 window from windows");
+            for output in self.pinnacle.space.outputs() {
+                output.with_state_mut(|state| {
+                    state.focus_stack.stack.retain(|w| w != &win);
+                });
+            }
+
+            self.pinnacle.windows.retain(|w| w != &win);
+
+            self.pinnacle.z_index_stack.retain(|w| w != &win);
+
+            if let Some(output) = win.output(&self.pinnacle) {
+                self.pinnacle.request_layout(&output);
+
+                let focus = self
+                    .pinnacle
+                    .focused_window(&output)
+                    .map(KeyboardFocusTarget::Window);
+
+                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
+                    self.pinnacle.raise_window(win.clone(), true);
+                    if let Some(toplevel) = win.toplevel() {
+                        toplevel.send_configure();
+                    }
+                }
+
+                self.pinnacle
+                    .seat
+                    .get_keyboard()
+                    .expect("Seat had no keyboard")
+                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+
+                self.schedule_render(&output);
             }
         }
     }

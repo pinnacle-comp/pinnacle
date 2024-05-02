@@ -91,10 +91,9 @@ impl From<&ModifiersState> for ModifierMask {
 
 #[derive(Default)]
 pub struct InputState {
+    // TODO: move all of these to config
     pub reload_keybind: Option<(ModifierMask, Keysym)>,
     pub kill_keybind: Option<(ModifierMask, Keysym)>,
-    /// All libinput devices that have been connected
-    pub libinput_devices: Vec<input::Device>,
 
     pub keybinds:
         HashMap<(ModifierMask, Keysym), UnboundedSender<Result<SetKeybindResponse, tonic::Status>>>,
@@ -102,13 +101,19 @@ pub struct InputState {
         (ModifierMask, u32, set_mousebind_request::MouseEdge),
         UnboundedSender<Result<SetMousebindResponse, tonic::Status>>,
     >,
+    //--------------------------------------------------
     #[allow(clippy::type_complexity)]
     pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
+    /// All libinput devices that have been connected
+    pub libinput_devices: Vec<input::Device>,
 
     /// A keyboard focus target stack that is used when there are exclusive keyboard layer
     /// surfaces. When used, the first item is the previous focus before there were any
     /// exclusive layer surfaces.
+    // TODO: make that a type or something
     exclusive_layer_focus_stack: Vec<KeyboardFocusTarget>,
+
+    locked_pointer_position_hint: Option<Point<f64, Logical>>,
 }
 
 impl InputState {
@@ -285,7 +290,46 @@ impl State {
         let location = pointer.current_location();
         let surface_under = self.pinnacle.pointer_focus_target_under(location);
 
-        if pointer.current_focus().as_ref() == surface_under.as_ref().map(|foc| &foc.0) {
+        // PERF: I'm not really a fan of polling all the time looking for locked pointer
+        // updates, but there doesn't seem to be a great way to get the final cursor
+        // position hint before destruction. I experimented with a
+        // `PointerConstraintsHandler::constraint_destroyed` method but doing so
+        // required threading the state through a bunch of different functions.
+        // Additionally, `PointerConstraintRef::deactivate` gets called in `WlSurface::leave`,
+        // so that would require all compositors implement `PointerConstraintsHandler`
+        // which seems very scuffed.
+        if pointer.current_focus().as_ref() == surface_under.as_ref().map(|s| &s.0) {
+            if let Some((surf, surf_loc)) =
+                surface_under.and_then(|(foc, loc)| Some((foc.wl_surface()?, loc)))
+            {
+                let unlocked = with_pointer_constraint(&surf, &pointer, |constraint| {
+                    let Some(constraint) = constraint else {
+                        return true;
+                    };
+                    if !constraint.is_active() {
+                        return true;
+                    }
+                    match &*constraint {
+                        PointerConstraint::Confined(_) => true,
+                        PointerConstraint::Locked(locked) => {
+                            self.pinnacle.input_state.locked_pointer_position_hint =
+                                locked.cursor_position_hint();
+                            false
+                        }
+                    }
+                });
+
+                if unlocked {
+                    if let Some(hint) = self
+                        .pinnacle
+                        .input_state
+                        .locked_pointer_position_hint
+                        .take()
+                    {
+                        self.warp_cursor_to_global_loc(hint + surf_loc.to_f64());
+                    }
+                }
+            }
             return;
         }
 
@@ -301,6 +345,34 @@ impl State {
             },
         );
         pointer.frame(self);
+    }
+
+    /// Warp the cursor to the given `loc` in the global space.
+    ///
+    /// This is not handled by [`State::pointer_motion`] because I haven't
+    /// figured out how thread that through yet.
+    pub fn warp_cursor_to_global_loc(&mut self, loc: impl Into<Point<f64, Logical>>) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+        let loc: Point<f64, Logical> = loc.into();
+        self.pinnacle.maybe_activate_pointer_constraint(loc);
+        let new_under = self.pinnacle.pointer_focus_target_under(loc);
+
+        pointer.motion(
+            self,
+            new_under,
+            &MotionEvent {
+                location: loc,
+                serial: SERIAL_COUNTER.next_serial(),
+                time: Duration::from(self.pinnacle.clock.now()).as_millis() as u32,
+            },
+        );
+
+        // TODO: only on outputs that the ptr left and entered
+        for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            self.schedule_render(&output);
+        }
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
