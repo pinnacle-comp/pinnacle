@@ -191,7 +191,7 @@ impl State {
         let data_control_state = DataControlState::new::<Self, _>(
             &display_handle,
             Some(&primary_selection_state),
-            Self::is_client_restricted,
+            Self::filter_restricted_client,
         );
 
         let state = Self {
@@ -219,20 +219,20 @@ impl State {
                 primary_selection_state,
                 layer_shell_state: WlrLayerShellState::new_with_filter::<Self, _>(
                     &display_handle,
-                    Self::is_client_restricted,
+                    Self::filter_restricted_client,
                 ),
                 data_control_state,
                 screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
                     &display_handle,
-                    Self::is_client_restricted,
+                    Self::filter_restricted_client,
                 ),
                 gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
                     &display_handle,
-                    Self::is_client_restricted,
+                    Self::filter_restricted_client,
                 ),
                 security_context_state: SecurityContextState::new::<Self, _>(
                     &display_handle,
-                    Self::is_client_restricted,
+                    Self::filter_restricted_client,
                 ),
                 relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
                     &display_handle,
@@ -276,12 +276,13 @@ impl State {
         Ok(state)
     }
 
-    fn is_client_restricted(client: &Client) -> bool {
+    /// Filters clients that are restricted by the security context
+    fn filter_restricted_client(client: &Client) -> bool {
         if let Some(state) = client.get_data::<ClientState>() {
-            return state.is_restricted;
+            return !state.is_restricted;
         }
         if client.get_data::<XWaylandClientData>().is_some() {
-            return false;
+            return true;
         }
         panic!("Unknown client data type");
     }
