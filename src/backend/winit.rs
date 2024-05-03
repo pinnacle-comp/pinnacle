@@ -118,6 +118,7 @@ pub fn setup_winit(
     );
 
     output.set_preferred(mode);
+    output.with_state_mut(|state| state.modes = vec![mode]);
 
     let render_node =
         EGLDevice::device_for_display(winit_backend.renderer().egl_context().display())

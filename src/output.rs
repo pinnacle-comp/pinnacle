@@ -41,6 +41,7 @@ pub struct OutputState {
     pub focus_stack: WindowKeyboardFocusStack,
     pub screencopy: Option<Screencopy>,
     pub serial: Option<NonZeroU32>,
+    pub modes: Vec<Mode>,
 }
 
 impl WithState for Output {
@@ -110,6 +111,7 @@ impl Pinnacle {
         }
         if let Some(mode) = mode {
             output.set_preferred(mode);
+            output.with_state_mut(|state| state.modes.push(mode));
         }
     }
 }

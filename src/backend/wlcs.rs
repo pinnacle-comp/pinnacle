@@ -62,6 +62,7 @@ pub fn setup_wlcs_dummy() -> anyhow::Result<(State, EventLoop<'static, State>)> 
     );
 
     output.set_preferred(mode);
+    output.with_state_mut(|state| state.modes = vec![mode]);
 
     let renderer = DummyRenderer::new();
     let shm_formats = renderer.shm_formats();

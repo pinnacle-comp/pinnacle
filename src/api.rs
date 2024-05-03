@@ -1177,11 +1177,9 @@ impl output_service_server::OutputService for OutputService {
             let modes = output
                 .as_ref()
                 .map(|output| {
-                    output
-                        .modes()
-                        .into_iter()
-                        .map(from_smithay_mode)
-                        .collect::<Vec<_>>()
+                    output.with_state(|state| {
+                        state.modes.iter().cloned().map(from_smithay_mode).collect()
+                    })
                 })
                 .unwrap_or_default();
 

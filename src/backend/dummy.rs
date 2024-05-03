@@ -13,7 +13,7 @@ use smithay::{
     utils::Transform,
 };
 
-use crate::state::{Pinnacle, State};
+use crate::state::{Pinnacle, State, WithState};
 
 #[cfg(feature = "wlcs")]
 use super::wlcs::Wlcs;
@@ -81,6 +81,7 @@ pub fn setup_dummy(
     );
 
     output.set_preferred(mode);
+    output.with_state_mut(|state| state.modes = vec![mode]);
 
     let renderer = DummyRenderer::new();
 
@@ -144,6 +145,7 @@ impl Pinnacle {
         output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
 
         output.set_preferred(mode);
+        output.with_state_mut(|state| state.modes = vec![mode]);
 
         output.create_global::<State>(&self.display_handle);
 

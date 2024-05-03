@@ -1040,6 +1040,14 @@ impl Udev {
 
         output.set_preferred(wl_mode);
 
+        let modes = connector
+            .modes()
+            .iter()
+            .cloned()
+            .map(smithay::output::Mode::from)
+            .collect::<Vec<_>>();
+        output.with_state_mut(|state| state.modes = modes);
+
         pinnacle.output_focus_stack.set_focus(output.clone());
 
         let x = pinnacle.space.outputs().fold(0, |acc, o| {
