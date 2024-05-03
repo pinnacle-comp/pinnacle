@@ -48,31 +48,18 @@ impl XdgShellHandler for State {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         tracing::debug!("toplevel destroyed");
-        self.pinnacle.windows.retain(|window| {
-            window
-                .wl_surface()
-                .is_some_and(|surf| &surf != surface.wl_surface())
-        });
-
-        self.pinnacle.z_index_stack.retain(|window| {
-            window
-                .wl_surface()
-                .is_some_and(|surf| &surf != surface.wl_surface())
-        });
-
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| {
-                state.focus_stack.stack.retain(|window| {
-                    window
-                        .wl_surface()
-                        .is_some_and(|surf| &surf != surface.wl_surface())
-                })
-            });
-        }
 
         let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
+
+        self.pinnacle.windows.retain(|win| win != &window);
+
+        self.pinnacle.z_index_stack.retain(|win| win != &window);
+
+        for output in self.pinnacle.space.outputs() {
+            output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != &window));
+        }
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
