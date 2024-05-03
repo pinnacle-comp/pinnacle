@@ -382,16 +382,23 @@ impl window_service_server::WindowService for WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             let pinnacle = &mut state.pinnacle;
+
             let Some(window) = window_id.window(pinnacle) else {
                 return;
             };
+
             let Some(tag) = tag_id.tag(pinnacle) else { return };
+
             window.with_state_mut(|state| {
                 state.tags = vec![tag.clone()];
             });
+
             let Some(output) = tag.output(pinnacle) else { return };
+
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
+
+            state.pinnacle.fixup_xwayland_window_layering();
         })
         .await
     }
@@ -446,6 +453,8 @@ impl window_service_server::WindowService for WindowService {
             let Some(output) = tag.output(pinnacle) else { return };
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
+
+            state.pinnacle.fixup_xwayland_window_layering();
         })
         .await
     }

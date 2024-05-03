@@ -840,6 +840,8 @@ impl tag_service_server::TagService for TagService {
                 }
             }
 
+            state.pinnacle.fixup_xwayland_window_layering();
+
             AddResponse { tag_ids }
         })
         .await
@@ -873,6 +875,8 @@ impl tag_service_server::TagService for TagService {
                     conn_saved_state.tags.retain(|tag| tag != tag_to_remove);
                 }
             }
+
+            state.pinnacle.fixup_xwayland_window_layering();
         })
         .await
     }
