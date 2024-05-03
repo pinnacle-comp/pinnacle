@@ -114,20 +114,11 @@ impl XwmHandler for State {
         if let Some(output) = window.output(&self.pinnacle) {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
             self.pinnacle.request_layout(&output);
-        }
 
-        self.pinnacle.loop_handle.insert_idle(move |state| {
-            state
-                .pinnacle
-                .seat
-                .get_keyboard()
-                .expect("Seat had no keyboard") // FIXME: actually handle error
-                .set_focus(
-                    state,
-                    Some(KeyboardFocusTarget::Window(window)),
-                    SERIAL_COUNTER.next_serial(),
-                );
-        });
+            self.pinnacle.loop_handle.insert_idle(move |state| {
+                state.update_keyboard_focus(&output);
+            });
+        }
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -470,11 +461,7 @@ impl State {
                     }
                 }
 
-                self.pinnacle
-                    .seat
-                    .get_keyboard()
-                    .expect("Seat had no keyboard")
-                    .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+                self.update_keyboard_focus(&output);
 
                 self.schedule_render(&output);
             }

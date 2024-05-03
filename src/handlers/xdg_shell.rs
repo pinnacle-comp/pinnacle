@@ -13,7 +13,7 @@ use smithay::{
             Resource,
         },
     },
-    utils::{Serial, SERIAL_COUNTER},
+    utils::Serial,
     wayland::{
         seat::WaylandFocus,
         shell::xdg::{
@@ -76,23 +76,21 @@ impl XdgShellHandler for State {
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
+
             let focus = self
                 .pinnacle
                 .focused_window(&output)
                 .map(KeyboardFocusTarget::Window);
+
             if let Some(KeyboardFocusTarget::Window(window)) = &focus {
                 tracing::debug!("Focusing on prev win");
-                // TODO:
                 self.pinnacle.raise_window(window.clone(), true);
                 if let Some(toplevel) = window.toplevel() {
                     toplevel.send_configure();
                 }
             }
-            self.pinnacle
-                .seat
-                .get_keyboard()
-                .expect("Seat had no keyboard")
-                .set_focus(self, focus, SERIAL_COUNTER.next_serial());
+
+            self.update_keyboard_focus(&output);
 
             self.schedule_render(&output);
         }

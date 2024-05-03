@@ -21,10 +21,7 @@ use smithay::{
 use tonic::{Request, Response, Status};
 use tracing::{error, warn};
 
-use crate::{
-    focus::keyboard::KeyboardFocusTarget, output::OutputName, state::WithState, tag::TagId,
-    window::window_state::WindowId,
-};
+use crate::{output::OutputName, state::WithState, tag::TagId, window::window_state::WindowId};
 
 use super::{run_unary, run_unary_no_response, StateFnSender};
 
@@ -313,13 +310,7 @@ impl window_service_server::WindowService for WindowService {
                     window.set_activate(true);
                     output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                     state.pinnacle.output_focus_stack.set_focus(output.clone());
-                    if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
-                        keyboard.set_focus(
-                            state,
-                            Some(KeyboardFocusTarget::Window(window)),
-                            SERIAL_COUNTER.next_serial(),
-                        );
-                    }
+                    state.update_keyboard_focus(&output);
                 }
                 SetOrToggle::Unset => {
                     if state.pinnacle.focused_window(&output) == Some(window) {
@@ -339,13 +330,7 @@ impl window_service_server::WindowService for WindowService {
                         window.set_activate(true);
                         output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                         state.pinnacle.output_focus_stack.set_focus(output.clone());
-                        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
-                            keyboard.set_focus(
-                                state,
-                                Some(KeyboardFocusTarget::Window(window)),
-                                SERIAL_COUNTER.next_serial(),
-                            );
-                        }
+                        state.update_keyboard_focus(&output);
                     }
                 }
                 SetOrToggle::Unspecified => unreachable!(),

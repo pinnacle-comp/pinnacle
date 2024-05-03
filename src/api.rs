@@ -753,7 +753,7 @@ impl tag_service_server::TagService for TagService {
             state.pinnacle.fixup_xwayland_window_layering();
 
             state.pinnacle.request_layout(&output);
-            state.update_focus(&output);
+            state.update_keyboard_focus(&output);
             state.schedule_render(&output);
         })
         .await
@@ -784,7 +784,7 @@ impl tag_service_server::TagService for TagService {
             state.pinnacle.fixup_xwayland_window_layering();
 
             state.pinnacle.request_layout(&output);
-            state.update_focus(&output);
+            state.update_keyboard_focus(&output);
             state.schedule_render(&output);
         })
         .await

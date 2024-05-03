@@ -31,7 +31,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
+    utils::{Logical, Point, Rectangle},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -190,20 +190,11 @@ impl CompositorHandler for State {
                         Some(Duration::ZERO),
                         surface_primary_scanout_output,
                     );
-                }
 
-                self.pinnacle.loop_handle.insert_idle(move |state| {
-                    state
-                        .pinnacle
-                        .seat
-                        .get_keyboard()
-                        .expect("Seat had no keyboard") // FIXME: actually handle error
-                        .set_focus(
-                            state,
-                            Some(KeyboardFocusTarget::Window(new_window)),
-                            SERIAL_COUNTER.next_serial(),
-                        );
-                });
+                    self.pinnacle.loop_handle.insert_idle(move |state| {
+                        state.update_keyboard_focus(&focused_output);
+                    });
+                }
             } else if new_window.toplevel().is_some() {
                 new_window.on_commit();
                 self.pinnacle.ensure_initial_configure(surface);

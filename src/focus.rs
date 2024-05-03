@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use smithay::{output::Output, utils::SERIAL_COUNTER};
+use smithay::{desktop::space::SpaceElement, output::Output, utils::SERIAL_COUNTER};
 use tracing::warn;
 
 use crate::{
@@ -13,12 +13,22 @@ pub mod pointer;
 
 impl State {
     /// Update the keyboard focus.
-    pub fn update_focus(&mut self, output: &Output) {
+    pub fn update_keyboard_focus(&mut self, output: &Output) {
         let current_focus = self.pinnacle.focused_window(output);
 
         if let Some(win) = &current_focus {
             assert!(!win.is_x11_override_redirect());
 
+            let wins = output.with_state(|state| state.focus_stack.stack.clone());
+
+            for win in wins.iter() {
+                win.set_activate(false);
+                if let Some(toplevel) = win.toplevel() {
+                    toplevel.send_configure();
+                }
+            }
+
+            win.set_activate(true);
             if let Some(toplevel) = win.toplevel() {
                 toplevel.send_configure();
             }
