@@ -31,7 +31,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{Logical, Point, Rectangle},
+    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -191,8 +191,17 @@ impl CompositorHandler for State {
                         surface_primary_scanout_output,
                     );
 
+                    // FIXME: an actual way to map new windows
+                    // This is not self.update_keyboard_focus because
+                    // the extra configure in that causes windows to map then resize
                     self.pinnacle.loop_handle.insert_idle(move |state| {
-                        state.update_keyboard_focus(&focused_output);
+                        if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
+                            keyboard.set_focus(
+                                state,
+                                Some(KeyboardFocusTarget::Window(new_window)),
+                                SERIAL_COUNTER.next_serial(),
+                            )
+                        }
                     });
                 }
             } else if new_window.toplevel().is_some() {

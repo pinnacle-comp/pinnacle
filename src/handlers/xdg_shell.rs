@@ -14,11 +14,8 @@ use smithay::{
         },
     },
     utils::Serial,
-    wayland::{
-        seat::WaylandFocus,
-        shell::xdg::{
-            PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
-        },
+    wayland::shell::xdg::{
+        PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
     },
 };
 use tracing::trace;
