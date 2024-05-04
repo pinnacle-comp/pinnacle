@@ -45,8 +45,6 @@ use self::{udev::Udev, winit::Winit};
 pub mod dummy;
 pub mod udev;
 pub mod winit;
-#[cfg(feature = "wlcs")]
-pub mod wlcs;
 
 pub enum Backend {
     /// The compositor is running in a Winit window

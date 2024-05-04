@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, OutputDisconnectResponse,
 };
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::Client;
 use smithay::utils::{Physical, Size};
 
 use smithay::{
@@ -15,12 +18,16 @@ use smithay::{
 use crate::config::StartupSettings;
 use crate::state::{Pinnacle, State, WithState};
 
-#[cfg(feature = "wlcs")]
-use super::wlcs::Wlcs;
 use super::Backend;
 use super::BackendData;
 
 pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
+
+#[cfg(feature = "wlcs")]
+#[derive(Default)]
+pub struct Wlcs {
+    pub clients: HashMap<i32, Client>,
+}
 
 pub struct Dummy {
     pub renderer: DummyRenderer,
@@ -33,6 +40,14 @@ impl Backend {
     fn dummy(&self) -> &Dummy {
         let Backend::Dummy(dummy) = self else { unreachable!() };
         dummy
+    }
+
+    #[cfg(feature = "wlcs")]
+    pub fn wlcs_mut(&mut self) -> &mut Wlcs {
+        let Backend::Dummy(dummy) = self else {
+            unreachable!(r#"feature gated by "wlcs""#)
+        };
+        &mut dummy.wlcs_state
     }
 }
 
