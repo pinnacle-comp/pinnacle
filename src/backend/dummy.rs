@@ -85,8 +85,6 @@ pub fn setup_dummy(
 
     let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
 
-    output.create_global::<State>(&display_handle);
-
     output.change_current_state(
         Some(mode),
         Some(Transform::Flipped180),
@@ -120,6 +118,8 @@ pub fn setup_dummy(
         loop_handle,
         startup_settings,
     )?;
+
+    output.create_global::<State>(&display_handle);
 
     state.pinnacle.output_focus_stack.set_focus(output.clone());
 

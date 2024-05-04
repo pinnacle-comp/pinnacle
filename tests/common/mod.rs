@@ -29,10 +29,12 @@ where
         + UnwindSafe
         + 'static,
 {
+    const NO_XWAYLAND: bool = true;
+
     let (mut state, mut event_loop) = setup_dummy(StartupSettings {
         no_config: true,
         config_dir: None,
-        no_xwayland: false,
+        no_xwayland: NO_XWAYLAND,
     })?;
 
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
@@ -50,6 +52,15 @@ where
     state.pinnacle.start_grpc_server(tempdir.path())?;
 
     let loop_signal = event_loop.get_signal();
+
+    if !NO_XWAYLAND {
+        while state.pinnacle.xdisplay.is_none() {
+            event_loop
+                .dispatch(None, &mut state)
+                .expect("dispatch failed");
+            state.on_event_loop_cycle_completion();
+        }
+    }
 
     let join_handle = std::thread::spawn(move || -> anyhow::Result<()> {
         let res = test(sender);
