@@ -18,6 +18,7 @@ use nix::unistd::Uid;
 use pinnacle::{
     backend::{udev::setup_udev, winit::setup_winit},
     cli::{self, Cli},
+    config::StartupSettings,
 };
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
@@ -84,21 +85,27 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
+    let startup_settings = StartupSettings {
+        no_config: cli.no_config,
+        config_dir: cli.config_dir,
+        no_xwayland: cli.no_xwayland,
+    };
+
     let (mut state, mut event_loop) = match (cli.backend, cli.force) {
         (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
-                setup_winit(cli.no_config, cli.config_dir)?
+                setup_winit(startup_settings)?
             } else {
                 info!("Starting udev backend");
-                setup_udev(cli.no_config, cli.config_dir)?
+                setup_udev(startup_settings)?
             }
         }
         (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
-                    setup_winit(cli.no_config, cli.config_dir)?
+                    setup_winit(startup_settings)?
                 } else {
                     warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
                     warn!("If you are trying to run the winit backend in a tty, it won't work.");
@@ -107,14 +114,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting winit backend");
-                setup_winit(cli.no_config, cli.config_dir)?
+                setup_winit(startup_settings)?
             }
         }
         (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
-                    setup_udev(cli.no_config, cli.config_dir)?
+                    setup_udev(startup_settings)?
                 } else {
                     warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
                     warn!("If you are trying to run the udev backend in a graphical environment,");
@@ -124,30 +131,13 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting udev backend");
-                setup_udev(cli.no_config, cli.config_dir)?
+                setup_udev(startup_settings)?
             }
         }
     };
 
     event_loop.run(None, &mut state, |state| {
-        state.update_pointer_focus();
-        state.pinnacle.fixup_z_layering();
-        state.pinnacle.space.refresh();
-        state.pinnacle.popup_manager.cleanup();
-
-        state
-            .pinnacle
-            .display_handle
-            .flush_clients()
-            .expect("failed to flush client buffers");
-
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            state.pinnacle.windows.len(),
-            state.pinnacle.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-            If you see this, report it to the developer."
-        );
+        state.on_event_loop_cycle_completion();
     })?;
 
     Ok(())

@@ -5,7 +5,6 @@ use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Physical, Size};
-use std::path::PathBuf;
 
 use smithay::{
     output::{Output, Subpixel},
@@ -13,6 +12,7 @@ use smithay::{
     utils::Transform,
 };
 
+use crate::config::StartupSettings;
 use crate::state::{Pinnacle, State, WithState};
 
 #[cfg(feature = "wlcs")]
@@ -30,7 +30,7 @@ pub struct Dummy {
 }
 
 impl Backend {
-    fn dummy_mut(&mut self) -> &Dummy {
+    fn dummy(&self) -> &Dummy {
         let Backend::Dummy(dummy) = self else { unreachable!() };
         dummy
     }
@@ -47,8 +47,7 @@ impl BackendData for Dummy {
 }
 
 pub fn setup_dummy(
-    no_config: bool,
-    config_dir: Option<PathBuf>,
+    startup_settings: StartupSettings,
 ) -> anyhow::Result<(State, EventLoop<'static, State>)> {
     let event_loop: EventLoop<State> = EventLoop::try_new()?;
 
@@ -104,13 +103,12 @@ pub fn setup_dummy(
         display,
         event_loop.get_signal(),
         loop_handle,
-        no_config,
-        config_dir,
+        startup_settings,
     )?;
 
     state.pinnacle.output_focus_stack.set_focus(output.clone());
 
-    let dummy = state.backend.dummy_mut();
+    let dummy = state.backend.dummy();
 
     state
         .pinnacle
@@ -118,10 +116,6 @@ pub fn setup_dummy(
         .update_formats(dummy.renderer.shm_formats());
 
     state.pinnacle.space.map_output(&output, (0, 0));
-
-    if let Err(err) = state.pinnacle.start_xwayland() {
-        tracing::error!("Failed to start XWayland: {err}");
-    }
 
     Ok((state, event_loop))
 }

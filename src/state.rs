@@ -3,7 +3,7 @@
 use crate::{
     api::signal::SignalState,
     backend::Backend,
-    config::Config,
+    config::{Config, StartupSettings},
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
     layout::LayoutState,
@@ -43,7 +43,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use std::{cell::RefCell, path::PathBuf, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{error, info, warn};
 use xdg::BaseDirectories;
@@ -126,8 +126,7 @@ impl State {
         display: Display<Self>,
         loop_signal: LoopSignal,
         loop_handle: LoopHandle<'static, Self>,
-        no_config: bool,
-        config_dir: Option<PathBuf>,
+        startup_settings: StartupSettings,
     ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
@@ -194,84 +193,91 @@ impl State {
             Self::filter_restricted_client,
         );
 
-        let state = Self {
-            backend,
+        let mut pinnacle = Pinnacle {
+            loop_signal,
+            loop_handle,
+            display_handle: display_handle.clone(),
+            clock: Clock::<Monotonic>::new(),
+            compositor_state: CompositorState::new::<Self>(&display_handle),
+            data_device_state: DataDeviceState::new::<Self>(&display_handle),
+            seat_state,
+            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
+            space: Space::<WindowElement>::default(),
+            cursor_status: CursorImageStatus::default_named(),
+            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
+            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
+            viewporter_state: ViewporterState::new::<Self>(&display_handle),
+            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
+                &display_handle,
+            ),
+            primary_selection_state,
+            layer_shell_state: WlrLayerShellState::new_with_filter::<Self, _>(
+                &display_handle,
+                Self::filter_restricted_client,
+            ),
+            data_control_state,
+            screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
+                &display_handle,
+                Self::filter_restricted_client,
+            ),
+            gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
+                &display_handle,
+                Self::filter_restricted_client,
+            ),
+            security_context_state: SecurityContextState::new::<Self, _>(
+                &display_handle,
+                Self::filter_restricted_client,
+            ),
+            relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
+                &display_handle,
+            ),
+            pointer_constraints_state: PointerConstraintsState::new::<Self>(&display_handle),
 
-            pinnacle: Pinnacle {
-                loop_signal,
-                loop_handle,
-                display_handle: display_handle.clone(),
-                clock: Clock::<Monotonic>::new(),
-                compositor_state: CompositorState::new::<Self>(&display_handle),
-                data_device_state: DataDeviceState::new::<Self>(&display_handle),
-                seat_state,
-                shm_state: ShmState::new::<Self>(&display_handle, vec![]),
-                space: Space::<WindowElement>::default(),
-                cursor_status: CursorImageStatus::default_named(),
-                output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(
-                    &display_handle,
-                ),
-                xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
-                viewporter_state: ViewporterState::new::<Self>(&display_handle),
-                fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
-                    &display_handle,
-                ),
-                primary_selection_state,
-                layer_shell_state: WlrLayerShellState::new_with_filter::<Self, _>(
-                    &display_handle,
-                    Self::filter_restricted_client,
-                ),
-                data_control_state,
-                screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
-                    &display_handle,
-                    Self::filter_restricted_client,
-                ),
-                gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
-                    &display_handle,
-                    Self::filter_restricted_client,
-                ),
-                security_context_state: SecurityContextState::new::<Self, _>(
-                    &display_handle,
-                    Self::filter_restricted_client,
-                ),
-                relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
-                    &display_handle,
-                ),
-                pointer_constraints_state: PointerConstraintsState::new::<Self>(&display_handle),
+            input_state: InputState::new(),
 
-                input_state: InputState::new(),
+            output_focus_stack: OutputFocusStack::default(),
+            z_index_stack: Vec::new(),
 
-                output_focus_stack: OutputFocusStack::default(),
-                z_index_stack: Vec::new(),
+            config: Config::new(startup_settings.no_config, startup_settings.config_dir),
 
-                config: Config::new(no_config, config_dir),
+            seat,
 
-                seat,
+            dnd_icon: None,
 
-                dnd_icon: None,
+            popup_manager: PopupManager::default(),
 
-                popup_manager: PopupManager::default(),
+            windows: Vec::new(),
+            new_windows: Vec::new(),
 
-                windows: Vec::new(),
-                new_windows: Vec::new(),
+            xwm: None,
+            xdisplay: None,
 
-                xwm: None,
-                xdisplay: None,
+            system_processes: sysinfo::System::new_with_specifics(
+                RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+            ),
 
-                system_processes: sysinfo::System::new_with_specifics(
-                    RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-                ),
+            grpc_server_join_handle: None,
 
-                grpc_server_join_handle: None,
+            xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
+                .context("couldn't create xdg BaseDirectories")?,
 
-                xdg_base_dirs: BaseDirectories::with_prefix("pinnacle")
-                    .context("couldn't create xdg BaseDirectories")?,
+            signal_state: SignalState::default(),
 
-                signal_state: SignalState::default(),
-
-                layout_state: LayoutState::default(),
-            },
+            layout_state: LayoutState::default(),
         };
+
+        // not really a fan of this double negation
+        if !startup_settings.no_xwayland {
+            if let Err(err) = pinnacle.start_xwayland_and_config() {
+                tracing::error!("Failed to start XWayland: {err}");
+            }
+        } else {
+            pinnacle
+                .start_config(Some(pinnacle.config.dir(&pinnacle.xdg_base_dirs)))
+                .expect("failed to start config");
+        }
+
+        let state = Self { backend, pinnacle };
 
         Ok(state)
     }
@@ -285,6 +291,26 @@ impl State {
             return true;
         }
         panic!("Unknown client data type");
+    }
+
+    pub fn on_event_loop_cycle_completion(&mut self) {
+        self.pinnacle.fixup_z_layering();
+        self.pinnacle.space.refresh();
+        self.pinnacle.popup_manager.cleanup();
+        self.update_pointer_focus();
+
+        self.pinnacle
+            .display_handle
+            .flush_clients()
+            .expect("failed to flush client buffers");
+
+        // TODO: couple these or something, this is really error-prone
+        assert_eq!(
+            self.pinnacle.windows.len(),
+            self.pinnacle.z_index_stack.len(),
+            "Length of `windows` and `z_index_stack` are different. \
+            If you see this, report it to the developer."
+        );
     }
 }
 

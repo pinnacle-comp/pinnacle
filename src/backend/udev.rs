@@ -5,7 +5,7 @@ mod gamma;
 
 use std::{
     collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
+    path::Path,
     time::Duration,
 };
 
@@ -87,7 +87,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     backend::Backend,
-    config::ConnectorSavedState,
+    config::{ConnectorSavedState, StartupSettings},
     output::OutputName,
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
@@ -316,8 +316,7 @@ impl BackendData for Udev {
 }
 
 pub fn setup_udev(
-    no_config: bool,
-    config_dir: Option<PathBuf>,
+    startup_settings: StartupSettings,
 ) -> anyhow::Result<(State, EventLoop<'static, State>)> {
     let event_loop = EventLoop::try_new()?;
     let display = Display::new()?;
@@ -409,8 +408,7 @@ pub fn setup_udev(
         display,
         event_loop.get_signal(),
         event_loop.handle(),
-        no_config,
-        config_dir,
+        startup_settings,
     )?;
 
     let things = state
@@ -682,10 +680,6 @@ pub fn setup_udev(
             });
         });
     });
-
-    if let Err(err) = state.pinnacle.start_xwayland() {
-        error!("Failed to start XWayland: {err}");
-    }
 
     Ok((state, event_loop))
 }

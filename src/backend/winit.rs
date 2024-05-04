@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use anyhow::{anyhow, ensure};
 use smithay::{
@@ -30,7 +30,7 @@ use smithay::{
             Display,
         },
         winit::{
-            platform::pump_events::PumpStatus,
+            platform::{pump_events::PumpStatus, wayland::WindowBuilderExtWayland},
             window::{Icon, WindowBuilder},
         },
     },
@@ -40,6 +40,7 @@ use smithay::{
 use tracing::{error, trace, warn};
 
 use crate::{
+    config::StartupSettings,
     render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
     state::{State, WithState},
 };
@@ -76,8 +77,7 @@ impl Backend {
 
 /// Start Pinnacle as a window in a graphical environment.
 pub fn setup_winit(
-    no_config: bool,
-    config_dir: Option<PathBuf>,
+    startup_settings: StartupSettings,
 ) -> anyhow::Result<(State, EventLoop<'static, State>)> {
     let event_loop: EventLoop<State> = EventLoop::try_new()?;
 
@@ -88,6 +88,7 @@ pub fn setup_winit(
 
     let window_builder = WindowBuilder::new()
         .with_title("Pinnacle")
+        .with_name("pinnacle", "pinnacle")
         .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
 
     let (mut winit_backend, mut winit_evt_loop) =
@@ -184,8 +185,7 @@ pub fn setup_winit(
         display,
         event_loop.get_signal(),
         loop_handle,
-        no_config,
-        config_dir,
+        startup_settings,
     )?;
 
     // wl-mirror segfaults if it gets a wl-output global before the xdg output manager global
@@ -201,10 +201,6 @@ pub fn setup_winit(
         .update_formats(winit.backend.renderer().shm_formats());
 
     state.pinnacle.space.map_output(&output, (0, 0));
-
-    if let Err(err) = state.pinnacle.start_xwayland() {
-        error!("Failed to start XWayland: {err}");
-    }
 
     let insert_ret = state.pinnacle.loop_handle.insert_source(
         Timer::immediate(),

@@ -1,7 +1,7 @@
 use std::{panic::UnwindSafe, time::Duration};
 
 use anyhow::anyhow;
-use pinnacle::{backend::dummy::setup_dummy, state::State};
+use pinnacle::{backend::dummy::setup_dummy, config::StartupSettings, state::State};
 use smithay::{
     output::Output,
     reexports::calloop::{
@@ -29,7 +29,11 @@ where
         + UnwindSafe
         + 'static,
 {
-    let (mut state, mut event_loop) = setup_dummy(true, None)?;
+    let (mut state, mut event_loop) = setup_dummy(StartupSettings {
+        no_config: true,
+        config_dir: None,
+        no_xwayland: false,
+    })?;
 
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
@@ -54,23 +58,7 @@ where
     });
 
     event_loop.run(None, &mut state, |state| {
-        state.pinnacle.fixup_z_layering();
-        state.pinnacle.space.refresh();
-        state.pinnacle.popup_manager.cleanup();
-
-        state
-            .pinnacle
-            .display_handle
-            .flush_clients()
-            .expect("failed to flush client buffers");
-
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            state.pinnacle.windows.len(),
-            state.pinnacle.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-                    If you see this, report it to the developer."
-        );
+        state.on_event_loop_cycle_completion();
     })?;
 
     join_handle.join().map_err(|_| anyhow!("thread panicked"))?

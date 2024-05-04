@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use pinnacle::{
-    backend::wlcs::setup_wlcs_dummy,
+    backend::dummy::setup_dummy,
     state::{ClientState, State, WithState},
     window::window_state::FloatingOrTiled,
 };
@@ -16,7 +16,6 @@ use smithay::{
 };
 
 use crate::{
-    config::run_config,
     input_backend::{
         WlcsDevice, WlcsInputBackend, WlcsPointerButtonEvent, WlcsPointerMotionAbsoluteEvent,
         WlcsPointerMotionEvent, WlcsTouchDownEvent, WlcsTouchUpEvent,
@@ -25,7 +24,12 @@ use crate::{
 };
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {
-    let (mut state, mut event_loop) = setup_wlcs_dummy().expect("failed to setup dummy backend");
+    let (mut state, mut event_loop) = setup_dummy(pinnacle::config::StartupSettings {
+        no_config: true,
+        config_dir: None,
+        no_xwayland: true,
+    })
+    .expect("failed to setup dummy backend");
 
     event_loop
         .handle()
@@ -39,17 +43,23 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     let _handle = rt.enter();
 
-    // FIXME: once starting pinnacle without xwayland is a thing, handle this
-    // |      properly; in this case, we probably no longer need to start the
-    // |      config manually anymore either, as this is only needed now,
-    // |      because the config is started after xwayland reports its ready
+    {
+        let temp_dir = tempfile::tempdir().expect("failed to setup temp dir for socket");
+        let socket_dir = temp_dir.path().to_owned();
 
-    // when xdiplay is None when starting the config, the grpc server is not
-    // started, until it is set; this bypasses this for now
-    state.pinnacle.xdisplay = Some(u32::MAX);
-    run_config(&mut state.pinnacle);
+        state.pinnacle.start_grpc_server(&socket_dir).unwrap();
+
+        std::thread::spawn(move || {
+            crate::config::start_config();
+            drop(temp_dir);
+        });
+    };
 
     // wait for the config to connect to the layout service
+    //
+    // Ottatop: this probably doesn't do a whole lot because
+    // everything else is in the event loop so this pretty much
+    // just runs everything
     while state.pinnacle.layout_state.layout_request_sender.is_none() {
         event_loop
             .dispatch(Some(Duration::from_millis(10)), &mut state)
@@ -58,16 +68,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
 
     event_loop
         .run(None, &mut state, |state| {
-            state.update_pointer_focus();
-            state.pinnacle.fixup_z_layering();
-            state.pinnacle.space.refresh();
-            state.pinnacle.popup_manager.cleanup();
-
-            state
-                .pinnacle
-                .display_handle
-                .flush_clients()
-                .expect("failed to flush client buffers");
+            state.on_event_loop_cycle_completion();
         })
         .expect("failed to run event_loop");
 }

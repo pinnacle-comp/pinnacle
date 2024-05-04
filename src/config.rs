@@ -72,6 +72,14 @@ pub struct Metaconfig {
     pub socket_dir: Option<String>,
 }
 
+/// Settings from startup arguments.
+#[derive(Default, Debug, Clone)]
+pub struct StartupSettings {
+    pub no_config: bool,
+    pub config_dir: Option<PathBuf>,
+    pub no_xwayland: bool,
+}
+
 #[derive(serde::Deserialize, Debug, PartialEq)]
 pub struct Keybind {
     modifiers: Vec<Modifier>,
@@ -585,28 +593,11 @@ impl Pinnacle {
             .add_service(LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));
 
-        match self.xdisplay.as_ref() {
-            Some(_) => {
-                self.grpc_server_join_handle = Some(tokio::spawn(async move {
-                    if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
-                        error!("gRPC server error: {err}");
-                    }
-                }));
+        self.grpc_server_join_handle = Some(tokio::spawn(async move {
+            if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                error!("gRPC server error: {err}");
             }
-            // FIXME: Not really high priority but if you somehow reload the config really, REALLY
-            // |      fast at startup then I think there's a chance that the gRPC server
-            // |      could get started twice.
-            None => self.schedule(
-                |state| state.pinnacle.xdisplay.is_some(),
-                move |state| {
-                    state.pinnacle.grpc_server_join_handle = Some(tokio::spawn(async move {
-                        if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
-                            error!("gRPC server error: {err}");
-                        }
-                    }));
-                },
-            ),
-        }
+        }));
 
         Ok(())
     }

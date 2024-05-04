@@ -44,6 +44,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_config: bool,
 
+    /// Prevent Xwayland from being started
+    #[arg(long)]
+    pub no_xwayland: bool,
+
     /// Cli subcommands
     #[command(subcommand)]
     subcommand: Option<CliSubcommand>,
