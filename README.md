@@ -85,7 +85,7 @@ You will need:
 
 If you would like to use the Lua API, you will additionally need:
 
-- [Lua](https://www.lua.org/) 5.4 or newer
+- [Lua](https://www.lua.org/) 5.2 or newer
 - [LuaRocks](https://luarocks.org/), the Lua package manager
     - Arch:
         ```sh
@@ -95,7 +95,7 @@ If you would like to use the Lua API, you will additionally need:
         ```sh
         sudo apt install luarocks
         ```
-    - You must run `eval $(luarocks path --lua-version 5.4)` so that your config can find the API
+    - You must run `eval $(luarocks path --lua-version <your-lua-version>)` so that your config can find the API
       library files. It is recommended to place this command in your shell's startup script.
 
 TODO: other distros
@@ -199,7 +199,7 @@ Rust config.
 Additionally, if your config crashes, Pinnacle will also start the embedded Rust config.
 
 > [!NOTE]
-> If you have not run `eval $(luarocks path --lua-version 5.4)`, Pinnacle will fallback to the
+> If you have not run `eval $(luarocks path --lua-version <your-lua-version>)`, Pinnacle will fallback to the
 > embedded Rust config.
 
 ### The `metaconfig.toml` file
