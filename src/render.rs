@@ -151,7 +151,7 @@ where
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .filter(|win| win.is_on_active_tag())
         .enumerate()
-        .flat_map(|(i, win)| {
+        .map(|(i, win)| {
             if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
@@ -171,7 +171,10 @@ where
 
     let rest = fullscreen_and_up.split_off(last_fullscreen_split_at);
 
-    (fullscreen_and_up, rest)
+    (
+        fullscreen_and_up.into_iter().flatten().collect(),
+        rest.into_iter().flatten().collect(),
+    )
 }
 
 pub fn pointer_render_elements<R>(
