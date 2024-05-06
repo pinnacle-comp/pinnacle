@@ -59,7 +59,7 @@ use smithay::{
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{
-            self, generic::Generic, Dispatcher, EventLoop, Idle, Interest, LoopHandle, PostAction,
+            self, generic::Generic, Dispatcher, Idle, Interest, LoopHandle, PostAction,
             RegistrationToken,
         },
         drm::control::{connector, crtc, ModeTypeFlags},
@@ -73,7 +73,7 @@ use smithay::{
         wayland_server::{
             backend::GlobalId,
             protocol::{wl_shm, wl_surface::WlSurface},
-            Display, DisplayHandle,
+            DisplayHandle,
         },
     },
     utils::{DeviceFd, IsAlive, Point, Rectangle, Transform},
@@ -87,7 +87,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     backend::Backend,
-    config::{ConnectorSavedState, StartupSettings},
+    config::ConnectorSavedState,
     output::OutputName,
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
@@ -98,7 +98,7 @@ use crate::{
 
 use self::drm_util::EdidInfo;
 
-use super::BackendData;
+use super::{BackendData, UninitBackend};
 
 const SUPPORTED_FORMATS: &[Fourcc] = &[
     Fourcc::Abgr2101010,
@@ -151,6 +151,7 @@ pub struct Udev {
 }
 
 impl Backend {
+    #[allow(dead_code)]
     fn udev(&self) -> &Udev {
         let Backend::Udev(udev) = self else { unreachable!() };
         udev
@@ -163,6 +164,370 @@ impl Backend {
 }
 
 impl Udev {
+    pub fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Udev>> {
+        // Initialize session
+        let (session, notifier) = LibSeatSession::new()?;
+
+        // Get the primary gpu
+        let primary_gpu = udev::primary_gpu(session.seat())
+            .context("unable to get primary gpu path")?
+            .and_then(|x| {
+                DrmNode::from_path(x)
+                    .ok()?
+                    .node_with_type(NodeType::Render)?
+                    .ok()
+            })
+            .unwrap_or_else(|| {
+                udev::all_gpus(session.seat())
+                    .expect("failed to get gpu paths")
+                    .into_iter()
+                    .find_map(|x| DrmNode::from_path(x).ok())
+                    .expect("No GPU!")
+            });
+        info!("Using {} as primary gpu.", primary_gpu);
+
+        let gpu_manager = GpuManager::new(GbmGlesBackend::default())?;
+        // let gpu_manager = GpuManager::new(GbmGlesBackend::with_factory(|egl| {
+        //     let ctx = EGLContext::new(egl)?;
+        //     let mut supported = unsafe { GlesRenderer::supported_capabilities(&ctx) }?;
+        //     supported.retain(|cap| cap != &Capability::ColorTransformations);
+        //     Ok(unsafe { GlesRenderer::with_capabilities(ctx, supported) }?)
+        // }))?;
+
+        // Initialize the udev backend
+        let udev_backend = UdevBackend::new(session.seat())?;
+
+        let udev_dispatcher = Dispatcher::new(udev_backend, move |event, _, state: &mut State| {
+            let udev = state.backend.udev_mut();
+            let pinnacle = &mut state.pinnacle;
+            match event {
+                // GPU connected
+                UdevEvent::Added { device_id, path } => {
+                    if let Err(err) = DrmNode::from_dev_id(device_id)
+                        .map_err(DeviceAddError::DrmNode)
+                        .and_then(|node| udev.device_added(pinnacle, node, &path))
+                    {
+                        error!("Skipping device {device_id}: {err}");
+                    }
+                }
+                UdevEvent::Changed { device_id } => {
+                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                        udev.device_changed(pinnacle, node)
+                    }
+                }
+                // GPU disconnected
+                UdevEvent::Removed { device_id } => {
+                    if let Ok(node) = DrmNode::from_dev_id(device_id) {
+                        udev.device_removed(pinnacle, node)
+                    }
+                }
+            }
+        });
+
+        let mut udev = Udev {
+            display_handle,
+            udev_dispatcher,
+            dmabuf_state: None,
+            session,
+            primary_gpu,
+            gpu_manager,
+            allocator: None,
+            backends: HashMap::new(),
+            pointer_image: crate::cursor::Cursor::load(),
+            pointer_images: Vec::new(),
+            pointer_element: PointerElement::default(),
+
+            upscale_filter: TextureFilter::Linear,
+            downscale_filter: TextureFilter::Linear,
+        };
+
+        Ok(UninitBackend {
+            seat_name: udev.seat_name(),
+            init: Box::new(move |pinnacle| {
+                pinnacle
+                    .loop_handle
+                    .register_dispatcher(udev.udev_dispatcher.clone())?;
+
+                let things = udev
+                    .udev_dispatcher
+                    .as_source_ref()
+                    .device_list()
+                    .map(|(id, path)| (id, path.to_path_buf()))
+                    .collect::<Vec<_>>();
+
+                // Create DrmNodes from already connected GPUs
+                for (device_id, path) in things {
+                    if let Err(err) = DrmNode::from_dev_id(device_id)
+                        .map_err(DeviceAddError::DrmNode)
+                        .and_then(|node| udev.device_added(pinnacle, node, &path))
+                    {
+                        error!("Skipping device {device_id}: {err}");
+                    }
+                }
+
+                // Initialize libinput backend
+                let mut libinput_context = Libinput::new_with_udev::<
+                    LibinputSessionInterface<LibSeatSession>,
+                >(udev.session.clone().into());
+                libinput_context
+                    .udev_assign_seat(pinnacle.seat.name())
+                    .expect("failed to assign seat to libinput");
+                let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
+
+                // Bind all our objects that get driven by the event loop
+
+                let insert_ret =
+                    pinnacle
+                        .loop_handle
+                        .insert_source(libinput_backend, move |event, _, state| {
+                            state.pinnacle.apply_libinput_settings(&event);
+                            state.process_input_event(event);
+                        });
+
+                if let Err(err) = insert_ret {
+                    anyhow::bail!("Failed to insert libinput_backend into event loop: {err}");
+                }
+
+                pinnacle
+                    .loop_handle
+                    .insert_source(notifier, move |event, _, state| {
+                        match event {
+                            session::Event::PauseSession => {
+                                let udev = state.backend.udev_mut();
+                                libinput_context.suspend();
+                                info!("pausing session");
+
+                                for backend in udev.backends.values_mut() {
+                                    backend.drm.pause();
+                                }
+                            }
+                            session::Event::ActivateSession => {
+                                info!("resuming session");
+
+                                if libinput_context.resume().is_err() {
+                                    error!("Failed to resume libinput context");
+                                }
+
+                                let udev = state.backend.udev_mut();
+                                let pinnacle = &mut state.pinnacle;
+
+                                let (mut device_list, connected_devices, disconnected_devices) = {
+                                    let device_list = udev
+                                        .udev_dispatcher
+                                        .as_source_ref()
+                                        .device_list()
+                                        .flat_map(|(id, path)| {
+                                            Some((
+                                                DrmNode::from_dev_id(id).ok()?,
+                                                path.to_path_buf(),
+                                            ))
+                                        })
+                                        .collect::<HashMap<_, _>>();
+
+                                    let (connected_devices, disconnected_devices) =
+                                        udev.backends.keys().copied().partition::<Vec<_>, _>(
+                                            |node| device_list.contains_key(node),
+                                        );
+
+                                    (device_list, connected_devices, disconnected_devices)
+                                };
+
+                                for node in disconnected_devices {
+                                    device_list.remove(&node);
+                                    udev.device_removed(pinnacle, node);
+                                }
+
+                                for node in connected_devices {
+                                    device_list.remove(&node);
+
+                                    // INFO: see if this can be moved below udev.device_changed
+                                    {
+                                        let Some(backend) = udev.backends.get_mut(&node) else {
+                                            unreachable!();
+                                        };
+
+                                        if let Err(err) = backend.drm.activate(true) {
+                                            error!("Error activating DRM device: {err}");
+                                        }
+                                    }
+
+                                    udev.device_changed(pinnacle, node);
+
+                                    let Some(backend) = udev.backends.get_mut(&node) else {
+                                        unreachable!();
+                                    };
+
+                                    // Apply pending gammas
+                                    //
+                                    // Also welcome to some really doodoo code
+
+                                    for (crtc, surface) in backend.surfaces.iter_mut() {
+                                        match std::mem::take(&mut surface.pending_gamma_change) {
+                                            PendingGammaChange::Idle => {
+                                                debug!("Restoring from previous gamma");
+                                                if let Err(err) = Udev::set_gamma_internal(
+                                                    &backend.drm,
+                                                    crtc,
+                                                    surface.previous_gamma.clone(),
+                                                ) {
+                                                    warn!("Failed to reset gamma: {err}");
+                                                    surface.previous_gamma = None;
+                                                }
+                                            }
+                                            PendingGammaChange::Restore => {
+                                                debug!("Restoring to original gamma");
+                                                if let Err(err) = Udev::set_gamma_internal(
+                                                    &backend.drm,
+                                                    crtc,
+                                                    None::<[&[u16]; 3]>,
+                                                ) {
+                                                    warn!("Failed to reset gamma: {err}");
+                                                }
+                                                surface.previous_gamma = None;
+                                            }
+                                            PendingGammaChange::Change(gamma) => {
+                                                debug!("Changing to pending gamma");
+                                                match Udev::set_gamma_internal(
+                                                    &backend.drm,
+                                                    crtc,
+                                                    Some([&gamma[0], &gamma[1], &gamma[2]]),
+                                                ) {
+                                                    Ok(()) => {
+                                                        surface.previous_gamma = Some(gamma);
+                                                    }
+                                                    Err(err) => {
+                                                        warn!("Failed to set pending gamma: {err}");
+                                                        surface.previous_gamma = None;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Newly connected devices
+                                for (node, path) in device_list.into_iter() {
+                                    if let Err(err) = state.backend.udev_mut().device_added(
+                                        &mut state.pinnacle,
+                                        node,
+                                        &path,
+                                    ) {
+                                        error!("Error adding device: {err}");
+                                    }
+                                }
+
+                                for output in
+                                    state.pinnacle.space.outputs().cloned().collect::<Vec<_>>()
+                                {
+                                    state.schedule_render(&output);
+                                }
+                            }
+                        }
+                    })
+                    .expect("failed to insert libinput notifier into event loop");
+
+                pinnacle.shm_state.update_formats(
+                    udev.gpu_manager
+                        .single_renderer(&primary_gpu)?
+                        .shm_formats(),
+                );
+
+                // Create the Vulkan allocator
+                if let Ok(instance) = vulkan::Instance::new(Version::VERSION_1_2, None) {
+                    if let Some(physical_device) = PhysicalDevice::enumerate(&instance)
+                        .ok()
+                        .and_then(|devices| {
+                            devices
+                                .filter(|phd| {
+                                    phd.has_device_extension(ExtPhysicalDeviceDrmFn::name())
+                                })
+                                .find(|phd| {
+                                    phd.primary_node()
+                                        .is_ok_and(|node| node == Some(primary_gpu))
+                                        || phd
+                                            .render_node()
+                                            .is_ok_and(|node| node == Some(primary_gpu))
+                                })
+                        })
+                    {
+                        match VulkanAllocator::new(
+                            &physical_device,
+                            ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
+                        ) {
+                            Ok(allocator) => {
+                                udev.allocator = Some(Box::new(DmabufAllocator(allocator))
+                                    as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
+                            }
+                            Err(err) => {
+                                warn!("Failed to create vulkan allocator: {}", err);
+                            }
+                        }
+                    }
+                }
+
+                if udev.allocator.is_none() {
+                    info!("No vulkan allocator found, using GBM.");
+                    let gbm = udev
+                        .backends
+                        .get(&primary_gpu)
+                        // If the primary_gpu failed to initialize, we likely have a kmsro device
+                        .or_else(|| udev.backends.values().next())
+                        // Don't fail, if there is no allocator. There is a chance, that this a single gpu system and we don't need one.
+                        .map(|backend| backend.gbm.clone());
+                    udev.allocator = gbm.map(|gbm| {
+                        Box::new(DmabufAllocator(GbmAllocator::new(
+                            gbm,
+                            GbmBufferFlags::RENDERING,
+                        ))) as Box<_>
+                    });
+                }
+
+                let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu)?;
+
+                info!(
+                    ?primary_gpu,
+                    "Trying to initialize EGL Hardware Acceleration",
+                );
+
+                match renderer.bind_wl_display(&udev.display_handle) {
+                    Ok(_) => info!("EGL hardware-acceleration enabled"),
+                    Err(err) => error!(?err, "Failed to initialize EGL hardware-acceleration"),
+                }
+
+                // init dmabuf support with format list from our primary gpu
+                let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
+                let default_feedback =
+                    DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
+                        .build()
+                        .expect("failed to create dmabuf feedback");
+                let mut dmabuf_state = DmabufState::new();
+                let global = dmabuf_state.create_global_with_default_feedback::<State>(
+                    &udev.display_handle,
+                    &default_feedback,
+                );
+                udev.dmabuf_state = Some((dmabuf_state, global));
+
+                let gpu_manager = &mut udev.gpu_manager;
+                udev.backends.values_mut().for_each(|backend_data| {
+                    // Update the per drm surface dmabuf feedback
+                    backend_data.surfaces.values_mut().for_each(|surface_data| {
+                        surface_data.dmabuf_feedback =
+                            surface_data.dmabuf_feedback.take().or_else(|| {
+                                get_surface_dmabuf_feedback(
+                                    primary_gpu,
+                                    surface_data.render_node,
+                                    gpu_manager,
+                                    &surface_data.compositor,
+                                )
+                            });
+                    });
+                });
+
+                Ok(udev)
+            }),
+        })
+    }
+
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
@@ -313,375 +678,6 @@ impl BackendData for Udev {
             warn!("early buffer import failed: {}", err);
         }
     }
-}
-
-pub fn setup_udev(
-    startup_settings: StartupSettings,
-) -> anyhow::Result<(State, EventLoop<'static, State>)> {
-    let event_loop = EventLoop::try_new()?;
-    let display = Display::new()?;
-
-    // Initialize session
-    let (session, notifier) = LibSeatSession::new()?;
-
-    // Get the primary gpu
-    let primary_gpu = udev::primary_gpu(session.seat())
-        .context("unable to get primary gpu path")?
-        .and_then(|x| {
-            DrmNode::from_path(x)
-                .ok()?
-                .node_with_type(NodeType::Render)?
-                .ok()
-        })
-        .unwrap_or_else(|| {
-            udev::all_gpus(session.seat())
-                .expect("failed to get gpu paths")
-                .into_iter()
-                .find_map(|x| DrmNode::from_path(x).ok())
-                .expect("No GPU!")
-        });
-    info!("Using {} as primary gpu.", primary_gpu);
-
-    let gpu_manager = GpuManager::new(GbmGlesBackend::default())?;
-    // let gpu_manager = GpuManager::new(GbmGlesBackend::with_factory(|egl| {
-    //     let ctx = EGLContext::new(egl)?;
-    //     let mut supported = unsafe { GlesRenderer::supported_capabilities(&ctx) }?;
-    //     supported.retain(|cap| cap != &Capability::ColorTransformations);
-    //     Ok(unsafe { GlesRenderer::with_capabilities(ctx, supported) }?)
-    // }))?;
-
-    // Initialize the udev backend
-    let udev_backend = UdevBackend::new(session.seat())?;
-
-    let udev_dispatcher = Dispatcher::new(udev_backend, move |event, _, state: &mut State| {
-        let udev = state.backend.udev_mut();
-        let pinnacle = &mut state.pinnacle;
-        match event {
-            // GPU connected
-            UdevEvent::Added { device_id, path } => {
-                if let Err(err) = DrmNode::from_dev_id(device_id)
-                    .map_err(DeviceAddError::DrmNode)
-                    .and_then(|node| udev.device_added(pinnacle, node, &path))
-                {
-                    error!("Skipping device {device_id}: {err}");
-                }
-            }
-            UdevEvent::Changed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    udev.device_changed(pinnacle, node)
-                }
-            }
-            // GPU disconnected
-            UdevEvent::Removed { device_id } => {
-                if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    udev.device_removed(pinnacle, node)
-                }
-            }
-        }
-    });
-
-    event_loop
-        .handle()
-        .register_dispatcher(udev_dispatcher.clone())?;
-
-    let data = Udev {
-        display_handle: display.handle(),
-        udev_dispatcher,
-        dmabuf_state: None,
-        session,
-        primary_gpu,
-        gpu_manager,
-        allocator: None,
-        backends: HashMap::new(),
-        pointer_image: crate::cursor::Cursor::load(),
-        pointer_images: Vec::new(),
-        pointer_element: PointerElement::default(),
-
-        upscale_filter: TextureFilter::Linear,
-        downscale_filter: TextureFilter::Linear,
-    };
-
-    let display_handle = display.handle();
-
-    let mut state = State::init(
-        Backend::Udev(data),
-        display,
-        event_loop.get_signal(),
-        event_loop.handle(),
-        startup_settings,
-    )?;
-
-    let things = state
-        .backend
-        .udev()
-        .udev_dispatcher
-        .as_source_ref()
-        .device_list()
-        .map(|(id, path)| (id, path.to_path_buf()))
-        .collect::<Vec<_>>();
-
-    let udev = state.backend.udev_mut();
-
-    // Create DrmNodes from already connected GPUs
-    for (device_id, path) in things {
-        if let Err(err) = DrmNode::from_dev_id(device_id)
-            .map_err(DeviceAddError::DrmNode)
-            .and_then(|node| udev.device_added(&mut state.pinnacle, node, &path))
-        {
-            error!("Skipping device {device_id}: {err}");
-        }
-    }
-
-    // Initialize libinput backend
-    let mut libinput_context = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
-        udev.session.clone().into(),
-    );
-    libinput_context
-        .udev_assign_seat(state.pinnacle.seat.name())
-        .expect("failed to assign seat to libinput");
-    let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
-
-    // Bind all our objects that get driven by the event loop
-
-    let insert_ret = event_loop
-        .handle()
-        .insert_source(libinput_backend, move |event, _, state| {
-            state.pinnacle.apply_libinput_settings(&event);
-            state.process_input_event(event);
-        });
-
-    if let Err(err) = insert_ret {
-        anyhow::bail!("Failed to insert libinput_backend into event loop: {err}");
-    }
-
-    event_loop
-        .handle()
-        .insert_source(notifier, move |event, _, state| {
-            match event {
-                session::Event::PauseSession => {
-                    let udev = state.backend.udev_mut();
-                    libinput_context.suspend();
-                    info!("pausing session");
-
-                    for backend in udev.backends.values_mut() {
-                        backend.drm.pause();
-                    }
-                }
-                session::Event::ActivateSession => {
-                    info!("resuming session");
-
-                    if libinput_context.resume().is_err() {
-                        error!("Failed to resume libinput context");
-                    }
-
-                    let udev = state.backend.udev_mut();
-                    let pinnacle = &mut state.pinnacle;
-
-                    let (mut device_list, connected_devices, disconnected_devices) = {
-                        let device_list = udev
-                            .udev_dispatcher
-                            .as_source_ref()
-                            .device_list()
-                            .flat_map(|(id, path)| {
-                                Some((DrmNode::from_dev_id(id).ok()?, path.to_path_buf()))
-                            })
-                            .collect::<HashMap<_, _>>();
-
-                        let (connected_devices, disconnected_devices) = udev
-                            .backends
-                            .keys()
-                            .copied()
-                            .partition::<Vec<_>, _>(|node| device_list.contains_key(node));
-
-                        (device_list, connected_devices, disconnected_devices)
-                    };
-
-                    for node in disconnected_devices {
-                        device_list.remove(&node);
-                        udev.device_removed(pinnacle, node);
-                    }
-
-                    for node in connected_devices {
-                        device_list.remove(&node);
-
-                        // INFO: see if this can be moved below udev.device_changed
-                        {
-                            let Some(backend) = udev.backends.get_mut(&node) else {
-                                unreachable!();
-                            };
-
-                            if let Err(err) = backend.drm.activate(true) {
-                                error!("Error activating DRM device: {err}");
-                            }
-                        }
-
-                        udev.device_changed(pinnacle, node);
-
-                        let Some(backend) = udev.backends.get_mut(&node) else {
-                            unreachable!();
-                        };
-
-                        // Apply pending gammas
-                        //
-                        // Also welcome to some really doodoo code
-
-                        for (crtc, surface) in backend.surfaces.iter_mut() {
-                            match std::mem::take(&mut surface.pending_gamma_change) {
-                                PendingGammaChange::Idle => {
-                                    debug!("Restoring from previous gamma");
-                                    if let Err(err) = Udev::set_gamma_internal(
-                                        &backend.drm,
-                                        crtc,
-                                        surface.previous_gamma.clone(),
-                                    ) {
-                                        warn!("Failed to reset gamma: {err}");
-                                        surface.previous_gamma = None;
-                                    }
-                                }
-                                PendingGammaChange::Restore => {
-                                    debug!("Restoring to original gamma");
-                                    if let Err(err) = Udev::set_gamma_internal(
-                                        &backend.drm,
-                                        crtc,
-                                        None::<[&[u16]; 3]>,
-                                    ) {
-                                        warn!("Failed to reset gamma: {err}");
-                                    }
-                                    surface.previous_gamma = None;
-                                }
-                                PendingGammaChange::Change(gamma) => {
-                                    debug!("Changing to pending gamma");
-                                    match Udev::set_gamma_internal(
-                                        &backend.drm,
-                                        crtc,
-                                        Some([&gamma[0], &gamma[1], &gamma[2]]),
-                                    ) {
-                                        Ok(()) => {
-                                            surface.previous_gamma = Some(gamma);
-                                        }
-                                        Err(err) => {
-                                            warn!("Failed to set pending gamma: {err}");
-                                            surface.previous_gamma = None;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Newly connected devices
-                    for (node, path) in device_list.into_iter() {
-                        if let Err(err) =
-                            state
-                                .backend
-                                .udev_mut()
-                                .device_added(&mut state.pinnacle, node, &path)
-                        {
-                            error!("Error adding device: {err}");
-                        }
-                    }
-
-                    for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
-                        state.schedule_render(&output);
-                    }
-                }
-            }
-        })
-        .expect("failed to insert libinput notifier into event loop");
-
-    state.pinnacle.shm_state.update_formats(
-        udev.gpu_manager
-            .single_renderer(&primary_gpu)?
-            .shm_formats(),
-    );
-
-    // Create the Vulkan allocator
-    if let Ok(instance) = vulkan::Instance::new(Version::VERSION_1_2, None) {
-        if let Some(physical_device) =
-            PhysicalDevice::enumerate(&instance)
-                .ok()
-                .and_then(|devices| {
-                    devices
-                        .filter(|phd| phd.has_device_extension(ExtPhysicalDeviceDrmFn::name()))
-                        .find(|phd| {
-                            phd.primary_node()
-                                .is_ok_and(|node| node == Some(primary_gpu))
-                                || phd
-                                    .render_node()
-                                    .is_ok_and(|node| node == Some(primary_gpu))
-                        })
-                })
-        {
-            match VulkanAllocator::new(
-                &physical_device,
-                ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
-            ) {
-                Ok(allocator) => {
-                    udev.allocator = Some(Box::new(DmabufAllocator(allocator))
-                        as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
-                }
-                Err(err) => {
-                    warn!("Failed to create vulkan allocator: {}", err);
-                }
-            }
-        }
-    }
-
-    if udev.allocator.is_none() {
-        info!("No vulkan allocator found, using GBM.");
-        let gbm = udev
-            .backends
-            .get(&primary_gpu)
-            // If the primary_gpu failed to initialize, we likely have a kmsro device
-            .or_else(|| udev.backends.values().next())
-            // Don't fail, if there is no allocator. There is a chance, that this a single gpu system and we don't need one.
-            .map(|backend| backend.gbm.clone());
-        udev.allocator = gbm.map(|gbm| {
-            Box::new(DmabufAllocator(GbmAllocator::new(
-                gbm,
-                GbmBufferFlags::RENDERING,
-            ))) as Box<_>
-        });
-    }
-
-    let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu)?;
-
-    info!(
-        ?primary_gpu,
-        "Trying to initialize EGL Hardware Acceleration",
-    );
-
-    match renderer.bind_wl_display(&display_handle) {
-        Ok(_) => info!("EGL hardware-acceleration enabled"),
-        Err(err) => error!(?err, "Failed to initialize EGL hardware-acceleration"),
-    }
-
-    // init dmabuf support with format list from our primary gpu
-    let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
-    let default_feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
-        .build()
-        .expect("failed to create dmabuf feedback");
-    let mut dmabuf_state = DmabufState::new();
-    let global = dmabuf_state
-        .create_global_with_default_feedback::<State>(&display_handle, &default_feedback);
-    udev.dmabuf_state = Some((dmabuf_state, global));
-
-    let gpu_manager = &mut udev.gpu_manager;
-    udev.backends.values_mut().for_each(|backend_data| {
-        // Update the per drm surface dmabuf feedback
-        backend_data.surfaces.values_mut().for_each(|surface_data| {
-            surface_data.dmabuf_feedback = surface_data.dmabuf_feedback.take().or_else(|| {
-                get_surface_dmabuf_feedback(
-                    primary_gpu,
-                    surface_data.render_node,
-                    gpu_manager,
-                    &surface_data.compositor,
-                )
-            });
-        });
-    });
-
-    Ok((state, event_loop))
 }
 
 // TODO: document desperately

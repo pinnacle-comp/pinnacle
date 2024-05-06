@@ -2,8 +2,9 @@
 
 use crate::{
     api::signal::SignalState,
-    backend::Backend,
-    config::{Config, StartupSettings},
+    backend::{self, udev::Udev, winit::Winit, Backend},
+    cli::{self, Cli},
+    config::Config,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
     layout::LayoutState,
@@ -43,12 +44,15 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, path::PathBuf, sync::Arc};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use xdg::BaseDirectories;
 
 use crate::input::InputState;
+
+#[cfg(feature = "testing")]
+use crate::backend::dummy::Dummy;
 
 /// The main state of the application.
 pub struct State {
@@ -120,13 +124,46 @@ pub struct Pinnacle {
 }
 
 impl State {
-    /// Creates the central state and starts the config and xwayland
-    pub fn init(
-        backend: Backend,
-        display: Display<Self>,
+    pub fn on_event_loop_cycle_completion(&mut self) {
+        self.pinnacle.fixup_z_layering();
+        self.pinnacle.space.refresh();
+        self.pinnacle.popup_manager.cleanup();
+        self.update_pointer_focus();
+
+        self.pinnacle
+            .display_handle
+            .flush_clients()
+            .expect("failed to flush client buffers");
+
+        // TODO: couple these or something, this is really error-prone
+        assert_eq!(
+            self.pinnacle.windows.len(),
+            self.pinnacle.z_index_stack.len(),
+            "Length of `windows` and `z_index_stack` are different. \
+            If you see this, report it to the developer."
+        );
+    }
+}
+
+/// Filters clients that are restricted by the security context
+fn filter_restricted_client(client: &Client) -> bool {
+    if let Some(state) = client.get_data::<ClientState>() {
+        return !state.is_restricted;
+    }
+    if client.get_data::<XWaylandClientData>().is_some() {
+        return true;
+    }
+    panic!("Unknown client data type");
+}
+
+impl Pinnacle {
+    pub fn new(
+        display: Display<State>,
         loop_signal: LoopSignal,
-        loop_handle: LoopHandle<'static, Self>,
-        startup_settings: StartupSettings,
+        loop_handle: LoopHandle<'static, State>,
+        seat_name: String,
+        config_dir: PathBuf,
+        cli: Option<Cli>,
     ) -> anyhow::Result<Self> {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
@@ -136,23 +173,6 @@ impl State {
             socket_name.to_string_lossy()
         );
         std::env::set_var("WAYLAND_DISPLAY", socket_name);
-
-        // Opening a new process will use up a few file descriptors, around 10 for Alacritty, for
-        // example. Because of this, opening up only around 100 processes would exhaust the file
-        // descriptor limit on my system (Arch btw) and cause a "Too many open files" crash.
-        //
-        // To fix this, I just set the limit to be higher. As Pinnacle is the whole graphical
-        // environment, I *think* this is ok.
-        info!("Trying to raise file descriptor limit...");
-        if let Err(err) = nix::sys::resource::setrlimit(
-            nix::sys::resource::Resource::RLIMIT_NOFILE,
-            65536,
-            65536 * 2,
-        ) {
-            error!("Could not raise fd limit: errno {err}");
-        } else {
-            info!("Fd raise success!");
-        }
 
         loop_handle.insert_source(socket, |stream, _metadata, state| {
             state
@@ -180,65 +200,65 @@ impl State {
 
         let mut seat_state = SeatState::new();
 
-        let mut seat = seat_state.new_wl_seat(&display_handle, backend.seat_name());
+        let mut seat = seat_state.new_wl_seat(&display_handle, seat_name);
         seat.add_pointer();
 
         seat.add_keyboard(XkbConfig::default(), 500, 25)?;
 
-        let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
+        let primary_selection_state = PrimarySelectionState::new::<State>(&display_handle);
 
-        let data_control_state = DataControlState::new::<Self, _>(
+        let data_control_state = DataControlState::new::<State, _>(
             &display_handle,
             Some(&primary_selection_state),
-            Self::filter_restricted_client,
+            filter_restricted_client,
         );
 
-        let mut pinnacle = Pinnacle {
+        let pinnacle = Pinnacle {
             loop_signal,
             loop_handle,
             display_handle: display_handle.clone(),
             clock: Clock::<Monotonic>::new(),
-            compositor_state: CompositorState::new::<Self>(&display_handle),
-            data_device_state: DataDeviceState::new::<Self>(&display_handle),
+            compositor_state: CompositorState::new::<State>(&display_handle),
+            data_device_state: DataDeviceState::new::<State>(&display_handle),
             seat_state,
-            shm_state: ShmState::new::<Self>(&display_handle, vec![]),
+            shm_state: ShmState::new::<State>(&display_handle, vec![]),
             space: Space::<WindowElement>::default(),
             cursor_status: CursorImageStatus::default_named(),
-            output_manager_state: OutputManagerState::new_with_xdg_output::<Self>(&display_handle),
-            xdg_shell_state: XdgShellState::new::<Self>(&display_handle),
-            viewporter_state: ViewporterState::new::<Self>(&display_handle),
-            fractional_scale_manager_state: FractionalScaleManagerState::new::<Self>(
+            output_manager_state: OutputManagerState::new_with_xdg_output::<State>(&display_handle),
+            xdg_shell_state: XdgShellState::new::<State>(&display_handle),
+            viewporter_state: ViewporterState::new::<State>(&display_handle),
+            fractional_scale_manager_state: FractionalScaleManagerState::new::<State>(
                 &display_handle,
             ),
             primary_selection_state,
-            layer_shell_state: WlrLayerShellState::new_with_filter::<Self, _>(
+            layer_shell_state: WlrLayerShellState::new_with_filter::<State, _>(
                 &display_handle,
-                Self::filter_restricted_client,
+                filter_restricted_client,
             ),
             data_control_state,
-            screencopy_manager_state: ScreencopyManagerState::new::<Self, _>(
+            screencopy_manager_state: ScreencopyManagerState::new::<State, _>(
                 &display_handle,
-                Self::filter_restricted_client,
+                filter_restricted_client,
             ),
-            gamma_control_manager_state: GammaControlManagerState::new::<Self, _>(
+            gamma_control_manager_state: GammaControlManagerState::new::<State, _>(
                 &display_handle,
-                Self::filter_restricted_client,
+                filter_restricted_client,
             ),
-            security_context_state: SecurityContextState::new::<Self, _>(
+            security_context_state: SecurityContextState::new::<State, _>(
                 &display_handle,
-                Self::filter_restricted_client,
+                filter_restricted_client,
             ),
-            relative_pointer_manager_state: RelativePointerManagerState::new::<Self>(
+            relative_pointer_manager_state: RelativePointerManagerState::new::<State>(
                 &display_handle,
             ),
-            pointer_constraints_state: PointerConstraintsState::new::<Self>(&display_handle),
+            pointer_constraints_state: PointerConstraintsState::new::<State>(&display_handle),
 
             input_state: InputState::new(),
 
             output_focus_stack: OutputFocusStack::default(),
             z_index_stack: Vec::new(),
 
-            config: Config::new(startup_settings.no_config, startup_settings.config_dir),
+            config: Config::new(config_dir, cli),
 
             seat,
 
@@ -266,55 +286,9 @@ impl State {
             layout_state: LayoutState::default(),
         };
 
-        // not really a fan of this double negation
-        if !startup_settings.no_xwayland {
-            if let Err(err) = pinnacle.start_xwayland_and_config() {
-                tracing::error!("Failed to start XWayland: {err}");
-            }
-        } else {
-            pinnacle
-                .start_config(Some(pinnacle.config.dir(&pinnacle.xdg_base_dirs)))
-                .expect("failed to start config");
-        }
-
-        let state = Self { backend, pinnacle };
-
-        Ok(state)
+        Ok(pinnacle)
     }
 
-    /// Filters clients that are restricted by the security context
-    fn filter_restricted_client(client: &Client) -> bool {
-        if let Some(state) = client.get_data::<ClientState>() {
-            return !state.is_restricted;
-        }
-        if client.get_data::<XWaylandClientData>().is_some() {
-            return true;
-        }
-        panic!("Unknown client data type");
-    }
-
-    pub fn on_event_loop_cycle_completion(&mut self) {
-        self.pinnacle.fixup_z_layering();
-        self.pinnacle.space.refresh();
-        self.pinnacle.popup_manager.cleanup();
-        self.update_pointer_focus();
-
-        self.pinnacle
-            .display_handle
-            .flush_clients()
-            .expect("failed to flush client buffers");
-
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            self.pinnacle.windows.len(),
-            self.pinnacle.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-            If you see this, report it to the developer."
-        );
-    }
-}
-
-impl Pinnacle {
     /// Schedule `run` to run when `condition` returns true.
     ///
     /// This will continually reschedule `run` in the event loop if `condition` returns false.
@@ -343,6 +317,63 @@ impl Pinnacle {
                 warn!("Failed to send shutdown signal to config: {err}");
             }
         }
+    }
+}
+
+impl State {
+    pub fn new(
+        backend: cli::Backend,
+        loop_handle: LoopHandle<'static, State>,
+        loop_signal: LoopSignal,
+        config_dir: PathBuf,
+        cli: Option<Cli>,
+    ) -> anyhow::Result<Self> {
+        let display = Display::<State>::new()?;
+
+        let (backend, pinnacle) = match backend {
+            cli::Backend::Winit => {
+                let uninit_winit = Winit::try_new(display.handle())?;
+                let mut pinnacle = Pinnacle::new(
+                    display,
+                    loop_signal,
+                    loop_handle,
+                    uninit_winit.seat_name,
+                    config_dir,
+                    cli,
+                )?;
+                let winit = (uninit_winit.init)(&mut pinnacle)?;
+                (backend::Backend::Winit(winit), pinnacle)
+            }
+            cli::Backend::Udev => {
+                let uninit_udev = Udev::try_new(display.handle())?;
+                let mut pinnacle = Pinnacle::new(
+                    display,
+                    loop_signal,
+                    loop_handle,
+                    uninit_udev.seat_name,
+                    config_dir,
+                    cli,
+                )?;
+                let udev = (uninit_udev.init)(&mut pinnacle)?;
+                (backend::Backend::Udev(udev), pinnacle)
+            }
+            #[cfg(feature = "testing")]
+            cli::Backend::Dummy => {
+                let uninit_dummy = Dummy::try_new(display.handle());
+                let mut pinnacle = Pinnacle::new(
+                    display,
+                    loop_signal,
+                    loop_handle,
+                    uninit_dummy.seat_name,
+                    config_dir,
+                    cli,
+                )?;
+                let dummy = (uninit_dummy.init)(&mut pinnacle)?;
+                (backend::Backend::Dummy(dummy), pinnacle)
+            }
+        };
+
+        Ok(Self { backend, pinnacle })
     }
 }
 

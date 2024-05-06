@@ -16,10 +16,11 @@ use std::io::{BufRead, BufReader};
 use anyhow::Context;
 use nix::unistd::Uid;
 use pinnacle::{
-    backend::{udev::setup_udev, winit::setup_winit},
     cli::{self, Cli},
-    config::StartupSettings,
+    config::{get_config_dir, parse_metaconfig, Metaconfig},
+    state::State,
 };
+use smithay::reexports::calloop::EventLoop;
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -27,7 +28,8 @@ use xdg::BaseDirectories;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let xdg_state_dir = BaseDirectories::with_prefix("pinnacle")?.get_state_home();
+    let base_dirs = BaseDirectories::with_prefix("pinnacle")?;
+    let xdg_state_dir = base_dirs.get_state_home();
 
     let appender = tracing_appender::rolling::Builder::new()
         .rotation(Rotation::HOURLY)
@@ -40,7 +42,8 @@ async fn main() -> anyhow::Result<()> {
 
     let env_filter = EnvFilter::try_from_default_env();
 
-    let file_log_env_filter = EnvFilter::new("debug,h2=warn,smithay::xwayland::xwm=warn");
+    let file_log_env_filter =
+        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn");
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -85,27 +88,21 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    let startup_settings = StartupSettings {
-        no_config: cli.no_config,
-        config_dir: cli.config_dir,
-        no_xwayland: cli.no_xwayland,
-    };
-
-    let (mut state, mut event_loop) = match (cli.backend, cli.force) {
+    let backend: cli::Backend = match (cli.backend, cli.force) {
         (None, _) => {
             if in_graphical_env {
                 info!("Starting winit backend");
-                setup_winit(startup_settings)?
+                cli::Backend::Winit
             } else {
                 info!("Starting udev backend");
-                setup_udev(startup_settings)?
+                cli::Backend::Udev
             }
         }
         (Some(cli::Backend::Winit), force) => {
             if !in_graphical_env {
                 if force {
                     warn!("Starting winit backend with no detected graphical environment");
-                    setup_winit(startup_settings)?
+                    cli::Backend::Winit
                 } else {
                     warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
                     warn!("If you are trying to run the winit backend in a tty, it won't work.");
@@ -114,14 +111,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting winit backend");
-                setup_winit(startup_settings)?
+                cli::Backend::Winit
             }
         }
         (Some(cli::Backend::Udev), force) => {
             if in_graphical_env {
                 if force {
                     warn!("Starting udev backend with a detected graphical environment");
-                    setup_udev(startup_settings)?
+                    cli::Backend::Udev
                 } else {
                     warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
                     warn!("If you are trying to run the udev backend in a graphical environment,");
@@ -131,10 +128,61 @@ async fn main() -> anyhow::Result<()> {
                 }
             } else {
                 info!("Starting udev backend");
-                setup_udev(startup_settings)?
+                cli::Backend::Udev
             }
         }
+        #[cfg(feature = "testing")]
+        (Some(cli::Backend::Dummy), _) => cli::Backend::Dummy,
     };
+
+    let config_dir = cli
+        .config_dir
+        .clone()
+        .unwrap_or_else(|| get_config_dir(&base_dirs));
+
+    let metaconfig = match parse_metaconfig(&config_dir) {
+        Ok(metaconfig) => metaconfig,
+        Err(err) => {
+            warn!(
+                "Could not load `metaconfig.toml` at {}: {err}",
+                config_dir.display()
+            );
+            Metaconfig::default()
+        }
+    };
+
+    let metaconfig = metaconfig.merge_and_resolve(Some(&cli), &config_dir)?;
+
+    let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
+
+    let mut state = State::new(
+        backend,
+        event_loop.handle(),
+        event_loop.get_signal(),
+        config_dir,
+        Some(cli),
+    )?;
+
+    state
+        .pinnacle
+        .start_grpc_server(&metaconfig.socket_dir.clone())?;
+
+    if !metaconfig.no_xwayland {
+        match state.pinnacle.insert_xwayland_source() {
+            Ok(()) => {
+                // Wait for xwayland to start so the config gets DISPLAY
+                while state.pinnacle.xdisplay.is_none() {
+                    event_loop.dispatch(None, &mut state)?;
+                    state.on_event_loop_cycle_completion();
+                }
+            }
+            Err(err) => error!("Failed to start xwayland: {err}"),
+        }
+    }
+
+    if !metaconfig.no_config {
+        state.pinnacle.start_config(false)?;
+    }
 
     event_loop.run(None, &mut state, |state| {
         state.on_event_loop_cycle_completion();

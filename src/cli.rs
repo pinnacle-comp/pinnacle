@@ -10,6 +10,11 @@ pub enum Backend {
     Winit,
     /// Run Pinnacle from a tty
     Udev,
+    /// Run the dummy backend
+    ///
+    /// This does not open a window and is used only for testing.
+    #[cfg(feature = "testing")]
+    Dummy,
 }
 
 /// The main CLI struct.

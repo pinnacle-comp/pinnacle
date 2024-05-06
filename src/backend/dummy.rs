@@ -6,20 +6,18 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::Client;
+use smithay::reexports::wayland_server::{Client, DisplayHandle};
 use smithay::utils::{Physical, Size};
 
 use smithay::{
     output::{Output, Subpixel},
-    reexports::{calloop::EventLoop, wayland_server::Display},
     utils::Transform,
 };
 
-use crate::config::StartupSettings;
 use crate::state::{Pinnacle, State, WithState};
 
-use super::Backend;
 use super::BackendData;
+use super::{Backend, UninitBackend};
 
 pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
 
@@ -37,11 +35,6 @@ pub struct Dummy {
 }
 
 impl Backend {
-    fn dummy(&self) -> &Dummy {
-        let Backend::Dummy(dummy) = self else { unreachable!() };
-        dummy
-    }
-
     #[cfg(feature = "wlcs")]
     pub fn wlcs_mut(&mut self) -> &mut Wlcs {
         let Backend::Dummy(dummy) = self else {
@@ -61,78 +54,58 @@ impl BackendData for Dummy {
     fn early_import(&mut self, _surface: &WlSurface) {}
 }
 
-pub fn setup_dummy(
-    startup_settings: StartupSettings,
-) -> anyhow::Result<(State, EventLoop<'static, State>)> {
-    let event_loop: EventLoop<State> = EventLoop::try_new()?;
+impl Dummy {
+    pub fn try_new(display_handle: DisplayHandle) -> UninitBackend<Dummy> {
+        let mode = smithay::output::Mode {
+            size: (1920, 1080).into(),
+            refresh: 60_000,
+        };
 
-    let display: Display<State> = Display::new()?;
-    let display_handle = display.handle();
+        let physical_properties = smithay::output::PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Pinnacle".to_string(),
+            model: "Dummy Window".to_string(),
+        };
 
-    let loop_handle = event_loop.handle();
+        let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
 
-    let mode = smithay::output::Mode {
-        size: (1920, 1080).into(),
-        refresh: 60_000,
-    };
+        output.change_current_state(
+            Some(mode),
+            Some(Transform::Flipped180),
+            None,
+            Some((0, 0).into()),
+        );
 
-    let physical_properties = smithay::output::PhysicalProperties {
-        size: (0, 0).into(),
-        subpixel: Subpixel::Unknown,
-        make: "Pinnacle".to_string(),
-        model: "Dummy Window".to_string(),
-    };
+        output.set_preferred(mode);
+        output.with_state_mut(|state| state.modes = vec![mode]);
 
-    let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
+        let renderer = DummyRenderer::new();
 
-    output.change_current_state(
-        Some(mode),
-        Some(Transform::Flipped180),
-        None,
-        Some((0, 0).into()),
-    );
+        let dummy = Dummy {
+            renderer,
+            // dmabuf_state,
+            #[cfg(feature = "wlcs")]
+            wlcs_state: Wlcs::default(),
+        };
 
-    output.set_preferred(mode);
-    output.with_state_mut(|state| state.modes = vec![mode]);
+        UninitBackend {
+            seat_name: dummy.seat_name(),
+            init: Box::new(move |pinnacle| {
+                output.create_global::<State>(&display_handle);
 
-    let renderer = DummyRenderer::new();
+                pinnacle.output_focus_stack.set_focus(output.clone());
 
-    // let dmabuf_state = {
-    //     let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
-    //     let mut dmabuf_state = DmabufState::new();
-    //     let dmabuf_global = dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);
-    //     (dmabuf_state, dmabuf_global, None)
-    // };
+                pinnacle
+                    .shm_state
+                    .update_formats(dummy.renderer.shm_formats());
 
-    let backend = Dummy {
-        renderer,
-        // dmabuf_state,
-        #[cfg(feature = "wlcs")]
-        wlcs_state: Wlcs::default(),
-    };
+                pinnacle.space.map_output(&output, (0, 0));
 
-    let mut state = State::init(
-        super::Backend::Dummy(backend),
-        display,
-        event_loop.get_signal(),
-        loop_handle,
-        startup_settings,
-    )?;
-
-    output.create_global::<State>(&display_handle);
-
-    state.pinnacle.output_focus_stack.set_focus(output.clone());
-
-    let dummy = state.backend.dummy();
-
-    state
-        .pinnacle
-        .shm_state
-        .update_formats(dummy.renderer.shm_formats());
-
-    state.pinnacle.space.map_output(&output, (0, 0));
-
-    Ok((state, event_loop))
+                Ok(dummy)
+            }),
+        }
+    }
 }
 
 impl Pinnacle {

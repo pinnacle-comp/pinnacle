@@ -1,12 +1,13 @@
-use std::{panic::UnwindSafe, time::Duration};
+use std::{panic::UnwindSafe, path::PathBuf, time::Duration};
 
 use anyhow::anyhow;
-use pinnacle::{backend::dummy::setup_dummy, config::StartupSettings, state::State};
+use pinnacle::{state::State, tag::TagId};
 use smithay::{
     output::Output,
     reexports::calloop::{
         self,
         channel::{Event, Sender},
+        EventLoop,
     },
 };
 
@@ -29,13 +30,14 @@ where
         + UnwindSafe
         + 'static,
 {
-    const NO_XWAYLAND: bool = true;
-
-    let (mut state, mut event_loop) = setup_dummy(StartupSettings {
-        no_config: true,
-        config_dir: None,
-        no_xwayland: NO_XWAYLAND,
-    })?;
+    let mut event_loop = EventLoop::<State>::try_new()?;
+    let mut state = State::new(
+        pinnacle::cli::Backend::Dummy,
+        event_loop.handle(),
+        event_loop.get_signal(),
+        PathBuf::from(""),
+        None,
+    )?;
 
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
@@ -49,18 +51,11 @@ where
 
     let tempdir = tempfile::tempdir()?;
 
+    TagId::reset();
+
     state.pinnacle.start_grpc_server(tempdir.path())?;
 
     let loop_signal = event_loop.get_signal();
-
-    if !NO_XWAYLAND {
-        while state.pinnacle.xdisplay.is_none() {
-            event_loop
-                .dispatch(None, &mut state)
-                .expect("dispatch failed");
-            state.on_event_loop_cycle_completion();
-        }
-    }
 
     let join_handle = std::thread::spawn(move || -> anyhow::Result<()> {
         let res = test(sender);

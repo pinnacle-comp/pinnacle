@@ -205,9 +205,7 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
             info!("Reloading config");
             state
                 .pinnacle
-                .start_config(Some(
-                    state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
-                ))
+                .start_config(false)
                 .expect("failed to restart config");
         })
         .await

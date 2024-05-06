@@ -33,7 +33,7 @@ use smithay::{
 use tracing::error;
 
 use crate::{
-    state::{State, SurfaceDmabufFeedback},
+    state::{Pinnacle, State, SurfaceDmabufFeedback},
     window::WindowElement,
 };
 
@@ -53,6 +53,12 @@ pub enum Backend {
     Udev(Udev),
     #[cfg(feature = "testing")]
     Dummy(Dummy),
+}
+
+pub struct UninitBackend<B> {
+    pub seat_name: String,
+    #[allow(clippy::complexity)]
+    pub init: Box<dyn FnOnce(&mut Pinnacle) -> anyhow::Result<B>>,
 }
 
 impl Backend {
