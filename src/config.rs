@@ -419,7 +419,7 @@ impl Pinnacle {
         self.input_state.kill_keybind = Some(kill_keybind);
 
         if metaconfig.no_config {
-            info!("`--no-config` was set, not spawning config");
+            info!("`no-config` option was set, not spawning config");
             return Ok(());
         }
 
@@ -626,7 +626,7 @@ impl Pinnacle {
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
 
-        std::env::set_var("PINNACLE_GRPC_SOCKET", socket_path);
+        std::env::set_var("PINNACLE_GRPC_SOCKET", &socket_path);
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)
@@ -645,6 +645,8 @@ impl Pinnacle {
                 error!("gRPC server error: {err}");
             }
         }));
+
+        info!("gRPC server started at {}", socket_path.display());
 
         Ok(())
     }

@@ -332,6 +332,7 @@ impl State {
 
         let (backend, pinnacle) = match backend {
             cli::Backend::Winit => {
+                info!("Starting winit backend");
                 let uninit_winit = Winit::try_new(display.handle())?;
                 let mut pinnacle = Pinnacle::new(
                     display,
@@ -345,6 +346,7 @@ impl State {
                 (backend::Backend::Winit(winit), pinnacle)
             }
             cli::Backend::Udev => {
+                info!("Starting udev backend");
                 let uninit_udev = Udev::try_new(display.handle())?;
                 let mut pinnacle = Pinnacle::new(
                     display,

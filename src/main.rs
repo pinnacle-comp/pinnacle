@@ -91,10 +91,8 @@ async fn main() -> anyhow::Result<()> {
     let backend: cli::Backend = match (cli.backend, cli.force) {
         (None, _) => {
             if in_graphical_env {
-                info!("Starting winit backend");
                 cli::Backend::Winit
             } else {
-                info!("Starting udev backend");
                 cli::Backend::Udev
             }
         }
@@ -110,7 +108,6 @@ async fn main() -> anyhow::Result<()> {
                     return Ok(());
                 }
             } else {
-                info!("Starting winit backend");
                 cli::Backend::Winit
             }
         }
@@ -127,7 +124,6 @@ async fn main() -> anyhow::Result<()> {
                     return Ok(());
                 }
             } else {
-                info!("Starting udev backend");
                 cli::Backend::Udev
             }
         }
@@ -182,6 +178,8 @@ async fn main() -> anyhow::Result<()> {
 
     if !metaconfig.no_config {
         state.pinnacle.start_config(false)?;
+    } else {
+        info!("`no-config` option was set, not spawning config");
     }
 
     event_loop.run(None, &mut state, |state| {
