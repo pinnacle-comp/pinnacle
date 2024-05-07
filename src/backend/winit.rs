@@ -75,7 +75,7 @@ impl Backend {
 }
 
 impl Winit {
-    pub fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Winit>> {
+    pub(crate) fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Winit>> {
         let window_builder = WindowBuilder::new()
             .with_title("Pinnacle")
             .with_name("pinnacle", "pinnacle")

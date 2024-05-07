@@ -131,11 +131,11 @@ impl Metaconfig {
             }),
             socket_dir,
             no_config: cli
-                .map(|cli| cli.no_config)
+                .and_then(|cli| cli.no_config.then_some(true))
                 .or(self.no_config)
                 .unwrap_or_default(),
             no_xwayland: cli
-                .map(|cli| cli.no_xwayland)
+                .and_then(|cli| cli.no_xwayland.then_some(true))
                 .or(self.no_xwayland)
                 .unwrap_or_default(),
         })
@@ -388,14 +388,18 @@ impl Pinnacle {
             pinnacle.start_config(true)
         };
 
-        let metaconfig = match parse_metaconfig(&self.config.config_dir) {
-            Ok(metaconfig) => metaconfig,
-            Err(err) => {
-                let msg = format!(
-                    "Could not load `metaconfig.toml` at {}: {err}",
-                    self.config.config_dir.display()
-                );
-                return load_default_config(self, &msg);
+        let metaconfig = if builtin {
+            Metaconfig::default()
+        } else {
+            match parse_metaconfig(&self.config.config_dir) {
+                Ok(metaconfig) => metaconfig,
+                Err(err) => {
+                    let msg = format!(
+                        "Could not load `metaconfig.toml` at {}: {err}",
+                        self.config.config_dir.display()
+                    );
+                    return load_default_config(self, &msg);
+                }
             }
         };
 

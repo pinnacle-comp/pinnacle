@@ -164,7 +164,7 @@ impl Backend {
 }
 
 impl Udev {
-    pub fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Udev>> {
+    pub(crate) fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Udev>> {
         // Initialize session
         let (session, notifier) = LibSeatSession::new()?;
 

@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, OutputDisconnectResponse,
 };
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::{Client, DisplayHandle};
+use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Physical, Size};
 
 use smithay::{
@@ -24,7 +22,7 @@ pub const DUMMY_OUTPUT_NAME: &str = "Dummy Window";
 #[cfg(feature = "wlcs")]
 #[derive(Default)]
 pub struct Wlcs {
-    pub clients: HashMap<i32, Client>,
+    pub clients: std::collections::HashMap<i32, smithay::reexports::wayland_server::Client>,
 }
 
 pub struct Dummy {
@@ -55,7 +53,7 @@ impl BackendData for Dummy {
 }
 
 impl Dummy {
-    pub fn try_new(display_handle: DisplayHandle) -> UninitBackend<Dummy> {
+    pub(crate) fn try_new(display_handle: DisplayHandle) -> UninitBackend<Dummy> {
         let mode = smithay::output::Mode {
             size: (1920, 1080).into(),
             refresh: 60_000,

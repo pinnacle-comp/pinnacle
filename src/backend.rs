@@ -55,10 +55,10 @@ pub enum Backend {
     Dummy(Dummy),
 }
 
-pub struct UninitBackend<B> {
-    pub seat_name: String,
+pub(crate) struct UninitBackend<B> {
+    pub(crate) seat_name: String,
     #[allow(clippy::complexity)]
-    pub init: Box<dyn FnOnce(&mut Pinnacle) -> anyhow::Result<B>>,
+    pub(crate) init: Box<dyn FnOnce(&mut Pinnacle) -> anyhow::Result<B>>,
 }
 
 impl Backend {
