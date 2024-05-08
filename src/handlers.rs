@@ -196,11 +196,13 @@ impl CompositorHandler for State {
                     // the extra configure in that causes windows to map then resize
                     self.pinnacle.loop_handle.insert_idle(move |state| {
                         if let Some(keyboard) = state.pinnacle.seat.get_keyboard() {
-                            keyboard.set_focus(
-                                state,
-                                Some(KeyboardFocusTarget::Window(new_window)),
-                                SERIAL_COUNTER.next_serial(),
-                            )
+                            if new_window.is_on_active_tag() {
+                                keyboard.set_focus(
+                                    state,
+                                    Some(KeyboardFocusTarget::Window(new_window)),
+                                    SERIAL_COUNTER.next_serial(),
+                                );
+                            }
                         }
                     });
                 }
