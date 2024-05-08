@@ -295,6 +295,15 @@ pub struct Config {
 
     pub config_dir: PathBuf,
     pub cli: Option<Cli>,
+    socket_path: Option<PathBuf>,
+}
+
+impl Drop for Config {
+    fn drop(&mut self) {
+        if let Some(socket_path) = self.socket_path.as_ref() {
+            let _ = std::fs::remove_file(socket_path);
+        }
+    }
 }
 
 impl Config {
@@ -307,6 +316,7 @@ impl Config {
             shutdown_sender: None,
             config_dir,
             cli,
+            socket_path: None,
         }
     }
 
@@ -556,51 +566,15 @@ impl Pinnacle {
         self.system_processes
             .refresh_processes_specifics(ProcessRefreshKind::new());
 
-        let multiple_instances = self
-            .system_processes
-            .processes_by_exact_name("pinnacle")
-            .filter(|proc| proc.thread_kind().is_none())
-            .count()
-            > 1;
-
         std::fs::create_dir_all(socket_dir)?;
 
-        let socket_name = if multiple_instances {
-            let mut suffix: u8 = 1;
-            while let Ok(true) = socket_dir
-                .join(format!("pinnacle-grpc-{suffix}.sock"))
-                .try_exists()
-            {
-                suffix += 1;
-            }
-            format!("pinnacle-grpc-{suffix}.sock")
-        } else {
-            "pinnacle-grpc.sock".to_string()
-        };
+        let socket_name = format!("pinnacle-grpc-{}.sock", std::process::id());
 
         let socket_path = socket_dir.join(socket_name);
 
-        // If there are multiple instances, don't touch other sockets
-        if multiple_instances {
-            if let Ok(true) = socket_path.try_exists() {
-                std::fs::remove_file(&socket_path)
-                    .context(format!("Failed to remove old socket at {socket_path:?}"))?;
-            }
-        } else {
-            // If there aren't, remove them all
-            for file in std::fs::read_dir(socket_dir)?
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| {
-                    entry
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with("pinnacle-grpc")
-                })
-            {
-                debug!("Removing socket at {:?}", file.path());
-                std::fs::remove_file(file.path())
-                    .context(format!("Failed to remove old socket at {:?}", file.path()))?;
-            }
+        if let Ok(true) = socket_path.try_exists() {
+            std::fs::remove_file(&socket_path)
+                .context(format!("Failed to remove old socket at {socket_path:?}"))?;
         }
 
         std::env::set_var(
@@ -656,6 +630,8 @@ impl Pinnacle {
         }));
 
         info!("gRPC server started at {}", socket_path.display());
+
+        self.config.socket_path = Some(socket_path);
 
         Ok(())
     }
