@@ -8,7 +8,11 @@ use crate::{
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
     layout::LayoutState,
-    protocol::{gamma_control::GammaControlManagerState, screencopy::ScreencopyManagerState},
+    protocol::{
+        foreign_toplevel::{self, ForeignToplevelManagerState},
+        gamma_control::GammaControlManagerState,
+        screencopy::ScreencopyManagerState,
+    },
     window::WindowElement,
 };
 use anyhow::Context;
@@ -89,6 +93,7 @@ pub struct Pinnacle {
     pub security_context_state: SecurityContextState,
     pub relative_pointer_manager_state: RelativePointerManagerState,
     pub pointer_constraints_state: PointerConstraintsState,
+    pub foreign_toplevel_manager_state: ForeignToplevelManagerState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -129,6 +134,7 @@ impl State {
         self.pinnacle.space.refresh();
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
+        foreign_toplevel::refresh(self);
 
         self.pinnacle
             .display_handle
@@ -252,6 +258,10 @@ impl Pinnacle {
                 &display_handle,
             ),
             pointer_constraints_state: PointerConstraintsState::new::<State>(&display_handle),
+            foreign_toplevel_manager_state: ForeignToplevelManagerState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
 
             input_state: InputState::new(),
 

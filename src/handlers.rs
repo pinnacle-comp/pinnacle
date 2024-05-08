@@ -69,9 +69,10 @@ use tracing::{error, trace, warn};
 
 use crate::{
     backend::Backend,
-    delegate_gamma_control, delegate_screencopy,
+    delegate_foreign_toplevel, delegate_gamma_control, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     protocol::{
+        foreign_toplevel::{ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
@@ -678,18 +679,135 @@ impl PointerConstraintsHandler for State {
         self.pinnacle
             .maybe_activate_pointer_constraint(pointer.current_location());
     }
-
-    // Testing a smithay patch
-    // fn constraint_removed(
-    //     &mut self,
-    //     surface: &WlSurface,
-    //     pointer: &PointerHandle<Self>,
-    //     constraint: smithay::wayland::pointer_constraints::PointerConstraint,
-    // ) {
-    //     // tracing::info!(?constraint);
-    // }
 }
 delegate_pointer_constraints!(State);
+
+// FIXME: duplicated code with api calls
+impl ForeignToplevelHandler for State {
+    fn foreign_toplevel_manager_state(&mut self) -> &mut ForeignToplevelManagerState {
+        &mut self.pinnacle.foreign_toplevel_manager_state
+    }
+
+    fn activate(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        output.with_state_mut(|state| state.focus_stack.set_focus(window));
+        self.update_keyboard_focus(&output);
+    }
+
+    fn close(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        window.close();
+    }
+
+    // TODO: fullscreen on specified output? maybe
+    fn set_fullscreen(&mut self, wl_surface: WlSurface, _wl_output: Option<WlOutput>) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+
+    fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            window.toggle_fullscreen();
+        }
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+
+    fn set_maximized(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_fullscreen();
+        }
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+
+    fn unset_maximized(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
+            window.toggle_fullscreen();
+        }
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+
+    fn set_minimized(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        window.with_state_mut(|state| state.minimized = true);
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+
+    fn unset_minimized(&mut self, wl_surface: WlSurface) {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+            return;
+        };
+
+        window.with_state_mut(|state| state.minimized = false);
+
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
+    }
+}
+delegate_foreign_toplevel!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

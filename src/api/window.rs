@@ -13,13 +13,13 @@ use pinnacle_api_defs::pinnacle::{
     },
 };
 use smithay::{
-    desktop::{space::SpaceElement, WindowSurface},
+    desktop::space::SpaceElement,
     reexports::wayland_protocols::xdg::shell::server,
     utils::{Point, Rectangle, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
 use tonic::{Request, Response, Status};
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::{output::OutputName, state::WithState, tag::TagId, window::window_state::WindowId};
 
@@ -51,18 +51,7 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
-            match window.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => toplevel.send_close(),
-                WindowSurface::X11(surface) => {
-                    if !surface.is_override_redirect() {
-                        if let Err(err) = surface.close() {
-                            error!("failed to close x11 window: {err}");
-                        }
-                    } else {
-                        warn!("tried to close OR window");
-                    }
-                }
-            }
+            window.close();
         })
         .await
     }
