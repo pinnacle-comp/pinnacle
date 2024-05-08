@@ -70,7 +70,7 @@ pub struct Metaconfig {
     pub envs: Option<Table>,
     pub reload_keybind: Option<Keybind>,
     pub kill_keybind: Option<Keybind>,
-    pub socket_dir: Option<String>,
+    pub socket_dir: Option<PathBuf>,
     pub no_config: Option<bool>,
     pub no_xwayland: Option<bool>,
 }
@@ -97,15 +97,18 @@ impl Metaconfig {
         let default: Metaconfig =
             toml::from_str(builtin::METACONFIG).expect("default metaconfig should be error-free");
 
-        let socket_dir = if let Some(socket_dir) = &self.socket_dir {
-            let socket_dir = shellexpand::full(socket_dir)?.to_string();
+        let socket_dir = if let Some(socket_dir) = cli
+            .and_then(|cli| cli.socket_dir.as_ref())
+            .or(self.socket_dir.as_ref())
+        {
+            let socket_dir = shellexpand::path::full(socket_dir)?.to_path_buf();
 
             // cd into the metaconfig dir and canonicalize to preserve relative paths
             // like ./dir/here
             let current_dir = std::env::current_dir()?;
 
             std::env::set_current_dir(config_dir)?;
-            let socket_dir = PathBuf::from(socket_dir).canonicalize()?;
+            let socket_dir = socket_dir.canonicalize()?;
             std::env::set_current_dir(current_dir)?;
             socket_dir
         } else {
@@ -747,6 +750,9 @@ mod tests {
 
             socket_dir = "/path/to/socket/dir"
 
+            no_config = true
+            no_xwayland = true
+
             [envs]
             MARCO = "polo"
             SUN = "chips"
@@ -772,9 +778,9 @@ mod tests {
                 modifiers: vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift],
                 key: Key::Escape,
             }),
-            socket_dir: Some("/path/to/socket/dir".to_string()),
-            no_config: None,
-            no_xwayland: None,
+            socket_dir: Some("/path/to/socket/dir".into()),
+            no_config: Some(true),
+            no_xwayland: Some(true),
         };
 
         assert_eq!(
@@ -830,8 +836,6 @@ mod tests {
             command = "lua" # not an array
 
             reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-            # Missing `kill_keybind`
-            # kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
         "#;
 
         let metaconfig_dir = tempfile::tempdir()?;

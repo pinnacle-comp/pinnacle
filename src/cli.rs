@@ -53,13 +53,16 @@ pub struct Cli {
     #[arg(long)]
     pub no_xwayland: bool,
 
+    /// Open the gRPC socket at the specified directory
+    #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
+    pub socket_dir: Option<PathBuf>,
+
     /// Cli subcommands
     #[command(subcommand)]
     subcommand: Option<CliSubcommand>,
 }
 
 impl Cli {
-    //
     pub fn parse_and_prompt() -> Option<Self> {
         let mut cli = Cli::parse();
 
