@@ -136,6 +136,9 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| get_config_dir(&base_dirs));
 
+    // Parse the metaconfig once to resolve it with CLI flags.
+    // The metaconfig is parsed a second time when `start_config`
+    // is called below which is not ideal but I'm lazy.
     let metaconfig = match parse_metaconfig(&config_dir) {
         Ok(metaconfig) => metaconfig,
         Err(err) => {

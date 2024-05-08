@@ -75,6 +75,12 @@ pub struct Metaconfig {
     pub no_xwayland: Option<bool>,
 }
 
+/// A metaconfig with fields resolved.
+///
+/// The priority is:
+/// 1. CLI options
+/// 2. Metaconfig options
+/// 3. Default metaconfig options where applicable
 #[derive(Debug, PartialEq)]
 pub struct ResolvedMetaconfig {
     pub command: Vec<String>,
