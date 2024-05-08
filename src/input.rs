@@ -529,7 +529,7 @@ impl State {
             Some(KeyAction::ReloadConfig) => {
                 info!("Reloading config");
                 self.pinnacle
-                    .start_config(Some(self.pinnacle.config.dir(&self.pinnacle.xdg_base_dirs)))
+                    .start_config(false)
                     .expect("failed to restart config");
             }
             None => (),

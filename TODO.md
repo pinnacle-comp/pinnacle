@@ -1,0 +1,2 @@
+- Use compositor PID to uniquely ID gRPC socket
+- Log git commit on startup and add to --help/-V

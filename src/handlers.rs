@@ -102,21 +102,21 @@ impl CompositorHandler for State {
             });
             if let Some(dmabuf) = maybe_dmabuf {
                 if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
-                    let client = surface
-                        .client()
-                        .expect("Surface has no client/is no longer alive");
-                    let res =
-                        state
-                            .pinnacle
-                            .loop_handle
-                            .insert_source(source, move |_, _, state| {
-                                state
-                                    .client_compositor_state(&client)
-                                    .blocker_cleared(state, &state.pinnacle.display_handle.clone());
-                                Ok(())
-                            });
-                    if res.is_ok() {
-                        compositor::add_blocker(surface, blocker);
+                    if let Some(client) = surface.client() {
+                        let res =
+                            state
+                                .pinnacle
+                                .loop_handle
+                                .insert_source(source, move |_, _, state| {
+                                    state.client_compositor_state(&client).blocker_cleared(
+                                        state,
+                                        &state.pinnacle.display_handle.clone(),
+                                    );
+                                    Ok(())
+                                });
+                        if res.is_ok() {
+                            compositor::add_blocker(surface, blocker);
+                        }
                     }
                 }
             }

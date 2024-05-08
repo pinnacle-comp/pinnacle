@@ -1,14 +1,17 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use pinnacle::{
-    backend::dummy::setup_dummy,
     state::{ClientState, State, WithState},
+    tag::TagId,
     window::window_state::FloatingOrTiled,
 };
 use smithay::{
     backend::input::{ButtonState, DeviceCapability, InputEvent},
     reexports::{
-        calloop::channel::{Channel, Event},
+        calloop::{
+            channel::{Channel, Event},
+            EventLoop,
+        },
         wayland_server::{Client, Resource},
     },
     utils::Rectangle,
@@ -24,12 +27,17 @@ use crate::{
 };
 
 pub(crate) fn run(channel: Channel<WlcsEvent>) {
-    let (mut state, mut event_loop) = setup_dummy(pinnacle::config::StartupSettings {
-        no_config: true,
-        config_dir: None,
-        no_xwayland: true,
-    })
-    .expect("failed to setup dummy backend");
+    let mut event_loop = EventLoop::<State>::try_new().unwrap();
+    let mut state = State::new(
+        pinnacle::cli::Backend::Dummy,
+        event_loop.handle(),
+        event_loop.get_signal(),
+        PathBuf::from(""),
+        None,
+    )
+    .unwrap();
+
+    TagId::reset();
 
     event_loop
         .handle()
@@ -53,7 +61,7 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
             crate::config::start_config();
             drop(temp_dir);
         });
-    };
+    }
 
     // wait for the config to connect to the layout service
     //

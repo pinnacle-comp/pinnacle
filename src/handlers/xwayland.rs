@@ -2,7 +2,6 @@
 
 use std::{process::Stdio, time::Duration};
 
-use anyhow::anyhow;
 use smithay::{
     desktop::Window,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
@@ -517,9 +516,9 @@ fn should_float(surface: &X11Surface) -> bool {
 }
 
 impl Pinnacle {
-    // FIXME: this is coupled and I don't like that
-    // I would love to make this synchronous but that seems awkward to do
-    pub fn start_xwayland_and_config(&mut self) -> anyhow::Result<()> {
+    /// Spawn an [`XWayland`] instance and insert its event source into
+    /// the event loop.
+    pub fn insert_xwayland_source(&mut self) -> anyhow::Result<()> {
         // TODO: xwayland keyboard grab state
 
         let (xwayland, client) = XWayland::spawn(
@@ -535,51 +534,40 @@ impl Pinnacle {
         let display_handle = self.display_handle.clone();
 
         self.loop_handle
-            .insert_source(xwayland, move |event, _, state| {
-                match event {
-                    XWaylandEvent::Ready {
+            .insert_source(xwayland, move |event, _, state| match event {
+                XWaylandEvent::Ready {
+                    x11_socket,
+                    display_number,
+                } => {
+                    let mut wm = X11Wm::start_wm(
+                        state.pinnacle.loop_handle.clone(),
+                        display_handle.clone(),
                         x11_socket,
-                        display_number,
-                    } => {
-                        let mut wm = X11Wm::start_wm(
-                            state.pinnacle.loop_handle.clone(),
-                            display_handle.clone(),
-                            x11_socket,
-                            client.clone(),
-                        )
-                        .expect("failed to attach x11wm");
+                        client.clone(),
+                    )
+                    .expect("Failed to attach x11wm");
 
-                        let cursor = Cursor::load();
-                        let image = cursor.get_image(1, Duration::ZERO);
-                        wm.set_cursor(
-                            &image.pixels_rgba,
-                            Size::from((image.width as u16, image.height as u16)),
-                            Point::from((image.xhot as u16, image.yhot as u16)),
-                        )
-                        .expect("failed to set xwayland default cursor");
+                    let cursor = Cursor::load();
+                    let image = cursor.get_image(1, Duration::ZERO);
+                    wm.set_cursor(
+                        &image.pixels_rgba,
+                        Size::from((image.width as u16, image.height as u16)),
+                        Point::from((image.xhot as u16, image.yhot as u16)),
+                    )
+                    .expect("failed to set xwayland default cursor");
 
-                        tracing::debug!("setting xwm and xdisplay");
+                    tracing::debug!("setting xwm and xdisplay");
 
-                        state.pinnacle.xwm = Some(wm);
-                        state.pinnacle.xdisplay = Some(display_number);
+                    state.pinnacle.xwm = Some(wm);
+                    state.pinnacle.xdisplay = Some(display_number);
 
-                        std::env::set_var("DISPLAY", format!(":{display_number}"));
-                    }
-                    XWaylandEvent::Error => {
-                        warn!("XWayland crashed on startup");
-                    }
+                    std::env::set_var("DISPLAY", format!(":{display_number}"));
                 }
+                XWaylandEvent::Error => {
+                    warn!("XWayland crashed on startup");
+                }
+            })?;
 
-                state
-                    .pinnacle
-                    .start_config(Some(
-                        state.pinnacle.config.dir(&state.pinnacle.xdg_base_dirs),
-                    ))
-                    .expect("failed to start config");
-            })
-            .map(|_| ())
-            .map_err(|err| {
-                anyhow!("Failed to insert the XWaylandSource into the event loop: {err}")
-            })
+        Ok(())
     }
 }

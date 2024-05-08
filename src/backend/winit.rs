@@ -22,12 +22,12 @@ use smithay::{
             self,
             generic::Generic,
             timer::{TimeoutAction, Timer},
-            EventLoop, Interest, LoopHandle, PostAction,
+            Interest, LoopHandle, PostAction,
         },
         wayland_protocols::wp::presentation_time::server::wp_presentation_feedback,
         wayland_server::{
             protocol::{wl_shm, wl_surface::WlSurface},
-            Display,
+            DisplayHandle,
         },
         winit::{
             platform::{pump_events::PumpStatus, wayland::WindowBuilderExtWayland},
@@ -40,12 +40,11 @@ use smithay::{
 use tracing::{error, trace, warn};
 
 use crate::{
-    config::StartupSettings,
     render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
-    state::{State, WithState},
+    state::{Pinnacle, State, WithState},
 };
 
-use super::{Backend, BackendData};
+use super::{Backend, BackendData, UninitBackend};
 
 const LOGO_BYTES: &[u8] = include_bytes!("../../resources/pinnacle_logo_icon.rgba");
 
@@ -75,181 +74,171 @@ impl Backend {
     }
 }
 
-/// Start Pinnacle as a window in a graphical environment.
-pub fn setup_winit(
-    startup_settings: StartupSettings,
-) -> anyhow::Result<(State, EventLoop<'static, State>)> {
-    let event_loop: EventLoop<State> = EventLoop::try_new()?;
+impl Winit {
+    pub(crate) fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Winit>> {
+        let window_builder = WindowBuilder::new()
+            .with_title("Pinnacle")
+            .with_name("pinnacle", "pinnacle")
+            .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
 
-    let display: Display<State> = Display::new()?;
-    let display_handle = display.handle();
+        let (mut winit_backend, mut winit_evt_loop) =
+            match winit::init_from_builder::<GlesRenderer>(window_builder) {
+                Ok(ret) => ret,
+                Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
+            };
 
-    let loop_handle = event_loop.handle();
-
-    let window_builder = WindowBuilder::new()
-        .with_title("Pinnacle")
-        .with_name("pinnacle", "pinnacle")
-        .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
-
-    let (mut winit_backend, mut winit_evt_loop) =
-        match winit::init_from_builder::<GlesRenderer>(window_builder) {
-            Ok(ret) => ret,
-            Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
+        let mode = smithay::output::Mode {
+            size: winit_backend.window_size(),
+            refresh: 144_000,
         };
 
-    let mode = smithay::output::Mode {
-        size: winit_backend.window_size(),
-        refresh: 144_000,
-    };
+        let physical_properties = smithay::output::PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Pinnacle".to_string(),
+            model: "Winit Window".to_string(),
+        };
 
-    let physical_properties = smithay::output::PhysicalProperties {
-        size: (0, 0).into(),
-        subpixel: Subpixel::Unknown,
-        make: "Pinnacle".to_string(),
-        model: "Winit Window".to_string(),
-    };
+        let output = Output::new("Pinnacle Window".to_string(), physical_properties);
 
-    let output = Output::new("Pinnacle Window".to_string(), physical_properties);
+        output.change_current_state(
+            Some(mode),
+            Some(Transform::Flipped180),
+            None,
+            Some((0, 0).into()),
+        );
 
-    output.change_current_state(
-        Some(mode),
-        Some(Transform::Flipped180),
-        None,
-        Some((0, 0).into()),
-    );
+        output.set_preferred(mode);
+        output.with_state_mut(|state| state.modes = vec![mode]);
 
-    output.set_preferred(mode);
-    output.with_state_mut(|state| state.modes = vec![mode]);
+        let render_node =
+            EGLDevice::device_for_display(winit_backend.renderer().egl_context().display())
+                .and_then(|device| device.try_get_render_node());
 
-    let render_node =
-        EGLDevice::device_for_display(winit_backend.renderer().egl_context().display())
-            .and_then(|device| device.try_get_render_node());
-
-    let dmabuf_default_feedback = match render_node {
-        Ok(Some(node)) => {
-            let dmabuf_formats = winit_backend
-                .renderer()
-                .dmabuf_formats()
-                .collect::<Vec<_>>();
-            let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
-                .build()
-                .expect("DmabufFeedbackBuilder error");
-            Some(dmabuf_default_feedback)
-        }
-        Ok(None) => {
-            warn!("failed to query render node, dmabuf will use v3");
-            None
-        }
-        Err(err) => {
-            warn!("{}", err);
-            None
-        }
-    };
-
-    let dmabuf_state = match dmabuf_default_feedback {
-        Some(default_feedback) => {
-            let mut dmabuf_state = DmabufState::new();
-            let dmabuf_global = dmabuf_state
-                .create_global_with_default_feedback::<State>(&display_handle, &default_feedback);
-            (dmabuf_state, dmabuf_global, Some(default_feedback))
-        }
-        None => {
-            let dmabuf_formats = winit_backend
-                .renderer()
-                .dmabuf_formats()
-                .collect::<Vec<_>>();
-            let mut dmabuf_state = DmabufState::new();
-            let dmabuf_global =
-                dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);
-            (dmabuf_state, dmabuf_global, None)
-        }
-    };
-
-    if winit_backend
-        .renderer()
-        .bind_wl_display(&display_handle)
-        .is_ok()
-    {
-        tracing::info!("EGL hardware-acceleration enabled");
-    }
-
-    let backend = Backend::Winit(Winit {
-        backend: winit_backend,
-        damage_tracker: OutputDamageTracker::from_output(&output),
-        dmabuf_state,
-        full_redraw: 0,
-    });
-
-    let mut state = State::init(
-        backend,
-        display,
-        event_loop.get_signal(),
-        loop_handle,
-        startup_settings,
-    )?;
-
-    // wl-mirror segfaults if it gets a wl-output global before the xdg output manager global
-    output.create_global::<State>(&display_handle);
-
-    state.pinnacle.output_focus_stack.set_focus(output.clone());
-
-    let winit = state.backend.winit_mut();
-
-    state
-        .pinnacle
-        .shm_state
-        .update_formats(winit.backend.renderer().shm_formats());
-
-    state.pinnacle.space.map_output(&output, (0, 0));
-
-    let insert_ret = state.pinnacle.loop_handle.insert_source(
-        Timer::immediate(),
-        move |_instant, _metadata, state| {
-            let status = winit_evt_loop.dispatch_new_events(|event| match event {
-                WinitEvent::Resized { size, scale_factor } => {
-                    let mode = smithay::output::Mode {
-                        size,
-                        refresh: 144_000,
-                    };
-                    state.pinnacle.change_output_state(
-                        &output,
-                        Some(mode),
-                        None,
-                        Some(Scale::Fractional(scale_factor)),
-                        None,
-                    );
-                    state.pinnacle.request_layout(&output);
-                }
-                WinitEvent::Focus(focused) => {
-                    if focused {
-                        state.backend.winit_mut().reset_buffers(&output);
-                    }
-                }
-                WinitEvent::Input(input_evt) => {
-                    state.process_input_event(input_evt);
-                }
-                WinitEvent::Redraw => {
-                    state.render_winit_window(&output);
-                }
-                WinitEvent::CloseRequested => {
-                    state.pinnacle.shutdown();
-                }
-            });
-
-            if let PumpStatus::Exit(_) = status {
-                state.pinnacle.shutdown();
+        let dmabuf_default_feedback = match render_node {
+            Ok(Some(node)) => {
+                let dmabuf_formats = winit_backend
+                    .renderer()
+                    .dmabuf_formats()
+                    .collect::<Vec<_>>();
+                let dmabuf_default_feedback =
+                    DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
+                        .build()
+                        .expect("DmabufFeedbackBuilder error");
+                Some(dmabuf_default_feedback)
             }
+            Ok(None) => {
+                warn!("failed to query render node, dmabuf will use v3");
+                None
+            }
+            Err(err) => {
+                warn!("{}", err);
+                None
+            }
+        };
 
-            state.render_winit_window(&output);
+        let dmabuf_state = match dmabuf_default_feedback {
+            Some(default_feedback) => {
+                let mut dmabuf_state = DmabufState::new();
+                let dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State>(
+                    &display_handle,
+                    &default_feedback,
+                );
+                (dmabuf_state, dmabuf_global, Some(default_feedback))
+            }
+            None => {
+                let dmabuf_formats = winit_backend
+                    .renderer()
+                    .dmabuf_formats()
+                    .collect::<Vec<_>>();
+                let mut dmabuf_state = DmabufState::new();
+                let dmabuf_global =
+                    dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);
+                (dmabuf_state, dmabuf_global, None)
+            }
+        };
 
-            TimeoutAction::ToDuration(Duration::from_micros(((1.0 / 144.0) * 1000000.0) as u64))
-        },
-    );
-    if let Err(err) = insert_ret {
-        anyhow::bail!("Failed to insert winit events into event loop: {err}");
+        if winit_backend
+            .renderer()
+            .bind_wl_display(&display_handle)
+            .is_ok()
+        {
+            tracing::info!("EGL hardware-acceleration enabled");
+        }
+
+        let mut winit = Winit {
+            backend: winit_backend,
+            damage_tracker: OutputDamageTracker::from_output(&output),
+            dmabuf_state,
+            full_redraw: 0,
+        };
+
+        Ok(UninitBackend {
+            seat_name: winit.seat_name(),
+            init: Box::new(move |pinnacle: &mut Pinnacle| {
+                output.create_global::<State>(&display_handle);
+
+                pinnacle.output_focus_stack.set_focus(output.clone());
+
+                pinnacle
+                    .shm_state
+                    .update_formats(winit.backend.renderer().shm_formats());
+
+                pinnacle.space.map_output(&output, (0, 0));
+
+                let insert_ret = pinnacle.loop_handle.insert_source(
+                    Timer::immediate(),
+                    move |_instant, _metadata, state| {
+                        let status = winit_evt_loop.dispatch_new_events(|event| match event {
+                            WinitEvent::Resized { size, scale_factor } => {
+                                let mode = smithay::output::Mode {
+                                    size,
+                                    refresh: 144_000,
+                                };
+                                state.pinnacle.change_output_state(
+                                    &output,
+                                    Some(mode),
+                                    None,
+                                    Some(Scale::Fractional(scale_factor)),
+                                    None,
+                                );
+                                state.pinnacle.request_layout(&output);
+                            }
+                            WinitEvent::Focus(focused) => {
+                                if focused {
+                                    state.backend.winit_mut().reset_buffers(&output);
+                                }
+                            }
+                            WinitEvent::Input(input_evt) => {
+                                state.process_input_event(input_evt);
+                            }
+                            WinitEvent::Redraw => {
+                                state.render_winit_window(&output);
+                            }
+                            WinitEvent::CloseRequested => {
+                                state.pinnacle.shutdown();
+                            }
+                        });
+
+                        if let PumpStatus::Exit(_) = status {
+                            state.pinnacle.shutdown();
+                        }
+
+                        state.render_winit_window(&output);
+
+                        TimeoutAction::ToDuration(Duration::from_micros(
+                            ((1.0 / 144.0) * 1000000.0) as u64,
+                        ))
+                    },
+                );
+                if let Err(err) = insert_ret {
+                    anyhow::bail!("Failed to insert winit events into event loop: {err}");
+                }
+
+                Ok(winit)
+            }),
+        })
     }
-
-    Ok((state, event_loop))
 }
 
 impl State {

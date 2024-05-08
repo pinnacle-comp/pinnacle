@@ -123,8 +123,9 @@ static SUPPORTED_EXTENSIONS: &[WlcsExtensionDescriptor] = extension_list!(
     ("wp_viewporter", 1),
     ("xdg_shell", 6),
     ("linux-dmabuf-v1", 5),
-    ("xdg_shell", 6),
     ("security-context", 1),
+    ("zwp_pointer_constraints_v1", 1),
+    ("zwp_relative_pointer_manager_v1", 1),
 );
 
 static DESCRIPTOR: WlcsIntegrationDescriptor = WlcsIntegrationDescriptor {
