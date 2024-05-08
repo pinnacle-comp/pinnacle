@@ -61,6 +61,8 @@ async fn main() -> anyhow::Result<()> {
         .with(stdout_layer)
         .init();
 
+    info!("Starting Pinnacle (commit {})", env!("VERGEN_GIT_SHA"));
+
     set_log_panic_hook();
 
     let Some(cli) = Cli::parse_and_prompt() else {

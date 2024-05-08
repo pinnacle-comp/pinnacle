@@ -33,6 +33,34 @@ clap = { version = "4.5.4", features = ["derive"] }
 dircpy = "0.3.16"
 tempfile = "3.10.1"
 
+[workspace.dependencies.smithay]
+git = "https://github.com/Smithay/smithay"
+rev = "95d6e79"
+default-features = false
+features = [
+    "desktop",
+    "wayland_frontend",
+    # udev
+    "backend_libinput",
+    "backend_udev",
+    "backend_drm",
+    "backend_gbm",
+    "backend_vulkan",
+    "backend_egl",
+    "backend_session_libseat",
+    "renderer_gl",
+    "renderer_multi",
+    # egl
+    "use_system_lib",
+    "backend_egl",
+    # winit
+    "backend_winit",
+    "backend_drm",
+    # xwayland
+    "xwayland",
+    "x11rb_event_source",
+]
+
 ########################################################################yo😎###########
 
 [package]
@@ -87,36 +115,9 @@ bytemuck = "1.15.0"
 pinnacle-api = { path = "./api/rust" }
 gag = "1.0.0"
 
-[workspace.dependencies.smithay]
-git = "https://github.com/Smithay/smithay"
-rev = "95d6e79"
-default-features = false
-features = [
-    "desktop",
-    "wayland_frontend",
-    # udev
-    "backend_libinput",
-    "backend_udev",
-    "backend_drm",
-    "backend_gbm",
-    "backend_vulkan",
-    "backend_egl",
-    "backend_session_libseat",
-    "renderer_gl",
-    "renderer_multi",
-    # egl
-    "use_system_lib",
-    "backend_egl",
-    # winit
-    "backend_winit",
-    "backend_drm",
-    # xwayland
-    "xwayland",
-    "x11rb_event_source",
-]
 
 [build-dependencies]
-xdg = { workspace = true }
+vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }
 
 [dev-dependencies]
 temp-env = "0.3.6"
