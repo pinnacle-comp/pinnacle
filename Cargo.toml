@@ -79,7 +79,7 @@ x11rb = { version = "0.13.0", default-features = false, features = ["composite"]
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
 sysinfo = "0.30.10"
-nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
+# nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.37"

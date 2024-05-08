@@ -14,13 +14,12 @@
 use std::io::{BufRead, BufReader};
 
 use anyhow::Context;
-use nix::unistd::Uid;
 use pinnacle::{
     cli::{self, Cli},
     config::{get_config_dir, parse_metaconfig, Metaconfig},
     state::State,
 };
-use smithay::reexports::calloop::EventLoop;
+use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -68,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     };
 
-    if Uid::effective().is_root() {
+    if geteuid().is_root() {
         if !cli.allow_root {
             warn!("You are trying to run Pinnacle as root.");
             warn!("This is NOT recommended.");
