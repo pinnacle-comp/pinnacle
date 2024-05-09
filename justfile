@@ -73,7 +73,7 @@ install-protos-root:
     proto_dir="{{root_xdg_data_dir}}/protobuf"
     rm -rf "${proto_dir}"
     mkdir -p "{{root_xdg_data_dir}}"
-    cp -r "{{rootdir}}/api/protocol" "${proto_dir}"
+    cp -r "{{rootdir}}pinnacle-api-defs/protocol" "${proto_dir}"
 
 # [root] Install the Lua library (requires Luarocks)
 install-lua-lib-root:

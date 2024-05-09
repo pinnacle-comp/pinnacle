@@ -10,9 +10,9 @@ description = {
 dependencies = {
     "lua >= 5.2",
     "cqueues ~> 20200726",
-    "http ~> 0.4",
+    "http ~> 0.3",
     "lua-protobuf ~> 0.5",
-    "compat53 ~> 0.13",
+    "compat53 ~> 0.12-1",
 }
 build = {
     type = "builtin",
