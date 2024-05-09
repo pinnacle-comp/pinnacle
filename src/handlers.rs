@@ -700,7 +700,8 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        output.with_state_mut(|state| state.focus_stack.set_focus(window));
+        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+        self.pinnacle.raise_window(window, true);
         self.update_keyboard_focus(&output);
     }
 
