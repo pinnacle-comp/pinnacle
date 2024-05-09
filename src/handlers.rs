@@ -72,7 +72,7 @@ use crate::{
     delegate_foreign_toplevel, delegate_gamma_control, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     protocol::{
-        foreign_toplevel::{ForeignToplevelHandler, ForeignToplevelManagerState},
+        foreign_toplevel::{self, ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
@@ -458,7 +458,11 @@ impl ShmHandler for State {
 }
 delegate_shm!(State);
 
-impl OutputHandler for State {}
+impl OutputHandler for State {
+    fn output_bound(&mut self, output: Output, wl_output: WlOutput) {
+        foreign_toplevel::on_output_bound(self, &output, &wl_output);
+    }
+}
 delegate_output!(State);
 
 delegate_viewporter!(State);

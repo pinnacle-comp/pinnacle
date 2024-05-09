@@ -5,6 +5,7 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use smithay::{
+    desktop::WindowSurface,
     output::Output,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
@@ -19,15 +20,14 @@ use smithay::{
             Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
         },
     },
-    wayland::{
-        compositor,
-        seat::WaylandFocus,
-        shell::xdg::{ToplevelStateSet, XdgToplevelSurfaceData, XdgToplevelSurfaceRoleAttributes},
-    },
+    wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 use tracing::error;
 
-use crate::state::{State, WithState};
+use crate::{
+    state::{Pinnacle, State, WithState},
+    window::WindowElement,
+};
 
 const VERSION: u32 = 3;
 
@@ -113,79 +113,100 @@ pub fn refresh(state: &mut State) {
     // FIXME: Initial window mapping bypasses `state.update_keyboard_focus`
     // and sets it manually without updating the output keyboard focus stack,
     // fix that
-    let focused_win_and_op = state.pinnacle.focused_output().map(|op| {
-        (
-            op.with_state(|state| state.focus_stack.stack.last().cloned()),
-            op.clone(),
-        )
-    });
+    let focused_win = state
+        .pinnacle
+        .focused_output()
+        .map(|op| state.pinnacle.focused_window(op));
 
     // OH GOD THE BORROW CHECKER IS HAVING A SEIZURE
 
+    // PERF: We sacrifice performance to the borrow checker with this clone
     for window in state.pinnacle.windows.clone().iter() {
-        let Some(surface) = window.wl_surface() else {
-            continue;
-        };
-
-        compositor::with_states(&surface, |states| {
-            // FIXME: xwayland
-            let Some(role) = states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .map(|mutex| mutex.lock().expect("mutex should be lockable"))
-            else {
-                return;
-            };
-
-            if let Some((win, op)) = focused_win_and_op.as_ref() {
-                if win.as_ref() == Some(window) {
-                    focused = Some((window.clone(), op.clone()));
-                    return;
-                }
+        if let Some(win) = focused_win.as_ref() {
+            if win.as_ref() == Some(window) {
+                focused = Some(window.clone());
+                continue;
             }
+        }
 
-            // INFO: this will use the tags the window has to determine
-            // output, not overlap.
-
-            let win_op = window.output(&state.pinnacle);
-
+        if let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, window) {
+            let Some(surface) = window.wl_surface() else {
+                continue;
+            };
             refresh_toplevel(
                 &mut state.pinnacle.foreign_toplevel_manager_state,
                 &surface,
-                &role,
-                win_op.as_ref(),
-                window.with_state(|state| state.minimized),
-                false,
+                pending_data,
             );
-        })
+        }
     }
 
     // Finally, refresh the focused window.
-    if let Some((window, op)) = focused {
-        let Some(surface) = window.wl_surface() else {
-            return;
-        };
-
-        compositor::with_states(&surface, |states| {
-            // FIXME: xwayland
-            let Some(role) = states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .map(|mutex| mutex.lock().expect("mutex should be lockable"))
-            else {
+    if let Some(window) = focused {
+        if let Some(pending_data) = pending_toplevel_data_for(&state.pinnacle, &window) {
+            let Some(surface) = window.wl_surface() else {
                 return;
             };
-
             refresh_toplevel(
                 &mut state.pinnacle.foreign_toplevel_manager_state,
                 &surface,
-                &role,
-                Some(&op),
-                window.with_state(|state| state.minimized),
-                false,
+                pending_data,
             );
-        })
+        }
     }
+}
+
+fn pending_toplevel_data_for(
+    pinnacle: &Pinnacle,
+    win: &WindowElement,
+) -> Option<PendingToplevelData> {
+    let focused_win_and_op = pinnacle
+        .focused_output()
+        .map(|op| (pinnacle.focused_window(op), op.clone()));
+
+    let surface = win.wl_surface()?;
+
+    let output = win.output(pinnacle);
+
+    let focused = if let Some((foc_win, _)) = focused_win_and_op.as_ref() {
+        foc_win.as_ref() == Some(win)
+    } else {
+        false
+    };
+
+    compositor::with_states(&surface, |states| match win.underlying_surface() {
+        WindowSurface::Wayland(_toplevel) => {
+            let role = states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()?
+                .lock()
+                .ok()?;
+
+            Some(PendingToplevelData {
+                title: role.title.clone(),
+                app_id: role.app_id.clone(),
+                maximized: role.current.states.contains(xdg_toplevel::State::Maximized),
+                minimized: win.with_state(|state| state.minimized),
+                fullscreen: role
+                    .current
+                    .states
+                    .contains(xdg_toplevel::State::Fullscreen),
+                _activated: role.current.states.contains(xdg_toplevel::State::Activated),
+                focused,
+                output,
+            })
+        }
+        WindowSurface::X11(x11_surface) => Some(PendingToplevelData {
+            title: Some(x11_surface.title()),
+            app_id: Some(x11_surface.class()),
+            maximized: x11_surface.is_maximized(),
+            minimized: x11_surface.is_minimized(),
+            fullscreen: x11_surface.is_fullscreen(),
+            _activated: x11_surface.is_activated(),
+            focused,
+            output,
+        }),
+    })
 }
 
 pub fn on_output_bound(state: &mut State, output: &Output, wl_output: &WlOutput) {
@@ -211,25 +232,38 @@ pub fn on_output_bound(state: &mut State, output: &Output, wl_output: &WlOutput)
     }
 }
 
+struct PendingToplevelData {
+    title: Option<String>,
+    app_id: Option<String>,
+    maximized: bool,
+    minimized: bool,
+    fullscreen: bool,
+    _activated: bool,
+    focused: bool,
+    output: Option<Output>,
+}
+
 /// Refresh foreign toplevel handle state.
 fn refresh_toplevel(
     protocol_state: &mut ForeignToplevelManagerState,
     wl_surface: &WlSurface,
-    role: &XdgToplevelSurfaceRoleAttributes,
-    output: Option<&Output>,
-    is_minimized: bool,
-    has_focus: bool,
+    pending_data: PendingToplevelData,
 ) {
-    let states = to_state_vec(&role.current.states, is_minimized, has_focus);
+    let states = to_state_vec(
+        pending_data.maximized,
+        pending_data.minimized,
+        pending_data.fullscreen,
+        pending_data.focused,
+    );
 
     match protocol_state.toplevels.entry(wl_surface.clone()) {
         Entry::Occupied(entry) => {
             let data = entry.into_mut();
 
             let mut new_title = None;
-            if data.title != role.title {
-                data.title.clone_from(&role.title);
-                new_title = role.title.as_deref();
+            if data.title != pending_data.title {
+                data.title.clone_from(&pending_data.title);
+                new_title = pending_data.title.as_deref();
 
                 if new_title.is_none() {
                     error!("toplevel title changed to None");
@@ -237,9 +271,9 @@ fn refresh_toplevel(
             }
 
             let mut new_app_id = None;
-            if data.app_id != role.app_id {
-                data.app_id.clone_from(&role.app_id);
-                new_app_id = role.app_id.as_deref();
+            if data.app_id != pending_data.app_id {
+                data.app_id.clone_from(&pending_data.app_id);
+                new_app_id = pending_data.app_id.as_deref();
 
                 if new_app_id.is_none() {
                     error!("toplevel app_id changed to None");
@@ -253,8 +287,8 @@ fn refresh_toplevel(
             }
 
             let mut output_changed = false;
-            if data.output.as_ref() != output {
-                data.output = output.cloned();
+            if data.output != pending_data.output {
+                data.output.clone_from(&pending_data.output);
                 output_changed = true;
             }
 
@@ -305,10 +339,10 @@ fn refresh_toplevel(
         }
         Entry::Vacant(entry) => {
             let mut data = ToplevelData {
-                title: role.title.clone(),
-                app_id: role.app_id.clone(),
+                title: pending_data.title.clone(),
+                app_id: pending_data.app_id.clone(),
                 states,
-                output: output.cloned(),
+                output: pending_data.output.clone(),
                 instances: HashMap::new(),
                 // parent: TODO:
             };
@@ -506,18 +540,21 @@ where
 }
 
 fn to_state_vec(
-    states: &ToplevelStateSet,
-    is_minimized: bool,
+    maximized: bool,
+    minimized: bool,
+    fullscreen: bool,
+
+    // activated
     has_focus: bool,
 ) -> Vec<zwlr_foreign_toplevel_handle_v1::State> {
     let mut state_vec = Vec::new();
-    if states.contains(xdg_toplevel::State::Maximized) {
+    if maximized {
         state_vec.push(zwlr_foreign_toplevel_handle_v1::State::Maximized);
     }
-    if states.contains(xdg_toplevel::State::Fullscreen) {
+    if fullscreen {
         state_vec.push(zwlr_foreign_toplevel_handle_v1::State::Fullscreen);
     }
-    if is_minimized {
+    if minimized {
         state_vec.push(zwlr_foreign_toplevel_handle_v1::State::Minimized);
     }
 
