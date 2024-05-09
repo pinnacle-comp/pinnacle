@@ -772,8 +772,8 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            output.with_state_mut(|op_state| {
-                for op_tag in op_state.tags.iter_mut() {
+            output.with_state(|op_state| {
+                for op_tag in op_state.tags.iter() {
                     op_tag.set_active(false, state);
                 }
                 tag.set_active(true, state);

@@ -47,6 +47,7 @@ pub struct WindowElementState {
     pub floating_or_tiled: FloatingOrTiled,
     pub fullscreen_or_maximized: FullscreenOrMaximized,
     pub target_loc: Option<Point<i32, Logical>>,
+    pub minimized: bool,
 }
 
 impl WindowElement {
@@ -295,6 +296,7 @@ impl WindowElementState {
             floating_or_tiled: FloatingOrTiled::Tiled(None),
             fullscreen_or_maximized: FullscreenOrMaximized::Neither,
             target_loc: None,
+            minimized: false,
         }
     }
 }

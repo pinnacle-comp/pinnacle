@@ -11,6 +11,7 @@ use smithay::{
     utils::{IsAlive, Logical, Point, Rectangle},
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
+use tracing::{error, warn};
 
 use crate::state::{Pinnacle, WithState};
 
@@ -95,6 +96,22 @@ impl WindowElement {
                 })
             }
             WindowSurface::X11(surface) => Some(surface.title()),
+        }
+    }
+
+    /// Send a close request to this window.
+    pub fn close(&self) {
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => toplevel.send_close(),
+            WindowSurface::X11(surface) => {
+                if !surface.is_override_redirect() {
+                    if let Err(err) = surface.close() {
+                        error!("failed to close x11 window: {err}");
+                    }
+                } else {
+                    warn!("tried to close OR window");
+                }
+            }
         }
     }
 
