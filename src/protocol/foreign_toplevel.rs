@@ -121,7 +121,13 @@ pub fn refresh(state: &mut State) {
     // OH GOD THE BORROW CHECKER IS HAVING A SEIZURE
 
     // PERF: We sacrifice performance to the borrow checker with this clone
-    for window in state.pinnacle.windows.clone().iter() {
+    for window in state
+        .pinnacle
+        .windows
+        .clone()
+        .iter()
+        .filter(|win| !win.is_x11_override_redirect())
+    {
         if let Some(win) = focused_win.as_ref() {
             if win.as_ref() == Some(window) {
                 focused = Some(window.clone());
