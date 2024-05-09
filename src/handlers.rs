@@ -686,7 +686,6 @@ impl PointerConstraintsHandler for State {
 }
 delegate_pointer_constraints!(State);
 
-// FIXME: duplicated code with api calls
 impl ForeignToplevelHandler for State {
     fn foreign_toplevel_manager_state(&mut self) -> &mut ForeignToplevelManagerState {
         &mut self.pinnacle.foreign_toplevel_manager_state
@@ -700,9 +699,27 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
+        if !window.is_on_active_tag() {
+            let new_active_tag =
+                window.with_state(|state| state.tags.iter().min_by_key(|tag| tag.id().0).cloned());
+            if let Some(tag) = new_active_tag {
+                output.with_state(|state| {
+                    if state.tags.contains(&tag) {
+                        for op_tag in state.tags.iter() {
+                            op_tag.set_active(false, self);
+                        }
+                        tag.set_active(true, self);
+                    }
+                });
+            }
+        }
+
         output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
         self.pinnacle.raise_window(window, true);
         self.update_keyboard_focus(&output);
+
+        self.pinnacle.request_layout(&output);
+        self.schedule_render(&output);
     }
 
     fn close(&mut self, wl_surface: WlSurface) {
@@ -713,7 +730,6 @@ impl ForeignToplevelHandler for State {
         window.close();
     }
 
-    // TODO: fullscreen on specified output? maybe
     fn set_fullscreen(&mut self, wl_surface: WlSurface, _wl_output: Option<WlOutput>) {
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
