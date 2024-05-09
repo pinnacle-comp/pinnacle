@@ -76,6 +76,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .pinnacle
                 .space
                 .elements()
+                .filter(|win| win.is_on_active_tag())
                 .rev()
                 .find(|&win| {
                     if let Some(loc) = state.pinnacle.space.element_location(win) {
@@ -94,21 +95,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
 
                 if window_under == self.window {
-                    return;
-                }
-
-                if state
-                    .pinnacle
-                    .space
-                    .element_geometry(&self.window)
-                    .is_some_and(|geo| {
-                        state
-                            .pinnacle
-                            .space
-                            .element_geometry(&window_under)
-                            .is_some_and(|geo2| geo.overlaps(geo2))
-                    })
-                {
                     return;
                 }
 
