@@ -770,7 +770,7 @@ impl ForeignToplevelHandler for State {
         };
 
         if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_fullscreen();
+            window.toggle_maximized();
         }
 
         let Some(output) = window.output(&self.pinnacle) else {
@@ -787,7 +787,7 @@ impl ForeignToplevelHandler for State {
         };
 
         if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_fullscreen();
+            window.toggle_maximized();
         }
 
         let Some(output) = window.output(&self.pinnacle) else {
