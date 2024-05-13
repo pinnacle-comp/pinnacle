@@ -2,7 +2,11 @@
 
 pub mod libinput;
 
-use std::{collections::HashMap, mem::Discriminant, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    mem::Discriminant,
+    time::Duration,
+};
 
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
@@ -114,6 +118,9 @@ pub struct InputState {
     exclusive_layer_focus_stack: Vec<KeyboardFocusTarget>,
 
     locked_pointer_position_hint: Option<Point<f64, Logical>>,
+
+    // Keys that were used in a keybind and should not be released
+    no_release_keys: HashSet<u32>,
 }
 
 impl InputState {
@@ -152,6 +159,7 @@ enum KeyAction {
     Quit,
     SwitchVt(i32),
     ReloadConfig,
+    Suppress,
 }
 
 impl Pinnacle {
@@ -476,26 +484,37 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
+                if press_state == KeyState::Released
+                    && state
+                        .pinnacle
+                        .input_state
+                        .no_release_keys
+                        .contains(&event.key_code())
+                {
+                    return FilterResult::Intercept(KeyAction::Suppress);
+                }
+
                 if press_state == KeyState::Pressed {
                     let mod_mask = ModifierMask::from(modifiers);
 
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
-                    if let (Some(sender), _) | (None, Some(sender)) = (
-                        state
-                            .pinnacle
-                            .input_state
-                            .keybinds
-                            .get(&(mod_mask, mod_sym)),
-                        raw_sym.and_then(|raw_sym| {
-                            state
-                                .pinnacle
-                                .input_state
-                                .keybinds
-                                .get(&(mod_mask, *raw_sym))
-                        }),
-                    ) {
+                    if let Some(sender) = state
+                        .pinnacle
+                        .input_state
+                        .keybinds
+                        .get(&(mod_mask, mod_sym))
+                        .or_else(|| {
+                            raw_sym.and_then(|raw_sym| {
+                                state
+                                    .pinnacle
+                                    .input_state
+                                    .keybinds
+                                    .get(&(mod_mask, *raw_sym))
+                            })
+                        })
+                    {
                         return FilterResult::Intercept(KeyAction::CallCallback(sender.clone()));
                     }
 
@@ -516,23 +535,38 @@ impl State {
             },
         );
 
-        match action {
-            Some(KeyAction::CallCallback(sender)) => {
-                let _ = sender.send(Ok(SetKeybindResponse {}));
+        if let Some(KeyAction::Suppress) = action.as_ref() {
+            self.pinnacle
+                .input_state
+                .no_release_keys
+                .remove(&event.key_code());
+            return;
+        }
+
+        if let Some(action) = action {
+            self.pinnacle
+                .input_state
+                .no_release_keys
+                .insert(event.key_code());
+            match action {
+                KeyAction::CallCallback(sender) => {
+                    let _ = sender.send(Ok(SetKeybindResponse {}));
+                }
+                KeyAction::Quit => {
+                    self.pinnacle.shutdown();
+                }
+                KeyAction::SwitchVt(vt) => {
+                    self.switch_vt(vt);
+                    self.pinnacle.input_state.no_release_keys.clear();
+                }
+                KeyAction::ReloadConfig => {
+                    info!("Reloading config");
+                    self.pinnacle
+                        .start_config(false)
+                        .expect("failed to restart config");
+                }
+                KeyAction::Suppress => unreachable!("handled above"),
             }
-            Some(KeyAction::SwitchVt(vt)) => {
-                self.switch_vt(vt);
-            }
-            Some(KeyAction::Quit) => {
-                self.pinnacle.shutdown();
-            }
-            Some(KeyAction::ReloadConfig) => {
-                info!("Reloading config");
-                self.pinnacle
-                    .start_config(false)
-                    .expect("failed to restart config");
-            }
-            None => (),
         }
     }
 
