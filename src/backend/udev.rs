@@ -32,7 +32,10 @@ use smithay::{
         renderer::{
             self, damage,
             element::{
-                self, surface::WaylandSurfaceRenderElement, texture::TextureBuffer, Element,
+                self,
+                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
+                texture::TextureBuffer,
+                Element,
             },
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
@@ -88,7 +91,7 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     backend::Backend,
     config::ConnectorSavedState,
-    output::OutputName,
+    output::{BlankingState, OutputName},
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
         OutputRenderElement,
@@ -1312,6 +1315,13 @@ impl Udev {
                         flags,
                     );
                 }
+
+                output.with_state_mut(|state| {
+                    if let BlankingState::Blanking = state.blanking_state {
+                        debug!("Output {} blanked", output.name());
+                        state.blanking_state = BlankingState::Blanked;
+                    }
+                })
             }
             Err(err) => {
                 warn!("Error during rendering: {:?}", err);
@@ -1399,8 +1409,6 @@ impl Udev {
                 texture
             });
 
-        let windows = pinnacle.space.elements().cloned().collect::<Vec<_>>();
-
         let pointer_location = pinnacle
             .seat
             .get_pointer()
@@ -1434,10 +1442,14 @@ impl Udev {
 
         let mut output_render_elements = Vec::new();
 
+        let should_blank = pinnacle.lock_state.is_locking()
+            || (pinnacle.lock_state.is_locked()
+                && output.with_state(|state| state.lock_surface.is_none()));
+
         // If there isn't a pending screencopy that doesn't want to overlay the cursor,
         // render it.
         match pending_screencopy_with_cursor {
-            Some(include_cursor) => {
+            Some(include_cursor) if !should_blank => {
                 if include_cursor {
                     // HACK: Doing `RenderFrameResult::blit_frame_result` with something on the
                     // |     cursor plane causes the cursor to overwrite the pixels underneath it,
@@ -1461,7 +1473,7 @@ impl Udev {
                     output_render_elements.extend(pointer_render_elements);
                 }
             }
-            None => {
+            _ => {
                 let pointer_render_elements = pointer_render_elements(
                     output,
                     &mut renderer,
@@ -1475,12 +1487,35 @@ impl Udev {
             }
         }
 
-        output_render_elements.extend(crate::render::output_render_elements(
-            output,
-            &mut renderer,
-            &pinnacle.space,
-            &windows,
-        ));
+        if should_blank {
+            // Don't push any render elements and we get a blank frame
+            output.with_state_mut(|state| {
+                if let BlankingState::NotBlanked = state.blanking_state {
+                    debug!("Blanking output {} for session lock", output.name());
+                    state.blanking_state = BlankingState::Blanking;
+                }
+            });
+        } else if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            let elems = render_elements_from_surface_tree(
+                &mut renderer,
+                lock_surface.wl_surface(),
+                (0, 0),
+                output.current_scale().fractional_scale(),
+                1.0,
+                element::Kind::Unspecified,
+            );
+
+            output_render_elements.extend(elems);
+        } else {
+            let windows = pinnacle.space.elements().cloned().collect::<Vec<_>>();
+
+            output_render_elements.extend(crate::render::output_render_elements(
+                output,
+                &mut renderer,
+                &pinnacle.space,
+                &windows,
+            ));
+        }
 
         let result = (|| -> Result<bool, SwapBuffersError> {
             let render_frame_result = render_frame(
@@ -1496,13 +1531,15 @@ impl Udev {
                 }
             }
 
-            handle_pending_screencopy(
-                &mut renderer,
-                output,
-                surface,
-                &render_frame_result,
-                &pinnacle.loop_handle,
-            );
+            if pinnacle.lock_state.is_unlocked() {
+                handle_pending_screencopy(
+                    &mut renderer,
+                    output,
+                    surface,
+                    &render_frame_result,
+                    &pinnacle.loop_handle,
+                );
+            }
 
             super::post_repaint(
                 output,

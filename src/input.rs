@@ -185,6 +185,13 @@ impl Pinnacle {
             .output_geometry(output)
             .expect("called output_geometry on unmapped output");
 
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            return Some((
+                PointerFocusTarget::WlSurface(lock_surface.wl_surface().clone()),
+                output_geo.loc,
+            ));
+        }
+
         let mut fullscreen_and_up_split_at = 0;
 
         for (i, win) in self

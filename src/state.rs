@@ -7,6 +7,7 @@ use crate::{
     config::Config,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
+    handlers::session_lock::LockState,
     layout::LayoutState,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelManagerState},
@@ -41,6 +42,7 @@ use smithay::{
             data_device::DataDeviceState, primary_selection::PrimarySelectionState,
             wlr_data_control::DataControlState,
         },
+        session_lock::SessionLockManagerState,
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
@@ -94,6 +96,9 @@ pub struct Pinnacle {
     pub relative_pointer_manager_state: RelativePointerManagerState,
     pub pointer_constraints_state: PointerConstraintsState,
     pub foreign_toplevel_manager_state: ForeignToplevelManagerState,
+    pub session_lock_manager_state: SessionLockManagerState,
+
+    pub lock_state: LockState,
 
     /// The state of key and mousebinds along with libinput settings
     pub input_state: InputState,
@@ -262,6 +267,12 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
+            session_lock_manager_state: SessionLockManagerState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
+
+            lock_state: LockState::default(),
 
             input_state: InputState::new(),
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod session_lock;
 mod xdg_shell;
 mod xwayland;
 
@@ -260,6 +261,21 @@ impl CompositorHandler for State {
             .cloned()
         {
             vec![output] // surface is a layer surface
+        } else if let Some(output) = self
+            .pinnacle
+            .space
+            .outputs()
+            .find(|op| {
+                op.with_state(|state| {
+                    state
+                        .lock_surface
+                        .as_ref()
+                        .is_some_and(|lock| lock.wl_surface() == surface)
+                })
+            })
+            .cloned()
+        {
+            vec![output]
         } else {
             return;
         };
