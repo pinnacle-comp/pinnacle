@@ -33,7 +33,7 @@ use smithay::{
 use tracing::error;
 
 use crate::{
-    state::{Pinnacle, State, SurfaceDmabufFeedback},
+    state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
 
@@ -247,6 +247,16 @@ pub fn post_repaint(
     // Send frames to the cursor surface so it updates correctly
     if let CursorImageStatus::Surface(surf) = cursor_status {
         send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
+    }
+
+    if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+        send_frames_surface_tree(
+            lock_surface.wl_surface(),
+            output,
+            time,
+            Some(Duration::ZERO),
+            |_, _| None,
+        );
     }
 }
 

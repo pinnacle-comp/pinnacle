@@ -7,6 +7,7 @@ use smithay::{
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
     utils::{Logical, Point, Transform},
+    wayland::session_lock::LockSurface,
 };
 
 use crate::{
@@ -34,6 +35,18 @@ impl OutputName {
     }
 }
 
+/// State of an output's blanking status for session lock.
+#[derive(Debug, Default, Copy, Clone)]
+pub enum BlankingState {
+    /// The output is not blanked and is displaying normal content.
+    #[default]
+    NotBlanked,
+    /// A blank frame has been queued up.
+    Blanking,
+    /// A blank frame has been displayed.
+    Blanked,
+}
+
 /// The state of an output
 #[derive(Default, Debug)]
 pub struct OutputState {
@@ -42,6 +55,8 @@ pub struct OutputState {
     pub screencopy: Option<Screencopy>,
     pub serial: Option<NonZeroU32>,
     pub modes: Vec<Mode>,
+    pub lock_surface: Option<LockSurface>,
+    pub blanking_state: BlankingState,
 }
 
 impl WithState for Output {
@@ -112,6 +127,17 @@ impl Pinnacle {
         if let Some(mode) = mode {
             output.set_preferred(mode);
             output.with_state_mut(|state| state.modes.push(mode));
+        }
+
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            lock_surface.with_pending_state(|state| {
+                let Some(new_geo) = self.space.output_geometry(output) else {
+                    return;
+                };
+                state.size = Some((new_geo.size.w as u32, new_geo.size.h as u32).into());
+            });
+
+            lock_surface.send_configure();
         }
     }
 }

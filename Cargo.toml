@@ -35,7 +35,7 @@ tempfile = "3.10.1"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "95d6e79"
+rev = "0398269"
 default-features = false
 features = [
     "desktop",
@@ -77,7 +77,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "95d6e79" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "0398269" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -114,7 +114,6 @@ chrono = "0.4.37"
 bytemuck = "1.15.0"
 pinnacle-api = { path = "./api/rust" }
 gag = "1.0.0"
-
 
 [build-dependencies]
 vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }

@@ -531,8 +531,6 @@ impl Pinnacle {
             |_| (),
         )?;
 
-        let display_handle = self.display_handle.clone();
-
         self.loop_handle
             .insert_source(xwayland, move |event, _, state| match event {
                 XWaylandEvent::Ready {
@@ -541,7 +539,6 @@ impl Pinnacle {
                 } => {
                     let mut wm = X11Wm::start_wm(
                         state.pinnacle.loop_handle.clone(),
-                        display_handle.clone(),
                         x11_socket,
                         client.clone(),
                     )

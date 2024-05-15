@@ -155,10 +155,15 @@ impl InputState {
 
 #[derive(Debug)]
 enum KeyAction {
+    /// Call a config callback.
     CallCallback(UnboundedSender<Result<SetKeybindResponse, tonic::Status>>),
+    /// Quit the compositor.
     Quit,
+    /// Switch ttys.
     SwitchVt(i32),
+    /// Reload the config.
     ReloadConfig,
+    /// Prevent the key from being sent to clients.
     Suppress,
 }
 
@@ -184,6 +189,17 @@ impl Pinnacle {
             .space
             .output_geometry(output)
             .expect("called output_geometry on unmapped output");
+
+        if !self.lock_state.is_unlocked() {
+            return output
+                .with_state(|state| state.lock_surface.clone())
+                .map(|lock_surface| {
+                    (
+                        PointerFocusTarget::WlSurface(lock_surface.wl_surface().clone()),
+                        output_geo.loc,
+                    )
+                });
+        }
 
         let mut fullscreen_and_up_split_at = 0;
 
@@ -412,68 +428,89 @@ impl State {
             device.led_update(leds);
         }
 
-        for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
-            let data = compositor::with_states(layer.wl_surface(), |states| {
-                *states.cached_state.current::<LayerSurfaceCachedState>()
-            });
-            if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
-                && matches!(
-                    data.layer,
-                    wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
-                )
-            {
-                let layer_surface = self.pinnacle.space.outputs().find_map(|op| {
-                    let map = layer_map_for_output(op);
-                    let cloned = map.layers().find(|l| l.layer_surface() == &layer).cloned();
-                    cloned
+        if self.pinnacle.lock_state.is_unlocked() {
+            // Handle exclusive layers
+            for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
+                let data = compositor::with_states(layer.wl_surface(), |states| {
+                    *states.cached_state.current::<LayerSurfaceCachedState>()
                 });
+                if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
+                    && matches!(
+                        data.layer,
+                        wlr_layer::Layer::Top | wlr_layer::Layer::Overlay
+                    )
+                {
+                    let layer_surface = self.pinnacle.space.outputs().find_map(|op| {
+                        let map = layer_map_for_output(op);
+                        let cloned = map.layers().find(|l| l.layer_surface() == &layer).cloned();
+                        cloned
+                    });
 
-                if let Some(layer_surface) = layer_surface {
-                    match self.pinnacle.input_state.exclusive_layer_focus_stack.last() {
-                        Some(focus) => {
-                            let layer_focus = KeyboardFocusTarget::LayerSurface(layer_surface);
-                            if &layer_focus != focus {
+                    if let Some(layer_surface) = layer_surface {
+                        match self.pinnacle.input_state.exclusive_layer_focus_stack.last() {
+                            Some(focus) => {
+                                let layer_focus = KeyboardFocusTarget::LayerSurface(layer_surface);
+                                if &layer_focus != focus {
+                                    self.pinnacle
+                                        .input_state
+                                        .exclusive_layer_focus_stack
+                                        .push(layer_focus);
+                                }
+                            }
+                            // Push the previous focus on as this is the first exclusive layer surface
+                            // on screen. This lets us restore it when that layer surface goes away.
+                            None => {
                                 self.pinnacle
                                     .input_state
                                     .exclusive_layer_focus_stack
-                                    .push(layer_focus);
+                                    .extend(keyboard.current_focus());
+                                self.pinnacle
+                                    .input_state
+                                    .exclusive_layer_focus_stack
+                                    .push(KeyboardFocusTarget::LayerSurface(layer_surface));
                             }
-                        }
-                        // Push the previous focus on as this is the first exclusive layer surface
-                        // on screen. This lets us restore it when that layer surface goes away.
-                        None => {
-                            self.pinnacle
-                                .input_state
-                                .exclusive_layer_focus_stack
-                                .extend(keyboard.current_focus());
-                            self.pinnacle
-                                .input_state
-                                .exclusive_layer_focus_stack
-                                .push(KeyboardFocusTarget::LayerSurface(layer_surface));
                         }
                     }
                 }
             }
-        }
 
-        while let Some(last) = self.pinnacle.input_state.exclusive_layer_focus_stack.pop() {
-            if last.alive() {
-                // If it's not empty then there's another exclusive layer surface
-                // underneath. Otherwise `last` is the previous keyboard focus
-                // and we don't need the stack anymore.
-                if !self
-                    .pinnacle
-                    .input_state
-                    .exclusive_layer_focus_stack
-                    .is_empty()
-                {
-                    self.pinnacle
+            while let Some(last) = self.pinnacle.input_state.exclusive_layer_focus_stack.pop() {
+                if last.alive() {
+                    // If it's not empty then there's another exclusive layer surface
+                    // underneath. Otherwise `last` is the previous keyboard focus
+                    // and we don't need the stack anymore.
+                    if !self
+                        .pinnacle
                         .input_state
                         .exclusive_layer_focus_stack
-                        .push(last.clone());
+                        .is_empty()
+                    {
+                        self.pinnacle
+                            .input_state
+                            .exclusive_layer_focus_stack
+                            .push(last.clone());
+                    }
+                    keyboard.set_focus(self, Some(last), serial);
+                    break;
                 }
-                keyboard.set_focus(self, Some(last), serial);
-                break;
+            }
+        } else {
+            // We don't want anything but lock surfaces getting keyboard input when locked
+            let lock_surface = self
+                .pinnacle
+                .space
+                .outputs()
+                .find_map(|op| op.with_state(|state| state.lock_surface.clone()));
+
+            if !matches!(
+                keyboard.current_focus(),
+                Some(KeyboardFocusTarget::LockSurface(_))
+            ) {
+                keyboard.set_focus(
+                    self,
+                    lock_surface.map(KeyboardFocusTarget::LockSurface),
+                    serial,
+                );
             }
         }
 
@@ -515,15 +552,23 @@ impl State {
                             })
                         })
                     {
-                        return FilterResult::Intercept(KeyAction::CallCallback(sender.clone()));
+                        if state.pinnacle.lock_state.is_unlocked() {
+                            return FilterResult::Intercept(KeyAction::CallCallback(
+                                sender.clone(),
+                            ));
+                        }
                     }
 
                     if kill_keybind == Some((mod_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::Quit);
-                    } else if reload_keybind == Some((mod_mask, mod_sym)) {
+                    }
+
+                    if reload_keybind == Some((mod_mask, mod_sym)) {
                         return FilterResult::Intercept(KeyAction::ReloadConfig);
-                    } else if let mut vt @ keysyms::KEY_XF86Switch_VT_1
-                        ..=keysyms::KEY_XF86Switch_VT_12 = keysym.modified_sym().raw()
+                    }
+
+                    if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
+                        keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
                         tracing::info!("Switching to vt {vt}");

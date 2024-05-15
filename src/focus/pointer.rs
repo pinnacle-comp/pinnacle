@@ -414,6 +414,9 @@ impl From<KeyboardFocusTarget> for PointerFocusTarget {
             KeyboardFocusTarget::LayerSurface(layer) => {
                 PointerFocusTarget::WlSurface(layer.wl_surface().clone())
             }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                PointerFocusTarget::WlSurface(lock.wl_surface().clone())
+            }
         }
     }
 }

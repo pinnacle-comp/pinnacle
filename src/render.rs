@@ -5,6 +5,7 @@ use std::{ops::Deref, sync::Mutex};
 use smithay::{
     backend::renderer::{
         element::{
+            solid::SolidColorRenderElement,
             surface::WaylandSurfaceRenderElement,
             utils::{CropRenderElement, RelocateRenderElement, RescaleRenderElement},
             AsRenderElements, RenderElementStates, Wrap,
@@ -51,6 +52,7 @@ render_elements! {
     Surface = WaylandSurfaceRenderElement<R>,
     Pointer = PointerRenderElement<R>,
     Transform = TransformRenderElement<R, E>,
+    Color = SolidColorRenderElement,
 }
 
 impl<R> AsRenderElements<R> for WindowElement

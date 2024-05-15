@@ -9,6 +9,11 @@ use smithay::{
         renderer::{
             self, buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
+            element::{
+                self,
+                solid::{SolidColorBuffer, SolidColorRenderElement},
+                surface::render_elements_from_surface_tree,
+            },
             gles::{GlesRenderbuffer, GlesRenderer, GlesTexture},
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
             TextureFilter,
@@ -37,10 +42,14 @@ use smithay::{
     utils::{IsAlive, Point, Rectangle, Transform},
     wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
-use tracing::{error, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::{
-    render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
+    output::BlankingState,
+    render::{
+        pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
+        OutputRenderElement,
+    },
     state::{Pinnacle, State, WithState},
 };
 
@@ -200,6 +209,7 @@ impl Winit {
                                     Some(mode),
                                     None,
                                     Some(Scale::Fractional(scale_factor)),
+                                    // None,
                                     None,
                                 );
                                 state.pinnacle.request_layout(&output);
@@ -266,19 +276,16 @@ impl State {
 
         let mut output_render_elements = Vec::new();
 
-        let pending_screencopy_without_cursor = output.with_state(|state| {
-            state
-                .screencopy
-                .as_ref()
-                .is_some_and(|sc| !sc.overlay_cursor())
-        });
+        let should_draw_cursor = !self.pinnacle.lock_state.is_unlocked()
+            || output.with_state(|state| {
+                // Don't draw cursor when screencopy without cursor is pending
+                !state
+                    .screencopy
+                    .as_ref()
+                    .is_some_and(|sc| !sc.overlay_cursor())
+            });
 
-        // If there isn't a pending screencopy that doesn't want to overlay the cursor,
-        // render it.
-        //
-        // This will cause the cursor to disappear for a frame if there is one though,
-        // but it shouldn't meaningfully affect anything.
-        if !pending_screencopy_without_cursor {
+        if should_draw_cursor {
             let pointer_location = self
                 .pinnacle
                 .seat
@@ -298,12 +305,56 @@ impl State {
             output_render_elements.extend(pointer_render_elements);
         }
 
-        output_render_elements.extend(crate::render::output_render_elements(
-            output,
-            winit.backend.renderer(),
-            &self.pinnacle.space,
-            &windows,
-        ));
+        let should_blank = self.pinnacle.lock_state.is_locking()
+            || (self.pinnacle.lock_state.is_locked()
+                && output.with_state(|state| state.lock_surface.is_none()));
+
+        if should_blank {
+            let output_size = self
+                .pinnacle
+                .space
+                .output_geometry(output)
+                .map(|geo| geo.size)
+                .unwrap_or((99999, 99999).into());
+
+            let solid_color_buffer = SolidColorBuffer::new(output_size, [0.2, 0.0, 0.3, 1.0]);
+            let solid_color_element = SolidColorRenderElement::from_buffer(
+                &solid_color_buffer,
+                (0, 0),
+                output.current_scale().fractional_scale(),
+                1.0,
+                element::Kind::Unspecified,
+            );
+
+            output_render_elements.push(OutputRenderElement::from(solid_color_element));
+
+            output.with_state_mut(|state| {
+                if let BlankingState::NotBlanked = state.blanking_state {
+                    debug!("Blanking output {} for session lock", output.name());
+                    state.blanking_state = BlankingState::Blanking;
+                }
+            });
+        } else if self.pinnacle.lock_state.is_locked() {
+            if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+                let elems = render_elements_from_surface_tree(
+                    winit.backend.renderer(),
+                    lock_surface.wl_surface(),
+                    (0, 0),
+                    output.current_scale().fractional_scale(),
+                    1.0,
+                    element::Kind::Unspecified,
+                );
+
+                output_render_elements.extend(elems);
+            }
+        } else {
+            output_render_elements.extend(crate::render::output_render_elements(
+                output,
+                winit.backend.renderer(),
+                &self.pinnacle.space,
+                &windows,
+            ));
+        }
 
         let render_res = winit.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -325,17 +376,30 @@ impl State {
 
         match render_res {
             Ok(render_output_result) => {
-                Winit::handle_pending_screencopy(
-                    &mut winit.backend,
-                    output,
-                    &render_output_result,
-                    &self.pinnacle.loop_handle,
-                );
+                if self.pinnacle.lock_state.is_unlocked() {
+                    Winit::handle_pending_screencopy(
+                        &mut winit.backend,
+                        output,
+                        &render_output_result,
+                        &self.pinnacle.loop_handle,
+                    );
+                }
 
                 let has_rendered = render_output_result.damage.is_some();
                 if let Some(damage) = render_output_result.damage {
-                    if let Err(err) = winit.backend.submit(Some(damage)) {
-                        error!("Failed to submit buffer: {}", err);
+                    match winit.backend.submit(Some(damage)) {
+                        Ok(()) => {
+                            output.with_state_mut(|state| {
+                                if matches!(state.blanking_state, BlankingState::Blanking) {
+                                    // TODO: this is probably wrong
+                                    debug!("Output {} blanked", output.name());
+                                    state.blanking_state = BlankingState::Blanked;
+                                }
+                            });
+                        }
+                        Err(err) => {
+                            error!("Failed to submit buffer: {}", err);
+                        }
                     }
                 }
 

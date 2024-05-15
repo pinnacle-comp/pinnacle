@@ -7,7 +7,7 @@ use smithay::{
     },
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
     utils::{IsAlive, Serial},
-    wayland::seat::WaylandFocus,
+    wayland::{seat::WaylandFocus, session_lock::LockSurface},
 };
 
 use crate::{state::State, window::WindowElement};
@@ -18,6 +18,7 @@ pub enum KeyboardFocusTarget {
     Window(WindowElement),
     Popup(PopupKind),
     LayerSurface(LayerSurface),
+    LockSurface(LockSurface),
 }
 
 impl KeyboardTarget<State> for KeyboardFocusTarget {
@@ -38,6 +39,9 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
             KeyboardFocusTarget::LayerSurface(surf) => {
                 KeyboardTarget::enter(surf.wl_surface(), seat, data, keys, serial);
             }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                KeyboardTarget::enter(lock.wl_surface(), seat, data, keys, serial);
+            }
         }
     }
 
@@ -52,6 +56,9 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
             KeyboardFocusTarget::LayerSurface(surf) => {
                 KeyboardTarget::leave(surf.wl_surface(), seat, data, serial)
             }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                KeyboardTarget::leave(lock.wl_surface(), seat, data, serial);
+            }
         }
     }
 
@@ -60,7 +67,7 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
         seat: &Seat<State>,
         data: &mut State,
         key: KeysymHandle<'_>,
-        state: smithay::backend::input::KeyState,
+        state: KeyState,
         serial: Serial,
         time: u32,
     ) {
@@ -74,6 +81,9 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
             KeyboardFocusTarget::LayerSurface(surf) => {
                 KeyboardTarget::key(surf.wl_surface(), seat, data, key, state, serial, time);
             }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                KeyboardTarget::key(lock.wl_surface(), seat, data, key, state, serial, time);
+            }
         }
     }
 
@@ -81,7 +91,7 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
         &self,
         seat: &Seat<State>,
         data: &mut State,
-        modifiers: smithay::input::keyboard::ModifiersState,
+        modifiers: ModifiersState,
         serial: Serial,
     ) {
         match self {
@@ -94,6 +104,9 @@ impl KeyboardTarget<State> for KeyboardFocusTarget {
             KeyboardFocusTarget::LayerSurface(surf) => {
                 KeyboardTarget::modifiers(surf.wl_surface(), seat, data, modifiers, serial);
             }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                KeyboardTarget::modifiers(lock.wl_surface(), seat, data, modifiers, serial);
+            }
         }
     }
 }
@@ -104,6 +117,7 @@ impl IsAlive for KeyboardFocusTarget {
             KeyboardFocusTarget::Window(window) => window.alive(),
             KeyboardFocusTarget::Popup(popup) => popup.alive(),
             KeyboardFocusTarget::LayerSurface(surf) => surf.alive(),
+            KeyboardFocusTarget::LockSurface(lock) => lock.alive(),
         }
     }
 }
@@ -114,6 +128,7 @@ impl WaylandFocus for KeyboardFocusTarget {
             KeyboardFocusTarget::Window(window) => window.wl_surface(),
             KeyboardFocusTarget::Popup(popup) => Some(popup.wl_surface().clone()),
             KeyboardFocusTarget::LayerSurface(surf) => Some(surf.wl_surface().clone()),
+            KeyboardFocusTarget::LockSurface(lock) => Some(lock.wl_surface().clone()),
         }
     }
 
@@ -126,6 +141,9 @@ impl WaylandFocus for KeyboardFocusTarget {
             KeyboardFocusTarget::Popup(popup) => popup.wl_surface().id().same_client_as(object_id),
             KeyboardFocusTarget::LayerSurface(surf) => {
                 surf.wl_surface().id().same_client_as(object_id)
+            }
+            KeyboardFocusTarget::LockSurface(lock) => {
+                lock.wl_surface().id().same_client_as(object_id)
             }
         }
     }
