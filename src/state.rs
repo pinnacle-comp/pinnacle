@@ -47,6 +47,7 @@ use smithay::{
         shm::ShmState,
         socket::ListeningSocketSource,
         viewporter::ViewporterState,
+        xwayland_shell::XWaylandShellState,
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
@@ -97,6 +98,7 @@ pub struct Pinnacle {
     pub pointer_constraints_state: PointerConstraintsState,
     pub foreign_toplevel_manager_state: ForeignToplevelManagerState,
     pub session_lock_manager_state: SessionLockManagerState,
+    pub xwayland_shell_state: XWaylandShellState,
 
     pub lock_state: LockState,
 
@@ -271,6 +273,7 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
+            xwayland_shell_state: XWaylandShellState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 

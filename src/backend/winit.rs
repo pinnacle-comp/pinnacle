@@ -202,6 +202,7 @@ impl Winit {
                                     Some(mode),
                                     None,
                                     Some(Scale::Fractional(scale_factor)),
+                                    // None,
                                     None,
                                 );
                                 state.pinnacle.request_layout(&output);

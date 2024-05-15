@@ -11,7 +11,7 @@ use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
     delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
     delegate_primary_selection, delegate_relative_pointer, delegate_seat,
-    delegate_security_context, delegate_shm, delegate_viewporter,
+    delegate_security_context, delegate_shm, delegate_viewporter, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         utils::surface_primary_scanout_output, PopupKind, WindowSurfaceType,
@@ -63,6 +63,7 @@ use smithay::{
             xdg::{PopupSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
+        xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
@@ -130,7 +131,7 @@ impl CompositorHandler for State {
 
         utils::on_commit_buffer_handler::<State>(surface);
 
-        X11Wm::commit_hook::<State>(surface);
+        X11Wm::commit_hook::<State>(self, surface);
 
         self.backend.early_import(surface);
 
@@ -845,6 +846,13 @@ impl ForeignToplevelHandler for State {
     }
 }
 delegate_foreign_toplevel!(State);
+
+impl XWaylandShellHandler for State {
+    fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
+        &mut self.pinnacle.xwayland_shell_state
+    }
+}
+delegate_xwayland_shell!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
