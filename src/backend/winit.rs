@@ -9,7 +9,11 @@ use smithay::{
         renderer::{
             self, buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
-            element::{self, surface::render_elements_from_surface_tree},
+            element::{
+                self,
+                solid::{SolidColorBuffer, SolidColorRenderElement},
+                surface::render_elements_from_surface_tree,
+            },
             gles::{GlesRenderbuffer, GlesRenderer, GlesTexture},
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
             TextureFilter,
@@ -42,7 +46,10 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{
     output::BlankingState,
-    render::{pointer::PointerElement, pointer_render_elements, take_presentation_feedback},
+    render::{
+        pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
+        OutputRenderElement,
+    },
     state::{Pinnacle, State, WithState},
 };
 
@@ -303,7 +310,24 @@ impl State {
                 && output.with_state(|state| state.lock_surface.is_none()));
 
         if should_blank {
-            // Don't push any render elements and we get a blank frame
+            let output_size = self
+                .pinnacle
+                .space
+                .output_geometry(output)
+                .map(|geo| geo.size)
+                .unwrap_or((99999, 99999).into());
+
+            let solid_color_buffer = SolidColorBuffer::new(output_size, [0.2, 0.0, 0.3, 1.0]);
+            let solid_color_element = SolidColorRenderElement::from_buffer(
+                &solid_color_buffer,
+                (0, 0),
+                output.current_scale().fractional_scale(),
+                1.0,
+                element::Kind::Unspecified,
+            );
+
+            output_render_elements.push(OutputRenderElement::from(solid_color_element));
+
             output.with_state_mut(|state| {
                 if let BlankingState::NotBlanked = state.blanking_state {
                     debug!("Blanking output {} for session lock", output.name());

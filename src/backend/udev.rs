@@ -33,6 +33,7 @@ use smithay::{
             self, damage,
             element::{
                 self,
+                solid::{SolidColorBuffer, SolidColorRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
                 texture::TextureBuffer,
                 Element,
@@ -1488,7 +1489,23 @@ impl Udev {
         }
 
         if should_blank {
-            // Don't push any render elements and we get a blank frame
+            let output_size = pinnacle
+                .space
+                .output_geometry(output)
+                .map(|geo| geo.size)
+                .unwrap_or((99999, 99999).into());
+
+            let solid_color_buffer = SolidColorBuffer::new(output_size, [0.2, 0.0, 0.3, 1.0]);
+            let solid_color_element = SolidColorRenderElement::from_buffer(
+                &solid_color_buffer,
+                (0, 0),
+                output.current_scale().fractional_scale(),
+                1.0,
+                element::Kind::Unspecified,
+            );
+
+            output_render_elements.push(OutputRenderElement::from(solid_color_element));
+
             output.with_state_mut(|state| {
                 if let BlankingState::NotBlanked = state.blanking_state {
                     debug!("Blanking output {} for session lock", output.name());
