@@ -269,10 +269,6 @@ impl State {
 
         let mut output_render_elements = Vec::new();
 
-        let should_blank = self.pinnacle.lock_state.is_locking()
-            || (self.pinnacle.lock_state.is_locked()
-                && output.with_state(|state| state.lock_surface.is_none()));
-
         let should_draw_cursor = !self.pinnacle.lock_state.is_unlocked()
             || output.with_state(|state| {
                 // Don't draw cursor when screencopy without cursor is pending
@@ -302,6 +298,10 @@ impl State {
             output_render_elements.extend(pointer_render_elements);
         }
 
+        let should_blank = self.pinnacle.lock_state.is_locking()
+            || (self.pinnacle.lock_state.is_locked()
+                && output.with_state(|state| state.lock_surface.is_none()));
+
         if should_blank {
             // Don't push any render elements and we get a blank frame
             output.with_state_mut(|state| {
@@ -310,17 +310,19 @@ impl State {
                     state.blanking_state = BlankingState::Blanking;
                 }
             });
-        } else if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
-            let elems = render_elements_from_surface_tree(
-                winit.backend.renderer(),
-                lock_surface.wl_surface(),
-                (0, 0),
-                output.current_scale().fractional_scale(),
-                1.0,
-                element::Kind::Unspecified,
-            );
+        } else if self.pinnacle.lock_state.is_locked() {
+            if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+                let elems = render_elements_from_surface_tree(
+                    winit.backend.renderer(),
+                    lock_surface.wl_surface(),
+                    (0, 0),
+                    output.current_scale().fractional_scale(),
+                    1.0,
+                    element::Kind::Unspecified,
+                );
 
-            output_render_elements.extend(elems);
+                output_render_elements.extend(elems);
+            }
         } else {
             output_render_elements.extend(crate::render::output_render_elements(
                 output,
