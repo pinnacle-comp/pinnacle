@@ -1042,8 +1042,6 @@ impl Udev {
             .collect::<Vec<_>>();
         output.with_state_mut(|state| state.modes = modes);
 
-        pinnacle.output_focus_stack.set_focus(output.clone());
-
         let x = pinnacle.space.outputs().fold(0, |acc, o| {
             let Some(geo) = pinnacle.space.output_geometry(o) else {
                 unreachable!()
