@@ -218,9 +218,9 @@ impl Pinnacle {
         let layer_under =
             |layers: &[wlr_layer::Layer]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
                 let layer_map = layer_map_for_output(output);
-                let layer = layers
-                    .iter()
-                    .find_map(|layer| layer_map.layer_under(*layer, point))?;
+                let layer = layers.iter().find_map(|layer| {
+                    layer_map.layer_under(*layer, point - output_geo.loc.to_f64())
+                })?;
 
                 let layer_loc = layer_map.layer_geometry(layer)?.loc;
 
