@@ -1449,7 +1449,7 @@ impl Udev {
         // If there isn't a pending screencopy that doesn't want to overlay the cursor,
         // render it.
         match pending_screencopy_with_cursor {
-            Some(include_cursor) if !should_blank => {
+            Some(include_cursor) if pinnacle.lock_state.is_unlocked() => {
                 if include_cursor {
                     // HACK: Doing `RenderFrameResult::blit_frame_result` with something on the
                     // |     cursor plane causes the cursor to overwrite the pixels underneath it,

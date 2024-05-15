@@ -272,7 +272,7 @@ impl State {
             || (self.pinnacle.lock_state.is_locked()
                 && output.with_state(|state| state.lock_surface.is_none()));
 
-        let should_draw_cursor = !should_blank
+        let should_draw_cursor = !self.pinnacle.lock_state.is_unlocked()
             || output.with_state(|state| {
                 // Don't draw cursor when screencopy without cursor is pending
                 !state
