@@ -128,5 +128,16 @@ impl Pinnacle {
             output.set_preferred(mode);
             output.with_state_mut(|state| state.modes.push(mode));
         }
+
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            lock_surface.with_pending_state(|state| {
+                let Some(new_geo) = self.space.output_geometry(output) else {
+                    return;
+                };
+                state.size = Some((new_geo.size.w as u32, new_geo.size.h as u32).into());
+            });
+
+            lock_surface.send_configure();
+        }
     }
 }
