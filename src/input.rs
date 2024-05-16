@@ -324,7 +324,7 @@ impl State {
         // which seems very scuffed.
         if pointer.current_focus().as_ref() == surface_under.as_ref().map(|s| &s.0) {
             if let Some((surf, surf_loc)) =
-                surface_under.and_then(|(foc, loc)| Some((foc.wl_surface()?, loc)))
+                surface_under.and_then(|(foc, loc)| Some((foc.wl_surface()?.into_owned(), loc)))
             {
                 let unlocked = with_pointer_constraint(&surf, &pointer, |constraint| {
                     let Some(constraint) = constraint else {
@@ -883,7 +883,7 @@ impl State {
             let region = region
                 .clone()
                 .or_else(|| {
-                    compositor::with_states(&focus.wl_surface()?, |states| {
+                    compositor::with_states(&*focus.wl_surface()?, |states| {
                         states
                             .cached_state
                             .current::<SurfaceAttributes>()
@@ -894,7 +894,7 @@ impl State {
                 .or_else(|| {
                     // No region or input region means constrain within the whole surface
                     let surface_size =
-                        with_renderer_surface_state(&focus.wl_surface()?, |state| {
+                        with_renderer_surface_state(&*focus.wl_surface()?, |state| {
                             state.surface_size()
                         })??;
 

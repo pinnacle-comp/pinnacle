@@ -17,7 +17,7 @@ use smithay::{
     backend::{
         allocator::{
             dmabuf::{AnyError, Dmabuf, DmabufAllocator},
-            gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
+            gbm::{GbmAllocator, GbmBuffer, GbmBufferFlags, GbmDevice},
             vulkan::{ImageUsageFlags, VulkanAllocator},
             Allocator, Buffer, Fourcc,
         },
@@ -67,7 +67,6 @@ use smithay::{
             RegistrationToken,
         },
         drm::control::{connector, crtc, ModeTypeFlags},
-        gbm::BufferObject,
         input::Libinput,
         rustix::fs::OFlags,
         wayland_protocols::wp::{
@@ -122,7 +121,8 @@ type UdevRenderer<'a> = MultiRenderer<
 
 type UdevRenderFrameResult<'a> = RenderFrameResult<
     'a,
-    BufferObject<()>,
+    // BufferObject<()>,
+    GbmBuffer,
     GbmFramebuffer,
     OutputRenderElement<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
 >;
@@ -1712,7 +1712,7 @@ fn handle_pending_screencopy<'a>(
         screencopy.damage(&damage);
     }
 
-    let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
+    let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
         trace!("Dmabuf screencopy");
 
         let format_correct =

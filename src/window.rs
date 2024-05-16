@@ -231,11 +231,11 @@ impl Pinnacle {
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.space
             .elements()
-            .find(|window| window.wl_surface().map(|s| s == *surface).unwrap_or(false))
+            .find(|window| window.wl_surface().map(|s| &*s == surface).unwrap_or(false))
             .or_else(|| {
                 self.windows
                     .iter()
-                    .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
+                    .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             })
             .cloned()
     }
@@ -246,7 +246,7 @@ impl Pinnacle {
     pub fn new_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
         self.new_windows
             .iter()
-            .find(|&win| win.wl_surface().is_some_and(|surf| &surf == surface))
+            .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             .cloned()
     }
 }

@@ -35,7 +35,7 @@ tempfile = "3.10.1"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "0398269"
+rev = "271fbc0"
 default-features = false
 features = [
     "desktop",
@@ -77,14 +77,14 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "0398269" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "271fbc0" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
-anyhow = { version = "1.0.81", features = ["backtrace"] }
-thiserror = "1.0.58"
+anyhow = { version = "1.0.83", features = ["backtrace"] }
+thiserror = "1.0.60"
 # xcursor stuff
 xcursor = { version = "0.3.5" }
 image = { version = "0.25.1", default-features = false }
@@ -100,18 +100,18 @@ clap = { workspace = true }
 cliclack = "0.2.5"
 # Misc.
 bitflags = { workspace = true }
-serde = { version = "1.0.197", features = ["derive"] }
-toml = "0.8.12"
+serde = { version = "1.0.202", features = ["derive"] }
+toml = "0.8.13"
 shellexpand = { version = "3.1.0", features = ["path"] }
-x11rb = { version = "0.13.0", default-features = false, features = ["composite"] }
+x11rb = { version = "0.13.1", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
-sysinfo = "0.30.10"
+sysinfo = "0.30.12"
 # nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
-chrono = "0.4.37"
-bytemuck = "1.15.0"
+chrono = "0.4.38"
+bytemuck = "1.16.0"
 pinnacle-api = { path = "./api/rust" }
 gag = "1.0.0"
 
@@ -121,7 +121,7 @@ vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"
 [dev-dependencies]
 temp-env = "0.3.6"
 tempfile = { workspace = true }
-test-log = { version = "0.2.15", default-features = false, features = ["trace"] }
+test-log = { version = "0.2.16", default-features = false, features = ["trace"] }
 pinnacle = { path = ".", features = ["wlcs"] }
 pinnacle-api = { path = "./api/rust" }
 

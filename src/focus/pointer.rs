@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     WindowPointerEnterResponse, WindowPointerLeaveResponse,
 };
@@ -384,10 +386,10 @@ impl TouchTarget<State> for PointerFocusTarget {
 }
 
 impl WaylandFocus for PointerFocusTarget {
-    fn wl_surface(&self) -> Option<WlSurface> {
+    fn wl_surface(&self) -> Option<Cow<'_, WlSurface>> {
         match self {
-            PointerFocusTarget::WlSurface(surf) => Some(surf.clone()),
-            PointerFocusTarget::X11Surface(surf) => surf.wl_surface(),
+            PointerFocusTarget::WlSurface(surf) => Some(Cow::Borrowed(surf)),
+            PointerFocusTarget::X11Surface(surf) => surf.wl_surface().map(Cow::Owned),
         }
     }
 

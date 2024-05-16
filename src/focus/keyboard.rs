@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use smithay::{
     backend::input::KeyState,
     desktop::{LayerSurface, PopupKind, WindowSurface},
@@ -123,12 +125,12 @@ impl IsAlive for KeyboardFocusTarget {
 }
 
 impl WaylandFocus for KeyboardFocusTarget {
-    fn wl_surface(&self) -> Option<WlSurface> {
+    fn wl_surface(&self) -> Option<Cow<'_, WlSurface>> {
         match self {
             KeyboardFocusTarget::Window(window) => window.wl_surface(),
-            KeyboardFocusTarget::Popup(popup) => Some(popup.wl_surface().clone()),
-            KeyboardFocusTarget::LayerSurface(surf) => Some(surf.wl_surface().clone()),
-            KeyboardFocusTarget::LockSurface(lock) => Some(lock.wl_surface().clone()),
+            KeyboardFocusTarget::Popup(popup) => Some(Cow::Borrowed(popup.wl_surface())),
+            KeyboardFocusTarget::LayerSurface(surf) => Some(Cow::Borrowed(surf.wl_surface())),
+            KeyboardFocusTarget::LockSurface(lock) => Some(Cow::Borrowed(lock.wl_surface())),
         }
     }
 
@@ -153,7 +155,7 @@ impl TryFrom<KeyboardFocusTarget> for WlSurface {
     type Error = ();
 
     fn try_from(value: KeyboardFocusTarget) -> Result<Self, Self::Error> {
-        value.wl_surface().ok_or(())
+        value.wl_surface().map(Cow::into_owned).ok_or(())
     }
 }
 

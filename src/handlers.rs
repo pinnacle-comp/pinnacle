@@ -99,7 +99,9 @@ impl CompositorHandler for State {
                     .buffer
                     .as_ref()
                     .and_then(|assignment| match assignment {
-                        BufferAssignment::NewBuffer(buffer) => dmabuf::get_dmabuf(buffer).ok(),
+                        BufferAssignment::NewBuffer(buffer) => {
+                            dmabuf::get_dmabuf(buffer).cloned().ok()
+                        }
                         _ => None,
                     })
             });
@@ -155,7 +157,7 @@ impl CompositorHandler for State {
             .pinnacle
             .new_windows
             .iter()
-            .find(|win| win.wl_surface().as_ref() == Some(surface))
+            .find(|win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             .cloned()
         {
             let Some(is_mapped) =

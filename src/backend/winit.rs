@@ -463,7 +463,7 @@ impl Winit {
             }
         }
 
-        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()) {
+        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
             trace!("Dmabuf screencopy");
 
             backend

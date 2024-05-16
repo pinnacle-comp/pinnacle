@@ -96,7 +96,7 @@ pub fn refresh(state: &mut State) {
                 .pinnacle
                 .windows
                 .iter()
-                .any(|win| win.wl_surface().as_ref() == Some(surface))
+                .any(|win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             {
                 return true;
             }
