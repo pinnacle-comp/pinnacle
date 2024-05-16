@@ -680,4 +680,27 @@ impl WindowHandle {
     pub async fn tags_async(&self) -> Vec<TagHandle> {
         self.props_async().await.tags
     }
+
+    /// Returns whether this window is on an active tag.
+    pub fn is_on_active_tag(&self) -> bool {
+        self.tags()
+            .batch_find(
+                |tag| tag.active_async().boxed(),
+                |active| active.unwrap_or_default(),
+            )
+            .is_some()
+    }
+
+    /// The async version of [`WindowHandle::is_on_active_tag`].
+    pub async fn is_on_active_tag_async(&self) -> bool {
+        let tags = self.tags_async().await;
+        crate::util::batch_async(tags.iter().map(|tag| tag.active_async()))
+            .await
+            .contains(&Some(true))
+    }
+
+    /// Get this window's raw compositor id.
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }

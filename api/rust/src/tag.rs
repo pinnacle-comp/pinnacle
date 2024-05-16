@@ -466,6 +466,11 @@ impl TagHandle {
     pub async fn windows_async(&self) -> Vec<WindowHandle> {
         self.props_async().await.windows
     }
+
+    /// Get this tag's raw compositor id.
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }
 
 /// Properties of a tag.

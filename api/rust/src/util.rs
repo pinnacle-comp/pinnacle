@@ -125,7 +125,7 @@ impl Geometry {
     }
 }
 
-/// Batch a set of requests that will be sent ot the compositor all at once.
+/// Batch a set of requests that will be sent to the compositor all at once.
 ///
 /// # Rationale
 ///
@@ -237,8 +237,8 @@ macro_rules! batch_boxed_async {
 
 /// Methods for batch sending API requests to the compositor.
 pub trait Batch<I> {
-    /// [`batch_map`][Batch::batch_map]s then finds the object for which `f` with the results
-    /// returns `true`.
+    /// [`batch_map`][Batch::batch_map]s then finds the object for which `find` with the results
+    /// of awaiting `map_to_future(item)` returns `true`.
     fn batch_find<M, F, FutOp>(self, map_to_future: M, find: F) -> Option<I>
     where
         Self: Sized,
@@ -250,6 +250,14 @@ pub trait Batch<I> {
     where
         Self: Sized,
         F: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>;
+
+    /// [`batch_map`][Batch::batch_map]s then filters for objects for which `predicate` with the
+    /// results of awaiting `map_to_future(item)` returns `true`.
+    fn batch_filter<M, F, FutOp>(self, map_to_future: M, predicate: F) -> impl Iterator<Item = I>
+    where
+        Self: Sized,
+        M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
+        F: FnMut(&FutOp) -> bool;
 }
 
 impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
@@ -280,5 +288,28 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
         let items = self.into_iter().collect::<Vec<_>>();
         let futures = items.iter().map(map);
         crate::util::batch(futures).into_iter()
+    }
+
+    fn batch_filter<M, F, FutOp>(
+        self,
+        map_to_future: M,
+        mut predicate: F,
+    ) -> impl Iterator<Item = I>
+    where
+        Self: Sized,
+        M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
+        F: FnMut(&FutOp) -> bool,
+    {
+        let items = self.into_iter().collect::<Vec<_>>();
+        let futures = items.iter().map(map_to_future);
+        let results = crate::util::batch(futures);
+
+        assert_eq!(items.len(), results.len());
+
+        items
+            .into_iter()
+            .zip(results)
+            .filter(move |(_, fut_op)| predicate(fut_op))
+            .map(|(item, _)| item)
     }
 }

@@ -1240,6 +1240,20 @@ impl output_service_server::OutputService for OutputService {
                 output.with_state(|state| state.serial.map(|serial| serial.get()))
             });
 
+            let keyboard_focus_stack_window_ids = output
+                .as_ref()
+                .map(|output| {
+                    output.with_state(|state| {
+                        state
+                            .focus_stack
+                            .stack
+                            .iter()
+                            .map(|win| win.with_state(|state| state.id.0))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .unwrap_or_default();
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1257,6 +1271,7 @@ impl output_service_server::OutputService for OutputService {
                 scale,
                 transform,
                 serial,
+                keyboard_focus_stack_window_ids,
             }
         })
         .await

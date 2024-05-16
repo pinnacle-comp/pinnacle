@@ -2,6 +2,7 @@ mod common;
 
 use std::thread::JoinHandle;
 
+use anyhow::anyhow;
 use pinnacle::backend::dummy::DUMMY_OUTPUT_NAME;
 use pinnacle_api::ApiModules;
 use test_log::test;
@@ -16,12 +17,12 @@ async fn run_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
     run(api.clone());
 }
 
-fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) {
+fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> anyhow::Result<()> {
     std::thread::spawn(|| {
         run_rust_inner(run);
     })
     .join()
-    .unwrap();
+    .map_err(|_| anyhow!("rust oneshot api calls failed"))
 }
 
 #[tokio::main]
@@ -330,7 +331,7 @@ mod output {
                         .get_focused()
                         .unwrap()
                         .set_transform(Transform::Flipped270);
-                });
+                })?;
 
                 sleep_secs(1);
 
@@ -347,7 +348,7 @@ mod output {
                         .get_focused()
                         .unwrap()
                         .set_transform(Transform::_180);
-                });
+                })?;
 
                 sleep_secs(1);
 
@@ -355,6 +356,72 @@ mod output {
                     let op = state.pinnacle.focused_output().unwrap();
                     assert_eq!(op.current_transform(), smithay::utils::Transform::_180);
                 });
+
+                Ok(())
+            })
+        }
+
+        // FIXME: split this into keyboard_focus_stack and keyboard_focus_stack_visible tests
+        #[tokio::main]
+        #[self::test]
+        async fn keyboard_focus_stack() -> anyhow::Result<()> {
+            test_api(|_sender| {
+                setup_rust(|api| {
+                    api.output.setup([
+                        OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3"])
+                    ]);
+                });
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                })?;
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.tag.get("2").unwrap().switch_to();
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                })?;
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.tag.get("1").unwrap().switch_to();
+
+                    let focus_stack = api.output.get_focused().unwrap().keyboard_focus_stack();
+                    assert!(dbg!(focus_stack.len()) == 5);
+                    assert!(focus_stack[0].id() == 0);
+                    assert!(focus_stack[1].id() == 1);
+                    assert!(focus_stack[2].id() == 2);
+                    assert!(focus_stack[3].id() == 3);
+                    assert!(focus_stack[4].id() == 4);
+
+                    let focus_stack = api
+                        .output
+                        .get_focused()
+                        .unwrap()
+                        .keyboard_focus_stack_visible();
+                    assert!(focus_stack.len() == 3);
+                    assert!(focus_stack[0].id() == 0);
+                    assert!(focus_stack[1].id() == 1);
+                    assert!(focus_stack[2].id() == 2);
+
+                    api.tag.get("2").unwrap().switch_to();
+
+                    let focus_stack = api
+                        .output
+                        .get_focused()
+                        .unwrap()
+                        .keyboard_focus_stack_visible();
+                    assert!(focus_stack.len() == 2);
+                    assert!(focus_stack[0].id() == 3);
+                    assert!(focus_stack[1].id() == 4);
+                })?;
 
                 Ok(())
             })

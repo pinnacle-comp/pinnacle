@@ -610,6 +610,32 @@ function WindowHandle:raise()
     client.unary_request(window_service.Raise, { window_id = self.id })
 end
 
+---Returns whether or not this window is on an active tag.
+---
+---@return boolean
+function WindowHandle:is_on_active_tag()
+    local tags = self:tags() or {}
+
+    ---@type (fun(): boolean)[]
+    local batch = {}
+
+    for i, tg in ipairs(tags) do
+        batch[i] = function()
+            return tg:active() or false
+        end
+    end
+
+    local actives = require("pinnacle.util").batch(batch)
+
+    for _, active in ipairs(actives) do
+        if active then
+            return true
+        end
+    end
+
+    return false
+end
+
 ---@class WindowProperties
 ---@field geometry { x: integer?, y: integer?, width: integer?, height: integer? }? The location and size of the window
 ---@field class string? The window's class

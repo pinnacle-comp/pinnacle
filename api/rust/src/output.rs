@@ -26,6 +26,7 @@ use crate::{
     signal::{OutputSignal, SignalHandle},
     tag::{Tag, TagHandle},
     util::Batch,
+    window::WindowHandle,
     ApiModules,
 };
 
@@ -537,7 +538,7 @@ impl OutputId {
     /// Returns whether `output` is identified by this `OutputId`.
     pub fn matches(&self, output: &OutputHandle) -> bool {
         match self {
-            OutputId::Name(name) => name == output.name(),
+            OutputId::Name(name) => *name == output.name(),
             OutputId::Serial(serial) => Some(serial.get()) == output.serial(),
         }
     }
@@ -943,6 +944,11 @@ impl OutputHandle {
             scale: response.scale,
             transform: response.transform.and_then(|tf| tf.try_into().ok()),
             serial: response.serial,
+            keyboard_focus_stack: response
+                .keyboard_focus_stack_window_ids
+                .into_iter()
+                .map(|id| self.api.window.new_handle(id))
+                .collect(),
         }
     }
 
@@ -1142,9 +1148,37 @@ impl OutputHandle {
         self.props_async().await.serial
     }
 
+    /// Get this output's keyboard focus stack.
+    ///
+    /// This will return the focus stack containing *all* windows on this output.
+    /// If you only want windows on active tags, see
+    /// [`OutputHandle::keyboard_focus_stack_visible`].
+    ///
+    /// Shorthand for `self.props().keyboard_focus_stack`
+    pub fn keyboard_focus_stack(&self) -> Vec<WindowHandle> {
+        self.props().keyboard_focus_stack
+    }
+
+    /// The async version of [`OutputHandle::keyboard_focus_stack`].
+    pub async fn keyboard_focus_stack_async(&self) -> Vec<WindowHandle> {
+        self.props_async().await.keyboard_focus_stack
+    }
+
+    /// Get this output's keyboard focus stack with only visible windows.
+    ///
+    /// If you only want a focus stack containing all windows on this output, see
+    /// [`OutputHandle::keyboard_focus_stack`].
+    pub fn keyboard_focus_stack_visible(&self) -> Vec<WindowHandle> {
+        let keyboard_focus_stack = self.props().keyboard_focus_stack;
+
+        keyboard_focus_stack
+            .batch_filter(|win| win.is_on_active_tag_async().boxed(), |is_on| *is_on)
+            .collect()
+    }
+
     /// Get this output's unique name (the name of its connector).
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        self.name.to_string()
     }
 }
 
@@ -1204,4 +1238,6 @@ pub struct OutputProperties {
     pub transform: Option<Transform>,
     /// This output's EDID serial number.
     pub serial: Option<u32>,
+    /// This output's window keyboard focus stack.
+    pub keyboard_focus_stack: Vec<WindowHandle>,
 }

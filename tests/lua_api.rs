@@ -505,6 +505,65 @@ mod output {
                 Ok(())
             })
         }
+
+        // FIXME: split this into keyboard_focus_stack and keyboard_focus_stack_visible tests
+        #[tokio::main]
+        #[self::test]
+        async fn keyboard_focus_stack() -> anyhow::Result<()> {
+            test_api(|_sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.output.setup({
+                        ["*"] = { tags = { "1", "2", "3" } },
+                    })
+                }
+
+                sleep_secs(1);
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.process.spawn("foot")
+                    Pinnacle.process.spawn("foot")
+                    Pinnacle.process.spawn("foot")
+                }
+
+                sleep_secs(1);
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.tag.get("2"):switch_to()
+
+                    Pinnacle.process.spawn("foot")
+                    Pinnacle.process.spawn("foot")
+                }
+
+                sleep_secs(1);
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.tag.get("1"):switch_to()
+
+                    local focus_stack = Pinnacle.output.get_focused():keyboard_focus_stack()
+                    assert(#focus_stack == 5, "focus stack len != 5")
+                    assert(focus_stack[1].id == 0, "focus stack at 1 id != 0")
+                    assert(focus_stack[2].id == 1, "focus stack at 2 id != 1")
+                    assert(focus_stack[3].id == 2, "focus stack at 3 id != 2")
+                    assert(focus_stack[4].id == 3, "focus stack at 4 id != 3")
+                    assert(focus_stack[5].id == 4, "focus stack at 5 id != 4")
+
+                    local focus_stack = Pinnacle.output.get_focused():keyboard_focus_stack_visible()
+                    assert(#focus_stack == 3, "focus stack visible len != 3")
+                    assert(focus_stack[1].id == 0)
+                    assert(focus_stack[2].id == 1)
+                    assert(focus_stack[3].id == 2)
+
+                    Pinnacle.tag.get("2"):switch_to()
+
+                    local focus_stack = Pinnacle.output.get_focused():keyboard_focus_stack_visible()
+                    assert(#focus_stack == 2)
+                    assert(focus_stack[1].id == 3)
+                    assert(focus_stack[2].id == 4)
+                }
+
+                Ok(())
+            })
+        }
     }
 
     #[tokio::main]

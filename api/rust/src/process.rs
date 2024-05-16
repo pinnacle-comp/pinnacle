@@ -61,7 +61,7 @@ impl Process {
     ///
     /// ```
     /// process.spawn(["alacritty"]);
-    /// process.spawn(["bash", "-c", "swaybg -i ~/path_to_wallpaper"]);
+    /// process.spawn(["bash", "-c", "swaybg -i /path/to/wallpaper"]);
     /// ```
     pub fn spawn(&self, args: impl IntoIterator<Item = impl Into<String>>) {
         self.spawn_inner(args, false, None);
@@ -133,10 +133,11 @@ impl Process {
             has_callback: Some(callbacks.is_some()),
         };
 
+        let mut stream = block_on_tokio(client.spawn(request)).unwrap().into_inner();
+
         self.fut_sender
             .send(
                 async move {
-                    let mut stream = client.spawn(request).await.unwrap().into_inner();
                     let Some(mut callbacks) = callbacks else { return };
                     while let Some(Ok(response)) = stream.next().await {
                         if let Some(line) = response.stdout {

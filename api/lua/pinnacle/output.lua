@@ -892,6 +892,7 @@ end
 ---@field scale number?
 ---@field transform Transform?
 ---@field serial integer?
+---@field keyboard_focus_stack WindowHandle[]
 
 ---Get all properties of this output.
 ---
@@ -900,12 +901,18 @@ function OutputHandle:props()
     local response = client.unary_request(output_service.GetProperties, { output_name = self.name })
 
     ---@diagnostic disable-next-line: invisible
-    local handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
+    local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
 
-    response.tags = handles
+    ---@diagnostic disable-next-line: invisible
+    local keyboard_focus_stack_handles = require("pinnacle.window").handle.new_from_table(
+        response.keyboard_focus_stack_window_ids or {}
+    )
+
+    response.tags = tag_handles
     response.tag_ids = nil
     response.modes = response.modes or {}
     response.transform = transform_code_to_name[response.transform]
+    response.keyboard_focus_stack = keyboard_focus_stack_handles
 
     return response
 end
@@ -1058,6 +1065,53 @@ end
 ---@return integer?
 function OutputHandle:serial()
     return self:props().serial
+end
+
+---Get this output's keyboard focus stack.
+---
+---This includes *all* windows on the output, even those on inactive tags.
+---If you only want visible windows, use `keyboard_focus_stack_visible` instead.
+---
+---Shorthand for `handle:props().keyboard_focus_stack`.
+---
+---@return WindowHandle[]
+---
+---@see OutputHandle.keyboard_focus_stack_visible
+function OutputHandle:keyboard_focus_stack()
+    return self:props().keyboard_focus_stack
+end
+
+---Get this output's keyboard focus stack.
+---
+---This only includes windows on active tags.
+---If you want all windows on the output, use `keyboard_focus_stack` instead.
+---
+---@return WindowHandle[]
+---
+---@see OutputHandle.keyboard_focus_stack
+function OutputHandle:keyboard_focus_stack_visible()
+    local stack = self:props().keyboard_focus_stack
+
+    ---@type (fun(): boolean)[]
+    local batch = {}
+    for i, win in ipairs(stack) do
+        batch[i] = function()
+            return win:is_on_active_tag()
+        end
+    end
+
+    local on_active_tags = require("pinnacle.util").batch(batch)
+
+    ---@type WindowHandle[]
+    local keyboard_focus_stack_visible = {}
+
+    for i, is_active in ipairs(on_active_tags) do
+        if is_active then
+            table.insert(keyboard_focus_stack_visible, stack[i])
+        end
+    end
+
+    return keyboard_focus_stack_visible
 end
 
 ---@nodoc
