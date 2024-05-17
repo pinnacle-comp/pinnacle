@@ -3,6 +3,7 @@ use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
     layout_service_server, LayoutRequest, LayoutResponse,
 };
 use tonic::{Request, Response, Status, Streaming};
+use tracing::debug;
 
 use crate::output::OutputName;
 
@@ -37,8 +38,7 @@ impl layout_service_server::LayoutService for LayoutService {
                         match body {
                             layout_request::Body::Geometries(geos) => {
                                 if let Err(err) = state.apply_layout(geos) {
-                                    // TODO: send a Status and handle the error client side
-                                    tracing::error!("{err}")
+                                    debug!("{err}")
                                 }
                             }
                             layout_request::Body::Layout(ExplicitLayout { output_name }) => {

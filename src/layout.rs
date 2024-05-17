@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
@@ -165,23 +162,31 @@ impl Pinnacle {
 }
 
 /// A monotonically increasing identifier for layout requests.
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LayoutRequestId(pub u32);
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct LayoutRequestId(u32);
 
 #[derive(Debug, Default)]
 pub struct LayoutState {
     pub layout_request_sender: Option<UnboundedSender<Result<LayoutResponse, Status>>>,
     pub pending_swap: bool,
-    id_maps: HashMap<Output, LayoutRequestId>,
-    pending_requests: HashMap<Output, Vec<(LayoutRequestId, Vec<WindowElement>)>>,
-    old_requests: HashMap<Output, HashSet<LayoutRequestId>>,
+    pending_requests: HashMap<Output, LayoutRequestId>,
+    fulfilled_requests: HashMap<Output, LayoutRequestId>,
+    current_id: LayoutRequestId,
+}
+
+impl LayoutState {
+    fn next_id(&mut self) -> LayoutRequestId {
+        self.current_id.0 += 1;
+        self.current_id
+    }
 }
 
 impl Pinnacle {
-    pub fn request_layout(&mut self, output: &Output) {
+    pub fn request_layout(&mut self, output: &Output) -> Option<LayoutRequestId> {
+        let id = self.layout_state.next_id();
         let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
-            return;
+            return None;
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
@@ -220,19 +225,10 @@ impl Pinnacle {
         let tag_ids =
             output.with_state(|state| state.focused_tags().map(|tag| tag.id().0).collect());
 
-        let id = self
-            .layout_state
-            .id_maps
-            .entry(output.clone())
-            .or_insert(LayoutRequestId(0));
-
         self.layout_state
             .pending_requests
-            .entry(output.clone())
-            .or_default()
-            .push((*id, windows));
+            .insert(output.clone(), id);
 
-        // TODO: error
         let _ = sender.send(Ok(LayoutResponse {
             request_id: Some(id.0),
             output_name: Some(output.name()),
@@ -242,7 +238,7 @@ impl Pinnacle {
             output_height: Some(output_height as u32),
         }));
 
-        *id = LayoutRequestId(id.0 + 1);
+        Some(id)
     }
 }
 
@@ -262,41 +258,22 @@ impl State {
             anyhow::bail!("Output was invalid");
         };
 
-        let old_requests = self
-            .pinnacle
-            .layout_state
-            .old_requests
-            .entry(output.clone())
-            .or_default();
-
-        if old_requests.contains(&request_id) {
-            anyhow::bail!("Attempted to layout but the request was already fulfilled");
-        }
-
-        let pending = self
+        let Some(current_pending) = self
             .pinnacle
             .layout_state
             .pending_requests
-            .entry(output.clone())
-            .or_default();
-
-        let Some(latest) = pending.last().map(|(id, _)| *id) else {
-            anyhow::bail!("Attempted to layout but the request was nonexistent A");
+            .get(&output)
+            .copied()
+        else {
+            anyhow::bail!("attempted to layout without request");
         };
 
-        if latest == request_id {
-            pending.pop();
-        } else if let Some(pos) = pending
-            .split_last()
-            .and_then(|(_, rest)| rest.iter().position(|(id, _)| id == &request_id))
-        {
-            // Ignore stale requests
-            old_requests.insert(request_id);
-            pending.remove(pos);
-            return Ok(());
-        } else {
-            anyhow::bail!("Attempted to layout but the request was nonexistent B");
-        };
+        if current_pending > request_id {
+            anyhow::bail!("Attempted to layout but a new request came in");
+        }
+        if current_pending < request_id {
+            anyhow::bail!("Attempted to layout but request is newer");
+        }
 
         let geometries = geometries
             .into_iter()
@@ -311,6 +288,12 @@ impl State {
         let Some(geometries) = geometries else {
             anyhow::bail!("Attempted to layout but one or more dimensions were null");
         };
+
+        self.pinnacle.layout_state.pending_requests.remove(&output);
+        self.pinnacle
+            .layout_state
+            .fulfilled_requests
+            .insert(output.clone(), current_pending);
 
         self.pinnacle
             .update_windows_with_geometries(&output, geometries);
