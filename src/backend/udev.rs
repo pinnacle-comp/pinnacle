@@ -33,7 +33,6 @@ use smithay::{
             self, damage,
             element::{
                 self,
-                solid::{SolidColorBuffer, SolidColorRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
                 texture::TextureBuffer,
                 Element,
@@ -94,7 +93,7 @@ use crate::{
     output::{BlankingState, OutputName},
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
-        OutputRenderElement,
+        OutputRenderElement, CLEAR_COLOR, CLEAR_COLOR_LOCKED,
     },
     state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
 };
@@ -1487,23 +1486,6 @@ impl Udev {
         }
 
         if should_blank {
-            let output_size = pinnacle
-                .space
-                .output_geometry(output)
-                .map(|geo| geo.size)
-                .unwrap_or((99999, 99999).into());
-
-            let solid_color_buffer = SolidColorBuffer::new(output_size, [0.2, 0.0, 0.3, 1.0]);
-            let solid_color_element = SolidColorRenderElement::from_buffer(
-                &solid_color_buffer,
-                (0, 0),
-                output.current_scale().fractional_scale(),
-                1.0,
-                element::Kind::Unspecified,
-            );
-
-            output_render_elements.push(OutputRenderElement::from(solid_color_element));
-
             output.with_state_mut(|state| {
                 if let BlankingState::NotBlanked = state.blanking_state {
                     debug!("Blanking output {} for session lock", output.name());
@@ -1534,12 +1516,18 @@ impl Udev {
             ));
         }
 
+        let clear_color = if pinnacle.lock_state.is_unlocked() {
+            CLEAR_COLOR
+        } else {
+            CLEAR_COLOR_LOCKED
+        };
+
         let result = (|| -> Result<bool, SwapBuffersError> {
             let render_frame_result = render_frame(
                 &mut surface.compositor,
                 &mut renderer,
                 &output_render_elements,
-                [0.6, 0.6, 0.6, 1.0],
+                clear_color,
             )?;
 
             if let PrimaryPlaneElement::Swapchain(element) = &render_frame_result.primary_element {

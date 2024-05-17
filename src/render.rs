@@ -39,6 +39,9 @@ use self::pointer::{PointerElement, PointerRenderElement};
 
 pub mod pointer;
 
+pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
+pub const CLEAR_COLOR_LOCKED: [f32; 4] = [0.2, 0.0, 0.3, 1.0];
+
 render_elements! {
     pub TransformRenderElement<R, E>;
     Crop = CropRenderElement<E>,
