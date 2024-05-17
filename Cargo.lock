@@ -1410,7 +1410,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.5",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -2381,7 +2381,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=271fbc0#271fbc0209692c943a7f1092fbad4dea52e36be0"
+source = "git+https://github.com/Smithay/smithay?rev=900b938#900b938970081cb525dc94ff083d76aa07c60e54"
 dependencies = [
  "appendlist",
  "ash",
@@ -2456,7 +2456,7 @@ dependencies = [
 [[package]]
 name = "smithay-drm-extras"
 version = "0.1.0"
-source = "git+https://github.com/Smithay/smithay?rev=271fbc0#271fbc0209692c943a7f1092fbad4dea52e36be0"
+source = "git+https://github.com/Smithay/smithay?rev=900b938#900b938970081cb525dc94ff083d76aa07c60e54"
 dependencies = [
  "drm",
  "edid-rs",

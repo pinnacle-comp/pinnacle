@@ -35,7 +35,7 @@ tempfile = "3.10.1"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "271fbc0"
+rev = "900b938"
 default-features = false
 features = [
     "desktop",
@@ -77,7 +77,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "271fbc0" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "900b938" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
