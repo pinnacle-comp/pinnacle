@@ -143,6 +143,10 @@ impl State {
         self.update_pointer_focus();
         foreign_toplevel::refresh(self);
 
+        if let Backend::Winit(winit) = &mut self.backend {
+            winit.render_if_scheduled(&mut self.pinnacle);
+        }
+
         self.pinnacle
             .display_handle
             .flush_clients()

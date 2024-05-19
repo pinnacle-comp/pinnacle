@@ -356,8 +356,15 @@ pub fn take_presentation_feedback(
 impl State {
     /// Schedule a new render. This does nothing on the winit backend.
     pub fn schedule_render(&mut self, output: &Output) {
-        if let Backend::Udev(udev) = &mut self.backend {
-            udev.schedule_render(&self.pinnacle.loop_handle, output);
+        match &mut self.backend {
+            Backend::Udev(udev) => {
+                udev.schedule_render(&self.pinnacle.loop_handle, output);
+            }
+            Backend::Winit(winit) => {
+                winit.schedule_render();
+            }
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => (),
         }
     }
 }

@@ -788,6 +788,10 @@ impl State {
         );
 
         pointer.frame(self);
+
+        if let Some(output) = self.pinnacle.focused_output().cloned() {
+            self.schedule_render(&output);
+        }
     }
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
