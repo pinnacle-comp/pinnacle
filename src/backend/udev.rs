@@ -32,10 +32,7 @@ use smithay::{
         renderer::{
             self, damage,
             element::{
-                self,
-                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-                texture::TextureBuffer,
-                Element,
+                self, surface::render_elements_from_surface_tree, texture::TextureBuffer, Element,
             },
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
@@ -118,13 +115,8 @@ type UdevRenderer<'a> = MultiRenderer<
     GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
 >;
 
-type UdevRenderFrameResult<'a> = RenderFrameResult<
-    'a,
-    // BufferObject<()>,
-    GbmBuffer,
-    GbmFramebuffer,
-    OutputRenderElement<UdevRenderer<'a>, WaylandSurfaceRenderElement<UdevRenderer<'a>>>,
->;
+type UdevRenderFrameResult<'a> =
+    RenderFrameResult<'a, GbmBuffer, GbmFramebuffer, OutputRenderElement<UdevRenderer<'a>>>;
 
 /// Udev state attached to each [`Output`].
 #[derive(Debug, PartialEq)]
@@ -859,10 +851,7 @@ type GbmDrmCompositor = DrmCompositor<
 fn render_frame<'a>(
     compositor: &mut GbmDrmCompositor,
     renderer: &mut UdevRenderer<'a>,
-    elements: &'a [OutputRenderElement<
-        UdevRenderer<'a>,
-        WaylandSurfaceRenderElement<UdevRenderer<'a>>,
-    >],
+    elements: &'a [OutputRenderElement<UdevRenderer<'a>>],
     clear_color: [f32; 4],
 ) -> Result<UdevRenderFrameResult<'a>, SwapBuffersError> {
     use smithay::backend::drm::compositor::RenderFrameError;

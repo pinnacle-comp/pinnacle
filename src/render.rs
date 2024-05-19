@@ -4,12 +4,7 @@ use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
-        element::{
-            solid::SolidColorRenderElement,
-            surface::WaylandSurfaceRenderElement,
-            utils::{CropRenderElement, RelocateRenderElement, RescaleRenderElement},
-            AsRenderElements, RenderElementStates, Wrap,
-        },
+        element::{surface::WaylandSurfaceRenderElement, AsRenderElements, RenderElementStates},
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
@@ -43,19 +38,9 @@ pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
 pub const CLEAR_COLOR_LOCKED: [f32; 4] = [0.2, 0.0, 0.3, 1.0];
 
 render_elements! {
-    pub TransformRenderElement<R, E>;
-    Crop = CropRenderElement<E>,
-    Relocate = RelocateRenderElement<E>,
-    Rescale = RescaleRenderElement<E>,
-}
-
-render_elements! {
-    pub OutputRenderElement<R, E> where R: ImportAll + ImportMem;
-    Custom = Wrap<E>,
+    pub OutputRenderElement<R> where R: ImportAll + ImportMem;
     Surface = WaylandSurfaceRenderElement<R>,
     Pointer = PointerRenderElement<R>,
-    Transform = TransformRenderElement<R, E>,
-    Color = SolidColorRenderElement,
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -134,17 +119,13 @@ where
 ///
 /// ret.1 contains render elements for the windows at and above the first fullscreen window.
 /// ret.2 contains the rest.
-#[allow(clippy::type_complexity)]
 fn window_render_elements<R>(
     output: &Output,
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> (
-    Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>,
-    Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>,
-)
+) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>)
 where
     R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: Clone + 'static,
@@ -190,7 +171,7 @@ pub fn pointer_render_elements<R>(
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     pointer_element: &PointerElement<<R as Renderer>::TextureId>,
-) -> Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>
+) -> Vec<OutputRenderElement<R>>
 where
     R: Renderer + ImportAll,
     <R as Renderer>::TextureId: Clone + 'static,
@@ -250,7 +231,7 @@ pub fn output_render_elements<R, T>(
     renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-) -> Vec<OutputRenderElement<R, WaylandSurfaceRenderElement<R>>>
+) -> Vec<OutputRenderElement<R>>
 where
     R: Renderer<TextureId = T> + ImportAll + ImportMem,
     <R as Renderer>::TextureId: 'static,
@@ -258,7 +239,7 @@ where
 {
     let scale = Scale::from(output.current_scale().fractional_scale());
 
-    let mut output_render_elements: Vec<OutputRenderElement<_, _>> = Vec::new();
+    let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
 
     let (windows, override_redirect_windows) = windows
         .iter()
