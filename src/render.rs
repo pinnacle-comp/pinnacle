@@ -4,7 +4,10 @@ use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
-        element::{surface::WaylandSurfaceRenderElement, AsRenderElements, RenderElementStates},
+        element::{
+            surface::WaylandSurfaceRenderElement, AsRenderElements, Element, RenderElementStates,
+        },
+        gles::{GlesRenderer, GlesTexture},
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
@@ -26,21 +29,35 @@ use smithay::{
 
 use crate::{
     backend::Backend,
+    pinnacle_render_elements,
     state::{State, WithState},
     window::WindowElement,
 };
 
-use self::pointer::{PointerElement, PointerRenderElement};
+use self::{
+    pointer::{PointerElement, PointerRenderElement},
+    texture::CommonTextureRenderElement,
+};
 
 pub mod pointer;
+pub mod render_elements;
+pub mod texture;
 
 pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
 pub const CLEAR_COLOR_LOCKED: [f32; 4] = [0.2, 0.0, 0.3, 1.0];
 
-render_elements! {
-    pub OutputRenderElement<R> where R: ImportAll + ImportMem;
-    Surface = WaylandSurfaceRenderElement<R>,
-    Pointer = PointerRenderElement<R>,
+// render_elements! {
+//     pub OutputRenderElement<R> where R: ImportAll + ImportMem;
+//     Surface = WaylandSurfaceRenderElement<R>,
+//     Pointer = PointerRenderElement<R>,
+// }
+
+pinnacle_render_elements! {
+    #[derive(Debug)]
+    pub enum OutputRenderElement<R> {
+        Surface = WaylandSurfaceRenderElement<R>,
+        Pointer = PointerRenderElement<R>,
+    }
 }
 
 impl<R> AsRenderElements<R> for WindowElement
@@ -173,7 +190,7 @@ pub fn pointer_render_elements<R>(
     pointer_element: &PointerElement<<R as Renderer>::TextureId>,
 ) -> Vec<OutputRenderElement<R>>
 where
-    R: Renderer + ImportAll,
+    R: Renderer + ImportAll + ImportMem,
     <R as Renderer>::TextureId: Clone + 'static,
 {
     let mut output_render_elements = Vec::new();
@@ -346,6 +363,35 @@ impl State {
             }
             #[cfg(feature = "testing")]
             Backend::Dummy(_) => (),
+        }
+    }
+}
+
+impl Backend {
+    pub fn render_to_texture(
+        &mut self,
+        window: &WindowElement,
+        scale: f64,
+    ) -> Vec<(GlesTexture, Point<i32, Physical>)> {
+        let render_to_texture = |renderer: &mut GlesRenderer, window: &WindowElement| {
+            let elements = window.render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
+                renderer,
+                (0, 0).into(),
+                scale.into(),
+                1.0,
+            );
+
+            elements
+                .into_iter()
+                .map(|elem| (elem.texture().clone(), elem.location(scale.into())))
+                .collect()
+        };
+
+        match self {
+            Backend::Winit(winit) => render_to_texture(winit.backend.renderer(), window),
+            Backend::Udev(udev) => render_to_texture(udev.renderer().as_mut(), window),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => Vec::new(),
         }
     }
 }

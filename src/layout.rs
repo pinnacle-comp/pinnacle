@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod transaction;
+
 use std::{collections::HashMap, time::Duration};
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};

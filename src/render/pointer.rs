@@ -50,6 +50,7 @@ impl<T: Texture> PointerElement<T> {
 }
 
 render_elements! {
+    #[derive(Debug)]
     pub PointerRenderElement<R> where R: ImportAll;
     Surface=WaylandSurfaceRenderElement<R>,
     Texture=TextureRenderElement<<R as Renderer>::TextureId>,

@@ -108,7 +108,7 @@ const SUPPORTED_FORMATS: &[Fourcc] = &[
 const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 /// A [`MultiRenderer`] that uses the [`GbmGlesBackend`].
-type UdevRenderer<'a> = MultiRenderer<
+pub type UdevRenderer<'a> = MultiRenderer<
     'a,
     'a,
     GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
@@ -866,6 +866,12 @@ fn render_frame<'a>(
 }
 
 impl Udev {
+    pub fn renderer(&mut self) -> UdevRenderer<'_> {
+        self.gpu_manager
+            .single_renderer(&self.primary_gpu)
+            .expect("failed to create multirenderer")
+    }
+
     /// A GPU was plugged in.
     fn device_added(
         &mut self,
