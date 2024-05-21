@@ -318,6 +318,7 @@ mod output {
     }
 
     mod handle {
+        use pinnacle::window::window_state::WindowId;
         use pinnacle_api::output::Transform;
 
         use super::*;
@@ -361,7 +362,6 @@ mod output {
             })
         }
 
-        // FIXME: split this into keyboard_focus_stack and keyboard_focus_stack_visible tests
         #[tokio::main]
         #[self::test]
         async fn keyboard_focus_stack() -> anyhow::Result<()> {
@@ -400,6 +400,59 @@ mod output {
                     assert!(focus_stack[2].id() == 2);
                     assert!(focus_stack[3].id() == 3);
                     assert!(focus_stack[4].id() == 4);
+                })?;
+
+                // Terminate all windows related to this test
+                run_rust(|api| {
+                    api.tag.get("1").unwrap().switch_to();
+
+                    let focus_stack = api.output.get_focused().unwrap().keyboard_focus_stack();
+                    focus_stack[0].close();
+                    focus_stack[1].close();
+                    focus_stack[2].close();
+                    focus_stack[3].close();
+                    focus_stack[4].close();
+
+                    api.tag.remove(api.tag.get_all());
+
+                    WindowId::reset();
+                })?;
+
+                Ok(())
+            })
+        }
+
+        #[tokio::main]
+        #[self::test]
+        async fn keyboard_focus_stack_visible() -> anyhow::Result<()> {
+            test_api(|_sender| {
+                setup_rust(|api| {
+                    api.output.setup([
+                        OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3"])
+                    ]);
+                });
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.tag.get("1").unwrap().switch_to();
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                })?;
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.tag.get("2").unwrap().switch_to();
+                    api.process.spawn(["foot"]);
+                    api.process.spawn(["foot"]);
+                })?;
+
+                sleep_secs(1);
+
+                run_rust(|api| {
+                    api.tag.get("1").unwrap().switch_to();
 
                     let focus_stack = api
                         .output
@@ -421,6 +474,22 @@ mod output {
                     assert!(focus_stack.len() == 2);
                     assert!(focus_stack[0].id() == 3);
                     assert!(focus_stack[1].id() == 4);
+                })?;
+
+                // Terminate all windows related to this test
+                run_rust(|api| {
+                    api.tag.get("1").unwrap().switch_to();
+
+                    let focus_stack = api.output.get_focused().unwrap().keyboard_focus_stack();
+                    focus_stack[0].close();
+                    focus_stack[1].close();
+                    focus_stack[2].close();
+                    focus_stack[3].close();
+                    focus_stack[4].close();
+
+                    api.tag.remove(api.tag.get_all());
+
+                    WindowId::reset();
                 })?;
 
                 Ok(())
