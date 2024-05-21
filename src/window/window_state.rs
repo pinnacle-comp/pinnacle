@@ -27,6 +27,12 @@ impl WindowId {
         Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
+    /// Reset the static window id counter to 0.
+    /// FIXME: remove statics
+    pub fn reset() {
+        WINDOW_ID_COUNTER.store(0, Ordering::Relaxed);
+    }
+
     /// Get the window that has this WindowId.
     pub fn window(&self, pinnacle: &Pinnacle) -> Option<WindowElement> {
         pinnacle
