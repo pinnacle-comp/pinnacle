@@ -42,6 +42,7 @@ use self::{
 pub mod pointer;
 pub mod render_elements;
 pub mod texture;
+pub mod util;
 
 pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
 pub const CLEAR_COLOR_LOCKED: [f32; 4] = [0.2, 0.0, 0.3, 1.0];

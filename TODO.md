@@ -1,1 +1,0 @@
-- Log git commit on startup and add to --help/-V
