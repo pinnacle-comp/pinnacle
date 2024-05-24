@@ -115,7 +115,8 @@ pub struct Pinnacle {
 
     /// The main window vec
     pub windows: Vec<WindowElement>,
-    pub new_windows: Vec<WindowElement>,
+    /// Windows with no buffer.
+    pub unmapped_windows: Vec<WindowElement>,
 
     pub config: Config,
 
@@ -150,18 +151,23 @@ impl State {
             winit.render_if_scheduled(&mut self.pinnacle);
         }
 
+        // FIXME: Don't poll this every cycle
+        for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            output.with_state_mut(|state| {
+                if state
+                    .layout_transaction
+                    .as_ref()
+                    .is_some_and(|ts| ts.ready())
+                {
+                    self.schedule_render(&output);
+                }
+            });
+        }
+
         self.pinnacle
             .display_handle
             .flush_clients()
             .expect("failed to flush client buffers");
-
-        // TODO: couple these or something, this is really error-prone
-        assert_eq!(
-            self.pinnacle.windows.len(),
-            self.pinnacle.z_index_stack.len(),
-            "Length of `windows` and `z_index_stack` are different. \
-            If you see this, report it to the developer."
-        );
     }
 }
 
@@ -298,7 +304,7 @@ impl Pinnacle {
             popup_manager: PopupManager::default(),
 
             windows: Vec::new(),
-            new_windows: Vec::new(),
+            unmapped_windows: Vec::new(),
 
             xwm: None,
             xdisplay: None,

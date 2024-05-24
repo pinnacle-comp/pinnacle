@@ -1081,8 +1081,8 @@ impl output_service_server::OutputService for OutputService {
                 None,
             );
 
-            output.with_state_mut(|state| {
-                state.new_wait_layout_transaction(snapshots);
+            output.with_state_mut(|op_state| {
+                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots);
             });
 
             state.pinnacle.request_layout(&output);

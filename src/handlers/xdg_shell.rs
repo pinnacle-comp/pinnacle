@@ -44,7 +44,7 @@ impl XdgShellHandler for State {
         });
 
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
-        self.pinnacle.new_windows.push(window);
+        self.pinnacle.unmapped_windows.push(window);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
@@ -66,34 +66,15 @@ impl XdgShellHandler for State {
             None
         };
 
-        self.pinnacle.windows.retain(|win| win != &window);
-
-        self.pinnacle.z_index_stack.retain(|win| win != &window);
-
-        for output in self.pinnacle.space.outputs() {
-            output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != &window));
-        }
+        self.pinnacle.remove_window(&window, false);
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
 
             if let Some(snapshots) = snapshots {
                 output.with_state_mut(|state| {
-                    state.new_wait_layout_transaction(snapshots);
+                    state.new_wait_layout_transaction(self.pinnacle.loop_handle.clone(), snapshots);
                 });
-            }
-
-            let focus = self
-                .pinnacle
-                .focused_window(&output)
-                .map(KeyboardFocusTarget::Window);
-
-            if let Some(KeyboardFocusTarget::Window(window)) = &focus {
-                tracing::debug!("Focusing on prev win");
-                self.pinnacle.raise_window(window.clone(), true);
-                if let Some(toplevel) = window.toplevel() {
-                    toplevel.send_configure();
-                }
             }
 
             self.update_keyboard_focus(&output);
@@ -350,24 +331,19 @@ pub fn snapshot_pre_commit_hook(
     surface: &WlSurface,
 ) {
     let Some(window) = state.pinnacle.window_for_surface(surface) else {
-        tracing::info!("no win for surface");
         return;
     };
 
-    let unmapped = compositor::with_states(surface, |states| {
+    let got_unmapped = compositor::with_states(surface, |states| {
         let buffer = &states.cached_state.pending::<SurfaceAttributes>().buffer;
         matches!(buffer, Some(BufferAssignment::Removed))
     });
 
-    let id = surface.id();
-
-    if unmapped {
+    if got_unmapped {
         let Some(output) = window.output(&state.pinnacle) else {
-            tracing::info!("no output for win");
             return;
         };
         let Some(loc) = state.pinnacle.space.element_location(&window) else {
-            tracing::info!("no loc for win");
             return;
         };
 
@@ -375,11 +351,6 @@ pub fn snapshot_pre_commit_hook(
 
         let loc = (loc - window.geometry().loc - output.current_location())
             .to_physical_precise_round(scale);
-
-        tracing::info!(
-            ?id,
-            "storing unmap snapshot on buffer removed, loc = {loc:?}"
-        );
 
         state.backend.with_renderer(|renderer| {
             window.capture_snapshot_and_store(
@@ -390,7 +361,6 @@ pub fn snapshot_pre_commit_hook(
             );
         });
     } else {
-        tracing::info!("taking snapshot, surf id = {id:?}");
         window.with_state_mut(|state| state.snapshot.take());
     }
 }

@@ -99,10 +99,9 @@ impl WindowElement {
         scale: Scale<f64>,
         alpha: f32,
     ) {
-        let elements = self.render_elements(renderer, location, scale, alpha);
         self.with_state_mut(|state| {
             if state.snapshot.is_none() {
-                tracing::info!("storing snapshot");
+                let elements = self.render_elements(renderer, location, scale, alpha);
                 state.snapshot = Some(RenderSnapshot::new(elements, scale));
             }
         })

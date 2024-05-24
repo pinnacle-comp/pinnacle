@@ -435,33 +435,12 @@ impl State {
 
         if let Some(win) = win {
             debug!("removing x11 window from windows");
-            for output in self.pinnacle.space.outputs() {
-                output.with_state_mut(|state| {
-                    state.focus_stack.stack.retain(|w| w != &win);
-                });
-            }
 
-            self.pinnacle.windows.retain(|w| w != &win);
-
-            self.pinnacle.z_index_stack.retain(|w| w != &win);
+            self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
                 self.pinnacle.request_layout(&output);
-
-                let focus = self
-                    .pinnacle
-                    .focused_window(&output)
-                    .map(KeyboardFocusTarget::Window);
-
-                if let Some(KeyboardFocusTarget::Window(win)) = &focus {
-                    self.pinnacle.raise_window(win.clone(), true);
-                    if let Some(toplevel) = win.toplevel() {
-                        toplevel.send_configure();
-                    }
-                }
-
                 self.update_keyboard_focus(&output);
-
                 self.schedule_render(&output);
             }
         }

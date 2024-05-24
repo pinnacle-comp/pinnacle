@@ -30,6 +30,18 @@ impl Deref for WindowElement {
     }
 }
 
+impl PartialEq<&WindowElement> for WindowElement {
+    fn eq(&self, other: &&WindowElement) -> bool {
+        self == *other
+    }
+}
+
+impl PartialEq<WindowElement> for &WindowElement {
+    fn eq(&self, other: &WindowElement) -> bool {
+        *self == other
+    }
+}
+
 impl WindowElement {
     pub fn new(window: Window) -> Self {
         Self(window)
@@ -253,24 +265,34 @@ impl WithState for WindowElement {
 impl Pinnacle {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.space
-            .elements()
-            .find(|window| window.wl_surface().map(|s| &*s == surface).unwrap_or(false))
-            .or_else(|| {
-                self.windows
-                    .iter()
-                    .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
-            })
-            .cloned()
-    }
-
-    /// `window_for_surface` but for windows that haven't commited a buffer yet.
-    ///
-    /// Currently only used in `ensure_initial_configure` in [`handlers`][crate::handlers].
-    pub fn new_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.new_windows
+        self.windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             .cloned()
+    }
+
+    /// [`Self::window_for_surface`] but for windows that don't have a buffer.
+    pub fn unmapped_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
+        self.unmapped_windows
+            .iter()
+            .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
+            .cloned()
+    }
+
+    /// Removes a window from the main window vec, z_index stack, and focus stacks.
+    ///
+    /// If `unmap` is true the window has become unmapped and will be pushed to `unmapped_windows`.
+    pub fn remove_window(&mut self, window: &WindowElement, unmap: bool) {
+        self.windows.retain(|win| win != window);
+        self.unmapped_windows.retain(|win| win != window);
+        if unmap {
+            self.unmapped_windows.push(window.clone());
+        }
+
+        self.z_index_stack.retain(|win| win != window);
+
+        for output in self.space.outputs() {
+            output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
+        }
     }
 }

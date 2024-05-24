@@ -19,11 +19,16 @@ use smithay::{
         },
         gles::GlesRenderer,
     },
+    reexports::calloop::{
+        timer::{TimeoutAction, Timer},
+        LoopHandle,
+    },
     utils::{Physical, Point, Scale, Serial, Transform},
 };
 
 use crate::{
     render::{texture::CommonTextureRenderElement, util::snapshot::RenderSnapshot},
+    state::State,
     window::WindowElement,
 };
 
@@ -35,6 +40,8 @@ pub type LayoutSnapshot = RenderSnapshot<WaylandSurfaceRenderElement<GlesRendere
 /// While one is active on an output, its snapshots will be drawn instead of windows.
 #[derive(Debug)]
 pub struct LayoutTransaction {
+    /// The loop handle to schedule event loop wakeups.
+    loop_handle: LoopHandle<'static, State>,
     /// The instant this transaction started.
     ///
     /// Used for transaction timeout.
@@ -49,12 +56,23 @@ pub struct LayoutTransaction {
 }
 
 impl LayoutTransaction {
+    /// Schedule an event after the timeout to check for stuff.
+    fn register_wakeup(loop_handle: &LoopHandle<'static, State>) {
+        let _ = loop_handle.insert_source(
+            Timer::from_duration(Duration::from_millis(150)),
+            |_, _, _| TimeoutAction::Drop,
+        );
+    }
+
     /// Creates a new layout transaction that will become immediately active.
     pub fn new(
+        loop_handle: LoopHandle<'static, State>,
         snapshots: impl IntoIterator<Item = LayoutSnapshot>,
         pending_windows: impl IntoIterator<Item = (WindowElement, Serial)>,
     ) -> Self {
+        Self::register_wakeup(&loop_handle);
         Self {
+            loop_handle,
             start_time: Instant::now(),
             snapshots: snapshots.into_iter().collect(),
             pending_windows: pending_windows.into_iter().collect(),
@@ -66,11 +84,17 @@ impl LayoutTransaction {
     pub fn wait(&mut self) {
         self.wait = true;
         self.start_time = Instant::now();
+        Self::register_wakeup(&self.loop_handle);
     }
 
     /// Creates a new layout transaction that waits for the next update to pending windows.
-    pub fn new_and_wait(snapshots: impl IntoIterator<Item = LayoutSnapshot>) -> Self {
+    pub fn new_and_wait(
+        loop_handle: LoopHandle<'static, State>,
+        snapshots: impl IntoIterator<Item = LayoutSnapshot>,
+    ) -> Self {
+        Self::register_wakeup(&loop_handle);
         Self {
+            loop_handle,
             start_time: Instant::now(),
             snapshots: snapshots.into_iter().collect(),
             pending_windows: HashMap::new(),
@@ -87,17 +111,18 @@ impl LayoutTransaction {
         self.pending_windows = pending_windows.into_iter().collect();
         self.wait = false;
         self.start_time = Instant::now();
+        Self::register_wakeup(&self.loop_handle);
     }
 
     /// Returns whether all pending windows have committed their serials or the timeout has been
     /// reached.
     pub fn ready(&self) -> bool {
-        Instant::now().duration_since(self.start_time) >= Duration::from_millis(1000)
-        // || (!self.wait
-        //     && self
-        //         .pending_windows
-        //         .iter()
-        //         .all(|(win, serial)| win.is_serial_committed(*serial)))
+        Instant::now().duration_since(self.start_time) >= Duration::from_millis(150)
+            || (!self.wait
+                && self
+                    .pending_windows
+                    .iter()
+                    .all(|(win, serial)| win.is_serial_committed(*serial)))
     }
 }
 

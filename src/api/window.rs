@@ -635,7 +635,7 @@ impl window_service_server::WindowService for WindowService {
                 pinnacle
                     .focused_output()
                     .and_then(|output| pinnacle.focused_window(output))
-                    .map(|foc_win| win == &foc_win)
+                    .map(|foc_win| win == foc_win)
             });
 
             let floating = window

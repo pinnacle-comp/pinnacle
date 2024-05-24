@@ -54,7 +54,7 @@ pub fn render_to_encompassing_texture<E: RenderElement<GlesRenderer>>(
         .context("no elements to render")?;
 
     // Make elements relative to (0, 0) for rendering
-    let elements = elements.iter().map(|elem| {
+    let elements = elements.iter().rev().map(|elem| {
         RelocateRenderElement::from_element(
             elem,
             (-encompassing_geo.loc.x, -encompassing_geo.loc.y),

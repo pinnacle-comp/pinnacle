@@ -279,7 +279,11 @@ impl State {
             if let Some(ts) = state.layout_transaction.as_mut() {
                 ts.update_pending(pending_windows);
             } else {
-                state.layout_transaction = Some(LayoutTransaction::new(snapshots, pending_windows));
+                state.layout_transaction = Some(LayoutTransaction::new(
+                    self.pinnacle.loop_handle.clone(),
+                    snapshots,
+                    pending_windows,
+                ));
             }
         });
 

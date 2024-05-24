@@ -6,6 +6,7 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputRe
 use smithay::{
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
+    reexports::calloop::LoopHandle,
     utils::{Logical, Point, Transform},
     wayland::session_lock::LockSurface,
 };
@@ -14,7 +15,7 @@ use crate::{
     focus::WindowKeyboardFocusStack,
     layout::transaction::{LayoutSnapshot, LayoutTransaction},
     protocol::screencopy::Screencopy,
-    state::{Pinnacle, WithState},
+    state::{Pinnacle, State, WithState},
     tag::Tag,
 };
 
@@ -95,13 +96,13 @@ impl OutputState {
 
     pub fn new_wait_layout_transaction(
         &mut self,
+        loop_handle: LoopHandle<'static, State>,
         snapshots: impl IntoIterator<Item = LayoutSnapshot>,
     ) {
-        tracing::info!("new_wait_layout_transaction");
         if let Some(ts) = self.layout_transaction.as_mut() {
             ts.wait();
         } else {
-            self.layout_transaction = Some(LayoutTransaction::new_and_wait(snapshots));
+            self.layout_transaction = Some(LayoutTransaction::new_and_wait(loop_handle, snapshots));
         }
     }
 }

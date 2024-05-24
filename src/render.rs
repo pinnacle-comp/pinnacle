@@ -326,7 +326,6 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             )
         })
     }) {
-        tracing::info!("made snapshot elements");
         snapshot_elements = elements;
     } else {
         (fullscreen_and_up_elements, rest_of_window_elements) =

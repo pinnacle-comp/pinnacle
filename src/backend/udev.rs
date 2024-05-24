@@ -1511,23 +1511,21 @@ impl Udev {
             ));
         }
 
+        // HACK: Taking the transaction before creating render elements
+        // leads to a possibility where the original buffer still gets displayed.
+        // Need to figure that out.
+        // In the meantime we take the transaction afterwards and schedule another render.
+        let mut render_after_transaction_finish = false;
         output.with_state_mut(|state| {
             if state
                 .layout_transaction
                 .as_ref()
                 .is_some_and(|ts| ts.ready())
             {
-                tracing::info!("finished transaction");
                 state.layout_transaction.take();
+                render_after_transaction_finish = true;
             }
         });
-
-        // if clear_snapshots {
-        //     for win in pinnacle.windows.iter() {
-        //         tracing::info!("taking snapshot");
-        //         win.with_state_mut(|state| state.snapshot.take());
-        //     }
-        // }
 
         let clear_color = if pinnacle.lock_state.is_unlocked() {
             CLEAR_COLOR
@@ -1595,6 +1593,10 @@ impl Udev {
         match result {
             Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
             Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
+        }
+
+        if render_after_transaction_finish {
+            self.schedule_render(&pinnacle.loop_handle, output);
         }
     }
 }

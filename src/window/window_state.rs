@@ -59,7 +59,7 @@ pub struct WindowElementState {
     /// The most recent serial that has been committed.
     pub committed_serial: Option<Serial>,
     pub snapshot: Option<LayoutSnapshot>,
-    pub hook_id: Option<HookId>,
+    pub snapshot_hook_id: Option<HookId>,
 }
 
 impl WindowElement {
@@ -311,7 +311,7 @@ impl WindowElementState {
             minimized: false,
             committed_serial: None,
             snapshot: None,
-            hook_id: None,
+            snapshot_hook_id: None,
         }
     }
 }

@@ -80,14 +80,14 @@ impl Pinnacle {
     ///
     /// This does nothing if the window is unmapped.
     pub fn raise_window(&mut self, window: WindowElement, activate: bool) {
-        if self.space.elements().all(|win| win != &window) {
+        if self.space.elements().all(|win| win != window) {
             warn!("Tried to raise an unmapped window");
             return;
         }
 
         self.space.raise_element(&window, activate);
 
-        self.z_index_stack.retain(|win| win != &window);
+        self.z_index_stack.retain(|win| win != window);
         self.z_index_stack.push(window);
 
         self.fixup_xwayland_window_layering();
@@ -128,7 +128,7 @@ impl WindowKeyboardFocusStack {
     /// If it's already in the stack, it will be removed then pushed.
     /// If it isn't, it will just be pushed.
     pub fn set_focus(&mut self, window: WindowElement) {
-        self.stack.retain(|win| win != &window);
+        self.stack.retain(|win| win != window);
         self.stack.push(window);
         self.focused = true;
     }
