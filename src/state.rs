@@ -51,7 +51,7 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use std::{cell::RefCell, path::PathBuf, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, path::PathBuf, sync::Arc};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{info, warn};
 use xdg::BaseDirectories;
@@ -133,6 +133,9 @@ pub struct Pinnacle {
     pub signal_state: SignalState,
 
     pub layout_state: LayoutState,
+
+    /// A cache of surfaces to their root surface.
+    pub root_surface_cache: HashMap<WlSurface, WlSurface>,
 }
 
 impl State {
@@ -312,6 +315,8 @@ impl Pinnacle {
             signal_state: SignalState::default(),
 
             layout_state: LayoutState::default(),
+
+            root_surface_cache: HashMap::new(),
         };
 
         Ok(pinnacle)

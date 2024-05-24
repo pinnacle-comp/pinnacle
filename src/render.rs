@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod pointer;
+pub mod render_elements;
+pub mod texture;
+pub mod util;
+
 use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
         element::{
-            surface::WaylandSurfaceRenderElement, AsRenderElements, Element, RenderElementStates,
+            surface::WaylandSurfaceRenderElement, utils::RescaleRenderElement, AsRenderElements,
+            Element, RenderElementStates,
         },
         gles::{GlesRenderer, GlesTexture},
         ImportAll, ImportMem, Renderer, Texture,
@@ -22,13 +28,12 @@ use smithay::{
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    render_elements,
     utils::{Logical, Physical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
 };
 
 use crate::{
-    backend::Backend,
+    backend::{udev::UdevRenderer, Backend},
     pinnacle_render_elements,
     state::{State, WithState},
     window::WindowElement,
@@ -39,33 +44,54 @@ use self::{
     texture::CommonTextureRenderElement,
 };
 
-pub mod pointer;
-pub mod render_elements;
-pub mod texture;
-pub mod util;
-
 pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
 pub const CLEAR_COLOR_LOCKED: [f32; 4] = [0.2, 0.0, 0.3, 1.0];
-
-// render_elements! {
-//     pub OutputRenderElement<R> where R: ImportAll + ImportMem;
-//     Surface = WaylandSurfaceRenderElement<R>,
-//     Pointer = PointerRenderElement<R>,
-// }
 
 pinnacle_render_elements! {
     #[derive(Debug)]
     pub enum OutputRenderElement<R> {
         Surface = WaylandSurfaceRenderElement<R>,
         Pointer = PointerRenderElement<R>,
+        Snapshot = RescaleRenderElement<CommonTextureRenderElement>,
     }
 }
 
-impl<R> AsRenderElements<R> for WindowElement
+pub trait PRenderer
 where
-    R: Renderer + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: Texture + Clone + 'static,
+    Self: Renderer<TextureId = Self::PTextureId, Error = Self::PError> + ImportAll + ImportMem,
+    <Self as Renderer>::TextureId: Texture + Clone + 'static,
 {
+    type PTextureId: Texture + Clone + 'static;
+    type PError: std::error::Error + Send + Sync + 'static;
+}
+
+impl<R> PRenderer for R
+where
+    R: ImportAll + ImportMem,
+    R::TextureId: Texture + Clone + 'static,
+    R::Error: std::error::Error + Send + Sync + 'static,
+{
+    type PTextureId = R::TextureId;
+    type PError = R::Error;
+}
+
+pub trait AsGlesRenderer {
+    fn as_gles_renderer(&mut self) -> &mut GlesRenderer;
+}
+
+impl AsGlesRenderer for GlesRenderer {
+    fn as_gles_renderer(&mut self) -> &mut GlesRenderer {
+        self
+    }
+}
+
+impl<'a> AsGlesRenderer for UdevRenderer<'a> {
+    fn as_gles_renderer(&mut self) -> &mut GlesRenderer {
+        self.as_mut()
+    }
+}
+
+impl<R: PRenderer> AsRenderElements<R> for WindowElement {
     type RenderElement = WaylandSurfaceRenderElement<R>;
 
     fn render_elements<C: From<Self::RenderElement>>(
@@ -80,22 +106,18 @@ where
     }
 }
 
-struct LayerRenderElements<R: Renderer> {
+struct LayerRenderElements<R: PRenderer> {
     background: Vec<WaylandSurfaceRenderElement<R>>,
     bottom: Vec<WaylandSurfaceRenderElement<R>>,
     top: Vec<WaylandSurfaceRenderElement<R>>,
     overlay: Vec<WaylandSurfaceRenderElement<R>>,
 }
 
-fn layer_render_elements<R>(
+fn layer_render_elements<R: PRenderer>(
     output: &Output,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> LayerRenderElements<R>
-where
-    R: Renderer + ImportAll,
-    <R as Renderer>::TextureId: Clone + 'static,
-{
+) -> LayerRenderElements<R> {
     let layer_map = layer_map_for_output(output);
     let mut overlay = vec![];
     let mut top = vec![];
@@ -137,17 +159,13 @@ where
 ///
 /// ret.1 contains render elements for the windows at and above the first fullscreen window.
 /// ret.2 contains the rest.
-fn window_render_elements<R>(
+fn window_render_elements<R: PRenderer>(
     output: &Output,
     windows: &[WindowElement],
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>)
-where
-    R: Renderer + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: Clone + 'static,
-{
+) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>) {
     let mut last_fullscreen_split_at = 0;
 
     let mut fullscreen_and_up = windows
@@ -181,7 +199,7 @@ where
     )
 }
 
-pub fn pointer_render_elements<R>(
+pub fn pointer_render_elements<R: PRenderer>(
     output: &Output,
     renderer: &mut R,
     space: &Space<WindowElement>,
@@ -189,11 +207,7 @@ pub fn pointer_render_elements<R>(
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
     pointer_element: &PointerElement<<R as Renderer>::TextureId>,
-) -> Vec<OutputRenderElement<R>>
-where
-    R: Renderer + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: Clone + 'static,
-{
+) -> Vec<OutputRenderElement<R>> {
     let mut output_render_elements = Vec::new();
 
     let Some(output_geometry) = space.output_geometry(output) else {
@@ -244,17 +258,12 @@ where
 ///
 /// Render elements will be pulled from the provided windows,
 /// with the first window being at the top and subsequent ones beneath.
-pub fn output_render_elements<R, T>(
+pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     output: &Output,
     renderer: &mut R,
     space: &Space<WindowElement>,
     windows: &[WindowElement],
-) -> Vec<OutputRenderElement<R>>
-where
-    R: Renderer<TextureId = T> + ImportAll + ImportMem,
-    <R as Renderer>::TextureId: 'static,
-    T: Texture + Clone,
-{
+) -> Vec<OutputRenderElement<R>> {
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
@@ -303,8 +312,26 @@ where
         overlay,
     } = layer_render_elements(output, renderer, scale);
 
-    let (fullscreen_and_up_elements, rest_of_window_elements) =
-        window_render_elements::<R>(output, &windows, space, renderer, scale);
+    let mut snapshot_elements: Vec<RescaleRenderElement<CommonTextureRenderElement>> = Vec::new();
+    let mut fullscreen_and_up_elements = Vec::new();
+    let mut rest_of_window_elements = Vec::new();
+
+    if let Some(elements) = output.with_state(|state| {
+        state.layout_transaction.as_ref().map(|ts| {
+            ts.render_elements(
+                renderer.as_gles_renderer(),
+                (0, 0).into(),
+                output.current_scale().fractional_scale().into(),
+                1.0,
+            )
+        })
+    }) {
+        tracing::info!("made snapshot elements");
+        snapshot_elements = elements;
+    } else {
+        (fullscreen_and_up_elements, rest_of_window_elements) =
+            window_render_elements::<R>(output, &windows, space, renderer, scale);
+    }
 
     // Elements render from top to bottom
 
@@ -312,6 +339,7 @@ where
     output_render_elements.extend(fullscreen_and_up_elements);
     output_render_elements.extend(top.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(rest_of_window_elements);
+    output_render_elements.extend(snapshot_elements.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(bottom.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(background.into_iter().map(OutputRenderElement::from));
 

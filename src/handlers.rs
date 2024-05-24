@@ -4,7 +4,7 @@ pub mod session_lock;
 mod xdg_shell;
 mod xwayland;
 
-use std::{mem, os::fd::OwnedFd, sync::Arc, time::Duration};
+use std::{mem, os::fd::OwnedFd, sync::Arc};
 
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
@@ -13,8 +13,8 @@ use smithay::{
     delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_viewporter, delegate_xwayland_shell,
     desktop::{
-        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
-        utils::surface_primary_scanout_output, PopupKind, WindowSurfaceType,
+        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
+        WindowSurfaceType,
     },
     input::{
         pointer::{CursorImageStatus, PointerHandle},
@@ -36,8 +36,8 @@ use smithay::{
     wayland::{
         buffer::BufferHandler,
         compositor::{
-            self, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
-            SurfaceAttributes,
+            self, add_pre_commit_hook, BufferAssignment, CompositorClientState, CompositorHandler,
+            CompositorState, SurfaceAttributes,
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
@@ -73,11 +73,13 @@ use crate::{
     backend::Backend,
     delegate_foreign_toplevel, delegate_gamma_control, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
+    handlers::xdg_shell::snapshot_pre_commit_hook,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
+    render::util::snapshot::capture_snapshots_on_output,
     state::{ClientState, Pinnacle, State, WithState},
 };
 
@@ -137,19 +139,25 @@ impl CompositorHandler for State {
 
         self.backend.early_import(surface);
 
+        if compositor::is_sync_subsurface(surface) {
+            return;
+        }
+
         let mut root = surface.clone();
         while let Some(parent) = compositor::get_parent(&root) {
             root = parent;
         }
 
-        if !compositor::is_sync_subsurface(surface) {
-            if let Some(window) = self.pinnacle.window_for_surface(&root) {
-                window.on_commit();
-                if let Some(loc) = window.with_state_mut(|state| state.target_loc.take()) {
-                    self.pinnacle.space.map_element(window.clone(), loc, false);
-                }
-            }
-        };
+        self.pinnacle
+            .root_surface_cache
+            .insert(surface.clone(), root.clone());
+
+        if let Some(window) = self.pinnacle.window_for_surface(&root) {
+            window.mark_serial_as_committed();
+            window.on_commit();
+        }
+        // if !compositor::is_sync_subsurface(surface) {
+        // };
 
         self.pinnacle.popup_manager.commit(surface);
 
@@ -170,6 +178,17 @@ impl CompositorHandler for State {
                 self.pinnacle.new_windows.retain(|win| win != &new_window);
                 self.pinnacle.windows.push(new_window.clone());
 
+                new_window.on_commit();
+
+                if let Some(toplevel) = new_window.toplevel() {
+                    // TODO: HookId
+                    let hook_id =
+                        add_pre_commit_hook(toplevel.wl_surface(), snapshot_pre_commit_hook);
+                    tracing::info!(?hook_id, id = ?toplevel.wl_surface().id(), "adding hook");
+
+                    new_window.with_state_mut(|state| state.hook_id = Some(hook_id));
+                }
+
                 if let Some(output) = self.pinnacle.focused_output() {
                     tracing::debug!("Placing toplevel");
                     new_window.place_on_output(output);
@@ -189,12 +208,6 @@ impl CompositorHandler for State {
 
                 if let Some(focused_output) = self.pinnacle.focused_output().cloned() {
                     self.pinnacle.request_layout(&focused_output);
-                    new_window.send_frame(
-                        &focused_output,
-                        self.pinnacle.clock.now(),
-                        Some(Duration::ZERO),
-                        surface_primary_scanout_output,
-                    );
 
                     // FIXME: an actual way to map new windows
                     // This is not self.update_keyboard_focus because
@@ -217,6 +230,42 @@ impl CompositorHandler for State {
             }
 
             return;
+        }
+
+        if surface == &root {
+            if let Some(window) = self.pinnacle.window_for_surface(surface) {
+                if let Some(toplevel) = window.toplevel() {
+                    let Some(is_mapped) =
+                        with_renderer_surface_state(toplevel.wl_surface(), |state| {
+                            state.buffer().is_some()
+                        })
+                    else {
+                        unreachable!("on_commit_buffer_handler was called previously");
+                    };
+
+                    if !is_mapped {
+                        if let Some(hook_id) = window.with_state_mut(|state| state.hook_id.take()) {
+                            tracing::info!(
+                                ?hook_id,
+                                "removing hook, id = {:?}",
+                                toplevel.wl_surface().id()
+                            );
+                            compositor::remove_pre_commit_hook(surface, hook_id);
+                        }
+
+                        // TODO: split windows into mapped and unmapped, unmap here
+                        if let Some(output) = window.output(&self.pinnacle) {
+                            let snapshots = self.backend.with_renderer(|renderer| {
+                                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+                            });
+
+                            output.with_state_mut(|state| {
+                                state.new_wait_layout_transaction(snapshots);
+                            });
+                        }
+                    }
+                }
+            }
         }
 
         self.pinnacle.ensure_initial_configure(surface);
@@ -286,6 +335,39 @@ impl CompositorHandler for State {
         for output in outputs {
             self.schedule_render(&output);
         }
+    }
+
+    fn destroyed(&mut self, surface: &WlSurface) {
+        let Some(root_surface) = self.pinnacle.root_surface_cache.get(surface) else {
+            return;
+        };
+        let Some(window) = self.pinnacle.window_for_surface(root_surface) else {
+            return;
+        };
+        let Some(output) = window.output(&self.pinnacle) else {
+            return;
+        };
+        let Some(loc) = self.pinnacle.space.element_location(&window) else {
+            return;
+        };
+
+        let scale = output.current_scale().fractional_scale();
+
+        let loc = (loc - window.geometry().loc - output.current_location())
+            .to_physical_precise_round(scale);
+
+        self.backend.with_renderer(|renderer| {
+            window.capture_snapshot_and_store(
+                renderer,
+                loc,
+                output.current_scale().fractional_scale().into(),
+                1.0,
+            );
+        });
+
+        self.pinnacle
+            .root_surface_cache
+            .retain(|surf, root| surf != surface && root != surface);
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {

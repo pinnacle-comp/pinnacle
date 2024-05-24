@@ -8,7 +8,7 @@ use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{IsAlive, Logical, Point, Rectangle},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 use tracing::{error, warn};
@@ -157,6 +157,30 @@ impl WindowElement {
 
     pub fn is_x11_override_redirect(&self) -> bool {
         matches!(self.x11_surface(), Some(surface) if surface.is_override_redirect())
+    }
+
+    /// Marks the currently acked configure as committed.
+    pub fn mark_serial_as_committed(&self) {
+        let Some(toplevel) = self.toplevel() else { return };
+        let serial = compositor::with_states(toplevel.wl_surface(), |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .configure_serial
+        });
+
+        self.with_state_mut(|state| state.committed_serial = serial);
+    }
+
+    /// Returns whether the currently committed serial is >= the given serial.
+    pub fn is_serial_committed(&self, serial: Serial) -> bool {
+        match self.with_state(|state| state.committed_serial) {
+            Some(committed_serial) => committed_serial >= serial,
+            None => false,
+        }
     }
 }
 

@@ -1,3 +1,5 @@
+#[cfg(feature = "testing")]
+use smithay::backend::renderer::test::DummyRenderer;
 use smithay::{
     backend::renderer::{
         element::{self, texture::TextureRenderElement, Element, RenderElement},
@@ -11,7 +13,14 @@ use smithay::{
 use crate::backend::udev::UdevRenderer;
 
 /// TODO: docs
+#[derive(Debug)]
 pub struct CommonTextureRenderElement(TextureRenderElement<GlesTexture>);
+
+impl CommonTextureRenderElement {
+    pub fn new(element: TextureRenderElement<GlesTexture>) -> Self {
+        Self(element)
+    }
+}
 
 impl Element for CommonTextureRenderElement {
     fn id(&self) -> &element::Id {
@@ -97,5 +106,18 @@ impl<'a> RenderElement<UdevRenderer<'a>> for CommonTextureRenderElement {
     ) -> Option<element::UnderlyingStorage<'_>> {
         let _ = renderer;
         None
+    }
+}
+
+#[cfg(feature = "testing")]
+impl RenderElement<DummyRenderer> for CommonTextureRenderElement {
+    fn draw(
+        &self,
+        _frame: &mut <DummyRenderer as Renderer>::Frame<'_>,
+        _src: Rectangle<f64, Buffer>,
+        _dst: Rectangle<i32, Physical>,
+        _damage: &[Rectangle<i32, Physical>],
+    ) -> Result<(), <DummyRenderer as Renderer>::Error> {
+        Ok(())
     }
 }

@@ -56,6 +56,7 @@ use crate::{
     config::ConnectorSavedState,
     input::ModifierMask,
     output::OutputName,
+    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     tag::{Tag, TagId},
 };
@@ -1068,6 +1069,10 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
+            });
+
             state.pinnacle.change_output_state(
                 &output,
                 None,
@@ -1075,6 +1080,11 @@ impl output_service_server::OutputService for OutputService {
                 Some(Scale::Fractional(current_scale)),
                 None,
             );
+
+            output.with_state_mut(|state| {
+                state.new_wait_layout_transaction(snapshots);
+            });
+
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })

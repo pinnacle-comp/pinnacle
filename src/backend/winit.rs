@@ -335,6 +335,24 @@ impl Winit {
             ));
         }
 
+        let mut clear_snapshots = false;
+        self.output.with_state_mut(|state| {
+            if state
+                .layout_transaction
+                .as_ref()
+                .is_some_and(|ts| ts.ready())
+            {
+                state.layout_transaction.take();
+                clear_snapshots = true;
+            }
+        });
+
+        if clear_snapshots {
+            for win in pinnacle.windows.iter() {
+                win.with_state_mut(|state| state.snapshot.take());
+            }
+        }
+
         let render_res = self.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
                 0

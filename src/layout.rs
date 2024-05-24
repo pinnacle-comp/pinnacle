@@ -2,14 +2,13 @@
 
 pub mod transaction;
 
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
     desktop::{layer_map_for_output, WindowSurface},
     output::Output,
-    utils::{Logical, Point, Rectangle, Serial},
-    wayland::{compositor, shell::xdg::XdgToplevelSurfaceData},
+    utils::{Logical, Rectangle, Serial},
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::Status;
@@ -17,6 +16,7 @@ use tracing::warn;
 
 use crate::{
     output::OutputName,
+    render::util::snapshot::capture_snapshots_on_output,
     state::{Pinnacle, State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized},
@@ -24,12 +24,14 @@ use crate::{
     },
 };
 
+use self::transaction::LayoutTransaction;
+
 impl Pinnacle {
     fn update_windows_with_geometries(
         &mut self,
         output: &Output,
         geometries: Vec<Rectangle<i32, Logical>>,
-    ) {
+    ) -> Vec<(WindowElement, Serial)> {
         let windows_on_foc_tags = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
             self.windows
@@ -96,56 +98,24 @@ impl Pinnacle {
         }
 
         let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
-        let mut non_pending_wins = Vec::<(Point<i32, Logical>, WindowElement)>::new();
 
         for win in windows_on_foc_tags.iter() {
-            if win.with_state(|state| state.target_loc.is_some()) {
-                match win.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        let pending = compositor::with_states(toplevel.wl_surface(), |states| {
-                            states
-                                .data_map
-                                .get::<XdgToplevelSurfaceData>()
-                                .expect("XdgToplevelSurfaceData wasn't in surface's data map")
-                                .lock()
-                                .expect("Failed to lock Mutex<XdgToplevelSurfaceData>")
-                                .has_pending_changes()
-                        });
-
-                        if pending {
-                            pending_wins.push((win.clone(), toplevel.send_configure()))
-                        } else {
-                            let loc = win.with_state_mut(|state| state.target_loc.take());
-                            if let Some(loc) = loc {
-                                non_pending_wins.push((loc, win.clone()));
-                            }
-                        }
-                    }
-                    WindowSurface::X11(_) => {
-                        let loc = win.with_state_mut(|state| state.target_loc.take());
-                        if let Some(loc) = loc {
-                            self.space.map_element(win.clone(), loc, false);
-                        }
-                    }
+            if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
+                if let Some(serial) = toplevel.send_pending_configure() {
+                    pending_wins.push((win.clone(), serial));
                 }
+            }
+
+            // TODO: get rid of target_loc
+            let loc = win.with_state_mut(|state| state.target_loc.take());
+            if let Some(loc) = loc {
+                self.space.map_element(win.clone(), loc, false);
             }
         }
 
-        for (loc, window) in non_pending_wins {
-            self.space.map_element(window, loc, false);
-        }
-
-        // FIXME:
-        // We are sending frames here to get offscreen windows to commit and map.
-        // Obviously this is a bad way to do this but its a bandaid solution
-        // until decent transactional layout applications are implemented.
-        for (win, _serial) in pending_wins {
-            win.send_frame(output, self.clock.now(), Some(Duration::ZERO), |_, _| {
-                Some(output.clone())
-            });
-        }
-
         self.fixup_z_layering();
+
+        pending_wins
     }
 
     /// Swaps two windows in the main window vec and updates all windows.
@@ -297,8 +267,21 @@ impl State {
             .fulfilled_requests
             .insert(output.clone(), current_pending);
 
-        self.pinnacle
+        let snapshots = self.backend.with_renderer(|renderer| {
+            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+        });
+
+        let pending_windows = self
+            .pinnacle
             .update_windows_with_geometries(&output, geometries);
+
+        output.with_state_mut(|state| {
+            if let Some(ts) = state.layout_transaction.as_mut() {
+                ts.update_pending(pending_windows);
+            } else {
+                state.layout_transaction = Some(LayoutTransaction::new(snapshots, pending_windows));
+            }
+        });
 
         self.schedule_render(&output);
 

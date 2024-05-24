@@ -12,6 +12,7 @@ use smithay::{
 
 use crate::{
     focus::WindowKeyboardFocusStack,
+    layout::transaction::{LayoutSnapshot, LayoutTransaction},
     protocol::screencopy::Screencopy,
     state::{Pinnacle, WithState},
     tag::Tag,
@@ -57,6 +58,8 @@ pub struct OutputState {
     pub modes: Vec<Mode>,
     pub lock_surface: Option<LockSurface>,
     pub blanking_state: BlankingState,
+    /// A pending layout transaction.
+    pub layout_transaction: Option<LayoutTransaction>,
 }
 
 impl WithState for Output {
@@ -88,6 +91,18 @@ impl WithState for Output {
 impl OutputState {
     pub fn focused_tags(&self) -> impl Iterator<Item = &Tag> {
         self.tags.iter().filter(|tag| tag.active())
+    }
+
+    pub fn new_wait_layout_transaction(
+        &mut self,
+        snapshots: impl IntoIterator<Item = LayoutSnapshot>,
+    ) {
+        tracing::info!("new_wait_layout_transaction");
+        if let Some(ts) = self.layout_transaction.as_mut() {
+            ts.wait();
+        } else {
+            self.layout_transaction = Some(LayoutTransaction::new_and_wait(snapshots));
+        }
     }
 }
 

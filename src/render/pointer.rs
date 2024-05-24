@@ -15,6 +15,8 @@ use smithay::{
     utils::{Physical, Point, Scale},
 };
 
+use super::PRenderer;
+
 pub struct PointerElement<T: Texture> {
     texture: Option<TextureBuffer<T>>,
     status: CursorImageStatus,
@@ -56,11 +58,7 @@ render_elements! {
     Texture=TextureRenderElement<<R as Renderer>::TextureId>,
 }
 
-impl<T, R> AsRenderElements<R> for PointerElement<T>
-where
-    T: Texture + Clone + 'static,
-    R: Renderer<TextureId = T> + ImportAll,
-{
+impl<R: PRenderer> AsRenderElements<R> for PointerElement<R::TextureId> {
     type RenderElement = PointerRenderElement<R>;
 
     fn render_elements<C: From<Self::RenderElement>>(

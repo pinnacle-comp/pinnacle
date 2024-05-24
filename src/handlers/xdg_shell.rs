@@ -9,19 +9,23 @@ use smithay::{
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
         wayland_server::{
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
-            Resource,
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
+            DisplayHandle, Resource,
         },
     },
     utils::Serial,
-    wayland::shell::xdg::{
-        PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+    wayland::{
+        compositor::{self, BufferAssignment, SurfaceAttributes},
+        shell::xdg::{
+            PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+        },
     },
 };
 use tracing::trace;
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
+    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     window::WindowElement,
 };
@@ -50,6 +54,18 @@ impl XdgShellHandler for State {
             return;
         };
 
+        let snapshots = if let Some(output) = window.output(&self.pinnacle) {
+            self.backend.with_renderer(|renderer| {
+                Some(capture_snapshots_on_output(
+                    &mut self.pinnacle,
+                    renderer,
+                    &output,
+                ))
+            })
+        } else {
+            None
+        };
+
         self.pinnacle.windows.retain(|win| win != &window);
 
         self.pinnacle.z_index_stack.retain(|win| win != &window);
@@ -60,6 +76,12 @@ impl XdgShellHandler for State {
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|state| {
+                    state.new_wait_layout_transaction(snapshots);
+                });
+            }
 
             let focus = self
                 .pinnacle
@@ -321,3 +343,54 @@ impl XdgShellHandler for State {
     // TODO: impl the rest of the fns in XdgShellHandler
 }
 delegate_xdg_shell!(State);
+
+pub fn snapshot_pre_commit_hook(
+    state: &mut State,
+    _display_handle: &DisplayHandle,
+    surface: &WlSurface,
+) {
+    let Some(window) = state.pinnacle.window_for_surface(surface) else {
+        tracing::info!("no win for surface");
+        return;
+    };
+
+    let unmapped = compositor::with_states(surface, |states| {
+        let buffer = &states.cached_state.pending::<SurfaceAttributes>().buffer;
+        matches!(buffer, Some(BufferAssignment::Removed))
+    });
+
+    let id = surface.id();
+
+    if unmapped {
+        let Some(output) = window.output(&state.pinnacle) else {
+            tracing::info!("no output for win");
+            return;
+        };
+        let Some(loc) = state.pinnacle.space.element_location(&window) else {
+            tracing::info!("no loc for win");
+            return;
+        };
+
+        let scale = output.current_scale().fractional_scale();
+
+        let loc = (loc - window.geometry().loc - output.current_location())
+            .to_physical_precise_round(scale);
+
+        tracing::info!(
+            ?id,
+            "storing unmap snapshot on buffer removed, loc = {loc:?}"
+        );
+
+        state.backend.with_renderer(|renderer| {
+            window.capture_snapshot_and_store(
+                renderer,
+                loc,
+                output.current_scale().fractional_scale().into(),
+                1.0,
+            );
+        });
+    } else {
+        tracing::info!("taking snapshot, surf id = {id:?}");
+        window.with_state_mut(|state| state.snapshot.take());
+    }
+}
