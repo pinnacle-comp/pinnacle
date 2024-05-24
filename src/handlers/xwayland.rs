@@ -26,6 +26,7 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     cursor::Cursor,
     focus::keyboard::KeyboardFocusTarget,
+    render::util::snapshot::capture_snapshots_on_output,
     state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
@@ -104,7 +105,8 @@ impl XwmHandler for State {
             });
         }
 
-        // TODO: will an unmap -> map duplicate the window
+        // TODO: do snapshot and transaction here BUT ONLY IF TILED AND ON ACTIVE TAG
+
         self.pinnacle.windows.push(window.clone());
         self.pinnacle.raise_window(window.clone(), true);
 
@@ -432,13 +434,27 @@ impl State {
             .iter()
             .find(|elem| elem.x11_surface() == Some(&surface))
             .cloned();
-
         if let Some(win) = win {
             debug!("removing x11 window from windows");
+
+            let snapshots = win.output(&self.pinnacle).map(|output| {
+                self.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+                })
+            });
 
             self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
+                if let Some(snapshots) = snapshots {
+                    output.with_state_mut(|state| {
+                        state.new_wait_layout_transaction(
+                            self.pinnacle.loop_handle.clone(),
+                            snapshots,
+                        )
+                    });
+                }
+
                 self.pinnacle.request_layout(&output);
                 self.update_keyboard_focus(&output);
                 self.schedule_render(&output);

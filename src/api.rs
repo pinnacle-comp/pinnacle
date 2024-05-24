@@ -738,6 +738,14 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
+            let Some(output) = tag.output(&state.pinnacle) else {
+                return;
+            };
+
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
+            });
+
             match set_or_toggle {
                 SetOrToggle::Set => tag.set_active(true, state),
                 SetOrToggle::Unset => tag.set_active(false, state),
@@ -745,11 +753,11 @@ impl tag_service_server::TagService for TagService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = tag.output(&state.pinnacle) else {
-                return;
-            };
-
             state.pinnacle.fixup_xwayland_window_layering();
+
+            output.with_state_mut(|op_state| {
+                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots)
+            });
 
             state.pinnacle.request_layout(&output);
             state.update_keyboard_focus(&output);
@@ -773,6 +781,10 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
+            });
+
             output.with_state(|op_state| {
                 for op_tag in op_state.tags.iter() {
                     op_tag.set_active(false, state);
@@ -781,6 +793,10 @@ impl tag_service_server::TagService for TagService {
             });
 
             state.pinnacle.fixup_xwayland_window_layering();
+
+            output.with_state_mut(|op_state| {
+                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots)
+            });
 
             state.pinnacle.request_layout(&output);
             state.update_keyboard_focus(&output);

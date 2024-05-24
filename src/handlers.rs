@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod session_lock;
+pub mod window;
 mod xdg_shell;
 mod xwayland;
 
@@ -32,7 +33,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
+    utils::{Logical, Point, Rectangle},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -201,6 +202,8 @@ impl CompositorHandler for State {
                         .unmapped_windows
                         .retain(|win| win != unmapped_window);
                     self.pinnacle.windows.push(unmapped_window.clone());
+
+                    self.pinnacle.raise_window(unmapped_window.clone(), true);
 
                     self.pinnacle.apply_window_rules(&unmapped_window);
 

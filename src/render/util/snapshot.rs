@@ -100,7 +100,7 @@ impl WindowElement {
         alpha: f32,
     ) {
         self.with_state_mut(|state| {
-            if state.snapshot.is_none() {
+            if state.snapshot.is_none() || self.is_x11() {
                 let elements = self.render_elements(renderer, location, scale, alpha);
                 state.snapshot = Some(RenderSnapshot::new(elements, scale));
             }
@@ -117,10 +117,9 @@ pub fn capture_snapshots_on_output(
     let windows_on_foc_tags = output.with_state(|state| {
         let focused_tags = state.focused_tags().collect::<Vec<_>>();
         pinnacle
-            .windows
+            .z_index_stack
             .iter()
             .rev()
-            .filter(|win| !win.is_x11_override_redirect())
             .filter(|win| {
                 win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
             })

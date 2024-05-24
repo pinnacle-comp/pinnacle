@@ -21,7 +21,10 @@ use smithay::{
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
-use crate::{output::OutputName, state::WithState, tag::TagId, window::window_state::WindowId};
+use crate::{
+    output::OutputName, render::util::snapshot::capture_snapshots_on_output, state::WithState,
+    tag::TagId, window::window_state::WindowId,
+};
 
 use super::{run_unary, run_unary_no_response, StateFnSender};
 
@@ -136,6 +139,12 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
+            let snapshots = window.output(pinnacle).map(|output| {
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(pinnacle, renderer, &output)
+                })
+            });
+
             match set_or_toggle {
                 SetOrToggle::Set => {
                     if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
@@ -154,6 +163,12 @@ impl window_service_server::WindowService for WindowService {
             let Some(output) = window.output(pinnacle) else {
                 return;
             };
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
+                });
+            }
 
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
@@ -185,6 +200,12 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
+            let snapshots = window.output(pinnacle).map(|output| {
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(pinnacle, renderer, &output)
+                })
+            });
+
             match set_or_toggle {
                 SetOrToggle::Set => {
                     if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
@@ -203,6 +224,12 @@ impl window_service_server::WindowService for WindowService {
             let Some(output) = window.output(pinnacle) else {
                 return;
             };
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
+                });
+            }
 
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
@@ -234,6 +261,12 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
+            let snapshots = window.output(pinnacle).map(|output| {
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(pinnacle, renderer, &output)
+                })
+            });
+
             match set_or_toggle {
                 SetOrToggle::Set => {
                     if !window.with_state(|state| state.floating_or_tiled.is_floating()) {
@@ -252,6 +285,12 @@ impl window_service_server::WindowService for WindowService {
             let Some(output) = window.output(pinnacle) else {
                 return;
             };
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
+                });
+            }
 
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
@@ -363,11 +402,23 @@ impl window_service_server::WindowService for WindowService {
 
             let Some(tag) = tag_id.tag(pinnacle) else { return };
 
+            let snapshots = window.output(pinnacle).map(|output| {
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(pinnacle, renderer, &output)
+                })
+            });
+
             window.with_state_mut(|state| {
                 state.tags = vec![tag.clone()];
             });
 
             let Some(output) = tag.output(pinnacle) else { return };
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
+                });
+            }
 
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
@@ -405,6 +456,12 @@ impl window_service_server::WindowService for WindowService {
             };
             let Some(tag) = tag_id.tag(pinnacle) else { return };
 
+            let snapshots = window.output(pinnacle).map(|output| {
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(pinnacle, renderer, &output)
+                })
+            });
+
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
                 SetOrToggle::Set => window.with_state_mut(|state| {
@@ -425,6 +482,13 @@ impl window_service_server::WindowService for WindowService {
             }
 
             let Some(output) = tag.output(pinnacle) else { return };
+
+            if let Some(snapshots) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
+                });
+            }
+
             pinnacle.request_layout(&output);
             state.schedule_render(&output);
 

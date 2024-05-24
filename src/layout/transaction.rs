@@ -32,6 +32,9 @@ use crate::{
     window::WindowElement,
 };
 
+/// The timeout before transactions stop applying.
+const TIMEOUT: Duration = Duration::from_millis(1000);
+
 /// Type for window snapshots.
 pub type LayoutSnapshot = RenderSnapshot<WaylandSurfaceRenderElement<GlesRenderer>>;
 
@@ -56,10 +59,10 @@ pub struct LayoutTransaction {
 }
 
 impl LayoutTransaction {
-    /// Schedule an event after the timeout to check for stuff.
+    /// Schedule an event after the timeout to check for readiness.
     fn register_wakeup(loop_handle: &LoopHandle<'static, State>) {
         let _ = loop_handle.insert_source(
-            Timer::from_duration(Duration::from_millis(150)),
+            Timer::from_duration(TIMEOUT + Duration::from_millis(10)),
             |_, _, _| TimeoutAction::Drop,
         );
     }
@@ -117,12 +120,12 @@ impl LayoutTransaction {
     /// Returns whether all pending windows have committed their serials or the timeout has been
     /// reached.
     pub fn ready(&self) -> bool {
-        Instant::now().duration_since(self.start_time) >= Duration::from_millis(150)
-            || (!self.wait
-                && self
-                    .pending_windows
-                    .iter()
-                    .all(|(win, serial)| win.is_serial_committed(*serial)))
+        Instant::now().duration_since(self.start_time) >= TIMEOUT
+        // || (!self.wait
+        //     && self
+        //         .pending_windows
+        //         .iter()
+        //         .all(|(win, serial)| win.is_serial_committed(*serial)))
     }
 }
 
