@@ -49,14 +49,7 @@ impl XwmHandler for State {
         }
 
         let window = WindowElement::new(Window::new_x11_window(surface));
-        self.pinnacle
-            .space
-            .map_element(window.clone(), (0, 0), true);
-        let bbox = self
-            .pinnacle
-            .space
-            .element_bbox(&window)
-            .expect("called element_bbox on an unmapped window");
+        let bbox = window.bbox();
 
         let output_size = self
             .pinnacle
@@ -84,16 +77,13 @@ impl XwmHandler for State {
             unreachable!()
         };
 
-        self.pinnacle.space.map_element(window.clone(), loc, true);
         surface.set_mapped(true).expect("failed to map x11 window");
 
         let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
 
-        debug!("map_window_request, configuring with bbox {bbox:?}");
         surface
             .configure(bbox)
             .expect("failed to configure x11 window");
-        // TODO: ssd
 
         if let Some(output) = self.pinnacle.focused_output() {
             window.place_on_output(output);
@@ -103,22 +93,40 @@ impl XwmHandler for State {
             window.with_state_mut(|state| {
                 state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
             });
+            self.pinnacle.space.map_element(window.clone(), loc, true);
         }
 
         // TODO: do snapshot and transaction here BUT ONLY IF TILED AND ON ACTIVE TAG
+
+        let snapshots = if let Some(output) = window.output(&self.pinnacle) {
+            Some(self.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+            }))
+        } else {
+            None
+        };
 
         self.pinnacle.windows.push(window.clone());
         self.pinnacle.raise_window(window.clone(), true);
 
         self.pinnacle.apply_window_rules(&window);
 
-        if let Some(output) = window.output(&self.pinnacle) {
-            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-            self.pinnacle.request_layout(&output);
+        if window.is_on_active_tag() {
+            if let Some(output) = window.output(&self.pinnacle) {
+                output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+                self.update_keyboard_focus(&output);
 
-            self.pinnacle.loop_handle.insert_idle(move |state| {
-                state.update_keyboard_focus(&output);
-            });
+                if let Some(snapshots) = snapshots {
+                    output.with_state_mut(|state| {
+                        state.new_wait_layout_transaction(
+                            self.pinnacle.loop_handle.clone(),
+                            snapshots,
+                        )
+                    });
+                }
+
+                self.pinnacle.request_layout(&output);
+            }
         }
     }
 
@@ -240,10 +248,6 @@ impl XwmHandler for State {
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        window
-            .set_maximized(true)
-            .expect("failed to set x11 win to maximized");
-
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -251,16 +255,10 @@ impl XwmHandler for State {
             return;
         };
 
-        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_maximized();
-        }
+        self.set_window_maximized(&window, true);
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        window
-            .set_maximized(false)
-            .expect("failed to set x11 win to maximized");
-
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -268,16 +266,10 @@ impl XwmHandler for State {
             return;
         };
 
-        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_maximized();
-        }
+        self.set_window_maximized(&window, false);
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        window
-            .set_fullscreen(true)
-            .expect("failed to set x11 win to fullscreen");
-
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -285,19 +277,10 @@ impl XwmHandler for State {
             return;
         };
 
-        if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-            window.toggle_fullscreen();
-            if let Some(output) = window.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-            }
-        }
+        self.set_window_fullscreen(&window, true);
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        window
-            .set_fullscreen(false)
-            .expect("failed to set x11 win to unfullscreen");
-
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -305,12 +288,7 @@ impl XwmHandler for State {
             return;
         };
 
-        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-            window.toggle_fullscreen();
-            if let Some(output) = window.output(&self.pinnacle) {
-                self.pinnacle.request_layout(&output);
-            }
-        }
+        self.set_window_fullscreen(&window, true);
     }
 
     fn resize_request(

@@ -121,11 +121,11 @@ impl LayoutTransaction {
     /// reached.
     pub fn ready(&self) -> bool {
         Instant::now().duration_since(self.start_time) >= TIMEOUT
-        // || (!self.wait
-        //     && self
-        //         .pending_windows
-        //         .iter()
-        //         .all(|(win, serial)| win.is_serial_committed(*serial)))
+            || (!self.wait
+                && self
+                    .pending_windows
+                    .iter()
+                    .all(|(win, serial)| win.is_serial_committed(*serial)))
     }
 }
 

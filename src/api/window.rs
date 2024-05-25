@@ -194,45 +194,26 @@ impl window_service_server::WindowService for WindowService {
             return Err(Status::invalid_argument("unspecified set or toggle"));
         }
 
+        let maximized = match set_or_toggle {
+            SetOrToggle::Set => Some(true),
+            SetOrToggle::Unset => Some(false),
+            SetOrToggle::Toggle => None,
+            SetOrToggle::Unspecified => unreachable!(),
+        };
+
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
-            let snapshots = window.output(pinnacle).map(|output| {
-                state.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(pinnacle, renderer, &output)
-                })
-            });
-
-            match set_or_toggle {
-                SetOrToggle::Set => {
-                    if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-                        window.toggle_maximized();
-                    }
+            match maximized {
+                Some(maximized) => state.set_window_maximized(&window, maximized),
+                None => {
+                    let is_maximized = window
+                        .with_state(|win_state| win_state.fullscreen_or_maximized.is_maximized());
+                    state.set_window_maximized(&window, !is_maximized);
                 }
-                SetOrToggle::Unset => {
-                    if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-                        window.toggle_maximized();
-                    }
-                }
-                SetOrToggle::Toggle => window.toggle_maximized(),
-                SetOrToggle::Unspecified => unreachable!(),
             }
-
-            let Some(output) = window.output(pinnacle) else {
-                return;
-            };
-
-            if let Some(snapshots) = snapshots {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
-                });
-            }
-
-            pinnacle.request_layout(&output);
-            state.schedule_render(&output);
         })
         .await
     }
@@ -255,45 +236,26 @@ impl window_service_server::WindowService for WindowService {
             return Err(Status::invalid_argument("unspecified set or toggle"));
         }
 
+        let fullscreen = match set_or_toggle {
+            SetOrToggle::Set => Some(true),
+            SetOrToggle::Unset => Some(false),
+            SetOrToggle::Toggle => None,
+            SetOrToggle::Unspecified => unreachable!(),
+        };
+
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
-            let snapshots = window.output(pinnacle).map(|output| {
-                state.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(pinnacle, renderer, &output)
-                })
-            });
-
-            match set_or_toggle {
-                SetOrToggle::Set => {
-                    if !window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                        window.toggle_floating();
-                    }
+            match fullscreen {
+                Some(fullscreen) => state.set_window_fullscreen(&window, fullscreen),
+                None => {
+                    let is_fullscreen = window
+                        .with_state(|win_state| win_state.fullscreen_or_maximized.is_fullscreen());
+                    state.set_window_fullscreen(&window, !is_fullscreen);
                 }
-                SetOrToggle::Unset => {
-                    if window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                        window.toggle_floating();
-                    }
-                }
-                SetOrToggle::Toggle => window.toggle_floating(),
-                SetOrToggle::Unspecified => unreachable!(),
             }
-
-            let Some(output) = window.output(pinnacle) else {
-                return;
-            };
-
-            if let Some(snapshots) = snapshots {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(pinnacle.loop_handle.clone(), snapshots)
-                });
-            }
-
-            pinnacle.request_layout(&output);
-            state.schedule_render(&output);
         })
         .await
     }
