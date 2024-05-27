@@ -37,7 +37,7 @@ impl XdgShellHandler for State {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         surface.with_pending_state(|state| {
-            state.size = Some((600, 400).into()); // gets wleird-slow-ack working
+            // state.size = Some((600, 400).into()); // gets wleird-slow-ack working
             state.states.set(xdg_toplevel::State::TiledTop);
             state.states.set(xdg_toplevel::State::TiledBottom);
             state.states.set(xdg_toplevel::State::TiledLeft);

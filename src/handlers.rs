@@ -822,9 +822,9 @@ impl ForeignToplevelHandler for State {
                 output.with_state(|state| {
                     if state.tags.contains(&tag) {
                         for op_tag in state.tags.iter() {
-                            op_tag.set_active(false, self);
+                            op_tag.set_active(false, &mut self.pinnacle);
                         }
-                        tag.set_active(true, self);
+                        tag.set_active(true, &mut self.pinnacle);
                     }
                 });
             }

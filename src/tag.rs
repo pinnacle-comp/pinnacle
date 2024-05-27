@@ -9,7 +9,7 @@ use std::{
 
 use smithay::output::Output;
 
-use crate::state::{Pinnacle, State, WithState};
+use crate::state::{Pinnacle, WithState};
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -88,10 +88,10 @@ impl Tag {
         self.inner.borrow().active
     }
 
-    pub fn set_active(&self, active: bool, state: &mut State) {
+    pub fn set_active(&self, active: bool, pinnacle: &mut Pinnacle) {
         self.inner.borrow_mut().active = active;
 
-        state.pinnacle.signal_state.tag_active.signal(|buf| {
+        pinnacle.signal_state.tag_active.signal(|buf| {
             buf.push_back(
                 pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
                     tag_id: Some(self.id().0),

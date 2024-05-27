@@ -747,9 +747,9 @@ impl tag_service_server::TagService for TagService {
             });
 
             match set_or_toggle {
-                SetOrToggle::Set => tag.set_active(true, state),
-                SetOrToggle::Unset => tag.set_active(false, state),
-                SetOrToggle::Toggle => tag.set_active(!tag.active(), state),
+                SetOrToggle::Set => tag.set_active(true, &mut state.pinnacle),
+                SetOrToggle::Unset => tag.set_active(false, &mut state.pinnacle),
+                SetOrToggle::Toggle => tag.set_active(!tag.active(), &mut state.pinnacle),
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
@@ -793,9 +793,9 @@ impl tag_service_server::TagService for TagService {
 
             output.with_state(|op_state| {
                 for op_tag in op_state.tags.iter() {
-                    op_tag.set_active(false, state);
+                    op_tag.set_active(false, &mut state.pinnacle);
                 }
-                tag.set_active(true, state);
+                tag.set_active(true, &mut state.pinnacle);
             });
 
             state.pinnacle.fixup_xwayland_window_layering();
