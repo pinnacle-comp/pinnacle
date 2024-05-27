@@ -36,6 +36,7 @@ tempfile = "3.10.1"
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
 rev = "900b938"
+# path = "../../git/smithay"
 default-features = false
 features = [
     "desktop",

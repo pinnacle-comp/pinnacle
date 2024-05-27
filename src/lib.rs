@@ -1,5 +1,3 @@
-#![warn(clippy::unwrap_used)]
-
 pub mod api;
 pub mod backend;
 pub mod cli;

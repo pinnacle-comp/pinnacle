@@ -251,3 +251,6 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 # Changelog
 See [`CHANGELOG.md`](CHANGELOG.md).
+
+# With Special Thanks To
+- [Niri](https://github.com/YaLTeR/niri): For all that rendering and protocol stuff I, ahem, *took inspiration* from

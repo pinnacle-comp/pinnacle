@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use smithay::{desktop::space::SpaceElement, output::Output, utils::SERIAL_COUNTER};
-use tracing::warn;
 
 use crate::{
     state::{Pinnacle, State, WithState},
@@ -77,17 +76,10 @@ impl Pinnacle {
     }
 
     /// Raise a window to the top of the z-index stack.
-    ///
-    /// This does nothing if the window is unmapped.
     pub fn raise_window(&mut self, window: WindowElement, activate: bool) {
-        if self.space.elements().all(|win| win != &window) {
-            warn!("Tried to raise an unmapped window");
-            return;
-        }
-
         self.space.raise_element(&window, activate);
 
-        self.z_index_stack.retain(|win| win != &window);
+        self.z_index_stack.retain(|win| win != window);
         self.z_index_stack.push(window);
 
         self.fixup_xwayland_window_layering();
@@ -128,7 +120,7 @@ impl WindowKeyboardFocusStack {
     /// If it's already in the stack, it will be removed then pushed.
     /// If it isn't, it will just be pushed.
     pub fn set_focus(&mut self, window: WindowElement) {
-        self.stack.retain(|win| win != &window);
+        self.stack.retain(|win| win != window);
         self.stack.push(window);
         self.focused = true;
     }

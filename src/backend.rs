@@ -10,6 +10,7 @@ use smithay::{
                 default_primary_scanout_output_compare, utils::select_dmabuf_feedback,
                 RenderElementStates,
             },
+            gles::GlesRenderer,
             ImportDma, Renderer, TextureFilter,
         },
     },
@@ -103,6 +104,18 @@ impl Backend {
             Backend::Udev(udev) => udev.early_import(surface),
             #[cfg(feature = "testing")]
             Backend::Dummy(dummy) => dummy.early_import(surface),
+        }
+    }
+
+    pub fn with_renderer<T>(
+        &mut self,
+        with_renderer: impl FnOnce(&mut GlesRenderer) -> T,
+    ) -> Option<T> {
+        match self {
+            Backend::Winit(winit) => Some(with_renderer(winit.backend.renderer())),
+            Backend::Udev(udev) => Some(with_renderer(udev.renderer().ok()?.as_mut())),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => None,
         }
     }
 

@@ -56,6 +56,7 @@ use crate::{
     config::ConnectorSavedState,
     input::ModifierMask,
     output::OutputName,
+    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     tag::{Tag, TagId},
 };
@@ -737,18 +738,32 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            match set_or_toggle {
-                SetOrToggle::Set => tag.set_active(true, state),
-                SetOrToggle::Unset => tag.set_active(false, state),
-                SetOrToggle::Toggle => tag.set_active(!tag.active(), state),
-                SetOrToggle::Unspecified => unreachable!(),
-            }
-
             let Some(output) = tag.output(&state.pinnacle) else {
                 return;
             };
 
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+            });
+
+            match set_or_toggle {
+                SetOrToggle::Set => tag.set_active(true, &mut state.pinnacle),
+                SetOrToggle::Unset => tag.set_active(false, &mut state.pinnacle),
+                SetOrToggle::Toggle => tag.set_active(!tag.active(), &mut state.pinnacle),
+                SetOrToggle::Unspecified => unreachable!(),
+            }
+
             state.pinnacle.fixup_xwayland_window_layering();
+
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(
+                        state.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    )
+                });
+            }
 
             state.pinnacle.request_layout(&output);
             state.update_keyboard_focus(&output);
@@ -772,14 +787,28 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+            });
+
             output.with_state(|op_state| {
                 for op_tag in op_state.tags.iter() {
-                    op_tag.set_active(false, state);
+                    op_tag.set_active(false, &mut state.pinnacle);
                 }
-                tag.set_active(true, state);
+                tag.set_active(true, &mut state.pinnacle);
             });
 
             state.pinnacle.fixup_xwayland_window_layering();
+
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(
+                        state.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    )
+                });
+            }
 
             state.pinnacle.request_layout(&output);
             state.update_keyboard_focus(&output);
@@ -1068,6 +1097,10 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
+            let snapshots = state.backend.with_renderer(|renderer| {
+                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+            });
+
             state.pinnacle.change_output_state(
                 &output,
                 None,
@@ -1075,6 +1108,17 @@ impl output_service_server::OutputService for OutputService {
                 Some(Scale::Fractional(current_scale)),
                 None,
             );
+
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                output.with_state_mut(|op_state| {
+                    op_state.new_wait_layout_transaction(
+                        state.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    )
+                });
+            }
+
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })

@@ -2,13 +2,13 @@
 
 pub mod rules;
 
-use std::{cell::RefCell, ops::Deref};
+use std::{cell::RefCell, collections::HashSet, ops::Deref};
 
 use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{IsAlive, Logical, Point, Rectangle},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 use tracing::{error, warn};
@@ -27,6 +27,18 @@ impl Deref for WindowElement {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl PartialEq<&WindowElement> for WindowElement {
+    fn eq(&self, other: &&WindowElement) -> bool {
+        self == *other
+    }
+}
+
+impl PartialEq<WindowElement> for &WindowElement {
+    fn eq(&self, other: &WindowElement) -> bool {
+        *self == other
     }
 }
 
@@ -131,6 +143,23 @@ impl WindowElement {
         self.with_state(|state| state.tags.iter().any(|tag| tag.active()))
     }
 
+    pub fn is_on_active_tag_on_output(&self, output: &Output) -> bool {
+        // PERF: dear god benchmark this
+        let win_tags = self
+            .with_state(|state| state.tags.clone())
+            .into_iter()
+            .collect::<HashSet<_>>();
+        output.with_state(|state| {
+            state
+                .focused_tags()
+                .cloned()
+                .collect::<HashSet<_>>()
+                .intersection(&win_tags)
+                .next()
+                .is_some()
+        })
+    }
+
     /// Place this window on the given output, giving it the output's focused tags.
     ///
     /// RefCell Safety: Uses `with_state_mut` on the window and `with_state` on the output
@@ -157,6 +186,30 @@ impl WindowElement {
 
     pub fn is_x11_override_redirect(&self) -> bool {
         matches!(self.x11_surface(), Some(surface) if surface.is_override_redirect())
+    }
+
+    /// Marks the currently acked configure as committed.
+    pub fn mark_serial_as_committed(&self) {
+        let Some(toplevel) = self.toplevel() else { return };
+        let serial = compositor::with_states(toplevel.wl_surface(), |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .configure_serial
+        });
+
+        self.with_state_mut(|state| state.committed_serial = serial);
+    }
+
+    /// Returns whether the currently committed serial is >= the given serial.
+    pub fn is_serial_committed(&self, serial: Serial) -> bool {
+        match self.with_state(|state| state.committed_serial) {
+            Some(committed_serial) => committed_serial >= serial,
+            None => false,
+        }
     }
 }
 
@@ -229,24 +282,34 @@ impl WithState for WindowElement {
 impl Pinnacle {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.space
-            .elements()
-            .find(|window| window.wl_surface().map(|s| &*s == surface).unwrap_or(false))
-            .or_else(|| {
-                self.windows
-                    .iter()
-                    .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
-            })
-            .cloned()
-    }
-
-    /// `window_for_surface` but for windows that haven't commited a buffer yet.
-    ///
-    /// Currently only used in `ensure_initial_configure` in [`handlers`][crate::handlers].
-    pub fn new_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        self.new_windows
+        self.windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
             .cloned()
+    }
+
+    /// [`Self::window_for_surface`] but for windows that don't have a buffer.
+    pub fn unmapped_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
+        self.unmapped_windows
+            .iter()
+            .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
+            .cloned()
+    }
+
+    /// Removes a window from the main window vec, z_index stack, and focus stacks.
+    ///
+    /// If `unmap` is true the window has become unmapped and will be pushed to `unmapped_windows`.
+    pub fn remove_window(&mut self, window: &WindowElement, unmap: bool) {
+        self.windows.retain(|win| win != window);
+        self.unmapped_windows.retain(|win| win != window);
+        if unmap {
+            self.unmapped_windows.push(window.clone());
+        }
+
+        self.z_index_stack.retain(|win| win != window);
+
+        for output in self.space.outputs() {
+            output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
+        }
     }
 }

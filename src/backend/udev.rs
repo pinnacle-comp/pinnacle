@@ -108,7 +108,7 @@ const SUPPORTED_FORMATS: &[Fourcc] = &[
 const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 /// A [`MultiRenderer`] that uses the [`GbmGlesBackend`].
-type UdevRenderer<'a> = MultiRenderer<
+pub type UdevRenderer<'a> = MultiRenderer<
     'a,
     'a,
     GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
@@ -866,6 +866,10 @@ fn render_frame<'a>(
 }
 
 impl Udev {
+    pub fn renderer(&mut self) -> anyhow::Result<UdevRenderer<'_>> {
+        Ok(self.gpu_manager.single_renderer(&self.primary_gpu)?)
+    }
+
     /// A GPU was plugged in.
     fn device_added(
         &mut self,
@@ -1505,6 +1509,22 @@ impl Udev {
             ));
         }
 
+        // HACK: Taking the transaction before creating render elements
+        // leads to a possibility where the original buffer still gets displayed.
+        // Need to figure that out.
+        // In the meantime we take the transaction afterwards and schedule another render.
+        let mut render_after_transaction_finish = false;
+        output.with_state_mut(|state| {
+            if state
+                .layout_transaction
+                .as_ref()
+                .is_some_and(|ts| ts.ready())
+            {
+                state.layout_transaction.take();
+                render_after_transaction_finish = true;
+            }
+        });
+
         let clear_color = if pinnacle.lock_state.is_unlocked() {
             CLEAR_COLOR
         } else {
@@ -1571,6 +1591,10 @@ impl Udev {
         match result {
             Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
             Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
+        }
+
+        if render_after_transaction_finish {
+            self.schedule_render(&pinnacle.loop_handle, output);
         }
     }
 }

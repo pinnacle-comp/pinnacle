@@ -5,10 +5,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use smithay::{
     desktop::{space::SpaceElement, WindowSurface},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Point, Rectangle},
+    utils::{Logical, Point, Rectangle, Serial},
+    wayland::compositor::HookId,
 };
 
 use crate::{
+    layout::transaction::LayoutSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
 };
@@ -54,6 +56,10 @@ pub struct WindowElementState {
     pub fullscreen_or_maximized: FullscreenOrMaximized,
     pub target_loc: Option<Point<i32, Logical>>,
     pub minimized: bool,
+    /// The most recent serial that has been committed.
+    pub committed_serial: Option<Serial>,
+    pub snapshot: Option<LayoutSnapshot>,
+    pub snapshot_hook_id: Option<HookId>,
 }
 
 impl WindowElement {
@@ -303,6 +309,9 @@ impl WindowElementState {
             fullscreen_or_maximized: FullscreenOrMaximized::Neither,
             target_loc: None,
             minimized: false,
+            committed_serial: None,
+            snapshot: None,
+            snapshot_hook_id: None,
         }
     }
 }

@@ -9,7 +9,7 @@ use std::{
 
 use smithay::output::Output;
 
-use crate::state::{Pinnacle, State, WithState};
+use crate::state::{Pinnacle, WithState};
 
 static TAG_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -43,47 +43,55 @@ impl TagId {
 
 #[derive(Debug)]
 struct TagInner {
-    /// The internal id of this tag.
-    id: TagId,
     /// The name of this tag.
     name: String,
     /// Whether this tag is active or not.
     active: bool,
 }
 
-impl PartialEq for TagInner {
+/// A marker for windows.
+///
+/// A window may have 0 or more tags, and you can display 0 or more tags
+/// on each output at a time.
+#[derive(Debug, Clone)]
+pub struct Tag {
+    /// The internal id of this tag.
+    id: TagId,
+    inner: Rc<RefCell<TagInner>>,
+}
+
+impl PartialEq for Tag {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for TagInner {}
+impl Eq for Tag {}
 
-/// A marker for windows.
-///
-/// A window may have 0 or more tags, and you can display 0 or more tags
-/// on each output at a time.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Tag(Rc<RefCell<TagInner>>);
+impl Hash for Tag {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
 
 // RefCell Safety: These methods should never panic because they are all self-contained or Copy.
 impl Tag {
     pub fn id(&self) -> TagId {
-        self.0.borrow().id
+        self.id
     }
 
     pub fn name(&self) -> String {
-        self.0.borrow().name.clone()
+        self.inner.borrow().name.clone()
     }
 
     pub fn active(&self) -> bool {
-        self.0.borrow().active
+        self.inner.borrow().active
     }
 
-    pub fn set_active(&self, active: bool, state: &mut State) {
-        self.0.borrow_mut().active = active;
+    pub fn set_active(&self, active: bool, pinnacle: &mut Pinnacle) {
+        self.inner.borrow_mut().active = active;
 
-        state.pinnacle.signal_state.tag_active.signal(|buf| {
+        pinnacle.signal_state.tag_active.signal(|buf| {
             buf.push_back(
                 pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
                     tag_id: Some(self.id().0),
@@ -96,11 +104,13 @@ impl Tag {
 
 impl Tag {
     pub fn new(name: String) -> Self {
-        Self(Rc::new(RefCell::new(TagInner {
+        Self {
             id: TagId::next(),
-            name,
-            active: false,
-        })))
+            inner: Rc::new(RefCell::new(TagInner {
+                name,
+                active: false,
+            })),
+        }
     }
 
     /// Get the output this tag is on.
