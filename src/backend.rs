@@ -107,12 +107,15 @@ impl Backend {
         }
     }
 
-    pub fn with_renderer<T>(&mut self, with_renderer: impl FnOnce(&mut GlesRenderer) -> T) -> T {
+    pub fn with_renderer<T>(
+        &mut self,
+        with_renderer: impl FnOnce(&mut GlesRenderer) -> T,
+    ) -> Option<T> {
         match self {
-            Backend::Winit(winit) => with_renderer(winit.backend.renderer()),
-            Backend::Udev(udev) => with_renderer(udev.renderer().as_mut()),
+            Backend::Winit(winit) => Some(with_renderer(winit.backend.renderer())),
+            Backend::Udev(udev) => Some(with_renderer(udev.renderer().ok()?.as_mut())),
             #[cfg(feature = "testing")]
-            Backend::Dummy(_) => todo!(),
+            Backend::Dummy(_) => None,
         }
     }
 

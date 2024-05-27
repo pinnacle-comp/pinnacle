@@ -211,7 +211,9 @@ impl CompositorHandler for State {
                         if unmapped_window.is_on_active_tag() {
                             self.update_keyboard_focus(&focused_output);
 
-                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) =
+                                snapshots.flatten()
+                            {
                                 focused_output.with_state_mut(|state| {
                                     state.new_wait_layout_transaction(
                                         self.pinnacle.loop_handle.clone(),
@@ -253,23 +255,24 @@ impl CompositorHandler for State {
                         }
 
                         if let Some(output) = window.output(&self.pinnacle) {
-                            let (fs_and_up_snapshots, under_fs_snapshots) =
-                                self.backend.with_renderer(|renderer| {
-                                    capture_snapshots_on_output(
-                                        &mut self.pinnacle,
-                                        renderer,
-                                        &output,
-                                        [],
+                            let snapshots = self.backend.with_renderer(|renderer| {
+                                capture_snapshots_on_output(
+                                    &mut self.pinnacle,
+                                    renderer,
+                                    &output,
+                                    [],
+                                )
+                            });
+
+                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                                output.with_state_mut(|op_state| {
+                                    op_state.new_wait_layout_transaction(
+                                        self.pinnacle.loop_handle.clone(),
+                                        fs_and_up_snapshots,
+                                        under_fs_snapshots,
                                     )
                                 });
-
-                            output.with_state_mut(|state| {
-                                state.new_wait_layout_transaction(
-                                    self.pinnacle.loop_handle.clone(),
-                                    fs_and_up_snapshots,
-                                    under_fs_snapshots,
-                                );
-                            });
+                            }
                         }
 
                         self.pinnacle.remove_window(&window, true);

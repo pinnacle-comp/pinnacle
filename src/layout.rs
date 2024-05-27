@@ -267,7 +267,7 @@ impl State {
             .fulfilled_requests
             .insert(output.clone(), current_pending);
 
-        let (fs_and_up_snapshots, under_fs_snapshots) = self.backend.with_renderer(|renderer| {
+        let snapshots = self.backend.with_renderer(|renderer| {
             capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
         });
 
@@ -278,7 +278,7 @@ impl State {
         output.with_state_mut(|state| {
             if let Some(ts) = state.layout_transaction.as_mut() {
                 ts.update_pending(pending_windows);
-            } else {
+            } else if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
                 state.layout_transaction = Some(LayoutTransaction::new(
                     self.pinnacle.loop_handle.clone(),
                     fs_and_up_snapshots,

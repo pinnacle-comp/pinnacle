@@ -866,10 +866,8 @@ fn render_frame<'a>(
 }
 
 impl Udev {
-    pub fn renderer(&mut self) -> UdevRenderer<'_> {
-        self.gpu_manager
-            .single_renderer(&self.primary_gpu)
-            .expect("failed to create multirenderer")
+    pub fn renderer(&mut self) -> anyhow::Result<UdevRenderer<'_>> {
+        Ok(self.gpu_manager.single_renderer(&self.primary_gpu)?)
     }
 
     /// A GPU was plugged in.

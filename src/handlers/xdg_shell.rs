@@ -73,7 +73,7 @@ impl XdgShellHandler for State {
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                 output.with_state_mut(|state| {
                     state.new_wait_layout_transaction(
                         self.pinnacle.loop_handle.clone(),

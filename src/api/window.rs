@@ -248,7 +248,7 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                 output.with_state_mut(|op_state| {
                     op_state.new_wait_layout_transaction(
                         pinnacle.loop_handle.clone(),
@@ -380,7 +380,7 @@ impl window_service_server::WindowService for WindowService {
 
             let Some(output) = tag.output(pinnacle) else { return };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                 output.with_state_mut(|op_state| {
                     op_state.new_wait_layout_transaction(
                         pinnacle.loop_handle.clone(),
@@ -453,7 +453,7 @@ impl window_service_server::WindowService for WindowService {
 
             let Some(output) = tag.output(pinnacle) else { return };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                 output.with_state_mut(|op_state| {
                     op_state.new_wait_layout_transaction(
                         pinnacle.loop_handle.clone(),

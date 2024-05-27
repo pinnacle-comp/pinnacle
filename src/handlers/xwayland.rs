@@ -116,7 +116,7 @@ impl XwmHandler for State {
                 output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                 self.update_keyboard_focus(&output);
 
-                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                     output.with_state_mut(|state| {
                         state.new_wait_layout_transaction(
                             self.pinnacle.loop_handle.clone(),
@@ -426,7 +426,7 @@ impl State {
             self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
-                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
                     output.with_state_mut(|state| {
                         state.new_wait_layout_transaction(
                             self.pinnacle.loop_handle.clone(),
