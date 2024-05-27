@@ -851,16 +851,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-            window.toggle_fullscreen();
-        }
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
+        self.set_window_fullscreen(&window, true);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -868,16 +859,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-            window.toggle_fullscreen();
-        }
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
+        self.set_window_fullscreen(&window, false);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -885,16 +867,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_maximized();
-        }
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
+        self.set_window_maximized(&window, true);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -902,16 +875,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_maximized();
-        }
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
+        self.set_window_maximized(&window, false);
     }
 
     fn set_minimized(&mut self, wl_surface: WlSurface) {
