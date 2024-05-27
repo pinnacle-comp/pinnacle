@@ -37,6 +37,7 @@ impl XdgShellHandler for State {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         surface.with_pending_state(|state| {
+            state.size = Some((600, 400).into()); // gets wleird-slow-ack working
             state.states.set(xdg_toplevel::State::TiledTop);
             state.states.set(xdg_toplevel::State::TiledBottom);
             state.states.set(xdg_toplevel::State::TiledLeft);
@@ -60,6 +61,7 @@ impl XdgShellHandler for State {
                     &mut self.pinnacle,
                     renderer,
                     &output,
+                    [],
                 ))
             })
         } else {
@@ -71,9 +73,13 @@ impl XdgShellHandler for State {
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.request_layout(&output);
 
-            if let Some(snapshots) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
                 output.with_state_mut(|state| {
-                    state.new_wait_layout_transaction(self.pinnacle.loop_handle.clone(), snapshots);
+                    state.new_wait_layout_transaction(
+                        self.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    );
                 });
             }
 
@@ -310,10 +316,7 @@ pub fn snapshot_pre_commit_hook(
             return;
         };
 
-        let scale = output.current_scale().fractional_scale();
-
-        let loc = (loc - window.geometry().loc - output.current_location())
-            .to_physical_precise_round(scale);
+        let loc = loc - output.current_location();
 
         state.backend.with_renderer(|renderer| {
             window.capture_snapshot_and_store(

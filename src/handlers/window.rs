@@ -8,7 +8,7 @@ impl State {
     pub fn set_window_maximized(&mut self, window: &WindowElement, maximized: bool) {
         let snapshots = window.output(&self.pinnacle).map(|output| {
             self.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [window.clone()])
             })
         });
 
@@ -21,10 +21,13 @@ impl State {
         }
 
         if let Some(output) = window.output(&self.pinnacle) {
-            if let Some(snapshots) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
                 output.with_state_mut(|op_state| {
-                    op_state
-                        .new_wait_layout_transaction(self.pinnacle.loop_handle.clone(), snapshots)
+                    op_state.new_wait_layout_transaction(
+                        self.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    )
                 });
             }
 
@@ -36,7 +39,7 @@ impl State {
     pub fn set_window_fullscreen(&mut self, window: &WindowElement, fullscreen: bool) {
         let snapshots = window.output(&self.pinnacle).map(|output| {
             self.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [window.clone()])
             })
         });
 
@@ -49,10 +52,13 @@ impl State {
         }
 
         if let Some(output) = window.output(&self.pinnacle) {
-            if let Some(snapshots) = snapshots {
+            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
                 output.with_state_mut(|op_state| {
-                    op_state
-                        .new_wait_layout_transaction(self.pinnacle.loop_handle.clone(), snapshots)
+                    op_state.new_wait_layout_transaction(
+                        self.pinnacle.loop_handle.clone(),
+                        fs_and_up_snapshots,
+                        under_fs_snapshots,
+                    )
                 });
             }
 

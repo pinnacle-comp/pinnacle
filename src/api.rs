@@ -742,9 +742,10 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            let snapshots = state.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
-            });
+            let (fs_and_up_snapshots, under_fs_snapshots) =
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+                });
 
             match set_or_toggle {
                 SetOrToggle::Set => tag.set_active(true, state),
@@ -756,7 +757,11 @@ impl tag_service_server::TagService for TagService {
             state.pinnacle.fixup_xwayland_window_layering();
 
             output.with_state_mut(|op_state| {
-                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots)
+                op_state.new_wait_layout_transaction(
+                    state.pinnacle.loop_handle.clone(),
+                    fs_and_up_snapshots,
+                    under_fs_snapshots,
+                )
             });
 
             state.pinnacle.request_layout(&output);
@@ -781,9 +786,10 @@ impl tag_service_server::TagService for TagService {
                 return;
             };
 
-            let snapshots = state.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
-            });
+            let (fs_and_up_snapshots, under_fs_snapshots) =
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+                });
 
             output.with_state(|op_state| {
                 for op_tag in op_state.tags.iter() {
@@ -795,7 +801,11 @@ impl tag_service_server::TagService for TagService {
             state.pinnacle.fixup_xwayland_window_layering();
 
             output.with_state_mut(|op_state| {
-                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots)
+                op_state.new_wait_layout_transaction(
+                    state.pinnacle.loop_handle.clone(),
+                    fs_and_up_snapshots,
+                    under_fs_snapshots,
+                )
             });
 
             state.pinnacle.request_layout(&output);
@@ -1085,9 +1095,10 @@ impl output_service_server::OutputService for OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
-            let snapshots = state.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut state.pinnacle, renderer, &output)
-            });
+            let (fs_and_up_snapshots, under_fs_snapshots) =
+                state.backend.with_renderer(|renderer| {
+                    capture_snapshots_on_output(&mut state.pinnacle, renderer, &output, [])
+                });
 
             state.pinnacle.change_output_state(
                 &output,
@@ -1098,7 +1109,11 @@ impl output_service_server::OutputService for OutputService {
             );
 
             output.with_state_mut(|op_state| {
-                op_state.new_wait_layout_transaction(state.pinnacle.loop_handle.clone(), snapshots);
+                op_state.new_wait_layout_transaction(
+                    state.pinnacle.loop_handle.clone(),
+                    fs_and_up_snapshots,
+                    under_fs_snapshots,
+                );
             });
 
             state.pinnacle.request_layout(&output);

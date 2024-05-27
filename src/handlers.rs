@@ -192,7 +192,7 @@ impl CompositorHandler for State {
                         });
 
                         Some(self.backend.with_renderer(|renderer| {
-                            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+                            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
                         }))
                     } else {
                         None
@@ -211,11 +211,12 @@ impl CompositorHandler for State {
                         if unmapped_window.is_on_active_tag() {
                             self.update_keyboard_focus(&focused_output);
 
-                            if let Some(snapshots) = snapshots {
+                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
                                 focused_output.with_state_mut(|state| {
                                     state.new_wait_layout_transaction(
                                         self.pinnacle.loop_handle.clone(),
-                                        snapshots,
+                                        fs_and_up_snapshots,
+                                        under_fs_snapshots,
                                     )
                                 });
                             }
@@ -233,14 +234,14 @@ impl CompositorHandler for State {
 
             // Window surface commit
             if let Some(window) = self.pinnacle.window_for_surface(surface) {
-                if let Some(toplevel) = window.toplevel() {
+                if window.is_wayland() {
                     let Some(is_mapped) =
-                        with_renderer_surface_state(toplevel.wl_surface(), |state| {
-                            state.buffer().is_some()
-                        })
+                        with_renderer_surface_state(surface, |state| state.buffer().is_some())
                     else {
                         unreachable!("on_commit_buffer_handler was called previously");
                     };
+
+                    window.on_commit();
 
                     // Toplevel has become unmapped,
                     // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
@@ -252,22 +253,27 @@ impl CompositorHandler for State {
                         }
 
                         if let Some(output) = window.output(&self.pinnacle) {
-                            let snapshots = self.backend.with_renderer(|renderer| {
-                                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
-                            });
+                            let (fs_and_up_snapshots, under_fs_snapshots) =
+                                self.backend.with_renderer(|renderer| {
+                                    capture_snapshots_on_output(
+                                        &mut self.pinnacle,
+                                        renderer,
+                                        &output,
+                                        [],
+                                    )
+                                });
 
                             output.with_state_mut(|state| {
                                 state.new_wait_layout_transaction(
                                     self.pinnacle.loop_handle.clone(),
-                                    snapshots,
+                                    fs_and_up_snapshots,
+                                    under_fs_snapshots,
                                 );
                             });
                         }
 
                         self.pinnacle.remove_window(&window, true);
 
-                        // TODO: extract into "unmap/remove" window function and
-                        // dedup with toplevel destroyed, xwayland destroyed/unmap
                         if let Some(output) = window.output(&self.pinnacle) {
                             self.update_keyboard_focus(&output);
                             self.pinnacle.request_layout(&output);
@@ -363,10 +369,7 @@ impl CompositorHandler for State {
             return;
         };
 
-        let scale = output.current_scale().fractional_scale();
-
-        let loc = (loc - window.geometry().loc - output.current_location())
-            .to_physical_precise_round(scale);
+        let loc = loc - output.current_location();
 
         self.backend.with_renderer(|renderer| {
             window.capture_snapshot_and_store(

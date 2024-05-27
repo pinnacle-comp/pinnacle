@@ -267,8 +267,8 @@ impl State {
             .fulfilled_requests
             .insert(output.clone(), current_pending);
 
-        let snapshots = self.backend.with_renderer(|renderer| {
-            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output)
+        let (fs_and_up_snapshots, under_fs_snapshots) = self.backend.with_renderer(|renderer| {
+            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
         });
 
         let pending_windows = self
@@ -281,7 +281,8 @@ impl State {
             } else {
                 state.layout_transaction = Some(LayoutTransaction::new(
                     self.pinnacle.loop_handle.clone(),
-                    snapshots,
+                    fs_and_up_snapshots,
+                    under_fs_snapshots,
                     pending_windows,
                 ));
             }

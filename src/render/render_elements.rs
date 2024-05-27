@@ -10,12 +10,12 @@ macro_rules! pinnacle_render_elements {
     (
         $(#[$attr:meta])*
         $vis:vis enum $name:ident {
-            $($variant:ident = $type:ty),+ $(,)?
+            $( $(#[$variant_attr:meta])*  $variant:ident = $type:ty),+ $(,)?
         }
     ) => {
         $(#[$attr])*
         $vis enum $name {
-            $($variant($type)),+
+            $( $(#[$variant_attr])*  $variant($type)),+
         }
 
         $(impl From<$type> for $name {
@@ -32,7 +32,7 @@ macro_rules! pinnacle_render_elements {
     (
         $(#[$attr:meta])*
         $vis:vis enum $name:ident<$generic_name:ident> {
-            $($variant:ident = $type:ty),+ $(,)?
+            $( $(#[$variant_attr:meta])* $variant:ident = $type:ty),+ $(,)?
         }
     ) => {
         $(#[$attr])*
@@ -41,7 +41,7 @@ macro_rules! pinnacle_render_elements {
             $generic_name: ::smithay::backend::renderer::Renderer + ::smithay::backend::renderer::ImportAll + ::smithay::backend::renderer::ImportMem,
             $generic_name::TextureId: 'static,
         {
-            $($variant($type)),+
+            $( $(#[$variant_attr])* $variant($type)),+
         }
 
         $(impl<$generic_name> From<$type> for $name<$generic_name>

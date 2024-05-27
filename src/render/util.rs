@@ -4,6 +4,7 @@
 //! Render utilities.
 
 pub mod snapshot;
+pub mod surface;
 
 use anyhow::{bail, Context};
 use smithay::backend::allocator::Fourcc;

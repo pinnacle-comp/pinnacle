@@ -9,11 +9,8 @@ use std::{ops::Deref, sync::Mutex};
 
 use smithay::{
     backend::renderer::{
-        element::{
-            surface::WaylandSurfaceRenderElement, utils::RescaleRenderElement, AsRenderElements,
-            Element, RenderElementStates,
-        },
-        gles::{GlesRenderer, GlesTexture},
+        element::{surface::WaylandSurfaceRenderElement, AsRenderElements, RenderElementStates},
+        gles::GlesRenderer,
         ImportAll, ImportMem, Renderer, Texture,
     },
     desktop::{
@@ -23,17 +20,18 @@ use smithay::{
             surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
             OutputPresentationFeedback,
         },
-        Space,
+        PopupManager, Space, WindowSurface,
     },
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Physical, Point, Scale},
+    utils::{Logical, Point, Scale},
     wayland::{compositor, shell::wlr_layer},
 };
 
 use crate::{
     backend::{udev::UdevRenderer, Backend},
+    layout::transaction::{LayoutTransaction, SnapshotRenderElement, SnapshotTarget},
     pinnacle_render_elements,
     state::{State, WithState},
     window::WindowElement,
@@ -42,6 +40,7 @@ use crate::{
 use self::{
     pointer::{PointerElement, PointerRenderElement},
     texture::CommonTextureRenderElement,
+    util::surface::texture_render_elements_from_surface_tree,
 };
 
 pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
@@ -52,15 +51,20 @@ pinnacle_render_elements! {
     pub enum OutputRenderElement<R> {
         Surface = WaylandSurfaceRenderElement<R>,
         Pointer = PointerRenderElement<R>,
-        Snapshot = RescaleRenderElement<CommonTextureRenderElement>,
+        Snapshot = SnapshotRenderElement<R>,
     }
 }
 
+/// Trait to reduce bound specifications.
 pub trait PRenderer
 where
     Self: Renderer<TextureId = Self::PTextureId, Error = Self::PError> + ImportAll + ImportMem,
     <Self as Renderer>::TextureId: Texture + Clone + 'static,
 {
+    // Self::TextureId: Texture + Clone + 'static doesn't work in the where clause,
+    // which is why these associated types exist.
+    //
+    // From https://github.com/YaLTeR/niri/blob/ae7fb4c4f405aa0ff49930040d414581a812d938/src/render_helpers/renderer.rs#L10
     type PTextureId: Texture + Clone + 'static;
     type PError: std::error::Error + Send + Sync + 'static;
 }
@@ -75,7 +79,9 @@ where
     type PError = R::Error;
 }
 
+/// Trait for renderers that provide [`GlesRenderer`]s.
 pub trait AsGlesRenderer {
+    /// Gets a [`GlesRenderer`] from this renderer.
     fn as_gles_renderer(&mut self) -> &mut GlesRenderer;
 }
 
@@ -91,18 +97,88 @@ impl<'a> AsGlesRenderer for UdevRenderer<'a> {
     }
 }
 
-impl<R: PRenderer> AsRenderElements<R> for WindowElement {
-    type RenderElement = WaylandSurfaceRenderElement<R>;
-
-    fn render_elements<C: From<Self::RenderElement>>(
+impl WindowElement {
+    /// Render elements for this window at the given *logical* location in the space,
+    /// output-relative.
+    pub fn render_elements<R: PRenderer>(
         &self,
         renderer: &mut R,
-        location: Point<i32, Physical>,
+        location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Vec<C> {
+    ) -> Vec<WaylandSurfaceRenderElement<R>> {
+        let location = location - self.geometry().loc;
+        let phys_loc = location.to_f64().to_physical_precise_round(scale);
         self.deref()
-            .render_elements(renderer, location, scale, alpha)
+            .render_elements(renderer, phys_loc, scale, alpha)
+    }
+
+    /// Render elements for this window as textures.
+    pub fn texture_render_elements<R: PRenderer + AsGlesRenderer>(
+        &self,
+        renderer: &mut R,
+        location: Point<i32, Logical>,
+        scale: Scale<f64>,
+        alpha: f32,
+    ) -> Vec<CommonTextureRenderElement> {
+        let location = location - self.geometry().loc;
+        let location = location.to_f64().to_physical_precise_round(scale);
+
+        match self.underlying_surface() {
+            WindowSurface::Wayland(s) => {
+                let mut render_elements = Vec::new();
+                let surface = s.wl_surface();
+                let popup_render_elements =
+                    PopupManager::popups_for_surface(surface).flat_map(|(popup, popup_offset)| {
+                        let offset = (self.geometry().loc + popup_offset - popup.geometry().loc)
+                            .to_physical_precise_round(scale);
+
+                        texture_render_elements_from_surface_tree(
+                            renderer.as_gles_renderer(),
+                            popup.wl_surface(),
+                            location + offset,
+                            scale,
+                            alpha,
+                        )
+                    });
+
+                render_elements.extend(
+                    popup_render_elements
+                        .into_iter()
+                        .map(CommonTextureRenderElement::new),
+                );
+
+                render_elements.extend(
+                    texture_render_elements_from_surface_tree(
+                        renderer.as_gles_renderer(),
+                        surface,
+                        location,
+                        scale,
+                        alpha,
+                    )
+                    .into_iter()
+                    .map(CommonTextureRenderElement::new),
+                );
+
+                render_elements
+            }
+            WindowSurface::X11(s) => {
+                if let Some(surface) = s.wl_surface() {
+                    texture_render_elements_from_surface_tree(
+                        renderer.as_gles_renderer(),
+                        &surface,
+                        location,
+                        scale,
+                        alpha,
+                    )
+                    .into_iter()
+                    .map(CommonTextureRenderElement::new)
+                    .collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        }
     }
 }
 
@@ -171,22 +247,15 @@ fn window_render_elements<R: PRenderer>(
     let mut fullscreen_and_up = windows
         .iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
-        .filter(|win| win.is_on_active_tag())
         .enumerate()
         .map(|(i, win)| {
             if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
 
-            // subtract win.geometry().loc to align decorations correctly
-            let loc = (
-                space.element_location(win) .unwrap_or((0, 0).into())
-                    - win.geometry().loc
-                    - output.current_location()
-                )
-                .to_physical_precise_round(scale);
+            let loc = space.element_location(win).unwrap_or_default() - output.current_location();
 
-            win.render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0)
+            win.render_elements(renderer, loc, scale, 1.0)
                 .into_iter()
                 .map(OutputRenderElement::from)
         }).collect::<Vec<_>>();
@@ -254,6 +323,44 @@ pub fn pointer_render_elements<R: PRenderer>(
     output_render_elements
 }
 
+/// Render elements for any pending layout transaction.
+///
+/// Returns fullscreen_and_up elements then under_fullscreen elements.
+fn layout_transaction_render_elements<R: PRenderer + AsGlesRenderer>(
+    transaction: &LayoutTransaction,
+    space: &Space<WindowElement>,
+    renderer: &mut R,
+    scale: Scale<f64>,
+    output_loc: Point<i32, Logical>,
+) -> (Vec<SnapshotRenderElement<R>>, Vec<SnapshotRenderElement<R>>) {
+    let mut flat_map = |target: &SnapshotTarget| match target {
+        SnapshotTarget::Window(win) => {
+            let loc = space.element_location(win).unwrap_or_default() - output_loc;
+            win.render_elements(renderer, loc, scale, 1.0)
+                .into_iter()
+                .map(SnapshotRenderElement::from)
+                .collect::<Vec<_>>()
+        }
+        SnapshotTarget::Snapshot(snapshot) => snapshot
+            .render_elements(renderer, scale, 1.0)
+            .into_iter()
+            .collect(),
+    };
+
+    (
+        transaction
+            .fullscreen_and_up_snapshots
+            .iter()
+            .flat_map(&mut flat_map)
+            .collect::<Vec<_>>(),
+        transaction
+            .under_fullscreen_snapshots
+            .iter()
+            .flat_map(&mut flat_map)
+            .collect::<Vec<_>>(),
+    )
+}
+
 /// Generate render elements for the given output.
 ///
 /// Render elements will be pulled from the provided windows,
@@ -273,6 +380,11 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
         .cloned()
         .partition::<Vec<_>, _>(|win| !win.is_x11_override_redirect());
 
+    let windows = windows
+        .into_iter()
+        .filter(|win| win.is_on_active_tag())
+        .collect::<Vec<_>>();
+
     // // draw input method surface if any
     // let rectangle = input_method.coordinates();
     // let position = Point::from((
@@ -289,17 +401,19 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     //     ));
     // });
 
-    let o_r_elements = override_redirect_windows.iter().flat_map(|surf| {
-        surf.render_elements::<WaylandSurfaceRenderElement<R>>(
-            renderer,
-            space
-                .element_location(surf)
-                .unwrap_or((0, 0).into())
-                .to_physical_precise_round(scale),
-            scale,
-            1.0,
-        )
-    });
+    let output_loc = output.current_location();
+
+    let o_r_elements = override_redirect_windows
+        .iter()
+        .filter(|win| win.is_on_active_tag_on_output(output))
+        .flat_map(|surf| {
+            surf.render_elements(
+                renderer,
+                space.element_location(surf).unwrap_or_default() - output_loc,
+                scale,
+                1.0,
+            )
+        });
 
     // TODO: don't unconditionally render OR windows above fullscreen ones,
     // |     base it on if it's a descendant or not
@@ -312,21 +426,24 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
         overlay,
     } = layer_render_elements(output, renderer, scale);
 
-    let mut snapshot_elements: Vec<RescaleRenderElement<CommonTextureRenderElement>> = Vec::new();
-    let mut fullscreen_and_up_elements = Vec::new();
-    let mut rest_of_window_elements = Vec::new();
+    let fullscreen_and_up_elements;
+    let rest_of_window_elements;
 
-    if let Some(elements) = output.with_state(|state| {
-        state.layout_transaction.as_ref().map(|ts| {
-            ts.render_elements(
-                renderer.as_gles_renderer(),
-                (0, 0).into(),
-                output.current_scale().fractional_scale().into(),
-                1.0,
-            )
-        })
+    // If there is a snapshot, render its elements instead
+    if let Some((fs_and_up_elements, under_fs_elements)) = output.with_state(|state| {
+        state
+            .layout_transaction
+            .as_ref()
+            .map(|ts| layout_transaction_render_elements(ts, space, renderer, scale, output_loc))
     }) {
-        snapshot_elements = elements;
+        fullscreen_and_up_elements = fs_and_up_elements
+            .into_iter()
+            .map(OutputRenderElement::from)
+            .collect();
+        rest_of_window_elements = under_fs_elements
+            .into_iter()
+            .map(OutputRenderElement::from)
+            .collect();
     } else {
         (fullscreen_and_up_elements, rest_of_window_elements) =
             window_render_elements::<R>(output, &windows, space, renderer, scale);
@@ -338,7 +455,6 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     output_render_elements.extend(fullscreen_and_up_elements);
     output_render_elements.extend(top.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(rest_of_window_elements);
-    output_render_elements.extend(snapshot_elements.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(bottom.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(background.into_iter().map(OutputRenderElement::from));
 
@@ -380,7 +496,7 @@ pub fn take_presentation_feedback(
 }
 
 impl State {
-    /// Schedule a new render. This does nothing on the winit backend.
+    /// Schedule a new render.
     pub fn schedule_render(&mut self, output: &Output) {
         match &mut self.backend {
             Backend::Udev(udev) => {
@@ -391,35 +507,6 @@ impl State {
             }
             #[cfg(feature = "testing")]
             Backend::Dummy(_) => (),
-        }
-    }
-}
-
-impl Backend {
-    pub fn render_to_texture(
-        &mut self,
-        window: &WindowElement,
-        scale: f64,
-    ) -> Vec<(GlesTexture, Point<i32, Physical>)> {
-        let render_to_texture = |renderer: &mut GlesRenderer, window: &WindowElement| {
-            let elements = window.render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
-                renderer,
-                (0, 0).into(),
-                scale.into(),
-                1.0,
-            );
-
-            elements
-                .into_iter()
-                .map(|elem| (elem.texture().clone(), elem.location(scale.into())))
-                .collect()
-        };
-
-        match self {
-            Backend::Winit(winit) => render_to_texture(winit.backend.renderer(), window),
-            Backend::Udev(udev) => render_to_texture(udev.renderer().as_mut(), window),
-            #[cfg(feature = "testing")]
-            Backend::Dummy(_) => Vec::new(),
         }
     }
 }

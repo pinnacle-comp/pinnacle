@@ -9,34 +9,55 @@ use std::{
 };
 
 use smithay::{
-    backend::renderer::{
-        element::{
-            self,
-            surface::WaylandSurfaceRenderElement,
-            texture::{TextureBuffer, TextureRenderElement},
-            utils::RescaleRenderElement,
-            AsRenderElements,
-        },
-        gles::GlesRenderer,
+    backend::renderer::element::{
+        self,
+        surface::WaylandSurfaceRenderElement,
+        texture::{TextureBuffer, TextureRenderElement},
+        utils::RescaleRenderElement,
     },
+    desktop::Space,
     reexports::calloop::{
         timer::{TimeoutAction, Timer},
         LoopHandle,
     },
-    utils::{Physical, Point, Scale, Serial, Transform},
+    utils::{Logical, Point, Scale, Serial, Transform},
 };
 
 use crate::{
-    render::{texture::CommonTextureRenderElement, util::snapshot::RenderSnapshot},
+    pinnacle_render_elements,
+    render::{
+        texture::CommonTextureRenderElement, util::snapshot::RenderSnapshot, AsGlesRenderer,
+        PRenderer,
+    },
     state::State,
     window::WindowElement,
 };
 
 /// The timeout before transactions stop applying.
-const TIMEOUT: Duration = Duration::from_millis(1000);
+const TIMEOUT: Duration = Duration::from_millis(150);
 
 /// Type for window snapshots.
-pub type LayoutSnapshot = RenderSnapshot<WaylandSurfaceRenderElement<GlesRenderer>>;
+pub type LayoutSnapshot = RenderSnapshot<CommonTextureRenderElement>;
+
+pinnacle_render_elements! {
+    /// Render elements for an output snapshot
+    #[derive(Debug)]
+    pub enum SnapshotRenderElement<R> {
+        /// Draw the window itself.
+        Window = WaylandSurfaceRenderElement<R>,
+        /// Draw a snapshot of the window.
+        Snapshot = RescaleRenderElement<CommonTextureRenderElement>,
+    }
+}
+
+/// Specifier for snapshots
+#[derive(Debug)]
+pub enum SnapshotTarget {
+    /// Render a window.
+    Window(WindowElement),
+    /// Render a snapshot.
+    Snapshot(LayoutSnapshot),
+}
 
 /// A layout transaction.
 ///
@@ -50,7 +71,9 @@ pub struct LayoutTransaction {
     /// Used for transaction timeout.
     start_time: Instant,
     /// The snapshots to render while the transaction is processing.
-    snapshots: Vec<LayoutSnapshot>,
+    pub fullscreen_and_up_snapshots: Vec<SnapshotTarget>,
+    /// The snapshots to render while the transaction is processing.
+    pub under_fullscreen_snapshots: Vec<SnapshotTarget>,
     /// The windows that the transaction is waiting on.
     pending_windows: HashMap<WindowElement, Serial>,
     /// Wait for an update to the windows this transaction is waiting on
@@ -70,14 +93,16 @@ impl LayoutTransaction {
     /// Creates a new layout transaction that will become immediately active.
     pub fn new(
         loop_handle: LoopHandle<'static, State>,
-        snapshots: impl IntoIterator<Item = LayoutSnapshot>,
+        fullscreen_and_up_snapshots: impl IntoIterator<Item = SnapshotTarget>,
+        under_fullscreen_snapshots: impl IntoIterator<Item = SnapshotTarget>,
         pending_windows: impl IntoIterator<Item = (WindowElement, Serial)>,
     ) -> Self {
         Self::register_wakeup(&loop_handle);
         Self {
             loop_handle,
             start_time: Instant::now(),
-            snapshots: snapshots.into_iter().collect(),
+            fullscreen_and_up_snapshots: fullscreen_and_up_snapshots.into_iter().collect(),
+            under_fullscreen_snapshots: under_fullscreen_snapshots.into_iter().collect(),
             pending_windows: pending_windows.into_iter().collect(),
             wait: false,
         }
@@ -93,13 +118,15 @@ impl LayoutTransaction {
     /// Creates a new layout transaction that waits for the next update to pending windows.
     pub fn new_and_wait(
         loop_handle: LoopHandle<'static, State>,
-        snapshots: impl IntoIterator<Item = LayoutSnapshot>,
+        fullscreen_and_up_snapshots: impl IntoIterator<Item = SnapshotTarget>,
+        under_fullscreen_snapshots: impl IntoIterator<Item = SnapshotTarget>,
     ) -> Self {
         Self::register_wakeup(&loop_handle);
         Self {
             loop_handle,
             start_time: Instant::now(),
-            snapshots: snapshots.into_iter().collect(),
+            fullscreen_and_up_snapshots: fullscreen_and_up_snapshots.into_iter().collect(),
+            under_fullscreen_snapshots: under_fullscreen_snapshots.into_iter().collect(),
             pending_windows: HashMap::new(),
             wait: true,
         }
@@ -127,26 +154,37 @@ impl LayoutTransaction {
                     .iter()
                     .all(|(win, serial)| win.is_serial_committed(*serial)))
     }
-}
 
-impl AsRenderElements<GlesRenderer> for LayoutTransaction {
-    type RenderElement = RescaleRenderElement<CommonTextureRenderElement>;
-
-    fn render_elements<C: From<Self::RenderElement>>(
+    /// Render elements for this transaction, split into ones for windows fullscreen and up
+    /// and the rest.
+    ///
+    /// Window targets will be rendered normally and snapshot targets will
+    /// render their texture.
+    pub fn render_elements<R: PRenderer + AsGlesRenderer>(
         &self,
-        renderer: &mut GlesRenderer,
-        location: Point<i32, Physical>,
+        renderer: &mut R,
+        space: &Space<WindowElement>,
+        output_loc: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Vec<C> {
-        self.snapshots
-            .iter()
-            .flat_map(|snapshot| {
-                let (texture, loc) = snapshot.texture(renderer)?;
+    ) -> (Vec<SnapshotRenderElement<R>>, Vec<SnapshotRenderElement<R>>) {
+        let mut flat_map = |snapshot: &SnapshotTarget| match snapshot {
+            SnapshotTarget::Window(window) => {
+                let loc = space.element_location(window).unwrap_or_default() - output_loc;
+                window
+                    .render_elements(renderer, loc, scale, alpha)
+                    .into_iter()
+                    .map(SnapshotRenderElement::Window)
+                    .collect()
+            }
+            SnapshotTarget::Snapshot(snapshot) => {
+                let Some((texture, loc)) = snapshot.texture(renderer.as_gles_renderer()) else {
+                    return Vec::new();
+                };
                 let buffer =
                     TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
                 let elem = TextureRenderElement::from_texture_buffer(
-                    (loc + location).to_f64(),
+                    loc.to_f64(),
                     &buffer,
                     Some(alpha),
                     None,
@@ -158,10 +196,21 @@ impl AsRenderElements<GlesRenderer> for LayoutTransaction {
 
                 let scale = Scale::from((1.0 / scale.x, 1.0 / scale.y));
 
-                Some(C::from(RescaleRenderElement::from_element(
-                    common, loc, scale,
-                )))
-            })
-            .collect()
+                vec![SnapshotRenderElement::Snapshot(
+                    RescaleRenderElement::from_element(common, loc, scale),
+                )]
+            }
+        };
+
+        (
+            self.fullscreen_and_up_snapshots
+                .iter()
+                .flat_map(&mut flat_map)
+                .collect(),
+            self.under_fullscreen_snapshots
+                .iter()
+                .flat_map(&mut flat_map)
+                .collect(),
+        )
     }
 }

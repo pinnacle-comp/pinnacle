@@ -2,7 +2,7 @@
 
 pub mod rules;
 
-use std::{cell::RefCell, ops::Deref};
+use std::{cell::RefCell, collections::HashSet, ops::Deref};
 
 use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
@@ -141,6 +141,23 @@ impl WindowElement {
     /// RefCell Safety: This calls `with_state` on `self`.
     pub fn is_on_active_tag(&self) -> bool {
         self.with_state(|state| state.tags.iter().any(|tag| tag.active()))
+    }
+
+    pub fn is_on_active_tag_on_output(&self, output: &Output) -> bool {
+        // PERF: dear god benchmark this
+        let win_tags = self
+            .with_state(|state| state.tags.clone())
+            .into_iter()
+            .collect::<HashSet<_>>();
+        output.with_state(|state| {
+            state
+                .focused_tags()
+                .cloned()
+                .collect::<HashSet<_>>()
+                .intersection(&win_tags)
+                .next()
+                .is_some()
+        })
     }
 
     /// Place this window on the given output, giving it the output's focused tags.
