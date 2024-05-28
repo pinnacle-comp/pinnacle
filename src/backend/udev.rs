@@ -767,9 +767,10 @@ struct DrmSurfaceDmabufFeedback {
 }
 
 /// The state of a [`RenderSurface`].
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum RenderState {
     /// No render is scheduled.
+    #[default]
     Idle,
     // TODO: remove the token on tty switch or output unplug
     /// A render has been queued.
@@ -1322,11 +1323,14 @@ impl Udev {
             }
         };
 
-        let RenderState::WaitingForVblank { dirty } = surface.render_state else {
-            unreachable!();
+        let dirty = match std::mem::take(&mut surface.render_state) {
+            RenderState::WaitingForVblank { dirty } => dirty,
+            state => {
+                debug!("vblank happened but render state was {state:?}",);
+                self.schedule_render(&pinnacle.loop_handle, &output);
+                return;
+            }
         };
-
-        surface.render_state = RenderState::Idle;
 
         if dirty {
             self.schedule_render(&pinnacle.loop_handle, &output);
