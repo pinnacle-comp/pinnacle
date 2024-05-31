@@ -16,7 +16,8 @@ use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
         output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
-        SetLocationRequest, SetModeRequest, SetScaleRequest, SetTransformRequest,
+        SetLocationRequest, SetModeRequest, SetPoweredRequest, SetScaleRequest,
+        SetTransformRequest,
     },
 };
 use tonic::transport::Channel;
@@ -871,6 +872,26 @@ impl OutputHandle {
         block_on_tokio(client.set_transform(SetTransformRequest {
             output_name: Some(self.name.clone()),
             transform: Some(transform as i32),
+        }))
+        .unwrap();
+    }
+
+    /// Power on or off this output.
+    ///
+    /// This will not remove it from the space and your tags and windows
+    /// will still be interactable; only the monitor is turned off.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Power off `output`
+    /// output.set_powered(false);
+    /// ```
+    pub fn set_powered(&self, powered: bool) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_powered(SetPoweredRequest {
+            output_name: Some(self.name.clone()),
+            powered: Some(powered),
         }))
         .unwrap();
     }

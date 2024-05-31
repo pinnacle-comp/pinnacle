@@ -16,7 +16,7 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
-            SetModeRequest, SetScaleRequest, SetTransformRequest,
+            SetModeRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
         },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
@@ -1159,6 +1159,33 @@ impl output_service_server::OutputService for OutputService {
                 .change_output_state(&output, None, Some(smithay_transform), None, None);
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
+        })
+        .await
+    }
+
+    async fn set_powered(
+        &self,
+        request: Request<SetPoweredRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let Some(powered) = request.powered else {
+            return Err(Status::invalid_argument("powered was unspecified"));
+        };
+        let Some(output_name) = request.output_name else {
+            return Err(Status::invalid_argument("output_name was unspecified"));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
+                return;
+            };
+
+            state.backend.set_output_powered(&output, powered);
+
+            if powered {
+                state.schedule_render(&output);
+            }
         })
         .await
     }

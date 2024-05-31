@@ -49,6 +49,11 @@ message SetTransformRequest {
   optional Transform transform = 2;
 }
 
+message SetPoweredRequest {
+  optional string output_name = 1;
+  optional bool powered = 2;
+}
+
 message GetRequest {}
 message GetResponse {
   repeated string output_names = 1;
@@ -103,6 +108,7 @@ service OutputService {
   rpc SetMode(SetModeRequest) returns (google.protobuf.Empty);
   rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
   rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
+  rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);
   rpc Get(GetRequest) returns (GetResponse);
   rpc GetProperties(GetPropertiesRequest) returns (GetPropertiesResponse);
 }

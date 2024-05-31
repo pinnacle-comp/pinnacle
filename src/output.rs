@@ -51,7 +51,7 @@ pub enum BlankingState {
 }
 
 /// The state of an output
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
     pub focus_stack: WindowKeyboardFocusStack,
@@ -62,6 +62,27 @@ pub struct OutputState {
     pub blanking_state: BlankingState,
     /// A pending layout transaction.
     pub layout_transaction: Option<LayoutTransaction>,
+    /// Whether the monitor is powered.
+    ///
+    /// Unpowered monitors aren't drawn to but their tags and windows
+    /// still exist and can be interacted with.
+    pub powered: bool,
+}
+
+impl Default for OutputState {
+    fn default() -> Self {
+        Self {
+            tags: Default::default(),
+            focus_stack: Default::default(),
+            screencopy: Default::default(),
+            serial: Default::default(),
+            modes: Default::default(),
+            lock_surface: Default::default(),
+            blanking_state: Default::default(),
+            layout_transaction: Default::default(),
+            powered: true,
+        }
+    }
 }
 
 impl WithState for Output {

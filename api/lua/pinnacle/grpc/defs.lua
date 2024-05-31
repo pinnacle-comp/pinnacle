@@ -74,6 +74,10 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field output_name string?
 ---@field transform pinnacle.output.v0alpha1.Transform
 
+---@class pinnacle.output.v0alpha1.SetPoweredRequest
+---@field output_name string?
+---@field powered boolean
+
 ---@class pinnacle.output.v0alpha1.GetRequest
 
 ---@class pinnacle.output.v0alpha1.GetResponse
@@ -99,6 +103,7 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field scale number?
 ---@field transform pinnacle.output.v0alpha1.Transform?
 ---@field serial integer?
+---@field keyboard_focus_stack_window_ids integer[]?
 
 -- Window
 
@@ -482,6 +487,13 @@ defs.pinnacle = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetTransform",
                     request = "pinnacle.output.v0alpha1.SetTransformRequest",
+                    response = "google.protobuf.Empty",
+                },
+                ---@type GrpcRequestArgs
+                SetPowered = {
+                    service = "pinnacle.output.v0alpha1.OutputService",
+                    method = "SetPowered",
+                    request = "pinnacle.output.v0alpha1.SetPoweredRequest",
                     response = "google.protobuf.Empty",
                 },
                 ---@type GrpcRequestArgs

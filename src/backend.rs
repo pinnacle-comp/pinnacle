@@ -119,6 +119,15 @@ impl Backend {
         }
     }
 
+    pub fn set_output_powered(&mut self, output: &Output, powered: bool) {
+        match self {
+            Backend::Winit(_) => (),
+            Backend::Udev(udev) => udev.set_output_powered(output, powered),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.set_output_powered(output, powered),
+        }
+    }
+
     /// Returns `true` if the backend is [`Winit`].
     ///
     /// [`Winit`]: Backend::Winit

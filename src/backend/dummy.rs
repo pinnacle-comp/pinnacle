@@ -104,6 +104,10 @@ impl Dummy {
             }),
         }
     }
+
+    pub(super) fn set_output_powered(&self, output: &Output, powered: bool) {
+        output.with_state_mut(|state| state.powered = powered);
+    }
 }
 
 impl Pinnacle {

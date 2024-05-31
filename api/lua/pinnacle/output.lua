@@ -870,6 +870,13 @@ function OutputHandle:set_transform(transform)
     )
 end
 
+---Power on or off this output.
+---
+---@param powered boolean
+function OutputHandle:set_powered(powered)
+    client.unary_request(output_service.SetPowered, { output_name = self.name, powered = powered })
+end
+
 ---@class Mode
 ---@field pixel_width integer
 ---@field pixel_height integer
@@ -898,6 +905,7 @@ end
 ---
 ---@return OutputProperties
 function OutputHandle:props()
+    ---@type pinnacle.output.v0alpha1.GetPropertiesResponse
     local response = client.unary_request(output_service.GetProperties, { output_name = self.name })
 
     ---@diagnostic disable-next-line: invisible
@@ -908,8 +916,13 @@ function OutputHandle:props()
         response.keyboard_focus_stack_window_ids or {}
     )
 
-    response.tags = tag_handles
     response.tag_ids = nil
+
+    -- hehe
+    ---@diagnostic disable-next-line: cast-type-mismatch
+    ---@cast response OutputProperties
+
+    response.tags = tag_handles
     response.modes = response.modes or {}
     response.transform = transform_code_to_name[response.transform]
     response.keyboard_focus_stack = keyboard_focus_stack_handles

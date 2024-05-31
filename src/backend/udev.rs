@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-mod drm_util;
+mod drm;
 mod gamma;
 
 use std::{
@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context};
+use drm::set_crtc_active;
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, OutputDisconnectResponse,
 };
@@ -95,7 +96,7 @@ use crate::{
     state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
 };
 
-use self::drm_util::EdidInfo;
+use self::drm::util::EdidInfo;
 
 use super::{BackendData, UninitBackend};
 
@@ -544,6 +545,37 @@ impl Udev {
             RenderState::Scheduled(_) => (),
             RenderState::WaitingForVblank { dirty: _ } => {
                 surface.render_state = RenderState::WaitingForVblank { dirty: true }
+            }
+        }
+    }
+
+    pub(super) fn set_output_powered(&mut self, output: &Output, powered: bool) {
+        let UdevOutputData { device_id, crtc } =
+            output.user_data().get::<UdevOutputData>().unwrap();
+
+        let Some(backend_data) = self.backends.get_mut(device_id) else {
+            return;
+        };
+
+        if powered {
+            output.with_state_mut(|state| state.powered = true);
+        } else {
+            set_crtc_active(&backend_data.drm, *crtc, false);
+
+            output.with_state_mut(|state| state.powered = false);
+
+            // Resetting the compositor state will cause a queue frame to change the
+            // crtc state to active
+            //
+            // Used to enable a CRTC within an atomic operation
+            if let Err(err) = backend_data
+                .surfaces
+                .get_mut(crtc)
+                .unwrap()
+                .compositor
+                .reset_state()
+            {
+                warn!("Failed to reset compositor state on crtc {crtc:?}: {err}");
             }
         }
     }
@@ -1136,7 +1168,6 @@ impl Udev {
         &mut self,
         pinnacle: &mut Pinnacle,
         node: DrmNode,
-        _connector: connector::Info,
         crtc: crtc::Handle,
     ) {
         tracing::debug!(?crtc, "connector_disconnected");
@@ -1203,10 +1234,10 @@ impl Udev {
                     self.connector_connected(pinnacle, node, connector, crtc);
                 }
                 DrmScanEvent::Disconnected {
-                    connector,
+                    connector: _,
                     crtc: Some(crtc),
                 } => {
-                    self.connector_disconnected(pinnacle, node, connector, crtc);
+                    self.connector_disconnected(pinnacle, node, crtc);
                 }
                 _ => {}
             }
@@ -1225,8 +1256,8 @@ impl Udev {
             .map(|(info, crtc)| (info.clone(), crtc))
             .collect::<Vec<_>>();
 
-        for (connector, crtc) in crtcs {
-            self.connector_disconnected(pinnacle, node, connector, crtc);
+        for (_connector, crtc) in crtcs {
+            self.connector_disconnected(pinnacle, node, crtc);
         }
 
         tracing::debug!("Surfaces dropped");
@@ -1354,6 +1385,13 @@ impl Udev {
         };
 
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
+
+        // TODO: possibly lift this out and make it so that scheduling a render
+        // does nothing on powered off outputs
+        if output.with_state(|state| !state.powered) {
+            surface.render_state = RenderState::Idle;
+            return;
+        }
 
         // TODO get scale from the rendersurface when supporting HiDPI
         let frame = self.pointer_image.get_image(

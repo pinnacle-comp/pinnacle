@@ -476,6 +476,36 @@ mod output {
 
         #[tokio::main]
         #[self::test]
+        async fn set_powered() -> anyhow::Result<()> {
+            test_api(|sender| {
+                run_lua! { |Pinnacle|
+                    Pinnacle.output.get_focused():set_powered(false)
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.pinnacle.focused_output().unwrap();
+                    assert!(!op.with_state(|state| state.powered))
+                });
+
+                run_lua! { |Pinnacle|
+                    Pinnacle.output.get_focused():set_powered(true)
+                }
+
+                sleep_secs(1);
+
+                with_state(&sender, |state| {
+                    let op = state.pinnacle.focused_output().unwrap();
+                    assert!(op.with_state(|state| state.powered))
+                });
+
+                Ok(())
+            })
+        }
+
+        #[tokio::main]
+        #[self::test]
         async fn props() -> anyhow::Result<()> {
             test_api(|_sender| {
                 run_lua! { |Pinnacle|
