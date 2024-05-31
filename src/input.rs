@@ -400,6 +400,10 @@ impl State {
     }
 
     fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
+
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
@@ -616,6 +620,10 @@ impl State {
     }
 
     fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
@@ -699,6 +707,10 @@ impl State {
     }
 
     fn pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
+
         let source = event.source();
 
         let horizontal_amount = event
@@ -747,6 +759,10 @@ impl State {
     /// This *should* only be generated on the winit backend.
     /// Unless there's a case where it's generated on udev that I'm unaware of.
     fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion absolute received with no pointer on seat");
             return;
@@ -795,6 +811,10 @@ impl State {
     }
 
     fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion received with no pointer on seat");
             return;

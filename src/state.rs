@@ -34,6 +34,7 @@ use smithay::{
         compositor::{self, CompositorClientState, CompositorState},
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
+        idle_notify::IdleNotifierState,
         output::OutputManagerState,
         pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerManagerState,
@@ -99,6 +100,7 @@ pub struct Pinnacle {
     pub foreign_toplevel_manager_state: ForeignToplevelManagerState,
     pub session_lock_manager_state: SessionLockManagerState,
     pub xwayland_shell_state: XWaylandShellState,
+    pub idle_notifier_state: IdleNotifierState<State>,
 
     pub lock_state: LockState,
 
@@ -241,7 +243,7 @@ impl Pinnacle {
 
         let pinnacle = Pinnacle {
             loop_signal,
-            loop_handle,
+            loop_handle: loop_handle.clone(),
             display_handle: display_handle.clone(),
             clock: Clock::<Monotonic>::new(),
             compositor_state: CompositorState::new::<State>(&display_handle),
@@ -287,6 +289,7 @@ impl Pinnacle {
                 filter_restricted_client,
             ),
             xwayland_shell_state: XWaylandShellState::new::<State>(&display_handle),
+            idle_notifier_state: IdleNotifierState::new(&display_handle, loop_handle),
 
             lock_state: LockState::default(),
 

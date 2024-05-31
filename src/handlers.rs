@@ -10,8 +10,8 @@ use std::{mem, os::fd::OwnedFd, sync::Arc};
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
-    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_idle_notify, delegate_layer_shell, delegate_output, delegate_pointer_constraints,
+    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_viewporter, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
@@ -42,6 +42,7 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
+        idle_notify::{IdleNotifierHandler, IdleNotifierState},
         output::OutputHandler,
         pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
         seat::WaylandFocus,
@@ -916,6 +917,13 @@ impl XWaylandShellHandler for State {
     }
 }
 delegate_xwayland_shell!(State);
+
+impl IdleNotifierHandler for State {
+    fn idle_notifier_state(&mut self) -> &mut IdleNotifierState<Self> {
+        &mut self.pinnacle.idle_notifier_state
+    }
+}
+delegate_idle_notify!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
