@@ -219,5 +219,8 @@ impl Pinnacle {
 
             lock_surface.send_configure();
         }
+
+        self.output_management_manager_state
+            .update_head::<State>(output);
     }
 }

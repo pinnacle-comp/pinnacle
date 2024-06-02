@@ -1,0 +1,918 @@
+use smithay::{
+    output::Output,
+    reexports::{
+        wayland_protocols_wlr::output_management::v1::server::{
+            zwlr_output_configuration_head_v1::{self, ZwlrOutputConfigurationHeadV1},
+            zwlr_output_configuration_v1,
+            zwlr_output_head_v1::{self, AdaptiveSyncState},
+            zwlr_output_mode_v1::{self, ZwlrOutputModeV1},
+        },
+        wayland_server::{Resource, WEnum},
+    },
+    utils::{Logical, Physical, Point, Size, Transform, SERIAL_COUNTER},
+};
+use std::{collections::HashMap, num::NonZeroU32, sync::Mutex};
+
+use smithay::{
+    output::Mode,
+    reexports::{
+        wayland_protocols_wlr::output_management::v1::server::{
+            zwlr_output_configuration_v1::ZwlrOutputConfigurationV1,
+            zwlr_output_head_v1::ZwlrOutputHeadV1,
+            zwlr_output_manager_v1::{self, ZwlrOutputManagerV1},
+        },
+        wayland_server::{
+            self, backend::ClientId, Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch,
+        },
+    },
+};
+
+use crate::state::WithState;
+
+const VERSION: u32 = 4;
+
+pub struct OutputManagementManagerState {
+    display_handle: DisplayHandle,
+    managers: HashMap<ZwlrOutputManagerV1, OutputManagerData>,
+    outputs: HashMap<Output, OutputData>,
+}
+
+struct OutputManagerData {
+    serial: u32,
+    configurations: Vec<ZwlrOutputConfigurationV1>,
+    heads: HashMap<ZwlrOutputHeadV1, Vec<ZwlrOutputModeV1>>,
+}
+
+pub struct OutputManagementGlobalData {
+    filter: Box<dyn Fn(&Client) -> bool + Send + Sync>,
+}
+
+#[derive(Debug)]
+enum PendingHead {
+    NotConfigured,
+    Enabled(ZwlrOutputConfigurationHeadV1),
+    Disabled,
+}
+
+#[derive(Debug)]
+pub struct PendingOutputConfiguration {
+    serial: u32,
+    inner: Mutex<PendingOutputConfigurationInner>,
+}
+
+#[derive(Default, Debug)]
+struct PendingOutputConfigurationInner {
+    cancelled: bool,
+    pending_heads: HashMap<ZwlrOutputHeadV1, PendingHead>,
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct PendingOutputHeadConfiguration {
+    pub mode: Option<(Size<i32, Physical>, Option<NonZeroU32>)>,
+    pub position: Option<Point<i32, Logical>>,
+    pub transform: Option<Transform>,
+    pub scale: Option<f64>,
+    pub adaptive_sync: Option<bool>,
+}
+
+#[derive(Debug)]
+pub enum OutputConfiguration {
+    Disabled,
+    Enabled {
+        mode: Option<(Size<i32, Physical>, Option<NonZeroU32>)>,
+        position: Option<Point<i32, Logical>>,
+        transform: Option<Transform>,
+        scale: Option<f64>,
+        adaptive_sync: Option<bool>,
+    },
+}
+
+pub trait OutputManagementHandler {
+    fn output_management_manager_state(&mut self) -> &mut OutputManagementManagerState;
+    fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
+    fn test_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
+}
+
+#[derive(Debug, Clone)]
+pub struct OutputData {
+    // modes: Vec<Mode>,
+    enabled: bool,
+    current_mode: Option<Mode>,
+    position: Point<i32, Logical>,
+    transform: Transform,
+    scale: f64,
+    adaptive_sync: bool,
+}
+
+impl OutputManagementManagerState {
+    pub fn add_head<D>(&mut self, output: &Output)
+    where
+        D: Dispatch<ZwlrOutputHeadV1, Output>
+            + Dispatch<ZwlrOutputModeV1, Mode>
+            + OutputManagementHandler
+            + 'static,
+    {
+        if self.outputs.contains_key(output) {
+            return;
+        }
+
+        for (manager, manager_data) in self.managers.iter_mut() {
+            let (head, modes) = advertise_output::<D>(&self.display_handle, manager, output);
+            manager_data.heads.insert(head, modes);
+        }
+
+        let output_data = OutputData {
+            enabled: true,
+            current_mode: output.current_mode(),
+            position: output.current_location(),
+            transform: output.current_transform(),
+            scale: output.current_scale().fractional_scale(),
+            adaptive_sync: false, // TODO:
+        };
+
+        self.outputs.insert(output.clone(), output_data);
+    }
+
+    pub fn remove_head(&mut self, output: &Output) {
+        self.outputs.remove(output);
+
+        for data in self.managers.values_mut() {
+            let heads = data.heads.keys().cloned().collect::<Vec<_>>();
+            for head in heads {
+                if head.data::<Output>() == Some(output) {
+                    let modes = data.heads.remove(&head);
+                    if let Some(modes) = modes {
+                        for mode in modes {
+                            mode.finished();
+                        }
+                    }
+                    head.finished();
+                }
+            }
+        }
+    }
+
+    pub fn set_head_enabled(&mut self, output: &Output, enabled: bool) {
+        let Some(output_data) = self.outputs.get_mut(output) else {
+            return;
+        };
+
+        output_data.enabled = enabled;
+
+        for manager_data in self.managers.values() {
+            for (head, wlr_modes) in manager_data.heads.iter() {
+                if head.data::<Output>() == Some(output) {
+                    head.enabled(enabled as i32);
+
+                    if enabled {
+                        if let Some(current_mode) = output.current_mode() {
+                            let wlr_current_mode = wlr_modes
+                                .iter()
+                                .find(|wlr_mode| wlr_mode.data::<Mode>() == Some(&current_mode));
+                            if let Some(wlr_current_mode) = wlr_current_mode {
+                                head.current_mode(wlr_current_mode);
+                            }
+                        }
+                        head.position(output.current_location().x, output.current_location().y);
+                        head.transform(output.current_transform().into());
+                        head.scale(output.current_scale().fractional_scale());
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn update_head<D>(&mut self, output: &Output)
+    where
+        D: Dispatch<ZwlrOutputHeadV1, Output>
+            + Dispatch<ZwlrOutputModeV1, Mode>
+            + OutputManagementHandler
+            + 'static,
+    {
+        let Some(output_data) = self.outputs.get_mut(output) else {
+            tracing::error!("Called `update_head` without `advertise_output`");
+            return;
+        };
+
+        for (manager, manager_data) in self.managers.iter_mut() {
+            for (head, wlr_modes) in manager_data.heads.iter_mut() {
+                if head.data::<Output>() != Some(output) {
+                    continue;
+                }
+
+                // TODO: modes
+                let modes = output.with_state(|state| state.modes.clone());
+
+                wlr_modes.retain(|wlr_mode| {
+                    if !modes.contains(wlr_mode.data::<Mode>().unwrap()) {
+                        wlr_mode.finished();
+                        false
+                    } else {
+                        true
+                    }
+                });
+
+                for mode in modes {
+                    if !wlr_modes
+                        .iter()
+                        .any(|wlr_mode| wlr_mode.data::<Mode>().unwrap() == &mode)
+                    {
+                        if let Some(client) = head.client() {
+                            let new_wlr_mode = client
+                                .create_resource::<ZwlrOutputModeV1, _, D>(
+                                    &self.display_handle,
+                                    head.version(),
+                                    mode,
+                                )
+                                .expect("TODO");
+
+                            new_wlr_mode.size(mode.size.w, mode.size.h);
+                            new_wlr_mode.refresh(mode.refresh);
+
+                            if Some(mode) == output.preferred_mode() {
+                                new_wlr_mode.preferred();
+                            }
+
+                            head.mode(&new_wlr_mode);
+
+                            wlr_modes.push(new_wlr_mode);
+                        }
+                    }
+                }
+
+                // enabled handled in `set_head_enabled`
+
+                if output.current_mode() != output_data.current_mode {
+                    if let Some(new_cur_mode) = output.current_mode() {
+                        let new_cur_wlr_mode = wlr_modes
+                            .iter()
+                            .find(|wlr_mode| wlr_mode.data::<Mode>() == Some(&new_cur_mode));
+
+                        match new_cur_wlr_mode {
+                            Some(new_cur_wlr_mode) => {
+                                head.current_mode(new_cur_wlr_mode);
+                            }
+                            // TODO: don't do this branch
+                            None => {
+                                if let Some(client) = head.client() {
+                                    let new_cur_wlr_mode = client
+                                        .create_resource::<ZwlrOutputModeV1, _, D>(
+                                            &self.display_handle,
+                                            head.version(),
+                                            new_cur_mode,
+                                        )
+                                        .expect("TODO");
+
+                                    new_cur_wlr_mode.size(new_cur_mode.size.w, new_cur_mode.size.h);
+                                    new_cur_wlr_mode.refresh(new_cur_mode.refresh);
+
+                                    if Some(new_cur_mode) == output.preferred_mode() {
+                                        new_cur_wlr_mode.preferred();
+                                    }
+
+                                    head.mode(&new_cur_wlr_mode);
+                                    head.current_mode(&new_cur_wlr_mode);
+                                    wlr_modes.push(new_cur_wlr_mode);
+                                }
+                            }
+                        }
+
+                        output_data.current_mode = Some(new_cur_mode);
+                    }
+                }
+
+                if output.current_location() != output_data.position {
+                    let new_loc = output.current_location();
+                    head.position(new_loc.x, new_loc.y);
+                    output_data.position = new_loc;
+                }
+
+                if output.current_transform() != output_data.transform {
+                    let new_transform = output.current_transform();
+                    head.transform(new_transform.into());
+                    output_data.transform = new_transform;
+                }
+
+                if output.current_scale().fractional_scale() != output_data.scale {
+                    let new_scale = output.current_scale().fractional_scale();
+                    head.scale(new_scale);
+                    output_data.scale = new_scale;
+                }
+
+                // TODO: adaptive sync
+            }
+
+            let serial = u32::from(SERIAL_COUNTER.next_serial());
+
+            manager_data.serial = serial;
+            manager.done(serial);
+        }
+    }
+}
+
+fn advertise_output<D>(
+    display: &DisplayHandle,
+    manager: &ZwlrOutputManagerV1,
+    output: &Output,
+) -> (ZwlrOutputHeadV1, Vec<ZwlrOutputModeV1>)
+where
+    D: Dispatch<ZwlrOutputHeadV1, Output>
+        + Dispatch<ZwlrOutputModeV1, Mode>
+        + OutputManagementHandler
+        + 'static,
+{
+    let client = manager.client().expect("TODO");
+
+    let head = client
+        .create_resource::<ZwlrOutputHeadV1, _, D>(display, manager.version(), output.clone())
+        .unwrap();
+
+    manager.head(&head);
+
+    head.name(output.name());
+    head.description(output.description());
+
+    let physical_props = output.physical_properties();
+    head.physical_size(physical_props.size.w, physical_props.size.h);
+
+    let mut wlr_modes = Vec::new();
+    for mode in output.modes() {
+        let wlr_mode = client
+            .create_resource::<ZwlrOutputModeV1, _, D>(display, manager.version(), mode)
+            .unwrap();
+        head.mode(&wlr_mode);
+        wlr_mode.size(mode.size.w, mode.size.h);
+        wlr_mode.refresh(mode.refresh);
+        if Some(mode) == output.preferred_mode() {
+            wlr_mode.preferred();
+        }
+        wlr_modes.push(wlr_mode);
+    }
+
+    if head.version() >= zwlr_output_head_v1::EVT_MAKE_SINCE {
+        head.make(physical_props.make);
+        head.model(physical_props.model);
+
+        if let Some(serial_number) = output.with_state(|state| state.serial) {
+            head.serial_number(serial_number.to_string());
+        }
+    }
+
+    // TODO:
+    // SINCE FOUR
+    // head.adaptive_sync(match data.adaptive_sync {
+    //     true => AdaptiveSyncState::Enabled,
+    //     false => AdaptiveSyncState::Disabled,
+    // });
+
+    // TODO:
+    // head.enabled(data.enabled as i32);
+    head.enabled(true as i32);
+    if true
+    /* data.enabled */
+    {
+        if let Some(current_mode) = output.current_mode() {
+            let wlr_current_mode = wlr_modes
+                .iter()
+                .find(|wlr_mode| wlr_mode.data::<Mode>() == Some(&current_mode));
+            if let Some(wlr_current_mode) = wlr_current_mode {
+                head.current_mode(wlr_current_mode);
+            }
+        }
+        head.position(output.current_location().x, output.current_location().y);
+        head.transform(output.current_transform().into());
+        head.scale(output.current_scale().fractional_scale());
+    }
+
+    (head, wlr_modes)
+}
+
+fn manager_for_configuration<'a, D>(
+    state: &'a mut D,
+    configuration: &ZwlrOutputConfigurationV1,
+) -> Option<(&'a ZwlrOutputManagerV1, &'a mut OutputManagerData)>
+where
+    D: OutputManagementHandler,
+{
+    state
+        .output_management_manager_state()
+        .managers
+        .iter_mut()
+        .find(|(_, manager_data)| manager_data.configurations.contains(configuration))
+}
+
+impl OutputManagementManagerState {
+    pub fn new<D, F>(display: &DisplayHandle, filter: F) -> Self
+    where
+        D: GlobalDispatch<ZwlrOutputManagerV1, OutputManagementGlobalData>
+            + Dispatch<ZwlrOutputManagerV1, ()>
+            + 'static,
+        F: Fn(&Client) -> bool + Send + Sync + 'static,
+    {
+        let global_data = OutputManagementGlobalData {
+            filter: Box::new(filter),
+        };
+
+        display.create_global::<D, ZwlrOutputManagerV1, _>(VERSION, global_data);
+
+        Self {
+            display_handle: display.clone(),
+            managers: HashMap::new(),
+            outputs: HashMap::new(),
+        }
+    }
+}
+
+impl<D> GlobalDispatch<ZwlrOutputManagerV1, OutputManagementGlobalData, D>
+    for OutputManagementManagerState
+where
+    D: GlobalDispatch<ZwlrOutputManagerV1, OutputManagementGlobalData>
+        + Dispatch<ZwlrOutputManagerV1, ()>
+        + Dispatch<ZwlrOutputHeadV1, Output>
+        + Dispatch<ZwlrOutputModeV1, Mode>
+        + OutputManagementHandler,
+{
+    fn bind(
+        state: &mut D,
+        handle: &DisplayHandle,
+        _client: &Client,
+        resource: wayland_server::New<ZwlrOutputManagerV1>,
+        _global_data: &OutputManagementGlobalData,
+        data_init: &mut DataInit<'_, D>,
+    ) {
+        let manager = data_init.init(resource, ());
+
+        let heads = state
+            .output_management_manager_state()
+            .outputs
+            .keys()
+            .map(|output| advertise_output::<D>(handle, &manager, output))
+            .collect();
+
+        let serial = u32::from(SERIAL_COUNTER.next_serial());
+
+        manager.done(serial);
+
+        let state = state.output_management_manager_state();
+
+        let data = OutputManagerData {
+            serial,
+            configurations: Vec::new(),
+            heads,
+        };
+
+        state.managers.insert(manager, data);
+    }
+
+    fn can_view(client: Client, global_data: &OutputManagementGlobalData) -> bool {
+        (global_data.filter)(&client)
+    }
+}
+
+impl<D> Dispatch<ZwlrOutputManagerV1, (), D> for OutputManagementManagerState
+where
+    D: Dispatch<ZwlrOutputManagerV1, ()> + OutputManagementHandler,
+    D: Dispatch<ZwlrOutputConfigurationV1, PendingOutputConfiguration> + OutputManagementHandler,
+{
+    fn request(
+        state: &mut D,
+        _client: &Client,
+        resource: &ZwlrOutputManagerV1,
+        request: <ZwlrOutputManagerV1 as wayland_server::Resource>::Request,
+        _data: &(),
+        _dhandle: &DisplayHandle,
+        data_init: &mut DataInit<'_, D>,
+    ) {
+        match request {
+            zwlr_output_manager_v1::Request::CreateConfiguration { id, serial } => {
+                let Some(manager_data) = state
+                    .output_management_manager_state()
+                    .managers
+                    .get_mut(resource)
+                else {
+                    let config = PendingOutputConfiguration {
+                        serial,
+                        inner: Mutex::new(PendingOutputConfigurationInner {
+                            cancelled: false,
+                            pending_heads: HashMap::new(),
+                        }),
+                    };
+
+                    let config = data_init.init(id, config);
+
+                    config.cancelled();
+                    return;
+                };
+
+                let pending_heads = manager_data
+                    .heads
+                    .keys()
+                    .map(|head| (head.clone(), PendingHead::NotConfigured))
+                    .collect::<HashMap<_, _>>();
+
+                let config = PendingOutputConfiguration {
+                    serial,
+                    inner: Mutex::new(PendingOutputConfigurationInner {
+                        cancelled: false,
+                        pending_heads,
+                    }),
+                };
+
+                let config = data_init.init(id, config);
+
+                let correct_serial = manager_data.serial == serial;
+
+                if !correct_serial {
+                    config.cancelled();
+                    return;
+                }
+
+                manager_data.configurations.push(config);
+            }
+            zwlr_output_manager_v1::Request::Stop => {
+                resource.finished();
+
+                state
+                    .output_management_manager_state()
+                    .managers
+                    .remove(resource);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn destroyed(state: &mut D, _client: ClientId, resource: &ZwlrOutputManagerV1, _data: &()) {
+        state
+            .output_management_manager_state()
+            .managers
+            .remove(resource);
+    }
+}
+
+impl<D> Dispatch<ZwlrOutputHeadV1, Output, D> for OutputManagementManagerState {
+    fn request(
+        state: &mut D,
+        client: &Client,
+        resource: &ZwlrOutputHeadV1,
+        request: <ZwlrOutputHeadV1 as Resource>::Request,
+        data: &Output,
+        dhandle: &DisplayHandle,
+        data_init: &mut DataInit<'_, D>,
+    ) {
+        match request {
+            zwlr_output_head_v1::Request::Release => {
+                // TODO:
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<D> Dispatch<ZwlrOutputModeV1, Mode, D> for OutputManagementManagerState {
+    fn request(
+        state: &mut D,
+        client: &Client,
+        resource: &ZwlrOutputModeV1,
+        request: <ZwlrOutputModeV1 as Resource>::Request,
+        data: &Mode,
+        dhandle: &DisplayHandle,
+        data_init: &mut DataInit<'_, D>,
+    ) {
+        match request {
+            zwlr_output_mode_v1::Request::Release => {
+                // TODO:
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<D> Dispatch<ZwlrOutputConfigurationV1, PendingOutputConfiguration, D>
+    for OutputManagementManagerState
+where
+    D: Dispatch<ZwlrOutputManagerV1, ()>
+        + Dispatch<ZwlrOutputConfigurationHeadV1, Mutex<PendingOutputHeadConfiguration>>
+        + OutputManagementHandler,
+{
+    fn request(
+        state: &mut D,
+        _client: &Client,
+        resource: &ZwlrOutputConfigurationV1,
+        request: <ZwlrOutputConfigurationV1 as Resource>::Request,
+        pending_data: &PendingOutputConfiguration,
+        _dhandle: &DisplayHandle,
+        data_init: &mut DataInit<'_, D>,
+    ) {
+        match request {
+            zwlr_output_configuration_v1::Request::EnableHead { id, head } => {
+                let config_head =
+                    data_init.init(id, Mutex::new(PendingOutputHeadConfiguration::default()));
+
+                let mut data = pending_data.inner.lock().unwrap();
+
+                let manager_serial =
+                    manager_for_configuration(state, resource).map(|(_, data)| data.serial);
+
+                if manager_serial != Some(pending_data.serial) {
+                    resource.cancelled();
+                    data.cancelled = true;
+                }
+
+                if data.cancelled {
+                    return;
+                }
+
+                if let Some(pending_data) = data.pending_heads.get_mut(&head) {
+                    if !matches!(pending_data, PendingHead::NotConfigured) {
+                        head.post_error(
+                            zwlr_output_configuration_v1::Error::AlreadyConfiguredHead,
+                            "head has already been configured",
+                        );
+                        return;
+                    }
+
+                    *pending_data = PendingHead::Enabled(config_head);
+                }
+            }
+            zwlr_output_configuration_v1::Request::DisableHead { head } => {
+                let mut data = pending_data.inner.lock().unwrap();
+
+                let manager_serial =
+                    manager_for_configuration(state, resource).map(|(_, data)| data.serial);
+
+                if manager_serial != Some(pending_data.serial) {
+                    resource.cancelled();
+                    data.cancelled = true;
+                }
+
+                if data.cancelled {
+                    return;
+                }
+
+                if let Some(pending_data) = data.pending_heads.get_mut(&head) {
+                    if !matches!(pending_data, PendingHead::NotConfigured) {
+                        head.post_error(
+                            zwlr_output_configuration_v1::Error::AlreadyConfiguredHead,
+                            "head has already been configured",
+                        );
+                        return;
+                    }
+
+                    *pending_data = PendingHead::Disabled;
+                }
+            }
+            req @ (zwlr_output_configuration_v1::Request::Apply
+            | zwlr_output_configuration_v1::Request::Test) => {
+                let mut data = pending_data.inner.lock().unwrap();
+
+                let manager_serial =
+                    manager_for_configuration(state, resource).map(|(_, data)| data.serial);
+
+                if manager_serial != Some(pending_data.serial) {
+                    resource.cancelled();
+                    data.cancelled = true;
+                }
+
+                if data.cancelled {
+                    return;
+                }
+
+                if data
+                    .pending_heads
+                    .values()
+                    .any(|cfg| matches!(cfg, PendingHead::NotConfigured))
+                {
+                    resource.post_error(
+                        zwlr_output_configuration_v1::Error::UnconfiguredHead,
+                        "a head was unconfigured",
+                    );
+                    return;
+                }
+
+                let config = data
+                    .pending_heads
+                    .iter()
+                    .map(|(head, head_cfg)| {
+                        let output = head.data::<Output>().unwrap().clone();
+
+                        let cfg = match head_cfg {
+                            PendingHead::NotConfigured => unreachable!(),
+                            PendingHead::Enabled(cfg_head) => {
+                                let pending = cfg_head
+                                    .data::<Mutex<PendingOutputHeadConfiguration>>()
+                                    .unwrap()
+                                    .lock()
+                                    .unwrap();
+                                OutputConfiguration::Enabled {
+                                    mode: pending.mode,
+                                    position: pending.position,
+                                    transform: pending.transform,
+                                    scale: pending.scale,
+                                    adaptive_sync: pending.adaptive_sync,
+                                }
+                            }
+                            PendingHead::Disabled => OutputConfiguration::Disabled,
+                        };
+
+                        (output, cfg)
+                    })
+                    .collect();
+
+                let apply = matches!(req, zwlr_output_configuration_v1::Request::Apply);
+                let success = if apply {
+                    state.apply_configuration(config)
+                } else {
+                    state.test_configuration(config)
+                };
+
+                if success {
+                    resource.succeeded();
+                } else {
+                    resource.failed();
+                }
+            }
+            zwlr_output_configuration_v1::Request::Destroy => (),
+            _ => unreachable!(),
+        }
+    }
+
+    fn destroyed(
+        state: &mut D,
+        _client: ClientId,
+        resource: &ZwlrOutputConfigurationV1,
+        _data: &PendingOutputConfiguration,
+    ) {
+        for output_manager_data in state
+            .output_management_manager_state()
+            .managers
+            .values_mut()
+        {
+            output_manager_data
+                .configurations
+                .retain(|config| config != resource);
+        }
+    }
+}
+
+impl<D> Dispatch<ZwlrOutputConfigurationHeadV1, Mutex<PendingOutputHeadConfiguration>, D>
+    for OutputManagementManagerState
+where
+    D: Dispatch<ZwlrOutputModeV1, Mode> + 'static,
+{
+    fn request(
+        _state: &mut D,
+        _client: &Client,
+        resource: &ZwlrOutputConfigurationHeadV1,
+        request: <ZwlrOutputConfigurationHeadV1 as Resource>::Request,
+        data: &Mutex<PendingOutputHeadConfiguration>,
+        _dhandle: &DisplayHandle,
+        _data_init: &mut DataInit<'_, D>,
+    ) {
+        match request {
+            zwlr_output_configuration_head_v1::Request::SetMode { mode } => {
+                let mut data = data.lock().unwrap();
+                if data.mode.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "mode has already been set",
+                    );
+                    return;
+                }
+
+                let mode = mode.data::<Mode>().unwrap();
+
+                let mode = (mode.size, NonZeroU32::new(mode.refresh as u32));
+
+                data.mode = Some(mode);
+            }
+            zwlr_output_configuration_head_v1::Request::SetCustomMode {
+                width,
+                height,
+                refresh,
+            } => {
+                let mut data = data.lock().unwrap();
+                if data.mode.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "mode has already been set",
+                    );
+                    return;
+                }
+
+                if width <= 0 || height <= 0 || refresh < 0 {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::InvalidCustomMode,
+                        "invalid custom mode",
+                    );
+                    return;
+                }
+
+                data.mode = Some(((width, height).into(), NonZeroU32::new(refresh as u32)));
+            }
+            zwlr_output_configuration_head_v1::Request::SetPosition { x, y } => {
+                let mut data = data.lock().unwrap();
+                if data.position.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "position has already been set",
+                    );
+                    return;
+                }
+
+                data.position = Some((x, y).into());
+            }
+            zwlr_output_configuration_head_v1::Request::SetTransform { transform } => {
+                let mut data = data.lock().unwrap();
+                if data.transform.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "transform has already been set",
+                    );
+                    return;
+                }
+
+                let transform = match transform {
+                    WEnum::Value(transform) => transform,
+                    WEnum::Unknown(val) => {
+                        resource.post_error(
+                            zwlr_output_configuration_head_v1::Error::InvalidTransform,
+                            format!("transform has an invalid value of {val}"),
+                        );
+                        return;
+                    }
+                };
+
+                data.transform = Some(transform.into());
+            }
+            zwlr_output_configuration_head_v1::Request::SetScale { scale } => {
+                let mut data = data.lock().unwrap();
+                if data.scale.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "scale has already been set",
+                    );
+                    return;
+                }
+
+                data.scale = Some(scale);
+            }
+            zwlr_output_configuration_head_v1::Request::SetAdaptiveSync { state } => {
+                let mut data = data.lock().unwrap();
+                if data.adaptive_sync.is_some() {
+                    resource.post_error(
+                        zwlr_output_configuration_head_v1::Error::AlreadySet,
+                        "adaptive sync has already been set",
+                    );
+                    return;
+                }
+
+                let adaptive_sync = match state {
+                    WEnum::Value(adaptive_sync) => match adaptive_sync {
+                        AdaptiveSyncState::Disabled => false,
+                        AdaptiveSyncState::Enabled => true,
+                        _ => unreachable!(),
+                    },
+                    WEnum::Unknown(val) => {
+                        resource.post_error(
+                            zwlr_output_configuration_head_v1::Error::InvalidAdaptiveSyncState,
+                            format!("adaptive sync has an invalid value of {val}"),
+                        );
+                        return;
+                    }
+                };
+
+                data.adaptive_sync = Some(adaptive_sync);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! delegate_output_management {
+    ($(@<$( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+>)? $ty: ty) => {
+        smithay::reexports::wayland_server::delegate_global_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_manager_v1::ZwlrOutputManagerV1: $crate::protocol::output_management::OutputManagementGlobalData
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+
+        smithay::reexports::wayland_server::delegate_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_manager_v1::ZwlrOutputManagerV1: ()
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+
+        smithay::reexports::wayland_server::delegate_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_head_v1::ZwlrOutputHeadV1: smithay::output::Output
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+
+        smithay::reexports::wayland_server::delegate_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_mode_v1::ZwlrOutputModeV1: smithay::output::Mode
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+
+        smithay::reexports::wayland_server::delegate_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_configuration_v1::ZwlrOutputConfigurationV1: $crate::protocol::output_management::PendingOutputConfiguration
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+
+        smithay::reexports::wayland_server::delegate_dispatch!($(@< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)? $ty: [
+            smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_configuration_head_v1::ZwlrOutputConfigurationHeadV1: std::sync::Mutex<$crate::protocol::output_management::PendingOutputHeadConfiguration>
+        ] => $crate::protocol::output_management::OutputManagementManagerState);
+    };
+}

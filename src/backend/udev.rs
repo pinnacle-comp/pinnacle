@@ -1055,6 +1055,10 @@ impl Udev {
         );
         let global = output.create_global::<State>(&self.display_handle);
 
+        pinnacle
+            .output_management_manager_state
+            .add_head::<State>(&output);
+
         output.with_state_mut(|state| state.serial = serial);
 
         output.set_preferred(wl_mode);
@@ -1215,6 +1219,10 @@ impl Udev {
                     output_name: Some(output.name()),
                 })
             });
+
+            pinnacle
+                .output_management_manager_state
+                .remove_head(&output);
         }
     }
 

@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod idle;
 pub mod session_lock;
 pub mod window;
 mod xdg_shell;
 mod xwayland;
 
-use std::{mem, os::fd::OwnedFd, sync::Arc};
+use std::{collections::HashMap, mem, os::fd::OwnedFd, sync::Arc};
 
 use smithay::{
     backend::renderer::utils::{self, with_renderer_surface_state},
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
-    delegate_idle_notify, delegate_layer_shell, delegate_output, delegate_pointer_constraints,
-    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_viewporter, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
@@ -21,7 +22,7 @@ use smithay::{
         pointer::{CursorImageStatus, PointerHandle},
         Seat, SeatHandler, SeatState,
     },
-    output::Output,
+    output::{Output, Scale},
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
@@ -42,7 +43,6 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
-        idle_notify::{IdleNotifierHandler, IdleNotifierState},
         output::OutputHandler,
         pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
         seat::WaylandFocus,
@@ -69,16 +69,20 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use tracing::{error, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::{
     backend::Backend,
-    delegate_foreign_toplevel, delegate_gamma_control, delegate_screencopy,
+    delegate_foreign_toplevel, delegate_gamma_control, delegate_output_management,
+    delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     handlers::xdg_shell::snapshot_pre_commit_hook,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
+        output_management::{
+            OutputConfiguration, OutputManagementHandler, OutputManagementManagerState,
+        },
         screencopy::{Screencopy, ScreencopyHandler},
     },
     render::util::snapshot::capture_snapshots_on_output,
@@ -918,12 +922,57 @@ impl XWaylandShellHandler for State {
 }
 delegate_xwayland_shell!(State);
 
-impl IdleNotifierHandler for State {
-    fn idle_notifier_state(&mut self) -> &mut IdleNotifierState<Self> {
-        &mut self.pinnacle.idle_notifier_state
+impl OutputManagementHandler for State {
+    fn output_management_manager_state(&mut self) -> &mut OutputManagementManagerState {
+        &mut self.pinnacle.output_management_manager_state
+    }
+
+    fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool {
+        for (output, config) in config {
+            match config {
+                OutputConfiguration::Disabled => todo!(),
+                OutputConfiguration::Enabled {
+                    mode,
+                    position,
+                    transform,
+                    scale,
+                    adaptive_sync,
+                } => {
+                    let snapshots = self.backend.with_renderer(|renderer| {
+                        capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
+                    });
+
+                    self.pinnacle.change_output_state(
+                        &output,
+                        None,
+                        transform,
+                        scale.map(Scale::Fractional),
+                        position,
+                    );
+
+                    if let Some((a, b)) = snapshots {
+                        output.with_state_mut(|state| {
+                            state.new_wait_layout_transaction(
+                                self.pinnacle.loop_handle.clone(),
+                                a,
+                                b,
+                            )
+                        });
+                    }
+
+                    self.pinnacle.request_layout(&output);
+                }
+            }
+        }
+        true
+    }
+
+    fn test_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool {
+        debug!(?config);
+        true
     }
 }
-delegate_idle_notify!(State);
+delegate_output_management!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
