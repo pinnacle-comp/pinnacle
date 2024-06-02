@@ -67,6 +67,10 @@ impl BackendData for Winit {
     }
 
     fn early_import(&mut self, _surface: &WlSurface) {}
+
+    fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
+        output.change_current_state(Some(mode), None, None, None);
+    }
 }
 
 impl Backend {
@@ -201,6 +205,7 @@ impl Winit {
                                 refresh: 144_000,
                             };
                             state.pinnacle.change_output_state(
+                                &mut state.backend,
                                 &output,
                                 Some(mode),
                                 None,

@@ -2,7 +2,9 @@
 
 use std::{cell::RefCell, num::NonZeroU32};
 
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputResizeResponse};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
+};
 use smithay::{
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
@@ -12,6 +14,8 @@ use smithay::{
 };
 
 use crate::{
+    backend::BackendData,
+    config::ConnectorSavedState,
     focus::WindowKeyboardFocusStack,
     layout::transaction::{LayoutTransaction, SnapshotTarget},
     protocol::screencopy::Screencopy,
@@ -51,7 +55,7 @@ pub enum BlankingState {
 }
 
 /// The state of an output
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
     pub focus_stack: WindowKeyboardFocusStack,
@@ -67,22 +71,6 @@ pub struct OutputState {
     /// Unpowered monitors aren't drawn to but their tags and windows
     /// still exist and can be interacted with.
     pub powered: bool,
-}
-
-impl Default for OutputState {
-    fn default() -> Self {
-        Self {
-            tags: Default::default(),
-            focus_stack: Default::default(),
-            screencopy: Default::default(),
-            serial: Default::default(),
-            modes: Default::default(),
-            lock_surface: Default::default(),
-            blanking_state: Default::default(),
-            layout_transaction: Default::default(),
-            powered: true,
-        }
-    }
 }
 
 impl WithState for Output {
@@ -135,10 +123,9 @@ impl OutputState {
 }
 
 impl Pinnacle {
-    /// A wrapper around [`Output::change_current_state`] that additionally sends an output
-    /// geometry signal.
     pub fn change_output_state(
         &mut self,
+        backend: &mut impl BackendData,
         output: &Output,
         mode: Option<Mode>,
         transform: Option<Transform>,
@@ -147,7 +134,7 @@ impl Pinnacle {
     ) {
         let old_scale = output.current_scale().fractional_scale();
 
-        output.change_current_state(mode, transform, scale, location);
+        output.change_current_state(None, transform, scale, location);
         if let Some(location) = location {
             self.space.map_output(output, location);
             self.signal_state.output_move.signal(|buf| {
@@ -158,6 +145,11 @@ impl Pinnacle {
                 });
             });
         }
+
+        if let Some(mode) = mode {
+            backend.set_output_mode(output, mode);
+        }
+
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
             self.signal_state.output_resize.signal(|buf| {
@@ -168,10 +160,6 @@ impl Pinnacle {
                     logical_height: geo.map(|geo| geo.size.h as u32),
                 });
             });
-        }
-        if let Some(mode) = mode {
-            output.set_preferred(mode);
-            output.with_state_mut(|state| state.modes.push(mode));
         }
 
         if let Some(scale) = scale {
@@ -222,5 +210,80 @@ impl Pinnacle {
 
         self.output_management_manager_state
             .update_head::<State>(output);
+    }
+
+    pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
+        if enabled {
+            self.unmapped_outputs.remove(output);
+            if !self.outputs.contains_key(output) {
+                let global = output.create_global::<State>(&self.display_handle);
+                self.outputs.insert(output.clone(), global);
+            }
+            self.space.map_output(output, output.current_location());
+
+            // TODO: output connect?
+        } else {
+            let global = self.outputs.remove(output);
+            if let Some(global) = global {
+                self.display_handle.remove_global::<State>(global);
+            }
+            self.space.unmap_output(output);
+            self.unmapped_outputs.insert(output.clone());
+
+            // TODO: should this trigger the signal?
+            self.signal_state.output_disconnect.signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
+
+            self.gamma_control_manager_state.output_removed(output);
+
+            self.config.connector_saved_states.insert(
+                OutputName(output.name()),
+                ConnectorSavedState {
+                    loc: output.current_location(),
+                    tags: output.with_state(|state| state.tags.clone()),
+                    scale: Some(output.current_scale()),
+                },
+            );
+
+            for layer in layer_map_for_output(output).layers() {
+                layer.layer_surface().send_close();
+            }
+        }
+    }
+
+    pub fn remove_output(&mut self, output: &Output) {
+        let global = self.outputs.remove(output);
+        if let Some(global) = global {
+            self.display_handle.remove_global::<State>(global);
+        }
+        self.unmapped_outputs.remove(output);
+
+        self.space.unmap_output(output);
+
+        self.gamma_control_manager_state.output_removed(output);
+
+        self.output_management_manager_state.remove_head(output);
+
+        self.signal_state.output_disconnect.signal(|buffer| {
+            buffer.push_back(OutputDisconnectResponse {
+                output_name: Some(output.name()),
+            })
+        });
+
+        self.config.connector_saved_states.insert(
+            OutputName(output.name()),
+            ConnectorSavedState {
+                loc: output.current_location(),
+                tags: output.with_state(|state| state.tags.clone()),
+                scale: Some(output.current_scale()),
+            },
+        );
+
+        for layer in layer_map_for_output(output).layers() {
+            layer.layer_surface().send_close();
+        }
     }
 }

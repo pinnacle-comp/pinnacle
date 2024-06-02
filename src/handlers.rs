@@ -22,7 +22,7 @@ use smithay::{
         pointer::{CursorImageStatus, PointerHandle},
         Seat, SeatHandler, SeatState,
     },
-    output::{Output, Scale},
+    output::{Mode, Output, Scale},
     reexports::{
         calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_positioner::ConstraintAdjustment,
@@ -930,21 +930,55 @@ impl OutputManagementHandler for State {
     fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool {
         for (output, config) in config {
             match config {
-                OutputConfiguration::Disabled => todo!(),
+                OutputConfiguration::Disabled => {
+                    self.pinnacle.set_output_enabled(&output, false);
+                    // TODO: split
+                    self.backend.set_output_powered(&output, false);
+                }
                 OutputConfiguration::Enabled {
                     mode,
                     position,
                     transform,
                     scale,
-                    adaptive_sync,
+                    adaptive_sync: _,
                 } => {
+                    self.pinnacle.set_output_enabled(&output, true);
+                    // TODO: split
+                    self.backend.set_output_powered(&output, true);
+
+                    self.schedule_render(&output);
+
                     let snapshots = self.backend.with_renderer(|renderer| {
                         capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
                     });
 
+                    let mode = mode.map(|(size, refresh)| {
+                        if let Some(refresh) = refresh {
+                            Mode {
+                                size,
+                                refresh: refresh.get() as i32,
+                            }
+                        } else {
+                            output
+                                .with_state(|state| {
+                                    state
+                                        .modes
+                                        .iter()
+                                        .filter(|mode| mode.size == size)
+                                        .max_by_key(|mode| mode.refresh)
+                                        .copied()
+                                })
+                                .unwrap_or(Mode {
+                                    size,
+                                    refresh: 60_000,
+                                })
+                        }
+                    });
+
                     self.pinnacle.change_output_state(
+                        &mut self.backend,
                         &output,
-                        None,
+                        mode,
                         transform,
                         scale.map(Scale::Fractional),
                         position,

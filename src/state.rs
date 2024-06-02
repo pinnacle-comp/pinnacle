@@ -22,10 +22,11 @@ use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
-            backend::{ClientData, ClientId, DisconnectReason},
+            backend::{ClientData, ClientId, DisconnectReason, GlobalId},
             protocol::wl_surface::WlSurface,
             Client, Display, DisplayHandle,
         },
@@ -149,6 +150,9 @@ pub struct Pinnacle {
 
     /// WlSurfaces with an attached idle inhibitor.
     pub idle_inhibiting_surfaces: HashSet<WlSurface>,
+
+    pub outputs: HashMap<Output, GlobalId>,
+    pub unmapped_outputs: HashSet<Output>,
 }
 
 impl State {
@@ -343,6 +347,9 @@ impl Pinnacle {
             root_surface_cache: HashMap::new(),
 
             idle_inhibiting_surfaces: HashSet::new(),
+
+            outputs: HashMap::new(),
+            unmapped_outputs: HashSet::new(),
         };
 
         Ok(pinnacle)

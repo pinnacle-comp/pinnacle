@@ -1035,9 +1035,14 @@ impl output_service_server::OutputService for OutputService {
             if let Some(y) = y {
                 loc.y = y;
             }
-            state
-                .pinnacle
-                .change_output_state(&output, None, None, None, Some(loc));
+            state.pinnacle.change_output_state(
+                &mut state.backend,
+                &output,
+                None,
+                None,
+                None,
+                Some(loc),
+            );
             debug!("Mapping output {} to {loc:?}", output.name());
             state.pinnacle.request_layout(&output);
         })
@@ -1067,7 +1072,15 @@ impl output_service_server::OutputService for OutputService {
                 return;
             };
 
-            state.resize_output(&output, mode);
+            state.pinnacle.change_output_state(
+                &mut state.backend,
+                &output,
+                Some(mode),
+                None,
+                None,
+                None,
+            );
+            state.pinnacle.request_layout(&output);
         })
         .await
     }
@@ -1102,6 +1115,7 @@ impl output_service_server::OutputService for OutputService {
             });
 
             state.pinnacle.change_output_state(
+                &mut state.backend,
                 &output,
                 None,
                 None,
@@ -1154,9 +1168,14 @@ impl output_service_server::OutputService for OutputService {
                 return;
             };
 
-            state
-                .pinnacle
-                .change_output_state(&output, None, Some(smithay_transform), None, None);
+            state.pinnacle.change_output_state(
+                &mut state.backend,
+                &output,
+                None,
+                Some(smithay_transform),
+                None,
+                None,
+            );
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })

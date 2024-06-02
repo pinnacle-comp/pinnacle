@@ -101,7 +101,7 @@ pub struct OutputData {
     position: Point<i32, Logical>,
     transform: Transform,
     scale: f64,
-    adaptive_sync: bool,
+    _adaptive_sync: bool,
 }
 
 impl OutputManagementManagerState {
@@ -127,7 +127,7 @@ impl OutputManagementManagerState {
             position: output.current_location(),
             transform: output.current_transform(),
             scale: output.current_scale().fractional_scale(),
-            adaptive_sync: false, // TODO:
+            _adaptive_sync: false, // TODO:
         };
 
         self.outputs.insert(output.clone(), output_data);
@@ -336,7 +336,7 @@ where
     head.physical_size(physical_props.size.w, physical_props.size.h);
 
     let mut wlr_modes = Vec::new();
-    for mode in output.modes() {
+    for mode in output.with_state(|state| state.modes.clone()) {
         let wlr_mode = client
             .create_resource::<ZwlrOutputModeV1, _, D>(display, manager.version(), mode)
             .unwrap();
@@ -551,13 +551,13 @@ where
 
 impl<D> Dispatch<ZwlrOutputHeadV1, Output, D> for OutputManagementManagerState {
     fn request(
-        state: &mut D,
-        client: &Client,
-        resource: &ZwlrOutputHeadV1,
+        _state: &mut D,
+        _client: &Client,
+        _resource: &ZwlrOutputHeadV1,
         request: <ZwlrOutputHeadV1 as Resource>::Request,
-        data: &Output,
-        dhandle: &DisplayHandle,
-        data_init: &mut DataInit<'_, D>,
+        _data: &Output,
+        _dhandle: &DisplayHandle,
+        _data_init: &mut DataInit<'_, D>,
     ) {
         match request {
             zwlr_output_head_v1::Request::Release => {
@@ -570,13 +570,13 @@ impl<D> Dispatch<ZwlrOutputHeadV1, Output, D> for OutputManagementManagerState {
 
 impl<D> Dispatch<ZwlrOutputModeV1, Mode, D> for OutputManagementManagerState {
     fn request(
-        state: &mut D,
-        client: &Client,
-        resource: &ZwlrOutputModeV1,
+        _state: &mut D,
+        _client: &Client,
+        _resource: &ZwlrOutputModeV1,
         request: <ZwlrOutputModeV1 as Resource>::Request,
-        data: &Mode,
-        dhandle: &DisplayHandle,
-        data_init: &mut DataInit<'_, D>,
+        _data: &Mode,
+        _dhandle: &DisplayHandle,
+        _data_init: &mut DataInit<'_, D>,
     ) {
         match request {
             zwlr_output_mode_v1::Request::Release => {

@@ -71,7 +71,6 @@ use smithay::{
             presentation_time::server::wp_presentation_feedback,
         },
         wayland_server::{
-            backend::GlobalId,
             protocol::{wl_shm, wl_surface::WlSurface},
             DisplayHandle,
         },
@@ -527,8 +526,11 @@ impl Udev {
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            tracing::info!("no render surface on output {}", output.name());
             return;
         };
+
+        // tracing::info!(state = ?surface.render_state, name = output.name());
 
         match &surface.render_state {
             RenderState::Idle => {
@@ -576,6 +578,12 @@ impl Udev {
                 .reset_state()
             {
                 warn!("Failed to reset compositor state on crtc {crtc:?}: {err}");
+            }
+
+            if let Some(surface) = render_surface_for_output(output, &mut self.backends) {
+                if let RenderState::Scheduled(idle) = std::mem::take(&mut surface.render_state) {
+                    idle.cancel();
+                }
             }
         }
     }
@@ -638,51 +646,6 @@ impl State {
             // );
         }
     }
-
-    /// Resize the output with the given mode.
-    ///
-    /// TODO: This is in udev.rs but is also used in winit.rs.
-    /// |     I've got no clue how to make things public without making a mess.
-    pub fn resize_output(&mut self, output: &Output, mode: smithay::output::Mode) {
-        if let Backend::Udev(udev) = &mut self.backend {
-            let drm_mode = udev.backends.iter().find_map(|(_, backend)| {
-                backend
-                    .drm_scanner
-                    .crtcs()
-                    .find(|(_, handle)| {
-                        output
-                            .user_data()
-                            .get::<UdevOutputData>()
-                            .is_some_and(|data| &data.crtc == handle)
-                    })
-                    .and_then(|(info, _)| {
-                        info.modes()
-                            .iter()
-                            .find(|m| smithay::output::Mode::from(**m) == mode)
-                    })
-                    .copied()
-            });
-
-            if let Some(drm_mode) = drm_mode {
-                if let Some(render_surface) = render_surface_for_output(output, &mut udev.backends)
-                {
-                    match render_surface.compositor.use_mode(drm_mode) {
-                        Ok(()) => {
-                            self.pinnacle
-                                .change_output_state(output, Some(mode), None, None, None);
-                        }
-                        Err(err) => error!("Failed to resize output: {err}"),
-                    }
-                }
-            }
-        } else {
-            self.pinnacle
-                .change_output_state(output, Some(mode), None, None, None);
-        }
-
-        self.pinnacle.request_layout(output);
-        self.schedule_render(output);
-    }
 }
 
 impl BackendData for Udev {
@@ -703,6 +666,45 @@ impl BackendData for Udev {
     fn early_import(&mut self, surface: &WlSurface) {
         if let Err(err) = self.gpu_manager.early_import(self.primary_gpu, surface) {
             warn!("early buffer import failed: {}", err);
+        }
+    }
+
+    fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
+        let drm_mode = self.backends.iter().find_map(|(_, backend)| {
+            backend
+                .drm_scanner
+                .crtcs()
+                .find(|(_, handle)| {
+                    output
+                        .user_data()
+                        .get::<UdevOutputData>()
+                        .is_some_and(|data| &data.crtc == handle)
+                })
+                .and_then(|(info, _)| {
+                    info.modes()
+                        .iter()
+                        .find(|m| smithay::output::Mode::from(**m) == mode)
+                })
+                .copied()
+        });
+
+        if let Some(drm_mode) = drm_mode {
+            if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
+                match render_surface.compositor.use_mode(drm_mode) {
+                    Ok(()) => {
+                        output.change_current_state(Some(mode), None, None, None);
+                        output.with_state_mut(|state| {
+                            if !state.modes.contains(&mode) {
+                                state.modes.push(mode);
+                            }
+                        });
+                    }
+                    Err(err) => warn!("Failed to resize output: {err}"),
+                }
+            }
+        } else {
+            // TODO: create new drm mode with cvt
+            tracing::info!("no drm mode for mode");
         }
     }
 }
@@ -810,7 +812,6 @@ enum RenderState {
         /// The idle token from a render being scheduled.
         /// This is used to cancel renders if, for example,
         /// the output being rendered is removed.
-        #[allow(dead_code)] // TODO:
         Idle<'static>,
     ),
     /// A frame was rendered and scheduled and we are waiting for vblank.
@@ -823,10 +824,6 @@ enum RenderState {
 
 /// Render surface for an output.
 struct RenderSurface {
-    /// The output global id.
-    global: Option<GlobalId>,
-    /// A display handle used to remove the global on drop.
-    display_handle: DisplayHandle,
     /// The node from `connector_connected`.
     device_id: DrmNode,
     /// The node rendering to the screen? idk
@@ -860,15 +857,6 @@ struct ScreencopyCommitState {
     primary_plane_swapchain: CommitCounter,
     primary_plane_element: CommitCounter,
     _cursor: CommitCounter,
-}
-
-impl Drop for RenderSurface {
-    // Stop advertising this output to clients on drop.
-    fn drop(&mut self) {
-        if let Some(global) = self.global.take() {
-            self.display_handle.remove_global::<State>(global);
-        }
-    }
 }
 
 type GbmDrmCompositor = DrmCompositor<
@@ -1055,11 +1043,12 @@ impl Udev {
         );
         let global = output.create_global::<State>(&self.display_handle);
 
-        pinnacle
-            .output_management_manager_state
-            .add_head::<State>(&output);
+        pinnacle.outputs.insert(output.clone(), global);
 
-        output.with_state_mut(|state| state.serial = serial);
+        output.with_state_mut(|state| {
+            state.serial = serial;
+            state.powered = true;
+        });
 
         output.set_preferred(wl_mode);
 
@@ -1070,6 +1059,10 @@ impl Udev {
             .map(smithay::output::Mode::from)
             .collect::<Vec<_>>();
         output.with_state_mut(|state| state.modes = modes);
+
+        pinnacle
+            .output_management_manager_state
+            .add_head::<State>(&output);
 
         let x = pinnacle.space.outputs().fold(0, |acc, o| {
             let Some(geo) = pinnacle.space.output_geometry(o) else {
@@ -1131,10 +1124,8 @@ impl Udev {
         );
 
         let surface = RenderSurface {
-            display_handle: self.display_handle.clone(),
             device_id: node,
             render_node: device.render_node,
-            global: Some(global),
             compositor,
             dmabuf_feedback,
             render_state: RenderState::Idle,
@@ -1145,7 +1136,7 @@ impl Udev {
 
         device.surfaces.insert(crtc, surface);
 
-        pinnacle.change_output_state(&output, Some(wl_mode), None, None, Some(position));
+        pinnacle.change_output_state(self, &output, Some(wl_mode), None, None, Some(position));
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.
@@ -1157,7 +1148,7 @@ impl Udev {
         {
             let ConnectorSavedState { loc, tags, scale } = saved_state;
             output.with_state_mut(|state| state.tags.clone_from(tags));
-            pinnacle.change_output_state(&output, None, None, *scale, Some(*loc));
+            pinnacle.change_output_state(self, &output, None, None, *scale, Some(*loc));
         } else {
             pinnacle.signal_state.output_connect.signal(|buffer| {
                 buffer.push_back(OutputConnectResponse {
@@ -1223,6 +1214,11 @@ impl Udev {
             pinnacle
                 .output_management_manager_state
                 .remove_head(&output);
+
+            if let Some(global) = pinnacle.outputs.remove(&output) {
+                // TODO: disable ahead of time
+                pinnacle.display_handle.remove_global::<State>(global);
+            }
         }
     }
 
@@ -1298,11 +1294,15 @@ impl Udev {
             return;
         };
 
-        let output = if let Some(output) = pinnacle.space.outputs().find(|o| {
-            let udev_op_data = o.user_data().get::<UdevOutputData>();
-            udev_op_data
-                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
-        }) {
+        let output = if let Some(output) = pinnacle
+            .outputs
+            .keys()
+            .chain(pinnacle.unmapped_outputs.iter())
+            .find(|o| {
+                let udev_op_data = o.user_data().get::<UdevOutputData>();
+                udev_op_data
+                    .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
+            }) {
             output.clone()
         } else {
             // somehow we got called with an invalid output
@@ -1393,6 +1393,11 @@ impl Udev {
         };
 
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
+
+        if !pinnacle.outputs.contains_key(output) {
+            surface.render_state = RenderState::Idle;
+            return;
+        }
 
         // TODO: possibly lift this out and make it so that scheduling a render
         // does nothing on powered off outputs

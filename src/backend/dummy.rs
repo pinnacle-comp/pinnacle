@@ -1,6 +1,4 @@
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    OutputConnectResponse, OutputDisconnectResponse,
-};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -50,6 +48,10 @@ impl BackendData for Dummy {
     fn reset_buffers(&mut self, _output: &Output) {}
 
     fn early_import(&mut self, _surface: &WlSurface) {}
+
+    fn set_output_mode(&mut self, _output: &Output, _mode: smithay::output::Mode) {
+        // TODO:
+    }
 }
 
 impl Dummy {
@@ -139,16 +141,6 @@ impl Pinnacle {
             buf.push_back(OutputConnectResponse {
                 output_name: Some(output.name()),
             });
-        });
-    }
-
-    pub fn remove_output(&mut self, output: &Output) {
-        self.space.unmap_output(output);
-
-        self.signal_state.output_disconnect.signal(|buffer| {
-            buffer.push_back(OutputDisconnectResponse {
-                output_name: Some(output.name()),
-            })
         });
     }
 }
