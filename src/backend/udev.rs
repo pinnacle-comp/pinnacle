@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Context};
-use drm::set_crtc_active;
+use drm::{set_crtc_active, util::create_drm_mode};
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, OutputDisconnectResponse,
 };
@@ -703,8 +703,21 @@ impl BackendData for Udev {
                 }
             }
         } else {
-            // TODO: create new drm mode with cvt
-            tracing::info!("no drm mode for mode");
+            let new_mode = create_drm_mode(mode.size.w, mode.size.h, Some(mode.refresh as u32));
+
+            if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
+                match render_surface.compositor.use_mode(new_mode) {
+                    Ok(()) => {
+                        output.change_current_state(Some(mode), None, None, None);
+                        output.with_state_mut(|state| {
+                            if !state.modes.contains(&mode) {
+                                state.modes.push(mode);
+                            }
+                        });
+                    }
+                    Err(err) => warn!("Failed to resize output: {err}"),
+                }
+            }
         }
     }
 }

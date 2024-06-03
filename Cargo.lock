@@ -1394,6 +1394,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae743338b92ff9146ce83992f766a31066a91a8c84a45e0e9f21e7cf6de6d346"
 
 [[package]]
+name = "libdisplay-info-sys"
+version = "0.1.0"
+source = "git+https://github.com/Smithay/libdisplay-info-rs?rev=a482d0d#a482d0d4b71762c13d40fa394efe04473916f31c"
+
+[[package]]
 name = "libloading"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,8 +1856,10 @@ dependencies = [
  "clap",
  "cliclack",
  "dircpy",
+ "drm-sys",
  "gag",
  "image",
+ "libdisplay-info-sys",
  "pinnacle",
  "pinnacle-api",
  "pinnacle-api-defs",
@@ -2381,7 +2388,6 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=900b938#900b938970081cb525dc94ff083d76aa07c60e54"
 dependencies = [
  "appendlist",
  "ash",

@@ -28,6 +28,7 @@ pub struct Dummy {
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     #[cfg(feature = "wlcs")]
     pub wlcs_state: Wlcs,
+    pub output: Output,
 }
 
 impl Backend {
@@ -49,8 +50,8 @@ impl BackendData for Dummy {
 
     fn early_import(&mut self, _surface: &WlSurface) {}
 
-    fn set_output_mode(&mut self, _output: &Output, _mode: smithay::output::Mode) {
-        // TODO:
+    fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
+        output.change_current_state(Some(mode), None, None, None);
     }
 }
 
@@ -87,6 +88,7 @@ impl Dummy {
             // dmabuf_state,
             #[cfg(feature = "wlcs")]
             wlcs_state: Wlcs::default(),
+            output: output.clone(),
         };
 
         UninitBackend {

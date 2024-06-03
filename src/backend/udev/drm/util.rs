@@ -1,7 +1,18 @@
-use std::num::NonZeroU32;
+use std::{ffi::CString, io::Write, mem::MaybeUninit, num::NonZeroU32};
 
-use anyhow::Context;
-use smithay::reexports::drm::control::{connector, property, Device, ResourceHandle};
+use anyhow::{bail, Context};
+use drm_sys::{
+    drm_mode_modeinfo, DRM_MODE_FLAG_NHSYNC, DRM_MODE_FLAG_NVSYNC, DRM_MODE_FLAG_PHSYNC,
+    DRM_MODE_FLAG_PVSYNC, DRM_MODE_TYPE_USERDEF,
+};
+use libdisplay_info_sys::cvt::{
+    di_cvt_compute, di_cvt_options, di_cvt_reduced_blanking_version_DI_CVT_REDUCED_BLANKING_NONE,
+    di_cvt_timing,
+};
+use smithay::reexports::drm::{
+    self,
+    control::{connector, property, Device, ResourceHandle},
+};
 
 use super::edid_manus::get_manufacturer;
 
@@ -128,4 +139,154 @@ pub(super) fn get_drm_property(
         }
     }
     anyhow::bail!("No prop found for {}", name)
+}
+
+// From https://github.com/swaywm/sway/blob/2e9139df664f1e2dbe14b5df4a9646411b924c66/sway/commands/output/mode.c#L64
+fn parse_modeline_string(modeline: &str) -> anyhow::Result<drm_mode_modeinfo> {
+    let mut args = modeline.split_whitespace();
+
+    let clock = args
+        .next()
+        .context("no clock specified")?
+        .parse::<u32>()
+        .context("failed to parse clock")?
+        * 1000;
+    let hdisplay = args
+        .next()
+        .context("no hdisplay specified")?
+        .parse()
+        .context("failed to parse hdisplay")?;
+    let hsync_start = args
+        .next()
+        .context("no hsync_start specified")?
+        .parse()
+        .context("failed to parse hsync_start")?;
+    let hsync_end = args
+        .next()
+        .context("no hsync_end specified")?
+        .parse()
+        .context("failed to parse hsync_end")?;
+    let htotal = args
+        .next()
+        .context("no htotal specified")?
+        .parse()
+        .context("failed to parse htotal")?;
+    let vdisplay = args
+        .next()
+        .context("no vdisplay specified")?
+        .parse()
+        .context("failed to parse vdisplay")?;
+    let vsync_start = args
+        .next()
+        .context("no vsync_start specified")?
+        .parse()
+        .context("failed to parse vsync_start")?;
+    let vsync_end = args
+        .next()
+        .context("no vsync_end specified")?
+        .parse()
+        .context("failed to parse vsync_end")?;
+    let vtotal = args
+        .next()
+        .context("no vtotal specified")?
+        .parse()
+        .context("failed to parse vtotal")?;
+    let vrefresh = clock * 1000 * 1000 / htotal as u32 / vtotal as u32;
+
+    let mut flags = 0;
+    match args.next().context("no +/-hsync specified")? {
+        "+hsync" => flags |= DRM_MODE_FLAG_PHSYNC,
+        "-hsync" => flags |= DRM_MODE_FLAG_NHSYNC,
+        _ => bail!("invalid hsync specifier"),
+    };
+    match args.next().context("no +/-vsync specified")? {
+        "+vsync" => flags |= DRM_MODE_FLAG_PVSYNC,
+        "-vsync" => flags |= DRM_MODE_FLAG_NVSYNC,
+        _ => bail!("invalid vsync specifier"),
+    };
+
+    let type_ = DRM_MODE_TYPE_USERDEF;
+
+    let name = CString::new(format!("{}x{}@{}", hdisplay, vdisplay, vrefresh / 1000)).unwrap();
+    let mut name_buf = [0u8; 32];
+    let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
+    let name: [i8; 32] = bytemuck::cast(name_buf);
+
+    Ok(drm_mode_modeinfo {
+        clock,
+        hdisplay,
+        hsync_start,
+        hsync_end,
+        htotal,
+        hskew: 0,
+        vdisplay,
+        vsync_start,
+        vsync_end,
+        vtotal,
+        vscan: 0,
+        vrefresh,
+        flags,
+        type_,
+        name,
+    })
+}
+
+/// Create a new drm mode from a given width, height, and optional refresh rate (defaults to 60Hz).
+pub fn create_drm_mode(width: i32, height: i32, refresh_mhz: Option<u32>) -> drm::control::Mode {
+    drm::control::Mode::from(generate_cvt_mode(
+        width,
+        height,
+        refresh_mhz.map(|refresh| refresh as f64 / 1000.0),
+    ))
+}
+
+// From https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/95ac3e99242b4e7f59f00dd073ede405ff8e9e26/backend/drm/util.c#L247
+fn generate_cvt_mode(hdisplay: i32, vdisplay: i32, vrefresh: Option<f64>) -> drm_mode_modeinfo {
+    let options: di_cvt_options = di_cvt_options {
+        red_blank_ver: di_cvt_reduced_blanking_version_DI_CVT_REDUCED_BLANKING_NONE,
+        h_pixels: hdisplay,
+        v_lines: vdisplay,
+        ip_freq_rqd: vrefresh.unwrap_or(60.0),
+        video_opt: false,
+        vblank: 0.0,
+        additional_hblank: 0,
+        early_vsync_rqd: false,
+        int_rqd: false,
+        margins_rqd: false,
+    };
+
+    let mut timing = MaybeUninit::<di_cvt_timing>::zeroed();
+    // SAFETY: is an ffi function
+    unsafe { di_cvt_compute(timing.as_mut_ptr(), &options as *const _) };
+
+    // SAFETY: Initialized in the function above
+    let timing = unsafe { timing.assume_init() };
+
+    let hsync_start = (hdisplay + timing.h_front_porch as i32) as u16;
+    let vsync_start = (timing.v_lines_rnd + timing.v_front_porch) as u16;
+    let hsync_end = hsync_start + timing.h_sync as u16;
+    let vsync_end = vsync_start + timing.v_sync as u16;
+
+    let name = CString::new(format!("{}x{}", hdisplay, vdisplay)).unwrap();
+    let mut name_buf = [0u8; 32];
+    let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
+    let name: [i8; 32] = bytemuck::cast(name_buf);
+
+    drm_mode_modeinfo {
+        clock: f64::round(timing.act_pixel_freq * 1000.0) as u32,
+        hdisplay: hdisplay as u16,
+        hsync_start,
+        hsync_end,
+        htotal: hsync_end + timing.h_back_porch as u16,
+        hskew: 0,
+        vdisplay: timing.v_lines_rnd as u16,
+        vsync_start,
+        vsync_end,
+        vtotal: vsync_end + timing.v_back_porch as u16,
+        vscan: 0,
+        vrefresh: f64::round(timing.act_frame_rate) as u32,
+        flags: DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_PVSYNC,
+        type_: DRM_MODE_TYPE_USERDEF,
+        name,
+    }
 }
