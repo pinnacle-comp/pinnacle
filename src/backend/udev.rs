@@ -670,53 +670,50 @@ impl BackendData for Udev {
     }
 
     fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
-        let drm_mode = self.backends.iter().find_map(|(_, backend)| {
-            backend
-                .drm_scanner
-                .crtcs()
-                .find(|(_, handle)| {
-                    output
-                        .user_data()
-                        .get::<UdevOutputData>()
-                        .is_some_and(|data| &data.crtc == handle)
-                })
-                .and_then(|(info, _)| {
-                    info.modes()
-                        .iter()
-                        .find(|m| smithay::output::Mode::from(**m) == mode)
-                })
-                .copied()
-        });
+        let drm_mode = self
+            .backends
+            .iter()
+            .find_map(|(_, backend)| {
+                backend
+                    .drm_scanner
+                    .crtcs()
+                    .find(|(_, handle)| {
+                        output
+                            .user_data()
+                            .get::<UdevOutputData>()
+                            .is_some_and(|data| &data.crtc == handle)
+                    })
+                    .and_then(|(info, _)| {
+                        info.modes()
+                            .iter()
+                            .find(|m| smithay::output::Mode::from(**m) == mode)
+                    })
+                    .copied()
+            })
+            .unwrap_or_else(|| {
+                info!("Unknown mode for {}, creating new one", output.name());
+                create_drm_mode(mode.size.w, mode.size.h, Some(mode.refresh as u32))
+            });
 
-        if let Some(drm_mode) = drm_mode {
-            if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
-                match render_surface.compositor.use_mode(drm_mode) {
-                    Ok(()) => {
-                        output.change_current_state(Some(mode), None, None, None);
-                        output.with_state_mut(|state| {
-                            if !state.modes.contains(&mode) {
-                                state.modes.push(mode);
-                            }
-                        });
-                    }
-                    Err(err) => warn!("Failed to resize output: {err}"),
+        if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
+            match render_surface.compositor.use_mode(drm_mode) {
+                Ok(()) => {
+                    info!(
+                        "Set {}'s mode to {}x{}@{:.3}Hz",
+                        output.name(),
+                        mode.size.w,
+                        mode.size.h,
+                        mode.refresh as f64 / 1000.0
+                    );
+                    output.change_current_state(Some(mode), None, None, None);
+                    output.with_state_mut(|state| {
+                        // TODO: push or no?
+                        if !state.modes.contains(&mode) {
+                            state.modes.push(mode);
+                        }
+                    });
                 }
-            }
-        } else {
-            let new_mode = create_drm_mode(mode.size.w, mode.size.h, Some(mode.refresh as u32));
-
-            if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
-                match render_surface.compositor.use_mode(new_mode) {
-                    Ok(()) => {
-                        output.change_current_state(Some(mode), None, None, None);
-                        output.with_state_mut(|state| {
-                            if !state.modes.contains(&mode) {
-                                state.modes.push(mode);
-                            }
-                        });
-                    }
-                    Err(err) => warn!("Failed to resize output: {err}"),
-                }
+                Err(err) => warn!("Failed to set output mode for {}: {err}", output.name()),
             }
         }
     }
@@ -1169,6 +1166,8 @@ impl Udev {
                 })
             });
         }
+
+        pinnacle.output_management_manager_state.update::<State>();
     }
 
     /// A display was unplugged.
@@ -1227,6 +1226,7 @@ impl Udev {
             pinnacle
                 .output_management_manager_state
                 .remove_head(&output);
+            pinnacle.output_management_manager_state.update::<State>();
 
             if let Some(global) = pinnacle.outputs.remove(&output) {
                 // TODO: disable ahead of time

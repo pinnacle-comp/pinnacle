@@ -207,9 +207,6 @@ impl Pinnacle {
 
             lock_surface.send_configure();
         }
-
-        self.output_management_manager_state
-            .update_head::<State>(output);
     }
 
     pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
@@ -266,6 +263,7 @@ impl Pinnacle {
         self.gamma_control_manager_state.output_removed(output);
 
         self.output_management_manager_state.remove_head(output);
+        self.output_management_manager_state.update::<State>();
 
         self.signal_state.output_disconnect.signal(|buffer| {
             buffer.push_back(OutputDisconnectResponse {

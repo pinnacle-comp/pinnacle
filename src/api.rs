@@ -1045,6 +1045,10 @@ impl output_service_server::OutputService for OutputService {
             );
             debug!("Mapping output {} to {loc:?}", output.name());
             state.pinnacle.request_layout(&output);
+            state
+                .pinnacle
+                .output_management_manager_state
+                .update::<State>();
         })
         .await
     }
@@ -1081,6 +1085,10 @@ impl output_service_server::OutputService for OutputService {
                 None,
             );
             state.pinnacle.request_layout(&output);
+            state
+                .pinnacle
+                .output_management_manager_state
+                .update::<State>();
         })
         .await
     }
@@ -1135,6 +1143,10 @@ impl output_service_server::OutputService for OutputService {
 
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
+            state
+                .pinnacle
+                .output_management_manager_state
+                .update::<State>();
         })
         .await
     }
@@ -1178,6 +1190,10 @@ impl output_service_server::OutputService for OutputService {
             );
             state.pinnacle.request_layout(&output);
             state.schedule_render(&output);
+            state
+                .pinnacle
+                .output_management_manager_state
+                .update::<State>();
         })
         .await
     }

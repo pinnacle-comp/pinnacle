@@ -998,6 +998,9 @@ impl OutputManagementHandler for State {
                 }
             }
         }
+        self.pinnacle
+            .output_management_manager_state
+            .update::<State>();
         true
     }
 
