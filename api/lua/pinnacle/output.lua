@@ -163,6 +163,7 @@ end
 ---@class OutputSetup
 ---@field filter (fun(output: OutputHandle): boolean)? -- A filter for wildcard matches that should return true if this setup should apply to the passed in output.
 ---@field mode Mode? -- Makes this setup apply the given mode to outputs.
+---@field modeline (string|Modeline)? -- Makes this setup apply the given modeline to outputs. This takes precedence over `mode`.
 ---@field scale number? -- Makes this setup apply the given scale to outputs.
 ---@field tags string[]? -- Makes this setup add tags with the given name to outputs.
 ---@field transform Transform? -- Makes this setup applt the given transform to outputs.
@@ -289,7 +290,9 @@ function output.setup(setups)
                     goto continue
                 end
 
-                if setup.mode then
+                if setup.modeline then
+                    op:set_modeline(setup.modeline)
+                elseif setup.mode then
                     op:set_mode(
                         setup.mode.pixel_width,
                         setup.mode.pixel_height,

@@ -443,10 +443,15 @@ impl std::fmt::Debug for OutputMatcher {
     }
 }
 
+enum OutputMode {
+    Mode(Mode),
+    Modeline(Modeline),
+}
+
 /// An output setup for use in [`Output::setup`].
 pub struct OutputSetup {
     output: OutputMatcher,
-    mode: Option<Mode>,
+    mode: Option<OutputMode>,
     scale: Option<f32>,
     tag_names: Option<Vec<String>>,
     transform: Option<Transform>,
@@ -478,9 +483,24 @@ impl OutputSetup {
     }
 
     /// Makes this setup apply the given [`Mode`] to its outputs.
+    ///
+    /// This will overwrite [`OutputSetup::with_modeline`] if called after it.
     pub fn with_mode(self, mode: Mode) -> Self {
         Self {
-            mode: Some(mode),
+            mode: Some(OutputMode::Mode(mode)),
+            ..self
+        }
+    }
+
+    /// Makes this setup apply the given [`Modeline`] to its outputs.
+    ///
+    /// You can parse a modeline string into a modeline. See [`OutputHandle::set_modeline`] for
+    /// specifics.
+    ///
+    /// This will overwrite [`OutputSetup::with_mode`] if called after it.
+    pub fn with_modeline(self, modeline: Modeline) -> Self {
+        Self {
+            mode: Some(OutputMode::Modeline(modeline)),
             ..self
         }
     }
@@ -511,11 +531,18 @@ impl OutputSetup {
 
     fn apply(&self, output: &OutputHandle, tag: &Tag) {
         if let Some(mode) = &self.mode {
-            output.set_mode(
-                mode.pixel_width,
-                mode.pixel_height,
-                Some(mode.refresh_rate_millihertz),
-            );
+            match mode {
+                OutputMode::Mode(mode) => {
+                    output.set_mode(
+                        mode.pixel_width,
+                        mode.pixel_height,
+                        Some(mode.refresh_rate_millihertz),
+                    );
+                }
+                OutputMode::Modeline(modeline) => {
+                    output.set_modeline(*modeline);
+                }
+            }
         }
         if let Some(scale) = self.scale {
             output.set_scale(scale);
@@ -530,7 +557,7 @@ impl OutputSetup {
 }
 
 /// A location for an output.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutputLoc {
     /// A specific point in the global space of the form (x, y).
     Point(i32, i32),
@@ -1294,7 +1321,7 @@ impl OutputHandle {
 }
 
 /// A possible output pixel dimension and refresh rate configuration.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Mode {
     /// The width of the output, in pixels.
     pub pixel_width: u32,
