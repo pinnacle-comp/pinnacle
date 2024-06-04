@@ -70,6 +70,7 @@ pub struct PendingOutputConfiguration {
 #[derive(Default, Debug)]
 struct PendingOutputConfigurationInner {
     cancelled: bool,
+    used: bool,
     pending_heads: HashMap<ZwlrOutputHeadV1, PendingHead>,
 }
 
@@ -111,6 +112,9 @@ pub struct OutputData {
 }
 
 impl OutputManagementManagerState {
+    /// Add this head.
+    ///
+    /// [`OutputManagementManagerState::update`] needs to be called afterwards to apply the new state.
     pub fn add_head<D>(&mut self, output: &Output)
     where
         D: Dispatch<ZwlrOutputHeadV1, Output>
@@ -145,12 +149,18 @@ impl OutputManagementManagerState {
         self.outputs.insert(output.clone(), output_data);
     }
 
+    /// Mark this head as removed.
+    ///
+    /// [`OutputManagementManagerState::update`] needs to be called afterwards to apply the new state.
     pub fn remove_head(&mut self, output: &Output) {
         if self.outputs.remove(output).is_some() {
             self.removed_outputs.insert(output.clone());
         }
     }
 
+    /// Mark this head as enabled or not.
+    ///
+    /// [`OutputManagementManagerState::update`] needs to be called afterwards to apply the new state.
     pub fn set_head_enabled<D>(&mut self, output: &Output, enabled: bool)
     where
         D: Dispatch<ZwlrOutputHeadV1, Output>
@@ -210,6 +220,9 @@ impl OutputManagementManagerState {
         }
     }
 
+    /// Update output management state.
+    ///
+    /// This needs to be called whenever output state changes to notify clients of the new state.
     pub fn update<D>(&mut self)
     where
         D: Dispatch<ZwlrOutputHeadV1, Output>
@@ -386,12 +399,14 @@ where
         }
     }
 
-    // TODO:
-    // SINCE FOUR
-    // head.adaptive_sync(match data.adaptive_sync {
-    //     true => AdaptiveSyncState::Enabled,
-    //     false => AdaptiveSyncState::Disabled,
-    // });
+    if head.version() >= zwlr_output_head_v1::EVT_ADAPTIVE_SYNC_SINCE {
+        // TODO:
+        // head.adaptive_sync(match data.adaptive_sync {
+        //     true => AdaptiveSyncState::Enabled,
+        //     false => AdaptiveSyncState::Disabled,
+        // });
+        head.adaptive_sync(AdaptiveSyncState::Disabled);
+    }
 
     head.enabled(true as i32);
     if let Some(current_mode) = output.current_mode() {
@@ -561,6 +576,7 @@ where
                         serial,
                         inner: Mutex::new(PendingOutputConfigurationInner {
                             cancelled: false,
+                            used: false,
                             pending_heads: HashMap::new(),
                         }),
                     };
@@ -581,6 +597,7 @@ where
                     serial,
                     inner: Mutex::new(PendingOutputConfigurationInner {
                         cancelled: false,
+                        used: false,
                         pending_heads,
                     }),
                 };
@@ -730,6 +747,14 @@ where
                     return;
                 }
 
+                if data.used {
+                    resource.post_error(
+                        zwlr_output_configuration_v1::Error::AlreadyUsed,
+                        "configuration has already been applied or tested",
+                    );
+                    return;
+                }
+
                 let manager_serial =
                     manager_for_configuration(state, resource).map(|(_, data)| data.serial);
 
@@ -755,6 +780,14 @@ where
                 let mut data = pending_data.inner.lock().unwrap();
 
                 if data.cancelled {
+                    return;
+                }
+
+                if data.used {
+                    resource.post_error(
+                        zwlr_output_configuration_v1::Error::AlreadyUsed,
+                        "configuration has already been applied or tested",
+                    );
                     return;
                 }
 
@@ -784,6 +817,14 @@ where
                 let mut data = pending_data.inner.lock().unwrap();
 
                 if data.cancelled {
+                    return;
+                }
+
+                if data.used {
+                    resource.post_error(
+                        zwlr_output_configuration_v1::Error::AlreadyUsed,
+                        "configuration has already been applied or tested",
+                    );
                     return;
                 }
 
@@ -849,6 +890,8 @@ where
                 } else {
                     resource.failed();
                 }
+
+                data.used = true;
             }
             zwlr_output_configuration_v1::Request::Destroy => (),
             _ => unreachable!(),
