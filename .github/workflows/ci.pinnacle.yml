@@ -22,7 +22,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -44,7 +44,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot liblua5.4-dev libdisplay-info-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -84,7 +84,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
