@@ -65,6 +65,20 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field pixel_height integer?
 ---@field refresh_rate_millihz integer?
 
+---@class pinnacle.output.v0alpha1.SetModelineRequest
+---@field output_name string?
+---@field clock number?
+---@field hdisplay integer?
+---@field hsync_start integer?
+---@field hsync_end integer?
+---@field htotal integer?
+---@field vdisplay integer?
+---@field vsync_start integer?
+---@field vsync_end integer?
+---@field vtotal integer?
+---@field hsync_pos boolean?
+---@field vsync_pos boolean?
+
 ---@class pinnacle.output.v0alpha1.SetScaleRequest
 ---@field output_name string?
 ---@field absolute number?
@@ -473,6 +487,13 @@ defs.pinnacle = {
                     service = "pinnacle.output.v0alpha1.OutputService",
                     method = "SetMode",
                     request = "pinnacle.output.v0alpha1.SetModeRequest",
+                    response = "google.protobuf.Empty",
+                },
+                ---@type GrpcRequestArgs
+                SetModeline = {
+                    service = "pinnacle.output.v0alpha1.OutputService",
+                    method = "SetModeline",
+                    request = "pinnacle.output.v0alpha1.SetModelineRequest",
                     response = "google.protobuf.Empty",
                 },
                 ---@type GrpcRequestArgs

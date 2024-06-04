@@ -813,6 +813,54 @@ function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
     })
 end
 
+---@class Modeline
+---@field clock number
+---@field hdisplay integer
+---@field hsync_start integer
+---@field hsync_end integer
+---@field htotal integer
+---@field vdisplay integer
+---@field vsync_start integer
+---@field vsync_end integer
+---@field vtotal integer
+---@field hsync boolean
+---@field vsync boolean
+
+---Set a custom modeline for this output.
+---
+---This accepts a `Modeline` table or a string of the modeline.
+---
+---@param modeline string|Modeline
+function OutputHandle:set_modeline(modeline)
+    if type(modeline) == "string" then
+        local ml, err = require("pinnacle.util").output.parse_modeline(modeline)
+        if ml then
+            modeline = ml
+        else
+            print("invalid modeline: " .. tostring(err))
+            return
+        end
+    end
+
+    ---@type pinnacle.output.v0alpha1.SetModelineRequest
+    local request = {
+        output_name = self.name,
+        clock = modeline.clock,
+        hdisplay = modeline.hdisplay,
+        hsync_start = modeline.hsync_start,
+        hsync_end = modeline.hsync_end,
+        htotal = modeline.htotal,
+        vdisplay = modeline.vdisplay,
+        vsync_start = modeline.vsync_start,
+        vsync_end = modeline.vsync_end,
+        vtotal = modeline.vtotal,
+        hsync_pos = modeline.hsync,
+        vsync_pos = modeline.vsync,
+    }
+
+    client.unary_request(output_service.SetModeline, request)
+end
+
 ---Set this output's scaling factor.
 ---
 ---@param scale number
