@@ -3,7 +3,7 @@
 use std::{cell::RefCell, num::NonZeroU32};
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
+    OutputConnectResponse, OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
 };
 use smithay::{
     desktop::layer_map_for_output,
@@ -255,6 +255,15 @@ impl Pinnacle {
                 }
             }
             self.space.map_output(output, output.current_location());
+
+            // Trigger the connect signal here for configs to reposition outputs
+            //
+            // TODO: Create a new output_disable/enable signal and trigger it here
+            self.signal_state.output_connect.signal(|buffer| {
+                buffer.push_back(OutputConnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
         } else {
             let global = self.outputs.get_mut(output);
             if let Some(global) = global {
@@ -263,6 +272,15 @@ impl Pinnacle {
                 }
             }
             self.space.unmap_output(output);
+
+            // Trigger the disconnect signal here for configs to reposition outputs
+            //
+            // TODO: Create a new output_disable/enable signal and trigger it here
+            self.signal_state.output_disconnect.signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
 
             self.gamma_control_manager_state.output_removed(output);
 
