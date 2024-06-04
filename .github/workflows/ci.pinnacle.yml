@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Build
     steps:
       - name: Checkout
@@ -34,7 +34,7 @@ jobs:
       - name: Celebratory yahoo
         run: echo yahoo
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Run tests
     steps:
       - name: Checkout
@@ -60,7 +60,7 @@ jobs:
         if: ${{ runner.debug == '1' }}
         run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --test-threads=1
   check-format:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Check formatting
     steps:
       - name: Checkout
@@ -72,7 +72,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
   clippy-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Clippy check
     steps:
       - name: Checkout
