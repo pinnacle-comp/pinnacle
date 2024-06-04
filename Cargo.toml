@@ -117,6 +117,7 @@ pinnacle-api = { path = "./api/rust" }
 gag = "1.0.0"
 drm-sys = "0.7.0"
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
+indexmap = "2.2.6"
 
 [build-dependencies]
 vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }

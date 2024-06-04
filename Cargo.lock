@@ -1859,6 +1859,7 @@ dependencies = [
  "drm-sys",
  "gag",
  "image",
+ "indexmap 2.2.6",
  "libdisplay-info-sys",
  "pinnacle",
  "pinnacle-api",

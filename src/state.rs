@@ -19,6 +19,7 @@ use crate::{
     window::WindowElement,
 };
 use anyhow::Context;
+use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     desktop::{PopupManager, Space},
@@ -153,7 +154,7 @@ pub struct Pinnacle {
     /// WlSurfaces with an attached idle inhibitor.
     pub idle_inhibiting_surfaces: HashSet<WlSurface>,
 
-    pub outputs: HashMap<Output, Option<GlobalId>>,
+    pub outputs: IndexMap<Output, Option<GlobalId>>,
 }
 
 impl State {
@@ -353,7 +354,7 @@ impl Pinnacle {
 
             idle_inhibiting_surfaces: HashSet::new(),
 
-            outputs: HashMap::new(),
+            outputs: IndexMap::new(),
         };
 
         Ok(pinnacle)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, collections::hash_map::Entry, num::NonZeroU32};
+use std::{cell::RefCell, num::NonZeroU32};
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
@@ -243,20 +243,18 @@ impl Pinnacle {
     pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
         if enabled {
             match self.outputs.entry(output.clone()) {
-                Entry::Occupied(entry) => {
+                indexmap::map::Entry::Occupied(entry) => {
                     let global = entry.into_mut();
                     if global.is_none() {
                         *global = Some(output.create_global::<State>(&self.display_handle));
                     }
                 }
-                Entry::Vacant(entry) => {
+                indexmap::map::Entry::Vacant(entry) => {
                     let global = output.create_global::<State>(&self.display_handle);
                     entry.insert(Some(global));
                 }
             }
             self.space.map_output(output, output.current_location());
-
-            // TODO: output connect?
         } else {
             let global = self.outputs.get_mut(output);
             if let Some(global) = global {
@@ -265,13 +263,6 @@ impl Pinnacle {
                 }
             }
             self.space.unmap_output(output);
-
-            // TODO: should this trigger the signal?
-            self.signal_state.output_disconnect.signal(|buffer| {
-                buffer.push_back(OutputDisconnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
 
             self.gamma_control_manager_state.output_removed(output);
 
@@ -290,9 +281,10 @@ impl Pinnacle {
         }
     }
 
+    /// Completely remove an output, for example when a monitor is unplugged
     pub fn remove_output(&mut self, output: &Output) {
-        let global = self.outputs.get_mut(output);
-        if let Some(global) = global {
+        let global = self.outputs.shift_remove(output);
+        if let Some(mut global) = global {
             if let Some(global) = global.take() {
                 self.display_handle.remove_global::<State>(global);
             }
