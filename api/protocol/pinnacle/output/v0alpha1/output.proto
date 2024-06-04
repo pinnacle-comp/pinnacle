@@ -116,6 +116,8 @@ message GetPropertiesResponse {
   optional uint32 serial = 16;
   // Window ids of the keyboard focus stack for this output.
   repeated uint32 keyboard_focus_stack_window_ids = 17;
+  optional bool enabled = 18;
+  optional bool powered = 19;
 }
 
 service OutputService {

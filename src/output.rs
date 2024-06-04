@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, num::NonZeroU32};
+use std::{cell::RefCell, collections::hash_map::Entry, num::NonZeroU32};
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
@@ -35,8 +35,8 @@ impl OutputName {
     /// Get the output with this name.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
         pinnacle
-            .space
-            .outputs()
+            .outputs
+            .keys()
             .find(|output| output.name() == self.0)
             .cloned()
     }
@@ -55,7 +55,7 @@ pub enum BlankingState {
 }
 
 /// The state of an output
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct OutputState {
     pub tags: Vec<Tag>,
     pub focus_stack: WindowKeyboardFocusStack,
@@ -71,6 +71,22 @@ pub struct OutputState {
     /// Unpowered monitors aren't drawn to but their tags and windows
     /// still exist and can be interacted with.
     pub powered: bool,
+}
+
+impl Default for OutputState {
+    fn default() -> Self {
+        Self {
+            tags: Default::default(),
+            focus_stack: Default::default(),
+            screencopy: Default::default(),
+            serial: Default::default(),
+            modes: Default::default(),
+            lock_surface: Default::default(),
+            blanking_state: Default::default(),
+            layout_transaction: Default::default(),
+            powered: true,
+        }
+    }
 }
 
 impl WithState for Output {
@@ -226,21 +242,29 @@ impl Pinnacle {
 
     pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
         if enabled {
-            self.unmapped_outputs.remove(output);
-            if !self.outputs.contains_key(output) {
-                let global = output.create_global::<State>(&self.display_handle);
-                self.outputs.insert(output.clone(), global);
+            match self.outputs.entry(output.clone()) {
+                Entry::Occupied(entry) => {
+                    let global = entry.into_mut();
+                    if global.is_none() {
+                        *global = Some(output.create_global::<State>(&self.display_handle));
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    let global = output.create_global::<State>(&self.display_handle);
+                    entry.insert(Some(global));
+                }
             }
             self.space.map_output(output, output.current_location());
 
             // TODO: output connect?
         } else {
-            let global = self.outputs.remove(output);
+            let global = self.outputs.get_mut(output);
             if let Some(global) = global {
-                self.display_handle.remove_global::<State>(global);
+                if let Some(global) = global.take() {
+                    self.display_handle.remove_global::<State>(global);
+                }
             }
             self.space.unmap_output(output);
-            self.unmapped_outputs.insert(output.clone());
 
             // TODO: should this trigger the signal?
             self.signal_state.output_disconnect.signal(|buffer| {
@@ -267,11 +291,12 @@ impl Pinnacle {
     }
 
     pub fn remove_output(&mut self, output: &Output) {
-        let global = self.outputs.remove(output);
+        let global = self.outputs.get_mut(output);
         if let Some(global) = global {
-            self.display_handle.remove_global::<State>(global);
+            if let Some(global) = global.take() {
+                self.display_handle.remove_global::<State>(global);
+            }
         }
-        self.unmapped_outputs.remove(output);
 
         for layer in layer_map_for_output(output).layers() {
             layer.layer_surface().send_close();

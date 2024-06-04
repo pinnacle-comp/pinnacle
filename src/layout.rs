@@ -158,11 +158,19 @@ impl LayoutState {
 }
 
 impl Pinnacle {
-    pub fn request_layout(&mut self, output: &Output) -> Option<LayoutRequestId> {
+    pub fn request_layout(&mut self, output: &Output) {
+        if self
+            .outputs
+            .get(output)
+            .is_some_and(|global| global.is_none())
+        {
+            return;
+        }
+
         let id = self.layout_state.next_id();
         let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
-            return None;
+            return;
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
@@ -213,8 +221,6 @@ impl Pinnacle {
             output_width: Some(output_width as u32),
             output_height: Some(output_height as u32),
         }));
-
-        Some(id)
     }
 }
 

@@ -1037,7 +1037,7 @@ impl Udev {
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
-        if pinnacle.space.outputs().any(|op| {
+        if pinnacle.outputs.keys().any(|op| {
             op.user_data()
                 .get::<UdevOutputData>()
                 .is_some_and(|op_id| op_id.crtc == crtc)
@@ -1056,11 +1056,10 @@ impl Udev {
         );
         let global = output.create_global::<State>(&self.display_handle);
 
-        pinnacle.outputs.insert(output.clone(), global);
+        pinnacle.outputs.insert(output.clone(), Some(global));
 
         output.with_state_mut(|state| {
             state.serial = serial;
-            state.powered = true;
         });
 
         output.set_preferred(wl_mode);
@@ -1198,8 +1197,8 @@ impl Udev {
         device.surfaces.remove(&crtc);
 
         let output = pinnacle
-            .space
-            .outputs()
+            .outputs
+            .keys()
             .find(|o| {
                 o.user_data()
                     .get::<UdevOutputData>()
@@ -1285,15 +1284,11 @@ impl Udev {
             return;
         };
 
-        let output = if let Some(output) = pinnacle
-            .outputs
-            .keys()
-            .chain(pinnacle.unmapped_outputs.iter())
-            .find(|o| {
-                let udev_op_data = o.user_data().get::<UdevOutputData>();
-                udev_op_data
-                    .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
-            }) {
+        let output = if let Some(output) = pinnacle.outputs.keys().find(|o| {
+            let udev_op_data = o.user_data().get::<UdevOutputData>();
+            udev_op_data
+                .is_some_and(|data| data.device_id == surface.device_id && data.crtc == crtc)
+        }) {
             output.clone()
         } else {
             // somehow we got called with an invalid output

@@ -40,8 +40,6 @@ output.handle = output_handle
 ---
 ---@return OutputHandle[]
 function output.get_all()
-    -- Not going to batch these because I doubt people would have that many monitors
-
     local response = client.unary_request(output_service.Get, {})
 
     ---@type OutputHandle[]
@@ -52,6 +50,27 @@ function output.get_all()
     end
 
     return handles
+end
+
+---Get all enabled outputs.
+---
+---### Example
+---```lua
+---local outputs = Output.get_all_enabled()
+---```
+---
+---@return OutputHandle[]
+function output.get_all_enabled()
+    local outputs = output.get_all()
+
+    local enabled_handles = {}
+    for _, handle in ipairs(outputs) do
+        if handle:enabled() then
+            table.insert(enabled_handles, handle)
+        end
+    end
+
+    return enabled_handles
 end
 
 ---Get an output by its name (the connector it's plugged into).
@@ -421,7 +440,7 @@ function output.setup_locs(update_locs_on, locs)
     end
 
     local function layout_outputs()
-        local outputs = output.get_all()
+        local outputs = output.get_all_enabled()
 
         ---@type OutputHandle[]
         local placed_outputs = {}
@@ -948,6 +967,8 @@ end
 ---@field transform Transform?
 ---@field serial integer?
 ---@field keyboard_focus_stack WindowHandle[]
+---@field enabled boolean?
+---@field powered boolean?
 
 ---Get all properties of this output.
 ---
@@ -1020,6 +1041,8 @@ end
 
 ---Get this output's logical width in pixels.
 ---
+---If the output is disabled, this returns nil.
+---
 ---Shorthand for `handle:props().logical_width`.
 ---
 ---@return integer?
@@ -1028,6 +1051,8 @@ function OutputHandle:logical_width()
 end
 
 ---Get this output's logical height in pixels.
+---
+---If the output is disabled, this returns nil.
 ---
 ---Shorthand for `handle:props().y`.
 ---
@@ -1140,6 +1165,25 @@ end
 ---@see OutputHandle.keyboard_focus_stack_visible
 function OutputHandle:keyboard_focus_stack()
     return self:props().keyboard_focus_stack
+end
+
+---Get whether this output is enabled.
+---
+---Disabled outputs are not mapped to the global space and cannot be used.
+---
+---@return boolean?
+function OutputHandle:enabled()
+    return self:props().enabled
+end
+
+---Get whether this output is powered.
+---
+---Unpowered outputs that are enabled will be off, but they will still be
+---mapped to the global space, meaning you can still interact with them.
+---
+---@return boolean?
+function OutputHandle:powered()
+    return self:props().powered
 end
 
 ---Get this output's keyboard focus stack.

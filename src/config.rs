@@ -381,7 +381,7 @@ impl Pinnacle {
         // Clear state
 
         debug!("Clearing tags");
-        for output in self.space.outputs() {
+        for output in self.outputs.keys() {
             output.with_state_mut(|state| state.tags.clear());
         }
 

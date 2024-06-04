@@ -60,7 +60,7 @@ impl Output {
         }
     }
 
-    /// Get a handle to all connected outputs.
+    /// Get handles to all connected outputs.
     ///
     /// # Examples
     ///
@@ -82,8 +82,33 @@ impl Output {
             .into_inner()
             .output_names
             .into_iter()
-            .map(move |name| self.new_handle(name))
+            .map(|name| self.new_handle(name))
             .collect()
+    }
+
+    /// Get handles to all outputs that are connected and enabled.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let enabled = output.get_all_enabled();
+    /// ```
+    pub fn get_all_enabled(&self) -> Vec<OutputHandle> {
+        block_on_tokio(self.get_all_enabled_async())
+    }
+
+    /// The async version of [`Output::get_all_enabled`].
+    pub async fn get_all_enabled_async(&self) -> Vec<OutputHandle> {
+        let outputs = self.get_all_async().await;
+
+        let mut enabled_outputs = Vec::new();
+        for output in outputs {
+            if output.enabled_async().await.unwrap_or_default() {
+                enabled_outputs.push(output);
+            }
+        }
+
+        enabled_outputs
     }
 
     /// Get a handle to the output with the given name.
@@ -272,7 +297,7 @@ impl Output {
 
         let api = self.api.get().unwrap().clone();
         let layout_outputs = move || {
-            let outputs = api.output.get_all();
+            let outputs = api.output.get_all_enabled();
 
             let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
 
@@ -1001,6 +1026,8 @@ impl OutputHandle {
                 .into_iter()
                 .map(|id| self.api.window.new_handle(id))
                 .collect(),
+            enabled: response.enabled,
+            powered: response.powered,
         }
     }
 
@@ -1056,6 +1083,8 @@ impl OutputHandle {
 
     /// Get this output's logical width in pixels.
     ///
+    /// If the output is disabled, this returns None.
+    ///
     /// Shorthand for `self.props().logical_width`.
     pub fn logical_width(&self) -> Option<u32> {
         self.props().logical_width
@@ -1067,6 +1096,8 @@ impl OutputHandle {
     }
 
     /// Get this output's logical height in pixels.
+    ///
+    /// If the output is disabled, this returns None.
     ///
     /// Shorthand for `self.props().logical_height`.
     pub fn logical_height(&self) -> Option<u32> {
@@ -1228,6 +1259,34 @@ impl OutputHandle {
             .collect()
     }
 
+    /// Get whether this output is enabled.
+    ///
+    /// Disabled outputs act as if you unplugged them.
+    pub fn enabled(&self) -> Option<bool> {
+        self.props().enabled
+    }
+
+    /// The async version of [`OutputHandle::enabled`].
+    pub async fn enabled_async(&self) -> Option<bool> {
+        self.props_async().await.enabled
+    }
+
+    /// Get whether this output is powered.
+    ///
+    /// Unpowered outputs will be turned off but you can still interact with them.
+    ///
+    /// Outputs can be disabled but still powered; this just means
+    /// they will turn on when powered. Disabled and unpowered outputs
+    /// will not power on when enabled, but will still be interactable.
+    pub fn powered(&self) -> Option<bool> {
+        self.props().powered
+    }
+
+    /// The async version of [`OutputHandle::powered`].
+    pub async fn powered_async(&self) -> Option<bool> {
+        self.props_async().await.powered
+    }
+
     /// Get this output's unique name (the name of its connector).
     pub fn name(&self) -> String {
         self.name.to_string()
@@ -1292,6 +1351,15 @@ pub struct OutputProperties {
     pub serial: Option<u32>,
     /// This output's window keyboard focus stack.
     pub keyboard_focus_stack: Vec<WindowHandle>,
+    /// Whether this output is enabled.
+    ///
+    /// Enabled outputs are mapped in the global space and usable.
+    /// Disabled outputs function as if you unplugged them.
+    pub enabled: Option<bool>,
+    /// Whether this output is powered.
+    ///
+    /// Unpowered outputs will be off but you can still interact with them.
+    pub powered: Option<bool>,
 }
 
 /// A custom modeline.

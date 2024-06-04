@@ -118,6 +118,8 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field transform pinnacle.output.v0alpha1.Transform?
 ---@field serial integer?
 ---@field keyboard_focus_stack_window_ids integer[]?
+---@field enabled boolean?
+---@field powered boolean?
 
 -- Window
 

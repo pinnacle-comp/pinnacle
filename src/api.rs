@@ -886,7 +886,7 @@ impl tag_service_server::TagService for TagService {
                 .flat_map(|id| id.tag(&state.pinnacle))
                 .collect::<Vec<_>>();
 
-            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
                 // TODO: seriously, convert state.tags into a hashset
                 output.with_state_mut(|state| {
                     for tag_to_remove in tags_to_remove.iter() {
@@ -916,8 +916,8 @@ impl tag_service_server::TagService for TagService {
         run_unary(&self.sender, move |state| {
             let tag_ids = state
                 .pinnacle
-                .space
-                .outputs()
+                .outputs
+                .keys()
                 .flat_map(|op| op.with_state(|state| state.tags.clone()))
                 .map(|tag| tag.id())
                 .map(|id| id.0)
@@ -1272,8 +1272,8 @@ impl output_service_server::OutputService for OutputService {
         run_unary(&self.sender, move |state| {
             let output_names = state
                 .pinnacle
-                .space
-                .outputs()
+                .outputs
+                .keys()
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
@@ -1400,6 +1400,18 @@ impl output_service_server::OutputService for OutputService {
                 })
                 .unwrap_or_default();
 
+            let enabled = output.as_ref().map(|output| {
+                state
+                    .pinnacle
+                    .outputs
+                    .get(output)
+                    .is_some_and(|global| global.is_some())
+            });
+
+            let powered = output
+                .as_ref()
+                .map(|output| output.with_state(|state| state.powered));
+
             output::v0alpha1::GetPropertiesResponse {
                 make,
                 model,
@@ -1418,6 +1430,8 @@ impl output_service_server::OutputService for OutputService {
                 transform,
                 serial,
                 keyboard_focus_stack_window_ids,
+                enabled,
+                powered,
             }
         })
         .await
@@ -1453,7 +1467,7 @@ impl render_service_server::RenderService for RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_upscale_filter(filter);
-            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }
@@ -1478,7 +1492,7 @@ impl render_service_server::RenderService for RenderService {
 
         run_unary_no_response(&self.sender, move |state| {
             state.backend.set_downscale_filter(filter);
-            for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
                 state.backend.reset_buffers(&output);
                 state.schedule_render(&output);
             }

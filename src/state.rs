@@ -153,8 +153,7 @@ pub struct Pinnacle {
     /// WlSurfaces with an attached idle inhibitor.
     pub idle_inhibiting_surfaces: HashSet<WlSurface>,
 
-    pub outputs: HashMap<Output, GlobalId>,
-    pub unmapped_outputs: HashSet<Output>,
+    pub outputs: HashMap<Output, Option<GlobalId>>,
 }
 
 impl State {
@@ -355,7 +354,6 @@ impl Pinnacle {
             idle_inhibiting_surfaces: HashSet::new(),
 
             outputs: HashMap::new(),
-            unmapped_outputs: HashSet::new(),
         };
 
         Ok(pinnacle)

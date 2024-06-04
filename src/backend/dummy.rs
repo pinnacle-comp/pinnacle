@@ -95,9 +95,11 @@ impl Dummy {
         UninitBackend {
             seat_name: dummy.seat_name(),
             init: Box::new(move |pinnacle| {
-                output.create_global::<State>(&display_handle);
+                let global = output.create_global::<State>(&display_handle);
 
                 pinnacle.output_focus_stack.set_focus(output.clone());
+
+                pinnacle.outputs.insert(output.clone(), Some(global));
 
                 pinnacle
                     .shm_state
@@ -136,7 +138,9 @@ impl Pinnacle {
         output.set_preferred(mode);
         output.with_state_mut(|state| state.modes = vec![mode]);
 
-        output.create_global::<State>(&self.display_handle);
+        let global = output.create_global::<State>(&self.display_handle);
+
+        self.outputs.insert(output.clone(), Some(global));
 
         self.space.map_output(&output, (0, 0));
 
