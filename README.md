@@ -66,6 +66,7 @@ You will need:
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
       > Luarocks currently doesn't install the Lua library and its dependencies due to openssh directory
       > shenanigans. Fix soon, hopefully. In the meantime you can use the Rust API.
+- `libdisplay-info`, for monitor display information
 - [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
     - Arch:
         ```sh
