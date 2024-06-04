@@ -11,9 +11,7 @@ use std::{
 
 use anyhow::{anyhow, ensure, Context};
 use drm::{set_crtc_active, util::create_drm_mode};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    OutputConnectResponse, OutputDisconnectResponse,
-};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -51,10 +49,7 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::{
-        layer_map_for_output,
-        utils::{send_frames_surface_tree, OutputPresentationFeedback},
-    },
+    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
@@ -1199,39 +1194,7 @@ impl Udev {
             .cloned();
 
         if let Some(output) = output {
-            // Save this output's state. It will be restored if the monitor gets replugged.
-            pinnacle.config.connector_saved_states.insert(
-                OutputName(output.name()),
-                ConnectorSavedState {
-                    loc: output.current_location(),
-                    tags: output.with_state(|state| state.tags.clone()),
-                    scale: Some(output.current_scale()),
-                },
-            );
-
-            // TODO: extract into a `remove_output` function and unify with dummy backend
-            for layer in layer_map_for_output(&output).layers() {
-                layer.layer_surface().send_close();
-            }
-
-            pinnacle.space.unmap_output(&output);
-            pinnacle.gamma_control_manager_state.output_removed(&output);
-
-            pinnacle.signal_state.output_disconnect.signal(|buffer| {
-                buffer.push_back(OutputDisconnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
-
-            pinnacle
-                .output_management_manager_state
-                .remove_head(&output);
-            pinnacle.output_management_manager_state.update::<State>();
-
-            if let Some(global) = pinnacle.outputs.remove(&output) {
-                // TODO: disable ahead of time
-                pinnacle.display_handle.remove_global::<State>(global);
-            }
+            pinnacle.remove_output(&output);
         }
     }
 

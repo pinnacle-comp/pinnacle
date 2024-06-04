@@ -74,7 +74,7 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     backend::Backend,
     delegate_foreign_toplevel, delegate_gamma_control, delegate_output_management,
-    delegate_screencopy,
+    delegate_output_power_management, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     handlers::xdg_shell::snapshot_pre_commit_hook,
     protocol::{
@@ -83,6 +83,7 @@ use crate::{
         output_management::{
             OutputConfiguration, OutputManagementHandler, OutputManagementManagerState,
         },
+        output_power_management::{OutputPowerManagementHandler, OutputPowerManagementState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
     render::util::snapshot::capture_snapshots_on_output,
@@ -1010,6 +1011,21 @@ impl OutputManagementHandler for State {
     }
 }
 delegate_output_management!(State);
+
+impl OutputPowerManagementHandler for State {
+    fn output_power_management_state(&mut self) -> &mut OutputPowerManagementState {
+        &mut self.pinnacle.output_power_management_state
+    }
+
+    fn set_mode(&mut self, output: &Output, powered: bool) {
+        self.backend.set_output_powered(output, powered);
+
+        if powered {
+            self.schedule_render(output);
+        }
+    }
+}
+delegate_output_power_management!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

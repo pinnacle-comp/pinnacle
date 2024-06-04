@@ -258,9 +258,15 @@ impl Pinnacle {
         }
         self.unmapped_outputs.remove(output);
 
+        for layer in layer_map_for_output(output).layers() {
+            layer.layer_surface().send_close();
+        }
+
         self.space.unmap_output(output);
 
         self.gamma_control_manager_state.output_removed(output);
+
+        self.output_power_management_state.output_removed(output);
 
         self.output_management_manager_state.remove_head(output);
         self.output_management_manager_state.update::<State>();
@@ -279,9 +285,5 @@ impl Pinnacle {
                 scale: Some(output.current_scale()),
             },
         );
-
-        for layer in layer_map_for_output(output).layers() {
-            layer.layer_surface().send_close();
-        }
     }
 }

@@ -13,6 +13,7 @@ use crate::{
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
         output_management::OutputManagementManagerState,
+        output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
     window::WindowElement,
@@ -109,6 +110,7 @@ pub struct Pinnacle {
     pub xwayland_shell_state: XWaylandShellState,
     pub idle_notifier_state: IdleNotifierState<State>,
     pub output_management_manager_state: OutputManagementManagerState,
+    pub output_power_management_state: OutputPowerManagementState,
 
     pub lock_state: LockState,
 
@@ -306,6 +308,10 @@ impl Pinnacle {
             xwayland_shell_state: XWaylandShellState::new::<State>(&display_handle),
             idle_notifier_state: IdleNotifierState::new(&display_handle, loop_handle),
             output_management_manager_state: OutputManagementManagerState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
+            output_power_management_state: OutputPowerManagementState::new::<State, _>(
                 &display_handle,
                 filter_restricted_client,
             ),

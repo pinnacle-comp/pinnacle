@@ -150,7 +150,6 @@ pub trait GammaControlHandler {
     fn gamma_control_destroyed(&mut self, output: &Output);
 }
 
-#[allow(missing_docs)]
 #[macro_export]
 macro_rules! delegate_gamma_control {
     ($(@<$( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+>)? $ty: ty) => {

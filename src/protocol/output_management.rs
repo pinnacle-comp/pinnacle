@@ -590,8 +590,6 @@ where
                 let correct_serial = manager_data.serial == serial;
 
                 if !correct_serial {
-                    tracing::info!(mgr_serial = manager_data.serial, cfg_serial = serial);
-                    tracing::info!("cancelled, incorrect serial 527");
                     config.cancelled();
                     config
                         .data::<PendingOutputConfiguration>()
@@ -736,7 +734,6 @@ where
                     manager_for_configuration(state, resource).map(|(_, data)| data.serial);
 
                 if manager_serial != Some(pending_data.serial) {
-                    tracing::info!("cancelled, incorrect serial 661");
                     resource.cancelled();
                     data.cancelled = true;
                     return;
@@ -765,7 +762,6 @@ where
                     manager_for_configuration(state, resource).map(|(_, data)| data.serial);
 
                 if manager_serial != Some(pending_data.serial) {
-                    tracing::info!("cancelled, incorrect serial 689");
                     resource.cancelled();
                     data.cancelled = true;
                     return;
@@ -795,7 +791,6 @@ where
                     manager_for_configuration(state, resource).map(|(_, data)| data.serial);
 
                 if manager_serial != Some(pending_data.serial) {
-                    tracing::info!("cancelled, incorrect serial 718");
                     resource.cancelled();
                     data.cancelled = true;
                     return;

@@ -347,6 +347,7 @@ pub struct ConnectorSavedState {
     pub tags: Vec<Tag>,
     /// The output's previous scale
     pub scale: Option<smithay::output::Scale>,
+    // TODO: transform
 }
 
 /// Parse a metaconfig file in `config_dir`, if any.
