@@ -16,7 +16,8 @@ use pinnacle_api_defs::pinnacle::{
         self,
         v0alpha1::{
             output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
-            SetModeRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+            SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
+            SetTransformRequest,
         },
     },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
@@ -52,10 +53,10 @@ use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
-    backend::BackendData,
+    backend::{udev::drm_mode_from_api_modeline, BackendData},
     config::ConnectorSavedState,
     input::ModifierMask,
-    output::OutputName,
+    output::{OutputMode, OutputName},
     render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     tag::{Tag, TagId},
@@ -1080,7 +1081,45 @@ impl output_service_server::OutputService for OutputService {
             state.pinnacle.change_output_state(
                 &mut state.backend,
                 &output,
-                Some(mode),
+                Some(OutputMode::Smithay(mode)),
+                None,
+                None,
+                None,
+            );
+            state.pinnacle.request_layout(&output);
+            state
+                .pinnacle
+                .output_management_manager_state
+                .update::<State>();
+        })
+        .await
+    }
+
+    async fn set_modeline(
+        &self,
+        request: Request<SetModelineRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        run_unary_no_response(&self.sender, |state| {
+            let Some(output) = request
+                .output_name
+                .clone()
+                .map(OutputName)
+                .and_then(|name| name.output(&state.pinnacle))
+            else {
+                return;
+            };
+
+            let Some(mode) = drm_mode_from_api_modeline(request) else {
+                // TODO: raise error
+                return;
+            };
+
+            state.pinnacle.change_output_state(
+                &mut state.backend,
+                &output,
+                Some(OutputMode::Drm(mode)),
                 None,
                 None,
                 None,

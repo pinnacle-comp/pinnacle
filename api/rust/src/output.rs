@@ -9,14 +9,14 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use std::{num::NonZeroU32, sync::OnceLock};
+use std::{num::NonZeroU32, str::FromStr, sync::OnceLock};
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
         output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
-        SetLocationRequest, SetModeRequest, SetPoweredRequest, SetScaleRequest,
+        SetLocationRequest, SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
         SetTransformRequest,
     },
 };
@@ -812,6 +812,37 @@ impl OutputHandle {
         .unwrap();
     }
 
+    /// Set a custom modeline for this output.
+    ///
+    /// See `xorg.conf(5)` for more information.
+    ///
+    /// You can parse a modeline from a string of the form
+    /// `<clock> <hdisplay> <hsync_start> <hsync_end> <htotal> <vdisplay> <vsync_start> <vsync_end> <hsync> <vsync>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
+    /// ```
+    pub fn set_modeline(&self, modeline: Modeline) {
+        let mut client = self.output_client.clone();
+        block_on_tokio(client.set_modeline(SetModelineRequest {
+            output_name: Some(self.name.clone()),
+            clock: Some(modeline.clock),
+            hdisplay: Some(modeline.hdisplay),
+            hsync_start: Some(modeline.hsync_start),
+            hsync_end: Some(modeline.hsync_end),
+            htotal: Some(modeline.htotal),
+            vdisplay: Some(modeline.vdisplay),
+            vsync_start: Some(modeline.vsync_start),
+            vsync_end: Some(modeline.vsync_end),
+            vtotal: Some(modeline.vtotal),
+            hsync_pos: Some(modeline.hsync),
+            vsync_pos: Some(modeline.vsync),
+        }))
+        .unwrap();
+    }
+
     /// Set this output's scaling factor.
     ///
     /// # Examples
@@ -1261,4 +1292,152 @@ pub struct OutputProperties {
     pub serial: Option<u32>,
     /// This output's window keyboard focus stack.
     pub keyboard_focus_stack: Vec<WindowHandle>,
+}
+
+/// A custom modeline.
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
+pub struct Modeline {
+    pub clock: f32,
+    pub hdisplay: u32,
+    pub hsync_start: u32,
+    pub hsync_end: u32,
+    pub htotal: u32,
+    pub vdisplay: u32,
+    pub vsync_start: u32,
+    pub vsync_end: u32,
+    pub vtotal: u32,
+    pub hsync: bool,
+    pub vsync: bool,
+}
+
+/// Error for the `FromStr` implementation for [`Modeline`].
+#[derive(Debug)]
+pub struct ParseModelineError(ParseModelineErrorKind);
+
+#[derive(Debug)]
+enum ParseModelineErrorKind {
+    NoClock,
+    InvalidClock,
+    NoHdisplay,
+    InvalidHdisplay,
+    NoHsyncStart,
+    InvalidHsyncStart,
+    NoHsyncEnd,
+    InvalidHsyncEnd,
+    NoHtotal,
+    InvalidHtotal,
+    NoVdisplay,
+    InvalidVdisplay,
+    NoVsyncStart,
+    InvalidVsyncStart,
+    NoVsyncEnd,
+    InvalidVsyncEnd,
+    NoVtotal,
+    InvalidVtotal,
+    NoHsync,
+    InvalidHsync,
+    NoVsync,
+    InvalidVsync,
+}
+
+impl std::fmt::Display for ParseModelineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+impl From<ParseModelineErrorKind> for ParseModelineError {
+    fn from(value: ParseModelineErrorKind) -> Self {
+        Self(value)
+    }
+}
+
+impl FromStr for Modeline {
+    type Err = ParseModelineError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut args = s.split_whitespace();
+
+        let clock = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoClock)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidClock)?;
+        let hdisplay = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoHdisplay)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidHdisplay)?;
+        let hsync_start = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoHsyncStart)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidHsyncStart)?;
+        let hsync_end = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoHsyncEnd)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidHsyncEnd)?;
+        let htotal = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoHtotal)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidHtotal)?;
+        let vdisplay = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoVdisplay)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidVdisplay)?;
+        let vsync_start = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoVsyncStart)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidVsyncStart)?;
+        let vsync_end = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoVsyncEnd)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidVsyncEnd)?;
+        let vtotal = args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoVtotal)?
+            .parse()
+            .map_err(|_| ParseModelineErrorKind::InvalidVtotal)?;
+
+        let hsync = match args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoHsync)?
+            .to_lowercase()
+            .as_str()
+        {
+            "+hsync" => true,
+            "-hsync" => false,
+            _ => Err(ParseModelineErrorKind::InvalidHsync)?,
+        };
+        let vsync = match args
+            .next()
+            .ok_or(ParseModelineErrorKind::NoVsync)?
+            .to_lowercase()
+            .as_str()
+        {
+            "+vsync" => true,
+            "-vsync" => false,
+            _ => Err(ParseModelineErrorKind::InvalidVsync)?,
+        };
+
+        Ok(Modeline {
+            clock,
+            hdisplay,
+            hsync_start,
+            hsync_end,
+            htotal,
+            vdisplay,
+            vsync_start,
+            vsync_end,
+            vtotal,
+            hsync,
+            vsync,
+        })
+    }
 }

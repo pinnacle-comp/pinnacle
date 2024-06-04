@@ -3,6 +3,8 @@
 mod drm;
 mod gamma;
 
+pub use drm::util::drm_mode_from_api_modeline;
+
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -82,7 +84,7 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     backend::Backend,
     config::ConnectorSavedState,
-    output::{BlankingState, OutputName},
+    output::{BlankingState, OutputMode, OutputName},
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
         OutputRenderElement, CLEAR_COLOR, CLEAR_COLOR_LOCKED,
@@ -664,7 +666,7 @@ impl BackendData for Udev {
         }
     }
 
-    fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
         let drm_mode = self
             .backends
             .iter()
@@ -681,18 +683,24 @@ impl BackendData for Udev {
                     .and_then(|(info, _)| {
                         info.modes()
                             .iter()
-                            .find(|m| smithay::output::Mode::from(**m) == mode)
+                            .find(|m| smithay::output::Mode::from(**m) == mode.into())
                     })
                     .copied()
             })
             .unwrap_or_else(|| {
                 info!("Unknown mode for {}, creating new one", output.name());
-                create_drm_mode(mode.size.w, mode.size.h, Some(mode.refresh as u32))
+                match mode {
+                    OutputMode::Smithay(mode) => {
+                        create_drm_mode(mode.size.w, mode.size.h, Some(mode.refresh as u32))
+                    }
+                    OutputMode::Drm(mode) => mode,
+                }
             });
 
         if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
             match render_surface.compositor.use_mode(drm_mode) {
                 Ok(()) => {
+                    let mode = smithay::output::Mode::from(mode);
                     info!(
                         "Set {}'s mode to {}x{}@{:.3}Hz",
                         output.name(),
@@ -1141,7 +1149,14 @@ impl Udev {
 
         device.surfaces.insert(crtc, surface);
 
-        pinnacle.change_output_state(self, &output, Some(wl_mode), None, None, Some(position));
+        pinnacle.change_output_state(
+            self,
+            &output,
+            Some(OutputMode::Smithay(wl_mode)),
+            None,
+            None,
+            Some(position),
+        );
 
         // If there is saved connector state, the connector was previously plugged in.
         // In this case, restore its tags and location.

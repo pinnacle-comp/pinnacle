@@ -36,6 +36,21 @@ message SetModeRequest {
   optional uint32 refresh_rate_millihz = 4;
 }
 
+message SetModelineRequest {
+  optional string output_name = 1;
+  optional float clock = 2;
+  optional uint32 hdisplay = 3;
+  optional uint32 hsync_start = 4;
+  optional uint32 hsync_end = 5;
+  optional uint32 htotal = 6;
+  optional uint32 vdisplay = 7;
+  optional uint32 vsync_start = 8;
+  optional uint32 vsync_end = 9;
+  optional uint32 vtotal = 10;
+  optional bool hsync_pos = 11;
+  optional bool vsync_pos = 12;
+}
+
 message SetScaleRequest {
   optional string output_name = 1;
   oneof absolute_or_relative {
@@ -106,6 +121,7 @@ message GetPropertiesResponse {
 service OutputService {
   rpc SetLocation(SetLocationRequest) returns (google.protobuf.Empty);
   rpc SetMode(SetModeRequest) returns (google.protobuf.Empty);
+  rpc SetModeline(SetModelineRequest) returns (google.protobuf.Empty);
   rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
   rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
   rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);

@@ -77,6 +77,7 @@ use crate::{
     delegate_output_power_management, delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     handlers::xdg_shell::snapshot_pre_commit_hook,
+    output::OutputMode,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
@@ -979,7 +980,7 @@ impl OutputManagementHandler for State {
                     self.pinnacle.change_output_state(
                         &mut self.backend,
                         &output,
-                        mode,
+                        mode.map(OutputMode::Smithay),
                         transform,
                         scale.map(Scale::Fractional),
                         position,

@@ -10,6 +10,7 @@ use smithay::{
     utils::Transform,
 };
 
+use crate::output::OutputMode;
 use crate::state::{Pinnacle, State, WithState};
 
 use super::BackendData;
@@ -50,8 +51,8 @@ impl BackendData for Dummy {
 
     fn early_import(&mut self, _surface: &WlSurface) {}
 
-    fn set_output_mode(&mut self, output: &Output, mode: smithay::output::Mode) {
-        output.change_current_state(Some(mode), None, None, None);
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
+        output.change_current_state(Some(mode.into()), None, None, None);
     }
 }
 

@@ -8,7 +8,7 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
 use smithay::{
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
-    reexports::calloop::LoopHandle,
+    reexports::{calloop::LoopHandle, drm},
     utils::{Logical, Point, Transform},
     wayland::session_lock::LockSurface,
 };
@@ -122,12 +122,27 @@ impl OutputState {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum OutputMode {
+    Smithay(Mode),
+    Drm(drm::control::Mode),
+}
+
+impl From<OutputMode> for Mode {
+    fn from(value: OutputMode) -> Self {
+        match value {
+            OutputMode::Smithay(mode) => mode,
+            OutputMode::Drm(mode) => Mode::from(mode),
+        }
+    }
+}
+
 impl Pinnacle {
     pub fn change_output_state(
         &mut self,
         backend: &mut impl BackendData,
         output: &Output,
-        mode: Option<Mode>,
+        mode: Option<OutputMode>,
         transform: Option<Transform>,
         scale: Option<Scale>,
         location: Option<Point<i32, Logical>>,
