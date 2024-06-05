@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Build
     steps:
       - name: Checkout
@@ -22,7 +22,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -34,7 +34,7 @@ jobs:
       - name: Celebratory yahoo
         run: echo yahoo
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Run tests
     steps:
       - name: Checkout
@@ -44,7 +44,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot liblua5.4-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -60,7 +60,7 @@ jobs:
         if: ${{ runner.debug == '1' }}
         run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --test-threads=1
   check-format:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Check formatting
     steps:
       - name: Checkout
@@ -72,7 +72,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
   clippy-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Clippy check
     steps:
       - name: Checkout
@@ -84,7 +84,7 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev
+        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:

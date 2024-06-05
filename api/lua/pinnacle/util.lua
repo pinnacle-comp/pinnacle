@@ -118,10 +118,93 @@ function rectangle.new(x, y, width, height)
     return self
 end
 
+---Parse a modeline string.
+---
+---@param modeline string
+---
+---@return Modeline|nil modeline A modeline if successful
+---@return string|nil error An error message if any
+local function parse_modeline(modeline)
+    local args = modeline:gmatch("[^%s]+")
+
+    local targs = {}
+
+    for arg in args do
+        table.insert(targs, arg)
+    end
+
+    local clock = tonumber(targs[1])
+    local hdisplay = tonumber(targs[2])
+    local hsync_start = tonumber(targs[3])
+    local hsync_end = tonumber(targs[4])
+    local htotal = tonumber(targs[5])
+    local vdisplay = tonumber(targs[6])
+    local vsync_start = tonumber(targs[7])
+    local vsync_end = tonumber(targs[8])
+    local vtotal = tonumber(targs[9])
+    local hsync = targs[10]
+    local vsync = targs[11]
+
+    if
+        not (
+            clock
+            and hdisplay
+            and hsync_start
+            and hsync_end
+            and htotal
+            and vdisplay
+            and vsync_start
+            and vsync_end
+            and vtotal
+            and hsync
+            and vsync
+        )
+    then
+        return nil, "one or more fields was missing"
+    end
+
+    local hsync_lower = string.lower(hsync)
+    local vsync_lower = string.lower(vsync)
+
+    if hsync_lower == "+hsync" then
+        hsync = true
+    elseif hsync_lower == "-hsync" then
+        hsync = false
+    else
+        return nil, "invalid hsync: " .. hsync
+    end
+
+    if vsync_lower == "+vsync" then
+        vsync = true
+    elseif vsync_lower == "-vsync" then
+        vsync = false
+    else
+        return nil, "invalid vsync: " .. vsync
+    end
+
+    ---@type Modeline
+    return {
+        clock = clock,
+        hdisplay = hdisplay,
+        hsync_start = hsync_start,
+        hsync_end = hsync_end,
+        htotal = htotal,
+        vdisplay = vdisplay,
+        vsync_start = vsync_start,
+        vsync_end = vsync_end,
+        vtotal = vtotal,
+        hsync = hsync,
+        vsync = vsync,
+    }
+end
+
 ---Utility functions.
 ---@class Util
 local util = {
     rectangle = rectangle,
+    output = {
+        parse_modeline = parse_modeline,
+    },
 }
 
 ---Batch a set of requests that will be sent to the compositor all at once.

@@ -36,7 +36,7 @@ use smithay::{
 use tracing::{debug, error, trace, warn};
 
 use crate::{
-    output::BlankingState,
+    output::{BlankingState, OutputMode},
     render::{
         pointer::PointerElement, pointer_render_elements, take_presentation_feedback, CLEAR_COLOR,
         CLEAR_COLOR_LOCKED,
@@ -67,6 +67,10 @@ impl BackendData for Winit {
     }
 
     fn early_import(&mut self, _surface: &WlSurface) {}
+
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
+        output.change_current_state(Some(mode.into()), None, None, None);
+    }
 }
 
 impl Backend {
@@ -181,9 +185,11 @@ impl Winit {
 
         let init = Box::new(move |pinnacle: &mut Pinnacle| {
             let output = winit.output.clone();
-            output.create_global::<State>(&display_handle);
+            let global = output.create_global::<State>(&display_handle);
 
             pinnacle.output_focus_stack.set_focus(output.clone());
+
+            pinnacle.outputs.insert(output.clone(), Some(global));
 
             pinnacle
                 .shm_state
@@ -201,8 +207,9 @@ impl Winit {
                                 refresh: 144_000,
                             };
                             state.pinnacle.change_output_state(
+                                &mut state.backend,
                                 &output,
-                                Some(mode),
+                                Some(OutputMode::Smithay(mode)),
                                 None,
                                 Some(Scale::Fractional(scale_factor)),
                                 // None,

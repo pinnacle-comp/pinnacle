@@ -347,6 +347,7 @@ pub struct ConnectorSavedState {
     pub tags: Vec<Tag>,
     /// The output's previous scale
     pub scale: Option<smithay::output::Scale>,
+    // TODO: transform
 }
 
 /// Parse a metaconfig file in `config_dir`, if any.
@@ -380,7 +381,7 @@ impl Pinnacle {
         // Clear state
 
         debug!("Clearing tags");
-        for output in self.space.outputs() {
+        for output in self.outputs.keys() {
             output.with_state_mut(|state| state.tags.clear());
         }
 

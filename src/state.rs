@@ -12,19 +12,23 @@ use crate::{
     protocol::{
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
+        output_management::OutputManagementManagerState,
+        output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
     window::WindowElement,
 };
 use anyhow::Context;
+use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     desktop::{PopupManager, Space},
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
-            backend::{ClientData, ClientId, DisconnectReason},
+            backend::{ClientData, ClientId, DisconnectReason, GlobalId},
             protocol::wl_surface::WlSurface,
             Client, Display, DisplayHandle,
         },
@@ -52,7 +56,12 @@ use smithay::{
     },
     xwayland::{X11Wm, XWaylandClientData},
 };
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{info, warn};
 use xdg::BaseDirectories;
@@ -101,6 +110,8 @@ pub struct Pinnacle {
     pub session_lock_manager_state: SessionLockManagerState,
     pub xwayland_shell_state: XWaylandShellState,
     pub idle_notifier_state: IdleNotifierState<State>,
+    pub output_management_manager_state: OutputManagementManagerState,
+    pub output_power_management_state: OutputPowerManagementState,
 
     pub lock_state: LockState,
 
@@ -139,6 +150,11 @@ pub struct Pinnacle {
 
     /// A cache of surfaces to their root surface.
     pub root_surface_cache: HashMap<WlSurface, WlSurface>,
+
+    /// WlSurfaces with an attached idle inhibitor.
+    pub idle_inhibiting_surfaces: HashSet<WlSurface>,
+
+    pub outputs: IndexMap<Output, Option<GlobalId>>,
 }
 
 impl State {
@@ -148,6 +164,7 @@ impl State {
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
         foreign_toplevel::refresh(self);
+        self.pinnacle.refresh_idle_inhibit();
 
         if let Backend::Winit(winit) = &mut self.backend {
             winit.render_if_scheduled(&mut self.pinnacle);
@@ -290,6 +307,14 @@ impl Pinnacle {
             ),
             xwayland_shell_state: XWaylandShellState::new::<State>(&display_handle),
             idle_notifier_state: IdleNotifierState::new(&display_handle, loop_handle),
+            output_management_manager_state: OutputManagementManagerState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
+            output_power_management_state: OutputPowerManagementState::new::<State, _>(
+                &display_handle,
+                filter_restricted_client,
+            ),
 
             lock_state: LockState::default(),
 
@@ -326,6 +351,10 @@ impl Pinnacle {
             layout_state: LayoutState::default(),
 
             root_surface_cache: HashMap::new(),
+
+            idle_inhibiting_surfaces: HashSet::new(),
+
+            outputs: IndexMap::new(),
         };
 
         Ok(pinnacle)

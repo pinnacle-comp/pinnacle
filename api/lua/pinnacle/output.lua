@@ -40,8 +40,6 @@ output.handle = output_handle
 ---
 ---@return OutputHandle[]
 function output.get_all()
-    -- Not going to batch these because I doubt people would have that many monitors
-
     local response = client.unary_request(output_service.Get, {})
 
     ---@type OutputHandle[]
@@ -52,6 +50,27 @@ function output.get_all()
     end
 
     return handles
+end
+
+---Get all enabled outputs.
+---
+---### Example
+---```lua
+---local outputs = Output.get_all_enabled()
+---```
+---
+---@return OutputHandle[]
+function output.get_all_enabled()
+    local outputs = output.get_all()
+
+    local enabled_handles = {}
+    for _, handle in ipairs(outputs) do
+        if handle:enabled() then
+            table.insert(enabled_handles, handle)
+        end
+    end
+
+    return enabled_handles
 end
 
 ---Get an output by its name (the connector it's plugged into).
@@ -144,6 +163,7 @@ end
 ---@class OutputSetup
 ---@field filter (fun(output: OutputHandle): boolean)? -- A filter for wildcard matches that should return true if this setup should apply to the passed in output.
 ---@field mode Mode? -- Makes this setup apply the given mode to outputs.
+---@field modeline (string|Modeline)? -- Makes this setup apply the given modeline to outputs. This takes precedence over `mode`.
 ---@field scale number? -- Makes this setup apply the given scale to outputs.
 ---@field tags string[]? -- Makes this setup add tags with the given name to outputs.
 ---@field transform Transform? -- Makes this setup applt the given transform to outputs.
@@ -270,7 +290,9 @@ function output.setup(setups)
                     goto continue
                 end
 
-                if setup.mode then
+                if setup.modeline then
+                    op:set_modeline(setup.modeline)
+                elseif setup.mode then
                     op:set_mode(
                         setup.mode.pixel_width,
                         setup.mode.pixel_height,
@@ -421,7 +443,7 @@ function output.setup_locs(update_locs_on, locs)
     end
 
     local function layout_outputs()
-        local outputs = output.get_all()
+        local outputs = output.get_all_enabled()
 
         ---@type OutputHandle[]
         local placed_outputs = {}
@@ -813,6 +835,54 @@ function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
     })
 end
 
+---@class Modeline
+---@field clock number
+---@field hdisplay integer
+---@field hsync_start integer
+---@field hsync_end integer
+---@field htotal integer
+---@field vdisplay integer
+---@field vsync_start integer
+---@field vsync_end integer
+---@field vtotal integer
+---@field hsync boolean
+---@field vsync boolean
+
+---Set a custom modeline for this output.
+---
+---This accepts a `Modeline` table or a string of the modeline.
+---
+---@param modeline string|Modeline
+function OutputHandle:set_modeline(modeline)
+    if type(modeline) == "string" then
+        local ml, err = require("pinnacle.util").output.parse_modeline(modeline)
+        if ml then
+            modeline = ml
+        else
+            print("invalid modeline: " .. tostring(err))
+            return
+        end
+    end
+
+    ---@type pinnacle.output.v0alpha1.SetModelineRequest
+    local request = {
+        output_name = self.name,
+        clock = modeline.clock,
+        hdisplay = modeline.hdisplay,
+        hsync_start = modeline.hsync_start,
+        hsync_end = modeline.hsync_end,
+        htotal = modeline.htotal,
+        vdisplay = modeline.vdisplay,
+        vsync_start = modeline.vsync_start,
+        vsync_end = modeline.vsync_end,
+        vtotal = modeline.vtotal,
+        hsync_pos = modeline.hsync,
+        vsync_pos = modeline.vsync,
+    }
+
+    client.unary_request(output_service.SetModeline, request)
+end
+
 ---Set this output's scaling factor.
 ---
 ---@param scale number
@@ -900,6 +970,8 @@ end
 ---@field transform Transform?
 ---@field serial integer?
 ---@field keyboard_focus_stack WindowHandle[]
+---@field enabled boolean?
+---@field powered boolean?
 
 ---Get all properties of this output.
 ---
@@ -972,6 +1044,8 @@ end
 
 ---Get this output's logical width in pixels.
 ---
+---If the output is disabled, this returns nil.
+---
 ---Shorthand for `handle:props().logical_width`.
 ---
 ---@return integer?
@@ -980,6 +1054,8 @@ function OutputHandle:logical_width()
 end
 
 ---Get this output's logical height in pixels.
+---
+---If the output is disabled, this returns nil.
 ---
 ---Shorthand for `handle:props().y`.
 ---
@@ -1092,6 +1168,25 @@ end
 ---@see OutputHandle.keyboard_focus_stack_visible
 function OutputHandle:keyboard_focus_stack()
     return self:props().keyboard_focus_stack
+end
+
+---Get whether this output is enabled.
+---
+---Disabled outputs are not mapped to the global space and cannot be used.
+---
+---@return boolean?
+function OutputHandle:enabled()
+    return self:props().enabled
+end
+
+---Get whether this output is powered.
+---
+---Unpowered outputs that are enabled will be off, but they will still be
+---mapped to the global space, meaning you can still interact with them.
+---
+---@return boolean?
+function OutputHandle:powered()
+    return self:props().powered
 end
 
 ---Get this output's keyboard focus stack.

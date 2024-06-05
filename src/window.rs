@@ -308,7 +308,7 @@ impl Pinnacle {
 
         self.z_index_stack.retain(|win| win != window);
 
-        for output in self.space.outputs() {
+        for output in self.outputs.keys() {
             output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
         }
     }

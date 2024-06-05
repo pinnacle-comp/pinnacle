@@ -2,16 +2,20 @@
 
 use std::{cell::RefCell, num::NonZeroU32};
 
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{OutputMoveResponse, OutputResizeResponse};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
+    OutputConnectResponse, OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
+};
 use smithay::{
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
-    reexports::calloop::LoopHandle,
+    reexports::{calloop::LoopHandle, drm},
     utils::{Logical, Point, Transform},
     wayland::session_lock::LockSurface,
 };
 
 use crate::{
+    backend::BackendData,
+    config::ConnectorSavedState,
     focus::WindowKeyboardFocusStack,
     layout::transaction::{LayoutTransaction, SnapshotTarget},
     protocol::screencopy::Screencopy,
@@ -31,8 +35,8 @@ impl OutputName {
     /// Get the output with this name.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
         pinnacle
-            .space
-            .outputs()
+            .outputs
+            .keys()
             .find(|output| output.name() == self.0)
             .cloned()
     }
@@ -134,20 +138,34 @@ impl OutputState {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum OutputMode {
+    Smithay(Mode),
+    Drm(drm::control::Mode),
+}
+
+impl From<OutputMode> for Mode {
+    fn from(value: OutputMode) -> Self {
+        match value {
+            OutputMode::Smithay(mode) => mode,
+            OutputMode::Drm(mode) => Mode::from(mode),
+        }
+    }
+}
+
 impl Pinnacle {
-    /// A wrapper around [`Output::change_current_state`] that additionally sends an output
-    /// geometry signal.
     pub fn change_output_state(
         &mut self,
+        backend: &mut impl BackendData,
         output: &Output,
-        mode: Option<Mode>,
+        mode: Option<OutputMode>,
         transform: Option<Transform>,
         scale: Option<Scale>,
         location: Option<Point<i32, Logical>>,
     ) {
         let old_scale = output.current_scale().fractional_scale();
 
-        output.change_current_state(mode, transform, scale, location);
+        output.change_current_state(None, transform, scale, location);
         if let Some(location) = location {
             self.space.map_output(output, location);
             self.signal_state.output_move.signal(|buf| {
@@ -158,6 +176,11 @@ impl Pinnacle {
                 });
             });
         }
+
+        if let Some(mode) = mode {
+            backend.set_output_mode(output, mode);
+        }
+
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
             self.signal_state.output_resize.signal(|buf| {
@@ -168,10 +191,6 @@ impl Pinnacle {
                     logical_height: geo.map(|geo| geo.size.h as u32),
                 });
             });
-        }
-        if let Some(mode) = mode {
-            output.set_preferred(mode);
-            output.with_state_mut(|state| state.modes.push(mode));
         }
 
         if let Some(scale) = scale {
@@ -219,5 +238,102 @@ impl Pinnacle {
 
             lock_surface.send_configure();
         }
+    }
+
+    pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
+        if enabled {
+            match self.outputs.entry(output.clone()) {
+                indexmap::map::Entry::Occupied(entry) => {
+                    let global = entry.into_mut();
+                    if global.is_none() {
+                        *global = Some(output.create_global::<State>(&self.display_handle));
+                    }
+                }
+                indexmap::map::Entry::Vacant(entry) => {
+                    let global = output.create_global::<State>(&self.display_handle);
+                    entry.insert(Some(global));
+                }
+            }
+            self.space.map_output(output, output.current_location());
+
+            // Trigger the connect signal here for configs to reposition outputs
+            //
+            // TODO: Create a new output_disable/enable signal and trigger it here
+            self.signal_state.output_connect.signal(|buffer| {
+                buffer.push_back(OutputConnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
+        } else {
+            let global = self.outputs.get_mut(output);
+            if let Some(global) = global {
+                if let Some(global) = global.take() {
+                    self.display_handle.remove_global::<State>(global);
+                }
+            }
+            self.space.unmap_output(output);
+
+            // Trigger the disconnect signal here for configs to reposition outputs
+            //
+            // TODO: Create a new output_disable/enable signal and trigger it here
+            self.signal_state.output_disconnect.signal(|buffer| {
+                buffer.push_back(OutputDisconnectResponse {
+                    output_name: Some(output.name()),
+                })
+            });
+
+            self.gamma_control_manager_state.output_removed(output);
+
+            self.config.connector_saved_states.insert(
+                OutputName(output.name()),
+                ConnectorSavedState {
+                    loc: output.current_location(),
+                    tags: output.with_state(|state| state.tags.clone()),
+                    scale: Some(output.current_scale()),
+                },
+            );
+
+            for layer in layer_map_for_output(output).layers() {
+                layer.layer_surface().send_close();
+            }
+        }
+    }
+
+    /// Completely remove an output, for example when a monitor is unplugged
+    pub fn remove_output(&mut self, output: &Output) {
+        let global = self.outputs.shift_remove(output);
+        if let Some(mut global) = global {
+            if let Some(global) = global.take() {
+                self.display_handle.remove_global::<State>(global);
+            }
+        }
+
+        for layer in layer_map_for_output(output).layers() {
+            layer.layer_surface().send_close();
+        }
+
+        self.space.unmap_output(output);
+
+        self.gamma_control_manager_state.output_removed(output);
+
+        self.output_power_management_state.output_removed(output);
+
+        self.output_management_manager_state.remove_head(output);
+        self.output_management_manager_state.update::<State>();
+
+        self.signal_state.output_disconnect.signal(|buffer| {
+            buffer.push_back(OutputDisconnectResponse {
+                output_name: Some(output.name()),
+            })
+        });
+
+        self.config.connector_saved_states.insert(
+            OutputName(output.name()),
+            ConnectorSavedState {
+                loc: output.current_location(),
+                tags: output.with_state(|state| state.tags.clone()),
+                scale: Some(output.current_scale()),
+            },
+        );
     }
 }

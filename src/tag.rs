@@ -26,8 +26,8 @@ impl TagId {
     /// Get the tag associated with this id.
     pub fn tag(&self, pinnacle: &Pinnacle) -> Option<Tag> {
         pinnacle
-            .space
-            .outputs()
+            .outputs
+            .keys()
             .flat_map(|op| op.with_state(|state| state.tags.clone()))
             .find(|tag| &tag.id() == self)
     }
@@ -118,8 +118,8 @@ impl Tag {
     /// RefCell Safety: This uses RefCells on every mapped output.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
         pinnacle
-            .space
-            .outputs()
+            .outputs
+            .keys()
             .find(|output| output.with_state(|state| state.tags.iter().any(|tg| tg == self)))
             .cloned()
     }

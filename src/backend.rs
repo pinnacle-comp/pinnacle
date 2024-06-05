@@ -34,6 +34,7 @@ use smithay::{
 use tracing::error;
 
 use crate::{
+    output::OutputMode,
     state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
     window::WindowElement,
 };
@@ -151,6 +152,8 @@ pub trait BackendData: 'static {
 
     // INFO: only for udev in anvil, maybe shouldn't be a trait fn?
     fn early_import(&mut self, surface: &WlSurface);
+
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode);
 }
 
 impl BackendData for Backend {
@@ -178,6 +181,15 @@ impl BackendData for Backend {
             Backend::Udev(udev) => udev.early_import(surface),
             #[cfg(feature = "testing")]
             Backend::Dummy(dummy) => dummy.early_import(surface),
+        }
+    }
+
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
+        match self {
+            Backend::Winit(winit) => winit.set_output_mode(output, mode),
+            Backend::Udev(udev) => udev.set_output_mode(output, mode),
+            #[cfg(feature = "testing")]
+            Backend::Dummy(dummy) => dummy.set_output_mode(output, mode),
         }
     }
 }

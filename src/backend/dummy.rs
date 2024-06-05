@@ -1,6 +1,4 @@
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    OutputConnectResponse, OutputDisconnectResponse,
-};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -12,6 +10,7 @@ use smithay::{
     utils::Transform,
 };
 
+use crate::output::OutputMode;
 use crate::state::{Pinnacle, State, WithState};
 
 use super::BackendData;
@@ -30,6 +29,7 @@ pub struct Dummy {
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     #[cfg(feature = "wlcs")]
     pub wlcs_state: Wlcs,
+    pub output: Output,
 }
 
 impl Backend {
@@ -50,6 +50,10 @@ impl BackendData for Dummy {
     fn reset_buffers(&mut self, _output: &Output) {}
 
     fn early_import(&mut self, _surface: &WlSurface) {}
+
+    fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
+        output.change_current_state(Some(mode.into()), None, None, None);
+    }
 }
 
 impl Dummy {
@@ -85,14 +89,17 @@ impl Dummy {
             // dmabuf_state,
             #[cfg(feature = "wlcs")]
             wlcs_state: Wlcs::default(),
+            output: output.clone(),
         };
 
         UninitBackend {
             seat_name: dummy.seat_name(),
             init: Box::new(move |pinnacle| {
-                output.create_global::<State>(&display_handle);
+                let global = output.create_global::<State>(&display_handle);
 
                 pinnacle.output_focus_stack.set_focus(output.clone());
+
+                pinnacle.outputs.insert(output.clone(), Some(global));
 
                 pinnacle
                     .shm_state
@@ -131,7 +138,9 @@ impl Pinnacle {
         output.set_preferred(mode);
         output.with_state_mut(|state| state.modes = vec![mode]);
 
-        output.create_global::<State>(&self.display_handle);
+        let global = output.create_global::<State>(&self.display_handle);
+
+        self.outputs.insert(output.clone(), Some(global));
 
         self.space.map_output(&output, (0, 0));
 
@@ -139,16 +148,6 @@ impl Pinnacle {
             buf.push_back(OutputConnectResponse {
                 output_name: Some(output.name()),
             });
-        });
-    }
-
-    pub fn remove_output(&mut self, output: &Output) {
-        self.space.unmap_output(output);
-
-        self.signal_state.output_disconnect.signal(|buffer| {
-            buffer.push_back(OutputDisconnectResponse {
-                output_name: Some(output.name()),
-            })
         });
     }
 }

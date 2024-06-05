@@ -32,20 +32,24 @@ impl Pinnacle {
         output: &Output,
         geometries: Vec<Rectangle<i32, Logical>>,
     ) -> Vec<(WindowElement, Serial)> {
-        let windows_on_foc_tags = output.with_state(|state| {
+        let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
             let focused_tags = state.focused_tags().collect::<Vec<_>>();
             self.windows
                 .iter()
-                .filter(|win| !win.is_x11_override_redirect())
-                .filter(|win| {
+                .filter(|win| win.output(self).as_ref() == Some(output))
+                .cloned()
+                .partition::<Vec<_>, _>(|win| {
                     win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
                 })
-                .cloned()
-                .collect::<Vec<_>>()
         });
+
+        for win in to_unmap {
+            self.space.unmap_elem(&win);
+        }
 
         let tiled_windows = windows_on_foc_tags
             .iter()
+            .filter(|win| !win.is_x11_override_redirect())
             .filter(|win| {
                 win.with_state(|state| {
                     state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
@@ -154,11 +158,19 @@ impl LayoutState {
 }
 
 impl Pinnacle {
-    pub fn request_layout(&mut self, output: &Output) -> Option<LayoutRequestId> {
+    pub fn request_layout(&mut self, output: &Output) {
+        if self
+            .outputs
+            .get(output)
+            .is_some_and(|global| global.is_none())
+        {
+            return;
+        }
+
         let id = self.layout_state.next_id();
         let Some(sender) = self.layout_state.layout_request_sender.as_ref() else {
             warn!("Layout requested but no client has connected to the layout service");
-            return None;
+            return;
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
@@ -209,8 +221,6 @@ impl Pinnacle {
             output_width: Some(output_width as u32),
             output_height: Some(output_height as u32),
         }));
-
-        Some(id)
     }
 }
 

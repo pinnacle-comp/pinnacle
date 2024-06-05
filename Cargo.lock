@@ -1394,6 +1394,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae743338b92ff9146ce83992f766a31066a91a8c84a45e0e9f21e7cf6de6d346"
 
 [[package]]
+name = "libdisplay-info-sys"
+version = "0.1.0"
+source = "git+https://github.com/Smithay/libdisplay-info-rs?rev=a482d0d#a482d0d4b71762c13d40fa394efe04473916f31c"
+
+[[package]]
 name = "libloading"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,8 +1856,11 @@ dependencies = [
  "clap",
  "cliclack",
  "dircpy",
+ "drm-sys",
  "gag",
  "image",
+ "indexmap 2.2.6",
+ "libdisplay-info-sys",
  "pinnacle",
  "pinnacle-api",
  "pinnacle-api-defs",
