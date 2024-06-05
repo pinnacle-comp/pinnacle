@@ -60,6 +60,7 @@ use crate::{
     render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     tag::{Tag, TagId},
+    util::restore_nofile_rlimit,
 };
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
@@ -587,22 +588,30 @@ impl process_service_server::ProcessService for ProcessService {
                 }
             }
 
-            let Ok(mut child) = tokio::process::Command::new(OsString::from(arg0.clone()))
-                .stdin(match has_callback {
-                    true => Stdio::piped(),
-                    false => Stdio::null(),
-                })
-                .stdout(match has_callback {
-                    true => Stdio::piped(),
-                    false => Stdio::null(),
-                })
-                .stderr(match has_callback {
-                    true => Stdio::piped(),
-                    false => Stdio::null(),
-                })
-                .args(command)
-                .spawn()
-            else {
+            let mut cmd = tokio::process::Command::new(OsString::from(arg0.clone()));
+
+            cmd.stdin(match has_callback {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            })
+            .stdout(match has_callback {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            })
+            .stderr(match has_callback {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            })
+            .args(command);
+
+            unsafe {
+                cmd.pre_exec(|| {
+                    restore_nofile_rlimit();
+                    Ok(())
+                });
+            }
+
+            let Ok(mut child) = cmd.spawn() else {
                 warn!("Tried to run {arg0}, but it doesn't exist",);
                 return;
             };

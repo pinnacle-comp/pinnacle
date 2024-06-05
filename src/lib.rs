@@ -13,4 +13,5 @@ pub mod protocol;
 pub mod render;
 pub mod state;
 pub mod tag;
+pub mod util;
 pub mod window;

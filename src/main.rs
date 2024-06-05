@@ -18,6 +18,7 @@ use pinnacle::{
     cli::{self, Cli},
     config::{get_config_dir, parse_metaconfig, Metaconfig},
     state::State,
+    util::increase_nofile_rlimit,
 };
 use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
 use tracing::{error, info, warn};
@@ -62,6 +63,8 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     info!("Starting Pinnacle (commit {})", env!("VERGEN_GIT_SHA"));
+
+    increase_nofile_rlimit();
 
     set_log_panic_hook();
 
