@@ -451,8 +451,8 @@ impl Pinnacle {
         };
 
         let x11_wins = self
-            .space
-            .elements()
+            .windows
+            .iter()
             .filter(|win| win.is_on_active_tag())
             .filter_map(|win| win.x11_surface())
             .cloned()
