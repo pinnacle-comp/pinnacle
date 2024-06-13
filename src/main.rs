@@ -20,7 +20,10 @@ use pinnacle::{
     state::State,
     util::increase_nofile_rlimit,
 };
-use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
+use smithay::reexports::{
+    calloop::{self, EventLoop},
+    rustix::process::geteuid,
+};
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -43,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env();
 
     let file_log_env_filter =
-        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn");
+        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=warn");
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -169,6 +172,15 @@ async fn main() -> anyhow::Result<()> {
     state
         .pinnacle
         .start_grpc_server(&metaconfig.socket_dir.clone())?;
+
+    #[cfg(feature = "snowcap")]
+    {
+        let (ping, source) = calloop::ping::make_ping()?;
+        tokio::task::spawn_blocking(move || {
+            snowcap::start(Some(source));
+        });
+        state.pinnacle.snowcap_shutdown_ping = Some(ping);
+    }
 
     if !metaconfig.no_xwayland {
         match state.pinnacle.insert_xwayland_source() {

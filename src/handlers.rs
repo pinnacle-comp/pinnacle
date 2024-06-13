@@ -678,7 +678,7 @@ impl WlrLayerShellHandler for State {
         let output = output
             .as_ref()
             .and_then(Output::from_resource)
-            .or_else(|| self.pinnacle.space.outputs().next().cloned());
+            .or_else(|| self.pinnacle.focused_output().cloned());
 
         let Some(output) = output else {
             error!("New layer surface, but there was no output to map it on");

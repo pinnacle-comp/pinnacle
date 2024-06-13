@@ -86,14 +86,20 @@ use process::Process;
 use render::Render;
 use signal::SignalState;
 use tag::Tag;
-use tokio::sync::{
-    mpsc::{unbounded_channel, UnboundedReceiver},
-    RwLock,
+use tokio::{
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver},
+        RwLock,
+    },
+    task::JoinHandle,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
+
+#[cfg(feature = "snowcap")]
+use snowcap_api::layer::Layer;
 
 pub mod input;
 pub mod layout;
@@ -131,6 +137,10 @@ pub struct ApiModules {
     /// The [`Render`] struct
     pub render: &'static Render,
     signal: Arc<RwLock<SignalState>>,
+
+    #[cfg(feature = "snowcap")]
+    /// The snowcap widget system.
+    pub snowcap: &'static Layer,
 }
 
 impl std::fmt::Debug for ApiModules {
@@ -145,16 +155,23 @@ impl std::fmt::Debug for ApiModules {
             .field("layout", &self.layout)
             .field("render", &self.render)
             .field("signal", &"...")
+            // TODO: snowcap
             .finish()
     }
+}
+
+/// Api receivers.
+pub struct Receivers {
+    pinnacle: UnboundedReceiver<BoxFuture<'static, ()>>,
+    #[cfg(feature = "snowcap")]
+    snowcap: UnboundedReceiver<JoinHandle<()>>,
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
 ///
 /// This function is inserted at the top of your config through the [`config`] macro.
 /// You should use that macro instead of this function directly.
-pub async fn connect(
-) -> Result<(ApiModules, UnboundedReceiver<BoxFuture<'static, ()>>), Box<dyn std::error::Error>> {
+pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Error>> {
     // port doesn't matter, we use a unix socket
     let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| {
@@ -163,7 +180,8 @@ pub async fn connect(
                     .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?"),
             )
         }))
-        .await?;
+        .await
+        .unwrap();
 
     let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<'static, ()>>();
 
@@ -181,6 +199,7 @@ pub async fn connect(
     let render = Box::leak(Box::new(Render::new(channel.clone())));
     let layout = Box::leak(Box::new(Layout::new(channel.clone(), fut_sender.clone())));
 
+    #[cfg(not(feature = "snowcap"))]
     let modules = ApiModules {
         pinnacle,
         process,
@@ -193,13 +212,39 @@ pub async fn connect(
         signal: signal.clone(),
     };
 
+    #[cfg(feature = "snowcap")]
+    let (snowcap, snowcap_recv) = snowcap_api::connect().await.unwrap();
+
+    #[cfg(feature = "snowcap")]
+    let modules = ApiModules {
+        pinnacle,
+        process,
+        window,
+        input,
+        output,
+        tag,
+        layout,
+        render,
+        signal: signal.clone(),
+        snowcap: Box::leak(Box::new(snowcap)),
+    };
+
     window.finish_init(modules.clone());
     output.finish_init(modules.clone());
     tag.finish_init(modules.clone());
     layout.finish_init(modules.clone());
     signal.read().await.finish_init(modules.clone());
 
-    Ok((modules, fut_recv))
+    #[cfg(feature = "snowcap")]
+    let receivers = Receivers {
+        pinnacle: fut_recv,
+        snowcap: snowcap_recv,
+    };
+
+    #[cfg(not(feature = "snowcap"))]
+    let receivers = Receivers { pinnacle: fut_recv };
+
+    Ok((modules, receivers))
 }
 
 /// Listen to Pinnacle for incoming messages.
@@ -209,7 +254,15 @@ pub async fn connect(
 ///
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
-pub async fn listen(api: ApiModules, fut_recv: UnboundedReceiver<BoxFuture<'static, ()>>) {
+pub async fn listen(api: ApiModules, receivers: Receivers) {
+    #[cfg(feature = "snowcap")]
+    let Receivers {
+        pinnacle: fut_recv,
+        snowcap: snowcap_recv,
+    } = receivers;
+    #[cfg(not(feature = "snowcap"))]
+    let Receivers { pinnacle: fut_recv } = receivers;
+
     let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
     let mut set = futures::stream::FuturesUnordered::new();
 
@@ -221,6 +274,9 @@ pub async fn listen(api: ApiModules, fut_recv: UnboundedReceiver<BoxFuture<'stat
         shutdown_stream.next().await;
     }
     .boxed();
+
+    #[cfg(feature = "snowcap")]
+    tokio::spawn(snowcap_api::listen(snowcap_recv));
 
     loop {
         tokio::select! {

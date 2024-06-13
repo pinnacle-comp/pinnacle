@@ -26,7 +26,7 @@ use smithay::{
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        calloop::{self, generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason, GlobalId},
             protocol::wl_surface::WlSurface,
@@ -155,6 +155,9 @@ pub struct Pinnacle {
     pub idle_inhibiting_surfaces: HashSet<WlSurface>,
 
     pub outputs: IndexMap<Output, Option<GlobalId>>,
+
+    #[cfg(feature = "snowcap")]
+    pub snowcap_shutdown_ping: Option<calloop::ping::Ping>,
 }
 
 impl State {
@@ -355,6 +358,9 @@ impl Pinnacle {
             idle_inhibiting_surfaces: HashSet::new(),
 
             outputs: IndexMap::new(),
+
+            #[cfg(feature = "snowcap")]
+            snowcap_shutdown_ping: None,
         };
 
         Ok(pinnacle)
@@ -387,6 +393,11 @@ impl Pinnacle {
             if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
                 warn!("Failed to send shutdown signal to config: {err}");
             }
+        }
+
+        #[cfg(feature = "snowcap")]
+        if let Some(snowcap_shutdown_ping) = self.snowcap_shutdown_ping.take() {
+            snowcap_shutdown_ping.ping();
         }
     }
 }

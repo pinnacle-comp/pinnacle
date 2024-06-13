@@ -21,3 +21,8 @@ num_enum = "0.7.2"
 xkbcommon = { workspace = true }
 rand = "0.8.5"
 bitflags = { workspace = true }
+snowcap-api = { git = "https://github.com/pinnacle-comp/snowcap", rev = "acb0e29", optional = true }
+
+[features]
+default = ["snowcap"]
+snowcap = ["dep:snowcap-api"]

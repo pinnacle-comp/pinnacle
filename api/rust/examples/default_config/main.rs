@@ -11,13 +11,36 @@ use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
     ApiModules,
 };
+#[cfg(feature = "snowcap")]
+use snowcap_api::layer::{ExclusiveZone, KeyboardInteractivity, ZLayer};
+#[cfg(feature = "snowcap")]
+use snowcap_api::widget::{Alignment, Column, Container, Length, Text};
 
 // Pinnacle needs to perform some setup before and after your config.
 // The `#[pinnacle_api::config(modules)]` attribute does so and
 // will bind all the config structs to the provided identifier.
-#[pinnacle_api::config(modules)]
+// #[pinnacle_api::config(modules)]
+#[pinnacle_api::tokio::main]
 async fn main() {
+    let (modules, __recv) = pinnacle_api::connect().await.unwrap();
+
     // Deconstruct to get all the APIs.
+    #[cfg(feature = "snowcap")]
+    #[allow(unused_variables)]
+    let ApiModules {
+        pinnacle,
+        process,
+        window,
+        input,
+        output,
+        tag,
+        layout,
+        render,
+        snowcap,
+        ..
+    } = modules.clone();
+
+    #[cfg(not(feature = "snowcap"))]
     #[allow(unused_variables)]
     let ApiModules {
         pinnacle,
@@ -29,7 +52,7 @@ async fn main() {
         layout,
         render,
         ..
-    } = modules;
+    } = modules.clone();
 
     let mod_key = Mod::Ctrl;
 
@@ -55,6 +78,39 @@ async fn main() {
 
     // `mod_key + alt + q` quits Pinnacle
     input.keybind([mod_key, Mod::Alt], 'q', || {
+        #[cfg(feature = "snowcap")]
+        {
+            let widget = Container::new(Column::new_with_children([
+                Text::new("Quit Pinnacle?").into(),
+                Text::new("Press ENTER to confirm.").into(),
+            ]))
+            .with_vertical_alignment(Alignment::Center)
+            .with_horizontal_alignment(Alignment::Center)
+            .with_width(Length::Fill)
+            .with_height(Length::Fill)
+            .with_border_thickness(4.0)
+            .with_border_radius(16.0);
+
+            snowcap
+                .new_widget(
+                    widget.into(),
+                    200,
+                    100,
+                    None,
+                    KeyboardInteractivity::Exclusive,
+                    ExclusiveZone::Respect,
+                    ZLayer::Overlay,
+                )
+                .on_key_press(|widget, key, _mods| {
+                    if key == Keysym::Return {
+                        pinnacle.quit();
+                    } else {
+                        widget.close();
+                    }
+                });
+        }
+
+        #[cfg(not(feature = "snowcap"))]
         pinnacle.quit();
     });
 
@@ -258,4 +314,6 @@ async fn main() {
     })));
 
     process.spawn_once([terminal]);
+
+    pinnacle_api::listen(modules, __recv).await;
 }

@@ -13,7 +13,7 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 
 [workspace.dependencies]
 # Tokio
-tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"]}
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"]}
 tokio-stream = { version = "0.1.15", features = ["net"] }
 # gRPC
 prost = "0.12.4"
@@ -113,11 +113,13 @@ pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.38"
 bytemuck = "1.16.0"
-pinnacle-api = { path = "./api/rust" }
+pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
 drm-sys = "0.7.0"
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
 indexmap = "2.2.6"
+snowcap = { git = "https://github.com/pinnacle-comp/snowcap", rev = "acb0e29", optional = true }
+snowcap-api = { git = "https://github.com/pinnacle-comp/snowcap", rev = "acb0e29", optional = true }
 
 [build-dependencies]
 vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }
@@ -126,11 +128,13 @@ vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"
 temp-env = "0.3.6"
 tempfile = { workspace = true }
 test-log = { version = "0.2.16", default-features = false, features = ["trace"] }
-pinnacle = { path = ".", features = ["wlcs"] }
-pinnacle-api = { path = "./api/rust" }
+pinnacle = { path = ".", features = ["wlcs"], default-features = false }
+pinnacle-api = { path = "./api/rust", default-features = false }
 
 [features]
+default = ["snowcap"]
+snowcap = ["pinnacle-api/snowcap", "dep:snowcap", "dep:snowcap-api"]
 testing = [
     "smithay/renderer_test",
 ]
-wlcs = [ "testing" ]
+wlcs = ["testing"]
