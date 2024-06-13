@@ -229,6 +229,16 @@ impl CompositorHandler for State {
                                     )
                                 });
                             }
+
+                            // It seems wlcs needs immediate frame sends for client tests to work
+                            #[cfg(feature = "testing")]
+                            unmapped_window.send_frame(
+                                &focused_output,
+                                self.pinnacle.clock.now(),
+                                Some(std::time::Duration::ZERO),
+                                |_, _| None,
+                            );
+
                             self.pinnacle.request_layout(&focused_output);
                         }
                     }
