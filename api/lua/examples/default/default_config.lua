@@ -13,7 +13,7 @@ require("pinnacle").setup(function(Pinnacle)
     ---@type Modifier
     local mod_key = "ctrl"
 
-    local terminal = "foot"
+    local terminal = "alacritty"
 
     --------------------
     -- Mousebinds     --
