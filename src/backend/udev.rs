@@ -1378,8 +1378,6 @@ impl Udev {
             return;
         };
 
-        assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
-
         if !pinnacle.outputs.contains_key(output) {
             surface.render_state = RenderState::Idle;
             return;
@@ -1391,6 +1389,8 @@ impl Udev {
             surface.render_state = RenderState::Idle;
             return;
         }
+
+        assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
         // TODO get scale from the rendersurface when supporting HiDPI
         let frame = self.pointer_image.get_image(
