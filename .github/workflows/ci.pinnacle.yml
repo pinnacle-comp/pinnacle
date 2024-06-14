@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
@@ -39,6 +41,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
@@ -65,6 +69,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -77,6 +83,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
