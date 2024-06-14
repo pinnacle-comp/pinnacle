@@ -11,7 +11,14 @@
 // #![deny(unused_imports)] // this has remained commented out for months lol
 #![warn(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader};
+use std::{
+    io::{BufRead, BufReader},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::Context;
 use pinnacle::{
@@ -54,7 +61,8 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(appender)
         .with_filter(file_log_env_filter);
 
-    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info"));
+    let stdout_env_filter =
+        env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info,snowcap=info"));
     let stdout_layer = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stdout)
@@ -175,10 +183,17 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "snowcap")]
     {
+        info!("Starting Snowcap");
         let (ping, source) = calloop::ping::make_ping()?;
+        let ready_flag = Arc::new(AtomicBool::new(false));
+        let ready_clone = ready_flag.clone();
         tokio::task::spawn_blocking(move || {
-            snowcap::start(Some(source));
+            snowcap::start(Some(source), ready_clone);
         });
+        while !ready_flag.load(Ordering::SeqCst) {
+            event_loop.dispatch(None, &mut state)?;
+            state.on_event_loop_cycle_completion();
+        }
         state.pinnacle.snowcap_shutdown_ping = Some(ping);
     }
 

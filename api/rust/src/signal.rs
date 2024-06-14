@@ -74,6 +74,8 @@ macro_rules! signals {
                         .send((self.current_id, callback))
                         .expect("failed to send callback");
 
+                    self.callback_count.fetch_add(1, Ordering::SeqCst);
+
                     let handle = SignalHandle::new(self.current_id, remove_callback_sender);
 
                     self.current_id.0 += 1;
@@ -376,6 +378,10 @@ where
 
         control_sender
             .send(Req::from_control(StreamControl::Ready))
+            .map_err(|err| {
+                println!("{err}");
+                err
+            })
             .expect("send failed");
 
         loop {
@@ -407,7 +413,8 @@ where
                 callback = callback_recv_recv => {
                     if let Some((id, callback)) = callback {
                         callbacks.insert(id, callback);
-                        callback_count.fetch_add(1, Ordering::SeqCst);
+                        // Added in `add_callback` in the macro above
+                        // callback_count.fetch_add(1, Ordering::SeqCst);
                     }
                 }
                 remove = remove_callback_recv_recv => {

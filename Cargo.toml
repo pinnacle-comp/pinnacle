@@ -5,6 +5,7 @@ members = [
     "api/rust/pinnacle-api-macros",
     "wlcs_pinnacle",
 ]
+exclude = ["snowcap"]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
@@ -118,8 +119,8 @@ gag = "1.0.0"
 drm-sys = "0.7.0"
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
 indexmap = "2.2.6"
-snowcap = { git = "https://github.com/pinnacle-comp/snowcap", rev = "acb0e29", optional = true }
-snowcap-api = { git = "https://github.com/pinnacle-comp/snowcap", rev = "acb0e29", optional = true }
+snowcap = { path = "./snowcap", optional = true }
+snowcap-api = { path = "./snowcap/api/rust", optional = true }
 
 [build-dependencies]
 vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }

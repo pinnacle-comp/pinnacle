@@ -19,11 +19,8 @@ use snowcap_api::widget::{Alignment, Column, Container, Length, Text};
 // Pinnacle needs to perform some setup before and after your config.
 // The `#[pinnacle_api::config(modules)]` attribute does so and
 // will bind all the config structs to the provided identifier.
-// #[pinnacle_api::config(modules)]
-#[pinnacle_api::tokio::main]
+#[pinnacle_api::config(modules)]
 async fn main() {
-    let (modules, __recv) = pinnacle_api::connect().await.unwrap();
-
     // Deconstruct to get all the APIs.
     #[cfg(feature = "snowcap")]
     #[allow(unused_variables)]
@@ -38,7 +35,7 @@ async fn main() {
         render,
         snowcap,
         ..
-    } = modules.clone();
+    } = modules;
 
     #[cfg(not(feature = "snowcap"))]
     #[allow(unused_variables)]
@@ -52,7 +49,7 @@ async fn main() {
         layout,
         render,
         ..
-    } = modules.clone();
+    } = modules;
 
     let mod_key = Mod::Ctrl;
 
@@ -314,6 +311,4 @@ async fn main() {
     })));
 
     process.spawn_once([terminal]);
-
-    pinnacle_api::listen(modules, __recv).await;
 }

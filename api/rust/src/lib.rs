@@ -113,6 +113,8 @@ pub mod util;
 pub mod window;
 
 pub use pinnacle_api_macros::config;
+#[cfg(feature = "snowcap")]
+pub use snowcap_api;
 pub use tokio;
 pub use xkbcommon;
 

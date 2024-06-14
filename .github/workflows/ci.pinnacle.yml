@@ -55,10 +55,10 @@ jobs:
         uses: extractions/setup-just@v1
       - name: Test
         if: ${{ runner.debug != '1' }}
-        run: just install test -- --test-threads=1
+        run: just install test --no-default-features -- --test-threads=1
       - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --test-threads=1
+        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test --no-default-features -- --nocapture --test-threads=1
   check-format:
     runs-on: ubuntu-24.04
     name: Check formatting
