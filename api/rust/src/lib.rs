@@ -237,6 +237,7 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
     tag.finish_init(modules.clone());
     layout.finish_init(modules.clone());
     signal.read().await.finish_init(modules.clone());
+    #[cfg(feature = "snowcap")]
     modules.snowcap.finish_init(modules.clone());
 
     #[cfg(feature = "snowcap")]

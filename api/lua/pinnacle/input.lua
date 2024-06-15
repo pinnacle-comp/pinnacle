@@ -74,6 +74,10 @@ local input = {
 }
 input.mouse_button_values = mouse_button_values
 
+---@class KeybindInfo
+---@field group string? The group to place this keybind in. Used for the keybind list.
+---@field description string? The description of this keybind. Used for the keybind list.
+
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
 ---
 ---You must provide three arguments:
@@ -111,7 +115,8 @@ input.mouse_button_values = mouse_button_values
 ---@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
 ---@param key Key | string The key used to trigger the bind
 ---@param action fun() The function to run when the bind is triggered
-function input.keybind(mods, key, action)
+---@param keybind_info KeybindInfo?
+function input.keybind(mods, key, action, keybind_info)
     local raw_code = nil
     local xkb_name = nil
 
@@ -130,6 +135,8 @@ function input.keybind(mods, key, action)
         modifiers = mod_values,
         raw_code = raw_code,
         xkb_name = xkb_name,
+        group = keybind_info and keybind_info.group,
+        description = keybind_info and keybind_info.description,
     }, action)
 end
 
@@ -163,6 +170,31 @@ function input.mousebind(mods, button, edge, action)
         button = mouse_button_values[button],
         edge = edge,
     }, action)
+end
+
+---@class KeybindDescription
+---@field modifiers Modifier[]
+---@field raw_code integer
+---@field xkb_name string
+---@field group string?
+---@field description string?
+
+---Get all keybinds along with their descriptions
+---
+---@return KeybindDescription[]
+function input.keybind_descriptions()
+    ---@type pinnacle.input.v0alpha1.KeybindDescriptionsResponse
+    local descs = client.unary_request(input_service.KeybindDescriptions, {})
+    local descs = descs.descriptions or {}
+
+    local ret = {}
+
+    for _, desc in ipairs(descs) do
+        desc.modifiers = desc.modifiers or {}
+        table.insert(ret, desc)
+    end
+
+    return ret
 end
 
 ---@class XkbConfig

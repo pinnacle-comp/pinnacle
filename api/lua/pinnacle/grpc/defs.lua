@@ -258,6 +258,8 @@ local pinnacle_input_v0alpha1_Modifier = {
 ---@field modifiers pinnacle.input.v0alpha1.Modifier[]?
 ---@field raw_code integer?
 ---@field xkb_name string?
+---@field group string?
+---@field description string?
 
 ---@class pinnacle.input.v0alpha1.SetKeybindResponse
 
@@ -273,6 +275,18 @@ local pinnacle_input_v0alpha1_SetMousebindRequest_MouseEdge = {
 ---@field edge pinnacle.input.v0alpha1.SetMousebindRequest.MouseEdge?
 
 ---@class pinnacle.input.v0alpha1.SetMousebindResponse
+
+---@class pinnacle.input.v0alpha1.KeybindDescriptionsRequest
+
+---@class pinnacle.input.v0alpha1.KeybindDescriptionsResponse
+---@field descriptions pinnacle.input.v0alpha1.KeybindDescription[]?
+
+---@class pinnacle.input.v0alpha1.KeybindDescription
+---@field modifiers pinnacle.input.v0alpha1.Modifier[]?
+---@field raw_code integer?
+---@field xkb_name string?
+---@field group string?
+---@field description string?
 
 ---@class SetXkbConfigRequest
 ---@field rules string?
@@ -727,6 +741,13 @@ defs.pinnacle = {
                     method = "SetMousebind",
                     request = "pinnacle.input.v0alpha1.SetMousebindRequest",
                     response = "pinnacle.input.v0alpha1.SetMousebindResponse",
+                },
+                ---@type GrpcRequestArgs
+                KeybindDescriptions = {
+                    service = "pinnacle.input.v0alpha1.InputService",
+                    method = "KeybindDescriptions",
+                    request = "pinnacle.input.v0alpha1.KeybindDescriptionsRequest",
+                    response = "pinnacle.input.v0alpha1.KeybindDescriptionsResponse",
                 },
                 ---@type GrpcRequestArgs
                 SetXkbConfig = {
