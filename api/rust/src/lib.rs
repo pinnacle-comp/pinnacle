@@ -85,6 +85,7 @@ use pinnacle::Pinnacle;
 use process::Process;
 use render::Render;
 use signal::SignalState;
+use snowcap::Snowcap;
 use tag::Tag;
 use tokio::{
     sync::{
@@ -98,9 +99,6 @@ use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
 
-#[cfg(feature = "snowcap")]
-use snowcap_api::layer::Layer;
-
 pub mod input;
 pub mod layout;
 pub mod output;
@@ -108,6 +106,8 @@ pub mod pinnacle;
 pub mod process;
 pub mod render;
 pub mod signal;
+#[cfg(feature = "snowcap")]
+pub mod snowcap;
 pub mod tag;
 pub mod util;
 pub mod window;
@@ -142,7 +142,7 @@ pub struct ApiModules {
 
     #[cfg(feature = "snowcap")]
     /// The snowcap widget system.
-    pub snowcap: &'static Layer,
+    pub snowcap: &'static Snowcap,
 }
 
 impl std::fmt::Debug for ApiModules {
@@ -215,20 +215,21 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
     };
 
     #[cfg(feature = "snowcap")]
-    let (snowcap, snowcap_recv) = snowcap_api::connect().await.unwrap();
-
-    #[cfg(feature = "snowcap")]
-    let modules = ApiModules {
-        pinnacle,
-        process,
-        window,
-        input,
-        output,
-        tag,
-        layout,
-        render,
-        signal: signal.clone(),
-        snowcap: Box::leak(Box::new(snowcap)),
+    let (modules, snowcap_recv) = {
+        let (snowcap, snowcap_recv) = snowcap_api::connect().await.unwrap();
+        let api_modules = ApiModules {
+            pinnacle,
+            process,
+            window,
+            input,
+            output,
+            tag,
+            layout,
+            render,
+            signal: signal.clone(),
+            snowcap: Box::leak(Box::new(Snowcap::new(snowcap))),
+        };
+        (api_modules, snowcap_recv)
     };
 
     window.finish_init(modules.clone());
@@ -236,6 +237,7 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
     tag.finish_init(modules.clone());
     layout.finish_init(modules.clone());
     signal.read().await.finish_init(modules.clone());
+    modules.snowcap.finish_init(modules.clone());
 
     #[cfg(feature = "snowcap")]
     let receivers = Receivers {
