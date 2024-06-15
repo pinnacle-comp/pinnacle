@@ -33,6 +33,7 @@ bitflags = "2.5.0"
 clap = { version = "4.5.4", features = ["derive"] }
 dircpy = "0.3.16"
 tempfile = "3.10.1"
+indexmap = "2.2.6"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -118,7 +119,7 @@ pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
 drm-sys = "0.7.0"
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
-indexmap = "2.2.6"
+indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 

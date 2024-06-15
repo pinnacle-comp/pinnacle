@@ -52,15 +52,6 @@ async fn main() {
 
     let terminal = "alacritty";
 
-    input.keybind(
-        [mod_key],
-        'i',
-        || {
-            dbg!(input.keybind_descriptions().collect::<Vec<_>>());
-        },
-        None,
-    );
-
     //------------------------
     // Mousebinds            |
     //------------------------
@@ -78,6 +69,20 @@ async fn main() {
     //------------------------
     // Keybinds              |
     //------------------------
+
+    // `mod_key + s` shows the keybind overlay
+    input.keybind(
+        [mod_key],
+        's',
+        || {
+            #[cfg(feature = "snowcap")]
+            snowcap.integration.keybind_overlay().show();
+        },
+        KeybindInfo {
+            group: Some("Compositor".into()),
+            description: Some("Show the keybind overlay".into()),
+        },
+    );
 
     // `mod_key + alt + q` quits Pinnacle
     input.keybind(
@@ -133,7 +138,7 @@ async fn main() {
         },
         KeybindInfo {
             group: Some("Process".into()),
-            description: Some("Spawn `alacritty`".into()),
+            description: Some(format!("Spawn `{terminal}`")),
         },
     );
 

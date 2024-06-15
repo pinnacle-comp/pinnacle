@@ -22,6 +22,7 @@ xkbcommon = { workspace = true }
 rand = "0.8.5"
 bitflags = { workspace = true }
 snowcap-api = { path = "../../snowcap/api/rust", optional = true }
+indexmap = { workspace = true }
 
 [features]
 default = ["snowcap"]
