@@ -88,12 +88,9 @@ use signal::SignalState;
 #[cfg(feature = "snowcap")]
 use snowcap::Snowcap;
 use tag::Tag;
-use tokio::{
-    sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver},
-        RwLock,
-    },
-    task::JoinHandle,
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver},
+    RwLock,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::transport::{Endpoint, Uri};
@@ -167,7 +164,7 @@ impl std::fmt::Debug for ApiModules {
 pub struct Receivers {
     pinnacle: UnboundedReceiver<BoxFuture<'static, ()>>,
     #[cfg(feature = "snowcap")]
-    snowcap: UnboundedReceiver<JoinHandle<()>>,
+    snowcap: UnboundedReceiver<tokio::task::JoinHandle<()>>,
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
@@ -238,17 +235,15 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
     tag.finish_init(modules.clone());
     layout.finish_init(modules.clone());
     signal.read().await.finish_init(modules.clone());
+
     #[cfg(feature = "snowcap")]
     modules.snowcap.finish_init(modules.clone());
 
-    #[cfg(feature = "snowcap")]
     let receivers = Receivers {
         pinnacle: fut_recv,
+        #[cfg(feature = "snowcap")]
         snowcap: snowcap_recv,
     };
-
-    #[cfg(not(feature = "snowcap"))]
-    let receivers = Receivers { pinnacle: fut_recv };
 
     Ok((modules, receivers))
 }

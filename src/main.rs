@@ -13,10 +13,6 @@
 
 use std::{
     io::{BufRead, BufReader},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
     time::Duration,
 };
 
@@ -27,10 +23,7 @@ use pinnacle::{
     state::State,
     util::increase_nofile_rlimit,
 };
-use smithay::reexports::{
-    calloop::{self, EventLoop},
-    rustix::process::geteuid,
-};
+use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -183,6 +176,12 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "snowcap")]
     {
+        use smithay::reexports::calloop;
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+
         info!("Starting Snowcap");
         let (ping, source) = calloop::ping::make_ping()?;
         let ready_flag = Arc::new(AtomicBool::new(false));
@@ -216,7 +215,7 @@ async fn main() -> anyhow::Result<()> {
         info!("`no-config` option was set, not spawning config");
     }
 
-    event_loop.run(None, &mut state, |state| {
+    event_loop.run(Duration::from_secs(1), &mut state, |state| {
         state.on_event_loop_cycle_completion();
     })?;
 

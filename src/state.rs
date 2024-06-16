@@ -26,7 +26,7 @@ use smithay::{
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{self, generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason, GlobalId},
             protocol::wl_surface::WlSurface,
@@ -157,7 +157,7 @@ pub struct Pinnacle {
     pub outputs: IndexMap<Output, Option<GlobalId>>,
 
     #[cfg(feature = "snowcap")]
-    pub snowcap_shutdown_ping: Option<calloop::ping::Ping>,
+    pub snowcap_shutdown_ping: Option<smithay::reexports::calloop::ping::Ping>,
 }
 
 impl State {

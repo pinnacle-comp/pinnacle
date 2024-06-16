@@ -12,6 +12,7 @@ pub mod integration;
 pub struct Snowcap {
     /// Create layer surface widgets.
     pub layer: &'static Layer,
+    /// Pinnacle integrations.
     pub integration: &'static Integration,
 }
 
