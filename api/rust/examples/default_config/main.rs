@@ -19,7 +19,6 @@ use pinnacle_api::{
 #[pinnacle_api::config(modules)]
 async fn main() {
     // Deconstruct to get all the APIs.
-    #[cfg(feature = "snowcap")]
     #[allow(unused_variables)]
     let ApiModules {
         pinnacle,
@@ -30,21 +29,8 @@ async fn main() {
         tag,
         layout,
         render,
+        #[cfg(feature = "snowcap")]
         snowcap,
-        ..
-    } = modules;
-
-    #[cfg(not(feature = "snowcap"))]
-    #[allow(unused_variables)]
-    let ApiModules {
-        pinnacle,
-        process,
-        window,
-        input,
-        output,
-        tag,
-        layout,
-        render,
         ..
     } = modules;
 
@@ -71,11 +57,11 @@ async fn main() {
     //------------------------
 
     // `mod_key + s` shows the keybind overlay
+    #[cfg(feature = "snowcap")]
     input.keybind(
         [mod_key],
         's',
         || {
-            #[cfg(feature = "snowcap")]
             snowcap.integration.keybind_overlay().show();
         },
         KeybindInfo {
@@ -91,7 +77,6 @@ async fn main() {
         || {
             #[cfg(feature = "snowcap")]
             snowcap.integration.quit_prompt().show();
-
             #[cfg(not(feature = "snowcap"))]
             pinnacle.quit();
         },

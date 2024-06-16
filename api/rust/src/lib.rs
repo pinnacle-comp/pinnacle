@@ -85,6 +85,7 @@ use pinnacle::Pinnacle;
 use process::Process;
 use render::Render;
 use signal::SignalState;
+#[cfg(feature = "snowcap")]
 use snowcap::Snowcap;
 use tag::Tag;
 use tokio::{
