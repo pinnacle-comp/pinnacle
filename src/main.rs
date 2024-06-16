@@ -186,14 +186,21 @@ async fn main() -> anyhow::Result<()> {
         let (ping, source) = calloop::ping::make_ping()?;
         let ready_flag = Arc::new(AtomicBool::new(false));
         let ready_clone = ready_flag.clone();
-        tokio::task::spawn_blocking(move || {
+        let join_handle = tokio::task::spawn_blocking(move || {
+            let _span = tracing::error_span!("snowcap");
+            let _span = _span.enter();
             snowcap::start(Some(source), ready_clone);
         });
+
         while !ready_flag.load(Ordering::SeqCst) {
-            event_loop.dispatch(None, &mut state)?;
+            if join_handle.is_finished() {
+                panic!("snowcap failed to start");
+            }
+            event_loop.dispatch(Duration::from_secs(1), &mut state)?;
             state.on_event_loop_cycle_completion();
         }
         state.pinnacle.snowcap_shutdown_ping = Some(ping);
+        state.pinnacle.snowcap_join_handle = Some(join_handle);
     }
 
     if !metaconfig.no_xwayland {

@@ -158,6 +158,8 @@ pub struct Pinnacle {
 
     #[cfg(feature = "snowcap")]
     pub snowcap_shutdown_ping: Option<smithay::reexports::calloop::ping::Ping>,
+    #[cfg(feature = "snowcap")]
+    pub snowcap_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl State {
@@ -171,6 +173,19 @@ impl State {
 
         if let Backend::Winit(winit) = &mut self.backend {
             winit.render_if_scheduled(&mut self.pinnacle);
+        }
+
+        #[cfg(feature = "snowcap")]
+        if self
+            .pinnacle
+            .snowcap_join_handle
+            .as_ref()
+            .is_some_and(|handle| handle.is_finished())
+        {
+            // If Snowcap is dead, the config has most likely crashed or will crash if it's used.
+            // The embedded config will also fail to start.
+            // We'll panic here just so people aren't stuck in the compositor.
+            panic!("snowcap has exited");
         }
 
         // FIXME: Don't poll this every cycle
@@ -361,6 +376,8 @@ impl Pinnacle {
 
             #[cfg(feature = "snowcap")]
             snowcap_shutdown_ping: None,
+            #[cfg(feature = "snowcap")]
+            snowcap_join_handle: None,
         };
 
         Ok(pinnacle)
