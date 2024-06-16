@@ -27,7 +27,7 @@ jobs:
       - name: Get protoc
         run: sudo apt install protobuf-compiler
       - name: Build docs
-        run: cd ./api/rust && cargo doc --no-deps -p pinnacle-api -p tokio -p xkbcommon
+        run: cd ./api/rust && cargo doc --no-deps -p pinnacle-api -p tokio -p xkbcommon -p snowcap-api
       - name: Create index.html
         run: echo "<meta http-equiv=\"refresh\" content=\"0; url=pinnacle_api\">" > ./target/doc/index.html
       - name: Deploy
