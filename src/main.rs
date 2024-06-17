@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env();
 
     let file_log_env_filter =
-        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=warn");
+        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=error");
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .with_filter(file_log_env_filter);
 
     let stdout_env_filter =
-        env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info,snowcap=info"));
+        env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info,snowcap=info,sctk=error"));
     let stdout_layer = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stdout)
