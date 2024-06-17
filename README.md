@@ -35,13 +35,9 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
-### What is Snowcap?
-You will see references to Snowcap throughout this README. [Snowcap](https://github.com/pinnacle-comp/snowcap) is the
-very, *very* WIP widget system for Pinnacle. Currently it's only being used for the builtin quit prompt and keybind overlay.
+Pinnacle comes integrated with [Snowcap](https://github.com/pinnacle-comp/snowcap), a
+very, *very* WIP widget system. Currently it's only being used for the builtin quit prompt and keybind overlay.
 In the future, Snowcap will be used for everything Awesome uses its widget system for: a taskbar, system tray, etc.
-
-> [!NOTE]
-> Only the Rust API has implemented Snowcap integration currently. Lua support soon™️
 
 ### Features
 - Tag system
@@ -170,16 +166,20 @@ the Lua or Rust default configs standalone, run one of the following in the crat
 
 ```sh
 # For a Lua configuration
-just install run -- -c "./api/lua/examples/default"
+just install run -- -c ./api/lua/examples/default
 
 # For a Rust configuration
-cargo run -- -c "./api/rust/examples/default_config"
+cargo run -- -c ./api/rust/examples/default_config
 ```
 
-When running the default Rust config standalone without compiled Snowcap integration,
-run the one in the following directory:
+When running without compiled Snowcap integration,
+use the following directories instead:
 ```sh
-cargo run -- -c "./api/rust/examples/default_config_no_snowcap"
+# Lua
+just install run -- -c ./api/lua/examples/default_no_snowcap
+
+# Rust
+cargo run -- -c ./api/rust/examples/default_config_no_snowcap
 ```
 
 ## Custom configuration
@@ -199,6 +199,8 @@ This will prompt you to choose a language (Lua or Rust) and directory to put the
 It will then generate a config at that directory. If Lua is chosen and there are conflicting
 files in the directory, the generator will prompt to rename them to a backup before continuing.
 If Rust is chosen, the directory must be manually emptied to continue.
+
+Note that this currently copies default configs *with* Snowcap integration.
 
 Run `cargo run -- config gen --help` for information on the command.
 
@@ -252,6 +254,8 @@ Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 > Documentation for other branches can be reached by replacing `main` with the branch you want.
 
 # Controls
+> Yes, ctrl is a bad mod key I know, this will be changed to Awesome keybinds soon
+
 The following are the default controls in the [`default_config`](api/rust/examples/default_config/main.rs).
 | Binding                                      | Action                             |
 |----------------------------------------------|------------------------------------|

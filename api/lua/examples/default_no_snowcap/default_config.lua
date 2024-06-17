@@ -7,7 +7,6 @@ require("pinnacle").setup(function(Pinnacle)
     local Window = Pinnacle.window
     local Layout = Pinnacle.layout
     local Util = Pinnacle.util
-    local Snowcap = Pinnacle.snowcap
 
     local key = Input.key
 
@@ -15,13 +14,6 @@ require("pinnacle").setup(function(Pinnacle)
     local mod_key = "ctrl"
 
     local terminal = "alacritty"
-
-    Input.keybind({ mod_key }, "s", function()
-        Snowcap.integration.keybind_overlay():show()
-    end, {
-        group = "Compositor",
-        description = "Show the keybind overlay",
-    })
 
     --------------------
     -- Mousebinds     --
@@ -41,7 +33,7 @@ require("pinnacle").setup(function(Pinnacle)
 
     -- mod_key + alt + q = Quit Pinnacle
     Input.keybind({ mod_key, "alt" }, "q", function()
-        Snowcap.integration.quit_prompt():show()
+        Pinnacle.quit()
     end, {
         group = "Compositor",
         description = "Quit Pinnacle",
