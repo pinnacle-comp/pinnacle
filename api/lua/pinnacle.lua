@@ -54,7 +54,10 @@ end
 ---@see Pinnacle.run
 function pinnacle.setup(config_fn)
     require("pinnacle.grpc.protobuf").build_protos()
-    require("snowcap").init()
+    local success, snowcap = pcall(require, "snowcap")
+    if success then
+        snowcap.init()
+    end
 
     -- Make Snowcap use Pinnacle's cqueues loop
     require("snowcap.grpc.client").loop = client.loop
@@ -96,7 +99,10 @@ end
 ---@param run_fn fun(pinnacle: Pinnacle)
 function pinnacle.run(run_fn)
     require("pinnacle.grpc.protobuf").build_protos()
-    require("snowcap").init()
+    local success, snowcap = pcall(require, "snowcap")
+    if success then
+        snowcap.init()
+    end
 
     run_fn(pinnacle)
 end
