@@ -26,6 +26,8 @@ local pinnacle = {
     layout = require("pinnacle.layout"),
     ---@type Render
     render = require("pinnacle.render"),
+    ---@type pinnacle.Snowcap
+    snowcap = require("pinnacle.snowcap"),
 }
 
 ---Quit Pinnacle.
@@ -52,6 +54,10 @@ end
 ---@see Pinnacle.run
 function pinnacle.setup(config_fn)
     require("pinnacle.grpc.protobuf").build_protos()
+    require("snowcap").init()
+
+    -- Make Snowcap use Pinnacle's cqueues loop
+    require("snowcap.grpc.client").loop = client.loop
 
     -- This function ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
@@ -90,6 +96,7 @@ end
 ---@param run_fn fun(pinnacle: Pinnacle)
 function pinnacle.run(run_fn)
     require("pinnacle.grpc.protobuf").build_protos()
+    require("snowcap").init()
 
     run_fn(pinnacle)
 end

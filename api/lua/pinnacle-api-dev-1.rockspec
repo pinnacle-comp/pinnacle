@@ -31,5 +31,6 @@ build = {
         ["pinnacle.signal"] = "pinnacle/signal.lua",
         ["pinnacle.layout"] = "pinnacle/layout.lua",
         ["pinnacle.render"] = "pinnacle/render.lua",
+        ["pinnacle.snowcap"] = "pinnacle/snowcap.lua",
     },
 }

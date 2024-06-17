@@ -11,7 +11,7 @@ list:
     @just --list --unsorted
 
 # Install the configs, protobuf definitions, and the Lua library (requires Luarocks)
-install: install-configs install-protos install-lua-lib
+install: install-configs install-protos install-lua-lib install-snowcap
 
 # Install the default Lua and Rust configs
 install-configs:
@@ -41,7 +41,7 @@ install-lua-lib:
     luarocks make --local --lua-version "{{lua_version}}"
 
 # Remove installed configs and the Lua API (requires Luarocks)
-clean:
+clean: clean-snowcap
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local pinnacle-api
 
@@ -119,3 +119,15 @@ wlcs *args: compile-wlcs
     set -euxo pipefail
     cargo build -p wlcs_pinnacle
     RUST_BACKTRACE=1 ./wlcs/wlcs target/debug/libwlcs_pinnacle.so {{args}}
+
+install-snowcap:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cd "{{rootdir}}/snowcap"
+    just install
+
+clean-snowcap:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cd "{{rootdir}}/snowcap"
+    just clean

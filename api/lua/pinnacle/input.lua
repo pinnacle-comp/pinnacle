@@ -190,7 +190,20 @@ function input.keybind_descriptions()
     local ret = {}
 
     for _, desc in ipairs(descs) do
-        desc.modifiers = desc.modifiers or {}
+        local mods = {}
+        for _, mod in ipairs(desc.modifiers or {}) do
+            if mod == modifier_values.shift then
+                table.insert(mods, "shift")
+            elseif mod == modifier_values.ctrl then
+                table.insert(mods, "ctrl")
+            elseif mod == modifier_values.alt then
+                table.insert(mods, "alt")
+            elseif mod == modifier_values.super then
+                table.insert(mods, "super")
+            end
+        end
+
+        desc.modifiers = mods
         table.insert(ret, desc)
     end
 

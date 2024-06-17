@@ -166,22 +166,23 @@ impl KeybindOverlay {
 
         impl std::fmt::Display for KeybindRepr {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                let bind = self
-                    .mods
-                    .iter()
-                    .map(|m| {
-                        // TODO: strum name or something
-                        match m {
-                            Mod::Shift => "Shift",
-                            Mod::Ctrl => "Ctrl",
-                            Mod::Alt => "Alt",
-                            Mod::Super => "Super",
-                        }
-                        .to_string()
-                    })
-                    .chain([self.name.clone()])
-                    .collect::<Vec<_>>()
-                    .join(" + ");
+                let mut parts = Vec::new();
+                if self.mods.contains(&Mod::Super) {
+                    parts.push("Super");
+                }
+                if self.mods.contains(&Mod::Ctrl) {
+                    parts.push("Ctrl");
+                }
+                if self.mods.contains(&Mod::Alt) {
+                    parts.push("Alt");
+                }
+                if self.mods.contains(&Mod::Shift) {
+                    parts.push("Shift");
+                }
+
+                parts.push(self.name.as_str());
+
+                let bind = parts.join(" + ");
                 write!(f, "{bind}")
             }
         }

@@ -1,5 +1,10 @@
 {
     "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
-    "workspace.library": ["~/.luarocks/share/lua/5.4/pinnacle.lua", "~/.luarocks/share/lua/5.4/pinnacle"],
+    "workspace.library": [
+        "~/.luarocks/share/lua/5.4/pinnacle.lua",
+        "~/.luarocks/share/lua/5.4/pinnacle",
+        "~/.luarocks/share/lua/5.4/snowcap.lua",
+        "~/.luarocks/share/lua/5.4/snowcap"
+    ],
     "runtime.version": "Lua 5.4",
 }
