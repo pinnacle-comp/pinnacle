@@ -15,8 +15,8 @@ use pinnacle_api_defs::pinnacle::input::{
     v0alpha1::{
         input_service_client::InputServiceClient,
         set_libinput_setting_request::{CalibrationMatrix, Setting},
-        SetKeybindRequest, SetLibinputSettingRequest, SetMousebindRequest, SetRepeatRateRequest,
-        SetXkbConfigRequest,
+        KeybindDescriptionsRequest, SetKeybindRequest, SetLibinputSettingRequest,
+        SetMousebindRequest, SetRepeatRateRequest, SetXkbConfigRequest,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -99,6 +99,32 @@ pub struct Input {
     fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
 }
 
+/// Keybind information.
+///
+/// Mainly used for the keybind list.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct KeybindInfo {
+    /// The group to place this keybind in.
+    pub group: Option<String>,
+    /// The description of this keybind.
+    pub description: Option<String>,
+}
+
+/// The description of a keybind.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeybindDescription {
+    /// The keybind's modifiers.
+    pub modifiers: Vec<Mod>,
+    /// The keysym code.
+    pub key_code: u32,
+    /// The name of the key.
+    pub xkb_name: String,
+    /// The group.
+    pub group: Option<String>,
+    /// The description of the keybind.
+    pub description: Option<String>,
+}
+
 impl Input {
     pub(crate) fn new(
         channel: Channel,
@@ -157,25 +183,28 @@ impl Input {
         mods: impl IntoIterator<Item = Mod>,
         key: impl Key + Send + 'static,
         mut action: impl FnMut() + Send + 'static,
+        keybind_info: impl Into<Option<KeybindInfo>>,
     ) {
         let mut client = self.create_input_client();
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
+        let keybind_info: Option<KeybindInfo> = keybind_info.into();
+
+        let mut stream = block_on_tokio(client.set_keybind(SetKeybindRequest {
+            modifiers,
+            key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
+                key.into_keysym().raw(),
+            )),
+            group: keybind_info.clone().and_then(|info| info.group),
+            description: keybind_info.clone().and_then(|info| info.description),
+        }))
+        .unwrap()
+        .into_inner();
+
         self.fut_sender
             .send(
                 async move {
-                    let mut stream = client
-                        .set_keybind(SetKeybindRequest {
-                            modifiers,
-                            key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
-                                key.into_keysym().raw(),
-                            )),
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-
                     while let Some(Ok(_response)) = stream.next().await {
                         action();
                         tokio::task::yield_now().await;
@@ -218,20 +247,17 @@ impl Input {
         let mut client = self.create_input_client();
 
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
+        let mut stream = block_on_tokio(client.set_mousebind(SetMousebindRequest {
+            modifiers,
+            button: Some(button as u32),
+            edge: Some(edge as i32),
+        }))
+        .unwrap()
+        .into_inner();
 
         self.fut_sender
             .send(
                 async move {
-                    let mut stream = client
-                        .set_mousebind(SetMousebindRequest {
-                            modifiers,
-                            button: Some(button as u32),
-                            edge: Some(edge as i32),
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-
                     while let Some(Ok(_response)) = stream.next().await {
                         action();
                         tokio::task::yield_now().await;
@@ -240,6 +266,31 @@ impl Input {
                 .boxed(),
             )
             .unwrap();
+    }
+
+    /// Get all keybinds and their information.
+    pub fn keybind_descriptions(&self) -> impl Iterator<Item = KeybindDescription> {
+        let mut client = self.create_input_client();
+        let descriptions =
+            block_on_tokio(client.keybind_descriptions(KeybindDescriptionsRequest {})).unwrap();
+        let descriptions = descriptions.into_inner();
+
+        descriptions.descriptions.into_iter().map(|desc| {
+            let mods = desc.modifiers().flat_map(|m| match m {
+                input::v0alpha1::Modifier::Unspecified => None,
+                input::v0alpha1::Modifier::Shift => Some(Mod::Shift),
+                input::v0alpha1::Modifier::Ctrl => Some(Mod::Ctrl),
+                input::v0alpha1::Modifier::Alt => Some(Mod::Alt),
+                input::v0alpha1::Modifier::Super => Some(Mod::Super),
+            });
+            KeybindDescription {
+                modifiers: mods.collect(),
+                key_code: desc.raw_code(),
+                xkb_name: desc.xkb_name().to_string(),
+                group: desc.group,
+                description: desc.description,
+            }
+        })
     }
 
     /// Set the xkeyboard config.

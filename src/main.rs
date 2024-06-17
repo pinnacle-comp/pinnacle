@@ -11,7 +11,10 @@
 // #![deny(unused_imports)] // this has remained commented out for months lol
 #![warn(clippy::unwrap_used)]
 
-use std::io::{BufRead, BufReader};
+use std::{
+    io::{BufRead, BufReader},
+    time::Duration,
+};
 
 use anyhow::Context;
 use pinnacle::{
@@ -43,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env();
 
     let file_log_env_filter =
-        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn");
+        EnvFilter::new("debug,h2=warn,hyper=warn,smithay::xwayland::xwm=warn,wgpu_hal=warn,naga=warn,wgpu_core=warn,cosmic_text=warn,iced_wgpu=warn,sctk=warn");
 
     let file_log_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -51,7 +54,8 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(appender)
         .with_filter(file_log_env_filter);
 
-    let stdout_env_filter = env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info"));
+    let stdout_env_filter =
+        env_filter.unwrap_or_else(|_| EnvFilter::new("warn,pinnacle=info,snowcap=info"));
     let stdout_layer = tracing_subscriber::fmt::layer()
         .compact()
         .with_writer(std::io::stdout)
@@ -170,6 +174,35 @@ async fn main() -> anyhow::Result<()> {
         .pinnacle
         .start_grpc_server(&metaconfig.socket_dir.clone())?;
 
+    #[cfg(feature = "snowcap")]
+    {
+        use smithay::reexports::calloop;
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+
+        info!("Starting Snowcap");
+        let (ping, source) = calloop::ping::make_ping()?;
+        let ready_flag = Arc::new(AtomicBool::new(false));
+        let ready_clone = ready_flag.clone();
+        let join_handle = tokio::task::spawn_blocking(move || {
+            let _span = tracing::error_span!("snowcap");
+            let _span = _span.enter();
+            snowcap::start(Some(source), ready_clone);
+        });
+
+        while !ready_flag.load(Ordering::SeqCst) {
+            if join_handle.is_finished() {
+                panic!("snowcap failed to start");
+            }
+            event_loop.dispatch(Duration::from_secs(1), &mut state)?;
+            state.on_event_loop_cycle_completion();
+        }
+        state.pinnacle.snowcap_shutdown_ping = Some(ping);
+        state.pinnacle.snowcap_join_handle = Some(join_handle);
+    }
+
     if !metaconfig.no_xwayland {
         match state.pinnacle.insert_xwayland_source() {
             Ok(()) => {
@@ -189,7 +222,7 @@ async fn main() -> anyhow::Result<()> {
         info!("`no-config` option was set, not spawning config");
     }
 
-    event_loop.run(None, &mut state, |state| {
+    event_loop.run(Duration::from_secs(1), &mut state, |state| {
         state.on_event_loop_cycle_completion();
     })?;
 

@@ -9,6 +9,7 @@ use pinnacle_api_defs::pinnacle::{
         input_service_server,
         set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
         set_mousebind_request::MouseEdge,
+        KeybindDescription, KeybindDescriptionsRequest, KeybindDescriptionsResponse, Modifier,
         SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
         SetMousebindResponse, SetRepeatRateRequest, SetXkbConfigRequest,
     },
@@ -55,7 +56,7 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     backend::{udev::drm_mode_from_api_modeline, BackendData},
     config::ConnectorSavedState,
-    input::ModifierMask,
+    input::{KeybindData, ModifierMask},
     output::{OutputMode, OutputName},
     render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
@@ -293,12 +294,21 @@ impl input_service_server::InputService for InputService {
             }
         };
 
+        let group = request.group;
+        let description = request.description;
+
         run_server_streaming(&self.sender, move |state, sender| {
+            let keybind_data = KeybindData {
+                sender,
+                group,
+                description,
+            };
+
             state
                 .pinnacle
                 .input_state
                 .keybinds
-                .insert((modifiers, keysym), sender);
+                .insert((modifiers, keysym), keybind_data);
         })
     }
 
@@ -344,6 +354,47 @@ impl input_service_server::InputService for InputService {
                 .mousebinds
                 .insert((modifiers, button, edge), sender);
         })
+    }
+
+    async fn keybind_descriptions(
+        &self,
+        _request: Request<KeybindDescriptionsRequest>,
+    ) -> Result<Response<KeybindDescriptionsResponse>, Status> {
+        run_unary(&self.sender, |state| {
+            let descriptions =
+                state
+                    .pinnacle
+                    .input_state
+                    .keybinds
+                    .iter()
+                    .map(|((mods, key), data)| {
+                        let mut modifiers = Vec::<i32>::new();
+                        if mods.contains(ModifierMask::CTRL) {
+                            modifiers.push(Modifier::Ctrl as i32);
+                        }
+                        if mods.contains(ModifierMask::ALT) {
+                            modifiers.push(Modifier::Alt as i32);
+                        }
+                        if mods.contains(ModifierMask::SUPER) {
+                            modifiers.push(Modifier::Super as i32);
+                        }
+                        if mods.contains(ModifierMask::SHIFT) {
+                            modifiers.push(Modifier::Shift as i32);
+                        }
+                        KeybindDescription {
+                            modifiers,
+                            raw_code: Some(key.raw()),
+                            xkb_name: Some(xkbcommon::xkb::keysym_get_name(*key)),
+                            group: data.group.clone(),
+                            description: data.description.clone(),
+                        }
+                    });
+
+            KeybindDescriptionsResponse {
+                descriptions: descriptions.collect(),
+            }
+        })
+        .await
     }
 
     async fn set_xkb_config(

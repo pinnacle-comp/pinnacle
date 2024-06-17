@@ -35,6 +35,14 @@ Pinnacle is a Wayland compositor built in Rust using [Smithay](https://github.co
 It's my attempt at creating something like [AwesomeWM](https://github.com/awesomeWM/awesome)
 for Wayland.
 
+### What is Snowcap?
+You will see references to Snowcap throughout this README. [Snowcap](https://github.com/pinnacle-comp/snowcap) is the
+very, *very* WIP widget system for Pinnacle. Currently it's only being used for the builtin quit prompt and keybind overlay.
+In the future, Snowcap will be used for everything Awesome uses its widget system for: a taskbar, system tray, etc.
+
+> [!NOTE]
+> Only the Rust API has implemented Snowcap integration currently. Lua support soon™️
+
 ### Features
 - Tag system
 - Customizable layouts, including most of the ones from Awesome
@@ -42,6 +50,7 @@ for Wayland.
 - wlr-layer-shell support
 - Configurable in Lua or Rust
 - wlr-screencopy support
+- A really *really* WIP widget system
 - Is very cool :thumbsup:
 
 ### Roadmap
@@ -51,57 +60,63 @@ for Wayland.
 You will need:
 
 - [Rust](https://www.rust-lang.org/) 1.75 or newer
-- Packages for [Smithay](https://github.com/Smithay/smithay):
-  `libwayland libxkbcommon libudev libinput libgdm libseat`, as well as `xwayland`
-    - Arch:
-        ```sh
-        sudo pacman -S wayland wayland-protocols libxkbcommon systemd-libs libinput mesa seatd xorg-xwayland
-        ```
-    - Debian/Ubuntu:
-        ```sh
-        sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgdm-dev libseat-dev xwayland
-        ```
-    - NixOS: There is flake [`flake.nix`](flake.nix) with a devShell. It also
+- The following external dependencies:
+    - `libwayland`
+    - `libxkbcommon`
+    - `libudev`
+    - `libinput`
+    - `libgbm`
+    - `libseat`
+    - `libEGL`
+    - `libsystemd`
+    - `libdisplay-info` for monitor display information
+    - `xwayland` for Xwayland support
+    - [`protoc`](https://grpc.io/docs/protoc-installation/) for the API
+
+The following are optional dependencies:
+
+- [`just`](https://github.com/casey/just) to automate installation of libraries and files
+- The following are required to use the Lua API:
+    - `just` as mentioned above
+    - [`lua`](https://www.lua.org/) 5.2 or newer
+    - [`luarocks`](https://luarocks.org/) for API installation
+        - You must run `eval $(luarocks path --lua-version <your-lua-version>)` so that your config can find the API
+          library files. It is recommended to place this command in your shell's startup script.
+
+- Arch and derivatives:
+    ```sh
+    sudo pacman -S wayland libxkbcommon libinput mesa seatd systemd-libs libdisplay-info xorg-xwayland protobuf
+    # And optionally
+    sudo pacman -S just lua luarocks
+    ```
+- Debian and derivatives:
+    ```sh
+    sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev libdisplay-info-dev
+    # And optionally
+    sudo apt install just lua5.4 luarocks
+    ```
+    - Note: `just` is only available in apt from Debian 13.
+- Nix and NixOS:
+    - Use the provided [`flake.nix`](flake.nix) with a devShell. It also
       includes the other tools needed for the build and sets up the
       `LD_LIBRARY_PATH` so the dynamically loaded libraries are found.
       > Luarocks currently doesn't install the Lua library and its dependencies due to openssh directory
       > shenanigans. Fix soon, hopefully. In the meantime you can use the Rust API.
-- `libdisplay-info`, for monitor display information
-- [protoc](https://grpc.io/docs/protoc-installation/), the Protocol Buffer Compiler, for configuration
-    - Arch:
-        ```sh
-        sudo pacman -S protobuf
-        ```
-    - Debian/Ubuntu:
-        ```sh
-        sudo apt install protobuf-compiler
-        ```
-- [just](https://github.com/casey/just), to automate installation of libraries and files
-    - You don't *need* this but without installation you will not be able to run `cargo run -- config gen` or
-      use the Lua API (it requires the protobuf definitions at runtime)
-    - Arch:
-      ```sh
-      sudo pacman -S just
-      ```
-
-If you would like to use the Lua API, you will additionally need:
-
-- [Lua](https://www.lua.org/) 5.2 or newer
-- [LuaRocks](https://luarocks.org/), the Lua package manager
-    - Arch:
-        ```sh
-        sudo pacman -S luarocks
-        ```
-    - Debian/Ubuntu:
-        ```sh
-        sudo apt install luarocks
-        ```
-    - You must run `eval $(luarocks path --lua-version <your-lua-version>)` so that your config can find the API
-      library files. It is recommended to place this command in your shell's startup script.
 
 TODO: other distros
 
 # Building
+
+Clone this repository and, if building with Snowcap integration, update the `snowcap` submodule:
+```sh
+git clone https://github.com/pinnacle-comp/pinnacle
+git submodule update --init
+```
+
+> [!NOTE]
+> For all following `cargo`/`just` commands, if you would like to build without Snowcap integration,
+> run with `--no-default-features`.
+
 Build the project with:
 ```sh
 cargo build [--release]
@@ -126,6 +141,16 @@ After building, run the executable located in either:
 ./target/release/pinnacle   # with --release
 ```
 
+> [!IMPORTANT]
+> When compiling with Snowcap integration, if you do not have Vulkan set up properly,
+> Pinnacle will crash on startup.
+>
+> For those using Nix outside of NixOS, you will need to run the built binary
+> with [nixGL](https://github.com/nix-community/nixGL) using *both* GL and Vulkan wrappers, nested inside one another:
+> ```
+> nix run --impure github:nix-community/nixGL -- nix run --impure github:nix-community/nixGL#nixVulkanIntel -- ./target/debug/pinnacle
+> ```
+
 Or, run the project directly with 
 ```sh
 cargo run [--release]
@@ -145,12 +170,16 @@ the Lua or Rust default configs standalone, run one of the following in the crat
 
 ```sh
 # For a Lua configuration
-cargo run -- -c "./api/lua/examples/default"
 just install run -- -c "./api/lua/examples/default"
 
 # For a Rust configuration
 cargo run -- -c "./api/rust/examples/default_config"
-just install run -- -c "./api/rust/examples/default_config"
+```
+
+When running the default Rust config standalone without compiled Snowcap integration,
+run the one in the following directory:
+```sh
+cargo run -- -c "./api/rust/examples/default_config_no_snowcap"
 ```
 
 ## Custom configuration
@@ -161,15 +190,9 @@ just install run -- -c "./api/rust/examples/default_config"
 
 ### Generating a config
 
-> [!NOTE]
-> The default configs must be installed for them to be copied:
-> ```sh
-> just install-configs # Or alternatively, `just install` which installs everything
-> ```
-
 Run the following command to open up the interactive config generator:
 ```sh
-cargo run -- config gen
+just install-configs run -- config gen
 ```
 
 This will prompt you to choose a language (Lua or Rust) and directory to put the config in.
@@ -232,6 +255,7 @@ Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 The following are the default controls in the [`default_config`](api/rust/examples/default_config/main.rs).
 | Binding                                      | Action                             |
 |----------------------------------------------|------------------------------------|
+| <kbd>Ctrl</kbd> + <kbd>s</kbd>               | Show the keybind overlay           |
 | <kbd>Ctrl</kbd> + <kbd>Mouse left drag</kbd> | Move window                        |
 | <kbd>Ctrl</kbd> + <kbd>Mouse right drag</kbd>| Resize window                      |
 | <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>q</kbd> | Quit Pinnacle                      |

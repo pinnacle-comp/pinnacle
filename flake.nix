@@ -50,6 +50,7 @@
             libinput
             mesa
             xwayland
+            libdisplay-info
 
             # winit on x11
             xorg.libXcursor

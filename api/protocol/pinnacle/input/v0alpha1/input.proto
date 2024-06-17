@@ -18,8 +18,24 @@ message SetKeybindRequest {
     uint32 raw_code = 2;
     string xkb_name = 3;
   }
+  optional string group = 4;
+  optional string description = 5;
 }
 message SetKeybindResponse {}
+
+message KeybindDescriptionsRequest {}
+
+message KeybindDescriptionsResponse {
+  repeated KeybindDescription descriptions = 1;
+}
+
+message KeybindDescription {
+  repeated Modifier modifiers = 1;
+  optional uint32 raw_code = 2;
+  optional string xkb_name = 3;
+  optional string group = 4;
+  optional string description = 5;
+}
 
 message SetMousebindRequest {
   repeated Modifier modifiers = 1;
@@ -130,6 +146,8 @@ message SetLibinputSettingRequest {
 service InputService {
   rpc SetKeybind(SetKeybindRequest) returns (stream SetKeybindResponse);
   rpc SetMousebind(SetMousebindRequest) returns (stream SetMousebindResponse);
+
+  rpc KeybindDescriptions(KeybindDescriptionsRequest) returns (KeybindDescriptionsResponse);
 
   rpc SetXkbConfig(SetXkbConfigRequest) returns (google.protobuf.Empty);
   rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);

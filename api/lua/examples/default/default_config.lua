@@ -34,12 +34,18 @@ require("pinnacle").setup(function(Pinnacle)
     -- mod_key + alt + q = Quit Pinnacle
     Input.keybind({ mod_key, "alt" }, "q", function()
         Pinnacle.quit()
-    end)
+    end, {
+        group = "Compositor",
+        description = "Quit Pinnacle",
+    })
 
     -- mod_key + alt + r = Reload config
     Input.keybind({ mod_key, "alt" }, "r", function()
         Pinnacle.reload_config()
-    end)
+    end, {
+        group = "Compositor",
+        description = "Reload the config",
+    })
 
     -- mod_key + alt + c = Close window
     Input.keybind({ mod_key, "alt" }, "c", function()
@@ -47,12 +53,18 @@ require("pinnacle").setup(function(Pinnacle)
         if focused then
             focused:close()
         end
-    end)
+    end, {
+        group = "Window",
+        description = "Close the focused window",
+    })
 
     -- mod_key + alt + Return = Spawn `terminal`
     Input.keybind({ mod_key }, key.Return, function()
         Process.spawn(terminal)
-    end)
+    end, {
+        group = "Process",
+        description = "Spawn `alacritty`",
+    })
 
     -- mod_key + alt + space = Toggle floating
     Input.keybind({ mod_key, "alt" }, key.space, function()
@@ -61,7 +73,10 @@ require("pinnacle").setup(function(Pinnacle)
             focused:toggle_floating()
             focused:raise()
         end
-    end)
+    end, {
+        group = "Window",
+        description = "Toggle floating on the focused window",
+    })
 
     -- mod_key + f = Toggle fullscreen
     Input.keybind({ mod_key }, "f", function()
@@ -70,7 +85,10 @@ require("pinnacle").setup(function(Pinnacle)
             focused:toggle_fullscreen()
             focused:raise()
         end
-    end)
+    end, {
+        group = "Window",
+        description = "Toggle fullscreen on the focused window",
+    })
 
     -- mod_key + m = Toggle maximized
     Input.keybind({ mod_key }, "m", function()
@@ -79,7 +97,10 @@ require("pinnacle").setup(function(Pinnacle)
             focused:toggle_maximized()
             focused:raise()
         end
-    end)
+    end, {
+        group = "Window",
+        description = "Toggle maximized on the focused window",
+    })
 
     ----------------------
     -- Tags and Outputs --
@@ -109,12 +130,18 @@ require("pinnacle").setup(function(Pinnacle)
         -- mod_key + 1-5 = Switch to tags 1-5
         Input.keybind({ mod_key }, tag_name, function()
             Tag.get(tag_name):switch_to()
-        end)
+        end, {
+            group = "Tag",
+            description = "Switch to tag " .. tag_name,
+        })
 
         -- mod_key + shift + 1-5 = Toggle tags 1-5
         Input.keybind({ mod_key, "shift" }, tag_name, function()
             Tag.get(tag_name):toggle_active()
-        end)
+        end, {
+            group = "Tag",
+            description = "Toggle tag " .. tag_name,
+        })
 
         -- mod_key + alt + 1-5 = Move window to tags 1-5
         Input.keybind({ mod_key, "alt" }, tag_name, function()
@@ -122,7 +149,10 @@ require("pinnacle").setup(function(Pinnacle)
             if focused then
                 focused:move_to_tag(Tag.get(tag_name) --[[@as TagHandle]])
             end
-        end)
+        end, {
+            group = "Tag",
+            description = "Move the focused window to tag " .. tag_name,
+        })
 
         -- mod_key + shift + alt + 1-5 = Toggle tags 1-5 on window
         Input.keybind({ mod_key, "shift", "alt" }, tag_name, function()
@@ -130,7 +160,10 @@ require("pinnacle").setup(function(Pinnacle)
             if focused then
                 focused:toggle_tag(Tag.get(tag_name) --[[@as TagHandle]])
             end
-        end)
+        end, {
+            group = "Tag",
+            description = "Toggle tag " .. tag_name .. " on the focused window",
+        })
     end
 
     --------------------
@@ -226,7 +259,10 @@ require("pinnacle").setup(function(Pinnacle)
                 Layout.request_layout(focused_op)
             end
         end
-    end)
+    end, {
+        group = "Layout",
+        description = "Cycle the layout forward on the first active tag",
+    })
 
     -- mod_key + shift + space = Cycle backward one layout on the focused output
     Input.keybind({ mod_key, "shift" }, key.space, function()
@@ -257,7 +293,10 @@ require("pinnacle").setup(function(Pinnacle)
                 Layout.request_layout(focused_op)
             end
         end
-    end)
+    end, {
+        group = "Layout",
+        description = "Cycle the layout backward on the first active tag",
+    })
 
     Input.set_libinput_settings({
         tap = true,

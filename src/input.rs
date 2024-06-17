@@ -13,6 +13,7 @@ use crate::{
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
+use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::input::v0alpha1::{
     set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
     SetMousebindResponse,
@@ -93,14 +94,20 @@ impl From<&ModifiersState> for ModifierMask {
     }
 }
 
+#[derive(Debug)]
+pub struct KeybindData {
+    pub sender: UnboundedSender<Result<SetKeybindResponse, tonic::Status>>,
+    pub group: Option<String>,
+    pub description: Option<String>,
+}
+
 #[derive(Default)]
 pub struct InputState {
     // TODO: move all of these to config
     pub reload_keybind: Option<(ModifierMask, Keysym)>,
     pub kill_keybind: Option<(ModifierMask, Keysym)>,
 
-    pub keybinds:
-        HashMap<(ModifierMask, Keysym), UnboundedSender<Result<SetKeybindResponse, tonic::Status>>>,
+    pub keybinds: IndexMap<(ModifierMask, Keysym), KeybindData>,
     pub mousebinds: HashMap<
         (ModifierMask, u32, set_mousebind_request::MouseEdge),
         UnboundedSender<Result<SetMousebindResponse, tonic::Status>>,
@@ -540,7 +547,7 @@ impl State {
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
-                    if let Some(sender) = state
+                    if let Some(keybind_data) = state
                         .pinnacle
                         .input_state
                         .keybinds
@@ -557,7 +564,7 @@ impl State {
                     {
                         if state.pinnacle.lock_state.is_unlocked() {
                             return FilterResult::Intercept(KeyAction::CallCallback(
-                                sender.clone(),
+                                keybind_data.sender.clone(),
                             ));
                         }
                     }
