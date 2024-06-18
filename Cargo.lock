@@ -3519,7 +3519,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=900b938#900b938970081cb525dc94ff083d76aa07c60e54"
+source = "git+https://github.com/Smithay/smithay?rev=b4f8120#b4f8120be0fb9b7f038d041efa7f6549e26cd2bc"
 dependencies = [
  "appendlist",
  "ash",
@@ -3556,9 +3556,9 @@ dependencies = [
  "udev",
  "wayland-backend",
  "wayland-egl",
- "wayland-protocols 0.31.2",
+ "wayland-protocols 0.32.1",
  "wayland-protocols-misc",
- "wayland-protocols-wlr 0.2.0",
+ "wayland-protocols-wlr 0.3.1",
  "wayland-server",
  "wayland-sys",
  "winit",
@@ -3633,7 +3633,7 @@ dependencies = [
 [[package]]
 name = "smithay-drm-extras"
 version = "0.1.0"
-source = "git+https://github.com/Smithay/smithay?rev=900b938#900b938970081cb525dc94ff083d76aa07c60e54"
+source = "git+https://github.com/Smithay/smithay?rev=b4f8120#b4f8120be0fb9b7f038d041efa7f6549e26cd2bc"
 dependencies = [
  "drm",
  "edid-rs",
@@ -4593,7 +4593,6 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "wayland-scanner",
- "wayland-server",
 ]
 
 [[package]]
@@ -4606,17 +4605,18 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]
 name = "wayland-protocols-misc"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa5933740b200188c9b4c38601b8212e8c154d7de0d2cb171944e137a77de1e"
+checksum = "e76311e1866c955afbbc46ae97e57542acda1dc9b0298358263a8550b5247331"
 dependencies = [
  "bitflags 2.5.0",
  "wayland-backend",
- "wayland-protocols 0.31.2",
+ "wayland-protocols 0.32.1",
  "wayland-scanner",
  "wayland-server",
 ]
@@ -4645,7 +4645,6 @@ dependencies = [
  "wayland-client",
  "wayland-protocols 0.31.2",
  "wayland-scanner",
- "wayland-server",
 ]
 
 [[package]]
@@ -4659,6 +4658,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols 0.32.1",
  "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]

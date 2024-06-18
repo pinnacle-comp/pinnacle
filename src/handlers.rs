@@ -67,7 +67,7 @@ use smithay::{
         shm::{ShmHandler, ShmState},
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
-    xwayland::{X11Wm, XWaylandClientData},
+    xwayland::XWaylandClientData,
 };
 use tracing::{debug, error, trace, warn};
 
@@ -142,8 +142,6 @@ impl CompositorHandler for State {
         trace!("commit on surface {surface:?}");
 
         utils::on_commit_buffer_handler::<State>(surface);
-
-        X11Wm::commit_hook::<State>(self, surface);
 
         self.backend.early_import(surface);
 
@@ -1113,8 +1111,8 @@ impl Pinnacle {
 
             // Constraint does not apply if not within region.
             if let Some(region) = constraint.region() {
-                let new_pos_surface_local = new_pos.to_i32_round() - surface_loc;
-                if !region.contains(new_pos_surface_local) {
+                let new_pos_surface_local = new_pos - surface_loc;
+                if !region.contains(new_pos_surface_local.to_i32_round()) {
                     return;
                 }
             }

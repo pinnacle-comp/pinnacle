@@ -75,8 +75,9 @@ impl RenderElement<GlesRenderer> for CommonTextureRenderElement {
         src: Rectangle<f64, Buffer>,
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), <GlesRenderer as Renderer>::Error> {
-        RenderElement::<GlesRenderer>::draw(&self.0, frame, src, dst, damage)
+        RenderElement::<GlesRenderer>::draw(&self.0, frame, src, dst, damage, opaque_regions)
     }
 
     fn underlying_storage(
@@ -95,8 +96,16 @@ impl<'a> RenderElement<UdevRenderer<'a>> for CommonTextureRenderElement {
         src: Rectangle<f64, Buffer>,
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), <UdevRenderer<'a> as Renderer>::Error> {
-        RenderElement::<GlesRenderer>::draw(&self.0, frame.as_mut(), src, dst, damage)?;
+        RenderElement::<GlesRenderer>::draw(
+            &self.0,
+            frame.as_mut(),
+            src,
+            dst,
+            damage,
+            opaque_regions,
+        )?;
         Ok(())
     }
 
@@ -117,6 +126,7 @@ impl RenderElement<DummyRenderer> for CommonTextureRenderElement {
         _src: Rectangle<f64, Buffer>,
         _dst: Rectangle<i32, Physical>,
         _damage: &[Rectangle<i32, Physical>],
+        _opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), <DummyRenderer as Renderer>::Error> {
         Ok(())
     }

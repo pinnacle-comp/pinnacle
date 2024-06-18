@@ -67,6 +67,7 @@ impl XwmHandler for State {
         // Center the popup in the middle of the output.
         // Once I find a way to get an X11Surface's parent it will be centered on the parent if
         // applicable.
+        // FIXME: loc is i32
         let loc: Point<i32, Logical> = (
             output_loc.x + output_size.w / 2 - bbox.size.w / 2,
             output_loc.y + output_size.h / 2 - bbox.size.h / 2,
@@ -91,7 +92,10 @@ impl XwmHandler for State {
 
         if should_float(surface) {
             window.with_state_mut(|state| {
-                state.floating_or_tiled = FloatingOrTiled::Floating(bbox);
+                state.floating_or_tiled = FloatingOrTiled::Floating {
+                    loc: bbox.loc.to_f64(),
+                    size: bbox.size,
+                }
             });
             self.pinnacle.space.map_element(window.clone(), loc, true);
         }

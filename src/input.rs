@@ -178,13 +178,14 @@ impl Pinnacle {
     pub fn pointer_focus_target_under<P>(
         &self,
         point: P,
-    ) -> Option<(PointerFocusTarget, Point<i32, Logical>)>
+    ) -> Option<(PointerFocusTarget, Point<f64, Logical>)>
     where
         P: Into<Point<f64, Logical>>,
     {
         let point: Point<f64, Logical> = point.into();
 
         let output = self.space.outputs().find(|op| {
+            // FIXME: loc is i32
             self.space
                 .output_geometry(op)
                 .expect("called output_geometry on unmapped output (this shouldn't happen here)")
@@ -202,7 +203,7 @@ impl Pinnacle {
                 .map(|lock_surface| {
                     (
                         PointerFocusTarget::WlSurface(lock_surface.wl_surface().clone()),
-                        output_geo.loc,
+                        output_geo.loc.to_f64(),
                     )
                 });
         }
@@ -222,13 +223,13 @@ impl Pinnacle {
         }
 
         let layer_under =
-            |layers: &[wlr_layer::Layer]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
+            |layers: &[wlr_layer::Layer]| -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
                 let layer_map = layer_map_for_output(output);
                 let layer = layers.iter().find_map(|layer| {
                     layer_map.layer_under(*layer, point - output_geo.loc.to_f64())
                 })?;
 
-                let layer_loc = layer_map.layer_geometry(layer)?.loc;
+                let layer_loc = layer_map.layer_geometry(layer)?.loc.to_f64();
 
                 layer
                     .surface_under(
@@ -238,24 +239,27 @@ impl Pinnacle {
                     .map(|(surf, surf_loc)| {
                         (
                             PointerFocusTarget::WlSurface(surf),
-                            surf_loc + layer_loc + output_geo.loc,
+                            surf_loc.to_f64() + layer_loc + output_geo.loc.to_f64(),
                         )
                     })
             };
 
         let window_under =
-            |windows: &[&WindowElement]| -> Option<(PointerFocusTarget, Point<i32, Logical>)> {
+            |windows: &[&WindowElement]| -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
                 windows.iter().find_map(|win| {
                     let loc = self
                         .space
                         .element_location(win)
                         .expect("called elem loc on unmapped win")
                         - win.geometry().loc;
+                    // FIXME: i32 -> f64
+                    let loc = loc.to_f64();
 
-                    win.surface_under(point - loc.to_f64(), WindowSurfaceType::ALL)
-                        .map(|(surf, surf_loc)| {
-                            (PointerFocusTarget::WlSurface(surf), surf_loc + loc)
-                        })
+                    win.surface_under(point - loc, WindowSurfaceType::ALL).map(
+                        |(surf, surf_loc)| {
+                            (PointerFocusTarget::WlSurface(surf), surf_loc.to_f64() + loc)
+                        },
+                    )
                 })
             };
 
@@ -830,7 +834,7 @@ impl State {
 
         let mut pointer_confined_to: Option<(
             PointerFocusTarget,
-            Point<i32, Logical>,
+            Point<f64, Logical>,
             Option<RegionAttributes>,
         )> = None;
 
@@ -851,11 +855,11 @@ impl State {
                         return;
                     }
 
-                    let pointer_loc_relative_to_surf = pointer_loc.to_i32_round() - surface_loc;
+                    let pointer_loc_relative_to_surf = pointer_loc - surface_loc;
 
                     // Constraint does not apply if not within region.
                     if let Some(region) = constraint.region() {
-                        if !region.contains(pointer_loc_relative_to_surf) {
+                        if !region.contains(pointer_loc_relative_to_surf.to_i32_round()) {
                             return;
                         }
                     }
@@ -909,6 +913,7 @@ impl State {
 
         let new_under = self.pinnacle.pointer_focus_target_under(new_pointer_loc);
 
+        // FIXME: rework this for float locs
         if let Some((focus, surf_loc, region)) = &pointer_confined_to {
             let region = region
                 .clone()
@@ -941,7 +946,8 @@ impl State {
 
             for (kind, mut rect) in region.rects {
                 // make loc global
-                rect.loc += *surf_loc;
+                // FIXME: f64 -> i32
+                rect.loc += surf_loc.to_i32_round();
                 // PERF: Who knows how out of hand this can get lol
                 match kind {
                     compositor::RectangleKind::Add => {

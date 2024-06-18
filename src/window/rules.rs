@@ -1,7 +1,4 @@
-use smithay::{
-    desktop::space::SpaceElement,
-    utils::{Point, Rectangle},
-};
+use smithay::{desktop::space::SpaceElement, utils::Point};
 
 use crate::{
     state::{Pinnacle, WithState},
@@ -180,7 +177,7 @@ impl Pinnacle {
                     floating_or_tiled,
                     fullscreen_or_maximized,
                     size,
-                    location,
+                    location, // FIXME: make f64
                 } = rule;
 
                 // TODO: If both `output` and `tags` are specified, `tags` will apply over
@@ -229,16 +226,16 @@ impl Pinnacle {
                     window_size.h = u32::from(*h) as i32;
 
                     match window.with_state(|state| state.floating_or_tiled) {
-                        window_state::FloatingOrTiled::Floating(mut rect) => {
-                            rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
+                        window_state::FloatingOrTiled::Floating { loc, mut size } => {
+                            size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
                             window.with_state_mut(|state| {
                                 state.floating_or_tiled =
-                                    window_state::FloatingOrTiled::Floating(rect)
+                                    window_state::FloatingOrTiled::Floating { loc, size }
                             });
                         }
                         window_state::FloatingOrTiled::Tiled(mut rect) => {
-                            if let Some(rect) = rect.as_mut() {
-                                rect.size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
+                            if let Some((_, size)) = rect.as_mut() {
+                                *size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
                             }
                             window.with_state_mut(|state| {
                                 state.floating_or_tiled = window_state::FloatingOrTiled::Tiled(rect)
@@ -247,22 +244,26 @@ impl Pinnacle {
                     }
                 }
 
-                if let Some(loc) = location {
+                if let Some(location) = location {
                     match window.with_state(|state| state.floating_or_tiled) {
-                        window_state::FloatingOrTiled::Floating(mut rect) => {
-                            rect.loc = (*loc).into();
+                        window_state::FloatingOrTiled::Floating { mut loc, size } => {
+                            // FIXME: make window rule f64
+                            loc = Point::from(*location).to_f64();
                             window.with_state_mut(|state| {
                                 state.floating_or_tiled =
-                                    window_state::FloatingOrTiled::Floating(rect)
+                                    window_state::FloatingOrTiled::Floating { loc, size }
                             });
-                            self.space.map_element(window.clone(), *loc, false);
+                            // FIXME: space maps as i32
+                            self.space
+                                .map_element(window.clone(), loc.to_i32_round(), false);
                         }
                         window_state::FloatingOrTiled::Tiled(rect) => {
                             // If the window is tiled, don't set the size. Instead, set
                             // what the size will be when it gets set to floating.
                             let rect = rect.unwrap_or_else(|| {
                                 let size = window.geometry().size;
-                                Rectangle::from_loc_and_size(Point::from(*loc), size)
+                                // FIXME: i32 -> f64
+                                (Point::from(*location).to_f64(), size)
                             });
 
                             window.with_state_mut(|state| {

@@ -15,7 +15,7 @@ use pinnacle_api_defs::pinnacle::{
 use smithay::{
     desktop::space::SpaceElement,
     reexports::wayland_protocols::xdg::shell::server,
-    utils::{Point, Rectangle, SERIAL_COUNTER},
+    utils::{Point, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
 use tonic::{Request, Response, Status};
@@ -85,6 +85,7 @@ impl window_service_server::WindowService for WindowService {
             };
 
             // TODO: with no x or y, defaults unmapped windows to 0, 0
+            // FIXME: space stores loc in i32 not f64
             let mut window_loc = state
                 .pinnacle
                 .space
@@ -97,13 +98,16 @@ impl window_service_server::WindowService for WindowService {
             window_size.w = width.unwrap_or(window_size.w);
             window_size.h = height.unwrap_or(window_size.h);
 
-            let rect = Rectangle::from_loc_and_size(window_loc, window_size);
-
             window.with_state_mut(|state| {
                 use crate::window::window_state::FloatingOrTiled;
                 state.floating_or_tiled = match state.floating_or_tiled {
-                    FloatingOrTiled::Floating(_) => FloatingOrTiled::Floating(rect),
-                    FloatingOrTiled::Tiled(_) => FloatingOrTiled::Tiled(Some(rect)),
+                    FloatingOrTiled::Floating { .. } => FloatingOrTiled::Floating {
+                        loc: window_loc.to_f64(),
+                        size: window_size,
+                    },
+                    FloatingOrTiled::Tiled(_) => {
+                        FloatingOrTiled::Tiled(Some((window_loc.to_f64(), window_size)))
+                    }
                 }
             });
 
@@ -560,8 +564,8 @@ impl window_service_server::WindowService for WindowService {
             };
 
             let window_geometry = window.geometry();
-            let window_x = window_loc.x as f64;
-            let window_y = window_loc.y as f64;
+            let window_x = window_loc.x;
+            let window_y = window_loc.y;
             let window_width = window_geometry.size.w as f64;
             let window_height = window_geometry.size.h as f64;
             let half_width = window_x + window_width / 2.0;

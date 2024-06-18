@@ -14,7 +14,6 @@ use smithay::{
         },
         wayland_server::{Client, Resource},
     },
-    utils::Rectangle,
     wayland::seat::WaylandFocus,
 };
 
@@ -137,8 +136,10 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                 }
 
                 window.with_state_mut(|state| {
-                    state.floating_or_tiled =
-                        FloatingOrTiled::Floating(Rectangle::from_loc_and_size(location, size));
+                    state.floating_or_tiled = FloatingOrTiled::Floating {
+                        loc: location.to_f64(),
+                        size,
+                    };
                 });
 
                 for output in state.pinnacle.space.outputs_for_element(&window) {

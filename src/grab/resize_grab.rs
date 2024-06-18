@@ -55,7 +55,9 @@ pub struct ResizeSurfaceGrab {
 
     edges: ResizeEdge,
 
-    initial_window_rect: Rectangle<i32, Logical>,
+    initial_window_loc: Point<f64, Logical>,
+    initial_window_size: Size<i32, Logical>,
+
     last_window_size: Size<i32, Logical>,
 
     button_used: u32,
@@ -66,13 +68,15 @@ impl ResizeSurfaceGrab {
         start_data: GrabStartData<State>,
         window: WindowElement,
         edges: ResizeEdge,
-        initial_window_rect: Rectangle<i32, Logical>,
+        initial_window_loc: Point<f64, Logical>,
+        initial_window_size: Size<i32, Logical>,
         button_used: u32,
     ) -> Option<Self> {
         window.wl_surface()?.with_state_mut(|state| {
             state.resize_state = ResizeSurfaceState::Resizing {
                 edges,
-                initial_window_rect,
+                initial_window_loc,
+                initial_window_size,
             };
         });
 
@@ -80,8 +84,9 @@ impl ResizeSurfaceGrab {
             start_data,
             window,
             edges,
-            initial_window_rect,
-            last_window_size: initial_window_rect.size,
+            initial_window_loc,
+            initial_window_size,
+            last_window_size: initial_window_size,
             button_used,
         })
     }
@@ -104,7 +109,8 @@ impl ResizeSurfaceGrab {
                     // TODO: validate resize state
                     state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                         edges: self.edges,
-                        initial_window_rect: self.initial_window_rect,
+                        initial_window_loc: self.initial_window_loc,
+                        initial_window_size: self.initial_window_size,
                     };
                 });
             }
@@ -116,7 +122,8 @@ impl ResizeSurfaceGrab {
                 surface.with_state_mut(|state| {
                     state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
                         edges: self.edges,
-                        initial_window_rect: self.initial_window_rect,
+                        initial_window_loc: self.initial_window_loc,
+                        initial_window_size: self.initial_window_size,
                     };
                 });
             }
@@ -133,7 +140,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         &mut self,
         data: &mut State,
         handle: &mut PointerInnerHandle<'_, State>,
-        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &smithay::input::pointer::MotionEvent,
     ) {
         handle.motion(data, None, event);
@@ -145,32 +152,32 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
         let delta = (event.location - self.start_data.location).to_i32_round::<i32>();
 
-        let mut new_window_width = self.initial_window_rect.size.w;
-        let mut new_window_height = self.initial_window_rect.size.h;
+        let mut new_window_width = self.initial_window_size.w;
+        let mut new_window_height = self.initial_window_size.h;
 
         if let xdg_toplevel::ResizeEdge::Left
         | xdg_toplevel::ResizeEdge::TopLeft
         | xdg_toplevel::ResizeEdge::BottomLeft = self.edges.0
         {
-            new_window_width = self.initial_window_rect.size.w - delta.x;
+            new_window_width = self.initial_window_size.w - delta.x;
         }
         if let xdg_toplevel::ResizeEdge::Right
         | xdg_toplevel::ResizeEdge::TopRight
         | xdg_toplevel::ResizeEdge::BottomRight = self.edges.0
         {
-            new_window_width = self.initial_window_rect.size.w + delta.x;
+            new_window_width = self.initial_window_size.w + delta.x;
         }
         if let xdg_toplevel::ResizeEdge::Top
         | xdg_toplevel::ResizeEdge::TopRight
         | xdg_toplevel::ResizeEdge::TopLeft = self.edges.0
         {
-            new_window_height = self.initial_window_rect.size.h - delta.y;
+            new_window_height = self.initial_window_size.h - delta.y;
         }
         if let xdg_toplevel::ResizeEdge::Bottom
         | xdg_toplevel::ResizeEdge::BottomRight
         | xdg_toplevel::ResizeEdge::BottomLeft = self.edges.0
         {
-            new_window_height = self.initial_window_rect.size.h + delta.y;
+            new_window_height = self.initial_window_size.h + delta.y;
         }
 
         let (min_size, max_size) = match self.window.wl_surface() {
@@ -220,7 +227,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         &mut self,
         data: &mut State,
         handle: &mut PointerInnerHandle<'_, State>,
-        focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &smithay::input::pointer::RelativeMotionEvent,
     ) {
         handle.relative_motion(data, focus, event);
@@ -329,34 +336,39 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum ResizeSurfaceState {
     #[default]
     Idle,
     Resizing {
         edges: ResizeEdge,
-        initial_window_rect: Rectangle<i32, Logical>,
+        initial_window_loc: Point<f64, Logical>,
+        initial_window_size: Size<i32, Logical>,
     },
     WaitingForLastCommit {
         edges: ResizeEdge,
-        initial_window_rect: Rectangle<i32, Logical>,
+        initial_window_loc: Point<f64, Logical>,
+        initial_window_size: Size<i32, Logical>,
     },
 }
 
 impl ResizeSurfaceState {
-    fn on_commit(&mut self) -> Option<(ResizeEdge, Rectangle<i32, Logical>)> {
+    #[allow(clippy::type_complexity)] // FIXME:
+    fn on_commit(&mut self) -> Option<(ResizeEdge, Point<f64, Logical>, Size<i32, Logical>)> {
         match *self {
             Self::Idle => None,
             Self::Resizing {
                 edges,
-                initial_window_rect,
-            } => Some((edges, initial_window_rect)),
+                initial_window_loc,
+                initial_window_size,
+            } => Some((edges, initial_window_loc, initial_window_size)),
             Self::WaitingForLastCommit {
                 edges,
-                initial_window_rect,
+                initial_window_loc,
+                initial_window_size,
             } => {
                 *self = Self::Idle;
-                Some((edges, initial_window_rect))
+                Some((edges, initial_window_loc, initial_window_size))
             }
         }
     }
@@ -368,25 +380,24 @@ impl Pinnacle {
             return;
         };
 
-        let Some(mut window_loc) = self.space.element_location(&window) else {
+        // FIXME: i32 -> f64
+        let Some(mut window_loc) = self.space.element_location(&window).map(|loc| loc.to_f64())
+        else {
             return;
         };
         let geometry = window.geometry();
 
-        let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
-            state
-                .resize_state
-                .on_commit()
-                .map(|(edges, initial_window_rect)| {
-                    let mut new_x: Option<i32> = None;
-                    let mut new_y: Option<i32> = None;
+        let new_loc: Option<(Option<f64>, Option<f64>)> = surface.with_state_mut(|state| {
+            state.resize_state.on_commit().map(
+                |(edges, initial_window_loc, initial_window_size)| {
+                    let mut new_x = None;
+                    let mut new_y = None;
                     if let xdg_toplevel::ResizeEdge::Left
                     | xdg_toplevel::ResizeEdge::TopLeft
                     | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
                     {
                         new_x = Some(
-                            initial_window_rect.loc.x
-                                + (initial_window_rect.size.w - geometry.size.w),
+                            initial_window_loc.x + (initial_window_size.w - geometry.size.w) as f64,
                         );
                     }
                     if let xdg_toplevel::ResizeEdge::Top
@@ -394,13 +405,13 @@ impl Pinnacle {
                     | xdg_toplevel::ResizeEdge::TopRight = edges.0
                     {
                         new_y = Some(
-                            initial_window_rect.loc.y
-                                + (initial_window_rect.size.h - geometry.size.h),
+                            initial_window_loc.y + (initial_window_size.h - geometry.size.h) as f64,
                         );
                     }
 
                     (new_x, new_y)
-                })
+                },
+            )
         });
 
         if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
@@ -424,18 +435,23 @@ impl Pinnacle {
 
         window.with_state_mut(|state| {
             if state.floating_or_tiled.is_floating() {
-                state.floating_or_tiled =
-                    FloatingOrTiled::Floating(Rectangle::from_loc_and_size(window_loc, size));
+                state.floating_or_tiled = FloatingOrTiled::Floating {
+                    loc: window_loc,
+                    size,
+                };
             }
         });
 
         if new_loc.0.is_some() || new_loc.1.is_some() {
-            self.space.map_element(window.clone(), window_loc, false);
+            // FIXME: space maps with i32 not f64
+            self.space
+                .map_element(window.clone(), window_loc.to_i32_round(), false);
 
             if let Some(surface) = window.x11_surface() {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
-                    let new_geo = Rectangle::from_loc_and_size(window_loc, geo.size);
+                    // FIXME: rounding
+                    let new_geo = Rectangle::from_loc_and_size(window_loc.to_i32_round(), geo.size);
                     surface
                         .configure(new_geo)
                         .expect("failed to configure x11 win");
@@ -468,11 +484,13 @@ impl State {
                 return;
             }
 
+            // FIXME: space stores loc as i32
             let initial_window_loc = self
                 .pinnacle
                 .space
                 .element_location(&window)
-                .expect("resize request called on unmapped window");
+                .expect("resize request called on unmapped window")
+                .to_f64();
             let initial_window_size = window.geometry().size;
 
             if let Some(window) = self.pinnacle.window_for_surface(surface) {
@@ -489,7 +507,8 @@ impl State {
                 start_data,
                 window,
                 edges,
-                Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
+                initial_window_loc,
+                initial_window_size,
                 button_used,
             );
 
@@ -519,11 +538,13 @@ impl State {
             return;
         }
 
+        // FIXME: i32 -> f64
         let initial_window_loc = self
             .pinnacle
             .space
             .element_location(&window)
-            .expect("resize request called on unmapped window");
+            .expect("resize request called on unmapped window")
+            .to_f64();
         let initial_window_size = window.geometry().size;
 
         if let Some(window) = self.pinnacle.window_for_surface(surface) {
@@ -548,7 +569,8 @@ impl State {
             start_data,
             window,
             edges,
-            Rectangle::from_loc_and_size(initial_window_loc, initial_window_size),
+            initial_window_loc,
+            initial_window_size,
             button_used,
         );
 

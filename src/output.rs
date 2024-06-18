@@ -210,20 +210,18 @@ impl Pinnacle {
 
                 // FIXME: get everything out of this with_state
                 win.with_state_mut(|state| {
-                    let FloatingOrTiled::Floating(rect) = &mut state.floating_or_tiled else {
+                    let FloatingOrTiled::Floating { loc, size: _ } = &mut state.floating_or_tiled
+                    else {
                         unreachable!()
                     };
 
-                    let loc = rect.loc;
+                    let mut loc_relative_to_output = *loc - output_loc.to_f64();
+                    loc_relative_to_output = loc_relative_to_output.upscale(pos_multiplier);
 
-                    let mut loc_relative_to_output = loc - output_loc;
-                    loc_relative_to_output = loc_relative_to_output
-                        .to_f64()
-                        .upscale(pos_multiplier)
-                        .to_i32_round();
-
-                    rect.loc = loc_relative_to_output + output_loc;
-                    self.space.map_element(win.clone(), rect.loc, false);
+                    *loc = loc_relative_to_output + output_loc.to_f64();
+                    // FIXME: f64 -> i32
+                    self.space
+                        .map_element(win.clone(), loc.to_i32_round(), false);
                 });
             }
         }

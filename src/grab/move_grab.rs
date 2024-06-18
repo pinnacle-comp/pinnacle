@@ -28,7 +28,7 @@ pub struct MoveSurfaceGrab {
     pub start_data: GrabStartData<State>,
     /// The window being moved
     pub window: WindowElement,
-    pub initial_window_loc: Point<i32, Logical>,
+    pub initial_window_loc: Point<f64, Logical>,
 }
 
 impl PointerGrab<State> for MoveSurfaceGrab {
@@ -40,7 +40,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         &mut self,
         state: &mut State,
         handle: &mut PointerInnerHandle<'_, State>,
-        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        _focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &MotionEvent,
     ) {
         handle.motion(state, None, event);
@@ -111,11 +111,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             }
         } else {
             let delta = event.location - self.start_data.location;
-            let new_loc = (self.initial_window_loc.to_f64() + delta).to_i32_round();
+            let new_loc = self.initial_window_loc.to_f64() + delta;
+            // FIXME: space maps locs as i32 not f64
             state
                 .pinnacle
                 .space
-                .map_element(self.window.clone(), new_loc, true);
+                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
 
             let size = state
                 .pinnacle
@@ -126,15 +127,15 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
             self.window.with_state_mut(|state| {
                 if state.floating_or_tiled.is_floating() {
-                    state.floating_or_tiled =
-                        FloatingOrTiled::Floating(Rectangle::from_loc_and_size(new_loc, size));
+                    state.floating_or_tiled = FloatingOrTiled::Floating { loc: new_loc, size };
                 }
             });
 
             if let Some(surface) = self.window.x11_surface() {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
-                    let new_geo = Rectangle::from_loc_and_size(new_loc, geo.size);
+                    // FIXME: prolly not fixable but xwayland configures with loc i32 not f64
+                    let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
                     surface
                         .configure(new_geo)
                         .expect("failed to configure x11 win");
@@ -152,7 +153,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         &mut self,
         data: &mut State,
         handle: &mut PointerInnerHandle<'_, State>,
-        focus: Option<(<State as SeatHandler>::PointerFocus, Point<i32, Logical>)>,
+        focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &RelativeMotionEvent,
     ) {
         handle.relative_motion(data, focus, event);
@@ -273,7 +274,8 @@ impl State {
                 .pinnacle
                 .space
                 .element_location(&window)
-                .expect("move request was called on an unmapped window");
+                .expect("move request was called on an unmapped window")
+                .to_f64();
 
             let grab = MoveSurfaceGrab {
                 start_data,
@@ -305,7 +307,8 @@ impl State {
             .pinnacle
             .space
             .element_location(&window)
-            .expect("move request was called on an unmapped window");
+            .expect("move request was called on an unmapped window")
+            .to_f64(); // TODO: add space f64 support or move away from space
 
         let start_data = smithay::input::pointer::GrabStartData {
             focus: pointer

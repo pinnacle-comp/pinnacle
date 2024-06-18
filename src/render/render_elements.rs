@@ -141,12 +141,13 @@ macro_rules! pinnacle_render_elements {
                 src: ::smithay::utils::Rectangle<f64, ::smithay::utils::Buffer>,
                 dst: ::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>,
                 damage: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
+                opaque_regions: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
             ) -> ::std::result::Result<(), ::smithay::backend::renderer::gles::GlesError> {
                 match self {
                     $($name::$variant(elem) => {
                         ::smithay::backend::renderer::element::RenderElement::<
                             ::smithay::backend::renderer::gles::GlesRenderer
-                        >::draw(elem, frame, src, dst, damage)
+                        >::draw(elem, frame, src, dst, damage, opaque_regions)
                     })+
                 }
             }
@@ -170,6 +171,7 @@ macro_rules! pinnacle_render_elements {
                 src: ::smithay::utils::Rectangle<f64, ::smithay::utils::Buffer>,
                 dst: ::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>,
                 damage: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
+                opaque_regions: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
             ) -> ::std::result::Result<
                 (),
                 <$crate::backend::udev::UdevRenderer as ::smithay::backend::renderer::Renderer>::Error,
@@ -178,7 +180,7 @@ macro_rules! pinnacle_render_elements {
                     $($name::$variant(elem) => {
                         ::smithay::backend::renderer::element::RenderElement::<
                             $crate::backend::udev::UdevRenderer
-                        >::draw(elem, frame, src, dst, damage)
+                        >::draw(elem, frame, src, dst, damage, opaque_regions)
                     })+
                 }
             }
@@ -203,6 +205,7 @@ macro_rules! pinnacle_render_elements {
                 src: ::smithay::utils::Rectangle<f64, ::smithay::utils::Buffer>,
                 dst: ::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>,
                 damage: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
+                opaque_regions: &[::smithay::utils::Rectangle<i32, ::smithay::utils::Physical>],
             ) -> ::std::result::Result<
                 (),
                 <::smithay::backend::renderer::test::DummyRenderer as ::smithay::backend::renderer::Renderer>::Error,
@@ -211,7 +214,7 @@ macro_rules! pinnacle_render_elements {
                     $($name::$variant(elem) => {
                         ::smithay::backend::renderer::element::RenderElement::<
                             ::smithay::backend::renderer::test::DummyRenderer
-                        >::draw(elem, frame, src, dst, damage)
+                        >::draw(elem, frame, src, dst, damage, opaque_regions)
                     })+
                 }
             }

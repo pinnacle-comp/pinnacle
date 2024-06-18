@@ -8,7 +8,7 @@ use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{IsAlive, Logical, Point, Rectangle, Serial},
+    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
     wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
 };
 use tracing::{error, warn};
@@ -53,23 +53,29 @@ impl WindowElement {
     /// Xwayland windows will still receive a configure.
     ///
     /// RefCell Safety: This method uses a [`RefCell`] on this window.
-    pub fn change_geometry(&self, new_geo: Rectangle<i32, Logical>) {
+    pub fn change_geometry(&self, new_loc: Point<f64, Logical>, new_size: Size<i32, Logical>) {
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 toplevel.with_pending_state(|state| {
-                    state.size = Some(new_geo.size);
+                    state.size = Some(new_size);
                 });
             }
             WindowSurface::X11(surface) => {
                 if !surface.is_override_redirect() {
+                    // FIXME: rounded loc here
                     surface
-                        .configure(new_geo)
+                        .configure(Rectangle::from_loc_and_size(
+                            new_loc.to_i32_round(),
+                            new_size,
+                        ))
                         .expect("failed to configure x11 win");
                 }
             }
         }
+
         self.with_state_mut(|state| {
-            state.target_loc = Some(new_geo.loc);
+            // FIXME: f64 -> i32, also remove target loc
+            state.target_loc = Some(new_loc.to_i32_round());
         });
     }
 

@@ -27,6 +27,7 @@ use crate::{
 use self::transaction::LayoutTransaction;
 
 impl Pinnacle {
+    // FIXME: make layout calls use f64 loc
     fn update_windows_with_geometries(
         &mut self,
         output: &Output,
@@ -70,7 +71,7 @@ impl Pinnacle {
         }));
 
         for (win, geo) in zipped.by_ref() {
-            win.change_geometry(geo);
+            win.change_geometry(geo.loc.to_f64(), geo.size);
         }
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
@@ -83,19 +84,19 @@ impl Pinnacle {
         for window in windows_on_foc_tags.iter() {
             match window.with_state(|state| state.fullscreen_or_maximized) {
                 FullscreenOrMaximized::Fullscreen => {
-                    window.change_geometry(output_geo);
+                    window.change_geometry(output_geo.loc.to_f64(), output_geo.size);
                 }
                 FullscreenOrMaximized::Maximized => {
-                    window.change_geometry(Rectangle::from_loc_and_size(
-                        output_geo.loc + non_exclusive_geo.loc,
+                    window.change_geometry(
+                        (output_geo.loc + non_exclusive_geo.loc).to_f64(),
                         non_exclusive_geo.size,
-                    ));
+                    );
                 }
                 FullscreenOrMaximized::Neither => {
-                    if let FloatingOrTiled::Floating(rect) =
+                    if let FloatingOrTiled::Floating { loc, size } =
                         window.with_state(|state| state.floating_or_tiled)
                     {
-                        window.change_geometry(rect);
+                        window.change_geometry(loc, size);
                     }
                 }
             }

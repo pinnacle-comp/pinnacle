@@ -143,7 +143,7 @@ fn render_elements_to_bound_framebuffer(
 
         if let Some(mut damage) = dst_rect.intersection(dst) {
             damage.loc -= dst.loc;
-            elem.draw(&mut frame, src, dst, &[damage])
+            elem.draw(&mut frame, src, dst, &[damage], &[])
                 .context("failed to draw element")?;
         }
     }

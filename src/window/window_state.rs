@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use smithay::{
     desktop::{space::SpaceElement, WindowSurface},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Point, Rectangle, Serial},
+    utils::{Logical, Point, Serial, Size},
     wayland::compositor::HookId,
 };
 
@@ -66,21 +66,28 @@ impl WindowElement {
     /// RefCell Safety: This method uses a [`RefCell`] on this window.
     pub fn toggle_floating(&self) {
         match self.with_state(|state| state.floating_or_tiled) {
-            FloatingOrTiled::Floating(current_rect) => {
+            FloatingOrTiled::Floating { loc, size } => {
                 self.with_state_mut(|state| {
-                    state.floating_or_tiled = FloatingOrTiled::Tiled(Some(current_rect))
+                    state.floating_or_tiled = FloatingOrTiled::Tiled(Some((loc, size)))
                 });
                 self.set_tiled_states();
             }
             FloatingOrTiled::Tiled(prev_rect) => {
-                let prev_rect = prev_rect.unwrap_or_else(|| self.geometry());
+                // FIXME: is using window geometry here right?
+                let (prev_loc, prev_size) = prev_rect.unwrap_or_else(|| {
+                    let geo = self.geometry();
+                    (geo.loc.to_f64(), geo.size)
+                });
 
                 self.with_state_mut(|state| {
-                    state.floating_or_tiled = FloatingOrTiled::Floating(prev_rect);
+                    state.floating_or_tiled = FloatingOrTiled::Floating {
+                        loc: prev_loc,
+                        size: prev_size,
+                    };
                 });
 
                 // TODO: maybe move this into update_windows
-                self.change_geometry(prev_rect);
+                self.change_geometry(prev_loc, prev_size);
                 self.set_floating_states();
             }
         }
@@ -123,8 +130,8 @@ impl WindowElement {
                 });
 
                 match self.with_state(|state| state.floating_or_tiled) {
-                    FloatingOrTiled::Floating(current_rect) => {
-                        self.change_geometry(current_rect);
+                    FloatingOrTiled::Floating { loc, size } => {
+                        self.change_geometry(loc, size);
                         self.set_floating_states();
                     }
                     FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
@@ -170,8 +177,8 @@ impl WindowElement {
                 });
 
                 match self.with_state(|state| state.floating_or_tiled) {
-                    FloatingOrTiled::Floating(current_rect) => {
-                        self.change_geometry(current_rect);
+                    FloatingOrTiled::Floating { loc, size } => {
+                        self.change_geometry(loc, size);
                         self.set_floating_states();
                     }
                     FloatingOrTiled::Tiled(_) => self.set_tiled_states(),
@@ -239,12 +246,15 @@ impl WindowElement {
 #[derive(Debug, Clone, Copy)]
 pub enum FloatingOrTiled {
     /// The window is floating with the specified geometry.
-    Floating(Rectangle<i32, Logical>),
+    Floating {
+        loc: Point<f64, Logical>,
+        size: Size<i32, Logical>,
+    },
     /// The window is tiled.
     ///
     /// The previous geometry it had when it was floating is stored here.
     /// This is so when it becomes floating again, it returns to this geometry.
-    Tiled(Option<Rectangle<i32, Logical>>),
+    Tiled(Option<(Point<f64, Logical>, Size<i32, Logical>)>),
 }
 
 impl FloatingOrTiled {
@@ -253,7 +263,7 @@ impl FloatingOrTiled {
     /// [`Floating`]: FloatingOrTiled::Floating
     #[must_use]
     pub fn is_floating(&self) -> bool {
-        matches!(self, Self::Floating(..))
+        matches!(self, Self::Floating { .. })
     }
 
     /// Returns `true` if the floating or tiled is [`Tiled`].
