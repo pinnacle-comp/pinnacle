@@ -254,8 +254,8 @@ impl Winit {
     /// Render the winit window if a render has been scheduled.
     pub fn render_if_scheduled(&mut self, pinnacle: &mut Pinnacle) {
         if self.output_render_scheduled {
-            self.render_winit_window(pinnacle);
             self.output_render_scheduled = false;
+            self.render_winit_window(pinnacle);
         }
     }
 
@@ -343,7 +343,11 @@ impl Winit {
             ));
         }
 
-        let mut clear_snapshots = false;
+        // HACK: Taking the transaction before creating render elements
+        // leads to a possibility where the original buffer still gets displayed.
+        // Need to figure that out.
+        // In the meantime we take the transaction afterwards and schedule another render.
+        let mut render_after_transaction_finish = false;
         self.output.with_state_mut(|state| {
             if state
                 .layout_transaction
@@ -351,15 +355,9 @@ impl Winit {
                 .is_some_and(|ts| ts.ready())
             {
                 state.layout_transaction.take();
-                clear_snapshots = true;
+                render_after_transaction_finish = true;
             }
         });
-
-        if clear_snapshots {
-            for win in pinnacle.windows.iter() {
-                win.with_state_mut(|state| state.snapshot.take());
-            }
-        }
 
         let render_res = self.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -446,6 +444,11 @@ impl Winit {
             Err(err) => {
                 warn!("{}", err);
             }
+        }
+
+        // At the end cuz borrow checker
+        if render_after_transaction_finish {
+            self.schedule_render();
         }
     }
 }

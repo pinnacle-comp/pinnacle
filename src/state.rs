@@ -403,6 +403,7 @@ impl Pinnacle {
     pub fn shutdown(&mut self) {
         info!("Shutting down Pinnacle");
         self.loop_signal.stop();
+        self.loop_signal.wakeup();
         if let Some(join_handle) = self.config.config_join_handle.take() {
             join_handle.abort();
         }
