@@ -64,6 +64,9 @@ features = [
     "x11rb_event_source",
 ]
 
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+
 ########################################################################yo😎###########
 
 [package]
@@ -140,3 +143,6 @@ testing = [
     "smithay/renderer_test",
 ]
 wlcs = ["testing"]
+
+[lints]
+workspace = true

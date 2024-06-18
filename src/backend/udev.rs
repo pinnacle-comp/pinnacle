@@ -51,7 +51,7 @@ use smithay::{
         vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
-    desktop::utils::{send_frames_surface_tree, OutputPresentationFeedback},
+    desktop::utils::OutputPresentationFeedback,
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
@@ -1414,17 +1414,15 @@ impl Udev {
         let _ = renderer.downscale_filter(self.downscale_filter);
 
         let pointer_images = &mut self.pointer_images;
-        let pointer_image = pointer_images
+        let (pointer_image, hotspot) = pointer_images
             .iter()
-            .find_map(
-                |(image, texture)| {
-                    if image == &frame {
-                        Some(texture.clone())
-                    } else {
-                        None
-                    }
-                },
-            )
+            .find_map(|(image, texture)| {
+                if image == &frame {
+                    Some((texture.clone(), (frame.xhot as i32, frame.yhot as i32)))
+                } else {
+                    None
+                }
+            })
             .unwrap_or_else(|| {
                 let texture = TextureBuffer::from_memory(
                     &mut renderer,
@@ -1437,8 +1435,9 @@ impl Udev {
                     None,
                 )
                 .expect("Failed to import cursor bitmap");
+                let hotspot = (frame.xhot as i32, frame.yhot as i32);
                 pointer_images.push((frame, texture.clone()));
-                texture
+                (texture, hotspot)
             });
 
         let pointer_location = pinnacle
@@ -1455,14 +1454,6 @@ impl Udev {
         if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_status {
             if !surface.alive() {
                 pinnacle.cursor_status = CursorImageStatus::default_named();
-            } else {
-                send_frames_surface_tree(
-                    surface,
-                    output,
-                    pinnacle.clock.now(),
-                    Some(Duration::ZERO),
-                    |_, _| None,
-                );
             }
         }
 
@@ -1499,6 +1490,7 @@ impl Udev {
                         pointer_location,
                         &mut pinnacle.cursor_status,
                         pinnacle.dnd_icon.as_ref(),
+                        hotspot.into(),
                         &self.pointer_element,
                     );
                     self.pointer_element.set_element_kind(element::Kind::Cursor);
@@ -1513,6 +1505,7 @@ impl Udev {
                     pointer_location,
                     &mut pinnacle.cursor_status,
                     pinnacle.dnd_icon.as_ref(),
+                    hotspot.into(),
                     &self.pointer_element,
                 );
                 output_render_elements.extend(pointer_render_elements);

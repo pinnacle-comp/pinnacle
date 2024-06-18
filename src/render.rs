@@ -275,6 +275,7 @@ pub fn pointer_render_elements<R: PRenderer>(
     pointer_location: Point<f64, Logical>,
     cursor_status: &mut CursorImageStatus,
     dnd_icon: Option<&WlSurface>,
+    fallback_hotspot: Point<i32, Logical>,
     pointer_element: &PointerElement<<R as Renderer>::TextureId>,
 ) -> Vec<OutputRenderElement<R>> {
     let mut output_render_elements = Vec::new();
@@ -296,7 +297,7 @@ pub fn pointer_render_elements<R: PRenderer>(
                     .hotspot
             })
         } else {
-            (0, 0).into()
+            fallback_hotspot
         };
 
         let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();

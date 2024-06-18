@@ -65,8 +65,6 @@ impl window_service_server::WindowService for WindowService {
     ) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        tracing::info!(request = ?request);
-
         let window_id = WindowId(
             request
                 .window_id

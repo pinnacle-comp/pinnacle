@@ -304,6 +304,7 @@ impl Winit {
                 pointer_location,
                 &mut pinnacle.cursor_status,
                 pinnacle.dnd_icon.as_ref(),
+                (0, 0).into(), // Nonsurface cursors are hidden
                 &pointer_element,
             );
             output_render_elements.extend(pointer_render_elements);

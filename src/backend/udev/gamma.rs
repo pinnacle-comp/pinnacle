@@ -21,7 +21,6 @@ impl Udev {
                 }
                 None => PendingGammaChange::Restore,
             };
-            tracing::info!("SET PENDING GAMMA WOO");
             return Ok(());
         }
 
