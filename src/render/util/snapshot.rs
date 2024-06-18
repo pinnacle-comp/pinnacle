@@ -17,7 +17,7 @@ use smithay::{
     },
     utils::{Physical, Point, Scale, Transform},
 };
-use tracing::error;
+use tracing::debug;
 
 use crate::layout::transaction::{LayoutSnapshot, SnapshotRenderElement, SnapshotTarget};
 use crate::render::texture::CommonTextureRenderElement;
@@ -84,7 +84,7 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
             ) {
                 Ok(tex) => tex,
                 Err(err) => {
-                    error!("Failed to render to encompassing texture: {err}");
+                    debug!("Failed to render to encompassing texture: {err}");
                     return None;
                 }
             };

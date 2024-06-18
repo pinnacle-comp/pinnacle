@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod foreign_toplevel;
 pub mod idle;
 pub mod session_lock;
 pub mod window;
@@ -73,13 +74,12 @@ use tracing::{debug, error, trace, warn};
 
 use crate::{
     backend::Backend,
-    delegate_foreign_toplevel, delegate_gamma_control, delegate_output_management,
-    delegate_output_power_management, delegate_screencopy,
+    delegate_gamma_control, delegate_output_management, delegate_output_power_management,
+    delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
     handlers::xdg_shell::snapshot_pre_commit_hook,
     output::OutputMode,
     protocol::{
-        foreign_toplevel::{self, ForeignToplevelHandler, ForeignToplevelManagerState},
         gamma_control::{GammaControlHandler, GammaControlManagerState},
         output_management::{
             OutputConfiguration, OutputManagementHandler, OutputManagementManagerState,
@@ -591,7 +591,7 @@ delegate_shm!(State);
 
 impl OutputHandler for State {
     fn output_bound(&mut self, output: Output, wl_output: WlOutput) {
-        foreign_toplevel::on_output_bound(self, &output, &wl_output);
+        crate::protocol::foreign_toplevel::on_output_bound(self, &output, &wl_output);
     }
 }
 delegate_output!(State);
@@ -816,114 +816,6 @@ impl PointerConstraintsHandler for State {
     }
 }
 delegate_pointer_constraints!(State);
-
-impl ForeignToplevelHandler for State {
-    fn foreign_toplevel_manager_state(&mut self) -> &mut ForeignToplevelManagerState {
-        &mut self.pinnacle.foreign_toplevel_manager_state
-    }
-
-    fn activate(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        if !window.is_on_active_tag() {
-            let new_active_tag =
-                window.with_state(|state| state.tags.iter().min_by_key(|tag| tag.id().0).cloned());
-            if let Some(tag) = new_active_tag {
-                output.with_state(|state| {
-                    if state.tags.contains(&tag) {
-                        for op_tag in state.tags.iter() {
-                            op_tag.set_active(false, &mut self.pinnacle);
-                        }
-                        tag.set_active(true, &mut self.pinnacle);
-                    }
-                });
-            }
-        }
-
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        self.pinnacle.raise_window(window, true);
-        self.update_keyboard_focus(&output);
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
-    }
-
-    fn close(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        window.close();
-    }
-
-    fn set_fullscreen(&mut self, wl_surface: WlSurface, _wl_output: Option<WlOutput>) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        self.set_window_fullscreen(&window, true);
-    }
-
-    fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        self.set_window_fullscreen(&window, false);
-    }
-
-    fn set_maximized(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        self.set_window_maximized(&window, true);
-    }
-
-    fn unset_maximized(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        self.set_window_maximized(&window, false);
-    }
-
-    fn set_minimized(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.minimized = true);
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
-    }
-
-    fn unset_minimized(&mut self, wl_surface: WlSurface) {
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.minimized = false);
-
-        let Some(output) = window.output(&self.pinnacle) else {
-            return;
-        };
-
-        self.pinnacle.request_layout(&output);
-        self.schedule_render(&output);
-    }
-}
-delegate_foreign_toplevel!(State);
 
 impl XWaylandShellHandler for State {
     fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
