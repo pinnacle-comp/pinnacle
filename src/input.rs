@@ -685,7 +685,7 @@ impl State {
 
                 for window in self.pinnacle.space.elements() {
                     if let Some(toplevel) = window.toplevel() {
-                        toplevel.send_configure();
+                        toplevel.send_pending_configure();
                     }
                 }
             } else {
@@ -695,7 +695,7 @@ impl State {
                         for window in state.focus_stack.stack.iter() {
                             window.set_activate(false);
                             if let Some(toplevel) = window.toplevel() {
-                                toplevel.send_configure();
+                                toplevel.send_pending_configure();
                             }
                         }
                     });

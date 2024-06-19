@@ -202,6 +202,7 @@ fn layer_render_elements<R: PRenderer>(
 
     let layer_elements = layer_map
         .layers()
+        .rev()
         .filter_map(|surface| {
             layer_map
                 .layer_geometry(surface)
