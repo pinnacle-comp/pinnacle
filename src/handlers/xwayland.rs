@@ -26,7 +26,6 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     cursor::Cursor,
     focus::keyboard::KeyboardFocusTarget,
-    render::util::snapshot::capture_snapshots_on_output,
     state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
 };
@@ -102,13 +101,11 @@ impl XwmHandler for State {
 
         // TODO: do snapshot and transaction here BUT ONLY IF TILED AND ON ACTIVE TAG
 
-        let snapshots = if let Some(output) = window.output(&self.pinnacle) {
-            Some(self.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-            }))
-        } else {
-            None
-        };
+        let output = window.output(&self.pinnacle);
+
+        if let Some(output) = output.as_ref() {
+            self.capture_snapshots_on_output(output, []);
+        }
 
         self.pinnacle.windows.push(window.clone());
         self.pinnacle.raise_window(window.clone(), true);
@@ -116,20 +113,11 @@ impl XwmHandler for State {
         self.pinnacle.apply_window_rules(&window);
 
         if window.is_on_active_tag() {
-            if let Some(output) = window.output(&self.pinnacle) {
+            if let Some(output) = output {
                 output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                 self.update_keyboard_focus(&output);
 
-                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                    output.with_state_mut(|state| {
-                        state.new_wait_layout_transaction(
-                            self.pinnacle.loop_handle.clone(),
-                            fs_and_up_snapshots,
-                            under_fs_snapshots,
-                        )
-                    });
-                }
-
+                self.pinnacle.begin_layout_transaction(&output);
                 self.pinnacle.request_layout(&output);
             }
         }
@@ -421,27 +409,20 @@ impl State {
         if let Some(win) = win {
             debug!("removing x11 window from windows");
 
-            let snapshots = win.output(&self.pinnacle).map(|output| {
-                self.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-                })
-            });
+            let output = win.output(&self.pinnacle);
+
+            if let Some(output) = output.as_ref() {
+                self.capture_snapshots_on_output(output, []);
+            }
 
             self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
-                if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                    output.with_state_mut(|state| {
-                        state.new_wait_layout_transaction(
-                            self.pinnacle.loop_handle.clone(),
-                            fs_and_up_snapshots,
-                            under_fs_snapshots,
-                        )
-                    });
-                }
-
+                self.pinnacle.begin_layout_transaction(&output);
                 self.pinnacle.request_layout(&output);
+
                 self.update_keyboard_focus(&output);
+                // FIXME: schedule renders on all the outputs this window intersected
                 self.schedule_render(&output);
             }
         }

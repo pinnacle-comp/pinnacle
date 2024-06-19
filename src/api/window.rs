@@ -21,10 +21,7 @@ use smithay::{
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
-use crate::{
-    output::OutputName, render::util::snapshot::capture_snapshots_on_output, state::WithState,
-    tag::TagId, window::window_state::WindowId,
-};
+use crate::{output::OutputName, state::WithState, tag::TagId, window::window_state::WindowId};
 
 use super::{run_unary, run_unary_no_response, StateFnSender};
 
@@ -220,16 +217,15 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
-            let snapshots = window.output(pinnacle).map(|output| {
-                state.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(pinnacle, renderer, &output, [window.clone()])
-                })
-            });
+            let output = window.output(&state.pinnacle);
+
+            if let Some(output) = output.as_ref() {
+                state.capture_snapshots_on_output(output, [window.clone()]);
+            }
 
             match set_or_toggle {
                 SetOrToggle::Set => {
@@ -246,21 +242,13 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = window.output(pinnacle) else {
+            let Some(output) = output else {
                 return;
             };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(
-                        pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    )
-                });
-            }
+            state.pinnacle.begin_layout_transaction(&output);
+            state.pinnacle.request_layout(&output);
 
-            pinnacle.request_layout(&output);
             state.schedule_render(&output);
         })
         .await
@@ -362,37 +350,29 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
-            let Some(tag) = tag_id.tag(pinnacle) else { return };
+            let Some(tag) = tag_id.tag(&state.pinnacle) else { return };
 
-            let snapshots = window.output(pinnacle).map(|output| {
-                state.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(pinnacle, renderer, &output, [window.clone()])
-                })
-            });
+            let output = window.output(&state.pinnacle);
+
+            if let Some(output) = output.as_ref() {
+                state.capture_snapshots_on_output(output, [window.clone()]);
+            }
 
             window.with_state_mut(|state| {
                 state.tags = vec![tag.clone()];
             });
 
-            let Some(output) = tag.output(pinnacle) else { return };
+            let Some(output) = tag.output(&state.pinnacle) else {
+                return;
+            };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(
-                        pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    )
-                });
-            }
+            state.pinnacle.begin_layout_transaction(&output);
+            state.pinnacle.request_layout(&output);
 
-            pinnacle.request_layout(&output);
             state.schedule_render(&output);
 
             state.pinnacle.fixup_xwayland_window_layering();
@@ -422,17 +402,16 @@ impl window_service_server::WindowService for WindowService {
         }
 
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
-            let Some(tag) = tag_id.tag(pinnacle) else { return };
+            let Some(tag) = tag_id.tag(&state.pinnacle) else { return };
 
-            let snapshots = window.output(pinnacle).map(|output| {
-                state.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(pinnacle, renderer, &output, [window.clone()])
-                })
-            });
+            let output = window.output(&state.pinnacle);
+
+            if let Some(output) = output.as_ref() {
+                state.capture_snapshots_on_output(output, [window.clone()]);
+            }
 
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
@@ -453,19 +432,13 @@ impl window_service_server::WindowService for WindowService {
                 SetOrToggle::Unspecified => unreachable!(),
             }
 
-            let Some(output) = tag.output(pinnacle) else { return };
+            let Some(output) = tag.output(&state.pinnacle) else {
+                return;
+            };
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(
-                        pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    )
-                });
-            }
+            state.pinnacle.begin_layout_transaction(&output);
+            state.pinnacle.request_layout(&output);
 
-            pinnacle.request_layout(&output);
             state.schedule_render(&output);
 
             state.pinnacle.fixup_xwayland_window_layering();

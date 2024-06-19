@@ -1,16 +1,14 @@
 use crate::{
-    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     window::WindowElement,
 };
 
 impl State {
     pub fn set_window_maximized(&mut self, window: &WindowElement, maximized: bool) {
-        let snapshots = window.output(&self.pinnacle).map(|output| {
-            self.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [window.clone()])
-            })
-        });
+        let output = window.output(&self.pinnacle);
+        if let Some(output) = output.as_ref() {
+            self.capture_snapshots_on_output(output, [window.clone()]);
+        }
 
         if maximized {
             if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
@@ -20,28 +18,19 @@ impl State {
             window.toggle_maximized();
         }
 
-        if let Some(output) = window.output(&self.pinnacle) {
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(
-                        self.pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    )
-                });
-            }
-
+        if let Some(output) = output {
+            self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
+
             self.schedule_render(&output);
         }
     }
 
     pub fn set_window_fullscreen(&mut self, window: &WindowElement, fullscreen: bool) {
-        let snapshots = window.output(&self.pinnacle).map(|output| {
-            self.backend.with_renderer(|renderer| {
-                capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [window.clone()])
-            })
-        });
+        let output = window.output(&self.pinnacle);
+        if let Some(output) = output.as_ref() {
+            self.capture_snapshots_on_output(output, [window.clone()]);
+        }
 
         if fullscreen {
             if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
@@ -52,17 +41,9 @@ impl State {
         }
 
         if let Some(output) = window.output(&self.pinnacle) {
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|op_state| {
-                    op_state.new_wait_layout_transaction(
-                        self.pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    )
-                });
-            }
-
+            self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
+
             self.schedule_render(&output);
         }
     }

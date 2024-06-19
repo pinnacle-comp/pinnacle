@@ -22,7 +22,7 @@ use tracing::debug;
 use crate::layout::transaction::{LayoutSnapshot, SnapshotRenderElement, SnapshotTarget};
 use crate::render::texture::CommonTextureRenderElement;
 use crate::render::{AsGlesRenderer, PRenderer};
-use crate::state::{Pinnacle, WithState};
+use crate::state::{Pinnacle, State, WithState};
 use crate::window::WindowElement;
 
 use super::{render_to_encompassing_texture, EncompassingTexture};
@@ -149,18 +149,33 @@ impl WindowElement {
     }
 }
 
-/// Capture snapshots for all tiled windows on this output.
-///
-/// Any windows in `also_include` are also included in the capture.
-///
-/// ret.1 = fullscreen and up,
-/// ret.2 = under fullscreen
+impl State {
+    /// Capture snapshots for all tiled windows on this output.
+    ///
+    /// Any windows in `also_include` are also included in the capture.
+    pub fn capture_snapshots_on_output(
+        &mut self,
+        output: &Output,
+        also_include: impl IntoIterator<Item = WindowElement>,
+    ) {
+        self.backend.with_renderer(|renderer| {
+            capture_snapshots_on_output(&mut self.pinnacle, renderer, output, also_include);
+        });
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct OutputSnapshots {
+    pub fullscreen_and_above: Vec<SnapshotTarget>,
+    pub under_fullscreen: Vec<SnapshotTarget>,
+}
+
 pub fn capture_snapshots_on_output(
     pinnacle: &mut Pinnacle,
     renderer: &mut GlesRenderer,
     output: &Output,
     also_include: impl IntoIterator<Item = WindowElement>,
-) -> (Vec<SnapshotTarget>, Vec<SnapshotTarget>) {
+) {
     let split_index = pinnacle
         .space
         .elements()
@@ -216,5 +231,8 @@ pub fn capture_snapshots_on_output(
         .flat_map(&mut flat_map)
         .collect();
 
-    (fullscreen_and_up_snapshots, under_fullscreen_snapshots)
+    output.with_state_mut(|state| {
+        state.snapshots.fullscreen_and_above = fullscreen_and_up_snapshots;
+        state.snapshots.under_fullscreen = under_fullscreen_snapshots;
+    });
 }

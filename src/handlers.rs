@@ -87,7 +87,6 @@ use crate::{
         output_power_management::{OutputPowerManagementHandler, OutputPowerManagementState},
         screencopy::{Screencopy, ScreencopyHandler},
     },
-    render::util::snapshot::capture_snapshots_on_output,
     state::{ClientState, Pinnacle, State, WithState},
 };
 
@@ -188,20 +187,18 @@ impl CompositorHandler for State {
                             .with_state_mut(|state| state.snapshot_hook_id = Some(hook_id));
                     }
 
-                    let snapshots = if let Some(output) = self.pinnacle.focused_output().cloned() {
+                    let output = self.pinnacle.focused_output().cloned();
+
+                    if let Some(output) = output.as_ref() {
                         tracing::debug!("Placing toplevel");
-                        unmapped_window.place_on_output(&output);
+                        unmapped_window.place_on_output(output);
 
                         output.with_state_mut(|state| {
                             state.focus_stack.set_focus(unmapped_window.clone())
                         });
 
-                        Some(self.backend.with_renderer(|renderer| {
-                            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-                        }))
-                    } else {
-                        None
-                    };
+                        self.capture_snapshots_on_output(output, []);
+                    }
 
                     self.pinnacle
                         .unmapped_windows
@@ -212,21 +209,12 @@ impl CompositorHandler for State {
 
                     self.pinnacle.apply_window_rules(&unmapped_window);
 
-                    if let Some(focused_output) = self.pinnacle.focused_output().cloned() {
+                    if let Some(focused_output) = output {
                         if unmapped_window.is_on_active_tag() {
                             self.update_keyboard_focus(&focused_output);
 
-                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) =
-                                snapshots.flatten()
-                            {
-                                focused_output.with_state_mut(|state| {
-                                    state.new_wait_layout_transaction(
-                                        self.pinnacle.loop_handle.clone(),
-                                        fs_and_up_snapshots,
-                                        under_fs_snapshots,
-                                    )
-                                });
-                            }
+                            self.pinnacle.begin_layout_transaction(&focused_output);
+                            self.pinnacle.request_layout(&focused_output);
 
                             // It seems wlcs needs immediate frame sends for client tests to work
                             #[cfg(feature = "testing")]
@@ -236,8 +224,6 @@ impl CompositorHandler for State {
                                 Some(std::time::Duration::ZERO),
                                 |_, _| None,
                             );
-
-                            self.pinnacle.request_layout(&focused_output);
                         }
                     }
                 } else {
@@ -269,30 +255,16 @@ impl CompositorHandler for State {
                             compositor::remove_pre_commit_hook(surface, hook_id);
                         }
 
-                        if let Some(output) = window.output(&self.pinnacle) {
-                            let snapshots = self.backend.with_renderer(|renderer| {
-                                capture_snapshots_on_output(
-                                    &mut self.pinnacle,
-                                    renderer,
-                                    &output,
-                                    [],
-                                )
-                            });
+                        let output = window.output(&self.pinnacle);
 
-                            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
-                                output.with_state_mut(|op_state| {
-                                    op_state.new_wait_layout_transaction(
-                                        self.pinnacle.loop_handle.clone(),
-                                        fs_and_up_snapshots,
-                                        under_fs_snapshots,
-                                    )
-                                });
-                            }
+                        if let Some(output) = output.as_ref() {
+                            self.capture_snapshots_on_output(output, []);
+                            self.pinnacle.begin_layout_transaction(output);
                         }
 
                         self.pinnacle.remove_window(&window, true);
 
-                        if let Some(output) = window.output(&self.pinnacle) {
+                        if let Some(output) = output {
                             self.update_keyboard_focus(&output);
                             self.pinnacle.request_layout(&output);
                         }
@@ -848,11 +820,7 @@ impl OutputManagementHandler for State {
                     // TODO: split
                     self.backend.set_output_powered(&output, true);
 
-                    self.schedule_render(&output);
-
-                    let snapshots = self.backend.with_renderer(|renderer| {
-                        capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-                    });
+                    self.capture_snapshots_on_output(&output, []);
 
                     let mode = mode.map(|(size, refresh)| {
                         if let Some(refresh) = refresh {
@@ -886,17 +854,10 @@ impl OutputManagementHandler for State {
                         position,
                     );
 
-                    if let Some((a, b)) = snapshots {
-                        output.with_state_mut(|state| {
-                            state.new_wait_layout_transaction(
-                                self.pinnacle.loop_handle.clone(),
-                                a,
-                                b,
-                            )
-                        });
-                    }
-
+                    self.pinnacle.begin_layout_transaction(&output);
                     self.pinnacle.request_layout(&output);
+
+                    self.schedule_render(&output);
                 }
             }
         }

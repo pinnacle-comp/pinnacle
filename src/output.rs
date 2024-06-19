@@ -19,6 +19,7 @@ use crate::{
     focus::WindowKeyboardFocusStack,
     layout::transaction::{LayoutTransaction, SnapshotTarget},
     protocol::screencopy::Screencopy,
+    render::util::snapshot::OutputSnapshots,
     state::{Pinnacle, State, WithState},
     tag::Tag,
     window::window_state::FloatingOrTiled,
@@ -71,6 +72,7 @@ pub struct OutputState {
     /// Unpowered monitors aren't drawn to but their tags and windows
     /// still exist and can be interacted with.
     pub powered: bool,
+    pub snapshots: OutputSnapshots,
 }
 
 impl Default for OutputState {
@@ -85,6 +87,7 @@ impl Default for OutputState {
             blanking_state: Default::default(),
             layout_transaction: Default::default(),
             powered: true,
+            snapshots: OutputSnapshots::default(),
         }
     }
 }
@@ -120,7 +123,7 @@ impl OutputState {
         self.tags.iter().filter(|tag| tag.active())
     }
 
-    pub fn new_wait_layout_transaction(
+    fn new_wait_layout_transaction(
         &mut self,
         loop_handle: LoopHandle<'static, State>,
         fullscreen_and_up_snapshots: impl IntoIterator<Item = SnapshotTarget>,
@@ -135,6 +138,18 @@ impl OutputState {
                 under_fullscreen_snapshots,
             ));
         }
+    }
+}
+
+impl Pinnacle {
+    pub fn begin_layout_transaction(&self, output: &Output) {
+        output.with_state_mut(|state| {
+            let (fullscreen_and_up, under) = (
+                std::mem::take(&mut state.snapshots.under_fullscreen),
+                std::mem::take(&mut state.snapshots.fullscreen_and_above),
+            );
+            state.new_wait_layout_transaction(self.loop_handle.clone(), fullscreen_and_up, under);
+        })
     }
 }
 

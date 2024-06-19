@@ -16,7 +16,6 @@ use tracing::warn;
 
 use crate::{
     output::OutputName,
-    render::util::snapshot::capture_snapshots_on_output,
     state::{Pinnacle, State, WithState},
     window::{
         window_state::{FloatingOrTiled, FullscreenOrMaximized},
@@ -278,9 +277,7 @@ impl State {
             .fulfilled_requests
             .insert(output.clone(), current_pending);
 
-        let snapshots = self.backend.with_renderer(|renderer| {
-            capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-        });
+        self.capture_snapshots_on_output(&output, []);
 
         let pending_windows = self
             .pinnacle
@@ -289,11 +286,11 @@ impl State {
         output.with_state_mut(|state| {
             if let Some(ts) = state.layout_transaction.as_mut() {
                 ts.update_pending(pending_windows);
-            } else if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots {
+            } else {
                 state.layout_transaction = Some(LayoutTransaction::new(
                     self.pinnacle.loop_handle.clone(),
-                    fs_and_up_snapshots,
-                    under_fs_snapshots,
+                    std::mem::take(&mut state.snapshots.fullscreen_and_above),
+                    std::mem::take(&mut state.snapshots.under_fullscreen),
                     pending_windows,
                 ));
             }

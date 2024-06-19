@@ -3,7 +3,6 @@ use smithay::reexports::wayland_server::protocol::{wl_output::WlOutput, wl_surfa
 use crate::{
     delegate_foreign_toplevel,
     protocol::foreign_toplevel::{ForeignToplevelHandler, ForeignToplevelManagerState},
-    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
 };
 
@@ -23,10 +22,9 @@ impl ForeignToplevelHandler for State {
         if !window.is_on_active_tag() {
             let new_active_tag =
                 window.with_state(|state| state.tags.iter().min_by_key(|tag| tag.id().0).cloned());
+
             if let Some(tag) = new_active_tag {
-                let snapshots = self.backend.with_renderer(|renderer| {
-                    capture_snapshots_on_output(&mut self.pinnacle, renderer, &output, [])
-                });
+                self.capture_snapshots_on_output(&output, []);
 
                 output.with_state(|state| {
                     if state.tags.contains(&tag) {
@@ -37,15 +35,8 @@ impl ForeignToplevelHandler for State {
                     }
                 });
 
-                if let Some((above, below)) = snapshots {
-                    output.with_state_mut(|state| {
-                        state.new_wait_layout_transaction(
-                            self.pinnacle.loop_handle.clone(),
-                            above,
-                            below,
-                        )
-                    });
-                }
+                self.pinnacle.begin_layout_transaction(&output);
+                self.pinnacle.request_layout(&output);
             }
         }
 
@@ -53,7 +44,6 @@ impl ForeignToplevelHandler for State {
         self.pinnacle.raise_window(window, true);
         self.update_keyboard_focus(&output);
 
-        self.pinnacle.request_layout(&output);
         self.schedule_render(&output);
     }
 

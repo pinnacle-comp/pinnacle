@@ -25,7 +25,6 @@ use tracing::trace;
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
-    render::util::snapshot::capture_snapshots_on_output,
     state::{State, WithState},
     window::WindowElement,
 };
@@ -55,36 +54,19 @@ impl XdgShellHandler for State {
             return;
         };
 
-        let snapshots = if let Some(output) = window.output(&self.pinnacle) {
-            self.backend.with_renderer(|renderer| {
-                Some(capture_snapshots_on_output(
-                    &mut self.pinnacle,
-                    renderer,
-                    &output,
-                    [],
-                ))
-            })
-        } else {
-            None
-        };
+        let output = window.output(&self.pinnacle);
+
+        if let Some(output) = output.as_ref() {
+            self.capture_snapshots_on_output(output, []);
+        }
 
         self.pinnacle.remove_window(&window, false);
 
-        if let Some(output) = window.output(&self.pinnacle) {
+        if let Some(output) = output {
+            self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
 
-            if let Some((fs_and_up_snapshots, under_fs_snapshots)) = snapshots.flatten() {
-                output.with_state_mut(|state| {
-                    state.new_wait_layout_transaction(
-                        self.pinnacle.loop_handle.clone(),
-                        fs_and_up_snapshots,
-                        under_fs_snapshots,
-                    );
-                });
-            }
-
             self.update_keyboard_focus(&output);
-
             self.schedule_render(&output);
         }
     }
