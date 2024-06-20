@@ -62,7 +62,10 @@ use smithay::{
             SelectionHandler, SelectionSource, SelectionTarget,
         },
         shell::{
-            wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
+            wlr_layer::{
+                self, Layer, LayerSurfaceCachedState, LayerSurfaceData, WlrLayerShellHandler,
+                WlrLayerShellState,
+            },
             xdg::{PopupSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
@@ -678,6 +681,12 @@ impl WlrLayerShellHandler for State {
         }) {
             map.unmap_layer(&layer);
             output = Some(op.clone());
+        }
+
+        let focused_output = self.pinnacle.focused_output().cloned();
+
+        if let Some(focused_output) = focused_output {
+            self.update_keyboard_focus(&focused_output);
         }
 
         if let Some(output) = output {

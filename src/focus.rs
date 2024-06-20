@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use keyboard::KeyboardFocusTarget;
 use smithay::{desktop::space::SpaceElement, output::Output, utils::SERIAL_COUNTER};
 
 use crate::{
@@ -13,35 +14,38 @@ pub mod pointer;
 impl State {
     /// Update the keyboard focus.
     pub fn update_keyboard_focus(&mut self, output: &Output) {
-        let current_focus = self.pinnacle.focused_window(output);
+        let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
+            return;
+        };
 
-        if let Some(win) = &current_focus {
-            assert!(!win.is_x11_override_redirect());
+        let current_focused_window = self.pinnacle.focused_window(output);
 
-            let wins = output.with_state(|state| state.focus_stack.stack.clone());
+        let keyboard_focus_is_same = keyboard
+            .current_focus()
+            .is_some_and(|foc| {
+                matches!(foc, KeyboardFocusTarget::Window(win) if Some(&win) == current_focused_window.as_ref())
+            });
 
-            for win in wins.iter() {
-                win.set_activate(false);
+        if keyboard_focus_is_same {
+            return;
+        }
+
+        if let Some(focused_win) = &current_focused_window {
+            assert!(!focused_win.is_x11_override_redirect());
+
+            for win in self.pinnacle.windows.iter() {
+                win.set_activate(win == focused_win);
                 if let Some(toplevel) = win.toplevel() {
-                    toplevel.send_configure();
+                    toplevel.send_pending_configure();
                 }
-            }
-
-            win.set_activate(true);
-            if let Some(toplevel) = win.toplevel() {
-                toplevel.send_configure();
             }
         }
 
-        self.pinnacle
-            .seat
-            .get_keyboard()
-            .expect("no keyboard")
-            .set_focus(
-                self,
-                current_focus.map(|win| win.into()),
-                SERIAL_COUNTER.next_serial(),
-            );
+        keyboard.set_focus(
+            self,
+            current_focused_window.map(|win| win.into()),
+            SERIAL_COUNTER.next_serial(),
+        );
     }
 }
 
