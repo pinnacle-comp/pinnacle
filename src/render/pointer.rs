@@ -8,7 +8,7 @@ use smithay::{
             self,
             memory::MemoryRenderBufferRenderElement,
             surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-            AsRenderElements,
+            AsRenderElements, Element, Id,
         },
         ImportAll, ImportMem,
     },
@@ -41,6 +41,9 @@ render_elements! {
     Memory = MemoryRenderBufferRenderElement<R>,
 }
 
+/// Render pointer elements.
+///
+/// Additionally returns the ids of cursor elements for use in screencopy.
 pub fn pointer_render_elements<R: PRenderer>(
     output: &Output,
     renderer: &mut R,
@@ -49,11 +52,13 @@ pub fn pointer_render_elements<R: PRenderer>(
     pointer_location: Point<f64, Logical>,
     dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
-) -> Vec<PointerRenderElement<R>> {
+    kind: element::Kind,
+) -> (Vec<PointerRenderElement<R>>, Vec<Id>) {
     let mut pointer_render_elements = Vec::new();
+    let mut cursor_ids = Vec::new();
 
     let Some(output_geometry) = space.output_geometry(output) else {
-        return pointer_render_elements;
+        return (pointer_render_elements, cursor_ids);
     };
 
     let scale = Scale::from(output.current_scale().fractional_scale());
@@ -78,7 +83,7 @@ pub fn pointer_render_elements<R: PRenderer>(
                     None,
                     None,
                     None,
-                    element::Kind::Cursor,
+                    kind,
                 );
 
                 elem.map(|elem| vec![PointerRenderElement::Memory(elem)])
@@ -108,6 +113,9 @@ pub fn pointer_render_elements<R: PRenderer>(
             }
         };
 
+        // rust analyzer is so broken wtf why is `elem` {unknown}
+        cursor_ids = elements.iter().map(|elem| elem.id()).cloned().collect();
+
         if let Some(dnd_icon) = dnd_icon {
             elements.extend(AsRenderElements::render_elements(
                 &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
@@ -121,5 +129,5 @@ pub fn pointer_render_elements<R: PRenderer>(
         pointer_render_elements = elements;
     }
 
-    pointer_render_elements
+    (pointer_render_elements, cursor_ids)
 }

@@ -32,7 +32,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self, damage,
-            element::{self, surface::render_elements_from_surface_tree, Element},
+            element::{self, surface::render_elements_from_surface_tree, Element, Id},
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
             sync::SyncPoint,
@@ -1454,7 +1454,20 @@ impl Udev {
             || (pinnacle.lock_state.is_locked()
                 && output.with_state(|state| state.lock_surface.is_none()));
 
-        let pointer_render_elements = pointer_render_elements(
+        // HACK: Doing `blit_frame_result` with something on the cursor/overlay plane overwrites
+        // transparency. This workaround makes the cursor not be on the cursor plane for blitting.
+        let kind = if output.with_state(|state| {
+            state
+                .screencopy
+                .as_ref()
+                .is_some_and(|sc| sc.overlay_cursor())
+        }) {
+            element::Kind::Unspecified
+        } else {
+            element::Kind::Cursor
+        };
+
+        let (pointer_render_elements, cursor_ids) = pointer_render_elements(
             output,
             &mut renderer,
             &mut pinnacle.cursor_state,
@@ -1462,6 +1475,7 @@ impl Udev {
             pointer_location,
             pinnacle.dnd_icon.as_ref(),
             &pinnacle.clock,
+            kind,
         );
         output_render_elements.extend(
             pointer_render_elements
@@ -1543,6 +1557,7 @@ impl Udev {
                     surface,
                     &render_frame_result,
                     &pinnacle.loop_handle,
+                    cursor_ids,
                 );
             }
 
@@ -1610,6 +1625,7 @@ fn handle_pending_screencopy<'a>(
     surface: &mut RenderSurface,
     render_frame_result: &UdevRenderFrameResult<'a>,
     loop_handle: &LoopHandle<'static, State>,
+    cursor_ids: Vec<Id>,
 ) {
     let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
         return;
@@ -1733,7 +1749,7 @@ fn handle_pending_screencopy<'a>(
                     output.current_scale().fractional_scale(),
                     renderer,
                     [screencopy.physical_region()],
-                    [],
+                    cursor_ids,
                 )?))
             } else {
                 // `RenderFrameResult::blit_frame_result` doesn't expose a way to
@@ -1760,7 +1776,11 @@ fn handle_pending_screencopy<'a>(
                         Point::from((0, 0)),
                         untransformed_output_size,
                     )],
-                    [],
+                    if !screencopy.overlay_cursor() {
+                        cursor_ids
+                    } else {
+                        Vec::new()
+                    },
                 )?;
 
                 // ayo are we supposed to wait this here (granted it doesn't do anything
@@ -1840,7 +1860,11 @@ fn handle_pending_screencopy<'a>(
                         Point::from((0, 0)),
                         untransformed_output_size,
                     )],
-                    [],
+                    if !screencopy.overlay_cursor() {
+                        cursor_ids
+                    } else {
+                        Vec::new()
+                    },
                 )?;
 
                 // Can someone explain to me why it feels like some things are

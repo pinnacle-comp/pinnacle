@@ -84,7 +84,9 @@ impl CursorState {
                 // TODO: scale
                 let buffer = MemoryRenderBuffer::from_slice(
                     &image.pixels_rgba,
-                    Fourcc::Abgr8888,
+                    // Don't make Abgr, then the format doesn't match the
+                    // cursor bo and this doesn't get put on the cursor plane
+                    Fourcc::Argb8888,
                     (image.width as i32, image.height as i32),
                     scale,
                     Transform::Normal,

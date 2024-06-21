@@ -295,7 +295,7 @@ impl Winit {
                 .map(|ptr| ptr.current_location())
                 .unwrap_or((0.0, 0.0).into());
 
-            let pointer_render_elements = pointer_render_elements(
+            let (pointer_render_elements, _cursor_ids) = pointer_render_elements(
                 &self.output,
                 self.backend.renderer(),
                 &mut pinnacle.cursor_state,
@@ -303,6 +303,7 @@ impl Winit {
                 pointer_location,
                 pinnacle.dnd_icon.as_ref(),
                 &pinnacle.clock,
+                element::Kind::Cursor,
             );
             output_render_elements.extend(
                 pointer_render_elements
