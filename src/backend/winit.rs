@@ -172,6 +172,8 @@ impl Winit {
             tracing::info!("EGL hardware-acceleration enabled");
         }
 
+        winit_backend.window().set_cursor_visible(false);
+
         let mut winit = Winit {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
@@ -270,14 +272,6 @@ impl Winit {
                     .set_cursor_image(CursorImageStatus::default_named());
             }
         }
-
-        let cursor_visible = !matches!(
-            pinnacle.cursor_state.cursor_image(),
-            CursorImageStatus::Surface(_)
-        );
-
-        // TODO: make winit cursor disappear if not surface
-        // TODO: set winit cursor to named cursor when possible
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
@@ -417,8 +411,6 @@ impl Winit {
                         }
                     }
                 }
-
-                self.backend.window().set_cursor_visible(cursor_visible);
 
                 let time = pinnacle.clock.now();
 
