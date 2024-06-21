@@ -51,8 +51,8 @@ impl CursorState {
         self.loaded_images.clear();
     }
 
-    pub fn cursor_size(&self) -> u32 {
-        self.size
+    pub fn cursor_size(&self, scale: i32) -> u32 {
+        self.size * scale as u32
     }
 
     pub fn set_cursor_image(&mut self, image: CursorImageStatus) {
@@ -76,7 +76,7 @@ impl CursorState {
             .clone()
     }
 
-    pub fn buffer_for_image(&mut self, image: Image) -> MemoryRenderBuffer {
+    pub fn buffer_for_image(&mut self, image: Image, scale: i32) -> MemoryRenderBuffer {
         self.mem_buffer_cache
             .iter()
             .find_map(|(img, buf)| (*img == image).then(|| buf.clone()))
@@ -86,7 +86,7 @@ impl CursorState {
                     &image.pixels_rgba,
                     Fourcc::Abgr8888,
                     (image.width as i32, image.height as i32),
-                    1,
+                    scale,
                     Transform::Normal,
                     None,
                 );
@@ -116,6 +116,7 @@ impl CursorState {
         }
     }
 
+    // TODO: update render to wait for est vblank, then you can remove this
     /// If the current cursor is named and animated, get the time to the next frame, in milliseconds.
     pub fn time_until_next_animated_cursor_frame(&mut self) -> Option<Duration> {
         match &self.current_cursor_image {
@@ -130,7 +131,6 @@ impl CursorState {
                     return None;
                 }
 
-                // FIXME: copied from below, unify
                 let mut millis = self.start_time.duration_since(Instant::now()).as_millis() as u32;
                 let animation_length_ms = nearest_size_images(self.size, &cursor.images)
                     .fold(0, |acc, image| acc + image.delay);
@@ -143,7 +143,7 @@ impl CursorState {
                     millis -= img.delay;
                 }
 
-                unreachable!()
+                None
             }
             CursorImageStatus::Surface(_) => None,
         }

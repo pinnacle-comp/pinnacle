@@ -511,7 +511,7 @@ impl Pinnacle {
                         .get_xcursor_images(CursorIcon::Default)
                         .unwrap();
                     let image =
-                        cursor.image(Duration::ZERO, state.pinnacle.cursor_state.cursor_size());
+                        cursor.image(Duration::ZERO, state.pinnacle.cursor_state.cursor_size(1)); // TODO: scale
                     wm.set_cursor(
                         &image.pixels_rgba,
                         Size::from((image.width as u16, image.height as u16)),

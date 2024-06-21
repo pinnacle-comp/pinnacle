@@ -57,6 +57,7 @@ pub fn pointer_render_elements<R: PRenderer>(
     };
 
     let scale = Scale::from(output.current_scale().fractional_scale());
+    let integer_scale = output.current_scale().integer_scale();
 
     let pointer_elem = cursor_state.pointer_element();
 
@@ -66,12 +67,13 @@ pub fn pointer_render_elements<R: PRenderer>(
         let mut elements = match &pointer_elem {
             PointerElement::Hidden => vec![],
             PointerElement::Named { cursor, size } => {
-                let image = cursor.image(clock.now().into(), *size);
+                let image = cursor.image(clock.now().into(), *size * integer_scale as u32);
                 let hotspot = (image.xhot as i32, image.yhot as i32);
-                let buffer = cursor_state.buffer_for_image(image);
+                let buffer = cursor_state.buffer_for_image(image, integer_scale);
                 let elem = MemoryRenderBufferRenderElement::from_buffer(
                     renderer,
-                    (cursor_pos - Point::from(hotspot).to_f64()).to_physical_precise_round(scale),
+                    (cursor_pos - Point::from(hotspot).downscale(integer_scale).to_f64())
+                        .to_physical_precise_round(scale),
                     &buffer,
                     None,
                     None,

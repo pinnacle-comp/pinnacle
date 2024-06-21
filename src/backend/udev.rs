@@ -523,10 +523,8 @@ impl Udev {
 
         match &surface.render_state {
             RenderState::Idle => {
-                tracing::info!("inserting idle render");
                 let output = output.clone();
                 let token = loop_handle.insert_idle(move |state| {
-                    tracing::info!("actually rendering");
                     state
                         .backend
                         .udev_mut()
@@ -537,7 +535,6 @@ impl Udev {
             }
             RenderState::Scheduled(_) => (),
             RenderState::WaitingForVblank { dirty: _ } => {
-                tracing::info!("making dirty");
                 surface.render_state = RenderState::WaitingForVblank { dirty: true }
             }
         }
@@ -1366,6 +1363,22 @@ impl Udev {
         }
 
         // Schedule a render when the next frame of an animated cursor should be drawn.
+        //
+        // TODO: Remove this and improve the render pipeline.
+        // Because of how the event loop works and the current implementation of rendering,
+        // immediately queuing a render here has the possibility of not submitting a new frame to
+        // DRM, meaning no vblank. The event loop will wait as it has no events, so things like
+        // animated cursors may hitch and only update when, for example, the cursor is actively
+        // moving as this generates events.
+        //
+        // What we should do is what Niri does: if `render_surface` doesn't cause any damage,
+        // instead of setting the `RenderState` to Idle, set it to some "waiting for estimated
+        // vblank" state and have `render_surface` always schedule a timer to fire at the estimated
+        // vblank time that will attempt another render schedule.
+        //
+        // This has the advantage of scheduling a render in a source and not in an idle callback,
+        // meaning we are guarenteed to have a render happen immediately and we won't have to wait
+        // for another event or call `loop_signal.wakeup()`.
         if let Some(until) = pinnacle
             .cursor_state
             .time_until_next_animated_cursor_frame()
@@ -1568,6 +1581,9 @@ impl Udev {
 
         match result {
             Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
+            // TODO: Don't immediately set this to Idle; this allows hot loops of `render_surface`.
+            // Instead, pull a Niri and schedule a timer for the next estimated vblank to allow
+            // another scheduled render.
             Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
         }
 
