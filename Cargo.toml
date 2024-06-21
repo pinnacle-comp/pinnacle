@@ -66,6 +66,9 @@ features = [
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
+new_without_default = "allow"
+type_complexity = "allow"
+let_and_return = "allow"
 
 ########################################################################yo😎###########
 

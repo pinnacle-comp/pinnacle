@@ -438,7 +438,6 @@ impl State {
 
         if self.pinnacle.lock_state.is_unlocked() {
             // Focus the topmost exclusive layer, if any
-            let mut exclusive_layers_exist = false;
             for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
                 let data = compositor::with_states(layer.wl_surface(), |states| {
                     *states.cached_state.current::<LayerSurfaceCachedState>()
@@ -456,7 +455,6 @@ impl State {
                     });
 
                     if let Some(layer_surface) = layer_surface {
-                        exclusive_layers_exist = true;
                         keyboard.set_focus(
                             self,
                             Some(KeyboardFocusTarget::LayerSurface(layer_surface)),

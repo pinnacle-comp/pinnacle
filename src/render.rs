@@ -5,7 +5,7 @@ pub mod render_elements;
 pub mod texture;
 pub mod util;
 
-use std::{ops::Deref, sync::Mutex};
+use std::ops::Deref;
 
 use smithay::{
     backend::renderer::{
@@ -22,11 +22,9 @@ use smithay::{
         },
         PopupManager, Space, WindowSurface,
     },
-    input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Point, Scale},
-    wayland::{compositor, shell::wlr_layer},
+    wayland::shell::wlr_layer,
 };
 
 use crate::{
@@ -38,8 +36,7 @@ use crate::{
 };
 
 use self::{
-    pointer::{PointerElement, PointerRenderElement},
-    texture::CommonTextureRenderElement,
+    pointer::PointerRenderElement, texture::CommonTextureRenderElement,
     util::surface::texture_render_elements_from_surface_tree,
 };
 
@@ -267,62 +264,6 @@ fn window_render_elements<R: PRenderer>(
         fullscreen_and_up.into_iter().flatten().collect(),
         rest.into_iter().flatten().collect(),
     )
-}
-
-pub fn pointer_render_elements<R: PRenderer>(
-    output: &Output,
-    renderer: &mut R,
-    space: &Space<WindowElement>,
-    pointer_location: Point<f64, Logical>,
-    cursor_status: &mut CursorImageStatus,
-    dnd_icon: Option<&WlSurface>,
-    fallback_hotspot: Point<i32, Logical>,
-    pointer_element: &PointerElement<<R as Renderer>::TextureId>,
-) -> Vec<OutputRenderElement<R>> {
-    let mut output_render_elements = Vec::new();
-
-    let Some(output_geometry) = space.output_geometry(output) else {
-        return output_render_elements;
-    };
-    let scale = Scale::from(output.current_scale().fractional_scale());
-
-    if output_geometry.to_f64().contains(pointer_location) {
-        let cursor_hotspot = if let CursorImageStatus::Surface(ref surface) = cursor_status {
-            compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<Mutex<CursorImageAttributes>>()
-                    .expect("surface data map had no CursorImageAttributes")
-                    .lock()
-                    .expect("failed to lock mutex")
-                    .hotspot
-            })
-        } else {
-            fallback_hotspot
-        };
-
-        let cursor_pos = pointer_location - output_geometry.loc.to_f64() - cursor_hotspot.to_f64();
-        let cursor_pos_scaled = cursor_pos.to_physical_precise_round(scale);
-
-        output_render_elements.extend(pointer_element.render_elements(
-            renderer,
-            cursor_pos_scaled,
-            scale,
-            1.0,
-        ));
-
-        if let Some(dnd_icon) = dnd_icon {
-            output_render_elements.extend(AsRenderElements::render_elements(
-                &smithay::desktop::space::SurfaceTree::from_surface(dnd_icon),
-                renderer,
-                cursor_pos_scaled,
-                scale,
-                1.0,
-            ));
-        }
-    }
-
-    output_render_elements
 }
 
 /// Render elements for any pending layout transaction.

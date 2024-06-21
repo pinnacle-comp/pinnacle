@@ -5,6 +5,7 @@ use crate::{
     backend::{self, udev::Udev, winit::Winit, Backend},
     cli::{self, Cli},
     config::Config,
+    cursor::CursorState,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
     handlers::session_lock::LockState,
@@ -23,7 +24,7 @@ use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     desktop::{PopupManager, Space},
-    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    input::{keyboard::XkbConfig, Seat, SeatState},
     output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
@@ -36,6 +37,7 @@ use smithay::{
     utils::{Clock, Monotonic},
     wayland::{
         compositor::{self, CompositorClientState, CompositorState},
+        cursor_shape::CursorShapeManagerState,
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         idle_notify::IdleNotifierState,
@@ -51,6 +53,7 @@ use smithay::{
         shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
         shm::ShmState,
         socket::ListeningSocketSource,
+        tablet_manager::TabletManagerState,
         viewporter::ViewporterState,
         xwayland_shell::XWaylandShellState,
     },
@@ -112,6 +115,7 @@ pub struct Pinnacle {
     pub idle_notifier_state: IdleNotifierState<State>,
     pub output_management_manager_state: OutputManagementManagerState,
     pub output_power_management_state: OutputPowerManagementState,
+    pub tablet_manager_state: TabletManagerState,
 
     pub lock_state: LockState,
 
@@ -123,7 +127,6 @@ pub struct Pinnacle {
 
     pub popup_manager: PopupManager,
 
-    pub cursor_status: CursorImageStatus,
     pub dnd_icon: Option<WlSurface>,
 
     /// The main window vec
@@ -160,6 +163,9 @@ pub struct Pinnacle {
     pub snowcap_shutdown_ping: Option<smithay::reexports::calloop::ping::Ping>,
     #[cfg(feature = "snowcap")]
     pub snowcap_join_handle: Option<tokio::task::JoinHandle<()>>,
+
+    pub cursor_shape_manager_state: CursorShapeManagerState,
+    pub cursor_state: CursorState,
 }
 
 impl State {
@@ -286,7 +292,6 @@ impl Pinnacle {
             seat_state,
             shm_state: ShmState::new::<State>(&display_handle, vec![]),
             space: Space::<WindowElement>::default(),
-            cursor_status: CursorImageStatus::default_named(),
             output_manager_state: OutputManagerState::new_with_xdg_output::<State>(&display_handle),
             xdg_shell_state: XdgShellState::new::<State>(&display_handle),
             viewporter_state: ViewporterState::new::<State>(&display_handle),
@@ -333,6 +338,7 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
+            tablet_manager_state: TabletManagerState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
@@ -378,6 +384,9 @@ impl Pinnacle {
             snowcap_shutdown_ping: None,
             #[cfg(feature = "snowcap")]
             snowcap_join_handle: None,
+
+            cursor_shape_manager_state: CursorShapeManagerState::new::<State>(&display_handle),
+            cursor_state: CursorState::new(),
         };
 
         Ok(pinnacle)

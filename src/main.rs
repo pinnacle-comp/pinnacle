@@ -223,6 +223,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     event_loop.run(Duration::from_secs(1), &mut state, |state| {
+        tracing::info!("after idles");
         state.on_event_loop_cycle_completion();
     })?;
 

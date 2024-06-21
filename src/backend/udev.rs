@@ -32,11 +32,9 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self, damage,
-            element::{
-                self, surface::render_elements_from_surface_tree, texture::TextureBuffer, Element,
-            },
+            element::{self, surface::render_elements_from_surface_tree, Element},
             gles::{GlesRenderbuffer, GlesRenderer},
-            multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer, MultiTexture},
+            multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
             sync::SyncPoint,
             utils::{CommitCounter, DamageSet},
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
@@ -57,8 +55,8 @@ use smithay::{
     reexports::{
         ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{
-            self, generic::Generic, Dispatcher, Idle, Interest, LoopHandle, PostAction,
-            RegistrationToken,
+            self, generic::Generic, timer::Timer, Dispatcher, Idle, Interest, LoopHandle,
+            PostAction, RegistrationToken,
         },
         drm::control::{connector, crtc, ModeTypeFlags},
         input::Libinput,
@@ -86,8 +84,8 @@ use crate::{
     config::ConnectorSavedState,
     output::{BlankingState, OutputMode, OutputName},
     render::{
-        pointer::PointerElement, pointer_render_elements, take_presentation_feedback,
-        OutputRenderElement, CLEAR_COLOR, CLEAR_COLOR_LOCKED,
+        pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
+        CLEAR_COLOR, CLEAR_COLOR_LOCKED,
     },
     state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
 };
@@ -134,9 +132,6 @@ pub struct Udev {
     allocator: Option<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>,
     pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     backends: HashMap<DrmNode, UdevBackendData>,
-    pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<MultiTexture>)>,
-    pointer_element: PointerElement<MultiTexture>,
-    pointer_image: crate::cursor::Cursor,
 
     pub(super) upscale_filter: TextureFilter,
     pub(super) downscale_filter: TextureFilter,
@@ -225,9 +220,6 @@ impl Udev {
             gpu_manager,
             allocator: None,
             backends: HashMap::new(),
-            pointer_image: crate::cursor::Cursor::load(),
-            pointer_images: Vec::new(),
-            pointer_element: PointerElement::default(),
 
             upscale_filter: TextureFilter::Linear,
             downscale_filter: TextureFilter::Linear,
@@ -531,8 +523,10 @@ impl Udev {
 
         match &surface.render_state {
             RenderState::Idle => {
+                tracing::info!("inserting idle render");
                 let output = output.clone();
                 let token = loop_handle.insert_idle(move |state| {
+                    tracing::info!("actually rendering");
                     state
                         .backend
                         .udev_mut()
@@ -543,6 +537,7 @@ impl Udev {
             }
             RenderState::Scheduled(_) => (),
             RenderState::WaitingForVblank { dirty: _ } => {
+                tracing::info!("making dirty");
                 surface.render_state = RenderState::WaitingForVblank { dirty: true }
             }
         }
@@ -933,7 +928,7 @@ impl Udev {
                     state
                         .backend
                         .udev_mut()
-                        .on_vblank(&state.pinnacle, node, crtc, metadata);
+                        .on_vblank(&mut state.pinnacle, node, crtc, metadata);
                 }
                 DrmEvent::Error(error) => {
                     error!("{:?}", error);
@@ -1271,7 +1266,7 @@ impl Udev {
     /// Mark [`OutputPresentationFeedback`]s as presented and schedule a new render on idle.
     fn on_vblank(
         &mut self,
-        pinnacle: &Pinnacle,
+        pinnacle: &mut Pinnacle,
         dev_id: DrmNode,
         crtc: crtc::Handle,
         metadata: &mut Option<DrmEventMetadata>,
@@ -1369,6 +1364,20 @@ impl Udev {
                 );
             }
         }
+
+        // Schedule a render when the next frame of an animated cursor should be drawn.
+        if let Some(until) = pinnacle
+            .cursor_state
+            .time_until_next_animated_cursor_frame()
+        {
+            let _ = pinnacle.loop_handle.insert_source(
+                Timer::from_duration(until),
+                move |_, _, state| {
+                    state.schedule_render(&output);
+                    calloop::timer::TimeoutAction::Drop
+                },
+            );
+        }
     }
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
@@ -1392,13 +1401,6 @@ impl Udev {
 
         assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
 
-        // TODO get scale from the rendersurface when supporting HiDPI
-        let frame = self.pointer_image.get_image(
-            1,
-            // output.current_scale().integer_scale() as u32,
-            pinnacle.clock.now().into(),
-        );
-
         let render_node = surface.render_node;
         let primary_gpu = self.primary_gpu;
         let mut renderer = if primary_gpu == render_node {
@@ -1413,32 +1415,19 @@ impl Udev {
         let _ = renderer.upscale_filter(self.upscale_filter);
         let _ = renderer.downscale_filter(self.downscale_filter);
 
-        let pointer_images = &mut self.pointer_images;
-        let (pointer_image, hotspot) = pointer_images
-            .iter()
-            .find_map(|(image, texture)| {
-                if image == &frame {
-                    Some((texture.clone(), (frame.xhot as i32, frame.yhot as i32)))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| {
-                let texture = TextureBuffer::from_memory(
-                    &mut renderer,
-                    &frame.pixels_rgba,
-                    Fourcc::Abgr8888,
-                    (frame.width as i32, frame.height as i32),
-                    false,
-                    1,
-                    Transform::Normal,
-                    None,
-                )
-                .expect("Failed to import cursor bitmap");
-                let hotspot = (frame.xhot as i32, frame.yhot as i32);
-                pointer_images.push((frame, texture.clone()));
-                (texture, hotspot)
-            });
+        ///////////////////////////////////////////////////////////////////////////////////////////
+
+        // draw the cursor as relevant and
+        // reset the cursor if the surface is no longer alive
+        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_state.cursor_image() {
+            if !surface.alive() {
+                pinnacle
+                    .cursor_state
+                    .set_cursor_image(CursorImageStatus::default_named());
+            }
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////////////////
 
         let pointer_location = pinnacle
             .seat
@@ -1446,71 +1435,26 @@ impl Udev {
             .map(|ptr| ptr.current_location())
             .unwrap_or((0.0, 0.0).into());
 
-        // set cursor
-        self.pointer_element.set_texture(pointer_image.clone());
-
-        // draw the cursor as relevant and
-        // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_status {
-            if !surface.alive() {
-                pinnacle.cursor_status = CursorImageStatus::default_named();
-            }
-        }
-
-        self.pointer_element
-            .set_status(pinnacle.cursor_status.clone());
-
-        let pending_screencopy_with_cursor =
-            output.with_state(|state| state.screencopy.as_ref().map(|sc| sc.overlay_cursor()));
-
         let mut output_render_elements = Vec::new();
 
         let should_blank = pinnacle.lock_state.is_locking()
             || (pinnacle.lock_state.is_locked()
                 && output.with_state(|state| state.lock_surface.is_none()));
 
-        // If there isn't a pending screencopy that doesn't want to overlay the cursor,
-        // render it.
-        match pending_screencopy_with_cursor {
-            Some(include_cursor) if pinnacle.lock_state.is_unlocked() => {
-                if include_cursor {
-                    // HACK: Doing `RenderFrameResult::blit_frame_result` with something on the
-                    // |     cursor plane causes the cursor to overwrite the pixels underneath it,
-                    // |     leading to a transparent hole under the cursor.
-                    // |     To circumvent that, we set the cursor to render on the primary plane instead.
-                    // |     Unfortunately that means I can't composite the cursor separately from
-                    // |     the screencopy, meaning if you have an active screencopy recording
-                    // |     without cursor overlay then the cursor will dim/flicker out/disappear.
-                    self.pointer_element
-                        .set_element_kind(element::Kind::Unspecified);
-                    let pointer_render_elements = pointer_render_elements(
-                        output,
-                        &mut renderer,
-                        &pinnacle.space,
-                        pointer_location,
-                        &mut pinnacle.cursor_status,
-                        pinnacle.dnd_icon.as_ref(),
-                        hotspot.into(),
-                        &self.pointer_element,
-                    );
-                    self.pointer_element.set_element_kind(element::Kind::Cursor);
-                    output_render_elements.extend(pointer_render_elements);
-                }
-            }
-            _ => {
-                let pointer_render_elements = pointer_render_elements(
-                    output,
-                    &mut renderer,
-                    &pinnacle.space,
-                    pointer_location,
-                    &mut pinnacle.cursor_status,
-                    pinnacle.dnd_icon.as_ref(),
-                    hotspot.into(),
-                    &self.pointer_element,
-                );
-                output_render_elements.extend(pointer_render_elements);
-            }
-        }
+        let pointer_render_elements = pointer_render_elements(
+            output,
+            &mut renderer,
+            &mut pinnacle.cursor_state,
+            &pinnacle.space,
+            pointer_location,
+            pinnacle.dnd_icon.as_ref(),
+            &pinnacle.clock,
+        );
+        output_render_elements.extend(
+            pointer_render_elements
+                .into_iter()
+                .map(OutputRenderElement::from),
+        );
 
         if should_blank {
             output.with_state_mut(|state| {
@@ -1601,7 +1545,7 @@ impl Udev {
                         scanout_feedback: &feedback.scanout_feedback,
                     }),
                 Duration::from(pinnacle.clock.now()),
-                &pinnacle.cursor_status,
+                pinnacle.cursor_state.cursor_image(),
             );
 
             let rendered = !render_frame_result.is_empty;
