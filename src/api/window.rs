@@ -489,7 +489,6 @@ impl window_service_server::WindowService for WindowService {
                 return;
             };
             let Some(window) = pointer_focus.window_for(state) else {
-                tracing::info!("Move grabs are currently not implemented for non-windows");
                 return;
             };
             let Some(wl_surf) = window.wl_surface() else {
@@ -498,6 +497,10 @@ impl window_service_server::WindowService for WindowService {
             let seat = state.pinnacle.seat.clone();
 
             state.move_request_server(&wl_surf, &seat, SERIAL_COUNTER.next_serial(), button);
+
+            if let Some(output) = state.pinnacle.focused_output().cloned() {
+                state.schedule_render(&output);
+            }
         })
         .await
     }
@@ -579,6 +582,10 @@ impl window_service_server::WindowService for WindowService {
                 edges.into(),
                 button,
             );
+
+            if let Some(output) = state.pinnacle.focused_output().cloned() {
+                state.schedule_render(&output);
+            }
         })
         .await
     }

@@ -4,10 +4,10 @@ use smithay::{
     desktop::{space::SpaceElement, WindowSurface},
     input::{
         pointer::{
-            AxisFrame, ButtonEvent, Focus, GestureHoldBeginEvent, GestureHoldEndEvent,
-            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
-            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, GrabStartData,
-            PointerGrab, PointerInnerHandle,
+            AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, Focus, GestureHoldBeginEvent,
+            GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent,
+            GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
+            GestureSwipeUpdateEvent, GrabStartData, PointerGrab, PointerInnerHandle,
         },
         Seat, SeatHandler,
     },
@@ -46,6 +46,23 @@ impl From<xwayland::xwm::ResizeEdge> for ResizeEdge {
 impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
     fn from(value: xdg_toplevel::ResizeEdge) -> Self {
         Self(value)
+    }
+}
+
+impl ResizeEdge {
+    fn cursor_icon(&self) -> CursorIcon {
+        match self.0 {
+            xdg_toplevel::ResizeEdge::None => CursorIcon::Default, // TODO: possibly different icon here?
+            xdg_toplevel::ResizeEdge::Top => CursorIcon::NResize,
+            xdg_toplevel::ResizeEdge::Bottom => CursorIcon::SResize,
+            xdg_toplevel::ResizeEdge::Left => CursorIcon::WResize,
+            xdg_toplevel::ResizeEdge::TopLeft => CursorIcon::NwResize,
+            xdg_toplevel::ResizeEdge::BottomLeft => CursorIcon::SwResize,
+            xdg_toplevel::ResizeEdge::Right => CursorIcon::EResize,
+            xdg_toplevel::ResizeEdge::TopRight => CursorIcon::NeResize,
+            xdg_toplevel::ResizeEdge::BottomRight => CursorIcon::SeResize,
+            _ => CursorIcon::Default,
+        }
     }
 }
 
@@ -146,6 +163,9 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         handle.motion(data, None, event);
 
         if !self.window.alive() {
+            data.pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::default_named());
             handle.unset_grab(self, data, event.serial, event.time, true);
             return;
         }
@@ -242,6 +262,9 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         handle.button(data, event);
 
         if !handle.current_pressed().contains(&self.button_used) {
+            data.pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::default_named());
             handle.unset_grab(self, data, event.serial, event.time, true);
         }
     }
@@ -558,9 +581,7 @@ impl State {
         }
 
         let start_data = smithay::input::pointer::GrabStartData {
-            focus: pointer
-                .current_focus()
-                .map(|focus| (focus, initial_window_loc)),
+            focus: None,
             button: button_used,
             location: pointer.current_location(),
         };
@@ -576,6 +597,10 @@ impl State {
 
         if let Some(grab) = grab {
             pointer.set_grab(self, grab, serial, Focus::Clear);
+
+            self.pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::Named(edges.cursor_icon()));
         }
     }
 }
