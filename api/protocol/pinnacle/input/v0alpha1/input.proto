@@ -143,6 +143,11 @@ message SetLibinputSettingRequest {
   }
 }
 
+message SetXcursorRequest {
+  optional string theme = 1;
+  optional uint32 size = 2;
+}
+
 service InputService {
   rpc SetKeybind(SetKeybindRequest) returns (stream SetKeybindResponse);
   rpc SetMousebind(SetMousebindRequest) returns (stream SetMousebindResponse);
@@ -153,4 +158,6 @@ service InputService {
   rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);
 
   rpc SetLibinputSetting(SetLibinputSettingRequest) returns (google.protobuf.Empty);
+
+  rpc SetXcursor(SetXcursorRequest) returns (google.protobuf.Empty);
 }

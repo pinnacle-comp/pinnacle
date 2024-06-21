@@ -32,20 +32,32 @@ pub struct CursorState {
 
 impl CursorState {
     pub fn new() -> Self {
-        let (theme, size) = load_xcursor_theme();
+        let (theme, size) = load_xcursor_theme_from_env();
+
+        std::env::set_var("XCURSOR_THEME", &theme);
+        std::env::set_var("XCURSOR_SIZE", size.to_string());
 
         Self {
             start_time: Instant::now(),
             current_cursor_image: CursorImageStatus::default_named(),
-            theme,
+            theme: CursorTheme::load(&theme),
             size,
             mem_buffer_cache: Default::default(),
             loaded_images: Default::default(),
         }
     }
 
-    pub fn set_theme_and_size(&mut self, theme: CursorTheme, size: u32) {
-        self.theme = theme;
+    pub fn set_theme(&mut self, theme: &str) {
+        std::env::set_var("XCURSOR_THEME", theme);
+
+        self.theme = CursorTheme::load(theme);
+        self.mem_buffer_cache.clear();
+        self.loaded_images.clear();
+    }
+
+    pub fn set_size(&mut self, size: u32) {
+        std::env::set_var("XCURSOR_SIZE", size.to_string());
+
         self.size = size;
         self.mem_buffer_cache.clear();
         self.loaded_images.clear();
@@ -186,15 +198,17 @@ fn nearest_size_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Ima
     })
 }
 
-/// Load a theme and size from $XCURSOR_THEME and $XCURSOR_SIZE
-fn load_xcursor_theme() -> (CursorTheme, u32) {
+/// Loads a theme and size from $XCURSOR_THEME and $XCURSOR_SIZE.
+///
+/// Defaults to "default" and 24 respectively.
+fn load_xcursor_theme_from_env() -> (String, u32) {
     let theme = std::env::var("XCURSOR_THEME").unwrap_or_else(|_| "default".into());
     let size = std::env::var("XCURSOR_SIZE")
         .ok()
         .and_then(|size| size.parse::<u32>().ok())
         .unwrap_or(24);
 
-    (CursorTheme::load(&theme), size)
+    (theme, size)
 }
 
 /// Load xcursor images for the given theme and icon.
