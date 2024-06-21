@@ -16,7 +16,7 @@ use pinnacle_api_defs::pinnacle::input::{
         input_service_client::InputServiceClient,
         set_libinput_setting_request::{CalibrationMatrix, Setting},
         KeybindDescriptionsRequest, SetKeybindRequest, SetLibinputSettingRequest,
-        SetMousebindRequest, SetRepeatRateRequest, SetXkbConfigRequest,
+        SetMousebindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -399,6 +399,46 @@ impl Input {
 
         block_on_tokio(client.set_libinput_setting(SetLibinputSettingRequest {
             setting: Some(setting),
+        }))
+        .unwrap();
+    }
+
+    /// Set the xcursor theme.
+    ///
+    /// Pinnacle reads `$XCURSOR_THEME` on startup to determine the theme.
+    /// This allows you to set it at runtime.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// input.set_xcursor_theme("Adwaita");
+    /// ```
+    pub fn set_xcursor_theme(&self, theme: impl ToString) {
+        let mut client = self.create_input_client();
+
+        block_on_tokio(client.set_xcursor(SetXcursorRequest {
+            theme: Some(theme.to_string()),
+            size: None,
+        }))
+        .unwrap();
+    }
+
+    /// Set the xcursor size.
+    ///
+    /// Pinnacle reads `$XCURSOR_SIZE` on startup to determine the cursor size.
+    /// This allows you to set it at runtime.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// input.set_xcursor_size(64);
+    /// ```
+    pub fn set_xcursor_size(&self, size: u32) {
+        let mut client = self.create_input_client();
+
+        block_on_tokio(client.set_xcursor(SetXcursorRequest {
+            theme: None,
+            size: Some(size),
         }))
         .unwrap();
     }

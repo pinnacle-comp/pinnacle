@@ -352,4 +352,28 @@ function input.set_libinput_settings(settings)
     end
 end
 
+---Sets the current xcursor theme.
+---
+---Pinnacle reads `$XCURSOR_THEME` on startup to set the theme.
+---This allows you to set it at runtime.
+---
+---@param theme string
+function input.set_xcursor_theme(theme)
+    client.unary_request(input_service.SetXcursor, {
+        theme = theme,
+    })
+end
+
+---Sets the current xcursor size.
+---
+---Pinnacle reads `$XCURSOR_SIZE` on startup to set the cursor size.
+---This allows you to set it at runtime.
+---
+---@param size integer
+function input.set_xcursor_size(size)
+    client.unary_request(input_service.SetXcursor, {
+        size = size,
+    })
+end
+
 return input

@@ -4,6 +4,7 @@ use std::{process::Stdio, time::Duration};
 
 use smithay::{
     desktop::Window,
+    input::pointer::CursorIcon,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
     wayland::selection::{
         data_device::{
@@ -24,7 +25,6 @@ use smithay::{
 use tracing::{debug, error, trace, warn};
 
 use crate::{
-    cursor::Cursor,
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
     window::{window_state::FloatingOrTiled, WindowElement},
@@ -505,8 +505,13 @@ impl Pinnacle {
                     )
                     .expect("Failed to attach x11wm");
 
-                    let cursor = Cursor::load();
-                    let image = cursor.get_image(1, Duration::ZERO);
+                    let cursor = state
+                        .pinnacle
+                        .cursor_state
+                        .get_xcursor_images(CursorIcon::Default)
+                        .unwrap();
+                    let image =
+                        cursor.image(Duration::ZERO, state.pinnacle.cursor_state.cursor_size(1)); // TODO: scale
                     wm.set_cursor(
                         &image.pixels_rgba,
                         Size::from((image.width as u16, image.height as u16)),

@@ -10,11 +10,15 @@ mod xwayland;
 use std::{collections::HashMap, mem, os::fd::OwnedFd, sync::Arc};
 
 use smithay::{
-    backend::renderer::utils::{self, with_renderer_surface_state},
-    delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
-    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_presentation,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
-    delegate_security_context, delegate_shm, delegate_viewporter, delegate_xwayland_shell,
+    backend::{
+        input::TabletToolDescriptor,
+        renderer::utils::{self, with_renderer_surface_state},
+    },
+    delegate_compositor, delegate_cursor_shape, delegate_data_control, delegate_data_device,
+    delegate_fractional_scale, delegate_layer_shell, delegate_output, delegate_pointer_constraints,
+    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
+    delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
         PopupManager, WindowSurfaceType,
@@ -62,13 +66,11 @@ use smithay::{
             SelectionHandler, SelectionSource, SelectionTarget,
         },
         shell::{
-            wlr_layer::{
-                self, Layer, LayerSurfaceCachedState, LayerSurfaceData, WlrLayerShellHandler,
-                WlrLayerShellState,
-            },
+            wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
             xdg::{PopupSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
+        tablet_manager::TabletSeatHandler,
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
     xwayland::XWaylandClientData,
@@ -541,7 +543,7 @@ impl SeatHandler for State {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        self.pinnacle.cursor_status = image;
+        self.pinnacle.cursor_state.set_cursor_image(image);
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
@@ -897,6 +899,17 @@ impl OutputPowerManagementHandler for State {
     }
 }
 delegate_output_power_management!(State);
+
+impl TabletSeatHandler for State {
+    fn tablet_tool_image(&mut self, tool: &TabletToolDescriptor, image: CursorImageStatus) {
+        // TODO:
+        let _ = tool;
+        let _ = image;
+    }
+}
+delegate_tablet_manager!(State);
+
+delegate_cursor_shape!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

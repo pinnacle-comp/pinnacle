@@ -11,7 +11,7 @@ use pinnacle_api_defs::pinnacle::{
         set_mousebind_request::MouseEdge,
         KeybindDescription, KeybindDescriptionsRequest, KeybindDescriptionsResponse, Modifier,
         SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
-        SetMousebindResponse, SetRepeatRateRequest, SetXkbConfigRequest,
+        SetMousebindResponse, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
     output::{
         self,
@@ -583,6 +583,31 @@ impl input_service_server::InputService for InputService {
                 .input_state
                 .libinput_settings
                 .insert(discriminant, apply_setting);
+        })
+        .await
+    }
+
+    async fn set_xcursor(
+        &self,
+        request: Request<SetXcursorRequest>,
+    ) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let theme = request.theme;
+        let size = request.size;
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(theme) = theme {
+                state.pinnacle.cursor_state.set_theme(&theme);
+            }
+
+            if let Some(size) = size {
+                state.pinnacle.cursor_state.set_size(size);
+            }
+
+            if let Some(output) = state.pinnacle.focused_output().cloned() {
+                state.schedule_render(&output)
+            }
         })
         .await
     }

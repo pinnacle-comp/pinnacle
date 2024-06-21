@@ -350,6 +350,10 @@ local pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap = {
 ---@field tap_drag_lock boolean?
 ---@field tap boolean?
 
+---@class SetXcursorRequest
+---@field theme string?
+---@field size integer?
+
 -- Process
 
 ---@class pinnacle.process.v0alpha1.SpawnRequest
@@ -768,6 +772,13 @@ defs.pinnacle = {
                     service = "pinnacle.input.v0alpha1.InputService",
                     method = "SetLibinputSetting",
                     request = "pinnacle.input.v0alpha1.SetLibinputSettingRequest",
+                    response = "google.protobuf.Empty",
+                },
+                ---@type GrpcRequestArgs
+                SetXcursor = {
+                    service = "pinnacle.input.v0alpha1.InputService",
+                    method = "SetXcursor",
+                    request = "pinnacle.input.v0alpha1.SetXcursorRequest",
                     response = "google.protobuf.Empty",
                 },
             },

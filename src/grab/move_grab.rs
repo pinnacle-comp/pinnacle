@@ -6,10 +6,11 @@ use smithay::{
     // |     input::keyboard
     input::{
         pointer::{
-            AxisFrame, ButtonEvent, Focus, GestureHoldBeginEvent, GestureHoldEndEvent,
-            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
-            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, GrabStartData,
-            MotionEvent, PointerGrab, PointerInnerHandle, RelativeMotionEvent,
+            AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, Focus, GestureHoldBeginEvent,
+            GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent,
+            GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
+            GestureSwipeUpdateEvent, GrabStartData, MotionEvent, PointerGrab, PointerInnerHandle,
+            RelativeMotionEvent,
         },
         Seat, SeatHandler,
     },
@@ -46,6 +47,10 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.motion(state, None, event);
 
         if !self.window.alive() {
+            state
+                .pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::default_named());
             handle.unset_grab(self, state, event.serial, event.time, true);
             return;
         }
@@ -168,6 +173,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         handle.button(data, event);
 
         if !handle.current_pressed().contains(&self.start_data.button) {
+            data.pinnacle
+                .cursor_state
+                .set_cursor_image(CursorImageStatus::default_named());
             handle.unset_grab(self, data, event.serial, event.time, true);
         }
     }
@@ -311,9 +319,9 @@ impl State {
             .to_f64(); // TODO: add space f64 support or move away from space
 
         let start_data = smithay::input::pointer::GrabStartData {
-            focus: pointer
-                .current_focus()
-                .map(|focus| (focus, initial_window_loc)),
+            // If Some and same as the dragged window then the window is allowed to
+            // change the cursor, which we don't want, therefore this is None
+            focus: None,
             button: button_used,
             location: pointer.current_location(),
         };
@@ -325,5 +333,9 @@ impl State {
         };
 
         pointer.set_grab(self, grab, serial, Focus::Clear);
+
+        self.pinnacle
+            .cursor_state
+            .set_cursor_image(CursorImageStatus::Named(CursorIcon::Grabbing));
     }
 }

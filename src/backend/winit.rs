@@ -10,7 +10,7 @@ use smithay::{
             self, buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
             element::{self, surface::render_elements_from_surface_tree},
-            gles::{GlesRenderbuffer, GlesRenderer, GlesTexture},
+            gles::{GlesRenderbuffer, GlesRenderer},
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
             TextureFilter,
         },
@@ -38,8 +38,8 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     output::{BlankingState, OutputMode},
     render::{
-        pointer::PointerElement, pointer_render_elements, take_presentation_feedback, CLEAR_COLOR,
-        CLEAR_COLOR_LOCKED,
+        pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
+        CLEAR_COLOR, CLEAR_COLOR_LOCKED,
     },
     state::{Pinnacle, State, WithState},
 };
@@ -172,6 +172,8 @@ impl Winit {
             tracing::info!("EGL hardware-acceleration enabled");
         }
 
+        winit_backend.window().set_cursor_visible(false);
+
         let mut winit = Winit {
             backend: winit_backend,
             damage_tracker: OutputDamageTracker::from_output(&output),
@@ -263,17 +265,13 @@ impl Winit {
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
-        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_status {
+        if let CursorImageStatus::Surface(surface) = pinnacle.cursor_state.cursor_image() {
             if !surface.alive() {
-                pinnacle.cursor_status = CursorImageStatus::default_named();
+                pinnacle
+                    .cursor_state
+                    .set_cursor_image(CursorImageStatus::default_named());
             }
         }
-
-        let cursor_visible = !matches!(pinnacle.cursor_status, CursorImageStatus::Surface(_));
-
-        let mut pointer_element = PointerElement::<GlesTexture>::new();
-
-        pointer_element.set_status(pinnacle.cursor_status.clone());
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
@@ -297,17 +295,21 @@ impl Winit {
                 .map(|ptr| ptr.current_location())
                 .unwrap_or((0.0, 0.0).into());
 
-            let pointer_render_elements = pointer_render_elements(
+            let (pointer_render_elements, _cursor_ids) = pointer_render_elements(
                 &self.output,
                 self.backend.renderer(),
+                &mut pinnacle.cursor_state,
                 &pinnacle.space,
                 pointer_location,
-                &mut pinnacle.cursor_status,
                 pinnacle.dnd_icon.as_ref(),
-                (0, 0).into(), // Nonsurface cursors are hidden
-                &pointer_element,
+                &pinnacle.clock,
+                element::Kind::Cursor,
             );
-            output_render_elements.extend(pointer_render_elements);
+            output_render_elements.extend(
+                pointer_render_elements
+                    .into_iter()
+                    .map(OutputRenderElement::from),
+            );
         }
 
         let should_blank = pinnacle.lock_state.is_locking()
@@ -411,8 +413,6 @@ impl Winit {
                     }
                 }
 
-                self.backend.window().set_cursor_visible(cursor_visible);
-
                 let time = pinnacle.clock.now();
 
                 super::post_repaint(
@@ -421,7 +421,7 @@ impl Winit {
                     &pinnacle.space,
                     None,
                     time.into(),
-                    &pinnacle.cursor_status,
+                    pinnacle.cursor_state.cursor_image(),
                 );
 
                 if has_rendered {
