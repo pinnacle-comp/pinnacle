@@ -145,7 +145,7 @@ impl CursorState {
                     return None;
                 }
 
-                let mut millis = self.start_time.duration_since(Instant::now()).as_millis() as u32;
+                let mut millis = self.start_time.elapsed().as_millis() as u32;
                 let animation_length_ms = nearest_size_images(self.size, &cursor.images)
                     .fold(0, |acc, image| acc + image.delay);
                 millis %= animation_length_ms;

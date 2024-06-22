@@ -144,7 +144,7 @@ impl LayoutTransaction {
     /// Returns whether all pending windows have committed their serials or the timeout has been
     /// reached.
     pub fn ready(&self) -> bool {
-        Instant::now().duration_since(self.start_time) >= TIMEOUT
+        self.start_time.elapsed() >= TIMEOUT
             || (!self.wait
                 && self
                     .pending_windows
