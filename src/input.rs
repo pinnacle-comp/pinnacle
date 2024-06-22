@@ -35,6 +35,7 @@ use smithay::{
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
         compositor::{self, RegionAttributes, SurfaceAttributes},
+        keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat,
         pointer_constraints::{with_pointer_constraint, PointerConstraint},
         seat::WaylandFocus,
         shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
@@ -487,6 +488,17 @@ impl State {
             }
         }
 
+        let shortcuts_inhibited = keyboard
+            .current_focus()
+            .and_then(|focus| {
+                focus.wl_surface().and_then(|surf| {
+                    self.pinnacle
+                        .seat
+                        .keyboard_shortcuts_inhibitor_for_surface(&surf)
+                })
+            })
+            .is_some_and(|inhibitor| inhibitor.is_active());
+
         let action = keyboard.input(
             self,
             event.key_code(),
@@ -510,42 +522,44 @@ impl State {
                     let raw_sym = keysym.raw_syms().iter().next();
                     let mod_sym = keysym.modified_sym();
 
-                    if let Some(keybind_data) = state
-                        .pinnacle
-                        .input_state
-                        .keybinds
-                        .get(&(mod_mask, mod_sym))
-                        .or_else(|| {
-                            raw_sym.and_then(|raw_sym| {
-                                state
-                                    .pinnacle
-                                    .input_state
-                                    .keybinds
-                                    .get(&(mod_mask, *raw_sym))
-                            })
-                        })
-                    {
-                        if state.pinnacle.lock_state.is_unlocked() {
-                            return FilterResult::Intercept(KeyAction::CallCallback(
-                                keybind_data.sender.clone(),
-                            ));
-                        }
-                    }
-
-                    if kill_keybind == Some((mod_mask, mod_sym)) {
-                        return FilterResult::Intercept(KeyAction::Quit);
-                    }
-
-                    if reload_keybind == Some((mod_mask, mod_sym)) {
-                        return FilterResult::Intercept(KeyAction::ReloadConfig);
-                    }
-
                     if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                         keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
                         tracing::info!("Switching to vt {vt}");
                         return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
+                    }
+
+                    if !shortcuts_inhibited {
+                        if let Some(keybind_data) = state
+                            .pinnacle
+                            .input_state
+                            .keybinds
+                            .get(&(mod_mask, mod_sym))
+                            .or_else(|| {
+                                raw_sym.and_then(|raw_sym| {
+                                    state
+                                        .pinnacle
+                                        .input_state
+                                        .keybinds
+                                        .get(&(mod_mask, *raw_sym))
+                                })
+                            })
+                        {
+                            if state.pinnacle.lock_state.is_unlocked() {
+                                return FilterResult::Intercept(KeyAction::CallCallback(
+                                    keybind_data.sender.clone(),
+                                ));
+                            }
+                        }
+
+                        if kill_keybind == Some((mod_mask, mod_sym)) {
+                            return FilterResult::Intercept(KeyAction::Quit);
+                        }
+
+                        if reload_keybind == Some((mod_mask, mod_sym)) {
+                            return FilterResult::Intercept(KeyAction::ReloadConfig);
+                        }
                     }
                 }
 

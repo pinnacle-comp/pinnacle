@@ -41,6 +41,7 @@ use smithay::{
         dmabuf::DmabufFeedback,
         fractional_scale::FractionalScaleManagerState,
         idle_notify::IdleNotifierState,
+        keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
         output::OutputManagerState,
         pointer_constraints::PointerConstraintsState,
         relative_pointer::RelativePointerManagerState,
@@ -55,6 +56,7 @@ use smithay::{
         socket::ListeningSocketSource,
         tablet_manager::TabletManagerState,
         viewporter::ViewporterState,
+        xwayland_keyboard_grab::XWaylandKeyboardGrabState,
         xwayland_shell::XWaylandShellState,
     },
     xwayland::{X11Wm, XWaylandClientData},
@@ -116,6 +118,8 @@ pub struct Pinnacle {
     pub output_management_manager_state: OutputManagementManagerState,
     pub output_power_management_state: OutputPowerManagementState,
     pub tablet_manager_state: TabletManagerState,
+    pub keyboard_shortcuts_inhibit_state: KeyboardShortcutsInhibitState,
+    pub xwayland_keyboard_grab_state: XWaylandKeyboardGrabState,
 
     pub lock_state: LockState,
 
@@ -339,6 +343,10 @@ impl Pinnacle {
                 filter_restricted_client,
             ),
             tablet_manager_state: TabletManagerState::new::<State>(&display_handle),
+            keyboard_shortcuts_inhibit_state: KeyboardShortcutsInhibitState::new::<State>(
+                &display_handle,
+            ),
+            xwayland_keyboard_grab_state: XWaylandKeyboardGrabState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 

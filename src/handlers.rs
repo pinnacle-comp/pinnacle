@@ -15,10 +15,11 @@ use smithay::{
         renderer::utils::{self, with_renderer_surface_state},
     },
     delegate_compositor, delegate_cursor_shape, delegate_data_control, delegate_data_device,
-    delegate_fractional_scale, delegate_layer_shell, delegate_output, delegate_pointer_constraints,
-    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit, delegate_layer_shell,
+    delegate_output, delegate_pointer_constraints, delegate_presentation,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
-    delegate_xwayland_shell,
+    delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
         PopupManager, WindowSurfaceType,
@@ -48,6 +49,10 @@ use smithay::{
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
+        keyboard_shortcuts_inhibit::{
+            KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState,
+            KeyboardShortcutsInhibitor,
+        },
         output::OutputHandler,
         pointer_constraints::{with_pointer_constraint, PointerConstraintsHandler},
         seat::WaylandFocus,
@@ -71,6 +76,7 @@ use smithay::{
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,
+        xwayland_keyboard_grab::XWaylandKeyboardGrabHandler,
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
     xwayland::XWaylandClientData,
@@ -911,6 +917,27 @@ impl TabletSeatHandler for State {
 delegate_tablet_manager!(State);
 
 delegate_cursor_shape!(State);
+
+impl KeyboardShortcutsInhibitHandler for State {
+    fn keyboard_shortcuts_inhibit_state(&mut self) -> &mut KeyboardShortcutsInhibitState {
+        &mut self.pinnacle.keyboard_shortcuts_inhibit_state
+    }
+
+    fn new_inhibitor(&mut self, inhibitor: KeyboardShortcutsInhibitor) {
+        // TODO: Some way to not unconditionally activate the inhibitor
+        inhibitor.activate();
+    }
+}
+delegate_keyboard_shortcuts_inhibit!(State);
+
+impl XWaylandKeyboardGrabHandler for State {
+    fn keyboard_focus_for_xsurface(&self, surface: &WlSurface) -> Option<Self::KeyboardFocus> {
+        self.pinnacle
+            .window_for_surface(surface)
+            .map(KeyboardFocusTarget::from)
+    }
+}
+delegate_xwayland_keyboard_grab!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

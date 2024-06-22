@@ -24,7 +24,6 @@ use pinnacle::{
     util::increase_nofile_rlimit,
 };
 use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
-use tokio::sync::oneshot::error::TryRecvError;
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -177,6 +176,8 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "snowcap")]
     {
+        use tokio::sync::oneshot::error::TryRecvError;
+
         let (sender, mut recv) = tokio::sync::oneshot::channel();
         let join_handle = tokio::task::spawn_blocking(move || {
             let _span = tracing::error_span!("snowcap");
