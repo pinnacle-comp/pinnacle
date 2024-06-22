@@ -160,7 +160,7 @@ pub struct Pinnacle {
     pub outputs: IndexMap<Output, Option<GlobalId>>,
 
     #[cfg(feature = "snowcap")]
-    pub snowcap_shutdown_ping: Option<smithay::reexports::calloop::ping::Ping>,
+    pub snowcap_stop_signal: Option<snowcap::StopSignal>,
     #[cfg(feature = "snowcap")]
     pub snowcap_join_handle: Option<tokio::task::JoinHandle<()>>,
 
@@ -381,7 +381,7 @@ impl Pinnacle {
             outputs: IndexMap::new(),
 
             #[cfg(feature = "snowcap")]
-            snowcap_shutdown_ping: None,
+            snowcap_stop_signal: None,
             #[cfg(feature = "snowcap")]
             snowcap_join_handle: None,
 
@@ -423,8 +423,8 @@ impl Pinnacle {
         }
 
         #[cfg(feature = "snowcap")]
-        if let Some(snowcap_shutdown_ping) = self.snowcap_shutdown_ping.take() {
-            snowcap_shutdown_ping.ping();
+        if let Some(stop_signal) = self.snowcap_stop_signal.take() {
+            stop_signal.stop();
         }
     }
 }

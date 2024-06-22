@@ -26,8 +26,8 @@ use smithay::{
             DisplayHandle,
         },
         winit::{
-            platform::wayland::WindowBuilderExtWayland,
-            window::{Icon, WindowBuilder},
+            platform::wayland::WindowAttributesExtWayland,
+            window::{Icon, WindowAttributes},
         },
     },
     utils::{IsAlive, Point, Rectangle, Transform},
@@ -82,13 +82,13 @@ impl Backend {
 
 impl Winit {
     pub(crate) fn try_new(display_handle: DisplayHandle) -> anyhow::Result<UninitBackend<Winit>> {
-        let window_builder = WindowBuilder::new()
+        let window_attrs = WindowAttributes::default()
             .with_title("Pinnacle")
             .with_name("pinnacle", "pinnacle")
             .with_window_icon(Icon::from_rgba(LOGO_BYTES.to_vec(), 64, 64).ok());
 
         let (mut winit_backend, winit_evt_loop) =
-            match winit::init_from_builder::<GlesRenderer>(window_builder) {
+            match winit::init_from_attributes::<GlesRenderer>(window_attrs) {
                 Ok(ret) => ret,
                 Err(err) => anyhow::bail!("Failed to init winit backend: {err}"),
             };
@@ -123,10 +123,7 @@ impl Winit {
 
         let dmabuf_default_feedback = match render_node {
             Ok(Some(node)) => {
-                let dmabuf_formats = winit_backend
-                    .renderer()
-                    .dmabuf_formats()
-                    .collect::<Vec<_>>();
+                let dmabuf_formats = winit_backend.renderer().dmabuf_formats();
                 let dmabuf_default_feedback =
                     DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
                         .build()
@@ -153,10 +150,7 @@ impl Winit {
                 (dmabuf_state, dmabuf_global, Some(default_feedback))
             }
             None => {
-                let dmabuf_formats = winit_backend
-                    .renderer()
-                    .dmabuf_formats()
-                    .collect::<Vec<_>>();
+                let dmabuf_formats = winit_backend.renderer().dmabuf_formats();
                 let mut dmabuf_state = DmabufState::new();
                 let dmabuf_global =
                     dmabuf_state.create_global::<State>(&display_handle, dmabuf_formats);

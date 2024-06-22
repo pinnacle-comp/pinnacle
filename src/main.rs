@@ -24,6 +24,7 @@ use pinnacle::{
     util::increase_nofile_rlimit,
 };
 use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
+use tokio::sync::oneshot::error::TryRecvError;
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -176,30 +177,28 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "snowcap")]
     {
-        use smithay::reexports::calloop;
-        use std::sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        };
-
-        info!("Starting Snowcap");
-        let (ping, source) = calloop::ping::make_ping()?;
-        let ready_flag = Arc::new(AtomicBool::new(false));
-        let ready_clone = ready_flag.clone();
+        let (sender, mut recv) = tokio::sync::oneshot::channel();
         let join_handle = tokio::task::spawn_blocking(move || {
             let _span = tracing::error_span!("snowcap");
             let _span = _span.enter();
-            snowcap::start(Some(source), ready_clone);
+            snowcap::start(Some(sender));
         });
 
-        while !ready_flag.load(Ordering::SeqCst) {
+        let stop_signal = loop {
             if join_handle.is_finished() {
                 panic!("snowcap failed to start");
             }
-            event_loop.dispatch(Duration::from_secs(1), &mut state)?;
-            state.on_event_loop_cycle_completion();
-        }
-        state.pinnacle.snowcap_shutdown_ping = Some(ping);
+            match recv.try_recv() {
+                Ok(stop_signal) => break stop_signal,
+                Err(TryRecvError::Empty) => {
+                    event_loop.dispatch(Duration::from_secs(1), &mut state)?;
+                    state.on_event_loop_cycle_completion();
+                }
+                Err(TryRecvError::Closed) => panic!("snowcap failed to start"),
+            }
+        };
+
+        state.pinnacle.snowcap_stop_signal = Some(stop_signal);
         state.pinnacle.snowcap_join_handle = Some(join_handle);
     }
 

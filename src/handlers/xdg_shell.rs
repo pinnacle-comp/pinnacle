@@ -286,7 +286,8 @@ pub fn snapshot_pre_commit_hook(
     };
 
     let got_unmapped = compositor::with_states(surface, |states| {
-        let buffer = &states.cached_state.pending::<SurfaceAttributes>().buffer;
+        let mut guard = states.cached_state.get::<SurfaceAttributes>();
+        let buffer = &guard.pending().buffer;
         matches!(buffer, Some(BufferAssignment::Removed))
     });
 

@@ -17,7 +17,7 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"]}
 tokio-stream = { version = "0.1.15", features = ["net"] }
 # gRPC
-prost = "0.12.4"
+prost = "0.12.6"
 tonic = "0.11.0"
 tonic-reflection = "0.11.0"
 tonic-build = "0.11.0"
@@ -30,14 +30,14 @@ pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 xkbcommon = "0.7.0"
 xdg = "2.5.2"
 bitflags = "2.5.0"
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.7", features = ["derive"] }
 dircpy = "0.3.16"
 tempfile = "3.10.1"
 indexmap = "2.2.6"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "b4f8120"
+rev = "69b379d"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -48,7 +48,6 @@ features = [
     "backend_udev",
     "backend_drm",
     "backend_gbm",
-    "backend_vulkan",
     "backend_egl",
     "backend_session_libseat",
     "renderer_gl",
@@ -86,14 +85,14 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "b4f8120" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "69b379d" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
-anyhow = { version = "1.0.83", features = ["backtrace"] }
-thiserror = "1.0.60"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
+thiserror = "1.0.61"
 # xcursor stuff
 xcursor = { version = "0.3.5" }
 image = { version = "0.25.1", default-features = false }
@@ -106,11 +105,11 @@ tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { workspace = true }
 # CLI
 clap = { workspace = true }
-cliclack = "0.2.5"
+cliclack = "0.3.1"
 # Misc.
 bitflags = { workspace = true }
-serde = { version = "1.0.202", features = ["derive"] }
-toml = "0.8.13"
+serde = { version = "1.0.203", features = ["derive"] }
+toml = "0.8.14"
 shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.1", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
@@ -120,7 +119,7 @@ sysinfo = "0.30.12"
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.38"
-bytemuck = "1.16.0"
+bytemuck = "1.16.1"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
 drm-sys = "0.7.0"

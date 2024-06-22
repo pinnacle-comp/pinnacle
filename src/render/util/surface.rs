@@ -38,7 +38,7 @@ pub fn texture_render_elements_from_surface_tree(
             let data = states.data_map.get::<RendererSurfaceStateUserData>();
 
             if let Some(data) = data {
-                let data = &*data.borrow();
+                let data = data.lock().unwrap();
 
                 if let Some(view) = data.view() {
                     location += view.offset.to_f64().to_physical(scale);
@@ -55,11 +55,14 @@ pub fn texture_render_elements_from_surface_tree(
             let data = states.data_map.get::<RendererSurfaceStateUserData>();
 
             if let Some(data) = data {
-                let has_view = if let Some(view) = data.borrow().view() {
-                    location += view.offset.to_f64().to_physical(scale);
-                    true
-                } else {
-                    false
+                let has_view = {
+                    let data = data.lock().unwrap();
+                    if let Some(view) = data.view() {
+                        location += view.offset.to_f64().to_physical(scale);
+                        true
+                    } else {
+                        false
+                    }
                 };
 
                 if has_view {
@@ -74,11 +77,8 @@ pub fn texture_render_elements_from_surface_tree(
                         Ok(Some(surface)) => {
                             // Reconstruct the element as a TextureRenderElement
 
-                            let data = data.borrow();
+                            let data = data.lock().unwrap();
                             let view = data.view().unwrap();
-
-                            // TODO: figure out what is making the WaylandSurfaceRenderElement
-                            // not drop and release the shm buffer for wleird
 
                             let texture_buffer = TextureBuffer::from_texture(
                                 renderer,

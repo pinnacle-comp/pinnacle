@@ -440,7 +440,10 @@ impl State {
             // Focus the topmost exclusive layer, if any
             for layer in self.pinnacle.layer_shell_state.layer_surfaces().rev() {
                 let data = compositor::with_states(layer.wl_surface(), |states| {
-                    *states.cached_state.current::<LayerSurfaceCachedState>()
+                    *states
+                        .cached_state
+                        .get::<LayerSurfaceCachedState>()
+                        .current()
                 });
                 if data.keyboard_interactivity == KeyboardInteractivity::Exclusive
                     && matches!(
@@ -868,7 +871,8 @@ impl State {
                     compositor::with_states(&*focus.wl_surface()?, |states| {
                         states
                             .cached_state
-                            .current::<SurfaceAttributes>()
+                            .get::<SurfaceAttributes>()
+                            .current()
                             .input_region
                             .clone()
                     })

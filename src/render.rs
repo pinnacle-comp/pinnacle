@@ -62,14 +62,14 @@ where
     // which is why these associated types exist.
     //
     // From https://github.com/YaLTeR/niri/blob/ae7fb4c4f405aa0ff49930040d414581a812d938/src/render_helpers/renderer.rs#L10
-    type PTextureId: Texture + Clone + 'static;
+    type PTextureId: Texture + Clone + Send + 'static;
     type PError: std::error::Error + Send + Sync + 'static;
 }
 
 impl<R> PRenderer for R
 where
     R: ImportAll + ImportMem,
-    R::TextureId: Texture + Clone + 'static,
+    R::TextureId: Texture + Clone + Send + 'static,
     R::Error: std::error::Error + Send + Sync + 'static,
 {
     type PTextureId = R::TextureId;

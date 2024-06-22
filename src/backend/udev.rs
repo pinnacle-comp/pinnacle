@@ -4,12 +4,9 @@ mod drm;
 mod gamma;
 
 pub use drm::util::drm_mode_from_api_modeline;
+use indexmap::IndexSet;
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    time::Duration,
-};
+use std::{collections::HashMap, path::Path, time::Duration};
 
 use anyhow::{anyhow, ensure, Context};
 use drm::{set_crtc_active, util::create_drm_mode};
@@ -17,10 +14,8 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
         allocator::{
-            dmabuf::{AnyError, Dmabuf, DmabufAllocator},
             gbm::{GbmAllocator, GbmBuffer, GbmBufferFlags, GbmDevice},
-            vulkan::{ImageUsageFlags, VulkanAllocator},
-            Allocator, Buffer, Fourcc,
+            Buffer, Fourcc,
         },
         drm::{
             compositor::{DrmCompositor, PrimaryPlaneElement, RenderFrameResult},
@@ -46,14 +41,12 @@ use smithay::{
             Session,
         },
         udev::{self, UdevBackend, UdevEvent},
-        vulkan::{self, version::Version, PhysicalDevice},
         SwapBuffersError,
     },
     desktop::utils::OutputPresentationFeedback,
     input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
-        ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::{
             self, generic::Generic, timer::Timer, Dispatcher, Idle, Interest, LoopHandle,
             PostAction, RegistrationToken,
@@ -129,7 +122,6 @@ pub struct Udev {
     display_handle: DisplayHandle,
     pub(super) dmabuf_state: Option<(DmabufState, DmabufGlobal)>,
     pub(super) primary_gpu: DrmNode,
-    allocator: Option<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>,
     pub(super) gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     backends: HashMap<DrmNode, UdevBackendData>,
 
@@ -218,7 +210,6 @@ impl Udev {
             session,
             primary_gpu,
             gpu_manager,
-            allocator: None,
             backends: HashMap::new(),
 
             upscale_filter: TextureFilter::Linear,
@@ -416,56 +407,6 @@ impl Udev {
                         .shm_formats(),
                 );
 
-                // Create the Vulkan allocator
-                if let Ok(instance) = vulkan::Instance::new(Version::VERSION_1_2, None) {
-                    if let Some(physical_device) = PhysicalDevice::enumerate(&instance)
-                        .ok()
-                        .and_then(|devices| {
-                            devices
-                                .filter(|phd| {
-                                    phd.has_device_extension(ExtPhysicalDeviceDrmFn::name())
-                                })
-                                .find(|phd| {
-                                    phd.primary_node()
-                                        .is_ok_and(|node| node == Some(primary_gpu))
-                                        || phd
-                                            .render_node()
-                                            .is_ok_and(|node| node == Some(primary_gpu))
-                                })
-                        })
-                    {
-                        match VulkanAllocator::new(
-                            &physical_device,
-                            ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
-                        ) {
-                            Ok(allocator) => {
-                                udev.allocator = Some(Box::new(DmabufAllocator(allocator))
-                                    as Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>);
-                            }
-                            Err(err) => {
-                                warn!("Failed to create vulkan allocator: {}", err);
-                            }
-                        }
-                    }
-                }
-
-                if udev.allocator.is_none() {
-                    info!("No vulkan allocator found, using GBM.");
-                    let gbm = udev
-                        .backends
-                        .get(&primary_gpu)
-                        // If the primary_gpu failed to initialize, we likely have a kmsro device
-                        .or_else(|| udev.backends.values().next())
-                        // Don't fail, if there is no allocator. There is a chance, that this a single gpu system and we don't need one.
-                        .map(|backend| backend.gbm.clone());
-                    udev.allocator = gbm.map(|gbm| {
-                        Box::new(DmabufAllocator(GbmAllocator::new(
-                            gbm,
-                            GbmBufferFlags::RENDERING,
-                        ))) as Box<_>
-                    });
-                }
-
                 let mut renderer = udev.gpu_manager.single_renderer(&primary_gpu)?;
 
                 info!(
@@ -479,7 +420,7 @@ impl Udev {
                 }
 
                 // init dmabuf support with format list from our primary gpu
-                let dmabuf_formats = renderer.dmabuf_formats().collect::<Vec<_>>();
+                let dmabuf_formats = renderer.dmabuf_formats();
                 let default_feedback =
                     DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
                         .build()
@@ -747,20 +688,18 @@ fn get_surface_dmabuf_feedback(
     let primary_formats = gpu_manager
         .single_renderer(&primary_gpu)
         .ok()?
-        .dmabuf_formats()
-        .collect::<HashSet<_>>();
+        .dmabuf_formats();
 
     let render_formats = gpu_manager
         .single_renderer(&render_node)
         .ok()?
-        .dmabuf_formats()
-        .collect::<HashSet<_>>();
+        .dmabuf_formats();
 
     let all_render_formats = primary_formats
         .iter()
         .chain(render_formats.iter())
         .copied()
-        .collect::<HashSet<_>>();
+        .collect::<IndexSet<_>>();
 
     let surface = composition.surface();
     let planes = surface.planes().clone();
@@ -772,7 +711,7 @@ fn get_surface_dmabuf_feedback(
         .formats
         .into_iter()
         .chain(planes.overlay.into_iter().flat_map(|p| p.formats))
-        .collect::<HashSet<_>>()
+        .collect::<IndexSet<_>>()
         .intersection(&all_render_formats)
         .copied()
         .collect::<Vec<_>>();

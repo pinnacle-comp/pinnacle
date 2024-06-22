@@ -202,7 +202,8 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
 
         let (min_size, max_size) = match self.window.wl_surface() {
             Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
-                let data = states.cached_state.current::<SurfaceCachedState>();
+                let mut guard = states.cached_state.get::<SurfaceCachedState>();
+                let data = guard.current();
                 (data.min_size, data.max_size)
             }),
             None => (Size::default(), Size::default()),
