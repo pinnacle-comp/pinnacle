@@ -56,6 +56,7 @@ use smithay::{
         socket::ListeningSocketSource,
         tablet_manager::TabletManagerState,
         viewporter::ViewporterState,
+        xdg_activation::XdgActivationState,
         xwayland_keyboard_grab::XWaylandKeyboardGrabState,
         xwayland_shell::XWaylandShellState,
     },
@@ -120,6 +121,7 @@ pub struct Pinnacle {
     pub tablet_manager_state: TabletManagerState,
     pub keyboard_shortcuts_inhibit_state: KeyboardShortcutsInhibitState,
     pub xwayland_keyboard_grab_state: XWaylandKeyboardGrabState,
+    pub xdg_activation_state: XdgActivationState,
 
     pub lock_state: LockState,
 
@@ -347,6 +349,7 @@ impl Pinnacle {
                 &display_handle,
             ),
             xwayland_keyboard_grab_state: XWaylandKeyboardGrabState::new::<State>(&display_handle),
+            xdg_activation_state: XdgActivationState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 

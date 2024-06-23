@@ -19,7 +19,7 @@ use smithay::{
     delegate_output, delegate_pointer_constraints, delegate_presentation,
     delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
-    delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
+    delegate_xdg_activation, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
         PopupManager, WindowSurfaceType,
@@ -76,6 +76,9 @@ use smithay::{
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,
+        xdg_activation::{
+            XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
+        },
         xwayland_keyboard_grab::XWaylandKeyboardGrabHandler,
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
@@ -938,6 +941,100 @@ impl XWaylandKeyboardGrabHandler for State {
     }
 }
 delegate_xwayland_keyboard_grab!(State);
+
+enum ActivationContext {
+    FocusIfPossible,
+    UrgentOnly,
+}
+
+impl XdgActivationHandler for State {
+    fn activation_state(&mut self) -> &mut XdgActivationState {
+        &mut self.pinnacle.xdg_activation_state
+    }
+
+    fn token_created(&mut self, token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
+        let Some((serial, seat)) = data.serial else {
+            data.user_data
+                .insert_if_missing(|| ActivationContext::UrgentOnly);
+            debug!(
+                ?token,
+                "xdg-activation: created urgent-only token for missing seat/serial"
+            );
+            return true;
+        };
+
+        let Some(seat) = Seat::<State>::from_resource(&seat) else {
+            data.user_data
+                .insert_if_missing(|| ActivationContext::UrgentOnly);
+            debug!(
+                ?token,
+                "xdg-activation: created urgent-only token for unknown seat"
+            );
+            return true;
+        };
+
+        let keyboard = seat.get_keyboard().unwrap();
+
+        let valid = keyboard
+            .last_enter()
+            .is_some_and(|last_enter| serial.is_no_older_than(&last_enter));
+
+        if valid {
+            data.user_data
+                .insert_if_missing(|| ActivationContext::FocusIfPossible);
+            debug!(?token, "xdg-activation: created focus-if-possible token");
+        } else {
+            debug!(?token, "xdg-activation: invalid token");
+        }
+
+        valid
+    }
+
+    fn request_activation(
+        &mut self,
+        _token: XdgActivationToken,
+        token_data: XdgActivationTokenData,
+        surface: WlSurface,
+    ) {
+        let Some(context) = token_data.user_data.get::<ActivationContext>() else {
+            debug!("xdg-activation: request without context");
+            return;
+        };
+
+        let Some(window) = self.pinnacle.window_for_surface(&surface) else {
+            debug!("xdg-activation: no window for request");
+            return;
+        };
+
+        match context {
+            ActivationContext::FocusIfPossible => {
+                if window.is_on_active_tag() {
+                    // TODO: add a holder for pending activations like cosmic-comp
+
+                    let Some(output) = window.output(&self.pinnacle) else {
+                        // TODO: make "no tags" be all tags on an output
+                        debug!("xdg-activation: focus-if-possible request on window but it had no tags");
+                        return;
+                    };
+
+                    self.pinnacle.raise_window(window.clone(), true);
+
+                    output.with_state_mut(|state| {
+                        state.focus_stack.set_focus(window);
+                    });
+
+                    self.update_keyboard_focus(&output);
+
+                    self.schedule_render(&output);
+                }
+            }
+            ActivationContext::UrgentOnly => {
+                // TODO: add urgent state to windows, use in a focus border/taskbar flash
+            }
+        }
+    }
+}
+delegate_xdg_activation!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
