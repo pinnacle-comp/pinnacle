@@ -581,11 +581,6 @@ mod output {
 
                     local focus_stack = Pinnacle.output.get_focused():keyboard_focus_stack()
                     assert(#focus_stack == 5, "focus stack len != 5")
-                    print(focus_stack[1].id)
-                    print(focus_stack[2].id)
-                    print(focus_stack[3].id)
-                    print(focus_stack[4].id)
-                    print(focus_stack[5].id)
 
                     assert(focus_stack[1].id == 0, "focus stack at 1 id != 0")
                     assert(focus_stack[2].id == 1, "focus stack at 2 id != 1")

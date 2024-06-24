@@ -206,9 +206,6 @@ impl CompositorHandler for State {
                     let output = self.pinnacle.focused_output().cloned();
 
                     if let Some(output) = output.as_ref() {
-                        tracing::debug!("Placing toplevel");
-                        unmapped_window.place_on_output(output);
-
                         output.with_state_mut(|state| {
                             state.focus_stack.set_focus(unmapped_window.clone())
                         });
@@ -222,8 +219,6 @@ impl CompositorHandler for State {
                     self.pinnacle.windows.push(unmapped_window.clone());
 
                     self.pinnacle.raise_window(unmapped_window.clone(), true);
-
-                    self.pinnacle.apply_window_rules(&unmapped_window);
 
                     if let Some(focused_output) = output {
                         if unmapped_window.is_on_active_tag() {
@@ -243,6 +238,10 @@ impl CompositorHandler for State {
                         }
                     }
                 } else {
+                    if let Some(output) = self.pinnacle.focused_output().cloned() {
+                        unmapped_window.place_on_output(&output);
+                    }
+                    self.pinnacle.apply_window_rules(&unmapped_window);
                     // Still unmapped
                     unmapped_window.on_commit();
                     self.pinnacle.ensure_initial_configure(surface);
