@@ -318,6 +318,7 @@ mod output {
     }
 
     mod handle {
+        use common::sleep_millis;
         use pinnacle::window::window_state::WindowId;
         use pinnacle_api::output::Transform;
 
@@ -406,15 +407,24 @@ mod output {
 
                 run_rust(|api| {
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
                 })?;
 
-                sleep_secs(1);
+                sleep_millis(250);
 
                 run_rust(|api| {
                     api.tag.get("2").unwrap().switch_to();
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
                 })?;
 
@@ -424,12 +434,12 @@ mod output {
                     api.tag.get("1").unwrap().switch_to();
 
                     let focus_stack = api.output.get_focused().unwrap().keyboard_focus_stack();
-                    assert!(dbg!(focus_stack.len()) == 5);
-                    assert!(focus_stack[0].id() == 0);
-                    assert!(focus_stack[1].id() == 1);
-                    assert!(focus_stack[2].id() == 2);
-                    assert!(focus_stack[3].id() == 3);
-                    assert!(focus_stack[4].id() == 4);
+                    assert_eq!(focus_stack.len(), 5);
+                    assert_eq!(focus_stack[0].id(), 0);
+                    assert_eq!(focus_stack[1].id(), 1);
+                    assert_eq!(focus_stack[2].id(), 2);
+                    assert_eq!(focus_stack[3].id(), 3);
+                    assert_eq!(focus_stack[4].id(), 4);
                 })?;
 
                 // Terminate all windows related to this test
@@ -465,17 +475,25 @@ mod output {
                 sleep_secs(1);
 
                 run_rust(|api| {
-                    api.tag.get("1").unwrap().switch_to();
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
                 })?;
 
-                sleep_secs(1);
+                sleep_millis(250);
 
                 run_rust(|api| {
                     api.tag.get("2").unwrap().switch_to();
                     api.process.spawn(["foot"]);
+                })?;
+                sleep_millis(250);
+                run_rust(|api| {
                     api.process.spawn(["foot"]);
                 })?;
 
@@ -489,10 +507,10 @@ mod output {
                         .get_focused()
                         .unwrap()
                         .keyboard_focus_stack_visible();
-                    assert!(focus_stack.len() == 3);
-                    assert!(focus_stack[0].id() == 0);
-                    assert!(focus_stack[1].id() == 1);
-                    assert!(focus_stack[2].id() == 2);
+                    assert_eq!(focus_stack.len(), 3);
+                    assert_eq!(focus_stack[0].id(), 0);
+                    assert_eq!(focus_stack[1].id(), 1);
+                    assert_eq!(focus_stack[2].id(), 2);
 
                     api.tag.get("2").unwrap().switch_to();
 
@@ -501,9 +519,9 @@ mod output {
                         .get_focused()
                         .unwrap()
                         .keyboard_focus_stack_visible();
-                    assert!(focus_stack.len() == 2);
-                    assert!(focus_stack[0].id() == 3);
-                    assert!(focus_stack[1].id() == 4);
+                    assert_eq!(focus_stack.len(), 2);
+                    assert_eq!(focus_stack[0].id(), 3);
+                    assert_eq!(focus_stack[1].id(), 4);
                 })?;
 
                 // Terminate all windows related to this test

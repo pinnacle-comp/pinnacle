@@ -23,6 +23,10 @@ pub fn sleep_secs(secs: u64) {
     std::thread::sleep(Duration::from_secs(secs));
 }
 
+pub fn sleep_millis(millis: u64) {
+    std::thread::sleep(Duration::from_millis(millis));
+}
+
 pub fn test_api<F>(test: F) -> anyhow::Result<()>
 where
     F: FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) -> anyhow::Result<()>
