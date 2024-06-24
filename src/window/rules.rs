@@ -1,6 +1,15 @@
-use smithay::{desktop::space::SpaceElement, utils::Point};
+use smithay::{
+    desktop::space::SpaceElement,
+    reexports::{
+        wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
+        wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration,
+    },
+    utils::Point,
+    wayland::compositor,
+};
 
 use crate::{
+    handlers::decoration::KdeDecorationObject,
     state::{Pinnacle, WithState},
     window::window_state,
 };
@@ -11,22 +20,17 @@ use std::num::NonZeroU32;
 
 use crate::{output::OutputName, tag::TagId, window::window_state::FullscreenOrMaximized};
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WindowRuleCondition {
     /// This condition is met when any of the conditions provided is met.
-    #[serde(default)]
     pub cond_any: Option<Vec<WindowRuleCondition>>,
     /// This condition is met when all of the conditions provided are met.
-    #[serde(default)]
     pub cond_all: Option<Vec<WindowRuleCondition>>,
     /// This condition is met when the class matches.
-    #[serde(default)]
     pub class: Option<Vec<String>>,
     /// This condition is met when the title matches.
-    #[serde(default)]
     pub title: Option<Vec<String>>,
     /// This condition is met when the tag matches.
-    #[serde(default)]
     pub tag: Option<Vec<TagId>>,
 }
 
@@ -136,27 +140,28 @@ impl WindowRuleCondition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DecorationMode {
+    ClientSide,
+    ServerSide,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct WindowRule {
     /// Set the output the window will open on.
-    #[serde(default)]
     pub output: Option<OutputName>,
     /// Set the tags the output will have on open.
-    #[serde(default)]
     pub tags: Option<Vec<TagId>>,
     /// Set the window to floating or tiled on open.
-    #[serde(default)]
     pub floating_or_tiled: Option<FloatingOrTiled>,
     /// Set the window to fullscreen, maximized, or force it to neither.
-    #[serde(default)]
     pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
     /// Set the window's initial size.
-    #[serde(default)]
     pub size: Option<(NonZeroU32, NonZeroU32)>,
     /// Set the window's initial location. If the window is tiled, it will snap to this position
     /// when set to floating.
-    #[serde(default)]
     pub location: Option<(i32, i32)>,
+    pub decoration_mode: Option<DecorationMode>,
 }
 
 // TODO: just skip serializing fields on the other FloatingOrTiled
@@ -178,6 +183,7 @@ impl Pinnacle {
                     fullscreen_or_maximized,
                     size,
                     location, // FIXME: make f64
+                    decoration_mode,
                 } = rule;
 
                 // TODO: If both `output` and `tags` are specified, `tags` will apply over
@@ -271,6 +277,47 @@ impl Pinnacle {
                                     window_state::FloatingOrTiled::Tiled(Some(rect))
                             });
                         }
+                    }
+                }
+
+                if let Some(decoration_mode) = decoration_mode {
+                    tracing::debug!(?decoration_mode, toplevel = ?window.toplevel(), "Window rule with decoration mode");
+                    window.with_state_mut(|state| {
+                        state.decoration_mode = Some(*decoration_mode);
+                    });
+                    if let Some(toplevel) = window.toplevel() {
+                        toplevel.with_pending_state(|state| {
+                            state.decoration_mode = Some(match decoration_mode {
+                                DecorationMode::ClientSide => {
+                                    zxdg_toplevel_decoration_v1::Mode::ClientSide
+                                }
+                                DecorationMode::ServerSide => {
+                                    zxdg_toplevel_decoration_v1::Mode::ServerSide
+                                }
+                            })
+                        });
+
+                        compositor::with_states(toplevel.wl_surface(), |states| {
+                            let kde_decoration = states.data_map.get::<KdeDecorationObject>();
+                            if let Some(kde_decoration) = kde_decoration {
+                                if let Some(object) = kde_decoration
+                                    .borrow()
+                                    .as_ref()
+                                    .and_then(|obj| obj.upgrade().ok())
+                                {
+                                    let mode = match decoration_mode {
+                                        DecorationMode::ClientSide => {
+                                            org_kde_kwin_server_decoration::Mode::Client
+                                        }
+                                        DecorationMode::ServerSide => {
+                                            org_kde_kwin_server_decoration::Mode::Server
+                                        }
+                                    };
+                                    tracing::debug!(?mode, "Window rule set KDE decoration mode");
+                                    object.mode(mode);
+                                }
+                            }
+                        });
                     }
                 }
             }

@@ -28,6 +28,7 @@ use smithay::{
     output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager,
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason, GlobalId},
             protocol::wl_surface::WlSurface,
@@ -51,7 +52,11 @@ use smithay::{
             wlr_data_control::DataControlState,
         },
         session_lock::SessionLockManagerState,
-        shell::{wlr_layer::WlrLayerShellState, xdg::XdgShellState},
+        shell::{
+            kde::decoration::KdeDecorationState,
+            wlr_layer::WlrLayerShellState,
+            xdg::{decoration::XdgDecorationState, XdgShellState},
+        },
         shm::ShmState,
         socket::ListeningSocketSource,
         tablet_manager::TabletManagerState,
@@ -122,6 +127,8 @@ pub struct Pinnacle {
     pub keyboard_shortcuts_inhibit_state: KeyboardShortcutsInhibitState,
     pub xwayland_keyboard_grab_state: XWaylandKeyboardGrabState,
     pub xdg_activation_state: XdgActivationState,
+    pub xdg_decoration_state: XdgDecorationState,
+    pub kde_decoration_state: KdeDecorationState,
 
     pub lock_state: LockState,
 
@@ -350,6 +357,11 @@ impl Pinnacle {
             ),
             xwayland_keyboard_grab_state: XWaylandKeyboardGrabState::new::<State>(&display_handle),
             xdg_activation_state: XdgActivationState::new::<State>(&display_handle),
+            xdg_decoration_state: XdgDecorationState::new::<State>(&display_handle),
+            kde_decoration_state: KdeDecorationState::new::<State>(
+                &display_handle,
+                org_kde_kwin_server_decoration_manager::Mode::Client,
+            ),
 
             lock_state: LockState::default(),
 

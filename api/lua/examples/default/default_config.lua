@@ -317,6 +317,16 @@ require("pinnacle").setup(function(Pinnacle)
         end,
     })
 
+    -- Request all windows to use client-side decorations
+    Window.add_window_rule({
+        cond = {
+            all = {},
+        },
+        rule = {
+            decoration_mode = "client_side",
+        },
+    })
+
     -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
     Process.spawn_once(terminal)
 end)

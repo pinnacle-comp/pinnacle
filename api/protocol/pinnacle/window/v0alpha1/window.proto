@@ -111,6 +111,8 @@ message WindowRule {
   optional int32 y = 6;
   optional int32 width = 7;
   optional int32 height = 8;
+  // true to force ssd, false to force csd, null to not force anything
+  optional bool ssd = 9;
 }
 
 service WindowService {

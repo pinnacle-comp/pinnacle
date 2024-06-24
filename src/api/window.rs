@@ -21,7 +21,12 @@ use smithay::{
 use tonic::{Request, Response, Status};
 use tracing::warn;
 
-use crate::{output::OutputName, state::WithState, tag::TagId, window::window_state::WindowId};
+use crate::{
+    output::OutputName,
+    state::WithState,
+    tag::TagId,
+    window::{rules::DecorationMode, window_state::WindowId},
+};
 
 use super::{run_unary, run_unary_no_response, StateFnSender};
 
@@ -802,6 +807,10 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
             })
         });
         let location = rule.x.and_then(|x| rule.y.map(|y| (x, y)));
+        let decoration_mode = rule.ssd.map(|ssd| match ssd {
+            true => DecorationMode::ServerSide,
+            false => DecorationMode::ClientSide,
+        });
 
         crate::window::rules::WindowRule {
             output,
@@ -810,6 +819,7 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
             fullscreen_or_maximized,
             size,
             location,
+            decoration_mode,
         }
     }
 }

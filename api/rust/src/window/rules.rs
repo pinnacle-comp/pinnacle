@@ -522,4 +522,32 @@ impl WindowRule {
         self.0.height = Some(height as i32);
         self
     }
+
+    /// This rule will force windows into the specified decoration mode.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::window::rules::WindowRule;
+    /// use pinnacle_api::window::rules::DecorationMode;
+    ///
+    /// // Currently, disable client-side decorations.
+    /// // In the future, Pinnacle will have the ability to draw its own decorations.
+    /// let rule = WindowRule::new().decoration_mode(DecorationMode::ServerSide);
+    /// ```
+    pub fn decoration_mode(mut self, mode: DecorationMode) -> Self {
+        self.0.ssd = Some(match mode {
+            DecorationMode::ClientSide => false,
+            DecorationMode::ServerSide => true,
+        });
+        self
+    }
+}
+
+/// The desired decoration mode.
+pub enum DecorationMode {
+    /// The client will draw its own decorations.
+    ClientSide,
+    /// The server will draw the decorations.
+    ServerSide,
 }

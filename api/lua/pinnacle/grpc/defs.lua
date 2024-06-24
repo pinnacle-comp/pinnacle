@@ -209,6 +209,7 @@ local pinnacle_window_v0alpha1_FullscreenOrMaximized = {
 ---@field y integer?
 ---@field width integer?
 ---@field height integer?
+---@field ssd boolean?
 
 -- Tag
 

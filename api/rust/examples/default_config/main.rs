@@ -7,6 +7,7 @@ use pinnacle_api::layout::{
 use pinnacle_api::output::OutputSetup;
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::util::{Axis, Batch};
+use pinnacle_api::window::rules::{DecorationMode, WindowRule, WindowRuleCondition};
 use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
@@ -375,6 +376,12 @@ async fn main() {
     }
 
     input.set_libinput_setting(LibinputSetting::Tap(true));
+
+    // Request all windows to use client-side decorations.
+    window.add_window_rule(
+        WindowRuleCondition::new().all([]),
+        WindowRule::new().decoration_mode(DecorationMode::ClientSide),
+    );
 
     // Enable sloppy focus
     window.connect_signal(WindowSignal::PointerEnter(Box::new(|win| {

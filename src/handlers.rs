@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod decoration;
 mod foreign_toplevel;
 pub mod idle;
 pub mod session_lock;

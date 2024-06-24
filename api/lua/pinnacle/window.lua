@@ -142,6 +142,7 @@ end
 ---@field y integer?
 ---@field width integer?
 ---@field height integer?
+---@field decoration_mode ("client_side" | "server_side")?
 
 ---@enum (key) FullscreenOrMaximized
 local _fullscreen_or_maximized = {
@@ -173,6 +174,16 @@ local function process_window_rule(rule)
 
     if rule.fullscreen_or_maximized then
         rule.fullscreen_or_maximized = _fullscreen_or_maximized[rule.fullscreen_or_maximized]
+    end
+
+    if rule.decoration_mode then
+        if rule.decoration_mode == "client_side" then
+            ---@diagnostic disable-next-line: inject-field
+            rule.ssd = false
+        elseif rule.decoration_mode == "server_side" then
+            ---@diagnostic disable-next-line: inject-field
+            rule.ssd = true
+        end
     end
 end
 

@@ -15,7 +15,7 @@ use crate::{
     tag::Tag,
 };
 
-use super::WindowElement;
+use super::{rules::DecorationMode, WindowElement};
 
 /// A unique identifier for each window.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -60,6 +60,7 @@ pub struct WindowElementState {
     pub committed_serial: Option<Serial>,
     pub snapshot: Option<LayoutSnapshot>,
     pub snapshot_hook_id: Option<HookId>,
+    pub decoration_mode: Option<DecorationMode>,
 }
 
 impl WindowElement {
@@ -309,7 +310,6 @@ impl FullscreenOrMaximized {
 }
 
 impl WindowElementState {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             id: WindowId::next(),
@@ -322,6 +322,7 @@ impl WindowElementState {
             committed_serial: None,
             snapshot: None,
             snapshot_hook_id: None,
+            decoration_mode: None,
         }
     }
 }
