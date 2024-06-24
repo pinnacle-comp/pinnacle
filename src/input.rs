@@ -21,15 +21,21 @@ use pinnacle_api_defs::pinnacle::input::v0alpha1::{
 use smithay::{
     backend::{
         input::{
-            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-            KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent,
+            GestureEndEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
+            PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
         },
         renderer::utils::with_renderer_surface_state,
     },
     desktop::{layer_map_for_output, space::SpaceElement, WindowSurfaceType},
     input::{
         keyboard::{keysyms, FilterResult, ModifiersState},
-        pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent},
+        pointer::{
+            AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
+            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
+            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, MotionEvent,
+            RelativeMotionEvent,
+        },
     },
     reexports::input::{self, Led},
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
@@ -295,17 +301,32 @@ impl Pinnacle {
 
 impl State {
     pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
-        match event {
-            // TODO: rest of input events
+        self.pinnacle
+            .idle_notifier_state
+            .notify_activity(&self.pinnacle.seat);
 
+        match event {
             // InputEvent::DeviceAdded { device } => todo!(),
             // InputEvent::DeviceRemoved { device } => todo!(),
-            InputEvent::Keyboard { event } => self.keyboard::<B>(event),
-            InputEvent::PointerMotion { event } => self.pointer_motion::<B>(event),
-            InputEvent::PointerMotionAbsolute { event } => self.pointer_motion_absolute::<B>(event),
-            InputEvent::PointerButton { event } => self.pointer_button::<B>(event),
-            InputEvent::PointerAxis { event } => self.pointer_axis::<B>(event),
+            InputEvent::Keyboard { event } => self.on_keyboard::<B>(event),
 
+            InputEvent::PointerMotion { event } => self.on_pointer_motion::<B>(event),
+            InputEvent::PointerMotionAbsolute { event } => {
+                self.on_pointer_motion_absolute::<B>(event)
+            }
+            InputEvent::PointerButton { event } => self.on_pointer_button::<B>(event),
+            InputEvent::PointerAxis { event } => self.on_pointer_axis::<B>(event),
+
+            InputEvent::GestureSwipeBegin { event } => self.on_gesture_swipe_begin::<B>(event),
+            InputEvent::GestureSwipeUpdate { event } => self.on_gesture_swipe_update::<B>(event),
+            InputEvent::GestureSwipeEnd { event } => self.on_gesture_swipe_end::<B>(event),
+            InputEvent::GesturePinchBegin { event } => self.on_gesture_pinch_begin::<B>(event),
+            InputEvent::GesturePinchUpdate { event } => self.on_gesture_pinch_update::<B>(event),
+            InputEvent::GesturePinchEnd { event } => self.on_gesture_pinch_end::<B>(event),
+            InputEvent::GestureHoldBegin { event } => self.on_gesture_hold_begin::<B>(event),
+            InputEvent::GestureHoldEnd { event } => self.on_gesture_hold_end::<B>(event),
+
+            // TODO: rest of input events
             _ => (),
         }
     }
@@ -404,11 +425,7 @@ impl State {
         }
     }
 
-    fn keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
-        self.pinnacle
-            .idle_notifier_state
-            .notify_activity(&self.pinnacle.seat);
-
+    fn on_keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
@@ -602,11 +619,7 @@ impl State {
         }
     }
 
-    fn pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
-        self.pinnacle
-            .idle_notifier_state
-            .notify_activity(&self.pinnacle.seat);
-
+    fn on_pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
@@ -680,11 +693,7 @@ impl State {
         pointer.frame(self);
     }
 
-    fn pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
-        self.pinnacle
-            .idle_notifier_state
-            .notify_activity(&self.pinnacle.seat);
-
+    fn on_pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
         let source = event.source();
 
         let horizontal_amount = event
@@ -732,11 +741,10 @@ impl State {
     ///
     /// This *should* only be generated on the winit backend.
     /// Unless there's a case where it's generated on udev that I'm unaware of.
-    fn pointer_motion_absolute<I: InputBackend>(&mut self, event: I::PointerMotionAbsoluteEvent) {
-        self.pinnacle
-            .idle_notifier_state
-            .notify_activity(&self.pinnacle.seat);
-
+    fn on_pointer_motion_absolute<I: InputBackend>(
+        &mut self,
+        event: I::PointerMotionAbsoluteEvent,
+    ) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion absolute received with no pointer on seat");
             return;
@@ -784,11 +792,7 @@ impl State {
         }
     }
 
-    fn pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
-        self.pinnacle
-            .idle_notifier_state
-            .notify_activity(&self.pinnacle.seat);
-
+    fn on_pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion received with no pointer on seat");
             return;
@@ -970,6 +974,130 @@ impl State {
         if let Some(output) = self.pinnacle.focused_output().cloned() {
             self.schedule_render(&output);
         }
+    }
+
+    fn on_gesture_swipe_begin<I: InputBackend>(&mut self, event: I::GestureSwipeBeginEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_swipe_begin(
+            self,
+            &GestureSwipeBeginEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                fingers: event.fingers(),
+            },
+        );
+    }
+
+    fn on_gesture_swipe_update<I: InputBackend>(&mut self, event: I::GestureSwipeUpdateEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        use smithay::backend::input::GestureSwipeUpdateEvent as _;
+
+        pointer.gesture_swipe_update(
+            self,
+            &GestureSwipeUpdateEvent {
+                time: event.time_msec(),
+                delta: event.delta(),
+            },
+        );
+    }
+
+    fn on_gesture_swipe_end<I: InputBackend>(&mut self, event: I::GestureSwipeEndEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_swipe_end(
+            self,
+            &GestureSwipeEndEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                cancelled: event.cancelled(),
+            },
+        );
+    }
+
+    fn on_gesture_pinch_begin<I: InputBackend>(&mut self, event: I::GesturePinchBeginEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_pinch_begin(
+            self,
+            &GesturePinchBeginEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                fingers: event.fingers(),
+            },
+        );
+    }
+
+    fn on_gesture_pinch_update<I: InputBackend>(&mut self, event: I::GesturePinchUpdateEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        use smithay::backend::input::GesturePinchUpdateEvent as _;
+
+        pointer.gesture_pinch_update(
+            self,
+            &GesturePinchUpdateEvent {
+                time: event.time_msec(),
+                delta: event.delta(),
+                scale: event.scale(),
+                rotation: event.rotation(),
+            },
+        );
+    }
+
+    fn on_gesture_pinch_end<I: InputBackend>(&mut self, event: I::GesturePinchEndEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_pinch_end(
+            self,
+            &GesturePinchEndEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                cancelled: event.cancelled(),
+            },
+        );
+    }
+
+    fn on_gesture_hold_begin<I: InputBackend>(&mut self, event: I::GestureHoldBeginEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_hold_begin(
+            self,
+            &GestureHoldBeginEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                fingers: event.fingers(),
+            },
+        );
+    }
+
+    fn on_gesture_hold_end<I: InputBackend>(&mut self, event: I::GestureHoldEndEvent) {
+        let Some(pointer) = self.pinnacle.seat.get_pointer() else {
+            return;
+        };
+
+        pointer.gesture_hold_end(
+            self,
+            &GestureHoldEndEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                cancelled: event.cancelled(),
+            },
+        );
     }
 }
 

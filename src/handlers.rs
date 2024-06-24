@@ -17,8 +17,8 @@ use smithay::{
     },
     delegate_compositor, delegate_cursor_shape, delegate_data_control, delegate_data_device,
     delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit, delegate_layer_shell,
-    delegate_output, delegate_pointer_constraints, delegate_presentation,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
+    delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
     delegate_xdg_activation, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
@@ -1035,6 +1035,8 @@ impl XdgActivationHandler for State {
     }
 }
 delegate_xdg_activation!(State);
+
+delegate_pointer_gestures!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

@@ -45,6 +45,7 @@ use smithay::{
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
         output::OutputManagerState,
         pointer_constraints::PointerConstraintsState,
+        pointer_gestures::PointerGesturesState,
         relative_pointer::RelativePointerManagerState,
         security_context::SecurityContextState,
         selection::{
@@ -129,6 +130,7 @@ pub struct Pinnacle {
     pub xdg_activation_state: XdgActivationState,
     pub xdg_decoration_state: XdgDecorationState,
     pub kde_decoration_state: KdeDecorationState,
+    pub pointer_gestures_state: PointerGesturesState,
 
     pub lock_state: LockState,
 
@@ -362,6 +364,7 @@ impl Pinnacle {
                 &display_handle,
                 org_kde_kwin_server_decoration_manager::Mode::Client,
             ),
+            pointer_gestures_state: PointerGesturesState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
