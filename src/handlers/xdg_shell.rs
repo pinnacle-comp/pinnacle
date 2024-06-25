@@ -231,7 +231,7 @@ impl XdgShellHandler for State {
                 return;
             };
 
-            self.set_window_fullscreen(&window, true);
+            self.set_window_fullscreen_and_layout(&window, true);
         }
 
         surface.send_configure();
@@ -246,7 +246,7 @@ impl XdgShellHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, false);
+        self.set_window_fullscreen_and_layout(&window, false);
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
@@ -254,7 +254,7 @@ impl XdgShellHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, true);
+        self.set_window_maximized_and_layout(&window, true);
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
@@ -262,7 +262,7 @@ impl XdgShellHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, false);
+        self.set_window_maximized_and_layout(&window, false);
     }
 
     fn minimize_request(&mut self, _surface: ToplevelSurface) {

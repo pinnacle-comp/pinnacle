@@ -73,10 +73,10 @@ impl WindowElement {
             }
         }
 
-        self.with_state_mut(|state| {
-            // FIXME: f64 -> i32, also remove target loc
-            state.target_loc = Some(new_loc.to_i32_round());
-        });
+        // self.with_state_mut(|state| {
+        //     // FIXME: f64 -> i32, also remove target loc
+        //     state.target_loc = Some(new_loc.to_i32_round());
+        // });
     }
 
     /// Get this window's class (app id in Wayland but hey old habits die hard).

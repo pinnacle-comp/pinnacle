@@ -17,10 +17,7 @@ use tracing::warn;
 use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
-    window::{
-        window_state::{FloatingOrTiled, FullscreenOrMaximized},
-        WindowElement,
-    },
+    window::{window_state::FullscreenOrMaximized, WindowElement},
 };
 
 use self::transaction::LayoutTransaction;
@@ -44,6 +41,13 @@ impl Pinnacle {
         });
 
         for win in to_unmap {
+            if win.with_state(|state| {
+                state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
+            }) {
+                if let Some(loc) = self.space.element_location(&win) {
+                    win.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
+                }
+            }
             self.space.unmap_elem(&win);
         }
 
@@ -71,33 +75,33 @@ impl Pinnacle {
 
         for (win, geo) in zipped.by_ref() {
             win.change_geometry(geo.loc.to_f64(), geo.size);
+            self.space.map_element(win, geo.loc, false);
         }
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
         for win in remaining_wins {
             assert!(win.with_state(|state| state.floating_or_tiled.is_floating()));
-            win.toggle_floating();
+            self.set_window_floating(&win, true);
+            if let Some(toplevel) = win.toplevel() {
+                toplevel.send_pending_configure();
+            }
+            // TODO: will prolly need to map here
         }
 
         for window in windows_on_foc_tags.iter() {
             match window.with_state(|state| state.fullscreen_or_maximized) {
                 FullscreenOrMaximized::Fullscreen => {
                     window.change_geometry(output_geo.loc.to_f64(), output_geo.size);
+                    self.space
+                        .map_element(window.clone(), output_geo.loc, false);
                 }
                 FullscreenOrMaximized::Maximized => {
-                    window.change_geometry(
-                        (output_geo.loc + non_exclusive_geo.loc).to_f64(),
-                        non_exclusive_geo.size,
-                    );
+                    let loc = output_geo.loc + non_exclusive_geo.loc;
+                    window.change_geometry(loc.to_f64(), non_exclusive_geo.size);
+                    self.space.map_element(window.clone(), loc, false);
                 }
-                FullscreenOrMaximized::Neither => {
-                    if let FloatingOrTiled::Floating { loc, size } =
-                        window.with_state(|state| state.floating_or_tiled)
-                    {
-                        window.change_geometry(loc, size);
-                    }
-                }
+                FullscreenOrMaximized::Neither => (),
             }
         }
 
@@ -110,10 +114,17 @@ impl Pinnacle {
                 }
             }
 
-            // TODO: get rid of target_loc
-            let loc = win.with_state_mut(|state| state.target_loc.take());
-            if let Some(loc) = loc {
-                self.space.map_element(win.clone(), loc, false);
+            let floating_loc = win
+                .with_state(|state| {
+                    let should_map = state.floating_or_tiled.is_floating()
+                        && state.fullscreen_or_maximized.is_neither();
+
+                    should_map.then_some(state.floating_loc)
+                })
+                .flatten();
+            if let Some(loc) = floating_loc {
+                self.space
+                    .map_element(win.clone(), loc.to_i32_round(), false);
             }
         }
 

@@ -3,7 +3,7 @@
 use std::{process::Stdio, time::Duration};
 
 use smithay::{
-    desktop::Window,
+    desktop::{space::SpaceElement, Window},
     input::pointer::CursorIcon,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
     wayland::selection::{
@@ -27,7 +27,7 @@ use tracing::{debug, error, trace, warn};
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
-    window::{window_state::FloatingOrTiled, WindowElement},
+    window::WindowElement,
 };
 
 impl XwmHandler for State {
@@ -47,8 +47,14 @@ impl XwmHandler for State {
             return;
         }
 
+        surface.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::new(Window::new_x11_window(surface));
-        let bbox = window.bbox();
+
+        if let Some(output) = self.pinnacle.focused_output() {
+            window.place_on_output(output);
+        }
+
+        self.pinnacle.apply_window_rules(&window);
 
         let output_size = self
             .pinnacle
@@ -63,13 +69,17 @@ impl XwmHandler for State {
             .map(|op| op.current_location())
             .unwrap_or((0, 0).into());
 
+        let size = window
+            .with_state(|state| state.floating_size)
+            .unwrap_or(window.bbox().size);
+
         // Center the popup in the middle of the output.
         // Once I find a way to get an X11Surface's parent it will be centered on the parent if
         // applicable.
         // FIXME: loc is i32
         let loc: Point<i32, Logical> = (
-            output_loc.x + output_size.w / 2 - bbox.size.w / 2,
-            output_loc.y + output_size.h / 2 - bbox.size.h / 2,
+            output_loc.x + output_size.w / 2 - size.w / 2,
+            output_loc.y + output_size.h / 2 - size.h / 2,
         )
             .into();
 
@@ -77,29 +87,26 @@ impl XwmHandler for State {
             unreachable!()
         };
 
-        surface.set_mapped(true).expect("failed to map x11 window");
-
-        let bbox = Rectangle::from_loc_and_size(loc, bbox.size);
+        let geo = Rectangle::from_loc_and_size(loc, size);
 
         surface
-            .configure(bbox)
+            .configure(geo)
             .expect("failed to configure x11 window");
 
-        if let Some(output) = self.pinnacle.focused_output() {
-            window.place_on_output(output);
-        }
+        let will_float = should_float(surface)
+            || window.with_state(|state| state.floating_or_tiled.is_floating());
 
-        if should_float(surface) {
+        if will_float {
             window.with_state_mut(|state| {
-                state.floating_or_tiled = FloatingOrTiled::Floating {
-                    loc: bbox.loc.to_f64(),
-                    size: bbox.size,
+                if state.floating_loc.is_none() {
+                    state.floating_loc = Some(geo.loc.to_f64());
+                }
+                if state.floating_size.is_none() {
+                    tracing::info!(?geo.size);
+                    state.floating_size = Some(geo.size);
                 }
             });
-            self.pinnacle.space.map_element(window.clone(), loc, true);
         }
-
-        // TODO: do snapshot and transaction here BUT ONLY IF TILED AND ON ACTIVE TAG
 
         let output = window.output(&self.pinnacle);
 
@@ -110,15 +117,18 @@ impl XwmHandler for State {
         self.pinnacle.windows.push(window.clone());
         self.pinnacle.raise_window(window.clone(), true);
 
-        self.pinnacle.apply_window_rules(&window);
-
         if window.is_on_active_tag() {
             if let Some(output) = output {
                 output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
                 self.update_keyboard_focus(&output);
 
-                self.pinnacle.begin_layout_transaction(&output);
-                self.pinnacle.request_layout(&output);
+                if will_float {
+                    self.pinnacle.set_window_floating(&window, true);
+                    self.pinnacle.space.map_element(window.clone(), loc, true);
+                } else {
+                    self.pinnacle.begin_layout_transaction(&output);
+                    self.pinnacle.request_layout(&output);
+                }
             }
         }
     }
@@ -184,7 +194,8 @@ impl XwmHandler for State {
         _reorder: Option<Reorder>,
     ) {
         trace!("XwmHandler::configure_request");
-        let floating_or_override_redirect = self
+        tracing::info!(?x, ?y, ?w, ?h);
+        let should_configure = self
             .pinnacle
             .windows
             .iter()
@@ -193,9 +204,11 @@ impl XwmHandler for State {
                 win.is_x11_override_redirect()
                     || win.with_state(|state| state.floating_or_tiled.is_floating())
             })
-            .unwrap_or(false);
+            .unwrap_or(true);
+        // If we unwrap_or here then the window hasn't requested a map yet.
+        // In that case, grant the configure. Xterm wants this to map properly, for example.
 
-        if floating_or_override_redirect {
+        if should_configure {
             let mut geo = window.geometry();
 
             if let Some(x) = x {
@@ -210,6 +223,8 @@ impl XwmHandler for State {
             if let Some(h) = h {
                 geo.size.h = h as i32;
             }
+
+            tracing::info!(?geo, "configure_request");
 
             if let Err(err) = window.configure(geo) {
                 error!("Failed to configure x11 win: {err}");
@@ -248,7 +263,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, true);
+        self.set_window_maximized_and_layout(&window, true);
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -259,7 +274,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, false);
+        self.set_window_maximized_and_layout(&window, false);
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -270,7 +285,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, true);
+        self.set_window_fullscreen_and_layout(&window, true);
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -281,7 +296,7 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, true);
+        self.set_window_fullscreen_and_layout(&window, true);
     }
 
     fn resize_request(

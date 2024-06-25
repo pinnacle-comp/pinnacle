@@ -22,7 +22,6 @@ use crate::{
     render::util::snapshot::OutputSnapshots,
     state::{Pinnacle, State, WithState},
     tag::Tag,
-    window::window_state::FloatingOrTiled,
 };
 
 /// A unique identifier for an output.
@@ -223,21 +222,17 @@ impl Pinnacle {
 
                 let output_loc = output.current_location();
 
-                // FIXME: get everything out of this with_state
-                win.with_state_mut(|state| {
-                    let FloatingOrTiled::Floating { loc, size: _ } = &mut state.floating_or_tiled
-                    else {
-                        unreachable!()
-                    };
+                let mut loc = self.space.element_location(&win).unwrap_or(output_loc);
 
-                    let mut loc_relative_to_output = *loc - output_loc.to_f64();
-                    loc_relative_to_output = loc_relative_to_output.upscale(pos_multiplier);
+                // FIXME: space maps in i32
+                let mut loc_relative_to_output = loc - output_loc;
+                loc_relative_to_output = loc_relative_to_output
+                    .to_f64()
+                    .upscale(pos_multiplier)
+                    .to_i32_round();
 
-                    *loc = loc_relative_to_output + output_loc.to_f64();
-                    // FIXME: f64 -> i32
-                    self.space
-                        .map_element(win.clone(), loc.to_i32_round(), false);
-                });
+                loc = loc_relative_to_output + output_loc;
+                self.space.map_element(win.clone(), loc, false);
             }
         }
 

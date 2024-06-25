@@ -22,7 +22,7 @@ use smithay::{
 
 use crate::{
     state::{Pinnacle, State, WithState},
-    window::{window_state::FloatingOrTiled, WindowElement},
+    window::WindowElement,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -451,19 +451,8 @@ impl Pinnacle {
             window_loc.y = new_y;
         }
 
-        let size = self
-            .space
-            .element_geometry(&window)
-            .expect("called element_geometry on unmapped window")
-            .size;
-
         window.with_state_mut(|state| {
-            if state.floating_or_tiled.is_floating() {
-                state.floating_or_tiled = FloatingOrTiled::Floating {
-                    loc: window_loc,
-                    size,
-                };
-            }
+            state.floating_loc = Some(window_loc);
         });
 
         if new_loc.0.is_some() || new_loc.1.is_some() {

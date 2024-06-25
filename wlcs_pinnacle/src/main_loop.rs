@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use pinnacle::{
     state::{ClientState, State, WithState},
     tag::TagId,
-    window::window_state::FloatingOrTiled,
 };
 use smithay::{
     backend::input::{ButtonState, DeviceCapability, InputEvent},
@@ -119,28 +118,16 @@ fn handle_event(event: WlcsEvent, state: &mut State) {
                 .cloned();
 
             if let Some(window) = window {
+                window.with_state_mut(|state| {
+                    state.floating_loc = Some(location.to_f64());
+                });
+
+                state.pinnacle.set_window_floating(&window, true);
+
                 state
                     .pinnacle
                     .space
                     .map_element(window.clone(), location, false);
-
-                let size = state
-                    .pinnacle
-                    .space
-                    .element_geometry(&window)
-                    .expect("window to be positioned was not mapped")
-                    .size;
-
-                if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-                    window.toggle_floating();
-                }
-
-                window.with_state_mut(|state| {
-                    state.floating_or_tiled = FloatingOrTiled::Floating {
-                        loc: location.to_f64(),
-                        size,
-                    };
-                });
 
                 for output in state.pinnacle.space.outputs_for_element(&window) {
                     state.schedule_render(&output);

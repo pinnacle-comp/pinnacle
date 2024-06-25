@@ -60,7 +60,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, true);
+        self.set_window_fullscreen_and_layout(&window, true);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -68,7 +68,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, false);
+        self.set_window_fullscreen_and_layout(&window, false);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -76,7 +76,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, true);
+        self.set_window_maximized_and_layout(&window, true);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -84,7 +84,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, false);
+        self.set_window_maximized_and_layout(&window, false);
     }
 
     fn set_minimized(&mut self, wl_surface: WlSurface) {

@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::{
     state::{State, WithState},
-    window::{window_state::FloatingOrTiled, WindowElement},
+    window::WindowElement,
 };
 
 /// Data for moving a window.
@@ -70,11 +70,39 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             }
         }
 
-        let is_tiled = self
-            .window
-            .with_state(|state| state.floating_or_tiled.is_tiled());
+        let can_move = self.window.with_state(|state| {
+            state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
+        });
 
-        if is_tiled {
+        if can_move {
+            let delta = event.location - self.start_data.location;
+            let new_loc = self.initial_window_loc.to_f64() + delta;
+            // FIXME: space maps locs as i32 not f64
+            state
+                .pinnacle
+                .space
+                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
+
+            self.window.with_state_mut(|state| {
+                state.floating_loc = Some(new_loc);
+            });
+
+            if let Some(surface) = self.window.x11_surface() {
+                if !surface.is_override_redirect() {
+                    let geo = surface.geometry();
+                    // FIXME: prolly not fixable but xwayland configures with loc i32 not f64
+                    let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
+                    surface
+                        .configure(new_geo)
+                        .expect("failed to configure x11 win");
+                }
+            }
+
+            let outputs = state.pinnacle.space.outputs_for_element(&self.window);
+            for output in outputs {
+                state.schedule_render(&output);
+            }
+        } else {
             // INFO: this is being used instead of space.element_under(event.location) because that
             // |     uses the bounding box, which is different from the actual geometry
             let window_under = state
@@ -113,43 +141,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 state
                     .pinnacle
                     .swap_window_positions(&self.window, &window_under);
-            }
-        } else {
-            let delta = event.location - self.start_data.location;
-            let new_loc = self.initial_window_loc.to_f64() + delta;
-            // FIXME: space maps locs as i32 not f64
-            state
-                .pinnacle
-                .space
-                .map_element(self.window.clone(), new_loc.to_i32_round(), true);
-
-            let size = state
-                .pinnacle
-                .space
-                .element_geometry(&self.window)
-                .expect("window wasn't mapped")
-                .size;
-
-            self.window.with_state_mut(|state| {
-                if state.floating_or_tiled.is_floating() {
-                    state.floating_or_tiled = FloatingOrTiled::Floating { loc: new_loc, size };
-                }
-            });
-
-            if let Some(surface) = self.window.x11_surface() {
-                if !surface.is_override_redirect() {
-                    let geo = surface.geometry();
-                    // FIXME: prolly not fixable but xwayland configures with loc i32 not f64
-                    let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
-                    surface
-                        .configure(new_geo)
-                        .expect("failed to configure x11 win");
-                }
-            }
-
-            let outputs = state.pinnacle.space.outputs_for_element(&self.window);
-            for output in outputs {
-                state.schedule_render(&output);
             }
         }
     }
