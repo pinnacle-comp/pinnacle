@@ -404,6 +404,10 @@ impl Pinnacle {
             return;
         };
 
+        if window.with_state(|state| !state.window_state.is_floating()) {
+            return;
+        }
+
         // FIXME: i32 -> f64
         let Some(mut window_loc) = self.space.element_location(&window).map(|loc| loc.to_f64())
         else {
@@ -437,10 +441,6 @@ impl Pinnacle {
                 },
             )
         });
-
-        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-            return;
-        }
 
         let Some(new_loc) = new_loc else { return };
 
@@ -492,8 +492,7 @@ impl State {
                 return;
             };
 
-            // TODO: check for fullscreen/maximized (probably shouldn't matter)
-            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+            if window.with_state(|state| !state.window_state.is_floating()) {
                 return;
             }
 
@@ -547,7 +546,7 @@ impl State {
             return;
         };
 
-        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+        if window.with_state(|state| !state.window_state.is_floating()) {
             return;
         }
 

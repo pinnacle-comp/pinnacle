@@ -200,13 +200,24 @@ impl Pinnacle {
                     window.with_state_mut(|state| state.tags.clone_from(&tags));
                 }
 
+                if let Some(floating_or_tiled) = floating_or_tiled {
+                    window.with_state_mut(|state| {
+                        state.window_state.set_floating(match floating_or_tiled {
+                            FloatingOrTiled::Floating => true,
+                            FloatingOrTiled::Tiled => false,
+                        })
+                    });
+                }
+
                 if let Some(fs_or_max) = fullscreen_or_maximized {
                     match fs_or_max {
-                        FullscreenOrMaximized::Neither => (), // TODO: is this branch needed?
+                        FullscreenOrMaximized::Neither => (), // TODO:
                         FullscreenOrMaximized::Fullscreen => {
-                            self.set_window_fullscreen(window, true)
+                            window.with_state_mut(|state| state.window_state.set_fullscreen(true));
                         }
-                        FullscreenOrMaximized::Maximized => self.set_window_maximized(window, true),
+                        FullscreenOrMaximized::Maximized => {
+                            window.with_state_mut(|state| state.window_state.set_maximized(true))
+                        }
                     }
                 }
 
@@ -225,10 +236,6 @@ impl Pinnacle {
                     window.with_state_mut(|state| {
                         state.floating_loc = Some(Point::from(*location).to_f64());
                     });
-                }
-
-                if let Some(floating_or_tiled) = floating_or_tiled {
-                    window.with_state_mut(|state| state.floating_or_tiled = *floating_or_tiled);
                 }
 
                 if let Some(decoration_mode) = decoration_mode {

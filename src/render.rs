@@ -247,7 +247,7 @@ fn window_render_elements<R: PRenderer>(
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .enumerate()
         .map(|(i, win)| {
-            if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            if win.with_state(|state| state.window_state.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
 

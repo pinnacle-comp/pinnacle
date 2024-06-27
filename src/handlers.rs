@@ -103,7 +103,6 @@ use crate::{
         screencopy::{Screencopy, ScreencopyHandler},
     },
     state::{ClientState, Pinnacle, State, WithState},
-    window::window_state::FloatingOrTiled,
 };
 
 impl BufferHandler for State {
@@ -238,14 +237,12 @@ impl CompositorHandler for State {
 
                         if should_float {
                             unmapped_window.with_state_mut(|state| {
-                                state.floating_or_tiled = FloatingOrTiled::Floating
+                                state.window_state.set_floating(true);
                             });
                         }
                     }
 
-                    if unmapped_window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                        self.pinnacle.set_window_floating(&unmapped_window, true);
-                    }
+                    self.pinnacle.update_window_state(&unmapped_window);
 
                     self.pinnacle
                         .unmapped_windows
@@ -258,10 +255,8 @@ impl CompositorHandler for State {
                         if unmapped_window.is_on_active_tag() {
                             self.update_keyboard_focus(&focused_output);
 
-                            if unmapped_window.with_state(|state| {
-                                state.floating_or_tiled.is_floating()
-                                    && state.fullscreen_or_maximized.is_neither()
-                            }) {
+                            if unmapped_window.with_state(|state| state.window_state.is_floating())
+                            {
                                 // TODO: make this sync with commit
                                 let loc = unmapped_window
                                     .with_state(|state| state.floating_loc)
@@ -295,10 +290,9 @@ impl CompositorHandler for State {
                         unmapped_window.place_on_output(&output);
                     }
                     self.pinnacle.apply_window_rules(&unmapped_window);
-                    if unmapped_window.with_state(|state| {
-                        state.floating_or_tiled.is_floating()
-                            && state.fullscreen_or_maximized.is_neither()
-                    }) {
+
+                    // TODO: may be able to update_window_state here instead
+                    if unmapped_window.with_state(|state| state.window_state.is_floating()) {
                         if let Some(size) = unmapped_window.with_state(|state| state.floating_size)
                         {
                             if let Some(toplevel) = unmapped_window.toplevel() {

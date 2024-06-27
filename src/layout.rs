@@ -17,7 +17,7 @@ use tracing::warn;
 use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
-    window::{window_state::FullscreenOrMaximized, WindowElement},
+    window::{window_state::WindowState, WindowElement},
 };
 
 use self::transaction::LayoutTransaction;
@@ -41,9 +41,7 @@ impl Pinnacle {
         });
 
         for win in to_unmap {
-            if win.with_state(|state| {
-                state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
-            }) {
+            if win.with_state(|state| state.window_state.is_floating()) {
                 if let Some(loc) = self.space.element_location(&win) {
                     win.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
                 }
@@ -54,11 +52,7 @@ impl Pinnacle {
         let tiled_windows = windows_on_foc_tags
             .iter()
             .filter(|win| !win.is_x11_override_redirect())
-            .filter(|win| {
-                win.with_state(|state| {
-                    state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
-                })
-            })
+            .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
             .cloned();
 
         let output_geo = self.space.output_geometry(output).expect("no output geo");
@@ -81,8 +75,8 @@ impl Pinnacle {
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
         for win in remaining_wins {
-            assert!(win.with_state(|state| state.floating_or_tiled.is_floating()));
-            self.set_window_floating(&win, true);
+            win.with_state_mut(|state| state.window_state.set_floating(true));
+            self.update_window_state(&win);
             if let Some(toplevel) = win.toplevel() {
                 toplevel.send_pending_configure();
             }
@@ -90,18 +84,18 @@ impl Pinnacle {
         }
 
         for window in windows_on_foc_tags.iter() {
-            match window.with_state(|state| state.fullscreen_or_maximized) {
-                FullscreenOrMaximized::Fullscreen => {
+            match window.with_state(|state| state.window_state) {
+                WindowState::Fullscreen { .. } => {
                     window.change_geometry(output_geo.loc.to_f64(), output_geo.size);
                     self.space
                         .map_element(window.clone(), output_geo.loc, false);
                 }
-                FullscreenOrMaximized::Maximized => {
+                WindowState::Maximized { .. } => {
                     let loc = output_geo.loc + non_exclusive_geo.loc;
                     window.change_geometry(loc.to_f64(), non_exclusive_geo.size);
                     self.space.map_element(window.clone(), loc, false);
                 }
-                FullscreenOrMaximized::Neither => (),
+                _ => (),
             }
         }
 
@@ -116,10 +110,10 @@ impl Pinnacle {
 
             let floating_loc = win
                 .with_state(|state| {
-                    let should_map = state.floating_or_tiled.is_floating()
-                        && state.fullscreen_or_maximized.is_neither();
-
-                    should_map.then_some(state.floating_loc)
+                    state
+                        .window_state
+                        .is_floating()
+                        .then_some(state.floating_loc)
                 })
                 .flatten();
             if let Some(loc) = floating_loc {
@@ -198,11 +192,7 @@ impl Pinnacle {
 
         let windows = windows_on_foc_tags
             .iter()
-            .filter(|win| {
-                win.with_state(|state| {
-                    state.floating_or_tiled.is_tiled() && state.fullscreen_or_maximized.is_neither()
-                })
-            })
+            .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
             .cloned()
             .collect::<Vec<_>>();
 

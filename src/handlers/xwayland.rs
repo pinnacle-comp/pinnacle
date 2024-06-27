@@ -93,8 +93,8 @@ impl XwmHandler for State {
             .configure(geo)
             .expect("failed to configure x11 window");
 
-        let will_float = should_float(surface)
-            || window.with_state(|state| state.floating_or_tiled.is_floating());
+        let will_float =
+            should_float(surface) || window.with_state(|state| state.window_state.is_floating());
 
         if will_float {
             window.with_state_mut(|state| {
@@ -107,6 +107,8 @@ impl XwmHandler for State {
                 }
             });
         }
+
+        self.pinnacle.update_window_state(&window);
 
         let output = window.output(&self.pinnacle);
 
@@ -123,7 +125,6 @@ impl XwmHandler for State {
                 self.update_keyboard_focus(&output);
 
                 if will_float {
-                    self.pinnacle.set_window_floating(&window, true);
                     self.pinnacle.space.map_element(window.clone(), loc, true);
                 } else {
                     self.pinnacle.begin_layout_transaction(&output);
@@ -202,7 +203,7 @@ impl XwmHandler for State {
             .find(|win| win.x11_surface() == Some(&window))
             .map(|win| {
                 win.is_x11_override_redirect()
-                    || win.with_state(|state| state.floating_or_tiled.is_floating())
+                    || win.with_state(|state| state.window_state.is_floating())
             })
             .unwrap_or(true);
         // If we unwrap_or here then the window hasn't requested a map yet.
@@ -263,7 +264,8 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_maximized_and_layout(&window, true);
+        window.with_state_mut(|state| state.window_state.set_maximized(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -274,7 +276,8 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_maximized_and_layout(&window, false);
+        window.with_state_mut(|state| state.window_state.set_maximized(false));
+        self.update_window_state_and_layout(&window);
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -285,7 +288,8 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_fullscreen_and_layout(&window, true);
+        window.with_state_mut(|state| state.window_state.set_fullscreen(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
@@ -296,7 +300,8 @@ impl XwmHandler for State {
             return;
         };
 
-        self.set_window_fullscreen_and_layout(&window, true);
+        window.with_state_mut(|state| state.window_state.set_fullscreen(false));
+        self.update_window_state_and_layout(&window);
     }
 
     fn resize_request(

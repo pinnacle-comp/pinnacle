@@ -46,6 +46,148 @@ impl WindowId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WindowState {
+    Tiled,
+    Floating,
+    Maximized { previous_state: FloatingOrTiled },
+    Fullscreen { previous_state: FloatingOrTiled },
+}
+
+impl WindowState {
+    pub fn set_floating(&mut self, floating: bool) {
+        if floating {
+            *self = WindowState::Floating;
+        } else {
+            *self = WindowState::Tiled;
+        }
+    }
+
+    pub fn toggle_floating(&mut self) {
+        *self = match self {
+            WindowState::Tiled => WindowState::Floating,
+            WindowState::Floating => WindowState::Tiled,
+            WindowState::Maximized { previous_state }
+            | WindowState::Fullscreen { previous_state } => match previous_state {
+                FloatingOrTiled::Floating => WindowState::Tiled,
+                FloatingOrTiled::Tiled => WindowState::Floating,
+            },
+        }
+    }
+
+    pub fn set_maximized(&mut self, maximized: bool) {
+        if maximized {
+            *self = match self {
+                WindowState::Tiled => WindowState::Maximized {
+                    previous_state: FloatingOrTiled::Tiled,
+                },
+                WindowState::Floating => WindowState::Maximized {
+                    previous_state: FloatingOrTiled::Floating,
+                },
+                ref it @ WindowState::Maximized { .. } => **it,
+                WindowState::Fullscreen { previous_state } => WindowState::Maximized {
+                    previous_state: *previous_state,
+                },
+            }
+        } else if let WindowState::Maximized { previous_state } = self {
+            *self = match previous_state {
+                FloatingOrTiled::Floating => WindowState::Floating,
+                FloatingOrTiled::Tiled => WindowState::Tiled,
+            }
+        }
+    }
+
+    pub fn toggle_maximized(&mut self) {
+        *self = match self {
+            WindowState::Tiled => WindowState::Maximized {
+                previous_state: FloatingOrTiled::Tiled,
+            },
+            WindowState::Floating => WindowState::Maximized {
+                previous_state: FloatingOrTiled::Floating,
+            },
+            WindowState::Maximized { previous_state } => match previous_state {
+                FloatingOrTiled::Floating => WindowState::Floating,
+                FloatingOrTiled::Tiled => WindowState::Tiled,
+            },
+            WindowState::Fullscreen { previous_state } => WindowState::Maximized {
+                previous_state: *previous_state,
+            },
+        }
+    }
+
+    pub fn set_fullscreen(&mut self, fullscreen: bool) {
+        if fullscreen {
+            *self = match self {
+                WindowState::Tiled => WindowState::Fullscreen {
+                    previous_state: FloatingOrTiled::Tiled,
+                },
+                WindowState::Floating => WindowState::Fullscreen {
+                    previous_state: FloatingOrTiled::Floating,
+                },
+                ref it @ WindowState::Fullscreen { .. } => **it,
+                WindowState::Maximized { previous_state } => WindowState::Fullscreen {
+                    previous_state: *previous_state,
+                },
+            }
+        } else if let WindowState::Fullscreen { previous_state } = self {
+            *self = match previous_state {
+                FloatingOrTiled::Floating => WindowState::Floating,
+                FloatingOrTiled::Tiled => WindowState::Tiled,
+            }
+        }
+    }
+
+    pub fn toggle_fullscreen(&mut self) {
+        *self = match self {
+            WindowState::Tiled => WindowState::Fullscreen {
+                previous_state: FloatingOrTiled::Tiled,
+            },
+            WindowState::Floating => WindowState::Fullscreen {
+                previous_state: FloatingOrTiled::Floating,
+            },
+            WindowState::Fullscreen { previous_state } => match previous_state {
+                FloatingOrTiled::Floating => WindowState::Floating,
+                FloatingOrTiled::Tiled => WindowState::Tiled,
+            },
+            WindowState::Maximized { previous_state } => WindowState::Fullscreen {
+                previous_state: *previous_state,
+            },
+        }
+    }
+
+    /// Returns `true` if the window state is [`Tiled`].
+    ///
+    /// [`Tiled`]: WindowState::Tiled
+    #[must_use]
+    pub fn is_tiled(&self) -> bool {
+        matches!(self, Self::Tiled)
+    }
+
+    /// Returns `true` if the window state is [`Floating`].
+    ///
+    /// [`Floating`]: WindowState::Floating
+    #[must_use]
+    pub fn is_floating(&self) -> bool {
+        matches!(self, Self::Floating)
+    }
+
+    /// Returns `true` if the window state is [`Maximized`].
+    ///
+    /// [`Maximized`]: WindowState::Maximized
+    #[must_use]
+    pub fn is_maximized(&self) -> bool {
+        matches!(self, Self::Maximized { .. })
+    }
+
+    /// Returns `true` if the window state is [`Fullscreen`].
+    ///
+    /// [`Fullscreen`]: WindowState::Fullscreen
+    #[must_use]
+    pub fn is_fullscreen(&self) -> bool {
+        matches!(self, Self::Fullscreen { .. })
+    }
+}
+
 /// State of a [`WindowElement`]
 #[derive(Debug)]
 pub struct WindowElementState {
@@ -53,8 +195,7 @@ pub struct WindowElementState {
     pub id: WindowId,
     /// What tags the window is currently on.
     pub tags: Vec<Tag>,
-    pub floating_or_tiled: FloatingOrTiled,
-    pub fullscreen_or_maximized: FullscreenOrMaximized,
+    pub window_state: WindowState,
     pub target_loc: Option<Point<i32, Logical>>,
     pub minimized: bool,
     /// The most recent serial that has been committed.
@@ -123,168 +264,128 @@ impl WindowElement {
 }
 
 impl Pinnacle {
-    pub fn set_window_floating(&self, window: &WindowElement, floating: bool) {
-        // If the window is fullscreen or maximized, simply mark it as floating or tiled
-        // and don't set floating or tiled states to prevent stuff like decorations
-        // appearing in fullscreen mode.
-        if window.with_state(|state| !state.fullscreen_or_maximized.is_neither()) {
-            window.with_state_mut(|state| {
-                state.floating_or_tiled = match floating {
-                    true => FloatingOrTiled::Floating,
-                    false => FloatingOrTiled::Tiled,
-                }
-            });
-            return;
-        }
+    /// Update a window's state from its [`WindowState`] (shocking).
+    pub fn update_window_state(&self, window: &WindowElement) {
+        let window_state = window.with_state(|state| state.window_state);
 
-        if floating {
-            let size = window
-                .with_state(|state| state.floating_size)
-                .unwrap_or_else(|| window.geometry().size);
-            let loc = window
-                .with_state(|state| state.floating_loc)
-                .or_else(|| self.space.element_location(window).map(|loc| loc.to_f64()))
-                .or_else(|| {
-                    self.focused_output().map(|op| {
-                        let op_geo = self
-                            .space
-                            .output_geometry(op)
-                            .expect("focused output wasn't mapped");
+        match window_state {
+            WindowState::Tiled => {
+                // let geo = self.space.element_geometry(window);
+                //
+                // window.with_state_mut(|state| {
+                //     if let Some(geo) = geo {
+                //         state.floating_size.replace(geo.size);
+                //         state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
+                //     }
+                // });
+                window.set_tiled_states();
+            }
+            WindowState::Floating => {
+                let size = window
+                    .with_state(|state| state.floating_size)
+                    .unwrap_or_else(|| window.geometry().size);
+                let loc = window
+                    .with_state(|state| state.floating_loc)
+                    .or_else(|| self.space.element_location(window).map(|loc| loc.to_f64()))
+                    .or_else(|| {
+                        self.focused_output().map(|op| {
+                            let op_geo = self
+                                .space
+                                .output_geometry(op)
+                                .expect("focused output wasn't mapped");
 
-                        let x = op_geo.loc.x + op_geo.size.w / 2 - (size.w / 2);
-                        let y = op_geo.loc.y + op_geo.size.h / 2 - (size.h / 2);
+                            let x = op_geo.loc.x + op_geo.size.w / 2 - (size.w / 2);
+                            let y = op_geo.loc.y + op_geo.size.h / 2 - (size.h / 2);
 
-                        (x as f64, y as f64).into()
+                            (x as f64, y as f64).into()
+                        })
                     })
-                })
-                .unwrap_or_default();
+                    .unwrap_or_default();
 
-            window.with_state_mut(|state| {
-                state.floating_size = Some(size);
-                state.floating_loc = Some(loc);
-                state.floating_or_tiled = FloatingOrTiled::Floating;
-            });
+                window.with_state_mut(|state| {
+                    state.floating_size = Some(size);
+                    state.floating_loc = Some(loc);
+                });
 
-            window.change_geometry(loc, size);
-            window.set_floating_states();
-        } else {
-            let geo = self.space.element_geometry(window);
-
-            window.with_state_mut(|state| {
-                if let Some(geo) = geo {
-                    state.floating_size.replace(geo.size);
-                    state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                }
-                state.floating_or_tiled = FloatingOrTiled::Tiled;
-            });
-            window.set_tiled_states();
-        }
-    }
-
-    pub fn set_window_maximized(&self, window: &WindowElement, maximized: bool) {
-        if maximized {
-            // We only want to update the stored floating geometry when exiting floating mode.
-            if window.with_state(|state| {
-                state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
-            }) {
-                let geo = self.space.element_geometry(window);
-
-                if let Some(geo) = geo {
-                    window.with_state_mut(|state| {
-                        state.floating_size.replace(geo.size);
-                        state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                    });
-                }
+                window.change_geometry(loc, size);
+                window.set_floating_states();
             }
+            WindowState::Maximized { .. } => {
+                // We only want to update the stored floating geometry when exiting floating mode.
+                // if window.with_state(|state| {
+                //     state.floating_or_tiled.is_floating()
+                //         && state.fullscreen_or_maximized.is_neither()
+                // }) {
+                //     let geo = self.space.element_geometry(window);
+                //
+                //     if let Some(geo) = geo {
+                //         window.with_state_mut(|state| {
+                //             state.floating_size.replace(geo.size);
+                //             state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
+                //         });
+                //     }
+                // }
 
-            window.with_state_mut(|state| {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Maximized;
-            });
-
-            match window.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.with_pending_state(|state| {
-                        state.states.set(xdg_toplevel::State::Maximized);
-                        state.states.unset(xdg_toplevel::State::Fullscreen);
-                        state.states.set(xdg_toplevel::State::TiledTop);
-                        state.states.set(xdg_toplevel::State::TiledLeft);
-                        state.states.set(xdg_toplevel::State::TiledBottom);
-                        state.states.set(xdg_toplevel::State::TiledRight);
-                    });
-                }
-                WindowSurface::X11(surface) => {
-                    if !surface.is_override_redirect() {
-                        if let Err(err) = surface.set_maximized(true) {
-                            warn!("Failed to set xwayland window to maximized: {err}");
-                        }
-                        if let Err(err) = surface.set_fullscreen(false) {
-                            warn!("Failed to unset xwayland window fullscreen: {err}");
+                match window.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        toplevel.with_pending_state(|state| {
+                            state.states.set(xdg_toplevel::State::Maximized);
+                            state.states.unset(xdg_toplevel::State::Fullscreen);
+                            state.states.set(xdg_toplevel::State::TiledTop);
+                            state.states.set(xdg_toplevel::State::TiledLeft);
+                            state.states.set(xdg_toplevel::State::TiledBottom);
+                            state.states.set(xdg_toplevel::State::TiledRight);
+                        });
+                    }
+                    WindowSurface::X11(surface) => {
+                        if !surface.is_override_redirect() {
+                            if let Err(err) = surface.set_maximized(true) {
+                                warn!("Failed to set xwayland window to maximized: {err}");
+                            }
+                            if let Err(err) = surface.set_fullscreen(false) {
+                                warn!("Failed to unset xwayland window fullscreen: {err}");
+                            }
                         }
                     }
                 }
             }
-        } else {
-            window.with_state_mut(|state| {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
-            });
+            WindowState::Fullscreen { .. } => {
+                // We only want to update the stored floating geometry when exiting floating mode.
+                // if window.with_state(|state| {
+                //     state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
+                // }) {
+                //     let geo = self.space.element_geometry(window);
+                //
+                //     if let Some(geo) = geo {
+                //         window.with_state_mut(|state| {
+                //             state.floating_size.replace(geo.size);
+                //             state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
+                //         });
+                //     }
+                // }
 
-            match window.with_state(|state| state.floating_or_tiled) {
-                FloatingOrTiled::Floating => self.set_window_floating(window, true),
-                FloatingOrTiled::Tiled => window.set_tiled_states(),
-            }
-        }
-    }
-
-    pub fn set_window_fullscreen(&self, window: &WindowElement, fullscreen: bool) {
-        if fullscreen {
-            // We only want to update the stored floating geometry when exiting floating mode.
-            if window.with_state(|state| {
-                state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
-            }) {
-                let geo = self.space.element_geometry(window);
-
-                if let Some(geo) = geo {
-                    window.with_state_mut(|state| {
-                        state.floating_size.replace(geo.size);
-                        state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                    });
-                }
-            }
-
-            window.with_state_mut(|state| {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Fullscreen;
-            });
-
-            match window.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.with_pending_state(|state| {
-                        state.states.unset(xdg_toplevel::State::Maximized);
-                        state.states.set(xdg_toplevel::State::Fullscreen);
-                        state.states.set(xdg_toplevel::State::TiledTop);
-                        state.states.set(xdg_toplevel::State::TiledLeft);
-                        state.states.set(xdg_toplevel::State::TiledBottom);
-                        state.states.set(xdg_toplevel::State::TiledRight);
-                    });
-                }
-                WindowSurface::X11(surface) => {
-                    if !surface.is_override_redirect() {
-                        if let Err(err) = surface.set_maximized(false) {
-                            warn!("Failed to unset xwayland window maximized: {err}");
-                        }
-                        if let Err(err) = surface.set_fullscreen(true) {
-                            warn!("Failed to set xwayland window to fullscreen: {err}");
+                match window.underlying_surface() {
+                    WindowSurface::Wayland(toplevel) => {
+                        toplevel.with_pending_state(|state| {
+                            state.states.unset(xdg_toplevel::State::Maximized);
+                            state.states.set(xdg_toplevel::State::Fullscreen);
+                            state.states.set(xdg_toplevel::State::TiledTop);
+                            state.states.set(xdg_toplevel::State::TiledLeft);
+                            state.states.set(xdg_toplevel::State::TiledBottom);
+                            state.states.set(xdg_toplevel::State::TiledRight);
+                        });
+                    }
+                    WindowSurface::X11(surface) => {
+                        if !surface.is_override_redirect() {
+                            if let Err(err) = surface.set_maximized(false) {
+                                warn!("Failed to unset xwayland window maximized: {err}");
+                            }
+                            if let Err(err) = surface.set_fullscreen(true) {
+                                warn!("Failed to set xwayland window to fullscreen: {err}");
+                            }
                         }
                     }
                 }
-            }
-        } else {
-            window.with_state_mut(|state| {
-                state.fullscreen_or_maximized = FullscreenOrMaximized::Neither;
-            });
-
-            match window.with_state(|state| state.floating_or_tiled) {
-                FloatingOrTiled::Floating => self.set_window_floating(window, true),
-                FloatingOrTiled::Tiled => window.set_tiled_states(),
             }
         }
     }
@@ -355,10 +456,9 @@ impl WindowElementState {
         Self {
             id: WindowId::next(),
             tags: vec![],
-            floating_or_tiled: FloatingOrTiled::Tiled,
+            window_state: WindowState::Tiled,
             floating_loc: None,
             floating_size: None,
-            fullscreen_or_maximized: FullscreenOrMaximized::Neither,
             target_loc: None,
             minimized: false,
             committed_serial: None,

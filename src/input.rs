@@ -218,7 +218,7 @@ impl Pinnacle {
             .filter(|win| win.is_on_active_tag())
             .enumerate()
         {
-            if win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
+            if win.with_state(|state| state.window_state.is_fullscreen()) {
                 fullscreen_and_up_split_at = i + 1;
             }
         }

@@ -214,7 +214,7 @@ impl Pinnacle {
                 .windows
                 .iter()
                 .filter(|win| win.output(self).as_ref() == Some(output))
-                .filter(|win| win.with_state(|state| state.floating_or_tiled.is_floating()))
+                .filter(|win| win.with_state(|state| state.window_state.is_floating()))
                 .cloned()
                 .collect::<Vec<_>>()
             {

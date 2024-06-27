@@ -70,9 +70,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             }
         }
 
-        let can_move = self.window.with_state(|state| {
-            state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
-        });
+        let can_move = self
+            .window
+            .with_state(|state| state.window_state.is_floating());
 
         if can_move {
             let delta = event.location - self.start_data.location;
@@ -132,7 +132,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 }
 
                 if window_under.with_state(|state| {
-                    state.floating_or_tiled.is_floating() || state.target_loc.is_some()
+                    state.window_state.is_floating() || state.target_loc.is_some()
                 }) {
                     return;
                 }

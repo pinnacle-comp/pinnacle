@@ -182,9 +182,9 @@ pub fn capture_snapshots_on_output(
         .filter(|win| {
             win.is_on_active_tag_on_output(output)
                 || (win.is_on_active_tag()
-                    && win.with_state(|state| state.floating_or_tiled.is_floating()))
+                    && win.with_state(|state| state.window_state.is_floating()))
         })
-        .position(|win| win.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()));
+        .position(|win| win.with_state(|state| state.window_state.is_fullscreen()));
 
     let mut under_fullscreen = pinnacle
         .space
@@ -192,7 +192,7 @@ pub fn capture_snapshots_on_output(
         .filter(|win| {
             win.is_on_active_tag_on_output(output)
                 || (win.is_on_active_tag()
-                    && win.with_state(|state| state.floating_or_tiled.is_floating()))
+                    && win.with_state(|state| state.window_state.is_floating()))
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -203,8 +203,7 @@ pub fn capture_snapshots_on_output(
     let also_include = also_include.into_iter().collect::<HashSet<_>>();
 
     let mut flat_map = |win: WindowElement| {
-        if win.with_state(|state| state.floating_or_tiled.is_tiled()) || also_include.contains(&win)
-        {
+        if win.with_state(|state| state.window_state.is_tiled()) || also_include.contains(&win) {
             let loc = pinnacle.space.element_location(&win)? - output.current_location();
             let snapshot = win.capture_snapshot_and_store(
                 renderer,
