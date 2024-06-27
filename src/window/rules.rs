@@ -14,7 +14,7 @@ use crate::{
     window::window_state::FloatingOrTiled,
 };
 
-use super::WindowElement;
+use super::{window_state::WindowState, WindowElement};
 
 use std::num::NonZeroU32;
 
@@ -162,6 +162,7 @@ pub struct WindowRule {
     /// when set to floating.
     pub location: Option<(i32, i32)>,
     pub decoration_mode: Option<DecorationMode>,
+    pub window_state: Option<WindowState>,
 }
 
 impl Pinnacle {
@@ -177,6 +178,7 @@ impl Pinnacle {
                     size,
                     location, // FIXME: make f64
                     decoration_mode,
+                    window_state,
                 } = rule;
 
                 // TODO: If both `output` and `tags` are specified, `tags` will apply over
@@ -200,23 +202,33 @@ impl Pinnacle {
                     window.with_state_mut(|state| state.tags.clone_from(&tags));
                 }
 
-                if let Some(floating_or_tiled) = floating_or_tiled {
-                    window.with_state_mut(|state| {
-                        state.window_state.set_floating(match floating_or_tiled {
-                            FloatingOrTiled::Floating => true,
-                            FloatingOrTiled::Tiled => false,
-                        })
+                if let Some(window_state) = window_state {
+                    window.with_state_mut(|state| match window_state {
+                        WindowState::Tiled => state.window_state.set_floating(false),
+                        WindowState::Floating => state.window_state.set_floating(true),
+                        WindowState::Maximized { .. } => state.window_state.set_maximized(true),
+                        WindowState::Fullscreen { .. } => state.window_state.set_fullscreen(true),
                     });
-                }
+                } else {
+                    if let Some(floating_or_tiled) = floating_or_tiled {
+                        window.with_state_mut(|state| {
+                            state.window_state.set_floating(match floating_or_tiled {
+                                FloatingOrTiled::Floating => true,
+                                FloatingOrTiled::Tiled => false,
+                            })
+                        });
+                    }
 
-                if let Some(fs_or_max) = fullscreen_or_maximized {
-                    match fs_or_max {
-                        FullscreenOrMaximized::Neither => (), // TODO:
-                        FullscreenOrMaximized::Fullscreen => {
-                            window.with_state_mut(|state| state.window_state.set_fullscreen(true));
-                        }
-                        FullscreenOrMaximized::Maximized => {
-                            window.with_state_mut(|state| state.window_state.set_maximized(true))
+                    if let Some(fs_or_max) = fullscreen_or_maximized {
+                        match fs_or_max {
+                            FullscreenOrMaximized::Neither => (), // TODO:
+                            FullscreenOrMaximized::Fullscreen => {
+                                window.with_state_mut(|state| {
+                                    state.window_state.set_fullscreen(true)
+                                });
+                            }
+                            FullscreenOrMaximized::Maximized => window
+                                .with_state_mut(|state| state.window_state.set_maximized(true)),
                         }
                     }
                 }

@@ -412,7 +412,7 @@ impl WindowRule {
         self
     }
 
-    /// This rule will force windows to open either floating or not.
+    /// This rule will force windows to open either floating if true or tiled if false.
     ///
     /// # Examples
     ///
@@ -426,7 +426,10 @@ impl WindowRule {
     /// let rule = WindowRule::new().floating(false);
     /// ```
     pub fn floating(mut self, floating: bool) -> Self {
-        self.0.floating = Some(floating);
+        self.0.set_state(match floating {
+            true => window::v0alpha1::WindowState::Floating,
+            false => window::v0alpha1::WindowState::Tiled,
+        });
         self
     }
 
@@ -447,11 +450,42 @@ impl WindowRule {
     /// // Force the window to open not fullscreen nor maximized
     /// let rule = WindowRule::new().fullscreen_or_maximized(FullscreenOrMaximized::Neither);
     /// ```
+    #[deprecated = "use the `fullscreen` or `maximized` methods instead"]
     pub fn fullscreen_or_maximized(
         mut self,
         fullscreen_or_maximized: FullscreenOrMaximized,
     ) -> Self {
         self.0.fullscreen_or_maximized = Some(fullscreen_or_maximized as i32);
+        self
+    }
+
+    /// This rule will force windows to open fullscreen.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::window::rules::WindowRule;
+    ///
+    /// // Force the window to open fullscreen
+    /// let rule = WindowRule::new().fullscreen();
+    /// ```
+    pub fn fullscreen(mut self) -> Self {
+        self.0.set_state(window::v0alpha1::WindowState::Fullscreen);
+        self
+    }
+
+    /// This rule will force windows to open maximized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pinnacle_api::window::rules::WindowRule;
+    ///
+    /// // Force the window to open fullscreen
+    /// let rule = WindowRule::new().maximized();
+    /// ```
+    pub fn maximized(mut self) -> Self {
+        self.0.set_state(window::v0alpha1::WindowState::Maximized);
         self
     }
 

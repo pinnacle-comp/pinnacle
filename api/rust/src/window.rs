@@ -234,6 +234,20 @@ pub enum FullscreenOrMaximized {
     Maximized,
 }
 
+/// A window's current display state.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
+pub enum WindowState {
+    /// The window is tiled.
+    Tiled = 1,
+    /// The window is floating.
+    Floating,
+    /// The window is fullscreen.
+    Fullscreen,
+    /// The window is maximized.
+    Maximized,
+}
+
 /// Properties of a window.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct WindowProperties {
@@ -249,11 +263,15 @@ pub struct WindowProperties {
     ///
     /// Note that a window can still be floating even if it's fullscreen or maximized; those two
     /// states will just override the floating state.
+    #[deprecated = "use `state` instead"]
     pub floating: Option<bool>,
     /// Whether the window is fullscreen, maximized, or neither
+    #[deprecated = "use `state` instead"]
     pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
     /// All the tags on the window
     pub tags: Vec<TagHandle>,
+    /// The state of the window.
+    pub state: Option<WindowState>,
 }
 
 impl WindowHandle {
@@ -569,6 +587,15 @@ impl WindowHandle {
             }
         };
 
+        let state = match response.state() {
+            window::v0alpha1::WindowState::Unspecified => None,
+            window::v0alpha1::WindowState::Tiled => Some(WindowState::Tiled),
+            window::v0alpha1::WindowState::Floating => Some(WindowState::Floating),
+            window::v0alpha1::WindowState::Fullscreen => Some(WindowState::Fullscreen),
+            window::v0alpha1::WindowState::Maximized => Some(WindowState::Maximized),
+        };
+
+        #[allow(deprecated)]
         let fullscreen_or_maximized = response
             .fullscreen_or_maximized
             .unwrap_or_default()
@@ -582,6 +609,7 @@ impl WindowHandle {
             height: geo.height() as u32,
         });
 
+        #[allow(deprecated)]
         WindowProperties {
             geometry,
             class: response.class,
@@ -594,6 +622,7 @@ impl WindowHandle {
                 .into_iter()
                 .map(|id| self.api.tag.new_handle(id))
                 .collect(),
+            state,
         }
     }
 
@@ -649,24 +678,82 @@ impl WindowHandle {
     ///
     /// Shorthand for `self.props().floating`.
     pub fn floating(&self) -> Option<bool> {
-        self.props().floating
+        self.props()
+            .state
+            .map(|state| state == WindowState::Floating)
     }
 
     /// The async version of [`floating`][Self::floating]
     pub async fn floating_async(&self) -> Option<bool> {
-        self.props_async().await.floating
+        self.props_async()
+            .await
+            .state
+            .map(|state| state == WindowState::Floating)
     }
 
     /// Get whether this window is fullscreen, maximized, or neither.
     ///
     /// Shorthand for `self.props().fullscreen_or_maximized`.
+    #[deprecated = "use the `fullscreen` or `maximized` methods instead"]
     pub fn fullscreen_or_maximized(&self) -> Option<FullscreenOrMaximized> {
-        self.props().fullscreen_or_maximized
+        self.props().state.map(|state| match state {
+            WindowState::Tiled | WindowState::Floating => FullscreenOrMaximized::Neither,
+            WindowState::Fullscreen => FullscreenOrMaximized::Fullscreen,
+            WindowState::Maximized => FullscreenOrMaximized::Maximized,
+        })
     }
 
     /// The async version of [`fullscreen_or_maximized`][Self::fullscreen_or_maximized].
+    #[deprecated = "use the `fullscreen_async` or `maximized_async` methods instead"]
     pub async fn fullscreen_or_maximized_async(&self) -> Option<FullscreenOrMaximized> {
-        self.props_async().await.fullscreen_or_maximized
+        self.props_async().await.state.map(|state| match state {
+            WindowState::Tiled | WindowState::Floating => FullscreenOrMaximized::Neither,
+            WindowState::Fullscreen => FullscreenOrMaximized::Fullscreen,
+            WindowState::Maximized => FullscreenOrMaximized::Maximized,
+        })
+    }
+
+    /// Get whether or not this window is tiled.
+    pub fn tiled(&self) -> Option<bool> {
+        self.props().state.map(|state| state == WindowState::Tiled)
+    }
+
+    /// The async version of [`tiled`][Self::tiled].
+    pub async fn tiled_async(&self) -> Option<bool> {
+        self.props_async()
+            .await
+            .state
+            .map(|state| state == WindowState::Tiled)
+    }
+
+    /// Get whether or not this window is fullscreen.
+    pub fn fullscreen(&self) -> Option<bool> {
+        self.props()
+            .state
+            .map(|state| state == WindowState::Fullscreen)
+    }
+
+    /// The async version of [`fullscreen`][Self::fullscreen].
+    pub async fn fullscreen_async(&self) -> Option<bool> {
+        self.props_async()
+            .await
+            .state
+            .map(|state| state == WindowState::Fullscreen)
+    }
+
+    /// Get whether or not this window is maximized.
+    pub fn maximized(&self) -> Option<bool> {
+        self.props()
+            .state
+            .map(|state| state == WindowState::Maximized)
+    }
+
+    /// The async version of [`maximized`][Self::maximized].
+    pub async fn maximized_async(&self) -> Option<bool> {
+        self.props_async()
+            .await
+            .state
+            .map(|state| state == WindowState::Maximized)
     }
 
     /// Get all the tags on this window.

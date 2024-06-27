@@ -666,6 +666,17 @@ impl window_service_server::WindowService for WindowService {
                 })
                 .unwrap_or_default();
 
+            let state = window.as_ref().map(|win| {
+                let state = win.with_state(|state| state.window_state);
+                (match state {
+                    WindowState::Tiled => window::v0alpha1::WindowState::Tiled,
+                    WindowState::Floating => window::v0alpha1::WindowState::Floating,
+                    WindowState::Maximized { .. } => window::v0alpha1::WindowState::Maximized,
+                    WindowState::Fullscreen { .. } => window::v0alpha1::WindowState::Fullscreen,
+                }) as i32
+            });
+
+            #[allow(deprecated)]
             window::v0alpha1::GetPropertiesResponse {
                 geometry,
                 class,
@@ -674,6 +685,7 @@ impl window_service_server::WindowService for WindowService {
                 floating,
                 fullscreen_or_maximized,
                 tag_ids,
+                state,
             }
         })
         .await
@@ -763,6 +775,19 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
                 Some(crate::window::window_state::FullscreenOrMaximized::Maximized)
             }
         };
+
+        let window_state = match rule.state() {
+            window::v0alpha1::WindowState::Unspecified => None,
+            window::v0alpha1::WindowState::Tiled => Some(WindowState::Tiled),
+            window::v0alpha1::WindowState::Floating => Some(WindowState::Floating),
+            window::v0alpha1::WindowState::Fullscreen => Some(WindowState::Fullscreen {
+                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
+            }),
+            window::v0alpha1::WindowState::Maximized => Some(WindowState::Fullscreen {
+                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
+            }),
+        };
+
         let output = rule.output.map(OutputName);
         let tags = match rule.tags.is_empty() {
             true => None,
@@ -794,6 +819,7 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
             size,
             location,
             decoration_mode,
+            window_state,
         }
     }
 }

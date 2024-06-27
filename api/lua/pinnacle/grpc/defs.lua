@@ -180,6 +180,7 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field floating boolean?
 ---@field fullscreen_or_maximized pinnacle.window.v0alpha1.FullscreenOrMaximized?
 ---@field tag_ids integer[]?
+---@field state pinnacle.window.v0alpha1.WindowState?
 
 ---@enum pinnacle.window.v0alpha1.FullscreenOrMaximized
 local pinnacle_window_v0alpha1_FullscreenOrMaximized = {
@@ -200,6 +201,15 @@ local pinnacle_window_v0alpha1_FullscreenOrMaximized = {
 ---@field titles string[]?
 ---@field tags integer[]?
 
+---@enum pinnacle.window.v0alpha1.WindowState
+local pinnacle_window_v0alpha1_WindowState = {
+    WINDOW_STATE_UNSPECIFIED = 0,
+    WINDOW_STATE_TILED = 1,
+    WINDOW_STATE_FLOATING = 2,
+    WINDOW_STATE_FULLSCREEN = 3,
+    WINDOW_STATE_MAXIMIZED = 4,
+}
+
 ---@class pinnacle.window.v0alpha1.WindowRule
 ---@field output string?
 ---@field tags integer[]?
@@ -210,6 +220,7 @@ local pinnacle_window_v0alpha1_FullscreenOrMaximized = {
 ---@field width integer?
 ---@field height integer?
 ---@field ssd boolean?
+---@field state pinnacle.window.v0alpha1.WindowState?
 
 -- Tag
 
@@ -560,6 +571,7 @@ defs.pinnacle = {
             FullscreenOrMaximized = util.bijective_table(
                 pinnacle_window_v0alpha1_FullscreenOrMaximized
             ),
+            WindowState = util.bijective_table(pinnacle_window_v0alpha1_WindowState),
             WindowService = {
                 ---@type GrpcRequestArgs
                 Close = {

@@ -74,9 +74,10 @@ message GetPropertiesResponse {
   optional string class = 2;
   optional string title = 3;
   optional bool focused = 4;
-  optional bool floating = 5;
-  optional FullscreenOrMaximized fullscreen_or_maximized = 6;
+  optional bool floating = 5 [deprecated = true];
+  optional FullscreenOrMaximized fullscreen_or_maximized = 6 [deprecated = true];
   repeated uint32 tag_ids = 7;
+  optional WindowState state = 8;
 }
 
 enum FullscreenOrMaximized {
@@ -99,12 +100,25 @@ message WindowRuleCondition {
   repeated uint32 tags = 5;
 }
 
+enum WindowState {
+  WINDOW_STATE_UNSPECIFIED = 0;
+  WINDOW_STATE_TILED = 1;
+  WINDOW_STATE_FLOATING = 2;
+  WINDOW_STATE_FULLSCREEN = 3;
+  WINDOW_STATE_MAXIMIZED = 4;
+}
+
 message WindowRule {
   optional string output = 1;
   repeated uint32 tags = 2;
+
+  // DEPRECATED
+  // TODO: remove in 0.1/0.2
   // `true` for floating, `false` for tiled
   optional bool floating = 3;
 
+  // DEPRECATED
+  // TODO: remove in 0.1/0.2
   optional FullscreenOrMaximized fullscreen_or_maximized = 4;
 
   optional int32 x = 5;
@@ -113,6 +127,8 @@ message WindowRule {
   optional int32 height = 8;
   // true to force ssd, false to force csd, null to not force anything
   optional bool ssd = 9;
+
+  optional WindowState state = 10;
 }
 
 service WindowService {
