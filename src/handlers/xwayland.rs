@@ -102,7 +102,6 @@ impl XwmHandler for State {
                     state.floating_loc = Some(geo.loc.to_f64());
                 }
                 if state.floating_size.is_none() {
-                    tracing::info!(?geo.size);
                     state.floating_size = Some(geo.size);
                 }
             });
@@ -195,7 +194,6 @@ impl XwmHandler for State {
         _reorder: Option<Reorder>,
     ) {
         trace!("XwmHandler::configure_request");
-        tracing::info!(?x, ?y, ?w, ?h);
         let should_configure = self
             .pinnacle
             .windows
@@ -224,8 +222,6 @@ impl XwmHandler for State {
             if let Some(h) = h {
                 geo.size.h = h as i32;
             }
-
-            tracing::info!(?geo, "configure_request");
 
             if let Err(err) = window.configure(geo) {
                 error!("Failed to configure x11 win: {err}");

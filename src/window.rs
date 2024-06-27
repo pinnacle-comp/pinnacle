@@ -317,5 +317,7 @@ impl Pinnacle {
         for output in self.outputs.keys() {
             output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
         }
+
+        self.space.unmap_elem(window);
     }
 }
