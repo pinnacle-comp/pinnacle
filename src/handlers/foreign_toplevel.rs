@@ -60,7 +60,8 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, true);
+        window.with_state_mut(|state| state.window_state.set_fullscreen(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -68,7 +69,8 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_fullscreen(&window, false);
+        window.with_state_mut(|state| state.window_state.set_fullscreen(false));
+        self.update_window_state_and_layout(&window);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -76,7 +78,8 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, true);
+        window.with_state_mut(|state| state.window_state.set_maximized(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -84,9 +87,11 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        self.set_window_maximized(&window, false);
+        window.with_state_mut(|state| state.window_state.set_maximized(false));
+        self.update_window_state_and_layout(&window);
     }
 
+    // TODO:
     fn set_minimized(&mut self, wl_surface: WlSurface) {
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
@@ -102,6 +107,7 @@ impl ForeignToplevelHandler for State {
         self.schedule_render(&output);
     }
 
+    // TODO:
     fn unset_minimized(&mut self, wl_surface: WlSurface) {
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;

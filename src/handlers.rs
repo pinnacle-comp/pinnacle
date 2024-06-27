@@ -73,7 +73,7 @@ use smithay::{
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
-            xdg::{PopupSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData},
+            xdg::{PopupSurface, SurfaceCachedState, XdgPopupSurfaceData, XdgToplevelSurfaceData},
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,
@@ -213,6 +213,37 @@ impl CompositorHandler for State {
                         self.capture_snapshots_on_output(output, []);
                     }
 
+                    unmapped_window.with_state_mut(|state| {
+                        if state.floating_size.is_none() {
+                            state.floating_size = Some(unmapped_window.geometry().size);
+                        }
+                    });
+
+                    // Float windows if necessary
+                    if let Some(toplevel) = unmapped_window.toplevel() {
+                        let has_parent = toplevel.parent().is_some();
+                        let (min_size, max_size) =
+                            compositor::with_states(toplevel.wl_surface(), |states| {
+                                let mut guard = states.cached_state.get::<SurfaceCachedState>();
+                                let state = guard.current();
+                                (state.min_size, state.max_size)
+                            });
+
+                        let requests_constrained_size = min_size.w > 0
+                            && min_size.h > 0
+                            && (min_size.w == max_size.w || min_size.h == max_size.h);
+
+                        let should_float = has_parent || requests_constrained_size;
+
+                        if should_float {
+                            unmapped_window.with_state_mut(|state| {
+                                state.window_state.set_floating(true);
+                            });
+                        }
+                    }
+
+                    self.pinnacle.update_window_state(&unmapped_window);
+
                     self.pinnacle
                         .unmapped_windows
                         .retain(|win| win != unmapped_window);
@@ -224,8 +255,25 @@ impl CompositorHandler for State {
                         if unmapped_window.is_on_active_tag() {
                             self.update_keyboard_focus(&focused_output);
 
-                            self.pinnacle.begin_layout_transaction(&focused_output);
-                            self.pinnacle.request_layout(&focused_output);
+                            if unmapped_window.with_state(|state| state.window_state.is_floating())
+                            {
+                                // TODO: make this sync with commit
+                                let loc = unmapped_window
+                                    .with_state(|state| state.floating_loc)
+                                    .unwrap();
+                                self.pinnacle.space.map_element(
+                                    unmapped_window.clone(),
+                                    loc.to_i32_round(),
+                                    true,
+                                );
+                                unmapped_window
+                                    .toplevel()
+                                    .expect("unreachable")
+                                    .send_pending_configure();
+                            } else {
+                                self.pinnacle.begin_layout_transaction(&focused_output);
+                                self.pinnacle.request_layout(&focused_output);
+                            }
 
                             // It seems wlcs needs immediate frame sends for client tests to work
                             #[cfg(feature = "testing")]
@@ -242,6 +290,16 @@ impl CompositorHandler for State {
                         unmapped_window.place_on_output(&output);
                     }
                     self.pinnacle.apply_window_rules(&unmapped_window);
+
+                    // TODO: may be able to update_window_state here instead
+                    if unmapped_window.with_state(|state| state.window_state.is_floating()) {
+                        if let Some(size) = unmapped_window.with_state(|state| state.floating_size)
+                        {
+                            if let Some(toplevel) = unmapped_window.toplevel() {
+                                toplevel.with_pending_state(|state| state.size = Some(size));
+                            }
+                        }
+                    }
                     // Still unmapped
                     unmapped_window.on_commit();
                     self.pinnacle.ensure_initial_configure(surface);

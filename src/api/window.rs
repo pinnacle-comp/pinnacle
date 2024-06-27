@@ -25,7 +25,10 @@ use crate::{
     output::OutputName,
     state::WithState,
     tag::TagId,
-    window::{rules::DecorationMode, window_state::WindowId},
+    window::{
+        rules::DecorationMode,
+        window_state::{WindowId, WindowState},
+    },
 };
 
 use super::{run_unary, run_unary_no_response, StateFnSender};
@@ -94,27 +97,17 @@ impl window_service_server::WindowService for WindowService {
             window_loc.x = x.unwrap_or(window_loc.x);
             window_loc.y = y.unwrap_or(window_loc.y);
 
+            // TODO: window.geometry.size or space.elem_geo
             let mut window_size = window.geometry().size;
             window_size.w = width.unwrap_or(window_size.w);
             window_size.h = height.unwrap_or(window_size.h);
 
             window.with_state_mut(|state| {
-                use crate::window::window_state::FloatingOrTiled;
-                state.floating_or_tiled = match state.floating_or_tiled {
-                    FloatingOrTiled::Floating { .. } => FloatingOrTiled::Floating {
-                        loc: window_loc.to_f64(),
-                        size: window_size,
-                    },
-                    FloatingOrTiled::Tiled(_) => {
-                        FloatingOrTiled::Tiled(Some((window_loc.to_f64(), window_size)))
-                    }
-                }
+                state.floating_loc = Some(window_loc.to_f64());
+                state.floating_size = Some(window_size);
             });
 
-            for output in state.pinnacle.space.outputs_for_element(&window) {
-                state.pinnacle.request_layout(&output);
-                state.schedule_render(&output);
-            }
+            state.pinnacle.update_window_state(&window);
         })
         .await
     }
@@ -150,13 +143,13 @@ impl window_service_server::WindowService for WindowService {
             };
 
             match fullscreen {
-                Some(fullscreen) => state.set_window_fullscreen(&window, fullscreen),
-                None => {
-                    let is_fullscreen = window
-                        .with_state(|win_state| win_state.fullscreen_or_maximized.is_fullscreen());
-                    state.set_window_fullscreen(&window, !is_fullscreen);
+                Some(fullscreen) => {
+                    window.with_state_mut(|state| state.window_state.set_fullscreen(fullscreen))
                 }
+                None => window.with_state_mut(|state| state.window_state.toggle_fullscreen()),
             }
+
+            state.update_window_state_and_layout(&window);
         })
         .await
     }
@@ -192,13 +185,13 @@ impl window_service_server::WindowService for WindowService {
             };
 
             match maximized {
-                Some(maximized) => state.set_window_maximized(&window, maximized),
-                None => {
-                    let is_maximized = window
-                        .with_state(|win_state| win_state.fullscreen_or_maximized.is_maximized());
-                    state.set_window_maximized(&window, !is_maximized);
+                Some(maximized) => {
+                    window.with_state_mut(|state| state.window_state.set_maximized(maximized))
                 }
+                None => window.with_state_mut(|state| state.window_state.toggle_maximized()),
             }
+
+            state.update_window_state_and_layout(&window);
         })
         .await
     }
@@ -221,40 +214,26 @@ impl window_service_server::WindowService for WindowService {
             return Err(Status::invalid_argument("unspecified set or toggle"));
         }
 
+        let floating = match set_or_toggle {
+            SetOrToggle::Unspecified => unreachable!(),
+            SetOrToggle::Set => Some(true),
+            SetOrToggle::Unset => Some(false),
+            SetOrToggle::Toggle => None,
+        };
+
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(&state.pinnacle) else {
                 return;
             };
 
-            let output = window.output(&state.pinnacle);
-
-            if let Some(output) = output.as_ref() {
-                state.capture_snapshots_on_output(output, [window.clone()]);
+            match floating {
+                Some(floating) => {
+                    window.with_state_mut(|state| state.window_state.set_floating(floating))
+                }
+                None => window.with_state_mut(|state| state.window_state.toggle_floating()),
             }
 
-            match set_or_toggle {
-                SetOrToggle::Set => {
-                    if !window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                        window.toggle_floating();
-                    }
-                }
-                SetOrToggle::Unset => {
-                    if window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                        window.toggle_floating();
-                    }
-                }
-                SetOrToggle::Toggle => window.toggle_floating(),
-                SetOrToggle::Unspecified => unreachable!(),
-            }
-
-            let Some(output) = output else {
-                return;
-            };
-
-            state.pinnacle.begin_layout_transaction(&output);
-            state.pinnacle.request_layout(&output);
-
-            state.schedule_render(&output);
+            state.update_window_state_and_layout(&window);
         })
         .await
     }
@@ -665,22 +644,17 @@ impl window_service_server::WindowService for WindowService {
 
             let floating = window
                 .as_ref()
-                .map(|win| win.with_state(|state| state.floating_or_tiled.is_floating()));
+                .map(|win| win.with_state(|state| state.window_state.is_floating()));
 
+            // TODO: change representation
             let fullscreen_or_maximized = window
                 .as_ref()
-                .map(|win| win.with_state(|state| state.fullscreen_or_maximized))
+                .map(|win| win.with_state(|state| state.window_state))
                 .map(|fs_or_max| match fs_or_max {
                     // TODO: from impl
-                    crate::window::window_state::FullscreenOrMaximized::Neither => {
-                        FullscreenOrMaximized::Neither
-                    }
-                    crate::window::window_state::FullscreenOrMaximized::Fullscreen => {
-                        FullscreenOrMaximized::Fullscreen
-                    }
-                    crate::window::window_state::FullscreenOrMaximized::Maximized => {
-                        FullscreenOrMaximized::Maximized
-                    }
+                    WindowState::Tiled | WindowState::Floating => FullscreenOrMaximized::Neither,
+                    WindowState::Fullscreen { .. } => FullscreenOrMaximized::Fullscreen,
+                    WindowState::Maximized { .. } => FullscreenOrMaximized::Maximized,
                 } as i32);
 
             let tag_ids = window
@@ -692,6 +666,17 @@ impl window_service_server::WindowService for WindowService {
                 })
                 .unwrap_or_default();
 
+            let state = window.as_ref().map(|win| {
+                let state = win.with_state(|state| state.window_state);
+                (match state {
+                    WindowState::Tiled => window::v0alpha1::WindowState::Tiled,
+                    WindowState::Floating => window::v0alpha1::WindowState::Floating,
+                    WindowState::Maximized { .. } => window::v0alpha1::WindowState::Maximized,
+                    WindowState::Fullscreen { .. } => window::v0alpha1::WindowState::Fullscreen,
+                }) as i32
+            });
+
+            #[allow(deprecated)]
             window::v0alpha1::GetPropertiesResponse {
                 geometry,
                 class,
@@ -700,6 +685,7 @@ impl window_service_server::WindowService for WindowService {
                 floating,
                 fullscreen_or_maximized,
                 tag_ids,
+                state,
             }
         })
         .await
@@ -789,14 +775,27 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
                 Some(crate::window::window_state::FullscreenOrMaximized::Maximized)
             }
         };
+
+        let window_state = match rule.state() {
+            window::v0alpha1::WindowState::Unspecified => None,
+            window::v0alpha1::WindowState::Tiled => Some(WindowState::Tiled),
+            window::v0alpha1::WindowState::Floating => Some(WindowState::Floating),
+            window::v0alpha1::WindowState::Fullscreen => Some(WindowState::Fullscreen {
+                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
+            }),
+            window::v0alpha1::WindowState::Maximized => Some(WindowState::Fullscreen {
+                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
+            }),
+        };
+
         let output = rule.output.map(OutputName);
         let tags = match rule.tags.is_empty() {
             true => None,
             false => Some(rule.tags.into_iter().map(TagId).collect::<Vec<_>>()),
         };
         let floating_or_tiled = rule.floating.map(|floating| match floating {
-            true => crate::window::rules::FloatingOrTiled::Floating,
-            false => crate::window::rules::FloatingOrTiled::Tiled,
+            true => crate::window::window_state::FloatingOrTiled::Floating,
+            false => crate::window::window_state::FloatingOrTiled::Tiled,
         });
         let size = rule.width.and_then(|w| {
             rule.height.and_then(|h| {
@@ -820,6 +819,7 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
             size,
             location,
             decoration_mode,
+            window_state,
         }
     }
 }

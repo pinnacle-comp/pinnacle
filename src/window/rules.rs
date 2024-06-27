@@ -11,10 +11,10 @@ use smithay::{
 use crate::{
     handlers::decoration::KdeDecorationObject,
     state::{Pinnacle, WithState},
-    window::window_state,
+    window::window_state::FloatingOrTiled,
 };
 
-use super::WindowElement;
+use super::{window_state::WindowState, WindowElement};
 
 use std::num::NonZeroU32;
 
@@ -162,13 +162,7 @@ pub struct WindowRule {
     /// when set to floating.
     pub location: Option<(i32, i32)>,
     pub decoration_mode: Option<DecorationMode>,
-}
-
-// TODO: just skip serializing fields on the other FloatingOrTiled
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum FloatingOrTiled {
-    Floating,
-    Tiled,
+    pub window_state: Option<WindowState>,
 }
 
 impl Pinnacle {
@@ -184,6 +178,7 @@ impl Pinnacle {
                     size,
                     location, // FIXME: make f64
                     decoration_mode,
+                    window_state,
                 } = rule;
 
                 // TODO: If both `output` and `tags` are specified, `tags` will apply over
@@ -207,23 +202,35 @@ impl Pinnacle {
                     window.with_state_mut(|state| state.tags.clone_from(&tags));
                 }
 
-                if let Some(floating_or_tiled) = floating_or_tiled {
-                    match floating_or_tiled {
-                        FloatingOrTiled::Floating => {
-                            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-                                window.toggle_floating();
+                if let Some(window_state) = window_state {
+                    window.with_state_mut(|state| match window_state {
+                        WindowState::Tiled => state.window_state.set_floating(false),
+                        WindowState::Floating => state.window_state.set_floating(true),
+                        WindowState::Maximized { .. } => state.window_state.set_maximized(true),
+                        WindowState::Fullscreen { .. } => state.window_state.set_fullscreen(true),
+                    });
+                } else {
+                    if let Some(floating_or_tiled) = floating_or_tiled {
+                        window.with_state_mut(|state| {
+                            state.window_state.set_floating(match floating_or_tiled {
+                                FloatingOrTiled::Floating => true,
+                                FloatingOrTiled::Tiled => false,
+                            })
+                        });
+                    }
+
+                    if let Some(fs_or_max) = fullscreen_or_maximized {
+                        match fs_or_max {
+                            FullscreenOrMaximized::Neither => (), // TODO:
+                            FullscreenOrMaximized::Fullscreen => {
+                                window.with_state_mut(|state| {
+                                    state.window_state.set_fullscreen(true)
+                                });
                             }
-                        }
-                        FloatingOrTiled::Tiled => {
-                            if window.with_state(|state| state.floating_or_tiled.is_floating()) {
-                                window.toggle_floating();
-                            }
+                            FullscreenOrMaximized::Maximized => window
+                                .with_state_mut(|state| state.window_state.set_maximized(true)),
                         }
                     }
-                }
-
-                if let Some(fs_or_max) = fullscreen_or_maximized {
-                    window.with_state_mut(|state| state.fullscreen_or_maximized = *fs_or_max);
                 }
 
                 if let Some((w, h)) = size {
@@ -231,53 +238,16 @@ impl Pinnacle {
                     window_size.w = u32::from(*w) as i32;
                     window_size.h = u32::from(*h) as i32;
 
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        window_state::FloatingOrTiled::Floating { loc, mut size } => {
-                            size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            window.with_state_mut(|state| {
-                                state.floating_or_tiled =
-                                    window_state::FloatingOrTiled::Floating { loc, size }
-                            });
-                        }
-                        window_state::FloatingOrTiled::Tiled(mut rect) => {
-                            if let Some((_, size)) = rect.as_mut() {
-                                *size = (u32::from(*w) as i32, u32::from(*h) as i32).into();
-                            }
-                            window.with_state_mut(|state| {
-                                state.floating_or_tiled = window_state::FloatingOrTiled::Tiled(rect)
-                            });
-                        }
-                    }
+                    window.with_state_mut(|state| {
+                        state.floating_size = Some(window_size);
+                    });
                 }
 
+                // FIXME: make this f64
                 if let Some(location) = location {
-                    match window.with_state(|state| state.floating_or_tiled) {
-                        window_state::FloatingOrTiled::Floating { mut loc, size } => {
-                            // FIXME: make window rule f64
-                            loc = Point::from(*location).to_f64();
-                            window.with_state_mut(|state| {
-                                state.floating_or_tiled =
-                                    window_state::FloatingOrTiled::Floating { loc, size }
-                            });
-                            // FIXME: space maps as i32
-                            self.space
-                                .map_element(window.clone(), loc.to_i32_round(), false);
-                        }
-                        window_state::FloatingOrTiled::Tiled(rect) => {
-                            // If the window is tiled, don't set the size. Instead, set
-                            // what the size will be when it gets set to floating.
-                            let rect = rect.unwrap_or_else(|| {
-                                let size = window.geometry().size;
-                                // FIXME: i32 -> f64
-                                (Point::from(*location).to_f64(), size)
-                            });
-
-                            window.with_state_mut(|state| {
-                                state.floating_or_tiled =
-                                    window_state::FloatingOrTiled::Tiled(Some(rect))
-                            });
-                        }
-                    }
+                    window.with_state_mut(|state| {
+                        state.floating_loc = Some(Point::from(*location).to_f64());
+                    });
                 }
 
                 if let Some(decoration_mode) = decoration_mode {

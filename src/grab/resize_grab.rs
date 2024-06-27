@@ -22,7 +22,7 @@ use smithay::{
 
 use crate::{
     state::{Pinnacle, State, WithState},
-    window::{window_state::FloatingOrTiled, WindowElement},
+    window::WindowElement,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -404,6 +404,10 @@ impl Pinnacle {
             return;
         };
 
+        if window.with_state(|state| !state.window_state.is_floating()) {
+            return;
+        }
+
         // FIXME: i32 -> f64
         let Some(mut window_loc) = self.space.element_location(&window).map(|loc| loc.to_f64())
         else {
@@ -438,10 +442,6 @@ impl Pinnacle {
             )
         });
 
-        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
-            return;
-        }
-
         let Some(new_loc) = new_loc else { return };
 
         if let Some(new_x) = new_loc.0 {
@@ -451,19 +451,8 @@ impl Pinnacle {
             window_loc.y = new_y;
         }
 
-        let size = self
-            .space
-            .element_geometry(&window)
-            .expect("called element_geometry on unmapped window")
-            .size;
-
         window.with_state_mut(|state| {
-            if state.floating_or_tiled.is_floating() {
-                state.floating_or_tiled = FloatingOrTiled::Floating {
-                    loc: window_loc,
-                    size,
-                };
-            }
+            state.floating_loc = Some(window_loc);
         });
 
         if new_loc.0.is_some() || new_loc.1.is_some() {
@@ -503,8 +492,7 @@ impl State {
                 return;
             };
 
-            // TODO: check for fullscreen/maximized (probably shouldn't matter)
-            if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+            if window.with_state(|state| !state.window_state.is_floating()) {
                 return;
             }
 
@@ -558,7 +546,7 @@ impl State {
             return;
         };
 
-        if window.with_state(|state| state.floating_or_tiled.is_tiled()) {
+        if window.with_state(|state| !state.window_state.is_floating()) {
             return;
         }
 

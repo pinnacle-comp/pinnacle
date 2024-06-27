@@ -1,49 +1,20 @@
-use crate::{
-    state::{State, WithState},
-    window::WindowElement,
-};
+use crate::{state::State, window::WindowElement};
 
 impl State {
-    pub fn set_window_maximized(&mut self, window: &WindowElement, maximized: bool) {
+    pub fn update_window_state_and_layout(&mut self, window: &WindowElement) {
         let output = window.output(&self.pinnacle);
         if let Some(output) = output.as_ref() {
             self.capture_snapshots_on_output(output, [window.clone()]);
         }
 
-        if maximized {
-            if !window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-                window.toggle_maximized();
-            }
-        } else if window.with_state(|state| state.fullscreen_or_maximized.is_maximized()) {
-            window.toggle_maximized();
-        }
-
-        if let Some(output) = output {
-            self.pinnacle.begin_layout_transaction(&output);
-            self.pinnacle.request_layout(&output);
-
-            self.schedule_render(&output);
-        }
-    }
-
-    pub fn set_window_fullscreen(&mut self, window: &WindowElement, fullscreen: bool) {
-        let output = window.output(&self.pinnacle);
-        if let Some(output) = output.as_ref() {
-            self.capture_snapshots_on_output(output, [window.clone()]);
-        }
-
-        if fullscreen {
-            if !window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-                window.toggle_fullscreen();
-            }
-        } else if window.with_state(|state| state.fullscreen_or_maximized.is_fullscreen()) {
-            window.toggle_fullscreen();
-        }
+        self.pinnacle.update_window_state(window);
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
+        }
 
+        for output in self.pinnacle.space.outputs_for_element(window) {
             self.schedule_render(&output);
         }
     }

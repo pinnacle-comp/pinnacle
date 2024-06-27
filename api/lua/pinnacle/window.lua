@@ -133,16 +133,23 @@ end
 ---@field titles string[]?
 ---@field tags TagHandle[]?
 
+---@alias WindowState
+---| "tiled"
+---| "floating"
+---| "fullscreen"
+---| "maximized"
+
 ---@class WindowRule
 ---@field output OutputHandle?
 ---@field tags TagHandle[]?
----@field floating boolean?
----@field fullscreen_or_maximized FullscreenOrMaximized?
+---@field floating boolean? -- Deprecated; use `state` with "floating" or "tiled" instead
+---@field fullscreen_or_maximized FullscreenOrMaximized? -- Deprecated; use `state` with "fullscreen" or "maximized" instead
 ---@field x integer?
 ---@field y integer?
 ---@field width integer?
 ---@field height integer?
 ---@field decoration_mode ("client_side" | "server_side")?
+---@field state WindowState?
 
 ---@enum (key) FullscreenOrMaximized
 local _fullscreen_or_maximized = {
@@ -183,6 +190,23 @@ local function process_window_rule(rule)
         elseif rule.decoration_mode == "server_side" then
             ---@diagnostic disable-next-line: inject-field
             rule.ssd = true
+        end
+    end
+
+    if rule.state then
+        local WindowState = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowState
+        if rule.state == "tiled" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
+            rule.state = WindowState.WINDOW_STATE_TILED
+        elseif rule.state == "floating" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
+            rule.state = WindowState.WINDOW_STATE_FLOATING
+        elseif rule.state == "fullscreen" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
+            rule.state = WindowState.WINDOW_STATE_FULLSCREEN
+        elseif rule.state == "maximized" then
+            ---@diagnostic disable-next-line: assign-type-mismatch
+            rule.state = WindowState.WINDOW_STATE_MAXIMIZED
         end
     end
 end
@@ -655,6 +679,7 @@ end
 ---@field floating boolean? Whether or not the window is floating
 ---@field fullscreen_or_maximized FullscreenOrMaximized? Whether the window is fullscreen, maximized, or neither
 ---@field tags TagHandle[]? The tags the window has
+---@field state WindowState?
 
 ---Get all the properties of this window.
 ---
@@ -669,6 +694,22 @@ function WindowHandle:props()
         ---@diagnostic disable-next-line: invisible
         and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
     response.tag_ids = nil
+
+    if response.state then
+        local WindowState = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowState
+        ---@type WindowState?
+        local state = nil
+        if response.state == WindowState.WINDOW_STATE_TILED then
+            state = "tiled"
+        elseif response.state == WindowState.WINDOW_STATE_FLOATING then
+            state = "floating"
+        elseif response.state == WindowState.WINDOW_STATE_FULLSCREEN then
+            state = "fullscreen"
+        elseif response.state == WindowState.WINDOW_STATE_MAXIMIZED then
+            state = "maximized"
+        end
+        response.state = state
+    end
 
     return response
 end
@@ -713,16 +754,40 @@ end
 ---
 ---Shorthand for `handle:props().floating`.
 ---
----@return boolean?
+---@return boolean
 function WindowHandle:floating()
-    return self:props().floating
+    return self:props().state == "floating"
 end
 
+---Get whether this window is tiled.
+---
+---@return boolean
+function WindowHandle:tiled()
+    return self:props().state == "tiled"
+end
+
+---Get whether this window is fullscreen.
+---
+---@return boolean
+function WindowHandle:fullscreen()
+    return self:props().state == "fullscreen"
+end
+
+---Get whether this window is maximized.
+---
+---@return boolean
+function WindowHandle:maximized()
+    return self:props().state == "maximized"
+end
+
+---Deprecated; use the `fullscreen` or `maximized` methods instead.
+---
 ---Get whether this window is fullscreen, maximized, or neither.
 ---
 ---Shorthand for `handle:props().fullscreen_or_maximized`.
 ---
 ---@return FullscreenOrMaximized?
+---@deprecated
 function WindowHandle:fullscreen_or_maximized()
     return self:props().fullscreen_or_maximized
 end
