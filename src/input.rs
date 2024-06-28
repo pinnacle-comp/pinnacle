@@ -664,6 +664,9 @@ impl State {
                             self.update_keyboard_focus(&output);
                         }
                     }
+                    for output in self.pinnacle.space.outputs_for_element(&window) {
+                        self.schedule_render(&output);
+                    }
                 } else if let Some(layer) = focus.layer_for(self) {
                     if layer.can_receive_keyboard_focus() {
                         keyboard.set_focus(

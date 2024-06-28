@@ -98,6 +98,7 @@ impl XwmHandler for State {
 
         if will_float {
             window.with_state_mut(|state| {
+                state.window_state.set_floating(true);
                 if state.floating_loc.is_none() {
                     state.floating_loc = Some(geo.loc.to_f64());
                 }
@@ -131,6 +132,10 @@ impl XwmHandler for State {
                 }
             }
         }
+
+        for output in self.pinnacle.space.outputs_for_element(&window) {
+            self.schedule_render(&output);
+        }
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -153,6 +158,10 @@ impl XwmHandler for State {
 
         self.pinnacle.space.map_element(window.clone(), loc, true);
         self.pinnacle.raise_window(window.clone(), true);
+
+        for output in self.pinnacle.space.outputs_for_element(&window) {
+            self.schedule_render(&output);
+        }
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {

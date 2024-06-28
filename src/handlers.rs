@@ -367,20 +367,41 @@ impl CompositorHandler for State {
             self.pinnacle.space.outputs_for_element(&window) // surface is a window
         } else if let Some(window) = self.pinnacle.window_for_surface(&root) {
             self.pinnacle.space.outputs_for_element(&window) // surface's root is a window
-        } else if let Some(PopupKind::Xdg(surf)) = self.pinnacle.popup_manager.find_popup(surface) {
-            // INFO: is this relative to the global space or no
-            let geo = surf.with_pending_state(|state| state.geometry);
-            let outputs = self
-                .pinnacle
-                .space
-                .outputs()
-                .filter_map(|output| {
-                    let op_geo = self.pinnacle.space.output_geometry(output);
-                    op_geo.and_then(|op_geo| op_geo.overlaps_or_touches(geo).then_some(output))
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            outputs // surface is a popup
+        } else if let Some(ref popup @ PopupKind::Xdg(ref surf)) =
+            self.pinnacle.popup_manager.find_popup(surface)
+        {
+            let size = surf.with_pending_state(|state| state.geometry.size);
+            let loc = find_popup_root_surface(popup)
+                .ok()
+                .and_then(|surf| self.pinnacle.window_for_surface(&surf))
+                .and_then(|win| self.pinnacle.space.element_location(&win));
+
+            if let Some(loc) = loc {
+                let geo = Rectangle::from_loc_and_size(loc, size);
+                let outputs = self
+                    .pinnacle
+                    .space
+                    .outputs()
+                    .filter_map(|output| {
+                        let op_geo = self.pinnacle.space.output_geometry(output);
+                        op_geo.and_then(|op_geo| op_geo.overlaps_or_touches(geo).then_some(output))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                outputs
+            } else {
+                let layer_output = find_popup_root_surface(popup)
+                    .ok()
+                    .and_then(|surf| {
+                        self.pinnacle.space.outputs().find(|op| {
+                            let map = layer_map_for_output(op);
+                            map.layer_for_surface(&surf, WindowSurfaceType::TOPLEVEL)
+                                .is_some()
+                        })
+                    })
+                    .cloned();
+                layer_output.map(|op| vec![op]).unwrap_or_default()
+            }
         } else if let Some(output) = self
             .pinnacle
             .space

@@ -440,13 +440,16 @@ impl window_service_server::WindowService for WindowService {
         );
 
         run_unary_no_response(&self.sender, move |state| {
-            let pinnacle = &mut state.pinnacle;
-            let Some(window) = window_id.window(pinnacle) else {
+            let Some(window) = window_id.window(&state.pinnacle) else {
                 warn!("`raise` was called on a nonexistent window");
                 return;
             };
 
-            pinnacle.raise_window(window, false);
+            for output in state.pinnacle.space.outputs_for_element(&window) {
+                state.schedule_render(&output);
+            }
+
+            state.pinnacle.raise_window(window, false);
         })
         .await
     }
