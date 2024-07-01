@@ -456,7 +456,7 @@ impl Udev {
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
-            tracing::info!("no render surface on output {}", output.name());
+            debug!("no render surface on output {}", output.name());
             return;
         };
 
@@ -522,58 +522,12 @@ impl Udev {
 impl State {
     /// Switch the tty.
     ///
-    /// This will first clear the overlay plane to prevent any lingering artifacts,
-    /// then switch the vt.
-    ///
     /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         if let Backend::Udev(udev) = &mut self.backend {
             if let Err(err) = udev.session.change_vt(vt) {
                 error!("Failed to switch to vt {vt}: {err}");
             }
-
-            // TODO: uncomment this when `RenderFrameResult::blit_frame_result` is fixed for
-            // |     overlay/cursor planes
-
-            // for backend in udev.backends.values_mut() {
-            //     for surface in backend.surfaces.values_mut() {
-            //         // Clear the overlay planes on tty switch.
-            //         //
-            //         // On my machine, switching a tty would leave the topmost window on the
-            //         // screen. Smithay will render the topmost window on the overlay plane,
-            //         // so we clear it here.
-            //         let planes = surface.compositor.surface().planes().clone();
-            //         tracing::debug!("Clearing overlay planes");
-            //         for overlay_plane in planes.overlay {
-            //             if let Err(err) = surface
-            //                 .compositor
-            //                 .surface()
-            //                 .clear_plane(overlay_plane.handle)
-            //             {
-            //                 warn!("Failed to clear overlay planes: {err}");
-            //             }
-            //         }
-            //     }
-            // }
-
-            // Wait for the clear to commit before switching
-            // self.schedule(
-            //     |state| {
-            //         let udev = state.backend.udev();
-            //         !udev
-            //             .backends
-            //             .values()
-            //             .flat_map(|backend| backend.surfaces.values())
-            //             .map(|surface| surface.compositor.surface())
-            //             .any(|drm_surf| drm_surf.commit_pending())
-            //     },
-            //     move |state| {
-            //         let udev = state.backend.udev_mut();
-            //         if let Err(err) = udev.session.change_vt(vt) {
-            //             error!("Failed to switch to vt {vt}: {err}");
-            //         }
-            //     },
-            // );
         }
     }
 }
@@ -708,8 +662,8 @@ fn get_surface_dmabuf_feedback(
     // the supplied buffer can not be scanned out directly
     let planes_formats = planes
         .primary
-        .formats
         .into_iter()
+        .flat_map(|p| p.formats)
         .chain(planes.overlay.into_iter().flat_map(|p| p.formats))
         .collect::<IndexSet<_>>()
         .intersection(&all_render_formats)
@@ -800,7 +754,7 @@ enum PendingGammaChange {
 struct ScreencopyCommitState {
     primary_plane_swapchain: CommitCounter,
     primary_plane_element: CommitCounter,
-    _cursor: CommitCounter,
+    cursor: CommitCounter,
 }
 
 type GbmDrmCompositor = DrmCompositor<
@@ -1036,8 +990,9 @@ impl Udev {
             let mut planes = surface.planes().clone();
 
             // INFO: We are disabling overlay planes because it seems that any elements on
-            // |     overlay planes don't get up/downscaled according to the set filter;
-            // |     it always defaults to linear.
+            // overlay planes don't get up/downscaled according to the set filter;
+            // it always defaults to linear. Also alacritty seems to have the wrong alpha
+            // when it's on the overlay plane.
             planes.overlay.clear();
 
             match DrmCompositor::new(
@@ -1117,7 +1072,7 @@ impl Udev {
         node: DrmNode,
         crtc: crtc::Handle,
     ) {
-        tracing::debug!(?crtc, "connector_disconnected");
+        debug!(?crtc, "connector_disconnected");
 
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
@@ -1185,7 +1140,7 @@ impl Udev {
             self.connector_disconnected(pinnacle, node, crtc);
         }
 
-        tracing::debug!("Surfaces dropped");
+        debug!("Surfaces dropped");
 
         // drop the backends on this side
         if let Some(backend_data) = self.backends.remove(&node) {
@@ -1195,7 +1150,7 @@ impl Udev {
 
             pinnacle.loop_handle.remove(backend_data.registration_token);
 
-            tracing::debug!("Dropping device");
+            debug!("Dropping device");
         }
     }
 
@@ -1393,19 +1348,6 @@ impl Udev {
             || (pinnacle.lock_state.is_locked()
                 && output.with_state(|state| state.lock_surface.is_none()));
 
-        // HACK: Doing `blit_frame_result` with something on the cursor/overlay plane overwrites
-        // transparency. This workaround makes the cursor not be on the cursor plane for blitting.
-        let kind = if output.with_state(|state| {
-            state
-                .screencopy
-                .as_ref()
-                .is_some_and(|sc| sc.overlay_cursor())
-        }) {
-            element::Kind::Unspecified
-        } else {
-            element::Kind::Cursor
-        };
-
         let (pointer_render_elements, cursor_ids) = pointer_render_elements(
             output,
             &mut renderer,
@@ -1414,7 +1356,6 @@ impl Udev {
             pointer_location,
             pinnacle.dnd_icon.as_ref(),
             &pinnacle.clock,
-            kind,
         );
         output_render_elements.extend(
             pointer_render_elements
@@ -1587,7 +1528,7 @@ fn handle_pending_screencopy<'a>(
         // region. Sway does the former, Hyprland the latter. Also, no one actually seems to be using the
         // received damage. wf-recorder and wl-mirror have no-op handlers for the damage event.
 
-        let damage = match &render_frame_result.primary_element {
+        let mut damage = match &render_frame_result.primary_element {
             PrimaryPlaneElement::Swapchain(element) => {
                 let swapchain_commit = &mut surface.screencopy_commit_state.primary_plane_swapchain;
                 let damage = element.damage.damage_since(Some(*swapchain_commit));
@@ -1622,29 +1563,30 @@ fn handle_pending_screencopy<'a>(
             )])
         });
 
-        // INFO: This code is here for if the bug where `blit_frame_result` makes the area around
-        // |     the cursor transparent is fixed/a workaround found.
-        // let cursor_damage = render_frame_result
-        //     .cursor_element
-        //     .map(|cursor| {
-        //         let damage =
-        //             cursor.damage_since(scale, Some(surface.screencopy_commit_state.cursor));
-        //         new_commit_counters.cursor = cursor.current_commit();
-        //         damage
-        //     })
-        //     .unwrap_or_default();
+        let cursor_damage = render_frame_result
+            .cursor_element
+            .map(|cursor| {
+                let damage =
+                    cursor.damage_since(scale, Some(surface.screencopy_commit_state.cursor));
+                surface.screencopy_commit_state.cursor = cursor.current_commit();
+                damage
+            })
+            .unwrap_or_default();
+
+        damage = damage.into_iter().chain(cursor_damage).collect();
+
+        // The primary plane and cursor had no damage but something got rendered,
+        // so it must be the cursor moving.
         //
-        // damage.extend(cursor_damage);
-        //
-        // // The primary plane and cursor had no damage but something got rendered,
-        // // so it must be the cursor moving.
-        // //
-        // // We currently have overlay planes disabled, so we don't have to worry about that.
-        // if damage.is_empty() && !render_frame_result.is_empty {
-        //     if let Some(cursor_elem) = render_frame_result.cursor_element {
-        //         damage.push(cursor_elem.geometry(scale));
-        //     }
-        // }
+        // We currently have overlay planes disabled, so we don't have to worry about that.
+        if damage.is_empty() && !render_frame_result.is_empty {
+            if let Some(cursor_elem) = render_frame_result.cursor_element {
+                damage = damage
+                    .into_iter()
+                    .chain([cursor_elem.geometry(scale)])
+                    .collect();
+            }
+        }
 
         // INFO: Protocol states that `copy_with_damage` should wait until there is
         // |     damage to be copied.

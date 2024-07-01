@@ -52,7 +52,6 @@ pub fn pointer_render_elements<R: PRenderer>(
     pointer_location: Point<f64, Logical>,
     dnd_icon: Option<&WlSurface>,
     clock: &Clock<Monotonic>,
-    kind: element::Kind,
 ) -> (Vec<PointerRenderElement<R>>, Vec<Id>) {
     let mut pointer_render_elements = Vec::new();
     let mut cursor_ids = Vec::new();
@@ -83,7 +82,7 @@ pub fn pointer_render_elements<R: PRenderer>(
                     None,
                     None,
                     None,
-                    kind,
+                    element::Kind::Cursor,
                 );
 
                 elem.map(|elem| vec![PointerRenderElement::Memory(elem)])

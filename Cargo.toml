@@ -37,7 +37,7 @@ indexmap = "2.2.6"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "69b379d"
+rev = "3731734"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -85,7 +85,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "69b379d" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "3731734" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -297,7 +297,6 @@ impl Winit {
                 pointer_location,
                 pinnacle.dnd_icon.as_ref(),
                 &pinnacle.clock,
-                element::Kind::Cursor,
             );
             output_render_elements.extend(
                 pointer_render_elements

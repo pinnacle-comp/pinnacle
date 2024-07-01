@@ -100,7 +100,7 @@ impl WindowElement {
     pub fn render_elements<R: PRenderer>(
         &self,
         renderer: &mut R,
-        location: Point<i32, Logical>,
+        location: Point<i32, Logical>, // TODO: make f64
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<WaylandSurfaceRenderElement<R>> {
