@@ -1,3 +1,4 @@
+use indexmap::IndexSet;
 use smithay::{
     desktop::space::SpaceElement,
     reexports::{
@@ -186,8 +187,9 @@ impl Pinnacle {
 
                 if let Some(output_name) = output {
                     if let Some(output) = output_name.output(self) {
-                        let tags = output
-                            .with_state(|state| state.focused_tags().cloned().collect::<Vec<_>>());
+                        let tags = output.with_state(|state| {
+                            state.focused_tags().cloned().collect::<IndexSet<_>>()
+                        });
 
                         window.with_state_mut(|state| state.tags.clone_from(&tags));
                     }
@@ -197,7 +199,7 @@ impl Pinnacle {
                     let tags = tag_ids
                         .iter()
                         .filter_map(|tag_id| tag_id.tag(self))
-                        .collect::<Vec<_>>();
+                        .collect::<IndexSet<_>>();
 
                     window.with_state_mut(|state| state.tags.clone_from(&tags));
                 }

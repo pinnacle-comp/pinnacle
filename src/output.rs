@@ -2,6 +2,7 @@
 
 use std::{cell::RefCell, num::NonZeroU32};
 
+use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     OutputConnectResponse, OutputDisconnectResponse, OutputMoveResponse, OutputResizeResponse,
 };
@@ -57,7 +58,9 @@ pub enum BlankingState {
 /// The state of an output
 #[derive(Debug)]
 pub struct OutputState {
-    pub tags: Vec<Tag>,
+    /// The tags on this output.
+    pub tags: IndexSet<Tag>,
+
     pub focus_stack: WindowKeyboardFocusStack,
     pub screencopy: Option<Screencopy>,
     pub serial: Option<NonZeroU32>,
@@ -137,6 +140,21 @@ impl OutputState {
                 under_fullscreen_snapshots,
             ));
         }
+    }
+
+    /// Add tags to this output, replacing defunct ones first.
+    pub fn add_tags(&mut self, tags: impl IntoIterator<Item = Tag>) {
+        let defunct_tags = self.tags.iter().skip_while(|tag| !tag.defunct());
+        let mut new_tags = tags.into_iter();
+
+        for defunct_tag in defunct_tags {
+            let Some(new_tag) = new_tags.next() else {
+                return;
+            };
+            defunct_tag.replace(new_tag);
+        }
+
+        self.tags.extend(new_tags);
     }
 }
 

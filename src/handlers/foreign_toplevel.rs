@@ -20,8 +20,13 @@ impl ForeignToplevelHandler for State {
         };
 
         if !window.is_on_active_tag() {
-            let new_active_tag =
-                window.with_state(|state| state.tags.iter().min_by_key(|tag| tag.id().0).cloned());
+            let new_active_tag = window.with_state(|state| {
+                state
+                    .tags
+                    .iter()
+                    .min_by_key(|tag| tag.id().to_inner())
+                    .cloned()
+            });
 
             if let Some(tag) = new_active_tag {
                 self.capture_snapshots_on_output(&output, []);
@@ -29,9 +34,27 @@ impl ForeignToplevelHandler for State {
                 output.with_state(|state| {
                     if state.tags.contains(&tag) {
                         for op_tag in state.tags.iter() {
-                            op_tag.set_active(false, &mut self.pinnacle);
+                            if op_tag.set_active(false) {
+                                self.pinnacle.signal_state.tag_active.signal(|buf| {
+                                    buf.push_back(
+                                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                                            tag_id: Some(op_tag.id().to_inner()),
+                                            active: Some(false),
+                                        },
+                                    );
+                                });
+                            }
                         }
-                        tag.set_active(true, &mut self.pinnacle);
+                        if tag.set_active(true) {
+                            self.pinnacle.signal_state.tag_active.signal(|buf| {
+                                buf.push_back(
+                                    pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                                        tag_id: Some(tag.id().to_inner()),
+                                        active: Some(true),
+                                    },
+                                );
+                            });
+                        }
                     }
                 });
 

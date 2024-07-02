@@ -806,7 +806,7 @@ impl tag_service_server::TagService for TagService {
     async fn set_active(&self, request: Request<SetActiveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId(
+        let tag_id = TagId::new(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -829,11 +829,22 @@ impl tag_service_server::TagService for TagService {
 
             state.capture_snapshots_on_output(&output, []);
 
-            match set_or_toggle {
-                SetOrToggle::Set => tag.set_active(true, &mut state.pinnacle),
-                SetOrToggle::Unset => tag.set_active(false, &mut state.pinnacle),
-                SetOrToggle::Toggle => tag.set_active(!tag.active(), &mut state.pinnacle),
+            let active = match set_or_toggle {
+                SetOrToggle::Set => true,
+                SetOrToggle::Unset => false,
+                SetOrToggle::Toggle => !tag.active(),
                 SetOrToggle::Unspecified => unreachable!(),
+            };
+
+            if tag.set_active(active) {
+                state.pinnacle.signal_state.tag_active.signal(|buf| {
+                    buf.push_back(
+                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                            tag_id: Some(tag.id().to_inner()),
+                            active: Some(active),
+                        },
+                    );
+                });
             }
 
             state.pinnacle.fixup_xwayland_window_layering();
@@ -850,7 +861,7 @@ impl tag_service_server::TagService for TagService {
     async fn switch_to(&self, request: Request<SwitchToRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId(
+        let tag_id = TagId::new(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -866,9 +877,27 @@ impl tag_service_server::TagService for TagService {
 
             output.with_state(|op_state| {
                 for op_tag in op_state.tags.iter() {
-                    op_tag.set_active(false, &mut state.pinnacle);
+                    if op_tag.set_active(false) {
+                        state.pinnacle.signal_state.tag_active.signal(|buf| {
+                            buf.push_back(
+                                pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                                    tag_id: Some(op_tag.id().to_inner()),
+                                    active: Some(false),
+                                },
+                            );
+                        });
+                    }
                 }
-                tag.set_active(true, &mut state.pinnacle);
+                if tag.set_active(true) {
+                    state.pinnacle.signal_state.tag_active.signal(|buf| {
+                        buf.push_back(
+                            pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
+                                tag_id: Some(tag.id().to_inner()),
+                                active: Some(true),
+                            },
+                        );
+                    });
+                }
             });
 
             state.pinnacle.fixup_xwayland_window_layering();
@@ -900,8 +929,7 @@ impl tag_service_server::TagService for TagService {
 
             let tag_ids = new_tags
                 .iter()
-                .map(|tag| tag.id())
-                .map(|id| id.0)
+                .map(|tag| tag.id().to_inner())
                 .collect::<Vec<_>>();
 
             state
@@ -915,21 +943,9 @@ impl tag_service_server::TagService for TagService {
 
             if let Some(output) = output_name.output(&state.pinnacle) {
                 output.with_state_mut(|state| {
-                    state.tags.extend(new_tags.clone());
+                    state.add_tags(new_tags);
                     debug!("tags added, are now {:?}", state.tags);
                 });
-            }
-
-            for tag in new_tags {
-                for window in state.pinnacle.windows.iter() {
-                    window.with_state_mut(|state| {
-                        for win_tag in state.tags.iter_mut() {
-                            if win_tag.id() == tag.id() {
-                                *win_tag = tag.clone();
-                            }
-                        }
-                    });
-                }
             }
 
             state.pinnacle.fixup_xwayland_window_layering();
@@ -939,22 +955,28 @@ impl tag_service_server::TagService for TagService {
         .await
     }
 
-    // TODO: test
     async fn remove(&self, request: Request<RemoveRequest>) -> Result<Response<()>, Status> {
         let request = request.into_inner();
 
-        let tag_ids = request.tag_ids.into_iter().map(TagId);
+        let tag_ids = request.tag_ids.into_iter().map(TagId::new);
 
         run_unary_no_response(&self.sender, move |state| {
             let tags_to_remove = tag_ids
                 .flat_map(|id| id.tag(&state.pinnacle))
                 .collect::<Vec<_>>();
 
+            for window in state.pinnacle.windows.iter() {
+                window.with_state_mut(|state| {
+                    for tag_to_remove in tags_to_remove.iter() {
+                        state.tags.shift_remove(tag_to_remove);
+                    }
+                })
+            }
+
             for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
-                // TODO: seriously, convert state.tags into a hashset
                 output.with_state_mut(|state| {
                     for tag_to_remove in tags_to_remove.iter() {
-                        state.tags.retain(|tag| tag != tag_to_remove);
+                        state.tags.shift_remove(tag_to_remove);
                     }
                 });
 
@@ -964,7 +986,7 @@ impl tag_service_server::TagService for TagService {
 
             for conn_saved_state in state.pinnacle.config.connector_saved_states.values_mut() {
                 for tag_to_remove in tags_to_remove.iter() {
-                    conn_saved_state.tags.retain(|tag| tag != tag_to_remove);
+                    conn_saved_state.tags.shift_remove(tag_to_remove);
                 }
             }
 
@@ -983,8 +1005,7 @@ impl tag_service_server::TagService for TagService {
                 .outputs
                 .keys()
                 .flat_map(|op| op.with_state(|state| state.tags.clone()))
-                .map(|tag| tag.id())
-                .map(|id| id.0)
+                .map(|tag| tag.id().to_inner())
                 .collect::<Vec<_>>();
 
             tag::v0alpha1::GetResponse { tag_ids }
@@ -998,7 +1019,7 @@ impl tag_service_server::TagService for TagService {
     ) -> Result<Response<tag::v0alpha1::GetPropertiesResponse>, Status> {
         let request = request.into_inner();
 
-        let tag_id = TagId(
+        let tag_id = TagId::new(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -1410,7 +1431,12 @@ impl output_service_server::OutputService for OutputService {
                 .as_ref()
                 .map(|output| {
                     output.with_state(|state| {
-                        state.tags.iter().map(|tag| tag.id().0).collect::<Vec<_>>()
+                        state
+                            .tags
+                            .iter()
+                            .filter(|tag| !tag.defunct())
+                            .map(|tag| tag.id().to_inner())
+                            .collect::<Vec<_>>()
                     })
                 })
                 .unwrap_or_default();

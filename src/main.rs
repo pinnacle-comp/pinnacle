@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! A very, VERY WIP Smithay-based Wayland compositor.
-//!
-//! Pinnacle is heavily inspired by the [Awesome Window Manager](https://awesomewm.org),
-//! and this is an attempt to make something akin to it for Wayland.
-//!
-//! While Pinnacle is not a library, this documentation serves to guide those who want to
-//! contribute or learn how building something like this works.
-
-// #![deny(unused_imports)] // this has remained commented out for months lol
-#![warn(clippy::unwrap_used)]
-
 use std::{
     io::{BufRead, BufReader},
     time::Duration,

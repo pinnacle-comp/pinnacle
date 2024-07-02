@@ -225,7 +225,7 @@ mod window {
                             ..Default::default()
                         },
                         WindowRule {
-                            tags: Some(vec![TagId(0)]),
+                            tags: Some(vec![TagId::new(0)]),
                             ..Default::default()
                         }
                     )
@@ -260,7 +260,7 @@ mod window {
                         WindowRuleCondition {
                             cond_all: Some(vec![WindowRuleCondition {
                                 class: Some(vec!["steam".to_string()]),
-                                tag: Some(vec![TagId(0), TagId(1)]),
+                                tag: Some(vec![TagId::new(0), TagId::new(1)]),
                                 ..Default::default()
                             }]),
                             ..Default::default()

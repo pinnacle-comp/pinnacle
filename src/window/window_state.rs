@@ -2,6 +2,7 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use indexmap::IndexSet;
 use smithay::{
     desktop::{space::SpaceElement, WindowSurface},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
@@ -194,7 +195,7 @@ pub struct WindowElementState {
     /// The id of this window.
     pub id: WindowId,
     /// What tags the window is currently on.
-    pub tags: Vec<Tag>,
+    pub tags: IndexSet<Tag>,
     pub window_state: WindowState,
     pub target_loc: Option<Point<i32, Logical>>,
     pub minimized: bool,
@@ -270,14 +271,6 @@ impl Pinnacle {
 
         match window_state {
             WindowState::Tiled => {
-                // let geo = self.space.element_geometry(window);
-                //
-                // window.with_state_mut(|state| {
-                //     if let Some(geo) = geo {
-                //         state.floating_size.replace(geo.size);
-                //         state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                //     }
-                // });
                 window.set_tiled_states();
             }
             WindowState::Floating => {
@@ -310,83 +303,50 @@ impl Pinnacle {
                 window.change_geometry(loc, size);
                 window.set_floating_states();
             }
-            WindowState::Maximized { .. } => {
-                // We only want to update the stored floating geometry when exiting floating mode.
-                // if window.with_state(|state| {
-                //     state.floating_or_tiled.is_floating()
-                //         && state.fullscreen_or_maximized.is_neither()
-                // }) {
-                //     let geo = self.space.element_geometry(window);
-                //
-                //     if let Some(geo) = geo {
-                //         window.with_state_mut(|state| {
-                //             state.floating_size.replace(geo.size);
-                //             state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                //         });
-                //     }
-                // }
-
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.states.set(xdg_toplevel::State::Maximized);
-                            state.states.unset(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if !surface.is_override_redirect() {
-                            if let Err(err) = surface.set_maximized(true) {
-                                warn!("Failed to set xwayland window to maximized: {err}");
-                            }
-                            if let Err(err) = surface.set_fullscreen(false) {
-                                warn!("Failed to unset xwayland window fullscreen: {err}");
-                            }
+            WindowState::Maximized { .. } => match window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    toplevel.with_pending_state(|state| {
+                        state.states.set(xdg_toplevel::State::Maximized);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
+                WindowSurface::X11(surface) => {
+                    if !surface.is_override_redirect() {
+                        if let Err(err) = surface.set_maximized(true) {
+                            warn!("Failed to set xwayland window to maximized: {err}");
+                        }
+                        if let Err(err) = surface.set_fullscreen(false) {
+                            warn!("Failed to unset xwayland window fullscreen: {err}");
                         }
                     }
                 }
-            }
-            WindowState::Fullscreen { .. } => {
-                // We only want to update the stored floating geometry when exiting floating mode.
-                // if window.with_state(|state| {
-                //     state.floating_or_tiled.is_floating() && state.fullscreen_or_maximized.is_neither()
-                // }) {
-                //     let geo = self.space.element_geometry(window);
-                //
-                //     if let Some(geo) = geo {
-                //         window.with_state_mut(|state| {
-                //             state.floating_size.replace(geo.size);
-                //             state.floating_loc.replace(geo.loc.to_f64()); // FIXME: i32 -> f64
-                //         });
-                //     }
-                // }
-
-                match window.underlying_surface() {
-                    WindowSurface::Wayland(toplevel) => {
-                        toplevel.with_pending_state(|state| {
-                            state.states.unset(xdg_toplevel::State::Maximized);
-                            state.states.set(xdg_toplevel::State::Fullscreen);
-                            state.states.set(xdg_toplevel::State::TiledTop);
-                            state.states.set(xdg_toplevel::State::TiledLeft);
-                            state.states.set(xdg_toplevel::State::TiledBottom);
-                            state.states.set(xdg_toplevel::State::TiledRight);
-                        });
-                    }
-                    WindowSurface::X11(surface) => {
-                        if !surface.is_override_redirect() {
-                            if let Err(err) = surface.set_maximized(false) {
-                                warn!("Failed to unset xwayland window maximized: {err}");
-                            }
-                            if let Err(err) = surface.set_fullscreen(true) {
-                                warn!("Failed to set xwayland window to fullscreen: {err}");
-                            }
+            },
+            WindowState::Fullscreen { .. } => match window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    toplevel.with_pending_state(|state| {
+                        state.states.unset(xdg_toplevel::State::Maximized);
+                        state.states.set(xdg_toplevel::State::Fullscreen);
+                        state.states.set(xdg_toplevel::State::TiledTop);
+                        state.states.set(xdg_toplevel::State::TiledLeft);
+                        state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.set(xdg_toplevel::State::TiledRight);
+                    });
+                }
+                WindowSurface::X11(surface) => {
+                    if !surface.is_override_redirect() {
+                        if let Err(err) = surface.set_maximized(false) {
+                            warn!("Failed to unset xwayland window maximized: {err}");
+                        }
+                        if let Err(err) = surface.set_fullscreen(true) {
+                            warn!("Failed to set xwayland window to fullscreen: {err}");
                         }
                     }
                 }
-            }
+            },
         }
     }
 }
@@ -455,7 +415,7 @@ impl WindowElementState {
     pub fn new() -> Self {
         Self {
             id: WindowId::next(),
-            tags: vec![],
+            tags: Default::default(),
             window_state: WindowState::Tiled,
             floating_loc: None,
             floating_size: None,

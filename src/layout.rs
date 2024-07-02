@@ -4,6 +4,7 @@ pub mod transaction;
 
 use std::collections::HashMap;
 
+use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
     desktop::{layer_map_for_output, WindowSurface},
@@ -30,13 +31,13 @@ impl Pinnacle {
         geometries: Vec<Rectangle<i32, Logical>>,
     ) -> Vec<(WindowElement, Serial)> {
         let (windows_on_foc_tags, to_unmap) = output.with_state(|state| {
-            let focused_tags = state.focused_tags().collect::<Vec<_>>();
+            let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
                 .iter()
                 .filter(|win| win.output(self).as_ref() == Some(output))
                 .cloned()
                 .partition::<Vec<_>, _>(|win| {
-                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
+                    win.with_state(|state| state.tags.intersection(&focused_tags).next().is_some())
                 })
         });
 
@@ -179,12 +180,12 @@ impl Pinnacle {
         };
 
         let windows_on_foc_tags = output.with_state(|state| {
-            let focused_tags = state.focused_tags().collect::<Vec<_>>();
+            let focused_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
             self.windows
                 .iter()
                 .filter(|win| !win.is_x11_override_redirect())
                 .filter(|win| {
-                    win.with_state(|state| state.tags.iter().any(|tg| focused_tags.contains(&tg)))
+                    win.with_state(|state| state.tags.intersection(&focused_tags).next().is_some())
                 })
                 .cloned()
                 .collect::<Vec<_>>()
@@ -207,8 +208,12 @@ impl Pinnacle {
             .map(|win| win.with_state(|state| state.id.0))
             .collect::<Vec<_>>();
 
-        let tag_ids =
-            output.with_state(|state| state.focused_tags().map(|tag| tag.id().0).collect());
+        let tag_ids = output.with_state(|state| {
+            state
+                .focused_tags()
+                .map(|tag| tag.id().to_inner())
+                .collect()
+        });
 
         self.layout_state
             .pending_requests

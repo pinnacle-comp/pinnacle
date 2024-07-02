@@ -2,8 +2,9 @@
 
 pub mod rules;
 
-use std::{cell::RefCell, collections::HashSet, ops::Deref};
+use std::{cell::RefCell, ops::Deref};
 
+use indexmap::IndexSet;
 use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
@@ -150,16 +151,12 @@ impl WindowElement {
     }
 
     pub fn is_on_active_tag_on_output(&self, output: &Output) -> bool {
-        // PERF: dear god benchmark this
-        let win_tags = self
-            .with_state(|state| state.tags.clone())
-            .into_iter()
-            .collect::<HashSet<_>>();
+        let win_tags = self.with_state(|state| state.tags.clone());
         output.with_state(|state| {
             state
                 .focused_tags()
                 .cloned()
-                .collect::<HashSet<_>>()
+                .collect::<IndexSet<_>>()
                 .intersection(&win_tags)
                 .next()
                 .is_some()
@@ -172,13 +169,13 @@ impl WindowElement {
     pub fn place_on_output(&self, output: &Output) {
         self.with_state_mut(|state| {
             state.tags = output.with_state(|state| {
-                let output_tags = state.focused_tags().cloned().collect::<Vec<_>>();
+                let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
                 if !output_tags.is_empty() {
                     output_tags
                 } else if let Some(first_tag) = state.tags.first() {
-                    vec![first_tag.clone()]
+                    std::iter::once(first_tag.clone()).collect()
                 } else {
-                    vec![]
+                    IndexSet::new()
                 }
             });
 

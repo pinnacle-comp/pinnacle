@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::Context;
+use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
     layout::v0alpha1::layout_service_server::LayoutServiceServer,
@@ -344,7 +345,7 @@ pub struct ConnectorSavedState {
     /// The old location
     pub loc: Point<i32, Logical>,
     /// The output's previous tags
-    pub tags: Vec<Tag>,
+    pub tags: IndexSet<Tag>,
     /// The output's previous scale
     pub scale: Option<smithay::output::Scale>,
     // TODO: transform
@@ -382,7 +383,11 @@ impl Pinnacle {
 
         debug!("Clearing tags");
         for output in self.outputs.keys() {
-            output.with_state_mut(|state| state.tags.clear());
+            output.with_state_mut(|state| {
+                for tag in state.tags.iter() {
+                    tag.make_defunct();
+                }
+            });
         }
 
         TagId::reset();

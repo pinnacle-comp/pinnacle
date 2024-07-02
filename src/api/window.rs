@@ -327,7 +327,7 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let tag_id = TagId(
+        let tag_id = TagId::new(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -347,7 +347,7 @@ impl window_service_server::WindowService for WindowService {
             }
 
             window.with_state_mut(|state| {
-                state.tags = vec![tag.clone()];
+                state.tags = std::iter::once(tag.clone()).collect();
             });
 
             let Some(output) = tag.output(&state.pinnacle) else {
@@ -373,7 +373,7 @@ impl window_service_server::WindowService for WindowService {
                 .ok_or_else(|| Status::invalid_argument("no window specified"))?,
         );
 
-        let tag_id = TagId(
+        let tag_id = TagId::new(
             request
                 .tag_id
                 .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
@@ -400,17 +400,19 @@ impl window_service_server::WindowService for WindowService {
             // TODO: turn state.tags into a hashset
             match set_or_toggle {
                 SetOrToggle::Set => window.with_state_mut(|state| {
-                    state.tags.retain(|tg| tg != &tag);
-                    state.tags.push(tag.clone());
+                    state.tags.insert(tag.clone());
                 }),
                 SetOrToggle::Unset => window.with_state_mut(|state| {
-                    state.tags.retain(|tg| tg != &tag);
+                    state.tags.shift_remove(&tag);
                 }),
                 SetOrToggle::Toggle => window.with_state_mut(|state| {
-                    if !state.tags.contains(&tag) {
-                        state.tags.push(tag.clone());
+                    if state.tags.contains(&tag) {
+                        // Prevent toggling that would leave a window tagless
+                        if state.tags.len() > 1 {
+                            state.tags.shift_remove(&tag);
+                        }
                     } else {
-                        state.tags.retain(|tg| tg != &tag);
+                        state.tags.insert(tag.clone());
                     }
                 }),
                 SetOrToggle::Unspecified => unreachable!(),
@@ -664,7 +666,12 @@ impl window_service_server::WindowService for WindowService {
                 .as_ref()
                 .map(|win| {
                     win.with_state(|state| {
-                        state.tags.iter().map(|tag| tag.id().0).collect::<Vec<_>>()
+                        state
+                            .tags
+                            .iter()
+                            .filter(|tag| !tag.defunct())
+                            .map(|tag| tag.id().to_inner())
+                            .collect::<Vec<_>>()
                     })
                 })
                 .unwrap_or_default();
@@ -751,7 +758,7 @@ impl From<WindowRuleCondition> for crate::window::rules::WindowRuleCondition {
 
         let tag = match cond.tags.is_empty() {
             true => None,
-            false => Some(cond.tags.into_iter().map(TagId).collect::<Vec<_>>()),
+            false => Some(cond.tags.into_iter().map(TagId::new).collect::<Vec<_>>()),
         };
 
         crate::window::rules::WindowRuleCondition {
@@ -794,7 +801,7 @@ impl From<WindowRule> for crate::window::rules::WindowRule {
         let output = rule.output.map(OutputName);
         let tags = match rule.tags.is_empty() {
             true => None,
-            false => Some(rule.tags.into_iter().map(TagId).collect::<Vec<_>>()),
+            false => Some(rule.tags.into_iter().map(TagId::new).collect::<Vec<_>>()),
         };
         let floating_or_tiled = rule.floating.map(|floating| match floating {
             true => crate::window::window_state::FloatingOrTiled::Floating,
