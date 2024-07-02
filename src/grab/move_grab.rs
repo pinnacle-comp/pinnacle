@@ -70,11 +70,18 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             }
         }
 
-        let can_move = self
+        let is_floating = self
             .window
             .with_state(|state| state.window_state.is_floating());
 
-        if can_move {
+        if is_floating {
+            let tag_output = self.window.output(&state.pinnacle);
+            if let Some(focused_output) = state.pinnacle.focused_output() {
+                if Some(focused_output) != tag_output.as_ref() {
+                    self.window.place_on_output(focused_output);
+                }
+            }
+
             let delta = event.location - self.start_data.location;
             let new_loc = self.initial_window_loc.to_f64() + delta;
             // FIXME: space maps locs as i32 not f64
@@ -103,6 +110,25 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 state.schedule_render(&output);
             }
         } else {
+            let tag_output = self.window.output(&state.pinnacle);
+            if let Some(focused_output) = state.pinnacle.focused_output().cloned() {
+                if Some(&focused_output) != tag_output.as_ref() {
+                    state.capture_snapshots_on_output(&focused_output, []);
+                    if let Some(tag_output) = tag_output.as_ref() {
+                        state.capture_snapshots_on_output(tag_output, []);
+                    }
+
+                    self.window.place_on_output(&focused_output);
+
+                    state.pinnacle.begin_layout_transaction(&focused_output);
+                    state.pinnacle.request_layout(&focused_output);
+                    if let Some(tag_output) = tag_output {
+                        state.pinnacle.begin_layout_transaction(&tag_output);
+                        state.pinnacle.request_layout(&tag_output);
+                    }
+                }
+            }
+
             // INFO: this is being used instead of space.element_under(event.location) because that
             // |     uses the bounding box, which is different from the actual geometry
             let window_under = state
@@ -137,10 +163,23 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     return;
                 }
 
+                let output = self.window.output(&state.pinnacle);
+
+                if let Some(output) = output.as_ref() {
+                    state.capture_snapshots_on_output(output, [self.window.clone()]);
+                }
+
                 debug!("Swapping window positions");
                 state
                     .pinnacle
                     .swap_window_positions(&self.window, &window_under);
+
+                state.pinnacle.layout_state.pending_swap = true;
+
+                if let Some(output) = output.as_ref() {
+                    state.pinnacle.begin_layout_transaction(output);
+                    state.pinnacle.request_layout(output);
+                }
             }
         }
     }

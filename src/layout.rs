@@ -135,10 +135,6 @@ impl Pinnacle {
 
         if let (Some(first), Some(second)) = (win1_index, win2_index) {
             self.windows.swap(first, second);
-            if let Some(output) = win1.output(self) {
-                self.request_layout(&output);
-            }
-            self.layout_state.pending_swap = true;
         }
     }
 }

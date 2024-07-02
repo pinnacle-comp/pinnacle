@@ -138,10 +138,10 @@ function client.server_streaming_request(grpc_request_args, data, callback)
                 local msg_len = string.unpack(">I4", response_body:sub(2, 5))
 
                 -- Skip the 1-byte compressed flag and the 4-byte message length
-                response_body = response_body:sub(6, 6 + msg_len - 1)
+                local body = response_body:sub(6, 6 + msg_len - 1)
 
                 ---@diagnostic disable-next-line: redefined-local
-                local success, obj = pcall(pb.decode, response_type, response_body)
+                local success, obj = pcall(pb.decode, response_type, body)
                 if not success then
                     print(obj)
                     os.exit(1)
@@ -150,7 +150,7 @@ function client.server_streaming_request(grpc_request_args, data, callback)
                 local response = obj
                 callback(response)
 
-                response_body = response_body:sub(msg_len + 1)
+                response_body = response_body:sub(msg_len + 6)
             end
         end
 
@@ -193,19 +193,21 @@ function client.bidirectional_streaming_request(grpc_request_args, data, callbac
                 local msg_len = string.unpack(">I4", response_body:sub(2, 5))
 
                 -- Skip the 1-byte compressed flag and the 4-byte message length
-                response_body = response_body:sub(6, 6 + msg_len - 1)
+                local body = response_body:sub(6, 6 + msg_len - 1)
 
                 ---@diagnostic disable-next-line: redefined-local
-                local success, obj = pcall(pb.decode, response_type, response_body)
+                local success, obj = pcall(pb.decode, response_type, body)
                 if not success then
                     print(obj)
                     os.exit(1)
                 end
 
+                -- print(require("inspect")(obj))
+
                 local response = obj
                 callback(response, stream)
 
-                response_body = response_body:sub(msg_len + 1)
+                response_body = response_body:sub(msg_len + 6)
             end
         end
 
