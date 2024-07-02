@@ -183,6 +183,14 @@ pub struct Pinnacle {
     pub cursor_state: CursorState,
 }
 
+impl Drop for Pinnacle {
+    fn drop(&mut self) {
+        if let Some(signal) = self.snowcap_stop_signal.take() {
+            signal.stop();
+        }
+    }
+}
+
 impl State {
     pub fn on_event_loop_cycle_completion(&mut self) {
         self.pinnacle.fixup_z_layering();
