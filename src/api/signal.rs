@@ -1,4 +1,7 @@
-use std::collections::VecDeque;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     signal_service_server, OutputConnectRequest, OutputConnectResponse, OutputDisconnectRequest,
@@ -7,9 +10,9 @@ use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
     WindowPointerEnterRequest, WindowPointerEnterResponse, WindowPointerLeaveRequest,
     WindowPointerLeaveResponse,
 };
-use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
+use tokio::sync::mpsc::UnboundedSender;
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::state::State;
 
@@ -35,20 +38,24 @@ pub struct SignalState {
 
 impl SignalState {
     pub fn clear(&mut self) {
-        self.output_connect.disconnect();
-        self.output_disconnect.disconnect();
-        self.output_resize.disconnect();
-        self.output_move.disconnect();
-        self.window_pointer_enter.disconnect();
-        self.window_pointer_leave.disconnect();
+        self.output_connect.instances.clear();
+        self.output_disconnect.instances.clear();
+        self.output_resize.instances.clear();
+        self.output_move.instances.clear();
+        self.window_pointer_enter.instances.clear();
+        self.window_pointer_leave.instances.clear();
     }
 }
 
 #[derive(Debug, Default)]
 #[allow(private_bounds)]
 pub struct SignalData<T, B: SignalBuffer<T>> {
-    sender: Option<UnboundedSender<Result<T, Status>>>,
-    join_handle: Option<JoinHandle<()>>,
+    instances: HashMap<ClientSignalId, SignalInstance<T, B>>,
+}
+
+#[derive(Debug)]
+struct SignalInstance<T, B: SignalBuffer<T>> {
+    sender: UnboundedSender<Result<T, Status>>,
     ready: bool,
     buffer: B,
 }
@@ -71,6 +78,10 @@ impl<T> SignalBuffer<T> for Option<T> {
     }
 }
 
+type ClientSignalId = u32;
+
+static CLIENT_SIGNAL_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
+
 #[allow(private_bounds)]
 impl<T, B: SignalBuffer<T>> SignalData<T, B> {
     /// Attempt to send a signal.
@@ -79,54 +90,50 @@ impl<T, B: SignalBuffer<T>> SignalData<T, B> {
     /// Otherwise, the signal will remain stored in the underlying buffer until the client is ready.
     ///
     /// Use `with_buffer` to populate and manipulate the buffer with the data you want.
-    pub fn signal(&mut self, with_buffer: impl FnOnce(&mut B)) {
-        let Some(sender) = self.sender.as_ref() else {
-            return;
-        };
-
-        with_buffer(&mut self.buffer);
-
-        if self.ready {
-            if let Some(data) = self.buffer.next() {
-                sender.send(Ok(data)).expect("failed to send signal");
-                self.ready = false;
+    pub fn signal(&mut self, mut with_buffer: impl FnMut(&mut B)) {
+        self.instances.retain(|_, instance| {
+            with_buffer(&mut instance.buffer);
+            if instance.ready {
+                if let Some(data) = instance.buffer.next() {
+                    instance.ready = false;
+                    return instance.sender.send(Ok(data)).is_ok();
+                }
             }
-        }
+
+            true
+        })
     }
 
-    pub fn connect(
-        &mut self,
-        sender: UnboundedSender<Result<T, Status>>,
-        join_handle: JoinHandle<()>,
-    ) {
-        self.sender.replace(sender);
-        if let Some(handle) = self.join_handle.replace(join_handle) {
-            handle.abort();
-        }
+    pub fn connect(&mut self, id: ClientSignalId, sender: UnboundedSender<Result<T, Status>>) {
+        self.instances.insert(
+            id,
+            SignalInstance {
+                sender,
+                ready: true,
+                buffer: B::default(),
+            },
+        );
     }
 
-    fn disconnect(&mut self) {
-        self.sender.take();
-        if let Some(handle) = self.join_handle.take() {
-            handle.abort();
-        }
-        self.ready = false;
-        self.buffer = B::default();
+    fn disconnect(&mut self, id: ClientSignalId) {
+        self.instances.remove(&id);
     }
 
     /// Mark this signal as ready to send.
     ///
     /// If there are signals already in the buffer, they will be sent.
-    fn ready(&mut self) {
-        let Some(sender) = self.sender.as_ref() else {
+    fn ready(&mut self, id: ClientSignalId) {
+        let Some(instance) = self.instances.get_mut(&id) else {
             return;
         };
 
-        if let Some(data) = self.buffer.next() {
-            sender.send(Ok(data)).expect("failed to send signal");
-            self.ready = false;
+        if let Some(data) = instance.buffer.next() {
+            instance.ready = false;
+            if instance.sender.send(Ok(data)).is_err() {
+                self.instances.remove(&id);
+            }
         } else {
-            self.ready = true;
+            instance.ready = true;
         }
     }
 }
@@ -144,6 +151,8 @@ where
 {
     let signal_data_selector_clone = signal_data_selector.clone();
 
+    let client_signal_id = CLIENT_SIGNAL_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
     run_bidirectional_streaming(
         sender,
         in_stream,
@@ -151,7 +160,7 @@ where
             let request = match request {
                 Ok(request) => request,
                 Err(status) => {
-                    error!("Error in output_connect signal in stream: {status}");
+                    debug!("Error in output_connect signal in stream: {status}");
                     return;
                 }
             };
@@ -160,14 +169,14 @@ where
 
             let signal = signal_data_selector(state);
             match request.control() {
-                StreamControl::Ready => signal.ready(),
-                StreamControl::Disconnect => signal.disconnect(),
+                StreamControl::Ready => signal.ready(client_signal_id),
+                StreamControl::Disconnect => signal.disconnect(client_signal_id),
                 StreamControl::Unspecified => warn!("Received unspecified stream control"),
             }
         },
-        move |state, sender, join_handle| {
+        move |state, sender, _join_handle| {
             let signal = signal_data_selector_clone(state);
-            signal.connect(sender, join_handle);
+            signal.connect(client_signal_id, sender);
         },
     )
 }
