@@ -183,6 +183,7 @@ pub struct Pinnacle {
     pub cursor_state: CursorState,
 }
 
+#[cfg(feature = "snowcap")]
 impl Drop for Pinnacle {
     fn drop(&mut self) {
         if let Some(signal) = self.snowcap_stop_signal.take() {
