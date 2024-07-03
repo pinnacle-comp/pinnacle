@@ -522,12 +522,20 @@ impl Pinnacle {
             return;
         }
 
-        if let Some(output) = self.space.outputs().find(|op| {
-            let map = layer_map_for_output(op);
-            map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-                .is_some()
-        }) {
-            layer_map_for_output(output).arrange();
+        let output = self
+            .space
+            .outputs()
+            .find(|op| {
+                let map = layer_map_for_output(op);
+                map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                    .is_some()
+            })
+            .cloned();
+
+        if let Some(output) = output {
+            if layer_map_for_output(&output).arrange() {
+                self.request_layout(&output);
+            }
 
             let initial_configure_sent = compositor::with_states(surface, |states| {
                 states
@@ -540,7 +548,7 @@ impl Pinnacle {
             });
 
             if !initial_configure_sent {
-                layer_map_for_output(output)
+                layer_map_for_output(&output)
                     .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
                     .expect("no layer for surface")
                     .layer_surface()
@@ -753,11 +761,7 @@ impl WlrLayerShellHandler for State {
             layer_map_for_output(&output).map_layer(&desktop::LayerSurface::new(surface, namespace))
         {
             error!("Failed to map layer surface: {err}");
-        }
-
-        self.pinnacle.loop_handle.insert_idle(move |state| {
-            state.pinnacle.request_layout(&output);
-        });
+        };
     }
 
     fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
