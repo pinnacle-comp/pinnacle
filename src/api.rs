@@ -1121,6 +1121,9 @@ impl output_service_server::OutputService for OutputService {
             if let Some(y) = y {
                 loc.y = y;
             }
+
+            state.capture_snapshots_on_output(&output, []);
+
             state.pinnacle.change_output_state(
                 &mut state.backend,
                 &output,
@@ -1130,6 +1133,7 @@ impl output_service_server::OutputService for OutputService {
                 Some(loc),
             );
             debug!("Mapping output {} to {loc:?}", output.name());
+            state.pinnacle.begin_layout_transaction(&output);
             state.pinnacle.request_layout(&output);
             state
                 .pinnacle
