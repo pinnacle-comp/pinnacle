@@ -268,16 +268,20 @@ impl Pinnacle {
 
     pub fn set_output_enabled(&mut self, output: &Output, enabled: bool) {
         if enabled {
+            let mut should_signal = false;
+
             match self.outputs.entry(output.clone()) {
                 indexmap::map::Entry::Occupied(entry) => {
                     let global = entry.into_mut();
                     if global.is_none() {
                         *global = Some(output.create_global::<State>(&self.display_handle));
+                        should_signal = true;
                     }
                 }
                 indexmap::map::Entry::Vacant(entry) => {
                     let global = output.create_global::<State>(&self.display_handle);
                     entry.insert(Some(global));
+                    should_signal = true;
                 }
             }
             self.space.map_output(output, output.current_location());
@@ -285,11 +289,13 @@ impl Pinnacle {
             // Trigger the connect signal here for configs to reposition outputs
             //
             // TODO: Create a new output_disable/enable signal and trigger it here
-            self.signal_state.output_connect.signal(|buffer| {
-                buffer.push_back(OutputConnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
+            if should_signal {
+                self.signal_state.output_connect.signal(|buffer| {
+                    buffer.push_back(OutputConnectResponse {
+                        output_name: Some(output.name()),
+                    })
+                });
+            }
         } else {
             let global = self.outputs.get_mut(output);
             if let Some(global) = global {
