@@ -132,19 +132,16 @@ impl WindowElement {
         location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> LayoutSnapshot {
+    ) -> Option<LayoutSnapshot> {
         self.with_state_mut(|state| {
             if state.snapshot.is_none() || self.is_x11() {
                 let elements = self.texture_render_elements(renderer, location, scale, alpha);
-
-                state.snapshot = Some(RenderSnapshot::new(elements, scale));
+                if !elements.is_empty() {
+                    state.snapshot = Some(RenderSnapshot::new(elements, scale));
+                }
             }
 
-            let Some(ret) = state.snapshot.clone() else {
-                unreachable!()
-            };
-
-            ret
+            state.snapshot.clone()
         })
     }
 }
@@ -212,7 +209,7 @@ pub fn capture_snapshots_on_output(
                 1.0,
             );
 
-            Some(SnapshotTarget::Snapshot(snapshot))
+            snapshot.map(SnapshotTarget::Snapshot)
         } else {
             Some(SnapshotTarget::Window(win))
         }

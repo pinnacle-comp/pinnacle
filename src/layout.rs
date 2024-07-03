@@ -128,7 +128,6 @@ impl Pinnacle {
         pending_wins
     }
 
-    /// Swaps two windows in the main window vec and updates all windows.
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
         let win1_index = self.windows.iter().position(|win| win == win1);
         let win2_index = self.windows.iter().position(|win| win == win2);

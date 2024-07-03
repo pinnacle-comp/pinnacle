@@ -165,6 +165,14 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
                 let output = self.window.output(&state.pinnacle);
 
+                // HACK: Snapshots may not be cleared and updated when swapping two windows of the same size;
+                // this causes new snapshots attempts to fizzle and the currently stored snapshot
+                // will have the wrong location. We're just gonna invalidate all window snapshots here
+                // because I'm too lazy to rearchitect stuff to make it more sensible.
+                for window in state.pinnacle.windows.iter() {
+                    window.with_state_mut(|state| state.snapshot.take());
+                }
+
                 if let Some(output) = output.as_ref() {
                     state.capture_snapshots_on_output(output, [self.window.clone()]);
                 }
