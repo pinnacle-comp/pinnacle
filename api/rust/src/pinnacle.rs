@@ -9,27 +9,18 @@
 use std::time::Duration;
 
 use pinnacle_api_defs::pinnacle::v0alpha1::{
-    pinnacle_service_client::PinnacleServiceClient, PingRequest, QuitRequest, ReloadConfigRequest,
-    ShutdownWatchRequest, ShutdownWatchResponse,
+    PingRequest, QuitRequest, ReloadConfigRequest, ShutdownWatchRequest, ShutdownWatchResponse,
 };
 use rand::RngCore;
-use tonic::{transport::Channel, Request, Streaming};
+use tonic::{Request, Streaming};
 
-use crate::block_on_tokio;
+use crate::{block_on_tokio, pinnacle};
 
 /// A struct that allows you to quit the compositor.
-#[derive(Debug, Clone)]
-pub struct Pinnacle {
-    client: PinnacleServiceClient<Channel>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Pinnacle;
 
 impl Pinnacle {
-    pub(crate) fn new(channel: Channel) -> Self {
-        Self {
-            client: PinnacleServiceClient::new(channel),
-        }
-    }
-
     /// Quit Pinnacle.
     ///
     /// # Examples
@@ -39,21 +30,18 @@ impl Pinnacle {
     /// pinnacle.quit();
     /// ```
     pub fn quit(&self) {
-        let mut client = self.client.clone();
         // Ignore errors here, the config is meant to be killed
-        let _ = block_on_tokio(client.quit(QuitRequest {}));
+        let _ = block_on_tokio(pinnacle().quit(QuitRequest {}));
     }
 
     /// Reload the currently active config.
     pub fn reload_config(&self) {
-        let mut client = self.client.clone();
         // Ignore errors here, the config is meant to be killed
-        let _ = block_on_tokio(client.reload_config(ReloadConfigRequest {}));
+        let _ = block_on_tokio(pinnacle().reload_config(ReloadConfigRequest {}));
     }
 
     pub(crate) async fn shutdown_watch(&self) -> Streaming<ShutdownWatchResponse> {
-        let mut client = self.client.clone();
-        client
+        pinnacle()
             .shutdown_watch(ShutdownWatchRequest {})
             .await
             .unwrap()
@@ -63,7 +51,6 @@ impl Pinnacle {
     /// TODO: eval if this is necessary
     #[allow(dead_code)]
     pub(super) async fn ping(&self) -> Result<(), String> {
-        let mut client = self.client.clone();
         let mut payload = [0u8; 8];
         rand::thread_rng().fill_bytes(&mut payload);
         let mut request = Request::new(PingRequest {
@@ -71,7 +58,7 @@ impl Pinnacle {
         });
         request.set_timeout(Duration::from_secs(10));
 
-        let response = client
+        let response = pinnacle()
             .ping(request)
             .await
             .map_err(|status| status.to_string())?;

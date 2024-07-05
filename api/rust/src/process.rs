@@ -7,22 +7,15 @@
 //! This module provides [`Process`], which allows you to spawn processes and set environment
 //! variables.
 
-use futures::{future::BoxFuture, FutureExt, StreamExt};
-use pinnacle_api_defs::pinnacle::process::v0alpha1::{
-    process_service_client::ProcessServiceClient, SetEnvRequest, SpawnRequest,
-};
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::transport::Channel;
+use pinnacle_api_defs::pinnacle::process::v0alpha1::{SetEnvRequest, SpawnRequest};
+use tokio_stream::StreamExt;
 
-use crate::block_on_tokio;
+use crate::{block_on_tokio, process};
 
 /// A struct containing methods to spawn processes with optional callbacks and set environment
 /// variables.
-#[derive(Debug, Clone)]
-pub struct Process {
-    channel: Channel,
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Process;
 
 /// Optional callbacks to be run when a spawned process prints to stdout or stderr or exits.
 #[derive(Default)]
@@ -37,20 +30,6 @@ pub struct SpawnCallbacks {
 }
 
 impl Process {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Process {
-        Self {
-            channel,
-            fut_sender,
-        }
-    }
-
-    fn create_process_client(&self) -> ProcessServiceClient<Channel> {
-        ProcessServiceClient::new(self.channel.clone())
-    }
-
     /// Spawn a process.
     ///
     /// Note that windows spawned *before* tags are added will not be displayed.
@@ -123,8 +102,6 @@ impl Process {
         once: bool,
         callbacks: Option<SpawnCallbacks>,
     ) {
-        let mut client = self.create_process_client();
-
         let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
 
         let request = SpawnRequest {
@@ -133,34 +110,31 @@ impl Process {
             has_callback: Some(callbacks.is_some()),
         };
 
-        let mut stream = block_on_tokio(client.spawn(request)).unwrap().into_inner();
+        let mut stream = block_on_tokio(process().spawn(request))
+            .unwrap()
+            .into_inner();
 
-        self.fut_sender
-            .send(
-                async move {
-                    let Some(mut callbacks) = callbacks else { return };
-                    while let Some(Ok(response)) = stream.next().await {
-                        if let Some(line) = response.stdout {
-                            if let Some(stdout) = callbacks.stdout.as_mut() {
-                                stdout(line);
-                            }
-                        }
-                        if let Some(line) = response.stderr {
-                            if let Some(stderr) = callbacks.stderr.as_mut() {
-                                stderr(line);
-                            }
-                        }
-                        if let Some(exit_msg) = response.exit_message {
-                            if let Some(exit) = callbacks.exit.as_mut() {
-                                exit(response.exit_code, exit_msg);
-                            }
-                        }
-                        tokio::task::yield_now().await;
+        tokio::spawn(async move {
+            let Some(mut callbacks) = callbacks else { return };
+            while let Some(Ok(response)) = stream.next().await {
+                if let Some(line) = response.stdout {
+                    if let Some(stdout) = callbacks.stdout.as_mut() {
+                        stdout(line);
                     }
                 }
-                .boxed(),
-            )
-            .unwrap();
+                if let Some(line) = response.stderr {
+                    if let Some(stderr) = callbacks.stderr.as_mut() {
+                        stderr(line);
+                    }
+                }
+                if let Some(exit_msg) = response.exit_message {
+                    if let Some(exit) = callbacks.exit.as_mut() {
+                        exit(response.exit_code, exit_msg);
+                    }
+                }
+                tokio::task::yield_now().await;
+            }
+        });
     }
 
     /// Set an environment variable for the compositor.
@@ -175,9 +149,7 @@ impl Process {
         let key = key.into();
         let value = value.into();
 
-        let mut client = self.create_process_client();
-
-        block_on_tokio(client.set_env(SetEnvRequest {
+        block_on_tokio(process().set_env(SetEnvRequest {
             key: Some(key),
             value: Some(value),
         }))

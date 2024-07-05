@@ -29,55 +29,31 @@
 //!
 //! These [`TagHandle`]s allow you to manipulate individual tags and get their properties.
 
-use std::sync::OnceLock;
-
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
     tag::{
         self,
-        v0alpha1::{
-            tag_service_client::TagServiceClient, AddRequest, RemoveRequest, SetActiveRequest,
-            SwitchToRequest,
-        },
+        v0alpha1::{AddRequest, RemoveRequest, SetActiveRequest, SwitchToRequest},
     },
     v0alpha1::SetOrToggle,
 };
-use tonic::transport::Channel;
 
 use crate::{
     block_on_tokio,
-    output::OutputHandle,
+    output::{Output, OutputHandle},
     signal::{SignalHandle, TagSignal},
+    signal_module,
     util::Batch,
-    window::WindowHandle,
-    ApiModules,
+    window::{Window, WindowHandle},
 };
 
 /// A struct that allows you to add and remove tags and get [`TagHandle`]s.
-#[derive(Clone, Debug)]
-pub struct Tag {
-    tag_client: TagServiceClient<Channel>,
-    api: OnceLock<ApiModules>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Tag;
 
 impl Tag {
-    pub(crate) fn new(channel: Channel) -> Self {
-        Self {
-            tag_client: TagServiceClient::new(channel.clone()),
-            api: OnceLock::new(),
-        }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.api.set(api).unwrap();
-    }
-
     pub(crate) fn new_handle(&self, id: u32) -> TagHandle {
-        TagHandle {
-            id,
-            tag_client: self.tag_client.clone(),
-            api: self.api.get().unwrap().clone(),
-        }
+        TagHandle { id }
     }
 
     /// Add tags to the specified output.
@@ -107,11 +83,9 @@ impl Tag {
         output: &OutputHandle,
         tag_names: impl IntoIterator<Item = impl Into<String>>,
     ) -> Vec<TagHandle> {
-        let mut client = self.tag_client.clone();
-
         let tag_names = tag_names.into_iter().map(Into::into).collect();
 
-        let response = client
+        let response = crate::tag()
             .add(AddRequest {
                 output_name: Some(output.name.clone()),
                 tag_names,
@@ -140,9 +114,7 @@ impl Tag {
 
     /// The async version of [`Tag::get_all`].
     pub async fn get_all_async(&self) -> Vec<TagHandle> {
-        let mut client = self.tag_client.clone();
-
-        let response = client
+        let response = crate::tag()
             .get(tag::v0alpha1::GetRequest {})
             .await
             .unwrap()
@@ -172,7 +144,7 @@ impl Tag {
     /// The async version of [`Tag::get`].
     pub async fn get_async(&self, name: impl Into<String>) -> Option<TagHandle> {
         let name = name.into();
-        let focused_output = self.api.get().unwrap().output.get_focused();
+        let focused_output = Output.get_focused();
 
         if let Some(output) = focused_output {
             self.get_on_output_async(name, &output).await
@@ -230,9 +202,7 @@ impl Tag {
     pub fn remove(&self, tags: impl IntoIterator<Item = TagHandle>) {
         let tag_ids = tags.into_iter().map(|handle| handle.id).collect::<Vec<_>>();
 
-        let mut client = self.tag_client.clone();
-
-        block_on_tokio(client.remove(RemoveRequest { tag_ids })).unwrap();
+        block_on_tokio(crate::tag().remove(RemoveRequest { tag_ids })).unwrap();
     }
 
     /// Connect to a tag signal.
@@ -241,7 +211,7 @@ impl Tag {
     /// You can pass in a [`TagSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: TagSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
+        let mut signal_state = signal_module();
 
         match signal {
             TagSignal::Active(f) => signal_state.tag_active.add_callback(f),
@@ -255,8 +225,6 @@ impl Tag {
 #[derive(Debug, Clone)]
 pub struct TagHandle {
     pub(crate) id: u32,
-    tag_client: TagServiceClient<Channel>,
-    api: ApiModules,
 }
 
 impl PartialEq for TagHandle {
@@ -289,8 +257,7 @@ impl TagHandle {
     /// tag.get("3")?.switch_to(); // Displays Steam
     /// ```
     pub fn switch_to(&self) {
-        let mut client = self.tag_client.clone();
-        block_on_tokio(client.switch_to(SwitchToRequest {
+        block_on_tokio(crate::tag().switch_to(SwitchToRequest {
             tag_id: Some(self.id),
         }))
         .unwrap();
@@ -315,8 +282,7 @@ impl TagHandle {
     /// tag.get("2")?.set_active(false); // Displays Steam
     /// ```
     pub fn set_active(&self, set: bool) {
-        let mut client = self.tag_client.clone();
-        block_on_tokio(client.set_active(SetActiveRequest {
+        block_on_tokio(crate::tag().set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
@@ -346,8 +312,7 @@ impl TagHandle {
     /// tag.get("2")?.toggle(); // Displays nothing
     /// ```
     pub fn toggle_active(&self) {
-        let mut client = self.tag_client.clone();
-        block_on_tokio(client.set_active(SetActiveRequest {
+        block_on_tokio(crate::tag().set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
         }))
@@ -368,8 +333,7 @@ impl TagHandle {
     /// // "DP-1" now only has tags "1" and "Buckle"
     /// ```
     pub fn remove(&self) {
-        let mut tag_client = self.tag_client.clone();
-        block_on_tokio(tag_client.remove(RemoveRequest {
+        block_on_tokio(crate::tag().remove(RemoveRequest {
             tag_ids: vec![self.id],
         }))
         .unwrap();
@@ -394,9 +358,7 @@ impl TagHandle {
 
     /// The async version of [`TagHandle::props`].
     pub async fn props_async(&self) -> TagProperties {
-        let mut client = self.tag_client.clone();
-
-        let response = client
+        let response = crate::tag()
             .get_properties(tag::v0alpha1::GetPropertiesRequest {
                 tag_id: Some(self.id),
             })
@@ -404,17 +366,14 @@ impl TagHandle {
             .unwrap()
             .into_inner();
 
-        let output = self.api.output;
-        let window = self.api.window;
-
         TagProperties {
             active: response.active,
             name: response.name,
-            output: response.output_name.map(|name| output.new_handle(name)),
+            output: response.output_name.map(|name| Output.new_handle(name)),
             windows: response
                 .window_ids
                 .into_iter()
-                .map(|id| window.new_handle(id))
+                .map(|id| Window.new_handle(id))
                 .collect(),
         }
     }

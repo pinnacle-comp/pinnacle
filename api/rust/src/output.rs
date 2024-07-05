@@ -9,55 +9,35 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use std::{num::NonZeroU32, str::FromStr, sync::OnceLock};
+use std::{num::NonZeroU32, str::FromStr};
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
     self,
     v0alpha1::{
-        output_service_client::OutputServiceClient, set_scale_request::AbsoluteOrRelative,
-        SetLocationRequest, SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
-        SetTransformRequest,
+        set_scale_request::AbsoluteOrRelative, SetLocationRequest, SetModeRequest,
+        SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
     },
 };
-use tonic::transport::Channel;
 
 use crate::{
     block_on_tokio,
     signal::{OutputSignal, SignalHandle},
+    signal_module,
     tag::{Tag, TagHandle},
     util::Batch,
-    window::WindowHandle,
-    ApiModules,
+    window::{Window, WindowHandle},
 };
 
 /// A struct that allows you to get handles to connected outputs and set them up.
 ///
 /// See [`OutputHandle`] for more information.
-#[derive(Debug, Clone)]
-pub struct Output {
-    output_client: OutputServiceClient<Channel>,
-    api: OnceLock<ApiModules>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Output;
 
 impl Output {
-    pub(crate) fn new(channel: Channel) -> Self {
-        Self {
-            output_client: OutputServiceClient::new(channel.clone()),
-            api: OnceLock::new(),
-        }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.api.set(api).unwrap();
-    }
-
     pub(crate) fn new_handle(&self, name: impl Into<String>) -> OutputHandle {
-        OutputHandle {
-            name: name.into(),
-            output_client: self.output_client.clone(),
-            api: self.api.get().unwrap().clone(),
-        }
+        OutputHandle { name: name.into() }
     }
 
     /// Get handles to all connected outputs.
@@ -73,9 +53,7 @@ impl Output {
 
     /// The async version of [`Output::get_all`].
     pub async fn get_all_async(&self) -> Vec<OutputHandle> {
-        let mut client = self.output_client.clone();
-
-        client
+        crate::output()
             .get(output::v0alpha1::GetRequest {})
             .await
             .unwrap()
@@ -181,8 +159,9 @@ impl Output {
             for_all(&output);
         }
 
-        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
-        signal_state.output_connect.add_callback(Box::new(for_all));
+        signal_module()
+            .output_connect
+            .add_callback(Box::new(for_all));
     }
 
     /// Connect to an output signal.
@@ -191,7 +170,7 @@ impl Output {
     /// You can pass in an [`OutputSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: OutputSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
+        let mut signal_state = signal_module();
 
         match signal {
             OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
@@ -230,11 +209,10 @@ impl Output {
     pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {
         let setups = setups.into_iter().collect::<Vec<_>>();
 
-        let tag_mod = self.api.get().unwrap().tag.clone();
         let apply_setups = move |output: &OutputHandle| {
             for setup in setups.iter() {
                 if setup.output.matches(output) {
-                    setup.apply(output, &tag_mod);
+                    setup.apply(output);
                 }
             }
             if let Some(tag) = output.tags().first() {
@@ -295,9 +273,8 @@ impl Output {
     ) {
         let setup: Vec<_> = setup.into_iter().collect();
 
-        let api = self.api.get().unwrap().clone();
         let layout_outputs = move || {
-            let outputs = api.output.get_all_enabled();
+            let outputs = Output.get_all_enabled();
 
             let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
 
@@ -529,7 +506,7 @@ impl OutputSetup {
         }
     }
 
-    fn apply(&self, output: &OutputHandle, tag: &Tag) {
+    fn apply(&self, output: &OutputHandle) {
         if let Some(mode) = &self.mode {
             match mode {
                 OutputMode::Mode(mode) => {
@@ -548,7 +525,7 @@ impl OutputSetup {
             output.set_scale(scale);
         }
         if let Some(tag_names) = &self.tag_names {
-            tag.add(output, tag_names);
+            Tag.add(output, tag_names);
         }
         if let Some(transform) = self.transform {
             output.set_transform(transform);
@@ -616,8 +593,6 @@ bitflags::bitflags! {
 #[derive(Clone, Debug)]
 pub struct OutputHandle {
     pub(crate) name: String,
-    output_client: OutputServiceClient<Channel>,
-    api: ApiModules,
 }
 
 impl PartialEq for OutputHandle {
@@ -722,8 +697,7 @@ impl OutputHandle {
     /// //          ^x=1920
     /// ```
     pub fn set_location(&self, x: impl Into<Option<i32>>, y: impl Into<Option<i32>>) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_location(SetLocationRequest {
+        block_on_tokio(crate::output().set_location(SetLocationRequest {
             output_name: Some(self.name.clone()),
             x: x.into(),
             y: y.into(),
@@ -854,8 +828,7 @@ impl OutputHandle {
         pixel_height: u32,
         refresh_rate_millihertz: impl Into<Option<u32>>,
     ) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_mode(SetModeRequest {
+        block_on_tokio(crate::output().set_mode(SetModeRequest {
             output_name: Some(self.name.clone()),
             pixel_width: Some(pixel_width),
             pixel_height: Some(pixel_height),
@@ -877,8 +850,7 @@ impl OutputHandle {
     /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
     /// ```
     pub fn set_modeline(&self, modeline: Modeline) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_modeline(SetModelineRequest {
+        block_on_tokio(crate::output().set_modeline(SetModelineRequest {
             output_name: Some(self.name.clone()),
             clock: Some(modeline.clock),
             hdisplay: Some(modeline.hdisplay),
@@ -903,8 +875,7 @@ impl OutputHandle {
     /// output.get_focused()?.set_scale(1.5);
     /// ```
     pub fn set_scale(&self, scale: f32) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_scale(SetScaleRequest {
+        block_on_tokio(crate::output().set_scale(SetScaleRequest {
             output_name: Some(self.name.clone()),
             absolute_or_relative: Some(AbsoluteOrRelative::Absolute(scale)),
         }))
@@ -919,8 +890,7 @@ impl OutputHandle {
     /// output.get_focused()?.increase_scale(0.25);
     /// ```
     pub fn increase_scale(&self, increase_by: f32) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_scale(SetScaleRequest {
+        block_on_tokio(crate::output().set_scale(SetScaleRequest {
             output_name: Some(self.name.clone()),
             absolute_or_relative: Some(AbsoluteOrRelative::Relative(increase_by)),
         }))
@@ -951,8 +921,7 @@ impl OutputHandle {
     /// output.set_transform(Transform::_90);
     /// ```
     pub fn set_transform(&self, transform: Transform) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_transform(SetTransformRequest {
+        block_on_tokio(crate::output().set_transform(SetTransformRequest {
             output_name: Some(self.name.clone()),
             transform: Some(transform as i32),
         }))
@@ -971,8 +940,7 @@ impl OutputHandle {
     /// output.set_powered(false);
     /// ```
     pub fn set_powered(&self, powered: bool) {
-        let mut client = self.output_client.clone();
-        block_on_tokio(client.set_powered(SetPoweredRequest {
+        block_on_tokio(crate::output().set_powered(SetPoweredRequest {
             output_name: Some(self.name.clone()),
             powered: Some(powered),
         }))
@@ -996,8 +964,7 @@ impl OutputHandle {
 
     /// The async version of [`OutputHandle::props`].
     pub async fn props_async(&self) -> OutputProperties {
-        let mut client = self.output_client.clone();
-        let response = client
+        let response = crate::output()
             .get_properties(output::v0alpha1::GetPropertiesRequest {
                 output_name: Some(self.name.clone()),
             })
@@ -1043,7 +1010,7 @@ impl OutputHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| self.api.tag.new_handle(id))
+                .map(|id| Tag.new_handle(id))
                 .collect(),
             scale: response.scale,
             transform: response.transform.and_then(|tf| tf.try_into().ok()),
@@ -1051,7 +1018,7 @@ impl OutputHandle {
             keyboard_focus_stack: response
                 .keyboard_focus_stack_window_ids
                 .into_iter()
-                .map(|id| self.api.window.new_handle(id))
+                .map(|id| Window.new_handle(id))
                 .collect(),
             enabled: response.enabled,
             powered: response.powered,

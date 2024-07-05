@@ -2,8 +2,6 @@
 //!
 //! This module includes builtin widgets like the exit prompt and keybind list.
 
-use std::sync::OnceLock;
-
 use indexmap::IndexMap;
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
@@ -15,32 +13,20 @@ use snowcap_api::{
 use xkbcommon::xkb::Keysym;
 
 use crate::{
-    input::{KeybindDescription, Mod},
-    ApiModules,
+    input::{Input, KeybindDescription, Mod},
+    pinnacle::Pinnacle,
 };
 
 /// Builtin widgets for Pinnacle.
-pub struct Integration {
-    api: OnceLock<ApiModules>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Integration;
 
 impl Integration {
-    pub(crate) fn new() -> Self {
-        Self {
-            api: OnceLock::new(),
-        }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.api.set(api).unwrap();
-    }
-
     /// Create the default quit prompt.
     ///
     /// Some of its characteristics can be changed by setting its fields.
     pub fn quit_prompt(&self) -> QuitPrompt {
         QuitPrompt {
-            api: self.api.get().cloned().unwrap(),
             border_radius: 12.0,
             border_thickness: 6.0,
             background_color: [0.15, 0.03, 0.1, 0.65].into(),
@@ -56,7 +42,6 @@ impl Integration {
     /// Some of its characteristics can be changed by setting its fields.
     pub fn keybind_overlay(&self) -> KeybindOverlay {
         KeybindOverlay {
-            api: self.api.get().cloned().unwrap(),
             border_radius: 12.0,
             border_thickness: 6.0,
             background_color: [0.15, 0.15, 0.225, 0.8].into(),
@@ -72,7 +57,6 @@ impl Integration {
 ///
 /// When opened, pressing ENTER will quit the compositor.
 pub struct QuitPrompt {
-    api: ApiModules,
     /// The radius of the prompt's corners.
     pub border_radius: f32,
     /// The thickness of the prompt border.
@@ -112,9 +96,7 @@ impl QuitPrompt {
         .border_color(self.border_color)
         .background_color(self.background_color);
 
-        self.api
-            .snowcap
-            .layer
+        snowcap_api::layer::Layer
             .new_widget(
                 widget,
                 self.width,
@@ -126,7 +108,7 @@ impl QuitPrompt {
             )
             .on_key_press(|handle, key, _mods| {
                 if key == Keysym::Return {
-                    self.api.pinnacle.quit();
+                    Pinnacle.quit();
                 } else {
                     handle.close();
                 }
@@ -136,7 +118,6 @@ impl QuitPrompt {
 
 /// A keybind overlay.
 pub struct KeybindOverlay {
-    api: ApiModules,
     /// The radius of the prompt's corners.
     pub border_radius: f32,
     /// The thickness of the prompt border.
@@ -156,7 +137,7 @@ pub struct KeybindOverlay {
 impl KeybindOverlay {
     /// Show this keybind overlay.
     pub fn show(&self) {
-        let descriptions = self.api.input.keybind_descriptions();
+        let descriptions = Input.keybind_descriptions();
 
         #[derive(PartialEq, Eq, Hash)]
         struct KeybindRepr {
@@ -300,9 +281,7 @@ impl KeybindOverlay {
         .border_color(self.border_color)
         .background_color(self.background_color);
 
-        self.api
-            .snowcap
-            .layer
+        snowcap_api::layer::Layer
             .new_widget(
                 widget,
                 self.width,

@@ -56,44 +56,47 @@
 //!
 //! ## 4. Set up the main function
 //! In `main.rs`, change `fn main()` to `async fn main()` and annotate it with the
-//! [`pinnacle_api::config`][`crate::config`] macro. Pass in the identifier you want to bind the
-//! config modules to:
+//! [`pinnacle_api::config`][`crate::config`] macro. Create the API modules with
+//! [`ApiModules::new`]:
 //!
 //! ```
 //! use pinnacle_api::ApiModules;
 //!
-//! #[pinnacle_api::config(modules)]
+//! #[pinnacle_api::config]
 //! async fn main() {
-//!     // `modules` is now available in the function body.
-//!     // You can deconstruct `ApiModules` to get all the config structs.
 //!     let ApiModules {
 //!         ..
-//!     } = modules;
+//!     } = ApiModules::new();
 //! }
 //! ```
 //!
 //! ## 5. Begin crafting your config!
 //! You can peruse the documentation for things to configure.
 
-use std::sync::Arc;
-
-use futures::{future::BoxFuture, Future, FutureExt, StreamExt};
+use futures::{Future, StreamExt};
 use input::Input;
 use layout::Layout;
 use output::Output;
 use pinnacle::Pinnacle;
+use pinnacle_api_defs::pinnacle::{
+    input::v0alpha1::input_service_client::InputServiceClient,
+    layout::v0alpha1::layout_service_client::LayoutServiceClient,
+    output::v0alpha1::output_service_client::OutputServiceClient,
+    process::v0alpha1::process_service_client::ProcessServiceClient,
+    render::v0alpha1::render_service_client::RenderServiceClient,
+    signal::v0alpha1::signal_service_client::SignalServiceClient,
+    tag::v0alpha1::tag_service_client::TagServiceClient,
+    v0alpha1::pinnacle_service_client::PinnacleServiceClient,
+    window::v0alpha1::window_service_client::WindowServiceClient,
+};
 use process::Process;
 use render::Render;
 use signal::SignalState;
 #[cfg(feature = "snowcap")]
 use snowcap::Snowcap;
 use tag::Tag;
-use tokio::sync::{
-    mpsc::{unbounded_channel, UnboundedReceiver},
-    RwLock,
-};
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use tonic::transport::{Endpoint, Uri};
+use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
+use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 use window::Window;
 
@@ -116,9 +119,81 @@ pub use snowcap_api;
 pub use tokio;
 pub use xkbcommon;
 
-/// A struct containing static references to all of the configuration structs.
+// These are all `RwLock<Option>` instead of `OnceLock` purely for the fact that
+// tonic doesn't like it when you use clients across tokio runtimes, and these are static
+// meaning they would get reused, so this allows us to recreate the client on a
+// different runtime when testing.
+static PINNACLE: RwLock<Option<PinnacleServiceClient<Channel>>> = RwLock::const_new(None);
+static PROCESS: RwLock<Option<ProcessServiceClient<Channel>>> = RwLock::const_new(None);
+static WINDOW: RwLock<Option<WindowServiceClient<Channel>>> = RwLock::const_new(None);
+static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::const_new(None);
+static OUTPUT: RwLock<Option<OutputServiceClient<Channel>>> = RwLock::const_new(None);
+static TAG: RwLock<Option<TagServiceClient<Channel>>> = RwLock::const_new(None);
+static LAYOUT: RwLock<Option<LayoutServiceClient<Channel>>> = RwLock::const_new(None);
+static RENDER: RwLock<Option<RenderServiceClient<Channel>>> = RwLock::const_new(None);
+static SIGNAL: RwLock<Option<SignalServiceClient<Channel>>> = RwLock::const_new(None);
+
+static SIGNAL_MODULE: Mutex<Option<SignalState>> = Mutex::const_new(None);
+
+pub(crate) fn pinnacle() -> PinnacleServiceClient<Channel> {
+    block_on_tokio(PINNACLE.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn process() -> ProcessServiceClient<Channel> {
+    block_on_tokio(PROCESS.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn window() -> WindowServiceClient<Channel> {
+    block_on_tokio(WINDOW.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn input() -> InputServiceClient<Channel> {
+    block_on_tokio(INPUT.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn output() -> OutputServiceClient<Channel> {
+    block_on_tokio(OUTPUT.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn tag() -> TagServiceClient<Channel> {
+    block_on_tokio(TAG.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn layout() -> LayoutServiceClient<Channel> {
+    block_on_tokio(LAYOUT.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn render() -> RenderServiceClient<Channel> {
+    block_on_tokio(RENDER.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+pub(crate) fn signal() -> SignalServiceClient<Channel> {
+    block_on_tokio(SIGNAL.read())
+        .clone()
+        .expect("grpc connection was not initialized")
+}
+
+pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
+    MutexGuard::map(block_on_tokio(SIGNAL_MODULE.lock()), |state| {
+        state.as_mut().expect("grpc connection was not initialized")
+    })
+}
+
+/// A struct containing all of the config module structs.
+///
+/// Everything in here is a static reference because even though the modules are
+/// copy-able unit structs, you still have to put `move` when using them in closures,
+/// so this is just a minor quality-of-life thing.
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ApiModules {
     /// The [`Pinnacle`] struct
     pub pinnacle: &'static Pinnacle,
@@ -136,42 +211,44 @@ pub struct ApiModules {
     pub layout: &'static Layout,
     /// The [`Render`] struct
     pub render: &'static Render,
-    signal: Arc<RwLock<SignalState>>,
 
     #[cfg(feature = "snowcap")]
     /// The snowcap widget system.
     pub snowcap: &'static Snowcap,
 }
 
-impl std::fmt::Debug for ApiModules {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ApiModules")
-            .field("pinnacle", &self.pinnacle)
-            .field("process", &self.process)
-            .field("window", &self.window)
-            .field("input", &self.input)
-            .field("output", &self.output)
-            .field("tag", &self.tag)
-            .field("layout", &self.layout)
-            .field("render", &self.render)
-            .field("signal", &"...")
-            // TODO: snowcap
-            .finish()
+impl Default for ApiModules {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Api receivers.
-pub struct Receivers {
-    pinnacle: UnboundedReceiver<BoxFuture<'static, ()>>,
-    #[cfg(feature = "snowcap")]
-    snowcap: UnboundedReceiver<tokio::task::JoinHandle<()>>,
+impl ApiModules {
+    /// Creates all the API modules.
+    pub const fn new() -> Self {
+        Self {
+            pinnacle: &Pinnacle,
+            process: &Process,
+            window: &Window,
+            input: &Input,
+            output: &Output,
+            tag: &Tag,
+            layout: &Layout,
+            render: &Render,
+            #[cfg(feature = "snowcap")]
+            snowcap: {
+                const SNOWCAP: Snowcap = Snowcap::new();
+                &SNOWCAP
+            },
+        }
+    }
 }
 
 /// Connects to Pinnacle and builds the configuration structs.
 ///
 /// This function is inserted at the top of your config through the [`config`] macro.
 /// You should use that macro instead of this function directly.
-pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Error>> {
+pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
     // port doesn't matter, we use a unix socket
     let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| {
@@ -183,69 +260,48 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
         .await
         .unwrap();
 
-    let (fut_sender, fut_recv) = unbounded_channel::<BoxFuture<'static, ()>>();
+    PINNACLE
+        .write()
+        .await
+        .replace(PinnacleServiceClient::new(channel.clone()));
+    PROCESS
+        .write()
+        .await
+        .replace(ProcessServiceClient::new(channel.clone()));
+    WINDOW
+        .write()
+        .await
+        .replace(WindowServiceClient::new(channel.clone()));
+    INPUT
+        .write()
+        .await
+        .replace(InputServiceClient::new(channel.clone()));
+    OUTPUT
+        .write()
+        .await
+        .replace(OutputServiceClient::new(channel.clone()));
+    TAG.write()
+        .await
+        .replace(TagServiceClient::new(channel.clone()));
+    RENDER
+        .write()
+        .await
+        .replace(RenderServiceClient::new(channel.clone()));
+    LAYOUT
+        .write()
+        .await
+        .replace(LayoutServiceClient::new(channel.clone()));
+    SIGNAL
+        .write()
+        .await
+        .replace(SignalServiceClient::new(channel.clone()));
 
-    let signal = Arc::new(RwLock::new(SignalState::new(
-        channel.clone(),
-        fut_sender.clone(),
-    )));
-
-    let pinnacle = Box::leak(Box::new(Pinnacle::new(channel.clone())));
-    let process = Box::leak(Box::new(Process::new(channel.clone(), fut_sender.clone())));
-    let window = Box::leak(Box::new(Window::new(channel.clone())));
-    let input = Box::leak(Box::new(Input::new(channel.clone(), fut_sender.clone())));
-    let output = Box::leak(Box::new(Output::new(channel.clone())));
-    let tag = Box::leak(Box::new(Tag::new(channel.clone())));
-    let render = Box::leak(Box::new(Render::new(channel.clone())));
-    let layout = Box::leak(Box::new(Layout::new(channel.clone(), fut_sender.clone())));
-
-    #[cfg(not(feature = "snowcap"))]
-    let modules = ApiModules {
-        pinnacle,
-        process,
-        window,
-        input,
-        output,
-        tag,
-        layout,
-        render,
-        signal: signal.clone(),
-    };
-
-    #[cfg(feature = "snowcap")]
-    let (modules, snowcap_recv) = {
-        let (snowcap, snowcap_recv) = snowcap_api::connect().await.unwrap();
-        let api_modules = ApiModules {
-            pinnacle,
-            process,
-            window,
-            input,
-            output,
-            tag,
-            layout,
-            render,
-            signal: signal.clone(),
-            snowcap: Box::leak(Box::new(Snowcap::new(snowcap))),
-        };
-        (api_modules, snowcap_recv)
-    };
-
-    window.finish_init(modules.clone());
-    output.finish_init(modules.clone());
-    tag.finish_init(modules.clone());
-    layout.finish_init(modules.clone());
-    signal.read().await.finish_init(modules.clone());
+    SIGNAL_MODULE.lock().await.replace(SignalState::new());
 
     #[cfg(feature = "snowcap")]
-    modules.snowcap.finish_init(modules.clone());
+    snowcap_api::connect().await.unwrap();
 
-    let receivers = Receivers {
-        pinnacle: fut_recv,
-        #[cfg(feature = "snowcap")]
-        snowcap: snowcap_recv,
-    };
-
-    Ok((modules, receivers))
+    Ok(())
 }
 
 /// Listen to Pinnacle for incoming messages.
@@ -255,52 +311,14 @@ pub async fn connect() -> Result<(ApiModules, Receivers), Box<dyn std::error::Er
 ///
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
-pub async fn listen(api: ApiModules, receivers: Receivers) {
-    #[cfg(feature = "snowcap")]
-    let Receivers {
-        pinnacle: fut_recv,
-        snowcap: snowcap_recv,
-    } = receivers;
-    #[cfg(not(feature = "snowcap"))]
-    let Receivers { pinnacle: fut_recv } = receivers;
+pub async fn listen() {
+    let mut shutdown_stream = Pinnacle.shutdown_watch().await;
 
-    let mut fut_recv = UnboundedReceiverStream::new(fut_recv);
-    let mut set = futures::stream::FuturesUnordered::new();
+    // This will trigger either when the compositor sends the shutdown signal
+    // or when it exits (in which case the stream received an error)
+    shutdown_stream.next().await;
 
-    let mut shutdown_stream = api.pinnacle.shutdown_watch().await;
-
-    let mut shutdown_watcher = async move {
-        // This will trigger either when the compositor sends the shutdown signal
-        // or when it exits (in which case the stream received an error)
-        shutdown_stream.next().await;
-    }
-    .boxed();
-
-    #[cfg(feature = "snowcap")]
-    tokio::spawn(snowcap_api::listen(snowcap_recv));
-
-    loop {
-        tokio::select! {
-            fut = fut_recv.next() => {
-                if let Some(fut) = fut {
-                    set.push(tokio::spawn(fut));
-                } else {
-                    break;
-                }
-            }
-            res = set.next() => {
-                if let Some(Err(join_err)) = res {
-                    eprintln!("tokio task panicked: {join_err}");
-                    api.signal.write().await.shutdown();
-                    break;
-                }
-            }
-            _ = &mut shutdown_watcher => {
-                api.signal.write().await.shutdown();
-                break;
-            }
-        }
-    }
+    signal_module().shutdown();
 }
 
 /// Block on a future using the current Tokio runtime.
