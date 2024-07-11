@@ -4,6 +4,7 @@ members = [
     "api/rust",
     "api/rust/pinnacle-api-macros",
     "wlcs_pinnacle",
+    "api/lua/build"
 ]
 exclude = ["snowcap"]
 

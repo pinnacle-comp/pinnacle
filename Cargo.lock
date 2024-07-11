@@ -2256,6 +2256,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lua-build"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.2.6",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "walkdir",
+]
+
+[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
