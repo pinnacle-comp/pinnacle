@@ -2,7 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local process_service = require("pinnacle.grpc.defs").pinnacle.process.v0alpha1.ProcessService
 
 ---Process management.
@@ -31,7 +31,7 @@ local function spawn_inner(args, callbacks, once)
         end
     end
 
-    client.server_streaming_request(process_service.Spawn, {
+    client():server_streaming_request(process_service.Spawn, {
         args = args,
         once = once,
         has_callback = callbacks ~= nil,
@@ -106,7 +106,7 @@ end
 ---@param key string The environment variable key
 ---@param value string The environment variable value
 function process.set_env(key, value)
-    client.unary_request(process_service.SetEnv, {
+    client():unary_request(process_service.SetEnv, {
         key = key,
         value = value,
     })

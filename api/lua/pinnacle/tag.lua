@@ -2,7 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local tag_service = require("pinnacle.grpc.defs").pinnacle.tag.v0alpha1.TagService
 
 local set_or_toggle = {
@@ -51,7 +51,7 @@ tag.handle = tag_handle
 ---
 ---@return TagHandle[]
 function tag.get_all()
-    local response = client.unary_request(tag_service.Get, {})
+    local response = client():unary_request(tag_service.Get, {})
 
     ---@type TagHandle[]
     local handles = {}
@@ -136,7 +136,7 @@ function tag.add(output, ...)
         tag_names = tag_names[1] --[=[@as string[]]=]
     end
 
-    local response = client.unary_request(tag_service.Add, {
+    local response = client():unary_request(tag_service.Add, {
         output_name = output.name,
         tag_names = tag_names,
     })
@@ -169,7 +169,7 @@ function tag.remove(tags)
         table.insert(ids, tg.id)
     end
 
-    client.unary_request(tag_service.Remove, { tag_ids = ids })
+    client():unary_request(tag_service.Remove, { tag_ids = ids })
 end
 
 ---@type table<string, SignalServiceMethod>
@@ -245,7 +245,7 @@ end
 ---Tag.get("3"):switch_to() -- Displays Steam
 ---```
 function TagHandle:switch_to()
-    client.unary_request(tag_service.SwitchTo, { tag_id = self.id })
+    client():unary_request(tag_service.SwitchTo, { tag_id = self.id })
 end
 
 ---Set whether or not this tag is active.
@@ -263,7 +263,7 @@ end
 ---
 ---@param active boolean
 function TagHandle:set_active(active)
-    client.unary_request(
+    client():unary_request(
         tag_service.SetActive,
         { tag_id = self.id, set_or_toggle = set_or_toggle[active] }
     )
@@ -281,7 +281,7 @@ end
 ---Tag.get("2"):toggle_active() -- Displays nothing
 ---```
 function TagHandle:toggle_active()
-    client.unary_request(
+    client():unary_request(
         tag_service.SetActive,
         { tag_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -297,7 +297,7 @@ end
 ---
 ---@return TagProperties
 function TagHandle:props()
-    local response = client.unary_request(tag_service.GetProperties, { tag_id = self.id })
+    local response = client():unary_request(tag_service.GetProperties, { tag_id = self.id })
 
     return {
         active = response.active,

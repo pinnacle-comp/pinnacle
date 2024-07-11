@@ -13,6 +13,7 @@ dependencies = {
     "http ~> 0.4",
     "lua-protobuf ~> 0.5",
     "compat53 ~> 0.13",
+    "lua-grpc-client >= dev-1",
 }
 build = {
     type = "builtin",

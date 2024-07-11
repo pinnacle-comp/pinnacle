@@ -2,7 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local input_service = require("pinnacle.grpc.defs").pinnacle.input.v0alpha1.InputService
 
 -- This is an @enum and not an @alias because with an @alias the completion replaces tables with a string,
@@ -131,7 +131,7 @@ function input.keybind(mods, key, action, keybind_info)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(input_service.SetKeybind, {
+    client():server_streaming_request(input_service.SetKeybind, {
         modifiers = mod_values,
         raw_code = raw_code,
         xkb_name = xkb_name,
@@ -165,7 +165,7 @@ function input.mousebind(mods, button, edge, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(input_service.SetMousebind, {
+    client():server_streaming_request(input_service.SetMousebind, {
         modifiers = mod_values,
         button = mouse_button_values[button],
         edge = edge,
@@ -184,7 +184,7 @@ end
 ---@return KeybindDescription[]
 function input.keybind_descriptions()
     ---@type pinnacle.input.v0alpha1.KeybindDescriptionsResponse
-    local descs = client.unary_request(input_service.KeybindDescriptions, {})
+    local descs = client():unary_request(input_service.KeybindDescriptions, {})
     local descs = descs.descriptions or {}
 
     local ret = {}
@@ -233,7 +233,7 @@ end
 ---
 ---@param xkb_config XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
-    client.unary_request(input_service.SetXkbConfig, xkb_config)
+    client():unary_request(input_service.SetXkbConfig, xkb_config)
 end
 
 ---Set the keyboard's repeat rate and delay.
@@ -246,7 +246,7 @@ end
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
 function input.set_repeat_rate(rate, delay)
-    client.unary_request(input_service.SetRepeatRate, {
+    client():unary_request(input_service.SetRepeatRate, {
         rate = rate,
         delay = delay,
     })
@@ -322,32 +322,32 @@ local tap_button_map_values = {
 function input.set_libinput_settings(settings)
     for setting, value in pairs(settings) do
         if setting == "accel_profile" then
-            client.unary_request(
+            client():unary_request(
                 input_service.SetLibinputSetting,
                 { [setting] = accel_profile_values[value] }
             )
         elseif setting == "calibration_matrix" then
-            client.unary_request(
+            client():unary_request(
                 input_service.SetLibinputSetting,
                 { [setting] = { matrix = value } }
             )
         elseif setting == "click_method" then
-            client.unary_request(
+            client():unary_request(
                 input_service.SetLibinputSetting,
                 { [setting] = click_method_values[value] }
             )
         elseif setting == "scroll_method" then
-            client.unary_request(
+            client():unary_request(
                 input_service.SetLibinputSetting,
                 { [setting] = scroll_method_values[value] }
             )
         elseif setting == "tap_button_map" then
-            client.unary_request(
+            client():unary_request(
                 input_service.SetLibinputSetting,
                 { [setting] = tap_button_map_values[value] }
             )
         else
-            client.unary_request(input_service.SetLibinputSetting, { [setting] = value })
+            client():unary_request(input_service.SetLibinputSetting, { [setting] = value })
         end
     end
 end
@@ -359,7 +359,7 @@ end
 ---
 ---@param theme string
 function input.set_xcursor_theme(theme)
-    client.unary_request(input_service.SetXcursor, {
+    client():unary_request(input_service.SetXcursor, {
         theme = theme,
     })
 end
@@ -371,7 +371,7 @@ end
 ---
 ---@param size integer
 function input.set_xcursor_size(size)
-    client.unary_request(input_service.SetXcursor, {
+    client():unary_request(input_service.SetXcursor, {
         size = size,
     })
 end

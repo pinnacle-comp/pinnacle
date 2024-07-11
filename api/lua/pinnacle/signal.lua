@@ -2,7 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.SignalService
 
 local stream_control = {
@@ -250,7 +250,7 @@ end
 ---@param request SignalServiceMethod
 ---@param callback fun(response: table)
 function signal.connect(request, callback)
-    local stream = client.bidirectional_streaming_request(signal_service[request], {
+    local stream = client():bidirectional_streaming_request(signal_service[request], {
         control = stream_control.READY,
     }, function(response)
         callback(response)

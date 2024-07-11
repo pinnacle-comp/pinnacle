@@ -38,12 +38,14 @@ install-protos:
 install-lua-lib: gen-lua-pb-defs
     #!/usr/bin/env bash
     cd "{{rootdir}}/api/lua"
-    luarocks make --local --lua-version "{{lua_version}}"
+    luarocks build --local https://raw.githubusercontent.com/pinnacle-comp/lua-grpc-client/main/lua-grpc-client-dev-1.rockspec
+    luarocks build --local --lua-version "{{lua_version}}"
 
 # Remove installed configs and the Lua API (requires Luarocks)
 clean: clean-snowcap
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local pinnacle-api
+    -luarocks remove --local lua-grpc-client
 
 # [root] Remove installed configs and the Lua API (requires Luarocks)
 clean-root:

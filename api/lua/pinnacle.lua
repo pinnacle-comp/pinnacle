@@ -2,7 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v0alpha1.PinnacleService
 
 ---The entry point to configuration.
@@ -32,12 +32,12 @@ local pinnacle = {
 
 ---Quit Pinnacle.
 function pinnacle.quit()
-    client.unary_request(pinnacle_service.Quit, {})
+    client():unary_request(pinnacle_service.Quit, {})
 end
 
 ---Reload the active config.
 function pinnacle.reload_config()
-    client.unary_request(pinnacle_service.ReloadConfig, {})
+    client():unary_request(pinnacle_service.ReloadConfig, {})
 end
 
 ---Setup a Pinnacle config.
@@ -59,15 +59,17 @@ function pinnacle.setup(config_fn)
         snowcap.init()
     end
 
+    require("pinnacle.grpc.client").connect()
+
     -- Make Snowcap use Pinnacle's cqueues loop
-    require("snowcap.grpc.client").loop = client.loop
+    require("snowcap.grpc.client").client().loop = client().loop
 
     -- This function ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
-    client.loop:wrap(function()
+    client().loop:wrap(function()
         while true do
             require("cqueues").sleep(60)
-            local success, err, errno = client.conn:ping(10)
+            local success, err, errno = client().conn:ping(10)
             if not success then
                 print("Compositor ping failed:", err, errno)
                 os.exit(1)
@@ -77,7 +79,7 @@ function pinnacle.setup(config_fn)
 
     config_fn(pinnacle)
 
-    local success, err = client.loop:loop()
+    local success, err = client().loop:loop()
     if not success then
         print(err)
     end
@@ -103,6 +105,8 @@ function pinnacle.run(run_fn)
     if success then
         snowcap.init()
     end
+
+    require("pinnacle.grpc.client").connect()
 
     run_fn(pinnacle)
 end
