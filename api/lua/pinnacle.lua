@@ -27,17 +27,33 @@ local pinnacle = {
     ---@type Render
     render = require("pinnacle.render"),
     ---@type pinnacle.Snowcap
-    snowcap = require("pinnacle.snowcap"),
+    snowcap = nil,
 }
 
 ---Quit Pinnacle.
 function pinnacle.quit()
-    client():unary_request(pinnacle_service.Quit, {})
+    client:unary_request(pinnacle_service.Quit, {})
 end
 
 ---Reload the active config.
 function pinnacle.reload_config()
-    client():unary_request(pinnacle_service.ReloadConfig, {})
+    client:unary_request(pinnacle_service.ReloadConfig, {})
+end
+
+function pinnacle.init()
+    require("pinnacle.grpc.protobuf").build_protos()
+
+    require("pinnacle.grpc.client").connect()
+
+    local success, snowcap = pcall(require, "snowcap")
+    if success then
+        if pcall(snowcap.init) then
+            pinnacle.snowcap = require("pinnacle.snowcap")
+
+            -- Make Snowcap use Pinnacle's cqueues loop
+            require("snowcap.grpc.client").client.loop = client.loop
+        end
+    end
 end
 
 ---Setup a Pinnacle config.
@@ -53,23 +69,14 @@ end
 ---
 ---@see Pinnacle.run
 function pinnacle.setup(config_fn)
-    require("pinnacle.grpc.protobuf").build_protos()
-    local success, snowcap = pcall(require, "snowcap")
-    if success then
-        snowcap.init()
-    end
-
-    require("pinnacle.grpc.client").connect()
-
-    -- Make Snowcap use Pinnacle's cqueues loop
-    require("snowcap.grpc.client").client().loop = client().loop
+    pinnacle.init()
 
     -- This function ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
-    client().loop:wrap(function()
+    client.loop:wrap(function()
         while true do
             require("cqueues").sleep(60)
-            local success, err, errno = client().conn:ping(10)
+            local success, err, errno = client.conn:ping(10)
             if not success then
                 print("Compositor ping failed:", err, errno)
                 os.exit(1)
@@ -79,7 +86,7 @@ function pinnacle.setup(config_fn)
 
     config_fn(pinnacle)
 
-    local success, err = client().loop:loop()
+    local success, err = client.loop:loop()
     if not success then
         print(err)
     end
@@ -100,13 +107,7 @@ end
 ---
 ---@param run_fn fun(pinnacle: Pinnacle)
 function pinnacle.run(run_fn)
-    require("pinnacle.grpc.protobuf").build_protos()
-    local success, snowcap = pcall(require, "snowcap")
-    if success then
-        snowcap.init()
-    end
-
-    require("pinnacle.grpc.client").connect()
+    pinnacle.init()
 
     run_fn(pinnacle)
 end

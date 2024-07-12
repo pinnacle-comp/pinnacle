@@ -31,7 +31,7 @@ local function spawn_inner(args, callbacks, once)
         end
     end
 
-    client():server_streaming_request(process_service.Spawn, {
+    client:server_streaming_request(process_service.Spawn, {
         args = args,
         once = once,
         has_callback = callbacks ~= nil,
@@ -106,7 +106,7 @@ end
 ---@param key string The environment variable key
 ---@param value string The environment variable value
 function process.set_env(key, value)
-    client():unary_request(process_service.SetEnv, {
+    client:unary_request(process_service.SetEnv, {
         key = key,
         value = value,
     })

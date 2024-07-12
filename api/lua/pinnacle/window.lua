@@ -3,14 +3,15 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client").client
+local window_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1
 local window_service = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowService
 
 local set_or_toggle = {
-    SET = 1,
-    [true] = 1,
-    UNSET = 2,
-    [false] = 2,
-    TOGGLE = 3,
+    SET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
+    [true] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
+    UNSET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    [false] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    TOGGLE = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
 ---@nodoc
@@ -50,7 +51,7 @@ window.handle = window_handle
 ---```
 ---@return WindowHandle[] windows Handles to all windows
 function window.get_all()
-    local response = client():unary_request(window_service.Get, {})
+    local response = client:unary_request(window_service.Get, {})
 
     local handles = window_handle.new_from_table(response.window_ids or {})
 
@@ -105,7 +106,7 @@ end
 function window.begin_move(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    client():unary_request(window_service.MoveGrab, { button = button })
+    client:unary_request(window_service.MoveGrab, { button = button })
 end
 
 ---Begin resizing this window using the specified mouse button.
@@ -123,7 +124,7 @@ end
 function window.begin_resize(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    client():unary_request(window_service.ResizeGrab, { button = button })
+    client:unary_request(window_service.ResizeGrab, { button = button })
 end
 
 ---@class WindowRuleCondition
@@ -133,11 +134,14 @@ end
 ---@field titles string[]?
 ---@field tags TagHandle[]?
 
----@alias WindowState
----| "tiled"
----| "floating"
----| "fullscreen"
----| "maximized"
+---@enum (key) WindowState
+local window_state = {
+    tiled = window_v0alpha1.WindowState.WINDOW_STATE_TILED,
+    floating = window_v0alpha1.WindowState.WINDOW_STATE_FLOATING,
+    fullscreen = window_v0alpha1.WindowState.WINDOW_STATE_FULLSCREEN,
+    maximized = window_v0alpha1.WindowState.WINDOW_STATE_MAXIMIZED,
+}
+require("pinnacle.util").make_bijective(window_state)
 
 ---@class WindowRule
 ---@field output OutputHandle?
@@ -152,17 +156,12 @@ end
 ---@field state WindowState?
 
 ---@enum (key) FullscreenOrMaximized
-local _fullscreen_or_maximized = {
-    neither = 1,
-    fullscreen = 2,
-    maximized = 3,
+local fullscreen_or_maximized = {
+    neither = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_NEITHER,
+    fullscreen = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_FULLSCREEN,
+    maximized = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_MAXIMIZED,
 }
-
-local _fullscreen_or_maximized_keys = {
-    [1] = "neither",
-    [2] = "fullscreen",
-    [3] = "maximized",
-}
+require("pinnacle.util").make_bijective(fullscreen_or_maximized)
 
 ---@param rule WindowRule
 local function process_window_rule(rule)
@@ -180,7 +179,7 @@ local function process_window_rule(rule)
     end
 
     if rule.fullscreen_or_maximized then
-        rule.fullscreen_or_maximized = _fullscreen_or_maximized[rule.fullscreen_or_maximized]
+        rule.fullscreen_or_maximized = fullscreen_or_maximized[rule.fullscreen_or_maximized]
     end
 
     if rule.decoration_mode then
@@ -328,7 +327,7 @@ function window.add_window_rule(rule)
 
     process_window_rule_cond(rule.cond)
 
-    client():unary_request(window_service.AddWindowRule, {
+    client:unary_request(window_service.AddWindowRule, {
         cond = rule.cond,
         rule = rule.rule,
     })
@@ -390,7 +389,7 @@ end
 ---if focused then focused:close() end
 ---```
 function WindowHandle:close()
-    client():unary_request(window_service.Close, { window_id = self.id })
+    client:unary_request(window_service.Close, { window_id = self.id })
 end
 
 ---Set this window's location and/or size.
@@ -420,7 +419,7 @@ end
 ---```
 ---@param geo { x: integer?, y: integer?, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
-    client():unary_request(window_service.SetGeometry, { window_id = self.id, geometry = geo })
+    client:unary_request(window_service.SetGeometry, { window_id = self.id, geometry = geo })
 end
 
 ---Set this window to fullscreen or not.
@@ -436,7 +435,7 @@ end
 ---
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
-    client():unary_request(
+    client:unary_request(
         window_service.SetFullscreen,
         { window_id = self.id, set_or_toggle = set_or_toggle[fullscreen] }
     )
@@ -452,7 +451,7 @@ end
 ---end
 ---```
 function WindowHandle:toggle_fullscreen()
-    client():unary_request(
+    client:unary_request(
         window_service.SetFullscreen,
         { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -471,7 +470,7 @@ end
 ---
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
-    client():unary_request(
+    client:unary_request(
         window_service.SetMaximized,
         { window_id = self.id, set_or_toggle = set_or_toggle[maximized] }
     )
@@ -487,7 +486,7 @@ end
 ---end
 ---```
 function WindowHandle:toggle_maximized()
-    client():unary_request(
+    client:unary_request(
         window_service.SetMaximized,
         { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -506,7 +505,7 @@ end
 ---
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
-    client():unary_request(
+    client:unary_request(
         window_service.SetFloating,
         { window_id = self.id, set_or_toggle = set_or_toggle[floating] }
     )
@@ -522,7 +521,7 @@ end
 ---end
 ---```
 function WindowHandle:toggle_floating()
-    client():unary_request(
+    client:unary_request(
         window_service.SetFloating,
         { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -540,7 +539,7 @@ end
 ---
 ---@param focused boolean
 function WindowHandle:set_focused(focused)
-    client():unary_request(
+    client:unary_request(
         window_service.SetFocused,
         { window_id = self.id, set_or_toggle = set_or_toggle[focused] }
     )
@@ -556,7 +555,7 @@ end
 ---end
 ---```
 function WindowHandle:toggle_focused()
-    client():unary_request(
+    client:unary_request(
         window_service.SetFocused,
         { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -577,7 +576,7 @@ end
 ---
 ---@param tag TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
-    client():unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
+    client:unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
 end
 
 ---Tag or untag the given tag on this window.
@@ -599,7 +598,7 @@ end
 ---@param tag TagHandle The tag to set or unset
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
-    client():unary_request(
+    client:unary_request(
         window_service.SetTag,
         { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle[set] }
     )
@@ -624,7 +623,7 @@ end
 ---
 ---@param tag TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
-    client():unary_request(
+    client:unary_request(
         window_service.SetTag,
         { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
     )
@@ -642,7 +641,7 @@ end
 ---end
 ---```
 function WindowHandle:raise()
-    client():unary_request(window_service.Raise, { window_id = self.id })
+    client:unary_request(window_service.Raise, { window_id = self.id })
 end
 
 ---Returns whether or not this window is on an active tag.
@@ -685,10 +684,9 @@ end
 ---
 ---@return WindowProperties
 function WindowHandle:props()
-    local response = client():unary_request(window_service.GetProperties, { window_id = self.id })
+    local response = client:unary_request(window_service.GetProperties, { window_id = self.id })
 
-    response.fullscreen_or_maximized =
-        _fullscreen_or_maximized_keys[response.fullscreen_or_maximized]
+    response.fullscreen_or_maximized = fullscreen_or_maximized[response.fullscreen_or_maximized]
 
     response.tags = response.tag_ids
         ---@diagnostic disable-next-line: invisible
@@ -696,19 +694,7 @@ function WindowHandle:props()
     response.tag_ids = nil
 
     if response.state then
-        local WindowState = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowState
-        ---@type WindowState?
-        local state = nil
-        if response.state == WindowState.WINDOW_STATE_TILED then
-            state = "tiled"
-        elseif response.state == WindowState.WINDOW_STATE_FLOATING then
-            state = "floating"
-        elseif response.state == WindowState.WINDOW_STATE_FULLSCREEN then
-            state = "fullscreen"
-        elseif response.state == WindowState.WINDOW_STATE_MAXIMIZED then
-            state = "maximized"
-        end
-        response.state = state
+        response.state = window_state[response.state]
     end
 
     return response

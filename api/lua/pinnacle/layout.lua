@@ -983,7 +983,7 @@ local layout = {
 ---
 ---@param manager LayoutManager
 function layout.set_manager(manager)
-    layout.stream = client():bidirectional_streaming_request(layout_service.Layout, {
+    layout.stream = client:bidirectional_streaming_request(layout_service.Layout, {
         layout = {},
     }, function(response, stream)
         local request_id = response.request_id
