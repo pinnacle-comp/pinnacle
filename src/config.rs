@@ -41,7 +41,7 @@ use tokio::{
 };
 use toml::Table;
 
-use tracing::{debug, error, info, info_span, warn, warn_span, Instrument};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 use xdg::BaseDirectories;
 use xkbcommon::xkb::Keysym;
 
@@ -524,7 +524,12 @@ impl Pinnacle {
                 tokio::spawn(
                     async move {
                         while let Ok(Some(line)) = reader.next_line().await {
-                            info!("{line}");
+                            match line.split_whitespace().next() {
+                                Some("WARN") => warn!("{line}"),
+                                Some("ERROR" | "FATAL") => error!("{line}"),
+                                Some("DEBUG") => debug!("{line}"),
+                                _ => info!("{line}"),
+                            }
                         }
                     }
                     .instrument(info_span!("config_stdout")),
@@ -536,10 +541,15 @@ impl Pinnacle {
                 tokio::spawn(
                     async move {
                         while let Ok(Some(line)) = reader.next_line().await {
-                            warn!("{line}");
+                            match line.split_whitespace().next() {
+                                Some("WARN") => warn!("{line}"),
+                                Some("ERROR" | "FATAL") => error!("{line}"),
+                                Some("DEBUG") => debug!("{line}"),
+                                _ => info!("{line}"),
+                            }
                         }
                     }
-                    .instrument(warn_span!("config_stderr")),
+                    .instrument(info_span!("config_stderr")),
                 );
             }
 

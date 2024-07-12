@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local output_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1
 local output_service = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1.OutputService
@@ -41,7 +42,14 @@ output.handle = output_handle
 ---
 ---@return OutputHandle[]
 function output.get_all()
-    local response = client:unary_request(output_service.Get, {})
+    local response, err = client:unary_request(output_service.Get, {})
+
+    if err then
+        log:error(err)
+        return {}
+    end
+
+    ---@cast response pinnacle.output.v0alpha1.GetResponse
 
     ---@type OutputHandle[]
     local handles = {}
@@ -690,11 +698,15 @@ end
 ---
 ---@see OutputHandle.set_loc_adj_to
 function OutputHandle:set_location(loc)
-    client:unary_request(output_service.SetLocation, {
+    local _, err = client:unary_request(output_service.SetLocation, {
         output_name = self.name,
         x = loc.x,
         y = loc.y,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@alias Alignment
@@ -827,12 +839,16 @@ end
 ---@param pixel_height integer
 ---@param refresh_rate_millihz integer?
 function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
-    client:unary_request(output_service.SetMode, {
+    local _, err = client:unary_request(output_service.SetMode, {
         output_name = self.name,
         pixel_width = pixel_width,
         pixel_height = pixel_height,
         refresh_rate_millihz = refresh_rate_millihz,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@class Modeline
@@ -880,24 +896,37 @@ function OutputHandle:set_modeline(modeline)
         vsync_pos = modeline.vsync,
     }
 
-    client:unary_request(output_service.SetModeline, request)
+    local _, err = client:unary_request(output_service.SetModeline, request)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Set this output's scaling factor.
 ---
 ---@param scale number
 function OutputHandle:set_scale(scale)
-    client:unary_request(output_service.SetScale, { output_name = self.name, absolute = scale })
+    local _, err =
+        client:unary_request(output_service.SetScale, { output_name = self.name, absolute = scale })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Increase this output's scaling factor.
 ---
 ---@param increase_by number
 function OutputHandle:increase_scale(increase_by)
-    client:unary_request(
+    local _, err = client:unary_request(
         output_service.SetScale,
         { output_name = self.name, relative = increase_by }
     )
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Decrease this output's scaling factor.
@@ -924,17 +953,28 @@ require("pinnacle.util").make_bijective(transform_name_to_code)
 ---
 ---@param transform Transform
 function OutputHandle:set_transform(transform)
-    client:unary_request(
+    local _, err = client:unary_request(
         output_service.SetTransform,
         { output_name = self.name, transform = transform_name_to_code[transform] }
     )
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Power on or off this output.
 ---
 ---@param powered boolean
 function OutputHandle:set_powered(powered)
-    client:unary_request(output_service.SetPowered, { output_name = self.name, powered = powered })
+    local _, err = client:unary_request(
+        output_service.SetPowered,
+        { output_name = self.name, powered = powered }
+    )
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@class Mode
@@ -967,8 +1007,15 @@ end
 ---
 ---@return OutputProperties
 function OutputHandle:props()
-    ---@type pinnacle.output.v0alpha1.GetPropertiesResponse
-    local response = client:unary_request(output_service.GetProperties, { output_name = self.name })
+    local response, err =
+        client:unary_request(output_service.GetProperties, { output_name = self.name })
+
+    if err then
+        log:error(err)
+        return {}
+    end
+
+    ---@cast response pinnacle.output.v0alpha1.GetPropertiesResponse
 
     ---@diagnostic disable-next-line: invisible
     local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
@@ -978,18 +1025,30 @@ function OutputHandle:props()
         response.keyboard_focus_stack_window_ids or {}
     )
 
-    response.tag_ids = nil
+    ---@type OutputProperties
+    local props = {
+        make = response.make,
+        model = response.model,
+        x = response.x,
+        y = response.y,
+        logical_width = response.logical_width,
+        logical_height = response.logical_height,
+        current_mode = response.current_mode --[[@as Mode]], -- TODO: possibly nil fields, fix
+        preferred_mode = response.preferred_mode --[[@as Mode]],
+        modes = response.modes or {},
+        physical_width = response.physical_width,
+        physical_height = response.physical_height,
+        focused = response.focused,
+        tags = tag_handles,
+        scale = response.scale,
+        transform = transform_name_to_code[response.transform] --[[@as Transform?]],
+        serial = response.serial,
+        keyboard_focus_stack = keyboard_focus_stack_handles,
+        enabled = response.enabled,
+        powered = response.powered,
+    }
 
-    -- hehe
-    ---@diagnostic disable-next-line: cast-type-mismatch
-    ---@cast response OutputProperties
-
-    response.tags = tag_handles
-    response.modes = response.modes or {}
-    response.transform = transform_name_to_code[response.transform]
-    response.keyboard_focus_stack = keyboard_focus_stack_handles
-
-    return response
+    return props
 end
 
 ---Get this output's make.

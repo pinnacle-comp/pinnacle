@@ -970,7 +970,7 @@ function builtins.fair(settings)
 end
 
 ---@class Layout
----@field private stream H2Stream?
+---@field private stream grpc_client.h2.Stream?
 local layout = {
     builtins = builtins,
 }

@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local defs = require("pinnacle.grpc.defs")
 local input_v0alpha1 = defs.pinnacle.input.v0alpha1
@@ -115,13 +116,17 @@ function input.keybind(mods, key, action, keybind_info)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client:server_streaming_request(input_service.SetKeybind, {
+    local err = client:server_streaming_request(input_service.SetKeybind, {
         modifiers = mod_values,
         raw_code = raw_code,
         xkb_name = xkb_name,
         group = keybind_info and keybind_info.group,
         description = keybind_info and keybind_info.description,
     }, action)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Set a mousebind. If called with an already existing mousebind, it gets replaced.
@@ -149,11 +154,15 @@ function input.mousebind(mods, button, edge, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client:server_streaming_request(input_service.SetMousebind, {
+    local err = client:server_streaming_request(input_service.SetMousebind, {
         modifiers = mod_values,
         button = mouse_button_values[button],
         edge = edge,
     }, action)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@class KeybindDescription
@@ -167,13 +176,18 @@ end
 ---
 ---@return KeybindDescription[]
 function input.keybind_descriptions()
-    ---@type pinnacle.input.v0alpha1.KeybindDescriptionsResponse
-    local descs = client:unary_request(input_service.KeybindDescriptions, {})
-    local descs = descs.descriptions or {}
+    local response, err = client:unary_request(input_service.KeybindDescriptions, {})
+
+    if err then
+        log:error(err)
+        return {}
+    end
+
+    ---@cast response pinnacle.input.v0alpha1.KeybindDescriptionsResponse
 
     local ret = {}
 
-    for _, desc in ipairs(descs) do
+    for _, desc in ipairs(response.descriptions or {}) do
         local mods = {}
         for _, mod in ipairs(desc.modifiers or {}) do
             if mod == modifier_values.shift then
@@ -217,7 +231,11 @@ end
 ---
 ---@param xkb_config XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
-    client:unary_request(input_service.SetXkbConfig, xkb_config)
+    local _, err = client:unary_request(input_service.SetXkbConfig, xkb_config)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Set the keyboard's repeat rate and delay.
@@ -230,10 +248,14 @@ end
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
 function input.set_repeat_rate(rate, delay)
-    client:unary_request(input_service.SetRepeatRate, {
+    local _, err = client:unary_request(input_service.SetRepeatRate, {
         rate = rate,
         delay = delay,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@enum (key) AccelProfile
@@ -305,33 +327,23 @@ local tap_button_map_values = {
 ---@param settings LibinputSettings
 function input.set_libinput_settings(settings)
     for setting, value in pairs(settings) do
+        local data = { [setting] = value }
+
         if setting == "accel_profile" then
-            client:unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = accel_profile_values[value] }
-            )
+            data[setting] = accel_profile_values[value]
         elseif setting == "calibration_matrix" then
-            client:unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = { matrix = value } }
-            )
+            data[setting] = { matrix = value }
         elseif setting == "click_method" then
-            client:unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = click_method_values[value] }
-            )
+            data[setting] = click_method_values[value]
         elseif setting == "scroll_method" then
-            client:unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = scroll_method_values[value] }
-            )
+            data[setting] = scroll_method_values[value]
         elseif setting == "tap_button_map" then
-            client:unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = tap_button_map_values[value] }
-            )
-        else
-            client:unary_request(input_service.SetLibinputSetting, { [setting] = value })
+            data[setting] = tap_button_map_values[value]
+        end
+
+        local _, err = client:unary_request(input_service.SetLibinputSetting, data)
+        if err then
+            log:error(err)
         end
     end
 end
@@ -343,9 +355,13 @@ end
 ---
 ---@param theme string
 function input.set_xcursor_theme(theme)
-    client:unary_request(input_service.SetXcursor, {
+    local _, err = client:unary_request(input_service.SetXcursor, {
         theme = theme,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Sets the current xcursor size.
@@ -355,9 +371,13 @@ end
 ---
 ---@param size integer
 function input.set_xcursor_size(size)
-    client:unary_request(input_service.SetXcursor, {
+    local _, err = client:unary_request(input_service.SetXcursor, {
         size = size,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 return input

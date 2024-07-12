@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v0alpha1.PinnacleService
 
@@ -32,12 +33,20 @@ local pinnacle = {
 
 ---Quit Pinnacle.
 function pinnacle.quit()
-    client:unary_request(pinnacle_service.Quit, {})
+    local _, err = client:unary_request(pinnacle_service.Quit, {})
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Reload the active config.
 function pinnacle.reload_config()
-    client:unary_request(pinnacle_service.ReloadConfig, {})
+    local _, err = client:unary_request(pinnacle_service.ReloadConfig, {})
+
+    if err then
+        log:error(err)
+    end
 end
 
 function pinnacle.init()
@@ -78,8 +87,12 @@ function pinnacle.setup(config_fn)
             require("cqueues").sleep(60)
             local success, err, errno = client.conn:ping(10)
             if not success then
-                print("Compositor ping failed:", err, errno)
-                os.exit(1)
+                error(
+                    "compositor ping failed: err = "
+                        .. tostring(err)
+                        .. ", errno = "
+                        .. tostring(errno)
+                )
             end
         end
     end)
@@ -88,7 +101,7 @@ function pinnacle.setup(config_fn)
 
     local success, err = client.loop:loop()
     if not success then
-        print(err)
+        error("loop errored: " .. tostring(err))
     end
 end
 

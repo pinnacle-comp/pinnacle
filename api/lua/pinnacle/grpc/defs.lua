@@ -100,58 +100,58 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@class google.protobuf.Empty
 
 ---@class pinnacle.signal.v0alpha1.OutputConnectRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.OutputConnectResponse
----@field output_name string??
+---@field output_name string?
 
 ---@class pinnacle.signal.v0alpha1.OutputDisconnectRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.OutputDisconnectResponse
----@field output_name string??
+---@field output_name string?
 
 ---@class pinnacle.signal.v0alpha1.OutputResizeRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.OutputResizeResponse
----@field output_name string??
----@field logical_width integer??
----@field logical_height integer??
+---@field output_name string?
+---@field logical_width integer?
+---@field logical_height integer?
 
 ---@class pinnacle.signal.v0alpha1.OutputMoveRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.OutputMoveResponse
----@field output_name string??
----@field x integer??
----@field y integer??
+---@field output_name string?
+---@field x integer?
+---@field y integer?
 
 ---@class pinnacle.signal.v0alpha1.WindowPointerEnterRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.WindowPointerEnterResponse
----@field window_id integer??
+---@field window_id integer?
 
 ---@class pinnacle.signal.v0alpha1.WindowPointerLeaveRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.WindowPointerLeaveResponse
----@field window_id integer??
+---@field window_id integer?
 
 ---@class pinnacle.signal.v0alpha1.TagActiveRequest
----@field control pinnacle.signal.v0alpha1.StreamControl??
+---@field control pinnacle.signal.v0alpha1.StreamControl?
 
 ---@class pinnacle.signal.v0alpha1.TagActiveResponse
----@field tag_id integer??
----@field active boolean??
+---@field tag_id integer?
+---@field active boolean?
 
 ---@class pinnacle.input.v0alpha1.SetKeybindRequest
 ---@field modifiers pinnacle.input.v0alpha1.Modifier[]?
----@field raw_code integer??
----@field xkb_name string??
----@field group string??
----@field description string??
+---@field raw_code integer?
+---@field xkb_name string?
+---@field group string?
+---@field description string?
 
 ---@class pinnacle.input.v0alpha1.SetKeybindResponse
 
@@ -162,103 +162,103 @@ local pinnacle_output_v0alpha1_Transform = {
 
 ---@class pinnacle.input.v0alpha1.KeybindDescription
 ---@field modifiers pinnacle.input.v0alpha1.Modifier[]?
----@field raw_code integer??
----@field xkb_name string??
----@field group string??
----@field description string??
+---@field raw_code integer?
+---@field xkb_name string?
+---@field group string?
+---@field description string?
 
 ---@class pinnacle.input.v0alpha1.SetMousebindRequest
 ---@field modifiers pinnacle.input.v0alpha1.Modifier[]?
----@field button integer??
----@field edge pinnacle.input.v0alpha1.SetMousebindRequest.MouseEdge??
+---@field button integer?
+---@field edge pinnacle.input.v0alpha1.SetMousebindRequest.MouseEdge?
 
 ---@class pinnacle.input.v0alpha1.SetMousebindResponse
 
 ---@class pinnacle.input.v0alpha1.SetXkbConfigRequest
----@field rules string??
----@field variant string??
----@field layout string??
----@field model string??
----@field options string??
+---@field rules string?
+---@field variant string?
+---@field layout string?
+---@field model string?
+---@field options string?
 
 ---@class pinnacle.input.v0alpha1.SetRepeatRateRequest
----@field rate integer??
----@field delay integer??
+---@field rate integer?
+---@field delay integer?
 
 ---@class pinnacle.input.v0alpha1.SetLibinputSettingRequest
----@field accel_profile pinnacle.input.v0alpha1.SetLibinputSettingRequest.AccelProfile??
----@field accel_speed number??
----@field calibration_matrix pinnacle.input.v0alpha1.SetLibinputSettingRequest.CalibrationMatrix??
----@field click_method pinnacle.input.v0alpha1.SetLibinputSettingRequest.ClickMethod??
----@field disable_while_typing boolean??
----@field left_handed boolean??
----@field middle_emulation boolean??
----@field rotation_angle integer??
----@field scroll_button integer??
----@field scroll_button_lock boolean??
----@field scroll_method pinnacle.input.v0alpha1.SetLibinputSettingRequest.ScrollMethod??
----@field natural_scroll boolean??
----@field tap_button_map pinnacle.input.v0alpha1.SetLibinputSettingRequest.TapButtonMap??
----@field tap_drag boolean??
----@field tap_drag_lock boolean??
----@field tap boolean??
+---@field accel_profile pinnacle.input.v0alpha1.SetLibinputSettingRequest.AccelProfile?
+---@field accel_speed number?
+---@field calibration_matrix pinnacle.input.v0alpha1.SetLibinputSettingRequest.CalibrationMatrix?
+---@field click_method pinnacle.input.v0alpha1.SetLibinputSettingRequest.ClickMethod?
+---@field disable_while_typing boolean?
+---@field left_handed boolean?
+---@field middle_emulation boolean?
+---@field rotation_angle integer?
+---@field scroll_button integer?
+---@field scroll_button_lock boolean?
+---@field scroll_method pinnacle.input.v0alpha1.SetLibinputSettingRequest.ScrollMethod?
+---@field natural_scroll boolean?
+---@field tap_button_map pinnacle.input.v0alpha1.SetLibinputSettingRequest.TapButtonMap?
+---@field tap_drag boolean?
+---@field tap_drag_lock boolean?
+---@field tap boolean?
 
 ---@class pinnacle.input.v0alpha1.SetLibinputSettingRequest.CalibrationMatrix
 ---@field matrix number[]?
 
 ---@class pinnacle.input.v0alpha1.SetXcursorRequest
----@field theme string??
----@field size integer??
+---@field theme string?
+---@field size integer?
 
 ---@class pinnacle.v0alpha1.Geometry
----@field x integer??
----@field y integer??
----@field width integer??
----@field height integer??
+---@field x integer?
+---@field y integer?
+---@field width integer?
+---@field height integer?
 
 ---@class pinnacle.v0alpha1.QuitRequest
 
 ---@class pinnacle.v0alpha1.ReloadConfigRequest
 
 ---@class pinnacle.v0alpha1.PingRequest
----@field payload string??
+---@field payload string?
 
 ---@class pinnacle.v0alpha1.PingResponse
----@field payload string??
+---@field payload string?
 
 ---@class pinnacle.v0alpha1.ShutdownWatchRequest
 
 ---@class pinnacle.v0alpha1.ShutdownWatchResponse
 
 ---@class pinnacle.layout.v0alpha1.LayoutRequest
----@field geometries pinnacle.layout.v0alpha1.LayoutRequest.Geometries??
----@field layout pinnacle.layout.v0alpha1.LayoutRequest.ExplicitLayout??
+---@field geometries pinnacle.layout.v0alpha1.LayoutRequest.Geometries?
+---@field layout pinnacle.layout.v0alpha1.LayoutRequest.ExplicitLayout?
 
 ---@class pinnacle.layout.v0alpha1.LayoutRequest.Geometries
----@field request_id integer??
----@field output_name string??
+---@field request_id integer?
+---@field output_name string?
 ---@field geometries pinnacle.v0alpha1.Geometry[]?
 
 ---@class pinnacle.layout.v0alpha1.LayoutRequest.ExplicitLayout
----@field output_name string??
+---@field output_name string?
 
 ---@class pinnacle.layout.v0alpha1.LayoutResponse
----@field request_id integer??
----@field output_name string??
+---@field request_id integer?
+---@field output_name string?
 ---@field window_ids integer[]?
 ---@field tag_ids integer[]?
----@field output_width integer??
----@field output_height integer??
+---@field output_width integer?
+---@field output_height integer?
 
 ---@class pinnacle.tag.v0alpha1.SetActiveRequest
----@field tag_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field tag_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.tag.v0alpha1.SwitchToRequest
----@field tag_id integer??
+---@field tag_id integer?
 
 ---@class pinnacle.tag.v0alpha1.AddRequest
----@field output_name string??
+---@field output_name string?
 ---@field tag_names string[]?
 
 ---@class pinnacle.tag.v0alpha1.AddResponse
@@ -273,69 +273,69 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field tag_ids integer[]?
 
 ---@class pinnacle.tag.v0alpha1.GetPropertiesRequest
----@field tag_id integer??
+---@field tag_id integer?
 
 ---@class pinnacle.tag.v0alpha1.GetPropertiesResponse
----@field active boolean??
----@field name string??
----@field output_name string??
+---@field active boolean?
+---@field name string?
+---@field output_name string?
 ---@field window_ids integer[]?
 
 ---@class pinnacle.process.v0alpha1.SpawnRequest
 ---@field args string[]?
----@field once boolean??
----@field has_callback boolean??
+---@field once boolean?
+---@field has_callback boolean?
 
 ---@class pinnacle.process.v0alpha1.SpawnResponse
----@field stdout string??
----@field stderr string??
----@field exit_code integer??
----@field exit_message string??
+---@field stdout string?
+---@field stderr string?
+---@field exit_code integer?
+---@field exit_message string?
 
 ---@class pinnacle.process.v0alpha1.SetEnvRequest
----@field key string??
----@field value string??
+---@field key string?
+---@field value string?
 
 ---@class pinnacle.window.v0alpha1.CloseRequest
----@field window_id integer??
+---@field window_id integer?
 
 ---@class pinnacle.window.v0alpha1.SetGeometryRequest
----@field window_id integer??
----@field geometry pinnacle.v0alpha1.Geometry??
+---@field window_id integer?
+---@field geometry pinnacle.v0alpha1.Geometry?
 
 ---@class pinnacle.window.v0alpha1.SetFullscreenRequest
----@field window_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field window_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.window.v0alpha1.SetMaximizedRequest
----@field window_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field window_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.window.v0alpha1.SetFloatingRequest
----@field window_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field window_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.window.v0alpha1.SetFocusedRequest
----@field window_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field window_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.window.v0alpha1.MoveToTagRequest
----@field window_id integer??
----@field tag_id integer??
+---@field window_id integer?
+---@field tag_id integer?
 
 ---@class pinnacle.window.v0alpha1.SetTagRequest
----@field window_id integer??
----@field tag_id integer??
----@field set_or_toggle pinnacle.v0alpha1.SetOrToggle??
+---@field window_id integer?
+---@field tag_id integer?
+---@field set_or_toggle pinnacle.v0alpha1.SetOrToggle?
 
 ---@class pinnacle.window.v0alpha1.RaiseRequest
----@field window_id integer??
+---@field window_id integer?
 
 ---@class pinnacle.window.v0alpha1.MoveGrabRequest
----@field button integer??
+---@field button integer?
 
 ---@class pinnacle.window.v0alpha1.ResizeGrabRequest
----@field button integer??
+---@field button integer?
 
 ---@class pinnacle.window.v0alpha1.GetRequest
 
@@ -343,21 +343,21 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field window_ids integer[]?
 
 ---@class pinnacle.window.v0alpha1.GetPropertiesRequest
----@field window_id integer??
+---@field window_id integer?
 
 ---@class pinnacle.window.v0alpha1.GetPropertiesResponse
----@field geometry pinnacle.v0alpha1.Geometry??
----@field class string??
----@field title string??
----@field focused boolean??
----@field floating boolean??
----@field fullscreen_or_maximized pinnacle.window.v0alpha1.FullscreenOrMaximized??
+---@field geometry pinnacle.v0alpha1.Geometry?
+---@field class string?
+---@field title string?
+---@field focused boolean?
+---@field floating boolean?
+---@field fullscreen_or_maximized pinnacle.window.v0alpha1.FullscreenOrMaximized?
 ---@field tag_ids integer[]?
----@field state pinnacle.window.v0alpha1.WindowState??
+---@field state pinnacle.window.v0alpha1.WindowState?
 
 ---@class pinnacle.window.v0alpha1.AddWindowRuleRequest
----@field cond pinnacle.window.v0alpha1.WindowRuleCondition??
----@field rule pinnacle.window.v0alpha1.WindowRule??
+---@field cond pinnacle.window.v0alpha1.WindowRuleCondition?
+---@field rule pinnacle.window.v0alpha1.WindowRule?
 
 ---@class pinnacle.window.v0alpha1.WindowRuleCondition
 ---@field any pinnacle.window.v0alpha1.WindowRuleCondition[]?
@@ -367,65 +367,65 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field tags integer[]?
 
 ---@class pinnacle.window.v0alpha1.WindowRule
----@field output string??
+---@field output string?
 ---@field tags integer[]?
----@field floating boolean??
----@field fullscreen_or_maximized pinnacle.window.v0alpha1.FullscreenOrMaximized??
----@field x integer??
----@field y integer??
----@field width integer??
----@field height integer??
----@field ssd boolean??
----@field state pinnacle.window.v0alpha1.WindowState??
+---@field floating boolean?
+---@field fullscreen_or_maximized pinnacle.window.v0alpha1.FullscreenOrMaximized?
+---@field x integer?
+---@field y integer?
+---@field width integer?
+---@field height integer?
+---@field ssd boolean?
+---@field state pinnacle.window.v0alpha1.WindowState?
 
 ---@class pinnacle.render.v0alpha1.SetUpscaleFilterRequest
----@field filter pinnacle.render.v0alpha1.Filter??
+---@field filter pinnacle.render.v0alpha1.Filter?
 
 ---@class pinnacle.render.v0alpha1.SetDownscaleFilterRequest
----@field filter pinnacle.render.v0alpha1.Filter??
+---@field filter pinnacle.render.v0alpha1.Filter?
 
 ---@class pinnacle.output.v0alpha1.Mode
----@field pixel_width integer??
----@field pixel_height integer??
----@field refresh_rate_millihz integer??
+---@field pixel_width integer?
+---@field pixel_height integer?
+---@field refresh_rate_millihz integer?
 
 ---@class pinnacle.output.v0alpha1.SetLocationRequest
----@field output_name string??
----@field x integer??
----@field y integer??
+---@field output_name string?
+---@field x integer?
+---@field y integer?
 
 ---@class pinnacle.output.v0alpha1.SetModeRequest
----@field output_name string??
----@field pixel_width integer??
----@field pixel_height integer??
----@field refresh_rate_millihz integer??
+---@field output_name string?
+---@field pixel_width integer?
+---@field pixel_height integer?
+---@field refresh_rate_millihz integer?
 
 ---@class pinnacle.output.v0alpha1.SetModelineRequest
----@field output_name string??
----@field clock number??
----@field hdisplay integer??
----@field hsync_start integer??
----@field hsync_end integer??
----@field htotal integer??
----@field vdisplay integer??
----@field vsync_start integer??
----@field vsync_end integer??
----@field vtotal integer??
----@field hsync_pos boolean??
----@field vsync_pos boolean??
+---@field output_name string?
+---@field clock number?
+---@field hdisplay integer?
+---@field hsync_start integer?
+---@field hsync_end integer?
+---@field htotal integer?
+---@field vdisplay integer?
+---@field vsync_start integer?
+---@field vsync_end integer?
+---@field vtotal integer?
+---@field hsync_pos boolean?
+---@field vsync_pos boolean?
 
 ---@class pinnacle.output.v0alpha1.SetScaleRequest
----@field output_name string??
----@field absolute number??
----@field relative number??
+---@field output_name string?
+---@field absolute number?
+---@field relative number?
 
 ---@class pinnacle.output.v0alpha1.SetTransformRequest
----@field output_name string??
----@field transform pinnacle.output.v0alpha1.Transform??
+---@field output_name string?
+---@field transform pinnacle.output.v0alpha1.Transform?
 
 ---@class pinnacle.output.v0alpha1.SetPoweredRequest
----@field output_name string??
----@field powered boolean??
+---@field output_name string?
+---@field powered boolean?
 
 ---@class pinnacle.output.v0alpha1.GetRequest
 
@@ -433,28 +433,28 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field output_names string[]?
 
 ---@class pinnacle.output.v0alpha1.GetPropertiesRequest
----@field output_name string??
+---@field output_name string?
 
 ---@class pinnacle.output.v0alpha1.GetPropertiesResponse
----@field make string??
----@field model string??
----@field x integer??
----@field y integer??
----@field logical_width integer??
----@field logical_height integer??
----@field current_mode pinnacle.output.v0alpha1.Mode??
----@field preferred_mode pinnacle.output.v0alpha1.Mode??
+---@field make string?
+---@field model string?
+---@field x integer?
+---@field y integer?
+---@field logical_width integer?
+---@field logical_height integer?
+---@field current_mode pinnacle.output.v0alpha1.Mode?
+---@field preferred_mode pinnacle.output.v0alpha1.Mode?
 ---@field modes pinnacle.output.v0alpha1.Mode[]?
----@field physical_width integer??
----@field physical_height integer??
----@field focused boolean??
+---@field physical_width integer?
+---@field physical_height integer?
+---@field focused boolean?
 ---@field tag_ids integer[]?
----@field scale number??
----@field transform pinnacle.output.v0alpha1.Transform??
----@field serial integer??
+---@field scale number?
+---@field transform pinnacle.output.v0alpha1.Transform?
+---@field serial integer?
 ---@field keyboard_focus_stack_window_ids integer[]?
----@field enabled boolean??
----@field powered boolean??
+---@field enabled boolean?
+---@field powered boolean?
 
 
 local google = {}

@@ -177,7 +177,7 @@ fn generate_message_classes(msgs: &MessageMap) -> String {
             {
                 "[]"
             } else {
-                "?"
+                ""
             };
 
             class += &format!("---@field {} {type}{repeated}{non_nil}\n", &field.name);
