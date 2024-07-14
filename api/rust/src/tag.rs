@@ -37,6 +37,7 @@ use pinnacle_api_defs::pinnacle::{
     },
     v0alpha1::SetOrToggle,
 };
+use tracing::{error, instrument};
 
 use crate::{
     block_on_tokio,
@@ -85,17 +86,17 @@ impl Tag {
     ) -> Vec<TagHandle> {
         let tag_names = tag_names.into_iter().map(Into::into).collect();
 
-        let response = crate::tag()
+        let tag_ids = crate::tag()
             .add(AddRequest {
                 output_name: Some(output.name.clone()),
                 tag_names,
             })
             .await
-            .unwrap()
-            .into_inner();
+            .map(|resp| resp.into_inner().tag_ids)
+            .inspect_err(|err| error!("Failed to add tags: {err}"))
+            .unwrap_or_default();
 
-        response
-            .tag_ids
+        tag_ids
             .into_iter()
             .map(move |id| self.new_handle(id))
             .collect()
@@ -114,14 +115,14 @@ impl Tag {
 
     /// The async version of [`Tag::get_all`].
     pub async fn get_all_async(&self) -> Vec<TagHandle> {
-        let response = crate::tag()
+        let tag_ids = crate::tag()
             .get(tag::v0alpha1::GetRequest {})
             .await
-            .unwrap()
-            .into_inner();
+            .map(|resp| resp.into_inner().tag_ids)
+            .inspect_err(|err| error!("Failed to get tags: {err}"))
+            .unwrap_or_default();
 
-        response
-            .tag_ids
+        tag_ids
             .into_iter()
             .map(move |id| self.new_handle(id))
             .collect()
@@ -202,7 +203,9 @@ impl Tag {
     pub fn remove(&self, tags: impl IntoIterator<Item = TagHandle>) {
         let tag_ids = tags.into_iter().map(|handle| handle.id).collect::<Vec<_>>();
 
-        block_on_tokio(crate::tag().remove(RemoveRequest { tag_ids })).unwrap();
+        if let Err(err) = block_on_tokio(crate::tag().remove(RemoveRequest { tag_ids })) {
+            error!("Failed to remove tags: {err}");
+        }
     }
 
     /// Connect to a tag signal.
@@ -256,11 +259,13 @@ impl TagHandle {
     /// tag.get("2")?.switch_to(); // Displays Firefox and Discord
     /// tag.get("3")?.switch_to(); // Displays Steam
     /// ```
+    #[instrument]
     pub fn switch_to(&self) {
-        block_on_tokio(crate::tag().switch_to(SwitchToRequest {
+        if let Err(err) = block_on_tokio(crate::tag().switch_to(SwitchToRequest {
             tag_id: Some(self.id),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this tag to active or not.
@@ -281,15 +286,17 @@ impl TagHandle {
     /// tag.get("3")?.set_active(true);  // Displays Firefox, Discord, and Steam
     /// tag.get("2")?.set_active(false); // Displays Steam
     /// ```
+    #[instrument]
     pub fn set_active(&self, set: bool) {
-        block_on_tokio(crate::tag().set_active(SetActiveRequest {
+        if let Err(err) = block_on_tokio(crate::tag().set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle this tag between active and inactive.
@@ -311,12 +318,14 @@ impl TagHandle {
     /// tag.get("3")?.toggle(); // Displays Firefox, Discord
     /// tag.get("2")?.toggle(); // Displays nothing
     /// ```
+    #[instrument]
     pub fn toggle_active(&self) {
-        block_on_tokio(crate::tag().set_active(SetActiveRequest {
+        if let Err(err) = block_on_tokio(crate::tag().set_active(SetActiveRequest {
             tag_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Remove this tag from its output.
@@ -332,11 +341,13 @@ impl TagHandle {
     /// tags[3].remove();
     /// // "DP-1" now only has tags "1" and "Buckle"
     /// ```
+    #[instrument]
     pub fn remove(&self) {
-        block_on_tokio(crate::tag().remove(RemoveRequest {
+        if let Err(err) = block_on_tokio(crate::tag().remove(RemoveRequest {
             tag_ids: vec![self.id],
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Get all properties of this tag.
@@ -357,14 +368,20 @@ impl TagHandle {
     }
 
     /// The async version of [`TagHandle::props`].
+    #[instrument]
     pub async fn props_async(&self) -> TagProperties {
-        let response = crate::tag()
+        let response = match crate::tag()
             .get_properties(tag::v0alpha1::GetPropertiesRequest {
                 tag_id: Some(self.id),
             })
             .await
-            .unwrap()
-            .into_inner();
+        {
+            Ok(resp) => resp.into_inner(),
+            Err(err) => {
+                error!("{err}");
+                return TagProperties::default();
+            }
+        };
 
         TagProperties {
             active: response.active,

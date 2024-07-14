@@ -17,6 +17,7 @@ use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
+use tracing::debug;
 
 use crate::{
     block_on_tokio, layout,
@@ -73,7 +74,7 @@ impl Layout {
                     output_height: response.output_height.unwrap_or_default(),
                 };
                 let geos = manager.lock().unwrap().active_layout(&args).layout(&args);
-                from_client
+                if from_client
                     .send(LayoutRequest {
                         body: Some(Body::Geometries(Geometries {
                             request_id: response.request_id,
@@ -89,7 +90,10 @@ impl Layout {
                                 .collect(),
                         })),
                     })
-                    .unwrap();
+                    .is_err()
+                {
+                    debug!("Failed to send layout geometries: channel closed");
+                }
             }
         };
 
@@ -235,22 +239,30 @@ impl<T> LayoutRequester<T> {
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
         let output_name = Output.get_focused().map(|op| op.name);
-        self.sender
+        if self
+            .sender
             .send(LayoutRequest {
                 body: Some(Body::Layout(ExplicitLayout { output_name })),
             })
-            .unwrap();
+            .is_err()
+        {
+            debug!("Failed to request layout: channel closed");
+        }
     }
 
     /// Request a layout from the compositor for the given output.
     pub fn request_layout_on_output(&self, output: &OutputHandle) {
-        self.sender
+        if self
+            .sender
             .send(LayoutRequest {
                 body: Some(Body::Layout(ExplicitLayout {
                     output_name: Some(output.name.clone()),
                 })),
             })
-            .unwrap();
+            .is_err()
+        {
+            debug!("Failed to request layout on output: channel closed");
+        }
     }
 }
 

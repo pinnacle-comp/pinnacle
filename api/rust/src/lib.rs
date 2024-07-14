@@ -98,6 +98,7 @@ use tag::Tag;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
+use tracing::info;
 use window::Window;
 
 pub mod input;
@@ -260,6 +261,9 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
 
+    let socket_path = std::env::var("PINNACLE_GRPC_SOCKET").unwrap();
+    info!("Connected to {socket_path}");
+
     PINNACLE
         .write()
         .await
@@ -319,6 +323,18 @@ pub async fn listen() {
     shutdown_stream.next().await;
 
     signal_module().shutdown();
+}
+
+/// Sets the default `tracing_subscriber` to output logs.
+///
+/// This subscriber does not include the time or ansi escape codes.
+/// If you would like to disable this in [`crate::config`], pass in
+/// `internal_tracing = false`.
+pub fn set_default_tracing_subscriber() {
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(false)
+        .init();
 }
 
 /// Block on a future using the current Tokio runtime.

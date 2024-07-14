@@ -19,6 +19,7 @@ use pinnacle_api_defs::pinnacle::output::{
         SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
     },
 };
+use tracing::{error, instrument};
 
 use crate::{
     block_on_tokio,
@@ -56,9 +57,9 @@ impl Output {
         crate::output()
             .get(output::v0alpha1::GetRequest {})
             .await
-            .unwrap()
-            .into_inner()
-            .output_names
+            .map(|resp| resp.into_inner().output_names)
+            .inspect_err(|err| error!("Failed to get outputs: {err}"))
+            .unwrap_or_default()
             .into_iter()
             .map(|name| self.new_handle(name))
             .collect()
@@ -151,7 +152,7 @@ impl Output {
     /// // Add tags 1-3 to all outputs and set tag "1" to active
     /// output.connect_for_all(|op| {
     ///     let tags = tag.add(&op, ["1", "2", "3"]);
-    ///     tags.next().unwrap().set_active(true);
+    ///     tags.first()?.set_active(true);
     /// });
     /// ```
     pub fn connect_for_all(&self, mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
@@ -200,7 +201,7 @@ impl Output {
     ///     // Give all outputs tags 1 through 5
     ///     OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3", "4", "5"]),
     ///     // Give outputs with a preferred mode of 4K a scale of 2.0
-    ///     OutputSetup::new_with_matcher(|op| op.preferred_mode().unwrap().pixel_width == 2160)
+    ///     OutputSetup::new_with_matcher(|op| op.preferred_mode()?.pixel_width == 2160)
     ///         .with_scale(2.0),
     ///     // Additionally give eDP-1 tags 6 and 7
     ///     OutputSetup::new(OutputId::name("eDP-1")).with_tags(["6", "7"]),
@@ -289,8 +290,11 @@ impl Output {
 
                     placed_outputs.push(output.clone());
                     let props = output.props();
-                    let x = props.x.unwrap();
-                    let width = props.logical_width.unwrap() as i32;
+                    let x = props.x.expect("output should have x-coord");
+                    let width = props
+                        .logical_width
+                        .expect("output should have logical width")
+                        as i32;
                     if rightmost_output_and_x.is_none()
                         || rightmost_output_and_x
                             .as_ref()
@@ -328,8 +332,10 @@ impl Output {
 
                 placed_outputs.push(output.clone());
                 let props = output.props();
-                let x = props.x.unwrap();
-                let width = props.logical_width.unwrap() as i32;
+                let x = props.x.expect("output should have x-coord");
+                let width = props
+                    .logical_width
+                    .expect("output should have logical width") as i32;
                 if rightmost_output_and_x.is_none()
                     || rightmost_output_and_x
                         .as_ref()
@@ -353,8 +359,10 @@ impl Output {
 
                 placed_outputs.push(output.clone());
                 let props = output.props();
-                let x = props.x.unwrap();
-                let width = props.logical_width.unwrap() as i32;
+                let x = props.x.expect("output should have x-coord");
+                let width = props
+                    .logical_width
+                    .expect("output should have logical width") as i32;
                 if rightmost_output_and_x.is_none()
                     || rightmost_output_and_x
                         .as_ref()
@@ -590,23 +598,9 @@ bitflags::bitflags! {
 /// A handle to an output.
 ///
 /// This allows you to manipulate outputs and get their properties.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OutputHandle {
     pub(crate) name: String,
-}
-
-impl PartialEq for OutputHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for OutputHandle {}
-
-impl std::hash::Hash for OutputHandle {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
 }
 
 /// The alignment to use for [`OutputHandle::set_loc_adj_to`].
@@ -696,13 +690,15 @@ impl OutputHandle {
     /// //    └─────┴───────┘
     /// //          ^x=1920
     /// ```
+    #[instrument(skip(x, y))]
     pub fn set_location(&self, x: impl Into<Option<i32>>, y: impl Into<Option<i32>>) {
-        block_on_tokio(crate::output().set_location(SetLocationRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_location(SetLocationRequest {
             output_name: Some(self.name.clone()),
             x: x.into(),
             y: y.into(),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this output adjacent to another one.
@@ -822,19 +818,21 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.set_mode(2560, 1440, 144000);
     /// ```
+    #[instrument(skip(refresh_rate_millihertz))]
     pub fn set_mode(
         &self,
         pixel_width: u32,
         pixel_height: u32,
         refresh_rate_millihertz: impl Into<Option<u32>>,
     ) {
-        block_on_tokio(crate::output().set_mode(SetModeRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_mode(SetModeRequest {
             output_name: Some(self.name.clone()),
             pixel_width: Some(pixel_width),
             pixel_height: Some(pixel_height),
             refresh_rate_millihz: refresh_rate_millihertz.into(),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set a custom modeline for this output.
@@ -849,8 +847,9 @@ impl OutputHandle {
     /// ```
     /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
     /// ```
+    #[instrument(skip(modeline))]
     pub fn set_modeline(&self, modeline: Modeline) {
-        block_on_tokio(crate::output().set_modeline(SetModelineRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_modeline(SetModelineRequest {
             output_name: Some(self.name.clone()),
             clock: Some(modeline.clock),
             hdisplay: Some(modeline.hdisplay),
@@ -863,8 +862,9 @@ impl OutputHandle {
             vtotal: Some(modeline.vtotal),
             hsync_pos: Some(modeline.hsync),
             vsync_pos: Some(modeline.vsync),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this output's scaling factor.
@@ -874,12 +874,14 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.set_scale(1.5);
     /// ```
+    #[instrument]
     pub fn set_scale(&self, scale: f32) {
-        block_on_tokio(crate::output().set_scale(SetScaleRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_scale(SetScaleRequest {
             output_name: Some(self.name.clone()),
             absolute_or_relative: Some(AbsoluteOrRelative::Absolute(scale)),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Increase this output's scaling factor by `increase_by`.
@@ -889,12 +891,14 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.increase_scale(0.25);
     /// ```
+    #[instrument]
     pub fn increase_scale(&self, increase_by: f32) {
-        block_on_tokio(crate::output().set_scale(SetScaleRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_scale(SetScaleRequest {
             output_name: Some(self.name.clone()),
             absolute_or_relative: Some(AbsoluteOrRelative::Relative(increase_by)),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Decrease this output's scaling factor by `decrease_by`.
@@ -920,12 +924,14 @@ impl OutputHandle {
     /// // Rotate 90 degrees counter-clockwise
     /// output.set_transform(Transform::_90);
     /// ```
+    #[instrument]
     pub fn set_transform(&self, transform: Transform) {
-        block_on_tokio(crate::output().set_transform(SetTransformRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_transform(SetTransformRequest {
             output_name: Some(self.name.clone()),
             transform: Some(transform as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Power on or off this output.
@@ -939,12 +945,14 @@ impl OutputHandle {
     /// // Power off `output`
     /// output.set_powered(false);
     /// ```
+    #[instrument]
     pub fn set_powered(&self, powered: bool) {
-        block_on_tokio(crate::output().set_powered(SetPoweredRequest {
+        if let Err(err) = block_on_tokio(crate::output().set_powered(SetPoweredRequest {
             output_name: Some(self.name.clone()),
             powered: Some(powered),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Get all properties of this output.
@@ -963,14 +971,20 @@ impl OutputHandle {
     }
 
     /// The async version of [`OutputHandle::props`].
+    #[instrument]
     pub async fn props_async(&self) -> OutputProperties {
-        let response = crate::output()
+        let response = match crate::output()
             .get_properties(output::v0alpha1::GetPropertiesRequest {
                 output_name: Some(self.name.clone()),
             })
             .await
-            .unwrap()
-            .into_inner();
+        {
+            Ok(resp) => resp.into_inner(),
+            Err(err) => {
+                error!("{err}");
+                return OutputProperties::default();
+            }
+        };
 
         OutputProperties {
             make: response.make,

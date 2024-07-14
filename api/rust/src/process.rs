@@ -9,6 +9,7 @@
 
 use pinnacle_api_defs::pinnacle::process::v0alpha1::{SetEnvRequest, SpawnRequest};
 use tokio_stream::StreamExt;
+use tracing::error;
 
 use crate::{block_on_tokio, process};
 
@@ -110,9 +111,13 @@ impl Process {
             has_callback: Some(callbacks.is_some()),
         };
 
-        let mut stream = block_on_tokio(process().spawn(request))
-            .unwrap()
-            .into_inner();
+        let mut stream = match block_on_tokio(process().spawn(request)) {
+            Ok(stream) => stream.into_inner(),
+            Err(err) => {
+                error!("Failed to spawn process: {err}");
+                return;
+            }
+        };
 
         tokio::spawn(async move {
             let Some(mut callbacks) = callbacks else { return };
@@ -149,10 +154,11 @@ impl Process {
         let key = key.into();
         let value = value.into();
 
-        block_on_tokio(process().set_env(SetEnvRequest {
+        if let Err(err) = block_on_tokio(process().set_env(SetEnvRequest {
             key: Some(key),
             value: Some(value),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set env: {err}");
+        }
     }
 }

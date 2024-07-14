@@ -79,8 +79,10 @@ pub fn config(
     let options = macro_input.options;
 
     let mut has_internal_tokio = false;
+    let mut has_internal_tracing = false;
 
     let mut internal_tokio = true;
+    let mut internal_tracing = true;
 
     for name_value in options.iter() {
         if name_value.path.get_ident() == Some(&Ident::new("internal_tokio", Span::call_site())) {
@@ -103,9 +105,26 @@ pub fn config(
                 compile_error!("expected `true` or `false`");
             }
             .into();
+        } else if name_value.path.get_ident()
+            == Some(&Ident::new("internal_tracing", Span::call_site()))
+        {
+            if has_internal_tracing {
+                return quote_spanned! {name_value.path.span()=>
+                    compile_error!("`internal_tracing` defined twice, remove this one");
+                }
+                .into();
+            }
+
+            has_internal_tracing = true;
+            if let Expr::Lit(lit) = &name_value.value {
+                if let Lit::Bool(bool) = &lit.lit {
+                    internal_tracing = bool.value;
+                    continue;
+                }
+            }
         } else {
             return quote_spanned! {name_value.path.span()=>
-                compile_error!("expected valid option (currently only `internal_tokio`)");
+                compile_error!("expected valid option (`internal_tokio` or `internal_tracing`)");
             }
             .into();
         }
@@ -117,10 +136,18 @@ pub fn config(
         }
     });
 
+    let tracing_fn = internal_tracing.then(|| {
+        quote! {
+            ::pinnacle_api::set_default_tracing_subscriber();
+        }
+    });
+
     quote! {
         #(#attrs)*
         #tokio_attr
         #vis #sig {
+            #tracing_fn
+
             ::pinnacle_api::connect().await.unwrap();
 
             #(#stmts)*

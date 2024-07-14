@@ -3,6 +3,7 @@
 use pinnacle_api_defs::pinnacle::render::v0alpha1::{
     SetDownscaleFilterRequest, SetUpscaleFilterRequest,
 };
+use tracing::error;
 
 use crate::{block_on_tokio, render};
 
@@ -33,10 +34,11 @@ impl Render {
     /// render.set_upscale_filter(ScalingFilter::NearestNeighbor);
     /// ```
     pub fn set_upscale_filter(&self, filter: ScalingFilter) {
-        block_on_tokio(render().set_upscale_filter(SetUpscaleFilterRequest {
+        if let Err(err) = block_on_tokio(render().set_upscale_filter(SetUpscaleFilterRequest {
             filter: Some(filter as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set upscale filter: {err}");
+        }
     }
 
     /// Set the downscaling filter that will be used for rendering.
@@ -49,9 +51,10 @@ impl Render {
     /// render.set_downscale_filter(ScalingFilter::NearestNeighbor);
     /// ```
     pub fn set_downscale_filter(&self, filter: ScalingFilter) {
-        block_on_tokio(render().set_downscale_filter(SetDownscaleFilterRequest {
+        if let Err(err) = block_on_tokio(render().set_downscale_filter(SetDownscaleFilterRequest {
             filter: Some(filter as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set downscale filter: {err}");
+        }
     }
 }

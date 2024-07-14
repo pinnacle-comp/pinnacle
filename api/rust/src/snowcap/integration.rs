@@ -106,6 +106,7 @@ impl QuitPrompt {
                 ExclusiveZone::Respect,
                 ZLayer::Overlay,
             )
+            .unwrap()
             .on_key_press(|handle, key, _mods| {
                 if key == Keysym::Return {
                     Pinnacle.quit();
@@ -291,6 +292,7 @@ impl KeybindOverlay {
                 ExclusiveZone::Respect,
                 ZLayer::Top,
             )
+            .unwrap()
             .on_key_press(|handle, _key, _mods| {
                 handle.close();
             });
