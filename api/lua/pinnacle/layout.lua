@@ -1,4 +1,8 @@
-local client = require("pinnacle.grpc.client")
+-- This Source Code Form is subject to the terms of the Mozilla Public
+-- License, v. 2.0. If a copy of the MPL was not distributed with this
+-- file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+local client = require("pinnacle.grpc.client").client
 local protobuf = require("pinnacle.grpc.protobuf")
 local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v0alpha1.LayoutService
 
@@ -966,7 +970,7 @@ function builtins.fair(settings)
 end
 
 ---@class Layout
----@field private stream H2Stream?
+---@field private stream grpc_client.h2.Stream?
 local layout = {
     builtins = builtins,
 }
@@ -979,7 +983,7 @@ local layout = {
 ---
 ---@param manager LayoutManager
 function layout.set_manager(manager)
-    layout.stream = client.bidirectional_streaming_request(layout_service.Layout, {
+    layout.stream = client:bidirectional_streaming_request(layout_service.Layout, {
         layout = {},
     }, function(response, stream)
         local request_id = response.request_id

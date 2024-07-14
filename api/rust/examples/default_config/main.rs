@@ -14,10 +14,9 @@ use pinnacle_api::{
     ApiModules,
 };
 
-// Pinnacle needs to perform some setup before and after your config.
-// The `#[pinnacle_api::config(modules)]` attribute does so and
-// will bind all the config structs to the provided identifier.
-#[pinnacle_api::config(modules)]
+// Pinnacle needs to perform some setup before and after your config,
+// which is what this macro does.
+#[pinnacle_api::config]
 async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
@@ -33,7 +32,7 @@ async fn main() {
         #[cfg(feature = "snowcap")]
         snowcap,
         ..
-    } = modules;
+    } = ApiModules::new();
 
     let mod_key = Mod::Ctrl;
 

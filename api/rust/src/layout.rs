@@ -8,52 +8,30 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex},
 };
 
-use futures::{future::BoxFuture, FutureExt};
 use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
     layout_request::{Body, ExplicitLayout, Geometries},
-    layout_service_client::LayoutServiceClient,
     LayoutRequest,
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
-use tonic::transport::Channel;
+use tracing::debug;
 
 use crate::{
-    block_on_tokio,
-    output::OutputHandle,
-    tag::TagHandle,
+    block_on_tokio, layout,
+    output::{Output, OutputHandle},
+    tag::{Tag, TagHandle},
     util::{Axis, Geometry},
-    window::WindowHandle,
-    ApiModules,
+    window::{Window, WindowHandle},
 };
 
 /// A struct that allows you to manage layouts.
-#[derive(Clone, Debug)]
-pub struct Layout {
-    api: OnceLock<ApiModules>,
-    layout_client: LayoutServiceClient<Channel>,
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Layout;
 
 impl Layout {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
-        Self {
-            api: OnceLock::new(),
-            layout_client: LayoutServiceClient::new(channel.clone()),
-            fut_sender,
-        }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.api.set(api).unwrap();
-    }
-
     /// Consume the given [`LayoutManager`] and set it as the global layout handler.
     ///
     /// This returns a [`LayoutRequester`] that allows you to manually request layouts from
@@ -65,7 +43,7 @@ impl Layout {
     {
         let (from_client, to_server) = unbounded_channel::<LayoutRequest>();
         let to_server_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(to_server);
-        let mut from_server = block_on_tokio(self.layout_client.clone().layout(to_server_stream))
+        let mut from_server = block_on_tokio(layout().clone().layout(to_server_stream))
             .expect("TODO")
             .into_inner();
 
@@ -73,33 +51,30 @@ impl Layout {
 
         let manager = Arc::new(Mutex::new(manager));
 
-        let api = self.api.get().unwrap().clone();
-
         let requester = LayoutRequester {
-            api: api.clone(),
             sender: from_client_clone,
             manager: manager.clone(),
         };
 
-        let thing = async move {
+        let fut = async move {
             while let Some(Ok(response)) = from_server.next().await {
                 let args = LayoutArgs {
-                    output: api.output.new_handle(response.output_name()),
+                    output: Output.new_handle(response.output_name()),
                     windows: response
                         .window_ids
                         .into_iter()
-                        .map(|id| api.window.new_handle(id))
+                        .map(|id| Window.new_handle(id))
                         .collect(),
                     tags: response
                         .tag_ids
                         .into_iter()
-                        .map(|id| api.tag.new_handle(id))
+                        .map(|id| Tag.new_handle(id))
                         .collect(),
                     output_width: response.output_width.unwrap_or_default(),
                     output_height: response.output_height.unwrap_or_default(),
                 };
                 let geos = manager.lock().unwrap().active_layout(&args).layout(&args);
-                from_client
+                if from_client
                     .send(LayoutRequest {
                         body: Some(Body::Geometries(Geometries {
                             request_id: response.request_id,
@@ -115,12 +90,14 @@ impl Layout {
                                 .collect(),
                         })),
                     })
-                    .unwrap();
+                    .is_err()
+                {
+                    debug!("Failed to send layout geometries: channel closed");
+                }
             }
-        }
-        .boxed();
+        };
 
-        self.fut_sender.send(thing).unwrap();
+        tokio::spawn(fut);
         requester
     }
 }
@@ -241,7 +218,6 @@ impl LayoutManager for CyclingLayoutManager {
 /// A struct that can request layouts and provides access to a consumed [`LayoutManager`].
 #[derive(Debug)]
 pub struct LayoutRequester<T> {
-    api: ApiModules,
     sender: UnboundedSender<LayoutRequest>,
     /// The manager that was consumed, wrapped in an `Arc<Mutex>`.
     pub manager: Arc<Mutex<T>>,
@@ -250,7 +226,6 @@ pub struct LayoutRequester<T> {
 impl<T> Clone for LayoutRequester<T> {
     fn clone(&self) -> Self {
         Self {
-            api: self.api.clone(),
             sender: self.sender.clone(),
             manager: self.manager.clone(),
         }
@@ -263,23 +238,31 @@ impl<T> LayoutRequester<T> {
     /// This uses the focused output for the request.
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
-        let output_name = self.api.output.get_focused().map(|op| op.name);
-        self.sender
+        let output_name = Output.get_focused().map(|op| op.name);
+        if self
+            .sender
             .send(LayoutRequest {
                 body: Some(Body::Layout(ExplicitLayout { output_name })),
             })
-            .unwrap();
+            .is_err()
+        {
+            debug!("Failed to request layout: channel closed");
+        }
     }
 
     /// Request a layout from the compositor for the given output.
     pub fn request_layout_on_output(&self, output: &OutputHandle) {
-        self.sender
+        if self
+            .sender
             .send(LayoutRequest {
                 body: Some(Body::Layout(ExplicitLayout {
                     output_name: Some(output.name.clone()),
                 })),
             })
-            .unwrap();
+            .is_err()
+        {
+            debug!("Failed to request layout on output: channel closed");
+        }
     }
 }
 

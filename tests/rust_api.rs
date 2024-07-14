@@ -12,9 +12,9 @@ use crate::common::{sleep_secs, test_api, with_state};
 
 #[tokio::main]
 async fn run_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
-    let (api, _recv) = pinnacle_api::connect().await.unwrap();
+    pinnacle_api::connect().await.unwrap();
 
-    run(api.clone());
+    run(ApiModules::new());
 }
 
 fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> anyhow::Result<()> {
@@ -27,11 +27,11 @@ fn run_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> anyhow::Result<()>
 
 #[tokio::main]
 async fn setup_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
-    let (api, recv) = pinnacle_api::connect().await.unwrap();
+    pinnacle_api::connect().await.unwrap();
 
-    run(api.clone());
+    run(ApiModules::new());
 
-    pinnacle_api::listen(api, recv).await;
+    pinnacle_api::listen().await;
 }
 
 fn setup_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> JoinHandle<()> {

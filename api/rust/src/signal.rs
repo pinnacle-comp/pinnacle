@@ -12,23 +12,24 @@ use std::{
     collections::{btree_map, BTreeMap},
     sync::{
         atomic::{AtomicU32, Ordering},
-        Arc, OnceLock,
+        Arc,
     },
 };
 
-use futures::{future::BoxFuture, pin_mut, FutureExt};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    signal_service_client::SignalServiceClient, SignalRequest, StreamControl,
-};
+use futures::{pin_mut, FutureExt};
+use pinnacle_api_defs::pinnacle::signal::v0alpha1::{SignalRequest, StreamControl};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedSender},
     oneshot,
 };
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
-use tonic::{transport::Channel, Streaming};
+use tonic::Streaming;
 
 use crate::{
-    block_on_tokio, output::OutputHandle, tag::TagHandle, window::WindowHandle, ApiModules,
+    block_on_tokio,
+    output::{Output, OutputHandle},
+    tag::{Tag, TagHandle},
+    window::{Window, WindowHandle},
 };
 
 pub(crate) trait Signal {
@@ -95,15 +96,13 @@ macro_rules! signals {
                     self.reset();
 
                     let channels = connect_signal::<_, _, <$name as Signal>::Callback, _, _>(
-                        &self.fut_sender,
                         self.callback_count.clone(),
                         |out| {
-                            block_on_tokio(self.client.$req(out))
+                            block_on_tokio($crate::signal().$req(out))
                                 .expect("failed to request signal connection")
                                 .into_inner()
                         },
                         $on_resp,
-                        self.api.get().unwrap().clone(),
                     );
 
                     self.callback_sender.replace(channels.callback_sender);
@@ -134,9 +133,9 @@ signals! {
             enum_name = Connect,
             callback_type = SingleOutputFn,
             client_request = output_connect,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(output_name) = response.output_name {
-                    let handle = api.output.new_handle(output_name);
+                    let handle = Output.new_handle(output_name);
 
                     for callback in callbacks {
                         callback(&handle);
@@ -151,9 +150,9 @@ signals! {
             enum_name = Disconnect,
             callback_type = SingleOutputFn,
             client_request = output_disconnect,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(output_name) = response.output_name {
-                    let handle = api.output.new_handle(output_name);
+                    let handle = Output.new_handle(output_name);
 
                     for callback in callbacks {
                         callback(&handle);
@@ -168,9 +167,9 @@ signals! {
             enum_name = Resize,
             callback_type = Box<dyn FnMut(&OutputHandle, u32, u32) + Send + 'static>,
             client_request = output_resize,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(output_name) = &response.output_name {
-                    let handle = api.output.new_handle(output_name);
+                    let handle = Output.new_handle(output_name);
 
                     for callback in callbacks {
                         callback(&handle, response.logical_width(), response.logical_height())
@@ -185,9 +184,9 @@ signals! {
             enum_name = Move,
             callback_type = Box<dyn FnMut(&OutputHandle, i32, i32) + Send + 'static>,
             client_request = output_move,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(output_name) = &response.output_name {
-                    let handle = api.output.new_handle(output_name);
+                    let handle = Output.new_handle(output_name);
 
                     for callback in callbacks {
                         callback(&handle, response.x(), response.y())
@@ -205,9 +204,9 @@ signals! {
             enum_name = PointerEnter,
             callback_type = SingleWindowFn,
             client_request = window_pointer_enter,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(window_id) = response.window_id {
-                    let handle = api.window.new_handle(window_id);
+                    let handle = Window.new_handle(window_id);
 
                     for callback in callbacks {
                         callback(&handle);
@@ -222,9 +221,9 @@ signals! {
             enum_name = PointerLeave,
             callback_type = SingleWindowFn,
             client_request = window_pointer_leave,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(window_id) = response.window_id {
-                    let handle = api.window.new_handle(window_id);
+                    let handle = Window.new_handle(window_id);
 
                     for callback in callbacks {
                         callback(&handle);
@@ -240,9 +239,9 @@ signals! {
             enum_name = Active,
             callback_type = Box<dyn FnMut(&TagHandle, bool) + Send + 'static>,
             client_request = tag_active,
-            on_response = |response, callbacks, api| {
+            on_response = |response, callbacks| {
                 if let Some(tag_id) = response.tag_id {
-                    let handle = api.tag.new_handle(tag_id);
+                    let handle = Tag.new_handle(tag_id);
 
                     for callback in callbacks {
                         callback(&handle, response.active.unwrap());
@@ -275,30 +274,16 @@ impl std::fmt::Debug for SignalState {
 }
 
 impl SignalState {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
-        let client = SignalServiceClient::new(channel);
+    pub(crate) fn new() -> Self {
         Self {
-            output_connect: SignalData::new(client.clone(), fut_sender.clone()),
-            output_disconnect: SignalData::new(client.clone(), fut_sender.clone()),
-            output_resize: SignalData::new(client.clone(), fut_sender.clone()),
-            output_move: SignalData::new(client.clone(), fut_sender.clone()),
-            window_pointer_enter: SignalData::new(client.clone(), fut_sender.clone()),
-            window_pointer_leave: SignalData::new(client.clone(), fut_sender.clone()),
-            tag_active: SignalData::new(client.clone(), fut_sender.clone()),
+            output_connect: SignalData::new(),
+            output_disconnect: SignalData::new(),
+            output_resize: SignalData::new(),
+            output_move: SignalData::new(),
+            window_pointer_enter: SignalData::new(),
+            window_pointer_leave: SignalData::new(),
+            tag_active: SignalData::new(),
         }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.output_connect.api.set(api.clone()).unwrap();
-        self.output_disconnect.api.set(api.clone()).unwrap();
-        self.output_resize.api.set(api.clone()).unwrap();
-        self.output_move.api.set(api.clone()).unwrap();
-        self.window_pointer_enter.api.set(api.clone()).unwrap();
-        self.window_pointer_leave.api.set(api.clone()).unwrap();
-        self.tag_active.api.set(api.clone()).unwrap();
     }
 
     pub(crate) fn shutdown(&mut self) {
@@ -316,9 +301,6 @@ impl SignalState {
 pub(crate) struct SignalConnId(pub(crate) u32);
 
 pub(crate) struct SignalData<S: Signal> {
-    client: SignalServiceClient<Channel>,
-    api: OnceLock<ApiModules>,
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
     callback_sender: Option<UnboundedSender<(SignalConnId, S::Callback)>>,
     remove_callback_sender: Option<UnboundedSender<SignalConnId>>,
     dc_pinger: Option<oneshot::Sender<()>>,
@@ -327,14 +309,8 @@ pub(crate) struct SignalData<S: Signal> {
 }
 
 impl<S: Signal> SignalData<S> {
-    fn new(
-        client: SignalServiceClient<Channel>,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
+    fn new() -> Self {
         Self {
-            client,
-            api: OnceLock::new(),
-            fut_sender,
             callback_sender: Default::default(),
             remove_callback_sender: Default::default(),
             dc_pinger: Default::default(),
@@ -351,18 +327,16 @@ struct ConnectSignalChannels<F> {
 }
 
 fn connect_signal<Req, Resp, F, T, O>(
-    fut_sender: &UnboundedSender<BoxFuture<'static, ()>>,
     callback_count: Arc<AtomicU32>,
     to_in_stream: T,
     mut on_response: O,
-    api: ApiModules,
 ) -> ConnectSignalChannels<F>
 where
     Req: SignalRequest + Send + 'static,
     Resp: Send + 'static,
     F: Send + 'static,
     T: FnOnce(UnboundedReceiverStream<Req>) -> Streaming<Resp>,
-    O: FnMut(Resp, btree_map::ValuesMut<'_, SignalConnId, F>, &ApiModules) + Send + 'static,
+    O: FnMut(Resp, btree_map::ValuesMut<'_, SignalConnId, F>) + Send + 'static,
 {
     let (control_sender, recv) = unbounded_channel::<Req>();
     let out_stream = UnboundedReceiverStream::new(recv);
@@ -399,7 +373,7 @@ where
 
                     match response {
                         Ok(response) => {
-                            on_response(response, callbacks.values_mut(), &api);
+                            on_response(response, callbacks.values_mut());
 
                             control_sender
                                 .send(Req::from_control(StreamControl::Ready))
@@ -437,7 +411,7 @@ where
         }
     };
 
-    fut_sender.send(signal_future.boxed()).expect("send failed");
+    tokio::spawn(signal_future);
 
     ConnectSignalChannels {
         callback_sender,

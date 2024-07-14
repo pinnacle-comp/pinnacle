@@ -2,94 +2,68 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
+local client = require("pinnacle.grpc.client").client
 local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.SignalService
 
-local stream_control = {
-    UNSPECIFIED = 0,
-    READY = 1,
-    DISCONNECT = 2,
-}
+local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.StreamControl
 
 -- TODO: rewrite ldoc_gen so you don't have to stick @nodoc everywhere
 
----@nodoc
----@type table<SignalServiceMethod, { sender: H2Stream?, callbacks: function[], on_response: fun(response: table) }>
+---@type table<string, { sender: grpc_client.h2.Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(output: OutputHandle))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     OutputDisconnect = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(output: OutputHandle))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     OutputResize = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(output: OutputHandle, logical_width: integer, logical_height: integer))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     OutputMove = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(output: OutputHandle, x: integer, y: integer))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     WindowPointerEnter = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(window: WindowHandle))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     WindowPointerLeave = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(window: WindowHandle))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
     TagActive = {
-        ---@nodoc
-        ---@type H2Stream?
+        ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@nodoc
         ---@type (fun(tag: TagHandle, active: boolean))[]
         callbacks = {},
-        ---@nodoc
         ---@type fun(response: table)
         on_response = nil,
     },
@@ -164,7 +138,7 @@ local signal_handle = {}
 ---A handle to a connected signal that can be used to disconnect the provided callback.
 ---
 ---@class SignalHandle
----@field private signal SignalServiceMethod
+---@field private signal string
 ---@field private callback function The callback you connected
 local SignalHandle = {}
 
@@ -236,7 +210,7 @@ function signal_handles.new(signal_hdls)
 end
 
 ---@nodoc
----@param request SignalServiceMethod
+---@param request string
 ---@param callback function
 function signal.add_callback(request, callback)
     if #signals[request].callbacks == 0 then
@@ -247,11 +221,11 @@ function signal.add_callback(request, callback)
 end
 
 ---@nodoc
----@param request SignalServiceMethod
+---@param request string
 ---@param callback fun(response: table)
 function signal.connect(request, callback)
-    local stream = client.bidirectional_streaming_request(signal_service[request], {
-        control = stream_control.READY,
+    local stream = client:bidirectional_streaming_request(signal_service[request], {
+        control = stream_control.STREAM_CONTROL_READY,
     }, function(response)
         callback(response)
 
@@ -259,7 +233,7 @@ function signal.connect(request, callback)
             local chunk = require("pinnacle.grpc.protobuf").encode(
                 "pinnacle.signal.v0alpha1." .. request .. "Request",
                 {
-                    control = stream_control.READY,
+                    control = stream_control.STREAM_CONTROL_READY,
                 }
             )
 
@@ -278,13 +252,13 @@ end
 
 ---@nodoc
 ---This should only be called when call callbacks for the signal are removed
----@param request SignalServiceMethod
+---@param request string
 function signal.disconnect(request)
     if signals[request].sender then
         local chunk = require("pinnacle.grpc.protobuf").encode(
             "pinnacle.signal.v0alpha1." .. request .. "Request",
             {
-                control = stream_control.DISCONNECT,
+                control = stream_control.STREAM_CONTROL_DISCONNECT,
             }
         )
 

@@ -11,6 +11,8 @@ local protobuf = {}
 local PINNACLE_PROTO_DIR = os.getenv("PINNACLE_PROTO_DIR")
 
 function protobuf.build_protos()
+    require("pinnacle.log"):debug("Building protos")
+
     local version = "v0alpha1"
     local proto_file_paths = {
         PINNACLE_PROTO_DIR .. "/pinnacle/tag/" .. version .. "/tag.proto",
@@ -60,7 +62,9 @@ function protobuf.encode(type, data)
 
     local encoded_protobuf = obj
 
+    ---@diagnostic disable-next-line: deprecated
     local packed_prefix = string.pack("I1", 0)
+    ---@diagnostic disable-next-line: deprecated
     local payload_len = string.pack(">I4", encoded_protobuf:len())
 
     local body = packed_prefix .. payload_len .. encoded_protobuf

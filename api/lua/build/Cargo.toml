@@ -1,0 +1,13 @@
+[package]
+name = "lua-build"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = "0.12.6"
+prost-types = "0.12.6"
+indexmap = "2.2.6"
+
+[build-dependencies]
+prost-build = "0.12.6"
+walkdir = "2.5.0"

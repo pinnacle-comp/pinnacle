@@ -4,11 +4,10 @@
 use integration::Integration;
 use snowcap_api::layer::Layer;
 
-use crate::ApiModules;
-
 pub mod integration;
 
 /// Snowcap modules and Pinnacle integration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Snowcap {
     /// Create layer surface widgets.
     pub layer: &'static Layer,
@@ -16,15 +15,18 @@ pub struct Snowcap {
     pub integration: &'static Integration,
 }
 
-impl Snowcap {
-    pub(crate) fn new(layer: Layer) -> Self {
-        Self {
-            layer: Box::leak(Box::new(layer)),
-            integration: Box::leak(Box::new(Integration::new())),
-        }
+impl Default for Snowcap {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.integration.finish_init(api);
+impl Snowcap {
+    /// Creates a new Snowcap struct.
+    pub const fn new() -> Self {
+        Self {
+            layer: &Layer,
+            integration: &Integration,
+        }
     }
 }

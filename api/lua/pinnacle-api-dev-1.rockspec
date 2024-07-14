@@ -13,6 +13,10 @@ dependencies = {
     "http ~> 0.4",
     "lua-protobuf ~> 0.5",
     "compat53 ~> 0.13",
+    "lualogging ~> 1.8.2",
+
+    -- Run just install
+    "lua-grpc-client >= dev-1",
 }
 build = {
     type = "builtin",
@@ -32,5 +36,6 @@ build = {
         ["pinnacle.layout"] = "pinnacle/layout.lua",
         ["pinnacle.render"] = "pinnacle/render.lua",
         ["pinnacle.snowcap"] = "pinnacle/snowcap.lua",
+        ["pinnacle.log"] = "pinnacle/log.lua",
     },
 }

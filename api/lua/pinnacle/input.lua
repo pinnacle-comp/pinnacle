@@ -2,20 +2,23 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client = require("pinnacle.grpc.client")
-local input_service = require("pinnacle.grpc.defs").pinnacle.input.v0alpha1.InputService
-
--- This is an @enum and not an @alias because with an @alias the completion replaces tables with a string,
--- which is annoying
+local log = require("pinnacle.log")
+local client = require("pinnacle.grpc.client").client
+local defs = require("pinnacle.grpc.defs")
+local input_v0alpha1 = defs.pinnacle.input.v0alpha1
+local input_service = defs.pinnacle.input.v0alpha1.InputService
 
 ---@enum (key) Modifier
 local modifier_values = {
-    shift = 1,
-    ctrl = 2,
-    alt = 3,
-    super = 4,
+    shift = input_v0alpha1.Modifier.MODIFIER_SHIFT,
+    ctrl = input_v0alpha1.Modifier.MODIFIER_CTRL,
+    alt = input_v0alpha1.Modifier.MODIFIER_ALT,
+    super = input_v0alpha1.Modifier.MODIFIER_SUPER,
 }
 
+require("pinnacle.util").make_bijective(modifier_values)
+
+---@enum (key) MouseButton
 local mouse_button_values = {
     --- Left
     [1] = 0x110,
@@ -39,30 +42,12 @@ local mouse_button_values = {
     btn_forward = 0x115,
     btn_back = 0x116,
 }
--- This alias is because I can't get @enum completion to work
----@alias MouseButton
----| 1 Left
----| 2 Right
----| 3 Middle
----| 4 Side
----| 5 Extra
----| 6 Forward
----| 7 Back,
----| "btn_left"
----| "btn_right"
----| "btn_middle"
----| "btn_side"
----| "btn_extra"
----| "btn_forward"
----| "btn_back"
 
+---@enum (key) MouseEdge
 local mouse_edge_values = {
-    press = 1,
-    release = 2,
+    press = input_v0alpha1.SetMousebindRequest.MouseEdge.MOUSE_EDGE_PRESS,
+    release = input_v0alpha1.SetMousebindRequest.MouseEdge.MOUSE_EDGE_RELEASE,
 }
----@alias MouseEdge
----| "press" Trigger on mouse button press
----| "release" Trigger on mouse button release
 
 ---Input management.
 ---
@@ -131,13 +116,17 @@ function input.keybind(mods, key, action, keybind_info)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(input_service.SetKeybind, {
+    local err = client:server_streaming_request(input_service.SetKeybind, {
         modifiers = mod_values,
         raw_code = raw_code,
         xkb_name = xkb_name,
         group = keybind_info and keybind_info.group,
         description = keybind_info and keybind_info.description,
     }, action)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Set a mousebind. If called with an already existing mousebind, it gets replaced.
@@ -165,11 +154,15 @@ function input.mousebind(mods, button, edge, action)
         table.insert(mod_values, modifier_values[mod])
     end
 
-    client.server_streaming_request(input_service.SetMousebind, {
+    local err = client:server_streaming_request(input_service.SetMousebind, {
         modifiers = mod_values,
         button = mouse_button_values[button],
         edge = edge,
     }, action)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---@class KeybindDescription
@@ -183,13 +176,18 @@ end
 ---
 ---@return KeybindDescription[]
 function input.keybind_descriptions()
-    ---@type pinnacle.input.v0alpha1.KeybindDescriptionsResponse
-    local descs = client.unary_request(input_service.KeybindDescriptions, {})
-    local descs = descs.descriptions or {}
+    local response, err = client:unary_request(input_service.KeybindDescriptions, {})
+
+    if err then
+        log:error(err)
+        return {}
+    end
+
+    ---@cast response pinnacle.input.v0alpha1.KeybindDescriptionsResponse
 
     local ret = {}
 
-    for _, desc in ipairs(descs) do
+    for _, desc in ipairs(response.descriptions or {}) do
         local mods = {}
         for _, mod in ipairs(desc.modifiers or {}) do
             if mod == modifier_values.shift then
@@ -233,7 +231,11 @@ end
 ---
 ---@param xkb_config XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
-    client.unary_request(input_service.SetXkbConfig, xkb_config)
+    local _, err = client:unary_request(input_service.SetXkbConfig, xkb_config)
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Set the keyboard's repeat rate and delay.
@@ -246,47 +248,51 @@ end
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
 function input.set_repeat_rate(rate, delay)
-    client.unary_request(input_service.SetRepeatRate, {
+    local _, err = client:unary_request(input_service.SetRepeatRate, {
         rate = rate,
         delay = delay,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
+---@enum (key) AccelProfile
 local accel_profile_values = {
-    flat = 1,
-    adaptive = 2,
+    ---No pointer acceleration
+    flat = input_v0alpha1.SetLibinputSettingRequest.AccelProfile.ACCEL_PROFILE_FLAT,
+    ---Pointer acceleration
+    adaptive = input_v0alpha1.SetLibinputSettingRequest.AccelProfile.ACCEL_PROFILE_ADAPTIVE,
 }
----@alias AccelProfile
----| "flat" No pointer acceleration
----| "adaptive" Pointer acceleration
 
+---@enum (key) ClickMethod
 local click_method_values = {
-    button_areas = 1,
-    click_finger = 2,
+    ---Button presses are generated according to where on the device the click occurs
+    button_areas = input_v0alpha1.SetLibinputSettingRequest.ClickMethod.CLICK_METHOD_BUTTON_AREAS,
+    ---Button presses are generated according to the number of fingers used
+    click_finger = input_v0alpha1.SetLibinputSettingRequest.ClickMethod.CLICK_METHOD_CLICK_FINGER,
 }
----@alias ClickMethod
----| "button_areas" Button presses are generated according to where on the device the click occurs
----| "click_finger" Button presses are generated according to the number of fingers used
 
+---@enum (key) ScrollMethod
 local scroll_method_values = {
-    no_scroll = 1,
-    two_finger = 2,
-    edge = 3,
-    on_button_down = 4,
+    ---Never send scroll events instead of pointer motion events
+    no_scroll = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_NO_SCROLL,
+    ---Send scroll events when two fingers are logically down on the device
+    two_finger = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_TWO_FINGER,
+    ---Send scroll events when a finger moves along the bottom or right edge of a device
+    edge = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_EDGE,
+    ---Send scroll events when a button is down and the device moves along a scroll-capable axis
+    on_button_down = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_ON_BUTTON_DOWN,
 }
----@alias ScrollMethod
----| "no_scroll" Never send scroll events instead of pointer motion events
----| "two_finger" Send scroll events when two fingers are logically down on the device
----| "edge" Send scroll events when a finger moves along the bottom or right edge of a device
----| "on_button_down" Send scroll events when a button is down and the device moves along a scroll-capable axis
 
+---@enum (key) TapButtonMap
 local tap_button_map_values = {
-    left_right_middle = 1,
-    left_middle_right = 2,
+    ---1/2/3 finger tap maps to left/right/middle
+    left_right_middle = input_v0alpha1.SetLibinputSettingRequest.TapButtonMap.TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE,
+    ---1/2/3 finger tap maps to left/middle/right
+    left_middle_right = input_v0alpha1.SetLibinputSettingRequest.TapButtonMap.TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT,
 }
----@alias TapButtonMap
----| "left_right_middle" 1/2/3 finger tap maps to left/right/middle
----| "left_middle_right" 1/2/3 finger tap maps to left/middle/right
 
 ---@class LibinputSettings
 ---@field accel_profile AccelProfile? Set pointer acceleration
@@ -321,33 +327,23 @@ local tap_button_map_values = {
 ---@param settings LibinputSettings
 function input.set_libinput_settings(settings)
     for setting, value in pairs(settings) do
+        local data = { [setting] = value }
+
         if setting == "accel_profile" then
-            client.unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = accel_profile_values[value] }
-            )
+            data[setting] = accel_profile_values[value]
         elseif setting == "calibration_matrix" then
-            client.unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = { matrix = value } }
-            )
+            data[setting] = { matrix = value }
         elseif setting == "click_method" then
-            client.unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = click_method_values[value] }
-            )
+            data[setting] = click_method_values[value]
         elseif setting == "scroll_method" then
-            client.unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = scroll_method_values[value] }
-            )
+            data[setting] = scroll_method_values[value]
         elseif setting == "tap_button_map" then
-            client.unary_request(
-                input_service.SetLibinputSetting,
-                { [setting] = tap_button_map_values[value] }
-            )
-        else
-            client.unary_request(input_service.SetLibinputSetting, { [setting] = value })
+            data[setting] = tap_button_map_values[value]
+        end
+
+        local _, err = client:unary_request(input_service.SetLibinputSetting, data)
+        if err then
+            log:error(err)
         end
     end
 end
@@ -359,9 +355,13 @@ end
 ---
 ---@param theme string
 function input.set_xcursor_theme(theme)
-    client.unary_request(input_service.SetXcursor, {
+    local _, err = client:unary_request(input_service.SetXcursor, {
         theme = theme,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 ---Sets the current xcursor size.
@@ -371,9 +371,13 @@ end
 ---
 ---@param size integer
 function input.set_xcursor_size(size)
-    client.unary_request(input_service.SetXcursor, {
+    local _, err = client:unary_request(input_service.SetXcursor, {
         size = size,
     })
+
+    if err then
+        log:error(err)
+    end
 end
 
 return input

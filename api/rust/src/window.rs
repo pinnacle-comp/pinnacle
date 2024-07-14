@@ -12,8 +12,6 @@
 //!
 //! This module also allows you to set window rules; see the [rules] module for more information.
 
-use std::sync::OnceLock;
-
 use futures::FutureExt;
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
@@ -21,22 +19,21 @@ use pinnacle_api_defs::pinnacle::{
     window::{
         self,
         v0alpha1::{
-            window_service_client::WindowServiceClient, AddWindowRuleRequest, CloseRequest,
-            GetRequest, MoveGrabRequest, MoveToTagRequest, RaiseRequest, ResizeGrabRequest,
-            SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest,
-            SetTagRequest,
+            AddWindowRuleRequest, CloseRequest, GetRequest, MoveGrabRequest, MoveToTagRequest,
+            RaiseRequest, ResizeGrabRequest, SetFloatingRequest, SetFocusedRequest,
+            SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
         },
     },
 };
-use tonic::transport::Channel;
+use tracing::{error, instrument};
 
 use crate::{
     block_on_tokio,
     input::MouseButton,
     signal::{SignalHandle, WindowSignal},
-    tag::TagHandle,
+    signal_module,
+    tag::{Tag, TagHandle},
     util::{Batch, Geometry},
-    ApiModules,
 };
 
 use self::rules::{WindowRule, WindowRuleCondition};
@@ -46,30 +43,12 @@ pub mod rules;
 /// A struct containing methods that get [`WindowHandle`]s and move windows with the mouse.
 ///
 /// See [`WindowHandle`] for more information.
-#[derive(Debug, Clone)]
-pub struct Window {
-    window_client: WindowServiceClient<Channel>,
-    api: OnceLock<ApiModules>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Window;
 
 impl Window {
-    pub(crate) fn new(channel: Channel) -> Self {
-        Self {
-            window_client: WindowServiceClient::new(channel.clone()),
-            api: OnceLock::new(),
-        }
-    }
-
-    pub(crate) fn finish_init(&self, api: ApiModules) {
-        self.api.set(api).unwrap();
-    }
-
     pub(crate) fn new_handle(&self, id: u32) -> WindowHandle {
-        WindowHandle {
-            id,
-            window_client: self.window_client.clone(),
-            api: self.api.get().unwrap().clone(),
-        }
+        WindowHandle { id }
     }
 
     /// Start moving the window with the mouse.
@@ -90,11 +69,10 @@ impl Window {
     /// });
     /// ```
     pub fn begin_move(&self, button: MouseButton) {
-        let mut client = self.window_client.clone();
-        if let Err(status) = block_on_tokio(client.move_grab(MoveGrabRequest {
+        if let Err(err) = block_on_tokio(crate::window().move_grab(MoveGrabRequest {
             button: Some(button as u32),
         })) {
-            eprintln!("ERROR: {status}");
+            error!("Failed to begin window move: {err}");
         }
     }
 
@@ -116,11 +94,11 @@ impl Window {
     /// });
     /// ```
     pub fn begin_resize(&self, button: MouseButton) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.resize_grab(ResizeGrabRequest {
+        if let Err(err) = block_on_tokio(crate::window().resize_grab(ResizeGrabRequest {
             button: Some(button as u32),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to begin window resize: {err}");
+        }
     }
 
     /// Get all windows.
@@ -136,13 +114,12 @@ impl Window {
 
     /// The async version of [`Window::get_all`].
     pub async fn get_all_async(&self) -> Vec<WindowHandle> {
-        let mut client = self.window_client.clone();
-        client
+        crate::window()
             .get(GetRequest {})
             .await
-            .unwrap()
-            .into_inner()
-            .window_ids
+            .map(|resp| resp.into_inner().window_ids)
+            .inspect_err(|err| error!("Failed to get windows: {err}"))
+            .unwrap_or_default()
             .into_iter()
             .map(move |id| self.new_handle(id))
             .collect::<Vec<_>>()
@@ -174,13 +151,12 @@ impl Window {
     ///
     /// See the [`rules`] module for more information.
     pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
-        let mut client = self.window_client.clone();
-
-        block_on_tokio(client.add_window_rule(AddWindowRuleRequest {
+        if let Err(err) = block_on_tokio(crate::window().add_window_rule(AddWindowRuleRequest {
             cond: Some(cond.0),
             rule: Some(rule.0),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to add window rule: {err}");
+        }
     }
 
     /// Connect to a window signal.
@@ -189,7 +165,7 @@ impl Window {
     /// You can pass in a [`WindowSignal`] along with a callback and it will get run
     /// with the necessary arguments every time a signal of that type is received.
     pub fn connect_signal(&self, signal: WindowSignal) -> SignalHandle {
-        let mut signal_state = block_on_tokio(self.api.get().unwrap().signal.write());
+        let mut signal_state = signal_module();
 
         match signal {
             WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
@@ -201,25 +177,9 @@ impl Window {
 /// A handle to a window.
 ///
 /// This allows you to manipulate the window and get its properties.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WindowHandle {
     id: u32,
-    window_client: WindowServiceClient<Channel>,
-    api: ApiModules,
-}
-
-impl PartialEq for WindowHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for WindowHandle {}
-
-impl std::hash::Hash for WindowHandle {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
 }
 
 /// Whether a window is fullscreen, maximized, or neither.
@@ -285,12 +245,13 @@ impl WindowHandle {
     /// // Close the focused window
     /// window.get_focused()?.close()
     /// ```
+    #[instrument]
     pub fn close(&self) {
-        let mut window_client = self.window_client.clone();
-        block_on_tokio(window_client.close(CloseRequest {
+        if let Err(err) = block_on_tokio(crate::window().close(CloseRequest {
             window_id: Some(self.id),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this window to fullscreen or not.
@@ -303,16 +264,17 @@ impl WindowHandle {
     /// // Set the focused window to fullscreen.
     /// window.get_focused()?.set_fullscreen(true);
     /// ```
+    #[instrument]
     pub fn set_fullscreen(&self, set: bool) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle this window between fullscreen and not.
@@ -325,13 +287,14 @@ impl WindowHandle {
     /// // Toggle the focused window to and from fullscreen.
     /// window.get_focused()?.toggle_fullscreen();
     /// ```
+    #[instrument]
     pub fn toggle_fullscreen(&self) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_fullscreen(SetFullscreenRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_fullscreen(SetFullscreenRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this window to maximized or not.
@@ -344,16 +307,17 @@ impl WindowHandle {
     /// // Set the focused window to maximized.
     /// window.get_focused()?.set_maximized(true);
     /// ```
+    #[instrument]
     pub fn set_maximized(&self, set: bool) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_maximized(SetMaximizedRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle this window between maximized and not.
@@ -366,13 +330,14 @@ impl WindowHandle {
     /// // Toggle the focused window to and from maximized.
     /// window.get_focused()?.toggle_maximized();
     /// ```
+    #[instrument]
     pub fn toggle_maximized(&self) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_maximized(SetMaximizedRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_maximized(SetMaximizedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set this window to floating or not.
@@ -388,16 +353,17 @@ impl WindowHandle {
     /// // Set the focused window to floating.
     /// window.get_focused()?.set_floating(true);
     /// ```
+    #[instrument]
     pub fn set_floating(&self, set: bool) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_floating(SetFloatingRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle this window to and from floating.
@@ -413,13 +379,14 @@ impl WindowHandle {
     /// // Toggle the focused window to and from floating.
     /// window.get_focused()?.toggle_floating();
     /// ```
+    #[instrument]
     pub fn toggle_floating(&self) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_floating(SetFloatingRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_floating(SetFloatingRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Focus or unfocus this window.
@@ -430,16 +397,17 @@ impl WindowHandle {
     /// // Unfocus the focused window
     /// window.get_focused()?.set_focused(false);
     /// ```
+    #[instrument]
     pub fn set_focused(&self, set: bool) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_focused(SetFocusedRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_focused(SetFocusedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle this window to and from focused.
@@ -452,13 +420,14 @@ impl WindowHandle {
     /// // be a focused window.
     /// window.get_focused()?.toggle_focused();
     /// ```
+    #[instrument]
     pub fn toggle_focused(&self) {
-        let mut client = self.window_client.clone();
-        block_on_tokio(client.set_focused(SetFocusedRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_focused(SetFocusedRequest {
             window_id: Some(self.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Move this window to the given `tag`.
@@ -472,14 +441,14 @@ impl WindowHandle {
     /// // Move the focused window to tag "Code" on the focused output
     /// window.get_focused()?.move_to_tag(&tag.get("Code", None)?);
     /// ```
+    #[instrument]
     pub fn move_to_tag(&self, tag: &TagHandle) {
-        let mut client = self.window_client.clone();
-
-        block_on_tokio(client.move_to_tag(MoveToTagRequest {
+        if let Err(err) = block_on_tokio(crate::window().move_to_tag(MoveToTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Set or unset a tag on this window.
@@ -493,18 +462,18 @@ impl WindowHandle {
     /// focused.set_tag(&tg, true); // `focused` now has tag "Potato"
     /// focused.set_tag(&tg, false); // `focused` no longer has tag "Potato"
     /// ```
+    #[instrument]
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
-        let mut client = self.window_client.clone();
-
-        block_on_tokio(client.set_tag(SetTagRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
             set_or_toggle: Some(match set {
                 true => SetOrToggle::Set,
                 false => SetOrToggle::Unset,
             } as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Toggle a tag on this window.
@@ -520,15 +489,15 @@ impl WindowHandle {
     /// focused.toggle_tag(&tg); // `focused` now has tag "Potato"
     /// focused.toggle_tag(&tg); // `focused` no longer has tag "Potato"
     /// ```
+    #[instrument]
     pub fn toggle_tag(&self, tag: &TagHandle) {
-        let mut client = self.window_client.clone();
-
-        block_on_tokio(client.set_tag(SetTagRequest {
+        if let Err(err) = block_on_tokio(crate::window().set_tag(SetTagRequest {
             window_id: Some(self.id),
             tag_id: Some(tag.id),
             set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Raise this window.
@@ -540,13 +509,13 @@ impl WindowHandle {
     /// ```
     /// window.get_focused()?.raise();
     /// ```
+    #[instrument]
     pub fn raise(&self) {
-        let mut client = self.window_client.clone();
-
-        block_on_tokio(client.raise(RaiseRequest {
+        if let Err(err) = block_on_tokio(crate::window().raise(RaiseRequest {
             window_id: Some(self.id),
-        }))
-        .unwrap();
+        })) {
+            error!("{err}");
+        }
     }
 
     /// Get all properties of this window.
@@ -572,9 +541,7 @@ impl WindowHandle {
 
     /// The async version of [`props`][Self::props].
     pub async fn props_async(&self) -> WindowProperties {
-        let mut client = self.window_client.clone();
-
-        let response = match client
+        let response = match crate::window()
             .get_properties(window::v0alpha1::GetPropertiesRequest {
                 window_id: Some(self.id),
             })
@@ -620,7 +587,7 @@ impl WindowHandle {
             tags: response
                 .tag_ids
                 .into_iter()
-                .map(|id| self.api.tag.new_handle(id))
+                .map(|id| Tag.new_handle(id))
                 .collect(),
             state,
         }

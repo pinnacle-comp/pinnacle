@@ -304,7 +304,7 @@ local function deep_copy_rec(obj, seen)
     return no
 end
 
----Create a deep copy of an object.
+---Creates a deep copy of an object.
 ---
 ---@generic T
 ---
@@ -315,7 +315,7 @@ function util.deep_copy(obj)
     return deep_copy_rec(obj, nil)
 end
 
----Create a table with entries key->value and value->key for all given pairs.
+---Creates a table with entries key->value and value->key for all given pairs.
 ---
 ---@generic T
 ---@param key_value_pairs T
@@ -330,6 +330,21 @@ function util.bijective_table(key_value_pairs)
     end
 
     return ret
+end
+
+---Makes a table bijective by inserting `value = key` entries for every key-value pair.
+---
+---@param table table
+function util.make_bijective(table)
+    local temp = {}
+
+    for k, v in pairs(table) do
+        temp[v] = k
+    end
+
+    for k, v in pairs(temp) do
+        table[k] = v
+    end
 end
 
 return util

@@ -8,19 +8,17 @@
 //! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
 //! View the struct's documentation for more information.
 
-use futures::{future::BoxFuture, FutureExt, StreamExt};
 use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v0alpha1::{
-        input_service_client::InputServiceClient,
         set_libinput_setting_request::{CalibrationMatrix, Setting},
         KeybindDescriptionsRequest, SetKeybindRequest, SetLibinputSettingRequest,
         SetMousebindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::transport::Channel;
+use tokio_stream::StreamExt;
+use tracing::error;
 use xkbcommon::xkb::Keysym;
 
 use crate::block_on_tokio;
@@ -93,11 +91,8 @@ pub struct XkbConfig {
 ///
 /// This struct contains methods that allow you to set key- and mousebinds,
 /// change xkeyboard and libinput settings, and change the keyboard's repeat rate.
-#[derive(Debug, Clone)]
-pub struct Input {
-    channel: Channel,
-    fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct Input;
 
 /// Keybind information.
 ///
@@ -126,20 +121,6 @@ pub struct KeybindDescription {
 }
 
 impl Input {
-    pub(crate) fn new(
-        channel: Channel,
-        fut_sender: UnboundedSender<BoxFuture<'static, ()>>,
-    ) -> Self {
-        Self {
-            channel,
-            fut_sender,
-        }
-    }
-
-    fn create_input_client(&self) -> InputServiceClient<Channel> {
-        InputServiceClient::new(self.channel.clone())
-    }
-
     /// Set a keybind.
     ///
     /// If called with an already set keybind, it gets replaced.
@@ -185,34 +166,31 @@ impl Input {
         mut action: impl FnMut() + Send + 'static,
         keybind_info: impl Into<Option<KeybindInfo>>,
     ) {
-        let mut client = self.create_input_client();
-
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
 
         let keybind_info: Option<KeybindInfo> = keybind_info.into();
 
-        let mut stream = block_on_tokio(client.set_keybind(SetKeybindRequest {
+        let mut stream = match block_on_tokio(crate::input().set_keybind(SetKeybindRequest {
             modifiers,
             key: Some(input::v0alpha1::set_keybind_request::Key::RawCode(
                 key.into_keysym().raw(),
             )),
             group: keybind_info.clone().and_then(|info| info.group),
             description: keybind_info.clone().and_then(|info| info.description),
-        }))
-        .unwrap()
-        .into_inner();
+        })) {
+            Ok(stream) => stream.into_inner(),
+            Err(err) => {
+                error!("Failed to set keybind: {err}");
+                return;
+            }
+        };
 
-        self.fut_sender
-            .send(
-                async move {
-                    while let Some(Ok(_response)) = stream.next().await {
-                        action();
-                        tokio::task::yield_now().await;
-                    }
-                }
-                .boxed(),
-            )
-            .unwrap();
+        tokio::spawn(async move {
+            while let Some(Ok(_response)) = stream.next().await {
+                action();
+                tokio::task::yield_now().await;
+            }
+        });
     }
 
     /// Set a mousebind.
@@ -244,38 +222,40 @@ impl Input {
         edge: MouseEdge,
         mut action: impl FnMut() + 'static + Send,
     ) {
-        let mut client = self.create_input_client();
-
         let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
-        let mut stream = block_on_tokio(client.set_mousebind(SetMousebindRequest {
+        let mut stream = match block_on_tokio(crate::input().set_mousebind(SetMousebindRequest {
             modifiers,
             button: Some(button as u32),
             edge: Some(edge as i32),
-        }))
-        .unwrap()
-        .into_inner();
+        })) {
+            Ok(stream) => stream.into_inner(),
+            Err(err) => {
+                error!("Failed to set keybind: {err}");
+                return;
+            }
+        };
 
-        self.fut_sender
-            .send(
-                async move {
-                    while let Some(Ok(_response)) = stream.next().await {
-                        action();
-                        tokio::task::yield_now().await;
-                    }
-                }
-                .boxed(),
-            )
-            .unwrap();
+        tokio::spawn(async move {
+            while let Some(Ok(_response)) = stream.next().await {
+                action();
+                tokio::task::yield_now().await;
+            }
+        });
     }
 
     /// Get all keybinds and their information.
     pub fn keybind_descriptions(&self) -> impl Iterator<Item = KeybindDescription> {
-        let mut client = self.create_input_client();
-        let descriptions =
-            block_on_tokio(client.keybind_descriptions(KeybindDescriptionsRequest {})).unwrap();
-        let descriptions = descriptions.into_inner();
+        let descriptions = match block_on_tokio(
+            crate::input().keybind_descriptions(KeybindDescriptionsRequest {}),
+        ) {
+            Ok(descs) => descs.into_inner().descriptions,
+            Err(err) => {
+                error!("Failed to get keybind descriptions: {err}");
+                Vec::new()
+            }
+        };
 
-        descriptions.descriptions.into_iter().map(|desc| {
+        descriptions.into_iter().map(|desc| {
             let mods = desc.modifiers().flat_map(|m| match m {
                 input::v0alpha1::Modifier::Unspecified => None,
                 input::v0alpha1::Modifier::Shift => Some(Mod::Shift),
@@ -311,16 +291,15 @@ impl Input {
     /// });
     /// ```
     pub fn set_xkb_config(&self, xkb_config: XkbConfig) {
-        let mut client = self.create_input_client();
-
-        block_on_tokio(client.set_xkb_config(SetXkbConfigRequest {
+        if let Err(err) = block_on_tokio(crate::input().set_xkb_config(SetXkbConfigRequest {
             rules: xkb_config.rules.map(String::from),
             variant: xkb_config.variant.map(String::from),
             layout: xkb_config.layout.map(String::from),
             model: xkb_config.model.map(String::from),
             options: xkb_config.options.map(String::from),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set xkb config: {err}");
+        }
     }
 
     /// Set the keyboard's repeat rate.
@@ -338,13 +317,12 @@ impl Input {
     /// input.set_repeat_rate(25, 500);
     /// ```
     pub fn set_repeat_rate(&self, rate: i32, delay: i32) {
-        let mut client = self.create_input_client();
-
-        block_on_tokio(client.set_repeat_rate(SetRepeatRateRequest {
+        if let Err(err) = block_on_tokio(crate::input().set_repeat_rate(SetRepeatRateRequest {
             rate: Some(rate),
             delay: Some(delay),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set repeat rate: {err}");
+        }
     }
 
     /// Set a libinput setting.
@@ -372,8 +350,6 @@ impl Input {
     /// input.set_libinput_setting(LibinputSetting::NaturalScroll(true));
     /// ```
     pub fn set_libinput_setting(&self, setting: LibinputSetting) {
-        let mut client = self.create_input_client();
-
         let setting = match setting {
             LibinputSetting::AccelProfile(profile) => Setting::AccelProfile(profile as i32),
             LibinputSetting::AccelSpeed(speed) => Setting::AccelSpeed(speed),
@@ -397,10 +373,13 @@ impl Input {
             LibinputSetting::Tap(enable) => Setting::Tap(enable),
         };
 
-        block_on_tokio(client.set_libinput_setting(SetLibinputSettingRequest {
-            setting: Some(setting),
-        }))
-        .unwrap();
+        if let Err(err) = block_on_tokio(crate::input().set_libinput_setting(
+            SetLibinputSettingRequest {
+                setting: Some(setting),
+            },
+        )) {
+            error!("Failed to set libinput setting: {err}");
+        }
     }
 
     /// Set the xcursor theme.
@@ -414,13 +393,12 @@ impl Input {
     /// input.set_xcursor_theme("Adwaita");
     /// ```
     pub fn set_xcursor_theme(&self, theme: impl ToString) {
-        let mut client = self.create_input_client();
-
-        block_on_tokio(client.set_xcursor(SetXcursorRequest {
+        if let Err(err) = block_on_tokio(crate::input().set_xcursor(SetXcursorRequest {
             theme: Some(theme.to_string()),
             size: None,
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set xcursor theme: {err}");
+        }
     }
 
     /// Set the xcursor size.
@@ -434,13 +412,12 @@ impl Input {
     /// input.set_xcursor_size(64);
     /// ```
     pub fn set_xcursor_size(&self, size: u32) {
-        let mut client = self.create_input_client();
-
-        block_on_tokio(client.set_xcursor(SetXcursorRequest {
+        if let Err(err) = block_on_tokio(crate::input().set_xcursor(SetXcursorRequest {
             theme: None,
             size: Some(size),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to set xcursor size: {err}");
+        }
     }
 }
 
