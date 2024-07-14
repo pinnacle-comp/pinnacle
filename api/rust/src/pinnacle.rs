@@ -8,15 +8,11 @@
 
 use std::time::Duration;
 
-use pinnacle_api_defs::pinnacle::{
-    v0alpha1::{
-        PingRequest, QuitRequest, ReloadConfigRequest, ShutdownWatchRequest, ShutdownWatchResponse,
-    },
-    window::v0alpha1::SetFocusedRequest,
+use pinnacle_api_defs::pinnacle::v0alpha1::{
+    PingRequest, QuitRequest, ReloadConfigRequest, ShutdownWatchRequest, ShutdownWatchResponse,
 };
 use rand::RngCore;
 use tonic::{Request, Streaming};
-use tracing::error;
 
 use crate::{block_on_tokio, pinnacle};
 

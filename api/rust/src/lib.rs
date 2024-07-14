@@ -45,7 +45,7 @@
 //! ```
 //!
 //! ## 3. Set up dependencies
-//! In your `Cargo.toml`, add a dependency to `pinnacle-api`:
+//! In your `Cargo.toml`, add `pinnacle-api` as a dependency:
 //!
 //! ```toml
 //! # Cargo.toml
@@ -56,21 +56,32 @@
 //!
 //! ## 4. Set up the main function
 //! In `main.rs`, change `fn main()` to `async fn main()` and annotate it with the
-//! [`pinnacle_api::config`][`crate::config`] macro. Create the API modules with
-//! [`ApiModules::new`]:
+//! [`pinnacle_api::config`][`crate::config`] macro:
+//!
+//! ```
+//! #[pinnacle_api::config]
+//! async fn main() {}
+//! ```
+//!
+//! ## 5. Begin crafting your config!
+//!
+//! You can create the API modules with [`ApiModules::new`]:
 //!
 //! ```
 //! use pinnacle_api::ApiModules;
 //!
-//! #[pinnacle_api::config]
-//! async fn main() {
-//!     let ApiModules {
-//!         ..
-//!     } = ApiModules::new();
-//! }
+//! let ApiModules {
+//!     ..
+//! } = ApiModules::new();
 //! ```
 //!
-//! ## 5. Begin crafting your config!
+//! Most modules are copy-able unit structs, so you can also use them directly:
+//!
+//! ```
+//! let _ = pinnacle_api::window::Window.get_all();
+//! pinnacle_api::pinnacle::Pinnacle.quit();
+//! ```
+//!
 //! You can peruse the documentation for things to configure.
 
 use futures::{Future, StreamExt};
