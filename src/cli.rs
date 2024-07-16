@@ -456,6 +456,7 @@ fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use anyhow::Context;
+    use assert_matches::assert_matches;
 
     use super::*;
 
@@ -519,18 +520,9 @@ mod tests {
 
         generate_config(config_gen)?;
 
-        assert!(matches!(
-            temp_dir.join("default_config.lua").try_exists(),
-            Ok(true)
-        ));
-        assert!(matches!(
-            temp_dir.join("metaconfig.toml").try_exists(),
-            Ok(true)
-        ));
-        assert!(matches!(
-            temp_dir.join(".luarc.json").try_exists(),
-            Ok(true)
-        ));
+        assert_matches!(temp_dir.join("default_config.lua").try_exists(), Ok(true));
+        assert_matches!(temp_dir.join("metaconfig.toml").try_exists(), Ok(true));
+        assert_matches!(temp_dir.join(".luarc.json").try_exists(), Ok(true));
 
         Ok(())
     }
@@ -550,15 +542,9 @@ mod tests {
 
         generate_config(config_gen)?;
 
-        assert!(matches!(
-            temp_dir.join("src/main.rs").try_exists(),
-            Ok(true)
-        ));
-        assert!(matches!(
-            temp_dir.join("metaconfig.toml").try_exists(),
-            Ok(true)
-        ));
-        assert!(matches!(temp_dir.join("Cargo.toml").try_exists(), Ok(true)));
+        assert_matches!(temp_dir.join("src/main.rs").try_exists(), Ok(true));
+        assert_matches!(temp_dir.join("metaconfig.toml").try_exists(), Ok(true));
+        assert_matches!(temp_dir.join("Cargo.toml").try_exists(), Ok(true));
 
         Ok(())
     }

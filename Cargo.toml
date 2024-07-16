@@ -116,7 +116,6 @@ x11rb = { version = "0.13.1", default-features = false, features = ["composite"]
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
 sysinfo = "0.30.12"
-# nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.38"
@@ -128,6 +127,7 @@ libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", r
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
+assert_matches = "1.5.0"
 
 [build-dependencies]
 vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }

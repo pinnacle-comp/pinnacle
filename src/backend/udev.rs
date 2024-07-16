@@ -3,6 +3,7 @@
 mod drm;
 mod gamma;
 
+use assert_matches::assert_matches;
 pub use drm::util::drm_mode_from_api_modeline;
 use indexmap::IndexSet;
 
@@ -1306,7 +1307,7 @@ impl Udev {
             return;
         }
 
-        assert!(matches!(surface.render_state, RenderState::Scheduled(_)));
+        assert_matches!(surface.render_state, RenderState::Scheduled(_));
 
         let render_node = surface.render_node;
         let primary_gpu = self.primary_gpu;
