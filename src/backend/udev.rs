@@ -24,7 +24,7 @@ use smithay::{
             CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata,
             DrmNode, NodeType,
         },
-        egl::{self, EGLDevice, EGLDisplay},
+        egl::{self, context::ContextPriority, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self, damage,
@@ -164,15 +164,10 @@ impl Udev {
                     .find_map(|x| DrmNode::from_path(x).ok())
                     .expect("No GPU!")
             });
-        info!("Using {} as primary gpu.", primary_gpu);
+        info!("Using {} as primary gpu", primary_gpu);
 
-        let gpu_manager = GpuManager::new(GbmGlesBackend::default())?;
-        // let gpu_manager = GpuManager::new(GbmGlesBackend::with_factory(|egl| {
-        //     let ctx = EGLContext::new(egl)?;
-        //     let mut supported = unsafe { GlesRenderer::supported_capabilities(&ctx) }?;
-        //     supported.retain(|cap| cap != &Capability::ColorTransformations);
-        //     Ok(unsafe { GlesRenderer::with_capabilities(ctx, supported) }?)
-        // }))?;
+        let gpu_manager =
+            GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High))?;
 
         // Initialize the udev backend
         let udev_backend = UdevBackend::new(session.seat())?;
@@ -1106,7 +1101,15 @@ impl Udev {
             return;
         };
 
-        for event in device.drm_scanner.scan_connectors(&device.drm) {
+        let drm_scan_result = match device.drm_scanner.scan_connectors(&device.drm) {
+            Ok(event) => event,
+            Err(err) => {
+                error!("Failed to scan drm connectors: {err}");
+                return;
+            }
+        };
+
+        for event in drm_scan_result {
             match event {
                 DrmScanEvent::Connected {
                     connector,
