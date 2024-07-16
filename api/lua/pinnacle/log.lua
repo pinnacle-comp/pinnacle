@@ -12,40 +12,24 @@ local logging = require("logging")
 ---@field fatal function
 local log = {}
 
-local console_logger = require("logging.console")({
-    logPattern = "%level %message\n",
-    logPatterns = {
-        [logging.ERROR] = "%level %message (at %source)\n",
-    },
-})
+local log_patterns = logging.buildLogPatterns({
+    [logging.ERROR] = "%level %message (at %source)",
+}, "%level %message")
+
+local console_logger = logging.new(function(self, level, message)
+    print(
+        logging.prepareLogMsg(
+            log_patterns[level],
+            logging.date(logging.defaultTimestampPattern()),
+            level,
+            message
+        )
+    )
+    return true
+end, logging.defaultLevel())
 
 setmetatable(log, {
     __index = console_logger,
 })
-
-log.debug = function(_, ...)
-    console_logger:debug(...)
-    io.flush()
-end
-
-log.info = function(_, ...)
-    console_logger:info(...)
-    io.flush()
-end
-
-log.warn = function(_, ...)
-    console_logger:warn(...)
-    io.flush()
-end
-
-log.error = function(_, ...)
-    console_logger:error(...)
-    io.flush()
-end
-
-log.fatal = function(_, ...)
-    console_logger:fatal(...)
-    io.flush()
-end
 
 return log

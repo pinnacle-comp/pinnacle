@@ -157,14 +157,6 @@ where
         sender,
         in_stream,
         move |state, request| {
-            let request = match request {
-                Ok(request) => request,
-                Err(status) => {
-                    debug!("Error in output_connect signal in stream: {status}");
-                    return;
-                }
-            };
-
             debug!("Got {request:?} from client stream");
 
             let signal = signal_data_selector(state);

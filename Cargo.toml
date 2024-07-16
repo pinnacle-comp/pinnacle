@@ -18,10 +18,10 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"]}
 tokio-stream = { version = "0.1.15", features = ["net"] }
 # gRPC
-prost = "0.12.6"
-tonic = "0.11.0"
-tonic-reflection = "0.11.0"
-tonic-build = "0.11.0"
+prost = "0.13.1"
+tonic = "0.12.0"
+tonic-reflection = "0.12.0"
+tonic-build = "0.12.0"
 # Tracing
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }

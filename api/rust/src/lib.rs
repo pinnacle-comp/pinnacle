@@ -85,6 +85,7 @@
 //! You can peruse the documentation for things to configure.
 
 use futures::{Future, StreamExt};
+use hyper_util::rt::TokioIo;
 use input::Input;
 use layout::Layout;
 use output::Output;
@@ -263,11 +264,11 @@ impl ApiModules {
 pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
     // port doesn't matter, we use a unix socket
     let channel = Endpoint::try_from("http://[::]:50051")?
-        .connect_with_connector(service_fn(|_: Uri| {
-            tokio::net::UnixStream::connect(
-                std::env::var("PINNACLE_GRPC_SOCKET")
-                    .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?"),
-            )
+        .connect_with_connector(service_fn(|_: Uri| async {
+            let path = std::env::var("PINNACLE_GRPC_SOCKET")
+                .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?");
+
+            Ok::<_, std::io::Error>(TokioIo::new(tokio::net::UnixStream::connect(path).await?))
         }))
         .await
         .unwrap();

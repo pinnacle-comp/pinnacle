@@ -144,7 +144,7 @@ fn run_bidirectional_streaming<F1, F2, I, O>(
     with_out_stream_and_in_stream_join_handle: F2,
 ) -> Result<Response<ResponseStream<O>>, Status>
 where
-    F1: Fn(&mut State, Result<I, Status>) + Clone + Send + 'static,
+    F1: Fn(&mut State, I) + Clone + Send + 'static,
     F2: FnOnce(&mut State, UnboundedSender<Result<O, Status>>, JoinHandle<()>) + Send + 'static,
     I: Send + 'static,
     O: Send + 'static,
@@ -155,15 +155,24 @@ where
 
     let with_in_stream = async move {
         while let Some(request) = in_stream.next().await {
-            let on_client_request = on_client_request.clone();
-            // TODO: handle error
-            let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
-                on_client_request(state, request);
-            }));
+            match request {
+                Ok(request) => {
+                    let on_client_request = on_client_request.clone();
+                    // TODO: handle error
+                    let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
+                        on_client_request(state, request);
+                    }));
+                }
+                Err(err) => {
+                    debug!("bidirectional stream error: {err}");
+                    break;
+                }
+            }
         }
     };
 
     let join_handle = tokio::spawn(with_in_stream);
+    // let join_handle = tokio::spawn(async {});
 
     let with_out_stream_and_in_stream_join_handle = Box::new(|state: &mut State| {
         with_out_stream_and_in_stream_join_handle(state, sender, join_handle);
