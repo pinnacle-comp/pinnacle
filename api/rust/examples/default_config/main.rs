@@ -16,7 +16,7 @@ use pinnacle_api::{
 
 // Pinnacle needs to perform some setup before and after your config,
 // which is what this macro does.
-#[pinnacle_api::config]
+#[pinnacle_api::config(internal_tracing = false)]
 async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
