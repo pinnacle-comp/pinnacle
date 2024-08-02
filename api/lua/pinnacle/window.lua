@@ -15,7 +15,7 @@ local set_or_toggle = {
     TOGGLE = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
----@nodoc
+---@lcat nodoc
 ---@class WindowHandleModule
 local window_handle = {}
 
@@ -27,7 +27,6 @@ local window_handle = {}
 ---what you want it to.
 ---
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
----@classmod
 ---@class WindowHandle
 ---@field id integer
 local WindowHandle = {}
@@ -37,13 +36,14 @@ local WindowHandle = {}
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
 ---@class Window
+---@lcat nodoc
 ---@field private handle WindowHandleModule
 local window = {}
 window.handle = window_handle
 
 ---Get all windows.
 ---
----### Example
+---#### Example
 ---```lua
 ---local windows = Window.get_all()
 ---for _, window in ipairs(windows) do
@@ -68,7 +68,7 @@ end
 
 ---Get the currently focused window.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -104,7 +104,7 @@ end
 ---The button must be pressed at the time this method is called.
 ---If the button is lifted, the move will end.
 ---
----### Example
+---#### Example
 ---```lua
 ---Input.mousebind({ "super" }, "btn_left", function()
 ---    Window.begin_move("btn_left")
@@ -126,7 +126,7 @@ end
 ---The button must be pressed at the time this method is called.
 ---If the button is lifted, the resize will end.
 ---
----### Example
+---#### Example
 ---```lua
 ---Input.mousebind({ "super" }, "btn_right", function()
 ---    Window.begin_resize("btn_right")
@@ -256,7 +256,7 @@ end
 ---
 ---`cond` can be a bit confusing and quite table heavy. Examples are shown below for guidance.
 ---
----### Examples
+---#### Examples
 ---```lua
 --- -- A simple window rule. This one will cause Firefox to open on tag "Browser".
 ---Window.add_window_rule({
@@ -390,7 +390,7 @@ end
 
 ---Send a close request to this window.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then focused:close() end
@@ -417,7 +417,7 @@ end
 ---*Tiled windows will not reflect these changes.*
 ---This method only applies to this window's floating geometry.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -440,7 +440,7 @@ end
 
 ---Set this window to fullscreen or not.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -463,7 +463,7 @@ end
 
 ---Toggle this window to and from fullscreen.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -483,7 +483,7 @@ end
 
 ---Set this window to maximized or not.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -506,7 +506,7 @@ end
 
 ---Toggle this window to and from maximized.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -526,7 +526,7 @@ end
 
 ---Set this window to floating or not.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -549,7 +549,7 @@ end
 
 ---Toggle this window to and from floating.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -569,7 +569,7 @@ end
 
 ---Focus or unfocus this window.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -591,7 +591,7 @@ end
 
 ---Toggle this window to and from focused.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -613,7 +613,7 @@ end
 ---
 ---This will remove all tags from this window and tag it with `tag`.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
 ---local focused = Window.get_focused()
@@ -634,7 +634,7 @@ end
 
 ---Tag or untag the given tag on this window.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
 ---local focused = Window.get_focused()
@@ -663,7 +663,7 @@ end
 
 ---Toggle the given tag on this window.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the tag "Tag"
 ---local focused = Window.get_focused()
@@ -694,7 +694,7 @@ end
 ---
 ---This will raise a window all the way to the top of the z-stack.
 ---
----### Example
+---#### Example
 ---```lua
 ---local focused = Window.get_focused()
 ---if focused then
@@ -864,7 +864,6 @@ function WindowHandle:tags()
     return self:props().tags
 end
 
----@nodoc
 ---Create a new `WindowHandle` from an id.
 ---@param window_id integer
 ---@return WindowHandle
@@ -877,7 +876,6 @@ function window_handle.new(window_id)
     return self
 end
 
----@nodoc
 ---@param window_ids integer[]
 ---
 ---@return WindowHandle[]

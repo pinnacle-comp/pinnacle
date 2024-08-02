@@ -89,7 +89,7 @@ input.mouse_button_values = mouse_button_values
 ---Input.keybind({ "ctrl" }, "@", function() end)
 ---```
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Set `super + Return` to open Alacritty
 ---Input.keybind({ "super" }, Input.key.Return, function()
@@ -133,7 +133,7 @@ end
 ---
 ---You must specify whether the keybind happens on button press or button release.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Set `super + left mouse button` to move a window on press
 ---Input.mousebind({ "super" }, "btn_left", "press", function()
@@ -221,7 +221,7 @@ end
 ---
 ---Read `xkeyboard-config(7)` for more information.
 ---
----### Example
+---#### Example
 ---```lua
 ---Input.set_xkb_config({
 ---    layout = "us,fr,ge",
@@ -240,7 +240,7 @@ end
 
 ---Set the keyboard's repeat rate and delay.
 ---
----### Example
+---#### Example
 ---```lua
 ---Input.set_repeat_rate(100, 1000) -- Key must be held down for 1 second, then repeats 10 times per second.
 ---```
@@ -316,7 +316,7 @@ local tap_button_map_values = {
 ---
 ---This includes settings for pointer devices, like acceleration profiles, natural scroll, and more.
 ---
----### Example
+---#### Example
 ---```lua
 ---Input.set_libinput_settings({
 ---    accel_profile = "flat",

@@ -197,6 +197,7 @@ pub fn capture_snapshots_on_output(
     let fullscreen_and_up =
         under_fullscreen.split_off(split_index.unwrap_or(under_fullscreen.len()));
 
+    #[allow(clippy::mutable_key_type)]
     let also_include = also_include.into_iter().collect::<HashSet<_>>();
 
     let mut flat_map = |win: WindowElement| {

@@ -56,7 +56,7 @@ end
 ---Note 2: If you spawn a window before tags are added it will spawn without any tags and
 ---won't be displayed in the compositor. TODO: Do what awesome does and display on all tags instead
 ---
----### Example
+---#### Example
 ---```lua
 ---Process.spawn("alacritty")
 ---
@@ -103,7 +103,7 @@ end
 ---Set an environment variable for the compositor.
 ---This will cause any future spawned processes to have this environment variable.
 ---
----### Example
+---#### Example
 ---```lua
 ---Process.set_env("ENV_NAME", "the value")
 ---```

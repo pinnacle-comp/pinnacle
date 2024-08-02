@@ -234,7 +234,7 @@ local util = {
 ---You must wrap each request in a function, otherwise they would just get
 ---evaluated at the callsite in a blocking manner.
 ---
----### Example
+---#### Example
 ---```lua
 ---local handles = window.get_all()
 ---

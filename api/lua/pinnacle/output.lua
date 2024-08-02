@@ -7,7 +7,7 @@ local client = require("pinnacle.grpc.client").client
 local output_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1
 local output_service = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1.OutputService
 
----@nodoc
+---@lcat nodoc
 ---@class OutputHandleModule
 local output_handle = {}
 
@@ -29,13 +29,14 @@ local OutputHandle = {}
 ---
 ---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---@class Output
+---@lcat nodoc
 ---@field private handle OutputHandleModule
 local output = {}
 output.handle = output_handle
 
 ---Get all outputs.
 ---
----### Example
+---#### Example
 ---```lua
 ---local outputs = Output.get_all()
 ---```
@@ -63,7 +64,7 @@ end
 
 ---Get all enabled outputs.
 ---
----### Example
+---#### Example
 ---```lua
 ---local outputs = Output.get_all_enabled()
 ---```
@@ -84,7 +85,7 @@ end
 
 ---Get an output by its name (the connector it's plugged into).
 ---
----### Example
+---#### Example
 ---```lua
 ---local output = Output.get_by_name("eDP-1")
 ---```
@@ -107,7 +108,7 @@ end
 ---
 ---This is currently defined as the most recent one that has had pointer motion.
 ---
----### Example
+---#### Example
 ---```lua
 ---local output = Output.get_focused()
 ---```
@@ -135,7 +136,7 @@ end
 ---to prevent duplicate setup. Instead, the compositor keeps track of the tags and other
 ---state associated with that output and restores it when replugged.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Add tags "1" through "5" to all outputs
 ---Output.connect_for_all(function(output)
@@ -184,7 +185,7 @@ end
 ---
 ---`setups` is a table of output identifier strings to `OutputSetup`s.
 ---
----### Keys
+---##### Keys
 ---
 ---Keys attempt to match outputs.
 ---
@@ -194,17 +195,17 @@ end
 ---
 ---Otherwise, keys will attempt to match the exact name of an output.
 ---
----Use "serial:<number>" to match outputs by their EDID serial. For example, "serial:143256".
+---Use `"serial:<number>"` to match outputs by their EDID serial. For example, `"serial:143256"`.
 ---Note that not all displays have EDID serials. Also, serials are not guaranteed to be unique.
 ---If you're unlucky enough to have two displays with the same serial, you'll have to use their names
 ---or filter with wildcards instead.
 ---
----### Setups
+---##### Setups
 ---
 ---If an output is matched, the corresponding `OutputSetup` entry will be applied to it.
 ---Any given `tags` will be added, and things like `transform`s, `scale`s, and `mode`s will be set.
 ---
----### Ordering setups
+---##### Ordering setups
 ---
 ---You may need to specify multiple wildcard matches for different setup applications.
 ---You can't just add another key of `"*"`, because that would overwrite the old `"*"`.
@@ -214,7 +215,7 @@ end
 ---orders above `#setups` may cause their entries to not apply.
 ---
 ---
----### Example
+---#### Example
 ---```lua
 ---Output.setup({
 ---    -- Give all outputs tags 1 through 5
@@ -347,17 +348,17 @@ end
 ---This function lets you declare positions for outputs, either as a specific point in the global
 ---space or relative to another output.
 ---
----### Choosing when to recompute output positions
+---##### Choosing when to recompute output positions
 ---
 ---`update_locs_on` specifies when output positions should be recomputed. It can be `"all"`, signaling you
 ---want positions to update on all of output connect, disconnect, and resize, or it can be a table
 ---containing `"connect"`, `"disconnect"`, and/or `"resize"`.
 ---
----### Specifying locations
+---##### Specifying locations
 ---
 ---`locs` should be a table of output identifiers to locations.
 ---
----#### Output identifiers
+---##### Output identifiers
 ---
 ---Keys for `locs` should be output identifiers. These are strings of
 ---the name of the output, for example "eDP-1" or "HDMI-A-1".
@@ -374,7 +375,7 @@ end
 ---you to specify more than one relative output. The first connected
 ---relative output will be chosen for placement. See the example below.
 ---
----### Example
+---#### Example
 ---```lua
 ---               -- vvvvv Relayout on output connect, disconnect, and resize
 ---Output.setup_locs("all", {
@@ -674,7 +675,7 @@ end
 ---Note: If you have space between two outputs when setting their locations,
 ---the pointer will not be able to move between them.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
 --- --  - "DP-1":   ┌─────┐
@@ -729,7 +730,7 @@ end
 ---For example, "top_align_left" will place this output above `other` and align the left borders.
 ---Similarly, "right_align_center" will place this output to the right of `other` and align their centers.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
 --- --  - "DP-1":   ┌─────┐
@@ -830,7 +831,7 @@ end
 ---
 ---If this output doesn't support the given mode, it will be ignored.
 ---
----### Example
+---#### Example
 ---```lua
 ---Output.get_focused():set_mode(2560, 1440, 144000)
 ---```
@@ -1271,7 +1272,6 @@ function OutputHandle:keyboard_focus_stack_visible()
     return keyboard_focus_stack_visible
 end
 
----@nodoc
 ---Create a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)

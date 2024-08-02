@@ -97,7 +97,11 @@ pub enum OutputConfiguration {
 
 pub trait OutputManagementHandler {
     fn output_management_manager_state(&mut self) -> &mut OutputManagementManagerState;
+    // Output is hashed by Arc::as_ptr, which is immutable
+    #[allow(clippy::mutable_key_type)]
     fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
+    // Output is hashed by Arc::as_ptr, which is immutable
+    #[allow(clippy::mutable_key_type)]
     fn test_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
 }
 
@@ -524,6 +528,8 @@ where
     ) {
         let manager = data_init.init(resource, ());
 
+        // Output is hashed by Arc::as_ptr, which is immutable
+        #[allow(clippy::mutable_key_type)]
         let heads = state
             .output_management_manager_state()
             .outputs
@@ -587,6 +593,7 @@ where
                     return;
                 };
 
+                #[allow(clippy::mutable_key_type)]
                 let pending_heads = manager_data
                     .heads
                     .keys()
@@ -849,6 +856,7 @@ where
                     return;
                 }
 
+                #[allow(clippy::mutable_key_type)]
                 let config = data
                     .pending_heads
                     .iter()

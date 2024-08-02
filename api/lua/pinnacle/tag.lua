@@ -14,7 +14,7 @@ local set_or_toggle = {
     TOGGLE = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
----@nodoc
+---@lcat nodoc
 ---@class TagHandleModule
 local tag_handle = {}
 
@@ -77,7 +77,7 @@ end
 ---
 ---If an output has more than one tag with the same name, this returns the first.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Get tags on the focused output
 ---local tag = Tag.get("Tag")
@@ -123,7 +123,7 @@ end
 ---
 ---Returns handles to the created tags.
 ---
----### Example
+---#### Example
 ---```lua
 ---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
@@ -168,7 +168,7 @@ end
 
 ---Remove the given tags.
 ---
----### Example
+---#### Example
 ---```lua
 ---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
@@ -239,7 +239,7 @@ end
 
 ---Remove this tag.
 ---
----### Example
+---#### Example
 ---```lua
 ---local tags = Tag.add(Output.get_by_name("HDMI-1"), "1", "2", "Buckle", "Shoe")
 ---
@@ -253,7 +253,7 @@ end
 
 ---Activate this tag and deactivate all other ones on the same output.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the following inactive tags and windows:
 --- --  - "1": Alacritty
@@ -272,7 +272,7 @@ end
 
 ---Set whether or not this tag is active.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the following inactive tags and windows:
 --- --  - "1": Alacritty
@@ -297,7 +297,7 @@ end
 
 ---Toggle this tag's active state.
 ---
----### Example
+---#### Example
 ---```lua
 --- -- Assume the focused output has the following inactive tags and windows:
 --- --  - "1": Alacritty
@@ -383,7 +383,6 @@ function TagHandle:windows()
     return self:props().windows
 end
 
----@nodoc
 ---Create a new `TagHandle` from an id.
 ---@param tag_id integer
 ---@return TagHandle
@@ -396,7 +395,6 @@ function tag_handle.new(tag_id)
     return self
 end
 
----@nodoc
 ---@param tag_ids integer[]
 ---@return TagHandle[]
 function tag_handle.new_from_table(tag_ids)

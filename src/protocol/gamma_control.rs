@@ -213,6 +213,8 @@ where
 
             let mut file = File::from(fd);
 
+            // Output is hashed by Arc::as_ptr, which is immutable
+            #[allow(clippy::mutable_key_type)]
             let gamma_controls = &mut state.gamma_control_manager_state().gamma_controls;
 
             if let Err(err) = file.read_exact(buf) {
@@ -276,6 +278,8 @@ where
         resource: &ZwlrGammaControlV1,
         _data: &GammaControlState,
     ) {
+        // Output is hashed by Arc::as_ptr, which is immutable
+        #[allow(clippy::mutable_key_type)]
         let gamma_controls = &mut state.gamma_control_manager_state().gamma_controls;
 
         let Some(output) = gamma_controls

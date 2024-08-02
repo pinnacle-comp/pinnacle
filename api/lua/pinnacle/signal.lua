@@ -7,8 +7,6 @@ local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.Si
 
 local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.StreamControl
 
--- TODO: rewrite ldoc_gen so you don't have to stick @nodoc everywhere
-
 ---@type table<string, { sender: grpc_client.h2.Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
     OutputConnect = {
@@ -130,20 +128,21 @@ end
 
 -----------------------------------------------------------------------------
 
----@nodoc
 ---@class SignalHandleModule
+---@lcat nodoc
 local signal_handle = {}
 
----@classmod
 ---A handle to a connected signal that can be used to disconnect the provided callback.
 ---
 ---@class SignalHandle
+---@lcat nodoc
 ---@field private signal string
+---@lcat nodoc
 ---@field private callback function The callback you connected
 local SignalHandle = {}
 
----@nodoc
 ---@class SignalHandlesModule
+---@lcat nodoc
 local signal_handles = {}
 
 ---A collection of `SignalHandle`s retreived through a `connect_signal` function.
@@ -151,10 +150,10 @@ local signal_handles = {}
 ---@class SignalHandles
 local SignalHandles = {}
 
----@nodoc
 ---@class Signal
 ---@field private handle SignalHandleModule
 ---@field private handles SignalHandlesModule
+---@lcat nodoc
 local signal = {}
 signal.handle = signal_handle
 signal.handles = signal_handles
@@ -178,7 +177,6 @@ function SignalHandle:disconnect()
     end
 end
 
----@nodoc
 ---@return SignalHandle
 function signal_handle.new(request, callback)
     ---@type SignalHandle
@@ -199,7 +197,6 @@ function SignalHandles:disconnect_all()
     end
 end
 
----@nodoc
 ---@param signal_hdls table<string, SignalHandle>
 ---@return SignalHandles
 function signal_handles.new(signal_hdls)
@@ -209,9 +206,9 @@ function signal_handles.new(signal_hdls)
     return self
 end
 
----@nodoc
 ---@param request string
 ---@param callback function
+---@lcat nodoc
 function signal.add_callback(request, callback)
     if #signals[request].callbacks == 0 then
         signal.connect(request, signals[request].on_response)
@@ -220,9 +217,9 @@ function signal.add_callback(request, callback)
     table.insert(signals[request].callbacks, callback)
 end
 
----@nodoc
 ---@param request string
 ---@param callback fun(response: table)
+---@lcat nodoc
 function signal.connect(request, callback)
     local stream = client:bidirectional_streaming_request(signal_service[request], {
         control = stream_control.STREAM_CONTROL_READY,
@@ -250,9 +247,9 @@ function signal.connect(request, callback)
     signals[request].sender = stream
 end
 
----@nodoc
 ---This should only be called when call callbacks for the signal are removed
 ---@param request string
+---@lcat nodoc
 function signal.disconnect(request)
     if signals[request].sender then
         local chunk = require("pinnacle.grpc.protobuf").encode(
