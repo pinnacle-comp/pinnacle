@@ -33,7 +33,7 @@ jobs:
       - name: Generate docs
         run: |
           cd ./lcat
-          cargo run -- --dir "../api/lua"
+          cargo run -- --dir "../api/lua" --base-url "/lua-reference/"
       - name: Push classes
         uses: cpina/github-action-push-to-another-repository@main
         with:
