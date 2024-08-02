@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Ottatop/lcat
-          path: ../lcat
+          path: ./lcat
       - name: Get Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
@@ -30,6 +30,7 @@ jobs:
       #   run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Generate docs
         run: |
+          mv ./lcat ..
           cd ../lcat
           cargo run -- --dir "../pinnacle/api/lua"
       - name: Push classes
