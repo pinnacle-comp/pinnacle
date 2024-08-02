@@ -3,6 +3,8 @@ name: Build and Publish Lua Docs
 on:
   push:
     branches: ["main"]
+    paths:
+      - "api/lua/**"
   workflow_dispatch:
 
 env:
