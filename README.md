@@ -248,10 +248,11 @@ and will set the correct workspace library files for use with the
 [Lua language server](https://github.com/LuaLS/lua-language-server).
 
 ## API references
-<b>Lua: https://pinnacle-comp.github.io/lua-reference/main.<br>
+<b>Lua: https://pinnacle-comp.github.io/lua-reference/.<br>
 Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 
-> Documentation for other branches can be reached by replacing `main` with the branch you want.
+> Documentation for the Rust API can be reached by replacing `main` with the branch you want.
+> Other branches for Lua soon<sup>tm</sup>
 
 # Controls
 > Yes, ctrl is a bad mod key I know, this will be changed to Awesome keybinds soon
