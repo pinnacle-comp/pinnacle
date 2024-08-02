@@ -1,3 +1,5 @@
+---@lcat nodoc
+
 ---@enum pinnacle.signal.v0alpha1.StreamControl
 local pinnacle_signal_v0alpha1_StreamControl = {
     STREAM_CONTROL_UNSPECIFIED = 0,
@@ -95,7 +97,6 @@ local pinnacle_output_v0alpha1_Transform = {
     TRANSFORM_FLIPPED_180 = 7,
     TRANSFORM_FLIPPED_270 = 8,
 }
-
 
 ---@class google.protobuf.Empty
 
@@ -456,7 +457,6 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@field enabled boolean?
 ---@field powered boolean?
 
-
 local google = {}
 google.protobuf = {}
 google.protobuf.Empty = {}
@@ -561,11 +561,16 @@ pinnacle.output.v0alpha1.GetPropertiesResponse = {}
 
 pinnacle.signal.v0alpha1.StreamControl = pinnacle_signal_v0alpha1_StreamControl
 pinnacle.input.v0alpha1.Modifier = pinnacle_input_v0alpha1_Modifier
-pinnacle.input.v0alpha1.SetMousebindRequest.MouseEdge = pinnacle_input_v0alpha1_SetMousebindRequest_MouseEdge
-pinnacle.input.v0alpha1.SetLibinputSettingRequest.AccelProfile = pinnacle_input_v0alpha1_SetLibinputSettingRequest_AccelProfile
-pinnacle.input.v0alpha1.SetLibinputSettingRequest.ClickMethod = pinnacle_input_v0alpha1_SetLibinputSettingRequest_ClickMethod
-pinnacle.input.v0alpha1.SetLibinputSettingRequest.ScrollMethod = pinnacle_input_v0alpha1_SetLibinputSettingRequest_ScrollMethod
-pinnacle.input.v0alpha1.SetLibinputSettingRequest.TapButtonMap = pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap
+pinnacle.input.v0alpha1.SetMousebindRequest.MouseEdge =
+    pinnacle_input_v0alpha1_SetMousebindRequest_MouseEdge
+pinnacle.input.v0alpha1.SetLibinputSettingRequest.AccelProfile =
+    pinnacle_input_v0alpha1_SetLibinputSettingRequest_AccelProfile
+pinnacle.input.v0alpha1.SetLibinputSettingRequest.ClickMethod =
+    pinnacle_input_v0alpha1_SetLibinputSettingRequest_ClickMethod
+pinnacle.input.v0alpha1.SetLibinputSettingRequest.ScrollMethod =
+    pinnacle_input_v0alpha1_SetLibinputSettingRequest_ScrollMethod
+pinnacle.input.v0alpha1.SetLibinputSettingRequest.TapButtonMap =
+    pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap
 pinnacle.v0alpha1.SetOrToggle = pinnacle_v0alpha1_SetOrToggle
 pinnacle.window.v0alpha1.FullscreenOrMaximized = pinnacle_window_v0alpha1_FullscreenOrMaximized
 pinnacle.window.v0alpha1.WindowState = pinnacle_window_v0alpha1_WindowState
@@ -574,75 +579,106 @@ pinnacle.output.v0alpha1.Transform = pinnacle_output_v0alpha1_Transform
 
 pinnacle.signal.v0alpha1.SignalService = {}
 pinnacle.signal.v0alpha1.SignalService.OutputConnect = {}
-pinnacle.signal.v0alpha1.SignalService.OutputConnect.service = "pinnacle.signal.v0alpha1.SignalService"
+pinnacle.signal.v0alpha1.SignalService.OutputConnect.service =
+    "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.OutputConnect.method = "OutputConnect"
-pinnacle.signal.v0alpha1.SignalService.OutputConnect.request = ".pinnacle.signal.v0alpha1.OutputConnectRequest"
-pinnacle.signal.v0alpha1.SignalService.OutputConnect.response = ".pinnacle.signal.v0alpha1.OutputConnectResponse"
+pinnacle.signal.v0alpha1.SignalService.OutputConnect.request =
+    ".pinnacle.signal.v0alpha1.OutputConnectRequest"
+pinnacle.signal.v0alpha1.SignalService.OutputConnect.response =
+    ".pinnacle.signal.v0alpha1.OutputConnectResponse"
 pinnacle.signal.v0alpha1.SignalService.OutputDisconnect = {}
-pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.service = "pinnacle.signal.v0alpha1.SignalService"
+pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.service =
+    "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.method = "OutputDisconnect"
-pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.request = ".pinnacle.signal.v0alpha1.OutputDisconnectRequest"
-pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.response = ".pinnacle.signal.v0alpha1.OutputDisconnectResponse"
+pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.request =
+    ".pinnacle.signal.v0alpha1.OutputDisconnectRequest"
+pinnacle.signal.v0alpha1.SignalService.OutputDisconnect.response =
+    ".pinnacle.signal.v0alpha1.OutputDisconnectResponse"
 pinnacle.signal.v0alpha1.SignalService.OutputResize = {}
-pinnacle.signal.v0alpha1.SignalService.OutputResize.service = "pinnacle.signal.v0alpha1.SignalService"
+pinnacle.signal.v0alpha1.SignalService.OutputResize.service =
+    "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.OutputResize.method = "OutputResize"
-pinnacle.signal.v0alpha1.SignalService.OutputResize.request = ".pinnacle.signal.v0alpha1.OutputResizeRequest"
-pinnacle.signal.v0alpha1.SignalService.OutputResize.response = ".pinnacle.signal.v0alpha1.OutputResizeResponse"
+pinnacle.signal.v0alpha1.SignalService.OutputResize.request =
+    ".pinnacle.signal.v0alpha1.OutputResizeRequest"
+pinnacle.signal.v0alpha1.SignalService.OutputResize.response =
+    ".pinnacle.signal.v0alpha1.OutputResizeResponse"
 pinnacle.signal.v0alpha1.SignalService.OutputMove = {}
 pinnacle.signal.v0alpha1.SignalService.OutputMove.service = "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.OutputMove.method = "OutputMove"
-pinnacle.signal.v0alpha1.SignalService.OutputMove.request = ".pinnacle.signal.v0alpha1.OutputMoveRequest"
-pinnacle.signal.v0alpha1.SignalService.OutputMove.response = ".pinnacle.signal.v0alpha1.OutputMoveResponse"
+pinnacle.signal.v0alpha1.SignalService.OutputMove.request =
+    ".pinnacle.signal.v0alpha1.OutputMoveRequest"
+pinnacle.signal.v0alpha1.SignalService.OutputMove.response =
+    ".pinnacle.signal.v0alpha1.OutputMoveResponse"
 pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter = {}
-pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v0alpha1.SignalService"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.service =
+    "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.method = "WindowPointerEnter"
-pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.request = ".pinnacle.signal.v0alpha1.WindowPointerEnterRequest"
-pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.response = ".pinnacle.signal.v0alpha1.WindowPointerEnterResponse"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.request =
+    ".pinnacle.signal.v0alpha1.WindowPointerEnterRequest"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerEnter.response =
+    ".pinnacle.signal.v0alpha1.WindowPointerEnterResponse"
 pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave = {}
-pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.service = "pinnacle.signal.v0alpha1.SignalService"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.service =
+    "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.method = "WindowPointerLeave"
-pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.request = ".pinnacle.signal.v0alpha1.WindowPointerLeaveRequest"
-pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.response = ".pinnacle.signal.v0alpha1.WindowPointerLeaveResponse"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.request =
+    ".pinnacle.signal.v0alpha1.WindowPointerLeaveRequest"
+pinnacle.signal.v0alpha1.SignalService.WindowPointerLeave.response =
+    ".pinnacle.signal.v0alpha1.WindowPointerLeaveResponse"
 pinnacle.signal.v0alpha1.SignalService.TagActive = {}
 pinnacle.signal.v0alpha1.SignalService.TagActive.service = "pinnacle.signal.v0alpha1.SignalService"
 pinnacle.signal.v0alpha1.SignalService.TagActive.method = "TagActive"
-pinnacle.signal.v0alpha1.SignalService.TagActive.request = ".pinnacle.signal.v0alpha1.TagActiveRequest"
-pinnacle.signal.v0alpha1.SignalService.TagActive.response = ".pinnacle.signal.v0alpha1.TagActiveResponse"
+pinnacle.signal.v0alpha1.SignalService.TagActive.request =
+    ".pinnacle.signal.v0alpha1.TagActiveRequest"
+pinnacle.signal.v0alpha1.SignalService.TagActive.response =
+    ".pinnacle.signal.v0alpha1.TagActiveResponse"
 pinnacle.input.v0alpha1.InputService = {}
 pinnacle.input.v0alpha1.InputService.SetKeybind = {}
 pinnacle.input.v0alpha1.InputService.SetKeybind.service = "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetKeybind.method = "SetKeybind"
-pinnacle.input.v0alpha1.InputService.SetKeybind.request = ".pinnacle.input.v0alpha1.SetKeybindRequest"
-pinnacle.input.v0alpha1.InputService.SetKeybind.response = ".pinnacle.input.v0alpha1.SetKeybindResponse"
+pinnacle.input.v0alpha1.InputService.SetKeybind.request =
+    ".pinnacle.input.v0alpha1.SetKeybindRequest"
+pinnacle.input.v0alpha1.InputService.SetKeybind.response =
+    ".pinnacle.input.v0alpha1.SetKeybindResponse"
 pinnacle.input.v0alpha1.InputService.SetMousebind = {}
 pinnacle.input.v0alpha1.InputService.SetMousebind.service = "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetMousebind.method = "SetMousebind"
-pinnacle.input.v0alpha1.InputService.SetMousebind.request = ".pinnacle.input.v0alpha1.SetMousebindRequest"
-pinnacle.input.v0alpha1.InputService.SetMousebind.response = ".pinnacle.input.v0alpha1.SetMousebindResponse"
+pinnacle.input.v0alpha1.InputService.SetMousebind.request =
+    ".pinnacle.input.v0alpha1.SetMousebindRequest"
+pinnacle.input.v0alpha1.InputService.SetMousebind.response =
+    ".pinnacle.input.v0alpha1.SetMousebindResponse"
 pinnacle.input.v0alpha1.InputService.KeybindDescriptions = {}
-pinnacle.input.v0alpha1.InputService.KeybindDescriptions.service = "pinnacle.input.v0alpha1.InputService"
+pinnacle.input.v0alpha1.InputService.KeybindDescriptions.service =
+    "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.KeybindDescriptions.method = "KeybindDescriptions"
-pinnacle.input.v0alpha1.InputService.KeybindDescriptions.request = ".pinnacle.input.v0alpha1.KeybindDescriptionsRequest"
-pinnacle.input.v0alpha1.InputService.KeybindDescriptions.response = ".pinnacle.input.v0alpha1.KeybindDescriptionsResponse"
+pinnacle.input.v0alpha1.InputService.KeybindDescriptions.request =
+    ".pinnacle.input.v0alpha1.KeybindDescriptionsRequest"
+pinnacle.input.v0alpha1.InputService.KeybindDescriptions.response =
+    ".pinnacle.input.v0alpha1.KeybindDescriptionsResponse"
 pinnacle.input.v0alpha1.InputService.SetXkbConfig = {}
 pinnacle.input.v0alpha1.InputService.SetXkbConfig.service = "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetXkbConfig.method = "SetXkbConfig"
-pinnacle.input.v0alpha1.InputService.SetXkbConfig.request = ".pinnacle.input.v0alpha1.SetXkbConfigRequest"
+pinnacle.input.v0alpha1.InputService.SetXkbConfig.request =
+    ".pinnacle.input.v0alpha1.SetXkbConfigRequest"
 pinnacle.input.v0alpha1.InputService.SetXkbConfig.response = ".google.protobuf.Empty"
 pinnacle.input.v0alpha1.InputService.SetRepeatRate = {}
 pinnacle.input.v0alpha1.InputService.SetRepeatRate.service = "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetRepeatRate.method = "SetRepeatRate"
-pinnacle.input.v0alpha1.InputService.SetRepeatRate.request = ".pinnacle.input.v0alpha1.SetRepeatRateRequest"
+pinnacle.input.v0alpha1.InputService.SetRepeatRate.request =
+    ".pinnacle.input.v0alpha1.SetRepeatRateRequest"
 pinnacle.input.v0alpha1.InputService.SetRepeatRate.response = ".google.protobuf.Empty"
 pinnacle.input.v0alpha1.InputService.SetLibinputSetting = {}
-pinnacle.input.v0alpha1.InputService.SetLibinputSetting.service = "pinnacle.input.v0alpha1.InputService"
+pinnacle.input.v0alpha1.InputService.SetLibinputSetting.service =
+    "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetLibinputSetting.method = "SetLibinputSetting"
-pinnacle.input.v0alpha1.InputService.SetLibinputSetting.request = ".pinnacle.input.v0alpha1.SetLibinputSettingRequest"
+pinnacle.input.v0alpha1.InputService.SetLibinputSetting.request =
+    ".pinnacle.input.v0alpha1.SetLibinputSettingRequest"
 pinnacle.input.v0alpha1.InputService.SetLibinputSetting.response = ".google.protobuf.Empty"
 pinnacle.input.v0alpha1.InputService.SetXcursor = {}
 pinnacle.input.v0alpha1.InputService.SetXcursor.service = "pinnacle.input.v0alpha1.InputService"
 pinnacle.input.v0alpha1.InputService.SetXcursor.method = "SetXcursor"
-pinnacle.input.v0alpha1.InputService.SetXcursor.request = ".pinnacle.input.v0alpha1.SetXcursorRequest"
+pinnacle.input.v0alpha1.InputService.SetXcursor.request =
+    ".pinnacle.input.v0alpha1.SetXcursorRequest"
 pinnacle.input.v0alpha1.InputService.SetXcursor.response = ".google.protobuf.Empty"
 pinnacle.v0alpha1.PinnacleService = {}
 pinnacle.v0alpha1.PinnacleService.Quit = {}
@@ -664,7 +700,8 @@ pinnacle.v0alpha1.PinnacleService.ShutdownWatch = {}
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.service = "pinnacle.v0alpha1.PinnacleService"
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.method = "ShutdownWatch"
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.request = ".pinnacle.v0alpha1.ShutdownWatchRequest"
-pinnacle.v0alpha1.PinnacleService.ShutdownWatch.response = ".pinnacle.v0alpha1.ShutdownWatchResponse"
+pinnacle.v0alpha1.PinnacleService.ShutdownWatch.response =
+    ".pinnacle.v0alpha1.ShutdownWatchResponse"
 pinnacle.layout.v0alpha1.LayoutService = {}
 pinnacle.layout.v0alpha1.LayoutService.Layout = {}
 pinnacle.layout.v0alpha1.LayoutService.Layout.service = "pinnacle.layout.v0alpha1.LayoutService"
@@ -700,8 +737,10 @@ pinnacle.tag.v0alpha1.TagService.Get.response = ".pinnacle.tag.v0alpha1.GetRespo
 pinnacle.tag.v0alpha1.TagService.GetProperties = {}
 pinnacle.tag.v0alpha1.TagService.GetProperties.service = "pinnacle.tag.v0alpha1.TagService"
 pinnacle.tag.v0alpha1.TagService.GetProperties.method = "GetProperties"
-pinnacle.tag.v0alpha1.TagService.GetProperties.request = ".pinnacle.tag.v0alpha1.GetPropertiesRequest"
-pinnacle.tag.v0alpha1.TagService.GetProperties.response = ".pinnacle.tag.v0alpha1.GetPropertiesResponse"
+pinnacle.tag.v0alpha1.TagService.GetProperties.request =
+    ".pinnacle.tag.v0alpha1.GetPropertiesRequest"
+pinnacle.tag.v0alpha1.TagService.GetProperties.response =
+    ".pinnacle.tag.v0alpha1.GetPropertiesResponse"
 pinnacle.process.v0alpha1.ProcessService = {}
 pinnacle.process.v0alpha1.ProcessService.Spawn = {}
 pinnacle.process.v0alpha1.ProcessService.Spawn.service = "pinnacle.process.v0alpha1.ProcessService"
@@ -720,34 +759,44 @@ pinnacle.window.v0alpha1.WindowService.Close.method = "Close"
 pinnacle.window.v0alpha1.WindowService.Close.request = ".pinnacle.window.v0alpha1.CloseRequest"
 pinnacle.window.v0alpha1.WindowService.Close.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetGeometry = {}
-pinnacle.window.v0alpha1.WindowService.SetGeometry.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.SetGeometry.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.SetGeometry.method = "SetGeometry"
-pinnacle.window.v0alpha1.WindowService.SetGeometry.request = ".pinnacle.window.v0alpha1.SetGeometryRequest"
+pinnacle.window.v0alpha1.WindowService.SetGeometry.request =
+    ".pinnacle.window.v0alpha1.SetGeometryRequest"
 pinnacle.window.v0alpha1.WindowService.SetGeometry.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetFullscreen = {}
-pinnacle.window.v0alpha1.WindowService.SetFullscreen.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.SetFullscreen.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.SetFullscreen.method = "SetFullscreen"
-pinnacle.window.v0alpha1.WindowService.SetFullscreen.request = ".pinnacle.window.v0alpha1.SetFullscreenRequest"
+pinnacle.window.v0alpha1.WindowService.SetFullscreen.request =
+    ".pinnacle.window.v0alpha1.SetFullscreenRequest"
 pinnacle.window.v0alpha1.WindowService.SetFullscreen.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetMaximized = {}
-pinnacle.window.v0alpha1.WindowService.SetMaximized.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.SetMaximized.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.SetMaximized.method = "SetMaximized"
-pinnacle.window.v0alpha1.WindowService.SetMaximized.request = ".pinnacle.window.v0alpha1.SetMaximizedRequest"
+pinnacle.window.v0alpha1.WindowService.SetMaximized.request =
+    ".pinnacle.window.v0alpha1.SetMaximizedRequest"
 pinnacle.window.v0alpha1.WindowService.SetMaximized.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetFloating = {}
-pinnacle.window.v0alpha1.WindowService.SetFloating.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.SetFloating.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.SetFloating.method = "SetFloating"
-pinnacle.window.v0alpha1.WindowService.SetFloating.request = ".pinnacle.window.v0alpha1.SetFloatingRequest"
+pinnacle.window.v0alpha1.WindowService.SetFloating.request =
+    ".pinnacle.window.v0alpha1.SetFloatingRequest"
 pinnacle.window.v0alpha1.WindowService.SetFloating.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetFocused = {}
 pinnacle.window.v0alpha1.WindowService.SetFocused.service = "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.SetFocused.method = "SetFocused"
-pinnacle.window.v0alpha1.WindowService.SetFocused.request = ".pinnacle.window.v0alpha1.SetFocusedRequest"
+pinnacle.window.v0alpha1.WindowService.SetFocused.request =
+    ".pinnacle.window.v0alpha1.SetFocusedRequest"
 pinnacle.window.v0alpha1.WindowService.SetFocused.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.MoveToTag = {}
 pinnacle.window.v0alpha1.WindowService.MoveToTag.service = "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.MoveToTag.method = "MoveToTag"
-pinnacle.window.v0alpha1.WindowService.MoveToTag.request = ".pinnacle.window.v0alpha1.MoveToTagRequest"
+pinnacle.window.v0alpha1.WindowService.MoveToTag.request =
+    ".pinnacle.window.v0alpha1.MoveToTagRequest"
 pinnacle.window.v0alpha1.WindowService.MoveToTag.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.SetTag = {}
 pinnacle.window.v0alpha1.WindowService.SetTag.service = "pinnacle.window.v0alpha1.WindowService"
@@ -762,12 +811,14 @@ pinnacle.window.v0alpha1.WindowService.Raise.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.MoveGrab = {}
 pinnacle.window.v0alpha1.WindowService.MoveGrab.service = "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.MoveGrab.method = "MoveGrab"
-pinnacle.window.v0alpha1.WindowService.MoveGrab.request = ".pinnacle.window.v0alpha1.MoveGrabRequest"
+pinnacle.window.v0alpha1.WindowService.MoveGrab.request =
+    ".pinnacle.window.v0alpha1.MoveGrabRequest"
 pinnacle.window.v0alpha1.WindowService.MoveGrab.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.ResizeGrab = {}
 pinnacle.window.v0alpha1.WindowService.ResizeGrab.service = "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.ResizeGrab.method = "ResizeGrab"
-pinnacle.window.v0alpha1.WindowService.ResizeGrab.request = ".pinnacle.window.v0alpha1.ResizeGrabRequest"
+pinnacle.window.v0alpha1.WindowService.ResizeGrab.request =
+    ".pinnacle.window.v0alpha1.ResizeGrabRequest"
 pinnacle.window.v0alpha1.WindowService.ResizeGrab.response = ".google.protobuf.Empty"
 pinnacle.window.v0alpha1.WindowService.Get = {}
 pinnacle.window.v0alpha1.WindowService.Get.service = "pinnacle.window.v0alpha1.WindowService"
@@ -775,31 +826,42 @@ pinnacle.window.v0alpha1.WindowService.Get.method = "Get"
 pinnacle.window.v0alpha1.WindowService.Get.request = ".pinnacle.window.v0alpha1.GetRequest"
 pinnacle.window.v0alpha1.WindowService.Get.response = ".pinnacle.window.v0alpha1.GetResponse"
 pinnacle.window.v0alpha1.WindowService.GetProperties = {}
-pinnacle.window.v0alpha1.WindowService.GetProperties.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.GetProperties.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.GetProperties.method = "GetProperties"
-pinnacle.window.v0alpha1.WindowService.GetProperties.request = ".pinnacle.window.v0alpha1.GetPropertiesRequest"
-pinnacle.window.v0alpha1.WindowService.GetProperties.response = ".pinnacle.window.v0alpha1.GetPropertiesResponse"
+pinnacle.window.v0alpha1.WindowService.GetProperties.request =
+    ".pinnacle.window.v0alpha1.GetPropertiesRequest"
+pinnacle.window.v0alpha1.WindowService.GetProperties.response =
+    ".pinnacle.window.v0alpha1.GetPropertiesResponse"
 pinnacle.window.v0alpha1.WindowService.AddWindowRule = {}
-pinnacle.window.v0alpha1.WindowService.AddWindowRule.service = "pinnacle.window.v0alpha1.WindowService"
+pinnacle.window.v0alpha1.WindowService.AddWindowRule.service =
+    "pinnacle.window.v0alpha1.WindowService"
 pinnacle.window.v0alpha1.WindowService.AddWindowRule.method = "AddWindowRule"
-pinnacle.window.v0alpha1.WindowService.AddWindowRule.request = ".pinnacle.window.v0alpha1.AddWindowRuleRequest"
+pinnacle.window.v0alpha1.WindowService.AddWindowRule.request =
+    ".pinnacle.window.v0alpha1.AddWindowRuleRequest"
 pinnacle.window.v0alpha1.WindowService.AddWindowRule.response = ".google.protobuf.Empty"
 pinnacle.render.v0alpha1.RenderService = {}
 pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter = {}
-pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.service = "pinnacle.render.v0alpha1.RenderService"
+pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.service =
+    "pinnacle.render.v0alpha1.RenderService"
 pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.method = "SetUpscaleFilter"
-pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.request = ".pinnacle.render.v0alpha1.SetUpscaleFilterRequest"
+pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.request =
+    ".pinnacle.render.v0alpha1.SetUpscaleFilterRequest"
 pinnacle.render.v0alpha1.RenderService.SetUpscaleFilter.response = ".google.protobuf.Empty"
 pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter = {}
-pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.service = "pinnacle.render.v0alpha1.RenderService"
+pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.service =
+    "pinnacle.render.v0alpha1.RenderService"
 pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.method = "SetDownscaleFilter"
-pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.request = ".pinnacle.render.v0alpha1.SetDownscaleFilterRequest"
+pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.request =
+    ".pinnacle.render.v0alpha1.SetDownscaleFilterRequest"
 pinnacle.render.v0alpha1.RenderService.SetDownscaleFilter.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService = {}
 pinnacle.output.v0alpha1.OutputService.SetLocation = {}
-pinnacle.output.v0alpha1.OutputService.SetLocation.service = "pinnacle.output.v0alpha1.OutputService"
+pinnacle.output.v0alpha1.OutputService.SetLocation.service =
+    "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.SetLocation.method = "SetLocation"
-pinnacle.output.v0alpha1.OutputService.SetLocation.request = ".pinnacle.output.v0alpha1.SetLocationRequest"
+pinnacle.output.v0alpha1.OutputService.SetLocation.request =
+    ".pinnacle.output.v0alpha1.SetLocationRequest"
 pinnacle.output.v0alpha1.OutputService.SetLocation.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.SetMode = {}
 pinnacle.output.v0alpha1.OutputService.SetMode.service = "pinnacle.output.v0alpha1.OutputService"
@@ -807,24 +869,30 @@ pinnacle.output.v0alpha1.OutputService.SetMode.method = "SetMode"
 pinnacle.output.v0alpha1.OutputService.SetMode.request = ".pinnacle.output.v0alpha1.SetModeRequest"
 pinnacle.output.v0alpha1.OutputService.SetMode.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.SetModeline = {}
-pinnacle.output.v0alpha1.OutputService.SetModeline.service = "pinnacle.output.v0alpha1.OutputService"
+pinnacle.output.v0alpha1.OutputService.SetModeline.service =
+    "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.SetModeline.method = "SetModeline"
-pinnacle.output.v0alpha1.OutputService.SetModeline.request = ".pinnacle.output.v0alpha1.SetModelineRequest"
+pinnacle.output.v0alpha1.OutputService.SetModeline.request =
+    ".pinnacle.output.v0alpha1.SetModelineRequest"
 pinnacle.output.v0alpha1.OutputService.SetModeline.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.SetScale = {}
 pinnacle.output.v0alpha1.OutputService.SetScale.service = "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.SetScale.method = "SetScale"
-pinnacle.output.v0alpha1.OutputService.SetScale.request = ".pinnacle.output.v0alpha1.SetScaleRequest"
+pinnacle.output.v0alpha1.OutputService.SetScale.request =
+    ".pinnacle.output.v0alpha1.SetScaleRequest"
 pinnacle.output.v0alpha1.OutputService.SetScale.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.SetTransform = {}
-pinnacle.output.v0alpha1.OutputService.SetTransform.service = "pinnacle.output.v0alpha1.OutputService"
+pinnacle.output.v0alpha1.OutputService.SetTransform.service =
+    "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.SetTransform.method = "SetTransform"
-pinnacle.output.v0alpha1.OutputService.SetTransform.request = ".pinnacle.output.v0alpha1.SetTransformRequest"
+pinnacle.output.v0alpha1.OutputService.SetTransform.request =
+    ".pinnacle.output.v0alpha1.SetTransformRequest"
 pinnacle.output.v0alpha1.OutputService.SetTransform.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.SetPowered = {}
 pinnacle.output.v0alpha1.OutputService.SetPowered.service = "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.SetPowered.method = "SetPowered"
-pinnacle.output.v0alpha1.OutputService.SetPowered.request = ".pinnacle.output.v0alpha1.SetPoweredRequest"
+pinnacle.output.v0alpha1.OutputService.SetPowered.request =
+    ".pinnacle.output.v0alpha1.SetPoweredRequest"
 pinnacle.output.v0alpha1.OutputService.SetPowered.response = ".google.protobuf.Empty"
 pinnacle.output.v0alpha1.OutputService.Get = {}
 pinnacle.output.v0alpha1.OutputService.Get.service = "pinnacle.output.v0alpha1.OutputService"
@@ -832,13 +900,15 @@ pinnacle.output.v0alpha1.OutputService.Get.method = "Get"
 pinnacle.output.v0alpha1.OutputService.Get.request = ".pinnacle.output.v0alpha1.GetRequest"
 pinnacle.output.v0alpha1.OutputService.Get.response = ".pinnacle.output.v0alpha1.GetResponse"
 pinnacle.output.v0alpha1.OutputService.GetProperties = {}
-pinnacle.output.v0alpha1.OutputService.GetProperties.service = "pinnacle.output.v0alpha1.OutputService"
+pinnacle.output.v0alpha1.OutputService.GetProperties.service =
+    "pinnacle.output.v0alpha1.OutputService"
 pinnacle.output.v0alpha1.OutputService.GetProperties.method = "GetProperties"
-pinnacle.output.v0alpha1.OutputService.GetProperties.request = ".pinnacle.output.v0alpha1.GetPropertiesRequest"
-pinnacle.output.v0alpha1.OutputService.GetProperties.response = ".pinnacle.output.v0alpha1.GetPropertiesResponse"
+pinnacle.output.v0alpha1.OutputService.GetProperties.request =
+    ".pinnacle.output.v0alpha1.GetPropertiesRequest"
+pinnacle.output.v0alpha1.OutputService.GetProperties.response =
+    ".pinnacle.output.v0alpha1.GetPropertiesResponse"
 
 return {
     google = google,
     pinnacle = pinnacle,
 }
-

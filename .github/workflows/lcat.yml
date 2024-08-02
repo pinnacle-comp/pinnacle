@@ -1,0 +1,58 @@
+name: Build and Publish Lua Docs
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SSH_DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY_LUA }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    name: Build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout lcat
+        uses: actions/checkout@v4
+        with:
+          repository: Ottatop/lcat
+          path: ../lcat
+      - name: Get Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache stuff
+        uses: Swatinem/rust-cache@v2
+      # - name: Get dependencies
+      #   run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
+      - name: Generate docs
+        run: |
+          cd ../lcat
+          cargo run -- --dir "../pinnacle/api/lua"
+      - name: Push classes
+        uses: cpina/github-action-push-to-another-repository@main
+        with:
+          source-directory: "../lcat/lcat_out/classes"
+          destination-github-username: "pinnacle-comp"
+          destination-repository-name: "lua-reference"
+          target-branch: main
+          target-directory: classes
+      - name: Push aliases
+        uses: cpina/github-action-push-to-another-repository@main
+        with:
+          source-directory: "../lcat/lcat_out/aliases"
+          destination-github-username: "pinnacle-comp"
+          destination-repository-name: "lua-reference"
+          target-branch: main
+          target-directory: aliases
+      - name: Push enums
+        uses: cpina/github-action-push-to-another-repository@main
+        with:
+          source-directory: "../lcat/lcat_out/enums"
+          destination-github-username: "pinnacle-comp"
+          destination-repository-name: "lua-reference"
+          target-branch: main
+          target-directory: enums

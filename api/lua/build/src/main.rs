@@ -323,7 +323,7 @@ fn main() {
     }
 
     println!(
-        "{}",
+        "---@lcat nodoc\n\n{}",
         generate_enum_definitions(&enums)
             + "\n"
             + &generate_message_classes(&msgs)
