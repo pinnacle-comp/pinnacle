@@ -30,13 +30,12 @@ jobs:
       #   run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev liblua5.4-dev libdisplay-info-dev
       - name: Generate docs
         run: |
-          mv ./lcat ..
-          cd ../lcat
-          cargo run -- --dir "../pinnacle/api/lua"
+          cd ./lcat
+          cargo run -- --dir "../api/lua"
       - name: Push classes
         uses: cpina/github-action-push-to-another-repository@main
         with:
-          source-directory: "../lcat/lcat_out/classes"
+          source-directory: "./lcat/lcat_out/classes"
           destination-github-username: "pinnacle-comp"
           destination-repository-name: "lua-reference"
           target-branch: main
@@ -44,7 +43,7 @@ jobs:
       - name: Push aliases
         uses: cpina/github-action-push-to-another-repository@main
         with:
-          source-directory: "../lcat/lcat_out/aliases"
+          source-directory: "./lcat/lcat_out/aliases"
           destination-github-username: "pinnacle-comp"
           destination-repository-name: "lua-reference"
           target-branch: main
@@ -52,7 +51,7 @@ jobs:
       - name: Push enums
         uses: cpina/github-action-push-to-another-repository@main
         with:
-          source-directory: "../lcat/lcat_out/enums"
+          source-directory: "./lcat/lcat_out/enums"
           destination-github-username: "pinnacle-comp"
           destination-repository-name: "lua-reference"
           target-branch: main
