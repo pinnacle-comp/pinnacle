@@ -6,7 +6,7 @@ members = [
     "wlcs_pinnacle",
     "api/lua/build"
 ]
-exclude = ["snowcap"]
+exclude = ["snowcap", "lcat"]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
