@@ -6,7 +6,10 @@ members = [
     "wlcs_pinnacle",
     "api/lua/build"
 ]
-exclude = ["snowcap", "lcat"]
+exclude = [
+    "snowcap", # Submodule
+    "lcat", # The docs building repo is currently cloned into this repo in CI
+]
 
 [workspace.package]
 authors = ["Ottatop <ottatop1227@gmail.com>"]
@@ -28,7 +31,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"]
 # API definitions
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 # Misc.
-xkbcommon = "0.7.0"
+xkbcommon = "0.8.0"
 xdg = "2.5.2"
 bitflags = "2.5.0"
 clap = { version = "4.5.7", features = ["derive"] }
@@ -38,7 +41,7 @@ indexmap = "2.2.6"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "5854e03"
+rev = "e7f0857"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -69,6 +72,7 @@ too_many_arguments = "allow"
 new_without_default = "allow"
 type_complexity = "allow"
 let_and_return = "allow"
+dbg_macro = "warn"
 
 ########################################################################yo😎###########
 
@@ -86,7 +90,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "5854e03" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "e7f0857" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -115,7 +119,7 @@ shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.1", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
-sysinfo = "0.30.12"
+sysinfo = "0.31.2"
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
 chrono = "0.4.38"
@@ -130,7 +134,7 @@ snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
 
 [build-dependencies]
-vergen = { version = "8.3.1", features = ["git", "gitcl", "rustc", "cargo", "si"] }
+vergen-gitcl = { version = "1.0.0", features = ["rustc", "cargo", "si"] }
 
 [dev-dependencies]
 temp-env = "0.3.6"

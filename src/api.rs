@@ -43,7 +43,7 @@ use smithay::{
     output::Scale,
     reexports::{calloop, input as libinput},
 };
-use sysinfo::ProcessRefreshKind;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
 use tokio::{
     io::AsyncBufReadExt,
     sync::mpsc::{unbounded_channel, UnboundedSender},
@@ -655,13 +655,13 @@ impl process_service_server::ProcessService for ProcessService {
                 state
                     .pinnacle
                     .system_processes
-                    .refresh_processes_specifics(ProcessRefreshKind::new());
+                    .refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
 
                 let compositor_pid = std::process::id();
                 let already_running = state
                     .pinnacle
                     .system_processes
-                    .processes_by_exact_name(&arg0)
+                    .processes_by_exact_name(arg0.as_ref())
                     .any(|proc| {
                         proc.parent()
                             .is_some_and(|parent_pid| parent_pid.as_u32() == compositor_pid)

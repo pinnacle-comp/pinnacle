@@ -34,7 +34,7 @@ use smithay::{
     reexports::calloop::{self, channel::Event, LoopHandle, RegistrationToken},
     utils::{Logical, Point},
 };
-use sysinfo::ProcessRefreshKind;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     task::JoinHandle,
@@ -580,7 +580,7 @@ impl Pinnacle {
 
     pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
         self.system_processes
-            .refresh_processes_specifics(ProcessRefreshKind::new());
+            .refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
 
         std::fs::create_dir_all(socket_dir)?;
 
