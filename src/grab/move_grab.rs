@@ -78,7 +78,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             let tag_output = self.window.output(&state.pinnacle);
             if let Some(focused_output) = state.pinnacle.focused_output() {
                 if Some(focused_output) != tag_output.as_ref() {
-                    self.window.place_on_output(focused_output);
+                    state
+                        .pinnacle
+                        .place_window_on_output(&self.window, focused_output);
                 }
             }
 
@@ -118,7 +120,9 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                         state.capture_snapshots_on_output(tag_output, []);
                     }
 
-                    self.window.place_on_output(&focused_output);
+                    state
+                        .pinnacle
+                        .place_window_on_output(&self.window, &focused_output);
 
                     state.pinnacle.begin_layout_transaction(&focused_output);
                     state.pinnacle.request_layout(&focused_output);

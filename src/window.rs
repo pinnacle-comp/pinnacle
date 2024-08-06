@@ -163,30 +163,6 @@ impl WindowElement {
         })
     }
 
-    /// Place this window on the given output, giving it the output's focused tags.
-    ///
-    /// RefCell Safety: Uses `with_state_mut` on the window and `with_state` on the output
-    pub fn place_on_output(&self, output: &Output) {
-        self.with_state_mut(|state| {
-            state.tags = output.with_state(|state| {
-                let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
-                if !output_tags.is_empty() {
-                    output_tags
-                } else if let Some(first_tag) = state.tags.first() {
-                    std::iter::once(first_tag.clone()).collect()
-                } else {
-                    IndexSet::new()
-                }
-            });
-
-            tracing::debug!(
-                "Placed window on {} with tags {:?}",
-                output.name(),
-                state.tags
-            );
-        });
-    }
-
     pub fn is_x11_override_redirect(&self) -> bool {
         matches!(self.x11_surface(), Some(surface) if surface.is_override_redirect())
     }
@@ -316,5 +292,39 @@ impl Pinnacle {
         }
 
         self.space.unmap_elem(window);
+    }
+
+    /// Places a window on an output by setting the window's tags to the output's
+    /// currently active tags.
+    ///
+    /// Additionally sets the window as the output's current keyboard-focused window as well as removing it
+    /// from all other outputs' keyboard focus stack.
+    pub fn place_window_on_output(&self, window: &WindowElement, output: &Output) {
+        window.with_state_mut(|state| {
+            state.tags = output.with_state(|state| {
+                let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
+                if !output_tags.is_empty() {
+                    output_tags
+                } else if let Some(first_tag) = state.tags.first() {
+                    std::iter::once(first_tag.clone()).collect()
+                } else {
+                    IndexSet::new()
+                }
+            });
+
+            tracing::debug!(
+                "Placed window on {} with tags {:?}",
+                output.name(),
+                state.tags
+            );
+        });
+
+        for op in self.outputs.keys() {
+            op.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
+        }
+
+        output.with_state_mut(|state| {
+            state.focus_stack.set_focus(window.clone());
+        });
     }
 }

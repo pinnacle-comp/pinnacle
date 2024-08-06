@@ -51,7 +51,7 @@ impl XwmHandler for State {
         let window = WindowElement::new(Window::new_x11_window(surface));
 
         if let Some(output) = self.pinnacle.focused_output() {
-            window.place_on_output(output);
+            self.pinnacle.place_window_on_output(&window, output)
         }
 
         self.pinnacle.apply_window_rules(&window);
@@ -150,10 +150,7 @@ impl XwmHandler for State {
         self.pinnacle.windows.push(window.clone());
 
         if let Some(output) = self.pinnacle.focused_output() {
-            window.place_on_output(output);
-            // FIXME: setting focus here may possibly muck things up
-            // |      or maybe they won't idk
-            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+            self.pinnacle.place_window_on_output(&window, output);
         }
 
         self.pinnacle.space.map_element(window.clone(), loc, true);

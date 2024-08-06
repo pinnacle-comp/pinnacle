@@ -287,7 +287,8 @@ impl CompositorHandler for State {
                     }
                 } else {
                     if let Some(output) = self.pinnacle.focused_output().cloned() {
-                        unmapped_window.place_on_output(&output);
+                        self.pinnacle
+                            .place_window_on_output(&unmapped_window, &output);
                     }
                     self.pinnacle.apply_window_rules(&unmapped_window);
 
