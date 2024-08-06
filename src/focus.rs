@@ -86,7 +86,7 @@ impl Pinnacle {
         self.z_index_stack.retain(|win| win != window);
         self.z_index_stack.push(window);
 
-        self.fixup_xwayland_window_layering();
+        self.update_xwayland_stacking_order();
     }
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.

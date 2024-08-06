@@ -359,7 +359,7 @@ impl window_service_server::WindowService for WindowService {
 
             state.schedule_render(&output);
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
         })
         .await
     }
@@ -427,7 +427,7 @@ impl window_service_server::WindowService for WindowService {
 
             state.schedule_render(&output);
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
         })
         .await
     }

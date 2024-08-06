@@ -138,6 +138,7 @@ pub struct Pinnacle {
     pub input_state: InputState,
 
     pub output_focus_stack: OutputFocusStack,
+    /// The z-index stack, bottom to top
     pub z_index_stack: Vec<WindowElement>,
 
     pub popup_manager: PopupManager,

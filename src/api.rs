@@ -856,7 +856,7 @@ impl tag_service_server::TagService for TagService {
                 });
             }
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
 
             state.pinnacle.begin_layout_transaction(&output);
             state.pinnacle.request_layout(&output);
@@ -909,7 +909,7 @@ impl tag_service_server::TagService for TagService {
                 }
             });
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
 
             state.pinnacle.begin_layout_transaction(&output);
             state.pinnacle.request_layout(&output);
@@ -957,7 +957,7 @@ impl tag_service_server::TagService for TagService {
                 });
             }
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
 
             AddResponse { tag_ids }
         })
@@ -999,7 +999,7 @@ impl tag_service_server::TagService for TagService {
                 }
             }
 
-            state.pinnacle.fixup_xwayland_window_layering();
+            state.pinnacle.update_xwayland_stacking_order();
         })
         .await
     }

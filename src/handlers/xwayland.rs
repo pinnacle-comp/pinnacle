@@ -452,23 +452,26 @@ impl State {
 }
 
 impl Pinnacle {
-    pub fn fixup_xwayland_window_layering(&mut self) {
+    pub fn update_xwayland_stacking_order(&mut self) {
         let Some(xwm) = self.xwm.as_mut() else {
             return;
         };
 
-        let x11_wins = self
-            .windows
+        let (active_windows, non_active_windows) = self
+            .z_index_stack
             .iter()
-            .filter(|win| win.is_on_active_tag())
-            .filter_map(|win| win.x11_surface())
-            .cloned()
-            .collect::<Vec<_>>();
+            .filter(|win| !win.is_x11_override_redirect())
+            .partition::<Vec<_>, _>(|win| win.is_on_active_tag());
 
-        for x11_win in x11_wins {
-            if let Err(err) = xwm.raise_window(&x11_win) {
-                warn!("Failed to raise xwayland window: {err}");
-            }
+        let active_windows = active_windows.into_iter().flat_map(|win| win.x11_surface());
+        let non_active_windows = non_active_windows
+            .into_iter()
+            .flat_map(|win| win.x11_surface());
+
+        if let Err(err) =
+            xwm.update_stacking_order_upwards(non_active_windows.chain(active_windows))
+        {
+            warn!("Failed to update xwayland stacking order: {err}");
         }
     }
 }
