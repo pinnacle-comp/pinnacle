@@ -9,19 +9,20 @@ require("pinnacle").setup(function(Pinnacle)
     local Util = Pinnacle.util
     local Snowcap = Pinnacle.snowcap
 
+    -- `Snowcap` will be nil when the Snowcap API isn't installed or Snowcap isn't running
+    -- A normal installation of Pinnacle won't have this issue, so you can remove this cast if desired.
+    ---@cast Snowcap +?
+
     local key = Input.key
 
     ---@type Modifier
-    local mod_key = "ctrl"
+    local mod_key = "super"
+    -- Change the mod key to "alt" when running as a nested window
+    if Pinnacle.backend() == "window" then
+        mod_key = "alt"
+    end
 
     local terminal = "alacritty"
-
-    Input.keybind({ mod_key }, "s", function()
-        Snowcap.integration.keybind_overlay():show()
-    end, {
-        group = "Compositor",
-        description = "Show the keybind overlay",
-    })
 
     --------------------
     -- Mousebinds     --
@@ -39,24 +40,38 @@ require("pinnacle").setup(function(Pinnacle)
     -- Keybinds       --
     --------------------
 
-    -- mod_key + alt + q = Quit Pinnacle
-    Input.keybind({ mod_key, "alt" }, "q", function()
-        Snowcap.integration.quit_prompt():show()
+    -- mod_key + s shows the keybind overlay
+    if Snowcap then
+        Input.keybind({ mod_key }, "s", function()
+            Snowcap.integration.keybind_overlay():show()
+        end, {
+            group = "Compositor",
+            description = "Show the keybind overlay",
+        })
+    end
+
+    -- mod_key + shift + q = Quit Pinnacle
+    Input.keybind({ mod_key, "shift" }, "q", function()
+        if Snowcap then
+            Snowcap.integration.quit_prompt():show()
+        else
+            Pinnacle.quit()
+        end
     end, {
         group = "Compositor",
         description = "Quit Pinnacle",
     })
 
-    -- mod_key + alt + r = Reload config
-    Input.keybind({ mod_key, "alt" }, "r", function()
+    -- mod_key + ctrl + r = Reload config
+    Input.keybind({ mod_key, "ctrl" }, "r", function()
         Pinnacle.reload_config()
     end, {
         group = "Compositor",
         description = "Reload the config",
     })
 
-    -- mod_key + alt + c = Close window
-    Input.keybind({ mod_key, "alt" }, "c", function()
+    -- mod_key + shift + c = Close window
+    Input.keybind({ mod_key, "shift" }, "c", function()
         local focused = Window.get_focused()
         if focused then
             focused:close()
@@ -66,7 +81,7 @@ require("pinnacle").setup(function(Pinnacle)
         description = "Close the focused window",
     })
 
-    -- mod_key + alt + Return = Spawn `terminal`
+    -- mod_key + Return = Spawn `terminal`
     Input.keybind({ mod_key }, key.Return, function()
         Process.spawn(terminal)
     end, {
@@ -74,8 +89,8 @@ require("pinnacle").setup(function(Pinnacle)
         description = "Spawn `alacritty`",
     })
 
-    -- mod_key + alt + space = Toggle floating
-    Input.keybind({ mod_key, "alt" }, key.space, function()
+    -- mod_key + ctrl + space = Toggle floating
+    Input.keybind({ mod_key, "ctrl" }, key.space, function()
         local focused = Window.get_focused()
         if focused then
             focused:toggle_floating()
@@ -143,16 +158,16 @@ require("pinnacle").setup(function(Pinnacle)
             description = "Switch to tag " .. tag_name,
         })
 
-        -- mod_key + shift + 1-5 = Toggle tags 1-5
-        Input.keybind({ mod_key, "shift" }, tag_name, function()
+        -- mod_key + ctrl + 1-5 = Toggle tags 1-5
+        Input.keybind({ mod_key, "ctrl" }, tag_name, function()
             Tag.get(tag_name):toggle_active()
         end, {
             group = "Tag",
             description = "Toggle tag " .. tag_name,
         })
 
-        -- mod_key + alt + 1-5 = Move window to tags 1-5
-        Input.keybind({ mod_key, "alt" }, tag_name, function()
+        -- mod_key + shift + 1-5 = Move window to tags 1-5
+        Input.keybind({ mod_key, "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
                 focused:move_to_tag(Tag.get(tag_name) --[[@as TagHandle]])
@@ -162,8 +177,8 @@ require("pinnacle").setup(function(Pinnacle)
             description = "Move the focused window to tag " .. tag_name,
         })
 
-        -- mod_key + shift + alt + 1-5 = Toggle tags 1-5 on window
-        Input.keybind({ mod_key, "shift", "alt" }, tag_name, function()
+        -- mod_key + ctrl + shift + 1-5 = Toggle tags 1-5 on window
+        Input.keybind({ mod_key, "ctrl", "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
                 focused:toggle_tag(Tag.get(tag_name) --[[@as TagHandle]])
@@ -317,7 +332,7 @@ require("pinnacle").setup(function(Pinnacle)
         end,
     })
 
-    -- Request all windows to use client-side decorations
+    -- Request all windows use client-side decorations
     Window.add_window_rule({
         cond = {
             all = {},

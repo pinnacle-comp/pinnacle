@@ -19,13 +19,14 @@ use pinnacle_api_defs::pinnacle::input::{
 };
 use tokio_stream::StreamExt;
 use tracing::error;
-use xkbcommon::xkb::Keysym;
 
 use crate::block_on_tokio;
 
 use self::libinput::LibinputSetting;
 
 pub mod libinput;
+
+pub use xkbcommon::xkb::Keysym;
 
 /// A mouse button.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

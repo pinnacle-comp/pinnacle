@@ -61,6 +61,13 @@ local pinnacle_v0alpha1_SetOrToggle = {
     SET_OR_TOGGLE_TOGGLE = 3,
 }
 
+---@enum pinnacle.v0alpha1.Backend
+local pinnacle_v0alpha1_Backend = {
+    BACKEND_UNSPECIFIED = 0,
+    BACKEND_WINDOW = 1,
+    BACKEND_TTY = 2,
+}
+
 ---@enum pinnacle.window.v0alpha1.FullscreenOrMaximized
 local pinnacle_window_v0alpha1_FullscreenOrMaximized = {
     FULLSCREEN_OR_MAXIMIZED_UNSPECIFIED = 0,
@@ -231,6 +238,11 @@ local pinnacle_output_v0alpha1_Transform = {
 ---@class pinnacle.v0alpha1.ShutdownWatchRequest
 
 ---@class pinnacle.v0alpha1.ShutdownWatchResponse
+
+---@class pinnacle.v0alpha1.BackendRequest
+
+---@class pinnacle.v0alpha1.BackendResponse
+---@field backend pinnacle.v0alpha1.Backend?
 
 ---@class pinnacle.layout.v0alpha1.LayoutRequest
 ---@field geometries pinnacle.layout.v0alpha1.LayoutRequest.Geometries?
@@ -501,6 +513,8 @@ pinnacle.v0alpha1.PingRequest = {}
 pinnacle.v0alpha1.PingResponse = {}
 pinnacle.v0alpha1.ShutdownWatchRequest = {}
 pinnacle.v0alpha1.ShutdownWatchResponse = {}
+pinnacle.v0alpha1.BackendRequest = {}
+pinnacle.v0alpha1.BackendResponse = {}
 pinnacle.layout = {}
 pinnacle.layout.v0alpha1 = {}
 pinnacle.layout.v0alpha1.LayoutRequest = {}
@@ -569,6 +583,7 @@ pinnacle.input.v0alpha1.SetLibinputSettingRequest.ClickMethod = pinnacle_input_v
 pinnacle.input.v0alpha1.SetLibinputSettingRequest.ScrollMethod = pinnacle_input_v0alpha1_SetLibinputSettingRequest_ScrollMethod
 pinnacle.input.v0alpha1.SetLibinputSettingRequest.TapButtonMap = pinnacle_input_v0alpha1_SetLibinputSettingRequest_TapButtonMap
 pinnacle.v0alpha1.SetOrToggle = pinnacle_v0alpha1_SetOrToggle
+pinnacle.v0alpha1.Backend = pinnacle_v0alpha1_Backend
 pinnacle.window.v0alpha1.FullscreenOrMaximized = pinnacle_window_v0alpha1_FullscreenOrMaximized
 pinnacle.window.v0alpha1.WindowState = pinnacle_window_v0alpha1_WindowState
 pinnacle.render.v0alpha1.Filter = pinnacle_render_v0alpha1_Filter
@@ -667,6 +682,11 @@ pinnacle.v0alpha1.PinnacleService.ShutdownWatch.service = "pinnacle.v0alpha1.Pin
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.method = "ShutdownWatch"
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.request = ".pinnacle.v0alpha1.ShutdownWatchRequest"
 pinnacle.v0alpha1.PinnacleService.ShutdownWatch.response = ".pinnacle.v0alpha1.ShutdownWatchResponse"
+pinnacle.v0alpha1.PinnacleService.Backend = {}
+pinnacle.v0alpha1.PinnacleService.Backend.service = "pinnacle.v0alpha1.PinnacleService"
+pinnacle.v0alpha1.PinnacleService.Backend.method = "Backend"
+pinnacle.v0alpha1.PinnacleService.Backend.request = ".pinnacle.v0alpha1.BackendRequest"
+pinnacle.v0alpha1.PinnacleService.Backend.response = ".pinnacle.v0alpha1.BackendResponse"
 pinnacle.layout.v0alpha1.LayoutService = {}
 pinnacle.layout.v0alpha1.LayoutService.Layout = {}
 pinnacle.layout.v0alpha1.LayoutService.Layout.service = "pinnacle.layout.v0alpha1.LayoutService"

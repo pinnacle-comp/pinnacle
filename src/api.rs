@@ -5,6 +5,7 @@ pub mod window;
 use std::{ffi::OsString, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
+    self,
     input::v0alpha1::{
         input_service_server,
         set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
@@ -33,8 +34,8 @@ use pinnacle_api_defs::pinnacle::{
         },
     },
     v0alpha1::{
-        pinnacle_service_server, PingRequest, PingResponse, QuitRequest, ReloadConfigRequest,
-        SetOrToggle, ShutdownWatchRequest, ShutdownWatchResponse,
+        pinnacle_service_server, BackendRequest, BackendResponse, PingRequest, PingResponse,
+        QuitRequest, ReloadConfigRequest, SetOrToggle, ShutdownWatchRequest, ShutdownWatchResponse,
     },
 };
 use smithay::{
@@ -236,6 +237,26 @@ impl pinnacle_service_server::PinnacleService for PinnacleService {
             state.pinnacle.config.shutdown_sender.replace(sender);
         })
     }
+
+    async fn backend(
+        &self,
+        _request: Request<BackendRequest>,
+    ) -> Result<Response<BackendResponse>, Status> {
+        run_unary(&self.sender, |state| {
+            let backend = match &state.backend {
+                crate::backend::Backend::Winit(_) => pinnacle::v0alpha1::Backend::Window,
+                crate::backend::Backend::Udev(_) => pinnacle::v0alpha1::Backend::Tty,
+                #[cfg(feature = "testing")]
+                crate::backend::Backend::Dummy(_) => pinnacle::v0alpha1::Backend::Tty, // unused
+            };
+
+            let mut response = BackendResponse::default();
+            response.set_backend(backend);
+
+            response
+        })
+        .await
+    }
 }
 
 pub struct InputService {
@@ -263,19 +284,11 @@ impl input_service_server::InputService for InputService {
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
-                    acc | ModifierMask::SHIFT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
-                    acc | ModifierMask::CTRL
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
-                    acc | ModifierMask::ALT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
-                    acc | ModifierMask::SUPER
-                }
+                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
+                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
+                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
+                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
             });
         let key = request
             .key
@@ -331,19 +344,11 @@ impl input_service_server::InputService for InputService {
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
-                    acc | ModifierMask::SHIFT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
-                    acc | ModifierMask::CTRL
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
-                    acc | ModifierMask::ALT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
-                    acc | ModifierMask::SUPER
-                }
+                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
+                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
+                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
+                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
             });
         let button = request
             .button
@@ -847,12 +852,10 @@ impl tag_service_server::TagService for TagService {
 
             if tag.set_active(active) {
                 state.pinnacle.signal_state.tag_active.signal(|buf| {
-                    buf.push_back(
-                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                            tag_id: Some(tag.id().to_inner()),
-                            active: Some(active),
-                        },
-                    );
+                    buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
+                        tag_id: Some(tag.id().to_inner()),
+                        active: Some(active),
+                    });
                 });
             }
 
@@ -888,23 +891,19 @@ impl tag_service_server::TagService for TagService {
                 for op_tag in op_state.tags.iter() {
                     if op_tag.set_active(false) {
                         state.pinnacle.signal_state.tag_active.signal(|buf| {
-                            buf.push_back(
-                                pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                    tag_id: Some(op_tag.id().to_inner()),
-                                    active: Some(false),
-                                },
-                            );
+                            buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
+                                tag_id: Some(op_tag.id().to_inner()),
+                                active: Some(false),
+                            });
                         });
                     }
                 }
                 if tag.set_active(true) {
                     state.pinnacle.signal_state.tag_active.signal(|buf| {
-                        buf.push_back(
-                            pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                tag_id: Some(tag.id().to_inner()),
-                                active: Some(true),
-                            },
-                        );
+                        buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
+                            tag_id: Some(tag.id().to_inner()),
+                            active: Some(true),
+                        });
                     });
                 }
             });

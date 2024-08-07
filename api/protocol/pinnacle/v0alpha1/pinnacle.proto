@@ -11,7 +11,6 @@ message Geometry {
   optional int32 height = 4;
 }
 
-// NOTE TO SELF: If you change this you MUST change the mappings in the Lua API
 enum SetOrToggle {
   SET_OR_TOGGLE_UNSPECIFIED = 0;
   SET_OR_TOGGLE_SET = 1;
@@ -39,9 +38,22 @@ message PingResponse {
 message ShutdownWatchRequest {}
 message ShutdownWatchResponse {}
 
+enum Backend {
+  BACKEND_UNSPECIFIED = 0;
+  BACKEND_WINDOW = 1;
+  BACKEND_TTY = 2;
+}
+
+message BackendRequest {}
+message BackendResponse {
+  optional Backend backend = 1;
+}
+
 service PinnacleService {
   rpc Quit(QuitRequest) returns (google.protobuf.Empty);
   rpc ReloadConfig(ReloadConfigRequest) returns (google.protobuf.Empty);
   rpc Ping(PingRequest) returns (PingResponse);
   rpc ShutdownWatch(ShutdownWatchRequest) returns (stream ShutdownWatchResponse);
+  // Gets the currently running backend.
+  rpc Backend(BackendRequest) returns (BackendResponse);
 }

@@ -49,6 +49,32 @@ function pinnacle.reload_config()
     end
 end
 
+---Gets the currently running backend.
+---
+---@return "tty" | "window" `"tty"` if Pinnacle is running in a tty, or `"window"` if it's running in a nested window
+function pinnacle.backend()
+    local response, err = client:unary_request(pinnacle_service.Backend, {})
+
+    if err then
+        log:error(err)
+        -- TODO: possibly panic here; a nil index error will be thrown after this anyway
+    end
+
+    ---@cast response pinnacle.v0alpha1.BackendResponse
+
+    local defs = require("pinnacle.grpc.defs")
+
+    if response.backend == defs.pinnacle.v0alpha1.Backend.BACKEND_WINDOW then
+        return "window"
+    else
+        return "tty"
+    end
+end
+
+---Initializes the protobuf backend and connects to Pinnacle's gRPC socket.
+---
+---If the Snowcap Lua API is installed and Snowcap is running, this will also setup Snowcap and
+---connect to its socket as well.
 function pinnacle.init()
     require("pinnacle.grpc.protobuf").build_protos()
 

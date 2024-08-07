@@ -130,7 +130,6 @@ pub use pinnacle_api_macros::config;
 #[cfg(feature = "snowcap")]
 pub use snowcap_api;
 pub use tokio;
-pub use xkbcommon;
 
 // These are all `RwLock<Option>` instead of `OnceLock` purely for the fact that
 // tonic doesn't like it when you use clients across tokio runtimes, and these are static

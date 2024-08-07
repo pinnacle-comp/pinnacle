@@ -172,13 +172,9 @@ just install run -- -c ./api/lua/examples/default
 cargo run -- -c ./api/rust/examples/default_config
 ```
 
-When running without compiled Snowcap integration,
-use the following directories instead:
+When running a Rust config without compiled Snowcap integration,
+use the following directory instead (Lua users can use the same directory):
 ```sh
-# Lua
-just install run -- -c ./api/lua/examples/default_no_snowcap
-
-# Rust
 cargo run -- -c ./api/rust/examples/default_config_no_snowcap
 ```
 
@@ -205,8 +201,8 @@ Note that this currently copies default configs *with* Snowcap integration.
 Run `cargo run -- config gen --help` for information on the command.
 
 ## More on configuration
-Pinnacle is configured purely through IPC using [gRPC](https://grpc.io/). This is done through
-configuration clients that use the [Lua](api/lua) and [Rust](api/rust) interface libraries.
+Pinnacle is configured mostly at runtime through IPC using [gRPC](https://grpc.io/). This is done through
+configuration clients that use the [Lua](api/lua) and [Rust](api/rust) APIs.
 
 As the compositor has no direct integration with these clients, it must know what it needs to run
 through a separate file, aptly called the `metaconfig.toml` file.
@@ -225,8 +221,8 @@ Rust config.
 Additionally, if your config crashes, Pinnacle will also start the embedded Rust config.
 
 > [!NOTE]
-> If you have not run `eval $(luarocks path --lua-version <your-lua-version>)`, Pinnacle will fallback to the
-> embedded Rust config.
+> If you are using a Lua config and have not run `eval $(luarocks path --lua-version <your-lua-version>)`,
+> Pinnacle will fallback to the embedded Rust config.
 
 ### The `metaconfig.toml` file
 A `metaconfig.toml` file must contain the following entries:
@@ -255,26 +251,29 @@ Rust: https://pinnacle-comp.github.io/rust-reference/main.</b>
 > Other branches for Lua soon<sup>tm</sup>
 
 # Controls
-> Yes, ctrl is a bad mod key I know, this will be changed to Awesome keybinds soon
 
-The following are the default controls in the [`default_config`](api/rust/examples/default_config/main.rs).
-| Binding                                      | Action                             |
-|----------------------------------------------|------------------------------------|
-| <kbd>Ctrl</kbd> + <kbd>s</kbd>               | Show the keybind overlay           |
-| <kbd>Ctrl</kbd> + <kbd>Mouse left drag</kbd> | Move window                        |
-| <kbd>Ctrl</kbd> + <kbd>Mouse right drag</kbd>| Resize window                      |
-| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>q</kbd> | Quit Pinnacle                      |
-| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>c</kbd> | Close window                       |
-| <kbd>Ctrl</kbd> + <kbd>Return</kbd>          | Spawn [Alacritty](https://github.com/alacritty/alacritty) (you can change this in the config)|
-| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>Space</kbd> | Toggle between floating and tiled |
-| <kbd>Ctrl</kbd> + <kbd>f</kbd>     | Toggle fullscreen        |
-| <kbd>Ctrl</kbd> + <kbd>m</kbd>     | Toggle maximized         |
-| <kbd>Ctrl</kbd> + <kbd>Space</kbd> | Cycle to the next layout |
-| <kbd>Ctrl</kbd><kbd>Shift</kbd> + <kbd>Space</kbd>                           | Cycle to the previous layout      |
-| <kbd>Ctrl</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                               | Switch to tag `1` to `5`          |
-| <kbd>Ctrl</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd>               | Toggle tag `1` to `5`             |
-| <kbd>Ctrl</kbd><kbd>Alt</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                 | Move a window to tag `1` to `5`   |
-| <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd> | Toggle tag `1` to `5` on a window |
+The following are the default controls, mirroring Awesome's defaults.
+
+<kbd>Mod</kbd> is <kbd>Super</kbd> when running in a tty and <kbd>Alt</kbd> when running as a nested window.
+
+| Binding                                                                      | Action                            |
+|------------------------------------------------------------------------------|-----------------------------------|
+| <kbd>Mod</kbd> + <kbd>s</kbd>                                                | Show the keybind overlay          |
+| <kbd>Mod</kbd> + <kbd>Mouse left drag</kbd>                                  | Move window                       |
+| <kbd>Mod</kbd> + <kbd>Mouse right drag</kbd>                                 | Resize window                     |
+| <kbd>Mod</kbd><kbd>Shift</kbd> + <kbd>q</kbd>                                | Quit Pinnacle                     |
+| <kbd>Mod</kbd><kbd>Ctrl</kbd> + <kbd>r</kbd>                                 | Reload the config                 |
+| <kbd>Mod</kbd><kbd>Shift</kbd> + <kbd>c</kbd>                                | Close window                      |
+| <kbd>Mod</kbd> + <kbd>Return</kbd>                                           | Spawn [Alacritty](https://github.com/alacritty/alacritty) (you can change this in the config) |
+| <kbd>Mod</kbd><kbd>Ctrl</kbd> + <kbd>Space</kbd>                             | Toggle floating                   |
+| <kbd>Mod</kbd> + <kbd>f</kbd>                                                | Toggle fullscreen                 |
+| <kbd>Mod</kbd> + <kbd>m</kbd>                                                | Toggle maximized                  |
+| <kbd>Mod</kbd> + <kbd>Space</kbd>                                            | Cycle to the next layout          |
+| <kbd>Mod</kbd><kbd>Shift</kbd> + <kbd>Space</kbd>                            | Cycle to the previous layout      |
+| <kbd>Mod</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                                | Switch to tag `1` to `5`          |
+| <kbd>Mod</kbd><kbd>Ctrl</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                 | Toggle tag `1` to `5`             |
+| <kbd>Mod</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd>                | Move a window to tag `1` to `5`   |
+| <kbd>Mod</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd> + <kbd>1</kbd> to <kbd>5</kbd> | Toggle tag `1` to `5` on a window |
 
 # Feature Requests, Bug Reports, Contributions, and Questions
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -283,4 +282,5 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 See [`CHANGELOG.md`](CHANGELOG.md).
 
 # With Special Thanks To
+- [Smithay](https://github.com/Smithay/smithay): For being a great compositor library and also allowing me not to deal with all the graphics stuff I still don't understand
 - [Niri](https://github.com/YaLTeR/niri): For all that rendering and protocol stuff I, ahem, *took inspiration* from

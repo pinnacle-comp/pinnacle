@@ -1,14 +1,15 @@
 use pinnacle_api::input::libinput::LibinputSetting;
 use pinnacle_api::input::KeybindInfo;
+use pinnacle_api::input::Keysym;
 use pinnacle_api::layout::{
     CornerLayout, CornerLocation, CyclingLayoutManager, DwindleLayout, FairLayout, MasterSide,
     MasterStackLayout, SpiralLayout,
 };
 use pinnacle_api::output::OutputSetup;
+use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window::rules::{DecorationMode, WindowRule, WindowRuleCondition};
-use pinnacle_api::xkbcommon::xkb::Keysym;
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
     ApiModules,
@@ -16,6 +17,10 @@ use pinnacle_api::{
 
 // Pinnacle needs to perform some setup before and after your config,
 // which is what this macro does.
+//
+// By default, logging is disabled here because this config is embedded inside Pinnacle
+// and that would cause a panic. Remove `internal_tracing = false` if you want to
+// enable logging for debugging.
 #[pinnacle_api::config(internal_tracing = false)]
 async fn main() {
     // Deconstruct to get all the APIs.
@@ -34,7 +39,11 @@ async fn main() {
         ..
     } = ApiModules::new();
 
-    let mod_key = Mod::Ctrl;
+    // Change the mod key to `Alt` when running as a nested window.
+    let mod_key = match pinnacle.backend() {
+        Backend::Tty => Mod::Super,
+        Backend::Window => Mod::Alt,
+    };
 
     let terminal = "alacritty";
 
@@ -70,9 +79,9 @@ async fn main() {
         },
     );
 
-    // `mod_key + alt + q` quits Pinnacle
+    // `mod_key + shift + q` quits Pinnacle
     input.keybind(
-        [mod_key, Mod::Alt],
+        [mod_key, Mod::Shift],
         'q',
         || {
             #[cfg(feature = "snowcap")]
@@ -86,9 +95,9 @@ async fn main() {
         },
     );
 
-    // `mod_key + alt + r` reloads the config
+    // `mod_key + ctrl + r` reloads the config
     input.keybind(
-        [mod_key, Mod::Alt],
+        [mod_key, Mod::Ctrl],
         'r',
         || {
             pinnacle.reload_config();
@@ -99,9 +108,9 @@ async fn main() {
         },
     );
 
-    // `mod_key + alt + c` closes the focused window
+    // `mod_key + shift + c` closes the focused window
     input.keybind(
-        [mod_key, Mod::Alt],
+        [mod_key, Mod::Shift],
         'c',
         || {
             if let Some(window) = window.get_focused() {
@@ -127,9 +136,9 @@ async fn main() {
         },
     );
 
-    // `mod_key + alt + space` toggles floating
+    // `mod_key + ctrl + space` toggles floating
     input.keybind(
-        [mod_key, Mod::Alt],
+        [mod_key, Mod::Ctrl],
         Keysym::space,
         || {
             if let Some(window) = window.get_focused() {
@@ -324,9 +333,9 @@ async fn main() {
             },
         );
 
-        // `mod_key + shift + 1-5` toggles tag "1" to "5"
+        // `mod_key + ctrl + 1-5` toggles tag "1" to "5"
         input.keybind(
-            [mod_key, Mod::Shift],
+            [mod_key, Mod::Ctrl],
             tag_name,
             move || {
                 if let Some(tg) = tag.get(tag_name) {
@@ -339,9 +348,9 @@ async fn main() {
             },
         );
 
-        // `mod_key + alt + 1-5` moves the focused window to tag "1" to "5"
+        // `mod_key + shift + 1-5` moves the focused window to tag "1" to "5"
         input.keybind(
-            [mod_key, Mod::Alt],
+            [mod_key, Mod::Shift],
             tag_name,
             move || {
                 if let Some(tg) = tag.get(tag_name) {
@@ -356,9 +365,9 @@ async fn main() {
             },
         );
 
-        // `mod_key + shift + alt + 1-5` toggles tag "1" to "5" on the focused window
+        // `mod_key + ctrl + shift + 1-5` toggles tag "1" to "5" on the focused window
         input.keybind(
-            [mod_key, Mod::Shift, Mod::Alt],
+            [mod_key, Mod::Ctrl, Mod::Shift],
             tag_name,
             move || {
                 if let Some(tg) = tag.get(tag_name) {
@@ -376,7 +385,7 @@ async fn main() {
 
     input.set_libinput_setting(LibinputSetting::Tap(true));
 
-    // Request all windows to use client-side decorations.
+    // Request all windows use client-side decorations.
     window.add_window_rule(
         WindowRuleCondition::new().all([]),
         WindowRule::new().decoration_mode(DecorationMode::ClientSide),
