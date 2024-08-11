@@ -154,7 +154,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        trace!("commit on surface {surface:?}");
+        // tracing::info!("commit on surface {surface:?}");
 
         utils::on_commit_buffer_handler::<State>(surface);
 
@@ -273,6 +273,13 @@ impl CompositorHandler for State {
                             } else {
                                 self.pinnacle.begin_layout_transaction(&focused_output);
                                 self.pinnacle.request_layout(&focused_output);
+
+                                // FIXME: Map immediately to get the primary scanout output to be correct
+                                // self.pinnacle.space.map_element(
+                                //     unmapped_window.clone(),
+                                //     focused_output.current_location(),
+                                //     true,
+                                // );
                             }
 
                             // It seems wlcs needs immediate frame sends for client tests to work

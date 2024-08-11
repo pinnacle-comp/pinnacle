@@ -266,44 +266,6 @@ fn window_render_elements<R: PRenderer>(
     )
 }
 
-/// Render elements for any pending layout transaction.
-///
-/// Returns fullscreen_and_up elements then under_fullscreen elements.
-fn layout_transaction_render_elements<R: PRenderer + AsGlesRenderer>(
-    transaction: &LayoutTransaction,
-    space: &Space<WindowElement>,
-    renderer: &mut R,
-    scale: Scale<f64>,
-    output_loc: Point<i32, Logical>,
-) -> (Vec<SnapshotRenderElement<R>>, Vec<SnapshotRenderElement<R>>) {
-    let mut flat_map = |target: &SnapshotTarget| match target {
-        SnapshotTarget::Window(win) => {
-            let loc = space.element_location(win).unwrap_or_default() - output_loc;
-            win.render_elements(renderer, loc, scale, 1.0)
-                .into_iter()
-                .map(SnapshotRenderElement::from)
-                .collect::<Vec<_>>()
-        }
-        SnapshotTarget::Snapshot(snapshot) => snapshot
-            .render_elements(renderer, scale, 1.0)
-            .into_iter()
-            .collect(),
-    };
-
-    (
-        transaction
-            .fullscreen_and_up_snapshots
-            .iter()
-            .flat_map(&mut flat_map)
-            .collect::<Vec<_>>(),
-        transaction
-            .under_fullscreen_snapshots
-            .iter()
-            .flat_map(&mut flat_map)
-            .collect::<Vec<_>>(),
-    )
-}
-
 /// Generate render elements for the given output.
 ///
 /// Render elements will be pulled from the provided windows,
@@ -377,7 +339,7 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
         state
             .layout_transaction
             .as_ref()
-            .map(|ts| layout_transaction_render_elements(ts, space, renderer, scale, output_loc))
+            .map(|ts| ts.render_elements(renderer, space, output_loc, scale, 1.0))
     }) {
         fullscreen_and_up_elements = fs_and_up_elements
             .into_iter()
@@ -388,6 +350,9 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             .map(OutputRenderElement::from)
             .collect();
     } else {
+        for window in windows.iter() {
+            window.with_state_mut(|state| state.offscreen_elem_id.take());
+        }
         (fullscreen_and_up_elements, rest_of_window_elements) =
             window_render_elements::<R>(output, &windows, space, renderer, scale);
     }
@@ -443,7 +408,7 @@ impl State {
     pub fn schedule_render(&mut self, output: &Output) {
         match &mut self.backend {
             Backend::Udev(udev) => {
-                udev.schedule_render(&self.pinnacle.loop_handle, output);
+                udev.schedule_render(output);
             }
             Backend::Winit(winit) => {
                 winit.schedule_render();

@@ -1,4 +1,4 @@
-use std::{ffi::CString, io::Write, mem::MaybeUninit, num::NonZeroU32};
+use std::{ffi::CString, io::Write, mem::MaybeUninit, num::NonZeroU32, time::Duration};
 
 use anyhow::Context;
 use drm_sys::{
@@ -12,7 +12,7 @@ use libdisplay_info_sys::cvt::{
 use pinnacle_api_defs::pinnacle::output::v0alpha1::SetModelineRequest;
 use smithay::reexports::drm::{
     self,
-    control::{connector, property, Device, ResourceHandle},
+    control::{connector, property, Device, ModeFlags, ResourceHandle},
 };
 
 use super::edid_manus::get_manufacturer;
@@ -268,4 +268,28 @@ fn generate_cvt_mode(hdisplay: i32, vdisplay: i32, vrefresh: Option<f64>) -> drm
         type_: DRM_MODE_TYPE_USERDEF,
         name,
     }
+}
+
+pub fn refresh_interval(mode: drm::control::Mode) -> Duration {
+    let clock = mode.clock() as u64;
+    let htotal = mode.hsync().2 as u64;
+    let vtotal = mode.vsync().2 as u64;
+
+    let mut numerator = htotal * vtotal * 1_000_000;
+    let mut denominator = clock;
+
+    if mode.flags().contains(ModeFlags::INTERLACE) {
+        denominator *= 2;
+    }
+
+    if mode.flags().contains(ModeFlags::DBLSCAN) {
+        numerator *= 2;
+    }
+
+    if mode.vscan() > 1 {
+        numerator *= mode.vscan() as u64;
+    }
+
+    let refresh_interval_ns = (numerator + denominator / 2) / denominator;
+    Duration::from_nanos(refresh_interval_ns)
 }

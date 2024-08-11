@@ -2,7 +2,12 @@
 
 use crate::{
     api::signal::SignalState,
-    backend::{self, udev::Udev, winit::Winit, Backend},
+    backend::{
+        self,
+        udev::{SurfaceDmabufFeedback, Udev},
+        winit::Winit,
+        Backend,
+    },
     cli::{self, Cli},
     config::Config,
     cursor::CursorState,
@@ -23,8 +28,19 @@ use anyhow::Context;
 use indexmap::IndexMap;
 use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
-    desktop::{PopupManager, Space},
-    input::{keyboard::XkbConfig, Seat, SeatState},
+    backend::renderer::element::{
+        default_primary_scanout_output_compare, utils::select_dmabuf_feedback, Id,
+        PrimaryScanoutOutput, RenderElementStates,
+    },
+    desktop::{
+        layer_map_for_output,
+        utils::{
+            send_dmabuf_feedback_surface_tree, send_frames_surface_tree,
+            surface_primary_scanout_output, update_surface_primary_scanout_output,
+        },
+        PopupManager, Space,
+    },
+    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
         calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
@@ -37,10 +53,9 @@ use smithay::{
     },
     utils::{Clock, Monotonic},
     wayland::{
-        compositor::{self, CompositorClientState, CompositorState},
+        compositor::{self, CompositorClientState, CompositorState, SurfaceData},
         cursor_shape::CursorShapeManagerState,
-        dmabuf::DmabufFeedback,
-        fractional_scale::FractionalScaleManagerState,
+        fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
         idle_notify::IdleNotifierState,
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
         output::OutputManagerState,
@@ -72,7 +87,8 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::Duration,
 };
 use sysinfo::{ProcessRefreshKind, RefreshKind};
 use tracing::{info, warn};
@@ -82,6 +98,12 @@ use crate::input::InputState;
 
 #[cfg(feature = "testing")]
 use crate::backend::dummy::Dummy;
+
+// We'll try to send frame callbacks at least once a second. We'll make a timer that fires once a
+// second, so with the worst timing the maximum interval between two frame callbacks for a surface
+// should be ~1.995 seconds.
+const FRAME_CALLBACK_THROTTLE: Option<Duration> = Some(Duration::from_millis(995));
+// const FRAME_CALLBACK_THROTTLE: Option<Duration> = Some(Duration::ZERO);
 
 /// The main state of the application.
 pub struct State {
@@ -202,9 +224,7 @@ impl State {
         foreign_toplevel::refresh(self);
         self.pinnacle.refresh_idle_inhibit();
 
-        if let Backend::Winit(winit) = &mut self.backend {
-            winit.render_if_scheduled(&mut self.pinnacle);
-        }
+        self.backend.render_scheduled_outputs(&mut self.pinnacle);
 
         #[cfg(feature = "snowcap")]
         if self
@@ -463,6 +483,243 @@ impl Pinnacle {
             stop_signal.stop();
         }
     }
+
+    pub fn send_frame_callbacks(&self, output: &Output, sequence: Option<FrameCallbackSequence>) {
+        let should_send = |surface: &WlSurface, states: &SurfaceData| {
+            // Do the standard primary scanout output check. For pointer surfaces it deduplicates
+            // the frame callbacks across potentially multiple outputs, and for regular windows and
+            // layer-shell surfaces it avoids sending frame callbacks to invisible surfaces.
+            let current_primary_output = surface_primary_scanout_output(surface, states);
+            // tracing::info!(
+            //     "current primary output is {:?}",
+            //     current_primary_output.as_ref().map(|o| o.name())
+            // );
+            if current_primary_output.as_ref() != Some(output) {
+                // return self
+                //     .window_for_surface(surface)
+                //     .and_then(|win| win.output(self));
+                return None;
+            }
+
+            let Some(sequence) = sequence else {
+                return Some(output.clone());
+            };
+
+            // Next, check the throttling status.
+            let frame_throttling_state = states
+                .data_map
+                .get_or_insert(SurfaceFrameThrottlingState::default);
+            let mut last_sent_at = frame_throttling_state.last_sent_at.borrow_mut();
+
+            let mut send = true;
+
+            // If we already sent a frame callback to this surface this output refresh
+            // cycle, don't send one again to prevent empty-damage commit busy loops.
+            if let Some((last_output, last_sequence)) = &*last_sent_at {
+                if last_output == output && *last_sequence == sequence {
+                    send = false;
+                }
+            }
+
+            if send {
+                *last_sent_at = Some((output.clone(), sequence));
+                Some(output.clone())
+            } else {
+                None
+            }
+        };
+
+        let now = self.clock.now();
+
+        for window in self.space.elements_for_output(output) {
+            window.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
+        }
+
+        for layer in layer_map_for_output(output).layers() {
+            layer.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
+        }
+
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            send_frames_surface_tree(
+                lock_surface.wl_surface(),
+                output,
+                now,
+                FRAME_CALLBACK_THROTTLE,
+                should_send,
+            );
+        }
+
+        if let Some(dnd) = self.dnd_icon.as_ref() {
+            send_frames_surface_tree(dnd, output, now, FRAME_CALLBACK_THROTTLE, should_send);
+        }
+
+        if let CursorImageStatus::Surface(surface) = self.cursor_state.cursor_image() {
+            send_frames_surface_tree(surface, output, now, FRAME_CALLBACK_THROTTLE, should_send);
+        }
+    }
+
+    pub fn update_primary_scanout_output(
+        &self,
+        output: &Output,
+        render_element_states: &RenderElementStates,
+    ) {
+        for window in self.space.elements() {
+            let offscreen_id = window.with_state(|state| state.offscreen_elem_id.clone());
+
+            window.with_surfaces(|surface, states| {
+                // let primary_scanout_output = update_surface_primary_scanout_output(
+                //     surface,
+                //     output,
+                //     states,
+                //     render_element_states,
+                //     default_primary_scanout_output_compare,
+                // );
+
+                let surface_primary_scanout_output = states
+                    .data_map
+                    .get_or_insert_threadsafe(Mutex::<PrimaryScanoutOutput>::default);
+
+                let primary_scanout_output = surface_primary_scanout_output
+                    .lock()
+                    .unwrap()
+                    .update_from_render_element_states(
+                        offscreen_id.clone().unwrap_or_else(|| Id::from(surface)),
+                        output,
+                        render_element_states,
+                        default_primary_scanout_output_compare,
+                    );
+
+                if let Some(output) = primary_scanout_output {
+                    with_fractional_scale(states, |fraction_scale| {
+                        fraction_scale
+                            .set_preferred_scale(output.current_scale().fractional_scale());
+                    });
+                }
+            });
+        }
+
+        let map = layer_map_for_output(output);
+        for layer_surface in map.layers() {
+            layer_surface.with_surfaces(|surface, states| {
+                let primary_scanout_output = update_surface_primary_scanout_output(
+                    surface,
+                    output,
+                    states,
+                    render_element_states,
+                    default_primary_scanout_output_compare,
+                );
+
+                if let Some(output) = primary_scanout_output {
+                    with_fractional_scale(states, |fraction_scale| {
+                        fraction_scale
+                            .set_preferred_scale(output.current_scale().fractional_scale());
+                    });
+                }
+            });
+        }
+    }
+
+    pub fn send_dmabuf_feedback(
+        &self,
+        output: &Output,
+        feedback: &SurfaceDmabufFeedback,
+        render_element_states: &RenderElementStates,
+    ) {
+        for window in self.space.elements() {
+            if self.space.outputs_for_element(window).contains(output) {
+                window.send_dmabuf_feedback(
+                    output,
+                    surface_primary_scanout_output,
+                    |surface, _| {
+                        select_dmabuf_feedback(
+                            surface,
+                            render_element_states,
+                            &feedback.render_feedback,
+                            &feedback.scanout_feedback,
+                        )
+                    },
+                );
+            }
+        }
+
+        let map = layer_map_for_output(output);
+        for layer_surface in map.layers() {
+            layer_surface.send_dmabuf_feedback(
+                output,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    select_dmabuf_feedback(
+                        surface,
+                        render_element_states,
+                        &feedback.render_feedback,
+                        &feedback.scanout_feedback,
+                    )
+                },
+            );
+        }
+
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            send_dmabuf_feedback_surface_tree(
+                lock_surface.wl_surface(),
+                output,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    select_dmabuf_feedback(
+                        surface,
+                        render_element_states,
+                        &feedback.render_feedback,
+                        &feedback.scanout_feedback,
+                    )
+                },
+            );
+        }
+
+        if let Some(dnd) = self.dnd_icon.as_ref() {
+            send_dmabuf_feedback_surface_tree(
+                dnd,
+                output,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    select_dmabuf_feedback(
+                        surface,
+                        render_element_states,
+                        &feedback.render_feedback,
+                        &feedback.scanout_feedback,
+                    )
+                },
+            );
+        }
+
+        if let CursorImageStatus::Surface(surface) = self.cursor_state.cursor_image() {
+            send_dmabuf_feedback_surface_tree(
+                surface,
+                output,
+                surface_primary_scanout_output,
+                |surface, _| {
+                    select_dmabuf_feedback(
+                        surface,
+                        render_element_states,
+                        &feedback.render_feedback,
+                        &feedback.scanout_feedback,
+                    )
+                },
+            );
+        }
+    }
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+pub struct FrameCallbackSequence(u32);
+
+impl FrameCallbackSequence {
+    pub fn increment(&mut self) {
+        self.0 = self.0.wrapping_add(1);
+    }
+}
+
+#[derive(Default)]
+struct SurfaceFrameThrottlingState {
+    last_sent_at: RefCell<Option<(Output, FrameCallbackSequence)>>,
 }
 
 impl State {
@@ -535,12 +792,6 @@ impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
 
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct SurfaceDmabufFeedback<'a> {
-    pub render_feedback: &'a DmabufFeedback,
-    pub scanout_feedback: &'a DmabufFeedback,
 }
 
 /// A trait meant to be used in types with a [`UserDataMap`][smithay::utils::user_data::UserDataMap]

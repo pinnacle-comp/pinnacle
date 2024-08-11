@@ -44,7 +44,7 @@ use crate::{
     state::{Pinnacle, State, WithState},
 };
 
-use super::{Backend, BackendData, UninitBackend};
+use super::{Backend, BackendData, RenderResult, UninitBackend};
 
 const LOGO_BYTES: &[u8] = include_bytes!("../../resources/pinnacle_logo_icon.rgba");
 
@@ -222,9 +222,10 @@ impl Winit {
                             state.process_input_event(input_evt);
                         }
                         WinitEvent::Redraw => {
-                            let winit = state.backend.winit_mut();
-                            winit.render_winit_window(&mut state.pinnacle);
-                            winit.output_render_scheduled = false;
+                            // let winit = state.backend.winit_mut();
+                            // winit.output_render_scheduled = true;
+                            // winit.render_if_scheduled(&mut state.pinnacle);
+                            state.backend.winit_mut().schedule_render();
                         }
                         WinitEvent::CloseRequested => {
                             state.pinnacle.shutdown();
@@ -250,12 +251,11 @@ impl Winit {
     /// Render the winit window if a render has been scheduled.
     pub fn render_if_scheduled(&mut self, pinnacle: &mut Pinnacle) {
         if self.output_render_scheduled {
-            self.output_render_scheduled = false;
             self.render_winit_window(pinnacle);
         }
     }
 
-    fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) {
+    pub(super) fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) -> RenderResult {
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
@@ -377,7 +377,7 @@ impl Winit {
                 })
         });
 
-        match render_res {
+        let render_result = match render_res {
             Ok(render_output_result) => {
                 if pinnacle.lock_state.is_unlocked() {
                     Winit::handle_pending_screencopy(
@@ -406,16 +406,9 @@ impl Winit {
                     }
                 }
 
-                let time = pinnacle.clock.now();
+                let now = pinnacle.clock.now();
 
-                super::post_repaint(
-                    &self.output,
-                    &render_output_result.states,
-                    &pinnacle.space,
-                    None,
-                    time.into(),
-                    pinnacle.cursor_state.cursor_image(),
-                );
+                pinnacle.update_primary_scanout_output(&self.output, &render_output_result.states);
 
                 if has_rendered {
                     let mut output_presentation_feedback = take_presentation_feedback(
@@ -424,7 +417,7 @@ impl Winit {
                         &render_output_result.states,
                     );
                     output_presentation_feedback.presented(
-                        time,
+                        now,
                         self.output
                             .current_mode()
                             .map(|mode| Duration::from_secs_f64(1000f64 / mode.refresh as f64))
@@ -432,17 +425,28 @@ impl Winit {
                         0,
                         wp_presentation_feedback::Kind::Vsync,
                     );
+                    RenderResult::Submitted
+                } else {
+                    RenderResult::NoDamage
                 }
             }
             Err(err) => {
                 warn!("{}", err);
+                RenderResult::Skipped
             }
-        }
+        };
+
+        pinnacle.send_frame_callbacks(&self.output, None);
+
+        assert!(self.output_render_scheduled);
+        self.output_render_scheduled = false;
 
         // At the end cuz borrow checker
         if render_after_transaction_finish {
             self.schedule_render();
         }
+
+        render_result
     }
 }
 

@@ -11,6 +11,7 @@ use smithay::{
         surface::WaylandSurfaceRenderElement,
         texture::{TextureBuffer, TextureRenderElement},
         utils::RescaleRenderElement,
+        Element,
     },
     desktop::Space,
     reexports::calloop::{
@@ -26,7 +27,7 @@ use crate::{
         texture::CommonTextureRenderElement, util::snapshot::RenderSnapshot, AsGlesRenderer,
         PRenderer,
     },
-    state::State,
+    state::{State, WithState},
     window::WindowElement,
 };
 
@@ -53,7 +54,10 @@ pub enum SnapshotTarget {
     /// Render a window.
     Window(WindowElement),
     /// Render a snapshot.
-    Snapshot(LayoutSnapshot),
+    Snapshot {
+        snapshot: LayoutSnapshot,
+        window: WindowElement,
+    },
 }
 
 /// A layout transaction.
@@ -174,28 +178,18 @@ impl LayoutTransaction {
                     .map(SnapshotRenderElement::Window)
                     .collect()
             }
-            SnapshotTarget::Snapshot(snapshot) => {
-                let Some((texture, loc)) = snapshot.texture(renderer.as_gles_renderer()) else {
-                    return Vec::new();
-                };
-                let buffer =
-                    TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
-                let elem = TextureRenderElement::from_texture_buffer(
-                    loc.to_f64(),
-                    &buffer,
-                    Some(alpha),
-                    None,
-                    None,
-                    element::Kind::Unspecified,
-                );
+            SnapshotTarget::Snapshot { snapshot, window } => {
+                let elem = snapshot.render_elements(renderer, scale, alpha);
 
-                let common = CommonTextureRenderElement::new(elem);
+                if let Some(elem) = elem {
+                    window.with_state_mut(|state| {
+                        state.offscreen_elem_id.replace(elem.id().clone());
+                    });
 
-                let scale = Scale::from((1.0 / scale.x, 1.0 / scale.y));
-
-                vec![SnapshotRenderElement::Snapshot(
-                    RescaleRenderElement::from_element(common, loc, scale),
-                )]
+                    vec![elem]
+                } else {
+                    vec![]
+                }
             }
         };
 

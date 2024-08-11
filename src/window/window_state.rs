@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
+    backend::renderer::element::Id,
     desktop::{space::SpaceElement, WindowSurface},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
     utils::{Logical, Point, Serial, Size},
@@ -206,6 +207,7 @@ pub struct WindowElementState {
     pub decoration_mode: Option<DecorationMode>,
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Option<Size<i32, Logical>>,
+    pub offscreen_elem_id: Option<Id>,
 }
 
 impl WindowElement {
@@ -425,6 +427,7 @@ impl WindowElementState {
             snapshot: None,
             snapshot_hook_id: None,
             decoration_mode: None,
+            offscreen_elem_id: None,
         }
     }
 }

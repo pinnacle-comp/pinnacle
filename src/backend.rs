@@ -1,42 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::time::Duration;
-
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
-        renderer::{
-            element::{
-                default_primary_scanout_output_compare, utils::select_dmabuf_feedback,
-                RenderElementStates,
-            },
-            gles::GlesRenderer,
-            ImportDma, Renderer, TextureFilter,
-        },
+        renderer::{gles::GlesRenderer, ImportDma, Renderer, TextureFilter},
     },
     delegate_dmabuf,
-    desktop::{
-        layer_map_for_output,
-        utils::{
-            send_frames_surface_tree, surface_primary_scanout_output,
-            update_surface_primary_scanout_output,
-        },
-        Space,
-    },
-    input::pointer::CursorImageStatus,
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    wayland::{
-        dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
-        fractional_scale::with_fractional_scale,
-    },
+    wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
 };
 use tracing::error;
 
 use crate::{
     output::OutputMode,
-    state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
-    window::WindowElement,
+    state::{Pinnacle, State},
 };
 
 #[cfg(feature = "testing")]
@@ -129,6 +107,25 @@ impl Backend {
         }
     }
 
+    pub fn render_scheduled_outputs(&mut self, pinnacle: &mut Pinnacle) {
+        match self {
+            Backend::Winit(winit) => winit.render_if_scheduled(pinnacle),
+            Backend::Udev(udev) => {
+                for output in pinnacle
+                    .outputs
+                    .iter()
+                    .filter(|(_, global)| global.is_some())
+                    .map(|(op, _)| op.clone())
+                    .collect::<Vec<_>>()
+                {
+                    udev.render_if_scheduled(pinnacle, &output);
+                }
+            }
+            #[cfg(feature = "testing")]
+            Backend::Dummy(_) => todo!(),
+        }
+    }
+
     /// Returns `true` if the backend is [`Winit`].
     ///
     /// [`Winit`]: Backend::Winit
@@ -144,6 +141,13 @@ impl Backend {
     pub fn is_udev(&self) -> bool {
         matches!(self, Self::Udev(..))
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RenderResult {
+    Submitted,
+    NoDamage,
+    Skipped,
 }
 
 pub trait BackendData: 'static {
@@ -191,106 +195,6 @@ impl BackendData for Backend {
             #[cfg(feature = "testing")]
             Backend::Dummy(dummy) => dummy.set_output_mode(output, mode),
         }
-    }
-}
-
-/// Update surface primary scanout outputs and send frames and dmabuf feedback to visible windows
-/// and layers.
-pub fn post_repaint(
-    output: &Output,
-    render_element_states: &RenderElementStates,
-    space: &Space<WindowElement>,
-    dmabuf_feedback: Option<SurfaceDmabufFeedback<'_>>,
-    time: Duration,
-    cursor_status: &CursorImageStatus,
-) {
-    // let throttle = Some(Duration::from_secs(1));
-    let throttle = Some(Duration::ZERO);
-
-    space.elements().for_each(|window| {
-        window.with_surfaces(|surface, states_inner| {
-            let primary_scanout_output = update_surface_primary_scanout_output(
-                surface,
-                output,
-                states_inner,
-                render_element_states,
-                default_primary_scanout_output_compare,
-            );
-
-            if let Some(output) = primary_scanout_output {
-                with_fractional_scale(states_inner, |fraction_scale| {
-                    fraction_scale.set_preferred_scale(output.current_scale().fractional_scale());
-                });
-            }
-        });
-
-        if space.outputs_for_element(window).contains(output) {
-            window.send_frame(output, time, throttle, surface_primary_scanout_output);
-            if let Some(dmabuf_feedback) = dmabuf_feedback {
-                window.send_dmabuf_feedback(
-                    output,
-                    surface_primary_scanout_output,
-                    |surface, _| {
-                        select_dmabuf_feedback(
-                            surface,
-                            render_element_states,
-                            dmabuf_feedback.render_feedback,
-                            dmabuf_feedback.scanout_feedback,
-                        )
-                    },
-                );
-            }
-        }
-    });
-
-    let map = layer_map_for_output(output);
-    for layer_surface in map.layers() {
-        layer_surface.with_surfaces(|surface, states| {
-            let primary_scanout_output = update_surface_primary_scanout_output(
-                surface,
-                output,
-                states,
-                render_element_states,
-                default_primary_scanout_output_compare,
-            );
-
-            if let Some(output) = primary_scanout_output {
-                with_fractional_scale(states, |fraction_scale| {
-                    fraction_scale.set_preferred_scale(output.current_scale().fractional_scale());
-                });
-            }
-        });
-
-        layer_surface.send_frame(output, time, throttle, surface_primary_scanout_output);
-        if let Some(dmabuf_feedback) = dmabuf_feedback {
-            layer_surface.send_dmabuf_feedback(
-                output,
-                surface_primary_scanout_output,
-                |surface, _| {
-                    select_dmabuf_feedback(
-                        surface,
-                        render_element_states,
-                        dmabuf_feedback.render_feedback,
-                        dmabuf_feedback.scanout_feedback,
-                    )
-                },
-            );
-        }
-    }
-
-    // Send frames to the cursor surface so it updates correctly
-    if let CursorImageStatus::Surface(surf) = cursor_status {
-        send_frames_surface_tree(surf, output, time, Some(Duration::ZERO), |_, _| None);
-    }
-
-    if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
-        send_frames_surface_tree(
-            lock_surface.wl_surface(),
-            output,
-            time,
-            Some(Duration::ZERO),
-            |_, _| None,
-        );
     }
 }
 
