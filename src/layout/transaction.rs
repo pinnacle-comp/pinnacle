@@ -7,18 +7,14 @@ use std::{
 
 use smithay::{
     backend::renderer::element::{
-        self,
-        surface::WaylandSurfaceRenderElement,
-        texture::{TextureBuffer, TextureRenderElement},
-        utils::RescaleRenderElement,
-        Element,
+        surface::WaylandSurfaceRenderElement, utils::RescaleRenderElement, Element,
     },
     desktop::Space,
     reexports::calloop::{
         timer::{TimeoutAction, Timer},
         LoopHandle,
     },
-    utils::{Logical, Point, Scale, Serial, Transform},
+    utils::{Logical, Point, Scale, Serial},
 };
 
 use crate::{

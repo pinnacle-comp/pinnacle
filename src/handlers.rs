@@ -423,6 +423,15 @@ impl CompositorHandler for State {
             .cloned()
         {
             vec![output] // surface is a layer surface
+        } else if matches!(self.pinnacle.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
+        {
+            // This is a cursor surface
+            // TODO: granular
+            self.pinnacle.space.outputs().cloned().collect()
+        } else if self.pinnacle.dnd_icon.as_ref() == Some(surface) {
+            // This is a dnd icon
+            // TODO: granular
+            self.pinnacle.space.outputs().cloned().collect()
         } else if let Some(output) = self
             .pinnacle
             .space

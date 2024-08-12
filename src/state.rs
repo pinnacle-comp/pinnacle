@@ -53,7 +53,9 @@ use smithay::{
     },
     utils::{Clock, Monotonic},
     wayland::{
-        compositor::{self, CompositorClientState, CompositorState, SurfaceData},
+        compositor::{
+            self, with_surface_tree_downward, CompositorClientState, CompositorState, SurfaceData,
+        },
         cursor_shape::CursorShapeManagerState,
         fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
         idle_notify::IdleNotifierState,
@@ -490,9 +492,22 @@ impl Pinnacle {
             // the frame callbacks across potentially multiple outputs, and for regular windows and
             // layer-shell surfaces it avoids sending frame callbacks to invisible surfaces.
             let current_primary_output = surface_primary_scanout_output(surface, states);
+
+            if matches!(self.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
+            {
+                tracing::info!(
+                    "cursor primary scanout output: {:?}",
+                    current_primary_output.as_ref().map(|o| o.name())
+                );
+            }
+
             // tracing::info!(
-            //     "current primary output is {:?}",
-            //     current_primary_output.as_ref().map(|o| o.name())
+            //     op_count = self.outputs.len(),
+            //     "current primary output is {:?}, wl_output {:?}",
+            //     current_primary_output.as_ref().map(|o| o.name()),
+            //     current_primary_output
+            //         .as_ref()
+            //         .and_then(|o| { self.outputs.get(o) }),
             // );
             if current_primary_output.as_ref() != Some(output) {
                 // return self
@@ -586,7 +601,9 @@ impl Pinnacle {
                         offscreen_id.clone().unwrap_or_else(|| Id::from(surface)),
                         output,
                         render_element_states,
-                        default_primary_scanout_output_compare,
+                        // TODO:
+                        // default_primary_scanout_output_compare,
+                        |_, _, op, _| op,
                     );
 
                 if let Some(output) = primary_scanout_output {
@@ -616,6 +633,60 @@ impl Pinnacle {
                     });
                 }
             });
+        }
+
+        if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {
+            with_surface_tree_downward(
+                lock_surface.wl_surface(),
+                (),
+                |_, _, _| compositor::TraversalAction::DoChildren(()),
+                |surface, states, _| {
+                    update_surface_primary_scanout_output(
+                        surface,
+                        output,
+                        states,
+                        render_element_states,
+                        default_primary_scanout_output_compare,
+                    );
+                },
+                |_, _, _| true,
+            );
+        }
+
+        if let Some(dnd) = self.dnd_icon.as_ref() {
+            with_surface_tree_downward(
+                dnd,
+                (),
+                |_, _, _| compositor::TraversalAction::DoChildren(()),
+                |surface, states, _| {
+                    update_surface_primary_scanout_output(
+                        surface,
+                        output,
+                        states,
+                        render_element_states,
+                        default_primary_scanout_output_compare,
+                    );
+                },
+                |_, _, _| true,
+            );
+        }
+
+        if let CursorImageStatus::Surface(surface) = self.cursor_state.cursor_image() {
+            with_surface_tree_downward(
+                surface,
+                (),
+                |_, _, _| compositor::TraversalAction::DoChildren(()),
+                |surface, states, _| {
+                    update_surface_primary_scanout_output(
+                        surface,
+                        output,
+                        states,
+                        render_element_states,
+                        default_primary_scanout_output_compare,
+                    );
+                },
+                |_, _, _| true,
+            );
         }
     }
 

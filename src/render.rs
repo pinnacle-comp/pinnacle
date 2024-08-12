@@ -29,7 +29,7 @@ use smithay::{
 
 use crate::{
     backend::{udev::UdevRenderer, Backend},
-    layout::transaction::{LayoutTransaction, SnapshotRenderElement, SnapshotTarget},
+    layout::transaction::SnapshotRenderElement,
     pinnacle_render_elements,
     state::{State, WithState},
     window::WindowElement,
