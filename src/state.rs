@@ -30,7 +30,7 @@ use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     backend::renderer::element::{
         default_primary_scanout_output_compare, utils::select_dmabuf_feedback, Id,
-        PrimaryScanoutOutput, RenderElementStates,
+        PrimaryScanoutOutput, RenderElementState, RenderElementStates,
     },
     desktop::{
         layer_map_for_output,
@@ -493,14 +493,6 @@ impl Pinnacle {
             // layer-shell surfaces it avoids sending frame callbacks to invisible surfaces.
             let current_primary_output = surface_primary_scanout_output(surface, states);
 
-            if matches!(self.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
-            {
-                tracing::info!(
-                    "cursor primary scanout output: {:?}",
-                    current_primary_output.as_ref().map(|o| o.name())
-                );
-            }
-
             // tracing::info!(
             //     op_count = self.outputs.len(),
             //     "current primary output is {:?}, wl_output {:?}",
@@ -573,6 +565,39 @@ impl Pinnacle {
         }
     }
 
+    /// Returns a custom primary scanout output comparison function that, in addition to performing
+    /// the [`default_primary_scanout_output_compare`], checks if the returned output actually
+    /// exists. If it doesn't, it returns the new output.
+    ///
+    /// This is needed because when turning a monitor off and on, windows will *still* have the old
+    /// output as the primary scanout output. For whatever reason, clones of that now-defunct
+    /// output still exist somewhere, causing the default compare function to choose it over the
+    /// new output for the monitor. This is a workaround for that.
+    fn primary_scanout_output_compare(
+        &self,
+    ) -> impl for<'a> Fn(
+        &'a Output,
+        &'a RenderElementState,
+        &'a Output,
+        &'a RenderElementState,
+    ) -> &'a Output
+           + '_ {
+        |current_output, current_state, next_output, next_state| {
+            let new_op = default_primary_scanout_output_compare(
+                current_output,
+                current_state,
+                next_output,
+                next_state,
+            );
+
+            if self.outputs.contains_key(new_op) {
+                new_op
+            } else {
+                next_output
+            }
+        }
+    }
+
     pub fn update_primary_scanout_output(
         &self,
         output: &Output,
@@ -582,14 +607,6 @@ impl Pinnacle {
             let offscreen_id = window.with_state(|state| state.offscreen_elem_id.clone());
 
             window.with_surfaces(|surface, states| {
-                // let primary_scanout_output = update_surface_primary_scanout_output(
-                //     surface,
-                //     output,
-                //     states,
-                //     render_element_states,
-                //     default_primary_scanout_output_compare,
-                // );
-
                 let surface_primary_scanout_output = states
                     .data_map
                     .get_or_insert_threadsafe(Mutex::<PrimaryScanoutOutput>::default);
@@ -601,9 +618,7 @@ impl Pinnacle {
                         offscreen_id.clone().unwrap_or_else(|| Id::from(surface)),
                         output,
                         render_element_states,
-                        // TODO:
-                        // default_primary_scanout_output_compare,
-                        |_, _, op, _| op,
+                        self.primary_scanout_output_compare(),
                     );
 
                 if let Some(output) = primary_scanout_output {
@@ -623,7 +638,7 @@ impl Pinnacle {
                     output,
                     states,
                     render_element_states,
-                    default_primary_scanout_output_compare,
+                    self.primary_scanout_output_compare(),
                 );
 
                 if let Some(output) = primary_scanout_output {
@@ -646,7 +661,7 @@ impl Pinnacle {
                         output,
                         states,
                         render_element_states,
-                        default_primary_scanout_output_compare,
+                        self.primary_scanout_output_compare(),
                     );
                 },
                 |_, _, _| true,
@@ -664,7 +679,7 @@ impl Pinnacle {
                         output,
                         states,
                         render_element_states,
-                        default_primary_scanout_output_compare,
+                        self.primary_scanout_output_compare(),
                     );
                 },
                 |_, _, _| true,
@@ -682,7 +697,7 @@ impl Pinnacle {
                         output,
                         states,
                         render_element_states,
-                        default_primary_scanout_output_compare,
+                        self.primary_scanout_output_compare(),
                     );
                 },
                 |_, _, _| true,
