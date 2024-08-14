@@ -32,7 +32,7 @@ use smithay::{
         egl::{self, context::ContextPriority, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            self, damage,
+            self,
             element::{self, surface::render_elements_from_surface_tree, Element, Id},
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
@@ -478,7 +478,7 @@ impl Udev {
             value @ (RenderState::Scheduled
             | RenderState::WaitingForEstimatedVblankAndScheduled(_)) => value,
 
-            RenderState::WaitingForVblank { render_needed: _ } => RenderState::WaitingForVblank {
+            RenderState::WaitingForVblank { .. } => RenderState::WaitingForVblank {
                 render_needed: true,
             },
 
@@ -780,26 +780,6 @@ type GbmDrmCompositor = DrmCompositor<
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;
-
-/// Render a frame with the given elements.
-///
-/// This frame needs to be queued for scanout afterwards.
-fn render_frame<'a>(
-    compositor: &mut GbmDrmCompositor,
-    renderer: &mut UdevRenderer<'a>,
-    elements: &'a [OutputRenderElement<UdevRenderer<'a>>],
-    clear_color: [f32; 4],
-) -> Result<UdevRenderFrameResult<'a>, SwapBuffersError> {
-    use smithay::backend::drm::compositor::RenderFrameError;
-
-    compositor
-        .render_frame(renderer, elements, clear_color)
-        .map_err(|err| match err {
-            RenderFrameError::PrepareFrame(err) => err.into(),
-            RenderFrameError::RenderFrame(damage::Error::Rendering(err)) => err.into(),
-            _ => unreachable!(),
-        })
-}
 
 impl Udev {
     pub fn renderer(&mut self) -> anyhow::Result<UdevRenderer<'_>> {
@@ -1434,87 +1414,85 @@ impl Udev {
             CLEAR_COLOR_LOCKED
         };
 
-        let result = (|| -> Result<bool, SwapBuffersError> {
-            let render_frame_result = render_frame(
-                &mut surface.compositor,
-                &mut renderer,
-                &output_render_elements,
-                clear_color,
-            )?;
+        let render_frame_result =
+            surface
+                .compositor
+                .render_frame(&mut renderer, &output_render_elements, clear_color);
 
-            if render_frame_result.needs_sync() {
-                if let PrimaryPlaneElement::Swapchain(element) =
-                    &render_frame_result.primary_element
-                {
-                    if let Err(err) = element.sync.wait() {
-                        warn!("Failed to wait for sync point: {err}");
+        match render_frame_result {
+            Ok(res) => {
+                if res.needs_sync() {
+                    if let PrimaryPlaneElement::Swapchain(element) = &res.primary_element {
+                        if let Err(err) = element.sync.wait() {
+                            warn!("Failed to wait for sync point: {err}");
+                        }
+                    }
+                }
+
+                if pinnacle.lock_state.is_unlocked() {
+                    handle_pending_screencopy(
+                        &mut renderer,
+                        output,
+                        surface,
+                        &res,
+                        &pinnacle.loop_handle,
+                        cursor_ids,
+                    );
+                }
+
+                pinnacle.update_primary_scanout_output(output, &res.states);
+
+                if let Some(dmabuf_feedback) = surface.dmabuf_feedback.as_ref() {
+                    pinnacle.send_dmabuf_feedback(output, dmabuf_feedback, &res.states);
+                }
+
+                let rendered = !res.is_empty;
+
+                if rendered {
+                    let output_presentation_feedback =
+                        take_presentation_feedback(output, &pinnacle.space, &res.states);
+
+                    match surface
+                        .compositor
+                        .queue_frame(Some(output_presentation_feedback))
+                    {
+                        Ok(()) => {
+                            let new_state = RenderState::WaitingForVblank {
+                                render_needed: false,
+                            };
+
+                            match mem::replace(&mut surface.render_state, new_state) {
+                                RenderState::Idle => unreachable!(),
+                                RenderState::Scheduled => (),
+                                RenderState::WaitingForVblank { .. } => unreachable!(),
+                                RenderState::WaitingForEstimatedVblank(_) => unreachable!(),
+                                RenderState::WaitingForEstimatedVblankAndScheduled(token) => {
+                                    pinnacle.loop_handle.remove(token);
+                                }
+                            };
+
+                            // From niri: We queued this frame successfully, so the current client buffers were
+                            // latched. We can send frame callbacks now, since a new client commit
+                            // will no longer overwrite this frame and will wait for a VBlank.
+                            surface.frame_callback_sequence.increment();
+
+                            pinnacle.send_frame_callbacks(
+                                output,
+                                Some(surface.frame_callback_sequence),
+                            );
+
+                            // Return here to not queue the estimated vblank timer on a submitted frame
+                            return;
+                        }
+                        Err(err) => {
+                            warn!("Error queueing frame: {err}");
+                        }
                     }
                 }
             }
-
-            if pinnacle.lock_state.is_unlocked() {
-                handle_pending_screencopy(
-                    &mut renderer,
-                    output,
-                    surface,
-                    &render_frame_result,
-                    &pinnacle.loop_handle,
-                    cursor_ids,
-                );
-            }
-
-            pinnacle.update_primary_scanout_output(output, &render_frame_result.states);
-
-            if let Some(dmabuf_feedback) = surface.dmabuf_feedback.as_ref() {
-                pinnacle.send_dmabuf_feedback(output, dmabuf_feedback, &render_frame_result.states);
-            }
-
-            let rendered = !render_frame_result.is_empty;
-
-            if rendered {
-                let output_presentation_feedback = take_presentation_feedback(
-                    output,
-                    &pinnacle.space,
-                    &render_frame_result.states,
-                );
-
-                surface
-                    .compositor
-                    .queue_frame(Some(output_presentation_feedback))?;
-            }
-
-            Ok(rendered)
-        })();
-
-        match result {
-            Ok(true) => {
-                let new_state = RenderState::WaitingForVblank {
-                    render_needed: false,
-                };
-
-                match mem::replace(&mut surface.render_state, new_state) {
-                    RenderState::Idle => unreachable!(),
-                    RenderState::Scheduled => (),
-                    RenderState::WaitingForVblank { .. } => unreachable!(),
-                    RenderState::WaitingForEstimatedVblank(_) => unreachable!(),
-                    RenderState::WaitingForEstimatedVblankAndScheduled(token) => {
-                        pinnacle.loop_handle.remove(token);
-                    }
-                };
-
-                // From niri: We queued this frame successfully, so the current client buffers were
-                // latched. We can send frame callbacks now, since a new client commit
-                // will no longer overwrite this frame and will wait for a VBlank.
-                surface.frame_callback_sequence.increment();
-
-                pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
-
-                // Return here to not queue the estimated vblank timer on a submitted frame
-                return;
-            }
-            Ok(false) => (),
             Err(err) => {
-                warn!(output = output.name(), "Render failed for surface: {err}");
+                // Can fail if we switched to a different TTY
+                warn!("Render failed for surface: {err}");
 
                 surface.render_state = if let RenderState::WaitingForEstimatedVblank(token)
                 | RenderState::WaitingForEstimatedVblankAndScheduled(
@@ -1530,9 +1508,9 @@ impl Udev {
 
         self.queue_estimated_vblank_timer(pinnacle, output, time_to_next_presentation);
 
-        // if render_after_transaction_finish {
-        //     self.schedule_render(output);
-        // }
+        if render_after_transaction_finish {
+            self.schedule_render(output);
+        }
     }
 
     fn queue_estimated_vblank_timer(
@@ -1605,8 +1583,16 @@ impl Udev {
             }
         }
 
-        // If animations, queue redraw, else
-        pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence))
+        // TODO: is_animated or unfinished_animations_remain
+        if pinnacle
+            .cursor_state
+            .time_until_next_animated_cursor_frame()
+            .is_some()
+        {
+            self.schedule_render(output);
+        } else {
+            pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
+        }
     }
 }
 
