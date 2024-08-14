@@ -16,7 +16,6 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
-    input::pointer::CursorImageStatus,
     output::{Output, Scale, Subpixel},
     reexports::{
         calloop::{self, generic::Generic, Interest, LoopHandle, PostAction},
@@ -30,7 +29,7 @@ use smithay::{
             window::{Icon, WindowAttributes},
         },
     },
-    utils::{IsAlive, Point, Rectangle, Transform},
+    utils::{Point, Rectangle, Transform},
     wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
 };
 use tracing::{debug, error, trace, warn};
@@ -53,7 +52,6 @@ pub struct Winit {
     pub damage_tracker: OutputDamageTracker,
     pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     pub full_redraw: u8,
-    output_render_scheduled: bool,
     output: Output,
 }
 
@@ -173,7 +171,6 @@ impl Winit {
             damage_tracker: OutputDamageTracker::from_output(&output),
             dmabuf_state,
             full_redraw: 0,
-            output_render_scheduled: false,
             output,
         };
 
@@ -222,10 +219,10 @@ impl Winit {
                             state.process_input_event(input_evt);
                         }
                         WinitEvent::Redraw => {
-                            // let winit = state.backend.winit_mut();
-                            // winit.output_render_scheduled = true;
-                            // winit.render_if_scheduled(&mut state.pinnacle);
-                            state.backend.winit_mut().schedule_render();
+                            state
+                                .backend
+                                .winit_mut()
+                                .render_winit_window(&mut state.pinnacle);
                         }
                         WinitEvent::CloseRequested => {
                             state.pinnacle.shutdown();
@@ -244,27 +241,12 @@ impl Winit {
 
     /// Schedule a render on the winit window.
     pub fn schedule_render(&mut self) {
-        self.output_render_scheduled = true;
+        self.backend.window().request_redraw();
     }
 
-    /// Render the winit window if a render has been scheduled.
-    pub fn render_if_scheduled(&mut self, pinnacle: &mut Pinnacle) {
-        if self.output_render_scheduled {
-            self.render_winit_window(pinnacle);
-        }
-    }
-
-    pub(super) fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) {
+    fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) {
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
-
-        if let CursorImageStatus::Surface(surface) = pinnacle.cursor_state.cursor_image() {
-            if !surface.alive() {
-                pinnacle
-                    .cursor_state
-                    .set_cursor_image(CursorImageStatus::default_named());
-            }
-        }
 
         // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
         // of every event loop cycle
@@ -433,11 +415,8 @@ impl Winit {
 
         pinnacle.send_frame_callbacks(&self.output, None);
 
-        assert!(self.output_render_scheduled);
-        self.output_render_scheduled = false;
-
         // At the end cuz borrow checker
-        if render_after_transaction_finish {
+        if render_after_transaction_finish || pinnacle.cursor_state.is_current_cursor_animated() {
             self.schedule_render();
         }
     }
@@ -454,7 +433,7 @@ impl Winit {
             return;
         };
 
-        assert!(screencopy.output() == output);
+        assert_eq!(screencopy.output(), output);
 
         if screencopy.with_damage() {
             match render_output_result.damage.as_ref() {

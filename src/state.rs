@@ -221,6 +221,7 @@ impl State {
     pub fn on_event_loop_cycle_completion(&mut self) {
         self.pinnacle.fixup_z_layering();
         self.pinnacle.space.refresh();
+        self.pinnacle.cursor_state.cleanup();
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();
         foreign_toplevel::refresh(self);

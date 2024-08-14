@@ -113,21 +113,16 @@ impl Backend {
     }
 
     pub fn render_scheduled_outputs(&mut self, pinnacle: &mut Pinnacle) {
-        match self {
-            Backend::Winit(winit) => winit.render_if_scheduled(pinnacle),
-            Backend::Udev(udev) => {
-                for output in pinnacle
-                    .outputs
-                    .iter()
-                    .filter(|(_, global)| global.is_some())
-                    .map(|(op, _)| op.clone())
-                    .collect::<Vec<_>>()
-                {
-                    udev.render_if_scheduled(pinnacle, &output);
-                }
+        if let Backend::Udev(udev) = self {
+            for output in pinnacle
+                .outputs
+                .iter()
+                .filter(|(_, global)| global.is_some())
+                .map(|(op, _)| op.clone())
+                .collect::<Vec<_>>()
+            {
+                udev.render_if_scheduled(pinnacle, &output);
             }
-            #[cfg(feature = "testing")]
-            Backend::Dummy(_) => (),
         }
     }
 

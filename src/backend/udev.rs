@@ -50,7 +50,6 @@ use smithay::{
         SwapBuffersError,
     },
     desktop::utils::OutputPresentationFeedback,
-    input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
@@ -71,7 +70,7 @@ use smithay::{
             DisplayHandle,
         },
     },
-    utils::{DeviceFd, IsAlive, Point, Rectangle, Transform},
+    utils::{DeviceFd, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         shm::shm_format_to_fourcc,
@@ -1252,13 +1251,7 @@ impl Udev {
             }
         };
 
-        // TODO: is_animated or unfinished_animations_remain
-        if render_needed
-            || pinnacle
-                .cursor_state
-                .time_until_next_animated_cursor_frame()
-                .is_some()
-        {
+        if render_needed || pinnacle.cursor_state.is_current_cursor_animated() {
             self.schedule_render(&output);
         } else {
             pinnacle.send_frame_callbacks(&output, Some(surface.frame_callback_sequence));
@@ -1319,20 +1312,6 @@ impl Udev {
 
         let _ = renderer.upscale_filter(self.upscale_filter);
         let _ = renderer.downscale_filter(self.downscale_filter);
-
-        ///////////////////////////////////////////////////////////////////////////////////////////
-
-        // draw the cursor as relevant and
-        // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_state.cursor_image() {
-            if !surface.alive() {
-                pinnacle
-                    .cursor_state
-                    .set_cursor_image(CursorImageStatus::default_named());
-            }
-        }
-
-        ///////////////////////////////////////////////////////////////////////////////////////////
 
         let pointer_location = pinnacle
             .seat
@@ -1583,12 +1562,7 @@ impl Udev {
             }
         }
 
-        // TODO: is_animated or unfinished_animations_remain
-        if pinnacle
-            .cursor_state
-            .time_until_next_animated_cursor_frame()
-            .is_some()
-        {
+        if pinnacle.cursor_state.is_current_cursor_animated() {
             self.schedule_render(output);
         } else {
             pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
