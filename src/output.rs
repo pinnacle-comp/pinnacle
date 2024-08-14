@@ -349,6 +349,8 @@ impl Pinnacle {
 
         self.space.unmap_output(output);
 
+        self.output_focus_stack.remove(output);
+
         self.gamma_control_manager_state.output_removed(output);
 
         self.output_power_management_state.output_removed(output);

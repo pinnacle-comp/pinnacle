@@ -928,7 +928,8 @@ impl OutputManagementHandler for State {
                 OutputConfiguration::Disabled => {
                     self.pinnacle.set_output_enabled(&output, false);
                     // TODO: split
-                    self.backend.set_output_powered(&output, false);
+                    self.backend
+                        .set_output_powered(&output, &self.pinnacle.loop_handle, false);
                 }
                 OutputConfiguration::Enabled {
                     mode,
@@ -939,7 +940,8 @@ impl OutputManagementHandler for State {
                 } => {
                     self.pinnacle.set_output_enabled(&output, true);
                     // TODO: split
-                    self.backend.set_output_powered(&output, true);
+                    self.backend
+                        .set_output_powered(&output, &self.pinnacle.loop_handle, true);
 
                     self.capture_snapshots_on_output(&output, []);
 
@@ -1001,7 +1003,8 @@ impl OutputPowerManagementHandler for State {
     }
 
     fn set_mode(&mut self, output: &Output, powered: bool) {
-        self.backend.set_output_powered(output, powered);
+        self.backend
+            .set_output_powered(output, &self.pinnacle.loop_handle, powered);
 
         if powered {
             self.schedule_render(output);

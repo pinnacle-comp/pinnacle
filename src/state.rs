@@ -243,15 +243,14 @@ impl State {
 
         // FIXME: Don't poll this every cycle
         for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
-            output.with_state_mut(|state| {
-                if state
+            if output.with_state_mut(|state| {
+                state
                     .layout_transaction
                     .as_ref()
                     .is_some_and(|ts| ts.ready())
-                {
-                    self.schedule_render(&output);
-                }
-            });
+            }) {
+                self.schedule_render(&output);
+            }
         }
 
         self.pinnacle

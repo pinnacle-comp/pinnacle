@@ -7,7 +7,7 @@ use smithay::{
     },
     delegate_dmabuf,
     output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::{calloop::LoopHandle, wayland_server::protocol::wl_surface::WlSurface},
     wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
 };
 use tracing::error;
@@ -98,10 +98,15 @@ impl Backend {
         }
     }
 
-    pub fn set_output_powered(&mut self, output: &Output, powered: bool) {
+    pub fn set_output_powered(
+        &mut self,
+        output: &Output,
+        loop_handle: &LoopHandle<'static, State>,
+        powered: bool,
+    ) {
         match self {
             Backend::Winit(_) => (),
-            Backend::Udev(udev) => udev.set_output_powered(output, powered),
+            Backend::Udev(udev) => udev.set_output_powered(output, loop_handle, powered),
             #[cfg(feature = "testing")]
             Backend::Dummy(dummy) => dummy.set_output_powered(output, powered),
         }
@@ -122,7 +127,7 @@ impl Backend {
                 }
             }
             #[cfg(feature = "testing")]
-            Backend::Dummy(_) => todo!(),
+            Backend::Dummy(_) => (),
         }
     }
 

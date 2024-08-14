@@ -109,6 +109,10 @@ impl OutputFocusStack {
         self.stack.retain(|op| op != &output);
         self.stack.push(output);
     }
+
+    pub fn remove(&mut self, output: &Output) {
+        self.stack.retain(|op| op != output);
+    }
 }
 
 /// A stack of windows, with the top one being the one in focus.

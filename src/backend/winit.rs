@@ -44,7 +44,7 @@ use crate::{
     state::{Pinnacle, State, WithState},
 };
 
-use super::{Backend, BackendData, RenderResult, UninitBackend};
+use super::{Backend, BackendData, UninitBackend};
 
 const LOGO_BYTES: &[u8] = include_bytes!("../../resources/pinnacle_logo_icon.rgba");
 
@@ -244,7 +244,6 @@ impl Winit {
 
     /// Schedule a render on the winit window.
     pub fn schedule_render(&mut self) {
-        trace!("Scheduling winit render");
         self.output_render_scheduled = true;
     }
 
@@ -255,7 +254,7 @@ impl Winit {
         }
     }
 
-    pub(super) fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) -> RenderResult {
+    pub(super) fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) {
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
@@ -377,7 +376,7 @@ impl Winit {
                 })
         });
 
-        let render_result = match render_res {
+        match render_res {
             Ok(render_output_result) => {
                 if pinnacle.lock_state.is_unlocked() {
                     Winit::handle_pending_screencopy(
@@ -425,14 +424,10 @@ impl Winit {
                         0,
                         wp_presentation_feedback::Kind::Vsync,
                     );
-                    RenderResult::Submitted
-                } else {
-                    RenderResult::NoDamage
                 }
             }
             Err(err) => {
                 warn!("{}", err);
-                RenderResult::Skipped
             }
         };
 
@@ -445,8 +440,6 @@ impl Winit {
         if render_after_transaction_finish {
             self.schedule_render();
         }
-
-        render_result
     }
 }
 

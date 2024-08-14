@@ -93,7 +93,7 @@ use crate::{
 
 use self::drm::util::EdidInfo;
 
-use super::{BackendData, RenderResult, UninitBackend};
+use super::{BackendData, UninitBackend};
 
 const SUPPORTED_FORMATS: &[Fourcc] = &[
     Fourcc::Abgr2101010,
@@ -463,49 +463,37 @@ impl Udev {
             return;
         };
 
-        // tracing::info!(state = ?surface.render_state, name = output.name());
-
         let old_state = mem::take(&mut surface.render_state);
 
-        surface.render_state = match old_state {
-            RenderState::Idle => {
-                // let output = output.clone();
-                // let token = loop_handle.insert_idle(move |state| {
-                //     state
-                //         .backend
-                //         .udev_mut()
-                //         .render_surface(&mut state.pinnacle, &output);
-                // });
+        // tracing::info!(
+        //     ?old_state,
+        //     op = output.name(),
+        //     powered = output.with_state(|state| state.powered),
+        //     "scheduled render"
+        // );
 
-                RenderState::Scheduled
-            }
+        surface.render_state = match old_state {
+            RenderState::Idle => RenderState::Scheduled,
+
             value @ (RenderState::Scheduled
             | RenderState::WaitingForEstimatedVblankAndScheduled(_)) => value,
+
             RenderState::WaitingForVblank { render_needed: _ } => RenderState::WaitingForVblank {
                 render_needed: true,
             },
+
             RenderState::WaitingForEstimatedVblank(token) => {
                 RenderState::WaitingForEstimatedVblankAndScheduled(token)
             }
         };
     }
 
-    // pub fn render_scheduled_outputs(&mut self, pinnacle: &mut Pinnacle) {
-    //     for output in pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
-    //         let Some(surface) = render_surface_for_output(&output, &mut self.backends) else {
-    //             continue;
-    //         };
-    //
-    //         if matches!(
-    //             surface.render_state,
-    //             RenderState::Scheduled | RenderState::WaitingForEstimatedVblankAndScheduled(_)
-    //         ) {
-    //             self.render_surface(pinnacle, &output);
-    //         }
-    //     }
-    // }
-
-    pub(super) fn set_output_powered(&mut self, output: &Output, powered: bool) {
+    pub(super) fn set_output_powered(
+        &mut self,
+        output: &Output,
+        loop_handle: &LoopHandle<'static, State>,
+        powered: bool,
+    ) {
         let UdevOutputData { device_id, crtc } =
             output.user_data().get::<UdevOutputData>().unwrap();
 
@@ -535,11 +523,12 @@ impl Udev {
             }
 
             if let Some(surface) = render_surface_for_output(output, &mut self.backends) {
-                // TODO: test
-                surface.render_state = RenderState::Idle;
-                // if let RenderState::Scheduled(idle) = std::mem::take(&mut surface.render_state) {
-                //     idle.cancel();
-                // }
+                if let RenderState::WaitingForEstimatedVblankAndScheduled(token)
+                | RenderState::WaitingForEstimatedVblank(token) =
+                    mem::take(&mut surface.render_state)
+                {
+                    loop_handle.remove(token);
+                }
             }
         }
     }
@@ -1222,11 +1211,6 @@ impl Udev {
             return;
         };
 
-        if matches!(surface.render_state, RenderState::Idle) {
-            warn!(output = output.name(), "Got vblank for an idle output");
-            return;
-        }
-
         match surface
             .compositor
             .frame_submitted()
@@ -1284,7 +1268,6 @@ impl Udev {
             RenderState::WaitingForVblank { render_needed } => render_needed,
             state => {
                 debug!("vblank happened but render state was {state:?}",);
-                // TODO: unreachable
                 return;
             }
         };
@@ -1317,21 +1300,21 @@ impl Udev {
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
     #[tracing::instrument(level = "debug", skip(self, pinnacle), fields(output = output.name()))]
-    fn render_surface(&mut self, pinnacle: &mut Pinnacle, output: &Output) -> RenderResult {
+    fn render_surface(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
-            return RenderResult::Skipped;
+            return;
         };
 
         if !pinnacle.outputs.contains_key(output) {
             surface.render_state = RenderState::Idle;
-            return RenderResult::Skipped;
+            return;
         }
 
         // TODO: possibly lift this out and make it so that scheduling a render
         // does nothing on powered off outputs
         if output.with_state(|state| !state.powered) {
             surface.render_state = RenderState::Idle;
-            return RenderResult::Skipped;
+            return;
         }
 
         assert_matches!(
@@ -1503,7 +1486,7 @@ impl Udev {
             Ok(rendered)
         })();
 
-        let render_result = match result {
+        match result {
             Ok(true) => {
                 let new_state = RenderState::WaitingForVblank {
                     render_needed: false,
@@ -1527,9 +1510,9 @@ impl Udev {
                 pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
 
                 // Return here to not queue the estimated vblank timer on a submitted frame
-                return RenderResult::Submitted;
+                return;
             }
-            Ok(false) => RenderResult::NoDamage,
+            Ok(false) => (),
             Err(err) => {
                 warn!(output = output.name(), "Render failed for surface: {err}");
 
@@ -1542,18 +1525,14 @@ impl Udev {
                 } else {
                     RenderState::Idle
                 };
-
-                RenderResult::Skipped
             }
-        };
+        }
 
         self.queue_estimated_vblank_timer(pinnacle, output, time_to_next_presentation);
 
         // if render_after_transaction_finish {
         //     self.schedule_render(output);
         // }
-
-        render_result
     }
 
     fn queue_estimated_vblank_timer(
