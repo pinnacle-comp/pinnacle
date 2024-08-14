@@ -207,6 +207,16 @@ pub struct WindowElementState {
     pub decoration_mode: Option<DecorationMode>,
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Option<Size<i32, Logical>>,
+
+    /// The id of a snapshot element if any.
+    ///
+    /// When updating the primary scanout output, Smithay looks at the ids of all elements drawn on
+    /// screen. If it matches the ids of this window's elements, the primary output is updated.
+    /// However, when a snapshot is rendering, the snapshot's element id is different from this
+    /// window's ids. Therefore, we clone that snapshot's id into this field and use it to update
+    /// the primary output when necessary.
+    ///
+    /// See [`Pinnacle::update_primary_scanout_output`] for more details.
     pub offscreen_elem_id: Option<Id>,
 }
 

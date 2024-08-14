@@ -493,18 +493,7 @@ impl Pinnacle {
             // layer-shell surfaces it avoids sending frame callbacks to invisible surfaces.
             let current_primary_output = surface_primary_scanout_output(surface, states);
 
-            // tracing::info!(
-            //     op_count = self.outputs.len(),
-            //     "current primary output is {:?}, wl_output {:?}",
-            //     current_primary_output.as_ref().map(|o| o.name()),
-            //     current_primary_output
-            //         .as_ref()
-            //         .and_then(|o| { self.outputs.get(o) }),
-            // );
             if current_primary_output.as_ref() != Some(output) {
-                // return self
-                //     .window_for_surface(surface)
-                //     .and_then(|win| win.output(self));
                 return None;
             }
 
@@ -539,7 +528,20 @@ impl Pinnacle {
         let now = self.clock.now();
 
         for window in self.space.elements_for_output(output) {
-            window.send_frame(output, now, FRAME_CALLBACK_THROTTLE, should_send);
+            // If the window is tiled and on an active tag, we'll unconditionally send frames.
+            // This works around an issue where snapshots taken with no windows prevent
+            // frames from being sent for new tiled windows until something else causes a render.
+            //
+            // FIXME: Currently this means that `WindowElementState::offscreen_elem_id` is redundant
+            let throttle = if window.is_on_active_tag_on_output(output)
+                && window.with_state(|state| state.window_state.is_tiled())
+            {
+                Some(Duration::ZERO)
+            } else {
+                FRAME_CALLBACK_THROTTLE
+            };
+
+            window.send_frame(output, now, throttle, should_send);
         }
 
         for layer in layer_map_for_output(output).layers() {
@@ -615,6 +617,12 @@ impl Pinnacle {
                     .lock()
                     .unwrap()
                     .update_from_render_element_states(
+                        // Update the primary scanout using the snapshot of the window, if there is one.
+                        // Otherwise just use the ids of this window's surfaces.
+                        //
+                        // Without this, the element id of the snapshot would be different from all
+                        // this window's surfaces, preventing their primary scanout outputs from
+                        // properly updating and potentially causing rendering to get stuck.
                         offscreen_id.clone().unwrap_or_else(|| Id::from(surface)),
                         output,
                         render_element_states,
