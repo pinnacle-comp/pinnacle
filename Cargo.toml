@@ -100,7 +100,6 @@ anyhow = { version = "1.0.86", features = ["backtrace"] }
 thiserror = "1.0.61"
 # xcursor stuff
 xcursor = { version = "0.3.5" }
-image = { version = "0.25.1", default-features = false }
 # gRPC
 prost = { workspace = true }
 tonic = { workspace = true }

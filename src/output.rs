@@ -13,6 +13,7 @@ use smithay::{
     utils::{Logical, Point, Transform},
     wayland::session_lock::LockSurface,
 };
+use tracing::debug;
 
 use crate::{
     backend::BackendData,
@@ -333,6 +334,8 @@ impl Pinnacle {
 
     /// Completely remove an output, for example when a monitor is unplugged
     pub fn remove_output(&mut self, output: &Output) {
+        debug!("Removing output {}", output.name());
+
         let global = self.outputs.shift_remove(output);
         if let Some(mut global) = global {
             if let Some(global) = global.take() {
@@ -345,6 +348,8 @@ impl Pinnacle {
         }
 
         self.space.unmap_output(output);
+
+        self.output_focus_stack.remove(output);
 
         self.gamma_control_manager_state.output_removed(output);
 

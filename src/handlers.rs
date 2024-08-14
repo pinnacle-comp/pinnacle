@@ -154,7 +154,7 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        trace!("commit on surface {surface:?}");
+        // tracing::info!("commit on surface {surface:?}");
 
         utils::on_commit_buffer_handler::<State>(surface);
 
@@ -273,6 +273,13 @@ impl CompositorHandler for State {
                             } else {
                                 self.pinnacle.begin_layout_transaction(&focused_output);
                                 self.pinnacle.request_layout(&focused_output);
+
+                                // FIXME: Map immediately to get the primary scanout output to be correct
+                                // self.pinnacle.space.map_element(
+                                //     unmapped_window.clone(),
+                                //     focused_output.current_location(),
+                                //     true,
+                                // );
                             }
 
                             // It seems wlcs needs immediate frame sends for client tests to work
@@ -416,6 +423,15 @@ impl CompositorHandler for State {
             .cloned()
         {
             vec![output] // surface is a layer surface
+        } else if matches!(self.pinnacle.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
+        {
+            // This is a cursor surface
+            // TODO: granular
+            self.pinnacle.space.outputs().cloned().collect()
+        } else if self.pinnacle.dnd_icon.as_ref() == Some(surface) {
+            // This is a dnd icon
+            // TODO: granular
+            self.pinnacle.space.outputs().cloned().collect()
         } else if let Some(output) = self
             .pinnacle
             .space
@@ -912,7 +928,8 @@ impl OutputManagementHandler for State {
                 OutputConfiguration::Disabled => {
                     self.pinnacle.set_output_enabled(&output, false);
                     // TODO: split
-                    self.backend.set_output_powered(&output, false);
+                    self.backend
+                        .set_output_powered(&output, &self.pinnacle.loop_handle, false);
                 }
                 OutputConfiguration::Enabled {
                     mode,
@@ -923,7 +940,8 @@ impl OutputManagementHandler for State {
                 } => {
                     self.pinnacle.set_output_enabled(&output, true);
                     // TODO: split
-                    self.backend.set_output_powered(&output, true);
+                    self.backend
+                        .set_output_powered(&output, &self.pinnacle.loop_handle, true);
 
                     self.capture_snapshots_on_output(&output, []);
 
@@ -985,7 +1003,8 @@ impl OutputPowerManagementHandler for State {
     }
 
     fn set_mode(&mut self, output: &Output, powered: bool) {
-        self.backend.set_output_powered(output, powered);
+        self.backend
+            .set_output_powered(output, &self.pinnacle.loop_handle, powered);
 
         if powered {
             self.schedule_render(output);

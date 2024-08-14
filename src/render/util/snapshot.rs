@@ -210,7 +210,10 @@ pub fn capture_snapshots_on_output(
                 1.0,
             );
 
-            snapshot.map(SnapshotTarget::Snapshot)
+            snapshot.map(|ss| SnapshotTarget::Snapshot {
+                snapshot: ss,
+                window: win.clone(),
+            })
         } else {
             Some(SnapshotTarget::Window(win))
         }

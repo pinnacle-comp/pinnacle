@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{collections::HashMap, rc::Rc};
 
 use anyhow::Context;
 use smithay::backend::allocator::Fourcc;
+use smithay::utils::IsAlive;
 use smithay::{
     backend::renderer::element::memory::MemoryRenderBuffer,
     input::pointer::{CursorIcon, CursorImageStatus},
@@ -20,13 +21,11 @@ use crate::render::pointer::PointerElement;
 static FALLBACK_CURSOR_DATA: &[u8] = include_bytes!("../resources/cursor.rgba");
 
 pub struct CursorState {
-    start_time: Instant,
     current_cursor_image: CursorImageStatus,
     theme: CursorTheme,
     size: u32,
-    // memory buffer cache
     mem_buffer_cache: Vec<(Image, MemoryRenderBuffer)>,
-    // map of cursor icons to loaded images
+    /// A map of cursor icons to loaded images
     loaded_images: HashMap<CursorIcon, Option<Rc<XCursor>>>,
 }
 
@@ -38,7 +37,6 @@ impl CursorState {
         std::env::set_var("XCURSOR_SIZE", size.to_string());
 
         Self {
-            start_time: Instant::now(),
             current_cursor_image: CursorImageStatus::default_named(),
             theme: CursorTheme::load(&theme),
             size,
@@ -130,36 +128,28 @@ impl CursorState {
         }
     }
 
-    // TODO: update render to wait for est vblank, then you can remove this
-    /// If the current cursor is named and animated, get the time to the next frame, in milliseconds.
-    pub fn time_until_next_animated_cursor_frame(&mut self) -> Option<Duration> {
+    pub fn is_current_cursor_animated(&mut self) -> bool {
         match &self.current_cursor_image {
-            CursorImageStatus::Hidden => None,
+            CursorImageStatus::Hidden => false,
             CursorImageStatus::Named(icon) => {
                 let cursor = self
                     .get_xcursor_images(*icon)
                     .or_else(|| self.get_xcursor_images(CursorIcon::Default))
                     .unwrap();
 
-                if cursor.images.len() <= 1 {
-                    return None;
-                }
-
-                let mut millis = self.start_time.elapsed().as_millis() as u32;
-                let animation_length_ms = nearest_size_images(self.size, &cursor.images)
-                    .fold(0, |acc, image| acc + image.delay);
-                millis %= animation_length_ms;
-
-                for img in nearest_size_images(self.size, &cursor.images) {
-                    if millis < img.delay {
-                        return Some(Duration::from_millis((img.delay - millis).into()));
-                    }
-                    millis -= img.delay;
-                }
-
-                None
+                let is_animated = cursor.images.len() > 1;
+                is_animated
             }
-            CursorImageStatus::Surface(_) => None,
+            CursorImageStatus::Surface(_) => false,
+        }
+    }
+
+    /// Cleans up the current cursor if it is a dead WlSurface.
+    pub fn cleanup(&mut self) {
+        if let CursorImageStatus::Surface(surface) = &self.current_cursor_image {
+            if !surface.alive() {
+                self.current_cursor_image = CursorImageStatus::default_named();
+            }
         }
     }
 }
@@ -171,12 +161,14 @@ pub struct XCursor {
 impl XCursor {
     pub fn image(&self, time: Duration, size: u32) -> Image {
         let mut millis = time.as_millis() as u32;
+
         let animation_length_ms =
             nearest_size_images(size, &self.images).fold(0, |acc, image| acc + image.delay);
-        millis %= animation_length_ms;
+
+        millis = millis.checked_rem(animation_length_ms).unwrap_or_default();
 
         for img in nearest_size_images(size, &self.images) {
-            if millis < img.delay {
+            if millis <= img.delay {
                 return img.clone();
             }
             millis -= img.delay;

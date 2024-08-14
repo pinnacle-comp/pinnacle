@@ -1343,7 +1343,9 @@ impl output_service_server::OutputService for OutputService {
                 return;
             };
 
-            state.backend.set_output_powered(&output, powered);
+            state
+                .backend
+                .set_output_powered(&output, &state.pinnacle.loop_handle, powered);
 
             if powered {
                 state.schedule_render(&output);

@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 mod drm;
+mod frame;
 mod gamma;
 
 use assert_matches::assert_matches;
 pub use drm::util::drm_mode_from_api_modeline;
+use frame::FrameClock;
 use indexmap::IndexSet;
 
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, mem, path::Path, time::Duration};
 
 use anyhow::{anyhow, ensure, Context};
-use drm::{set_crtc_active, util::create_drm_mode};
+use drm::{
+    set_crtc_active,
+    util::{create_drm_mode, refresh_interval},
+};
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
@@ -27,7 +32,7 @@ use smithay::{
         egl::{self, context::ContextPriority, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            self, damage,
+            self,
             element::{self, surface::render_elements_from_surface_tree, Element, Id},
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
@@ -45,12 +50,13 @@ use smithay::{
         SwapBuffersError,
     },
     desktop::utils::OutputPresentationFeedback,
-    input::pointer::CursorImageStatus,
     output::{Output, PhysicalProperties, Subpixel},
     reexports::{
         calloop::{
-            self, generic::Generic, timer::Timer, Dispatcher, Idle, Interest, LoopHandle,
-            PostAction, RegistrationToken,
+            self,
+            generic::Generic,
+            timer::{TimeoutAction, Timer},
+            Dispatcher, Interest, LoopHandle, PostAction, RegistrationToken,
         },
         drm::control::{connector, crtc, ModeTypeFlags},
         input::Libinput,
@@ -64,7 +70,7 @@ use smithay::{
             DisplayHandle,
         },
     },
-    utils::{DeviceFd, IsAlive, Point, Rectangle, Transform},
+    utils::{DeviceFd, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         shm::shm_format_to_fourcc,
@@ -81,7 +87,7 @@ use crate::{
         pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
         CLEAR_COLOR, CLEAR_COLOR_LOCKED,
     },
-    state::{Pinnacle, State, SurfaceDmabufFeedback, WithState},
+    state::{FrameCallbackSequence, Pinnacle, State, WithState},
 };
 
 use self::drm::util::EdidInfo;
@@ -333,7 +339,7 @@ impl Udev {
                                     // Also welcome to some really doodoo code
 
                                     for (crtc, surface) in backend.surfaces.iter_mut() {
-                                        match std::mem::take(&mut surface.pending_gamma_change) {
+                                        match mem::take(&mut surface.pending_gamma_change) {
                                             PendingGammaChange::Idle => {
                                                 debug!("Restoring from previous gamma");
                                                 if let Err(err) = Udev::set_gamma_internal(
@@ -450,34 +456,43 @@ impl Udev {
     }
 
     /// Schedule a new render that will cause the compositor to redraw everything.
-    pub fn schedule_render(&mut self, loop_handle: &LoopHandle<State>, output: &Output) {
+    pub fn schedule_render(&mut self, output: &Output) {
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             debug!("no render surface on output {}", output.name());
             return;
         };
 
-        // tracing::info!(state = ?surface.render_state, name = output.name());
+        let old_state = mem::take(&mut surface.render_state);
 
-        match &surface.render_state {
-            RenderState::Idle => {
-                let output = output.clone();
-                let token = loop_handle.insert_idle(move |state| {
-                    state
-                        .backend
-                        .udev_mut()
-                        .render_surface(&mut state.pinnacle, &output);
-                });
+        // tracing::info!(
+        //     ?old_state,
+        //     op = output.name(),
+        //     powered = output.with_state(|state| state.powered),
+        //     "scheduled render"
+        // );
 
-                surface.render_state = RenderState::Scheduled(token);
+        surface.render_state = match old_state {
+            RenderState::Idle => RenderState::Scheduled,
+
+            value @ (RenderState::Scheduled
+            | RenderState::WaitingForEstimatedVblankAndScheduled(_)) => value,
+
+            RenderState::WaitingForVblank { .. } => RenderState::WaitingForVblank {
+                render_needed: true,
+            },
+
+            RenderState::WaitingForEstimatedVblank(token) => {
+                RenderState::WaitingForEstimatedVblankAndScheduled(token)
             }
-            RenderState::Scheduled(_) => (),
-            RenderState::WaitingForVblank { dirty: _ } => {
-                surface.render_state = RenderState::WaitingForVblank { dirty: true }
-            }
-        }
+        };
     }
 
-    pub(super) fn set_output_powered(&mut self, output: &Output, powered: bool) {
+    pub(super) fn set_output_powered(
+        &mut self,
+        output: &Output,
+        loop_handle: &LoopHandle<'static, State>,
+        powered: bool,
+    ) {
         let UdevOutputData { device_id, crtc } =
             output.user_data().get::<UdevOutputData>().unwrap();
 
@@ -507,8 +522,11 @@ impl Udev {
             }
 
             if let Some(surface) = render_surface_for_output(output, &mut self.backends) {
-                if let RenderState::Scheduled(idle) = std::mem::take(&mut surface.render_state) {
-                    idle.cancel();
+                if let RenderState::WaitingForEstimatedVblankAndScheduled(token)
+                | RenderState::WaitingForEstimatedVblank(token) =
+                    mem::take(&mut surface.render_state)
+                {
+                    loop_handle.remove(token);
                 }
             }
         }
@@ -634,7 +652,7 @@ fn get_surface_dmabuf_feedback(
     render_node: DrmNode,
     gpu_manager: &mut GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     composition: &GbmDrmCompositor,
-) -> Option<DrmSurfaceDmabufFeedback> {
+) -> Option<SurfaceDmabufFeedback> {
     let primary_formats = gpu_manager
         .single_renderer(&primary_gpu)
         .ok()?
@@ -683,15 +701,16 @@ fn get_surface_dmabuf_feedback(
         .build()
         .ok()?; // INFO: this is an unwrap in Anvil, does it matter?
 
-    Some(DrmSurfaceDmabufFeedback {
+    Some(SurfaceDmabufFeedback {
         render_feedback,
         scanout_feedback,
     })
 }
 
-struct DrmSurfaceDmabufFeedback {
-    render_feedback: DmabufFeedback,
-    scanout_feedback: DmabufFeedback,
+#[derive(Debug)]
+pub struct SurfaceDmabufFeedback {
+    pub render_feedback: DmabufFeedback,
+    pub scanout_feedback: DmabufFeedback,
 }
 
 /// The state of a [`RenderSurface`].
@@ -700,20 +719,18 @@ enum RenderState {
     /// No render is scheduled.
     #[default]
     Idle,
-    // TODO: remove the token on tty switch or output unplug
-    /// A render has been queued.
-    Scheduled(
-        /// The idle token from a render being scheduled.
-        /// This is used to cancel renders if, for example,
-        /// the output being rendered is removed.
-        Idle<'static>,
-    ),
-    /// A frame was rendered and scheduled and we are waiting for vblank.
+    /// A render is scheduled to happen at the end of the current event loop cycle.
+    Scheduled,
+    /// A frame was rendered and we are waiting for vblank.
     WaitingForVblank {
         /// A render was scheduled while waiting for vblank.
         /// In this case, another render will be scheduled once vblank happens.
-        dirty: bool,
+        render_needed: bool,
     },
+    /// A frame caused no damage, but we'll still wait as if it did to prevent busy loops.
+    WaitingForEstimatedVblank(RegistrationToken),
+    /// A render was scheduled during a wait for estimated vblank.
+    WaitingForEstimatedVblankAndScheduled(RegistrationToken),
 }
 
 /// Render surface for an output.
@@ -727,12 +744,15 @@ struct RenderSurface {
     render_node: DrmNode,
     /// The thing rendering elements and queueing frames.
     compositor: GbmDrmCompositor,
-    dmabuf_feedback: Option<DrmSurfaceDmabufFeedback>,
+    dmabuf_feedback: Option<SurfaceDmabufFeedback>,
     render_state: RenderState,
     screencopy_commit_state: ScreencopyCommitState,
 
     previous_gamma: Option<[Box<[u16]>; 3]>,
     pending_gamma_change: PendingGammaChange,
+
+    frame_clock: FrameClock,
+    frame_callback_sequence: FrameCallbackSequence,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -759,26 +779,6 @@ type GbmDrmCompositor = DrmCompositor<
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;
-
-/// Render a frame with the given elements.
-///
-/// This frame needs to be queued for scanout afterwards.
-fn render_frame<'a>(
-    compositor: &mut GbmDrmCompositor,
-    renderer: &mut UdevRenderer<'a>,
-    elements: &'a [OutputRenderElement<UdevRenderer<'a>>],
-    clear_color: [f32; 4],
-) -> Result<UdevRenderFrameResult<'a>, SwapBuffersError> {
-    use smithay::backend::drm::compositor::RenderFrameError;
-
-    compositor
-        .render_frame(renderer, elements, clear_color)
-        .map_err(|err| match err {
-            RenderFrameError::PrepareFrame(err) => err.into(),
-            RenderFrameError::RenderFrame(damage::Error::Rendering(err)) => err.into(),
-            _ => unreachable!(),
-        })
-}
 
 impl Udev {
     pub fn renderer(&mut self) -> anyhow::Result<UdevRenderer<'_>> {
@@ -809,15 +809,20 @@ impl Udev {
 
         let registration_token = pinnacle
             .loop_handle
-            .insert_source(notifier, move |event, metadata, state| match event {
-                DrmEvent::VBlank(crtc) => {
-                    state
-                        .backend
-                        .udev_mut()
-                        .on_vblank(&mut state.pinnacle, node, crtc, metadata);
-                }
-                DrmEvent::Error(error) => {
-                    error!("{:?}", error);
+            .insert_source(notifier, move |event, metadata, state| {
+                let metadata = metadata.expect("vblank events must have metadata");
+                match event {
+                    DrmEvent::VBlank(crtc) => {
+                        state.backend.udev_mut().on_vblank(
+                            &mut state.pinnacle,
+                            node,
+                            crtc,
+                            metadata,
+                        );
+                    }
+                    DrmEvent::Error(error) => {
+                        error!("{:?}", error);
+                    }
                 }
             })
             .expect("failed to insert drm notifier into event loop");
@@ -890,7 +895,7 @@ impl Udev {
             .unwrap_or(0);
 
         let drm_mode = connector.modes()[mode_id];
-        let wl_mode = smithay::output::Mode::from(drm_mode);
+        let smithay_mode = smithay::output::Mode::from(drm_mode);
 
         let surface = match device
             .drm
@@ -943,7 +948,7 @@ impl Udev {
             state.serial = serial;
         });
 
-        output.set_preferred(wl_mode);
+        output.set_preferred(smithay_mode);
 
         let modes = connector
             .modes()
@@ -975,8 +980,7 @@ impl Udev {
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
 
-        // I like how this is still in here
-        let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
+        let color_formats = if std::env::var("PINNACLE_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
         } else {
             SUPPORTED_FORMATS
@@ -1026,6 +1030,8 @@ impl Udev {
             screencopy_commit_state: ScreencopyCommitState::default(),
             previous_gamma: None,
             pending_gamma_change: PendingGammaChange::Idle,
+            frame_clock: FrameClock::new(Some(refresh_interval(drm_mode))),
+            frame_callback_sequence: FrameCallbackSequence::default(),
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1033,7 +1039,7 @@ impl Udev {
         pinnacle.change_output_state(
             self,
             &output,
-            Some(OutputMode::Smithay(wl_mode)),
+            Some(OutputMode::Smithay(smithay_mode)),
             None,
             None,
             Some(position),
@@ -1158,13 +1164,12 @@ impl Udev {
         }
     }
 
-    /// Mark [`OutputPresentationFeedback`]s as presented and schedule a new render on idle.
     fn on_vblank(
         &mut self,
         pinnacle: &mut Pinnacle,
         dev_id: DrmNode,
         crtc: crtc::Handle,
-        metadata: &mut Option<DrmEventMetadata>,
+        metadata: DrmEventMetadata,
     ) {
         let Some(surface) = self
             .backends
@@ -1192,35 +1197,35 @@ impl Udev {
         {
             Ok(user_data) => {
                 if let Some(mut feedback) = user_data.flatten() {
-                    let tp = metadata.as_ref().and_then(|metadata| match metadata.time {
-                        smithay::backend::drm::DrmEventTime::Monotonic(tp) => Some(tp),
-                        smithay::backend::drm::DrmEventTime::Realtime(_) => None,
-                    });
-                    let seq = metadata
-                        .as_ref()
-                        .map(|metadata| metadata.sequence)
-                        .unwrap_or(0);
+                    let presentation_time = match metadata.time {
+                        smithay::backend::drm::DrmEventTime::Monotonic(tp) => tp,
+                        smithay::backend::drm::DrmEventTime::Realtime(_) => {
+                            // Not supported
 
-                    let (clock, flags) = if let Some(tp) = tp {
-                        (
-                            tp.into(),
-                            wp_presentation_feedback::Kind::Vsync
-                                | wp_presentation_feedback::Kind::HwClock
-                                | wp_presentation_feedback::Kind::HwCompletion,
-                        )
+                            // This value will be ignored in the frame clock code
+                            Duration::ZERO
+                        }
+                    };
+                    let seq = metadata.sequence as u64;
+
+                    let mut flags = wp_presentation_feedback::Kind::Vsync
+                        | wp_presentation_feedback::Kind::HwCompletion;
+
+                    let time: Duration = if presentation_time.is_zero() {
+                        pinnacle.clock.now().into()
                     } else {
-                        (pinnacle.clock.now(), wp_presentation_feedback::Kind::Vsync)
+                        flags.insert(wp_presentation_feedback::Kind::HwClock);
+                        presentation_time
                     };
 
-                    feedback.presented(
-                        clock,
-                        output
-                            .current_mode()
-                            .map(|mode| Duration::from_secs_f64(1000f64 / mode.refresh as f64))
-                            .unwrap_or_default(),
-                        seq as u64,
+                    feedback.presented::<_, smithay::utils::Monotonic>(
+                        time,
+                        surface.frame_clock.refresh_interval().unwrap_or_default(),
+                        seq,
                         flags,
                     );
+
+                    surface.frame_clock.presented(presentation_time);
                 }
 
                 output.with_state_mut(|state| {
@@ -1238,56 +1243,31 @@ impl Udev {
             }
         };
 
-        let dirty = match std::mem::take(&mut surface.render_state) {
-            RenderState::WaitingForVblank { dirty } => dirty,
+        let render_needed = match mem::take(&mut surface.render_state) {
+            RenderState::WaitingForVblank { render_needed } => render_needed,
             state => {
                 debug!("vblank happened but render state was {state:?}",);
-                self.schedule_render(&pinnacle.loop_handle, &output);
                 return;
             }
         };
 
-        if dirty {
-            self.schedule_render(&pinnacle.loop_handle, &output);
+        if render_needed || pinnacle.cursor_state.is_current_cursor_animated() {
+            self.schedule_render(&output);
         } else {
-            for window in pinnacle.windows.iter() {
-                window.send_frame(
-                    &output,
-                    pinnacle.clock.now(),
-                    Some(Duration::ZERO),
-                    |_, _| Some(output.clone()),
-                );
-            }
+            pinnacle.send_frame_callbacks(&output, Some(surface.frame_callback_sequence));
         }
+    }
 
-        // Schedule a render when the next frame of an animated cursor should be drawn.
-        //
-        // TODO: Remove this and improve the render pipeline.
-        // Because of how the event loop works and the current implementation of rendering,
-        // immediately queuing a render here has the possibility of not submitting a new frame to
-        // DRM, meaning no vblank. The event loop will wait as it has no events, so things like
-        // animated cursors may hitch and only update when, for example, the cursor is actively
-        // moving as this generates events.
-        //
-        // What we should do is what Niri does: if `render_surface` doesn't cause any damage,
-        // instead of setting the `RenderState` to Idle, set it to some "waiting for estimated
-        // vblank" state and have `render_surface` always schedule a timer to fire at the estimated
-        // vblank time that will attempt another render schedule.
-        //
-        // This has the advantage of scheduling a render in a source and not in an idle callback,
-        // meaning we are guarenteed to have a render happen immediately and we won't have to wait
-        // for another event or call `loop_signal.wakeup()`.
-        if let Some(until) = pinnacle
-            .cursor_state
-            .time_until_next_animated_cursor_frame()
-        {
-            let _ = pinnacle.loop_handle.insert_source(
-                Timer::from_duration(until),
-                move |_, _, state| {
-                    state.schedule_render(&output);
-                    calloop::timer::TimeoutAction::Drop
-                },
-            );
+    pub(super) fn render_if_scheduled(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            return;
+        };
+
+        if matches!(
+            surface.render_state,
+            RenderState::Scheduled | RenderState::WaitingForEstimatedVblankAndScheduled(_)
+        ) {
+            self.render_surface(pinnacle, output);
         }
     }
 
@@ -1310,7 +1290,14 @@ impl Udev {
             return;
         }
 
-        assert_matches!(surface.render_state, RenderState::Scheduled(_));
+        assert_matches!(
+            surface.render_state,
+            RenderState::Scheduled | RenderState::WaitingForEstimatedVblankAndScheduled(_)
+        );
+
+        let time_to_next_presentation = surface
+            .frame_clock
+            .time_to_next_presentation(&pinnacle.clock);
 
         let render_node = surface.render_node;
         let primary_gpu = self.primary_gpu;
@@ -1325,20 +1312,6 @@ impl Udev {
 
         let _ = renderer.upscale_filter(self.upscale_filter);
         let _ = renderer.downscale_filter(self.downscale_filter);
-
-        ///////////////////////////////////////////////////////////////////////////////////////////
-
-        // draw the cursor as relevant and
-        // reset the cursor if the surface is no longer alive
-        if let CursorImageStatus::Surface(surface) = &pinnacle.cursor_state.cursor_image() {
-            if !surface.alive() {
-                pinnacle
-                    .cursor_state
-                    .set_cursor_image(CursorImageStatus::default_named());
-            }
-        }
-
-        ///////////////////////////////////////////////////////////////////////////////////////////
 
         let pointer_location = pinnacle
             .seat
@@ -1420,74 +1393,182 @@ impl Udev {
             CLEAR_COLOR_LOCKED
         };
 
-        let result = (|| -> Result<bool, SwapBuffersError> {
-            let render_frame_result = render_frame(
-                &mut surface.compositor,
-                &mut renderer,
-                &output_render_elements,
-                clear_color,
-            )?;
+        let render_frame_result =
+            surface
+                .compositor
+                .render_frame(&mut renderer, &output_render_elements, clear_color);
 
-            if let PrimaryPlaneElement::Swapchain(element) = &render_frame_result.primary_element {
-                if let Err(err) = element.sync.wait() {
-                    warn!("Failed to wait for sync point: {err}");
+        let failed = match render_frame_result {
+            Ok(res) => {
+                if res.needs_sync() {
+                    if let PrimaryPlaneElement::Swapchain(element) = &res.primary_element {
+                        if let Err(err) = element.sync.wait() {
+                            warn!("Failed to wait for sync point: {err}");
+                        }
+                    }
+                }
+
+                if pinnacle.lock_state.is_unlocked() {
+                    handle_pending_screencopy(
+                        &mut renderer,
+                        output,
+                        surface,
+                        &res,
+                        &pinnacle.loop_handle,
+                        cursor_ids,
+                    );
+                }
+
+                pinnacle.update_primary_scanout_output(output, &res.states);
+
+                if let Some(dmabuf_feedback) = surface.dmabuf_feedback.as_ref() {
+                    pinnacle.send_dmabuf_feedback(output, dmabuf_feedback, &res.states);
+                }
+
+                let rendered = !res.is_empty;
+
+                if rendered {
+                    let output_presentation_feedback =
+                        take_presentation_feedback(output, &pinnacle.space, &res.states);
+
+                    match surface
+                        .compositor
+                        .queue_frame(Some(output_presentation_feedback))
+                    {
+                        Ok(()) => {
+                            let new_state = RenderState::WaitingForVblank {
+                                render_needed: false,
+                            };
+
+                            match mem::replace(&mut surface.render_state, new_state) {
+                                RenderState::Idle => unreachable!(),
+                                RenderState::Scheduled => (),
+                                RenderState::WaitingForVblank { .. } => unreachable!(),
+                                RenderState::WaitingForEstimatedVblank(_) => unreachable!(),
+                                RenderState::WaitingForEstimatedVblankAndScheduled(token) => {
+                                    pinnacle.loop_handle.remove(token);
+                                }
+                            };
+
+                            // From niri: We queued this frame successfully, so the current client buffers were
+                            // latched. We can send frame callbacks now, since a new client commit
+                            // will no longer overwrite this frame and will wait for a VBlank.
+                            surface.frame_callback_sequence.increment();
+
+                            pinnacle.send_frame_callbacks(
+                                output,
+                                Some(surface.frame_callback_sequence),
+                            );
+
+                            if render_after_transaction_finish {
+                                self.schedule_render(output);
+                            }
+
+                            // Return here to not queue the estimated vblank timer on a submitted frame
+                            return;
+                        }
+                        Err(err) => {
+                            warn!("Error queueing frame: {err}");
+                            true
+                        }
+                    }
+                } else {
+                    false
                 }
             }
-
-            if pinnacle.lock_state.is_unlocked() {
-                handle_pending_screencopy(
-                    &mut renderer,
-                    output,
-                    surface,
-                    &render_frame_result,
-                    &pinnacle.loop_handle,
-                    cursor_ids,
-                );
+            Err(err) => {
+                // Can fail if we switched to a different TTY
+                warn!("Render failed for surface: {err}");
+                true
             }
+        };
 
-            super::post_repaint(
-                output,
-                &render_frame_result.states,
-                &pinnacle.space,
-                surface
-                    .dmabuf_feedback
-                    .as_ref()
-                    .map(|feedback| SurfaceDmabufFeedback {
-                        render_feedback: &feedback.render_feedback,
-                        scanout_feedback: &feedback.scanout_feedback,
-                    }),
-                Duration::from(pinnacle.clock.now()),
-                pinnacle.cursor_state.cursor_image(),
-            );
+        Self::queue_estimated_vblank_timer(surface, pinnacle, output, time_to_next_presentation);
 
-            let rendered = !render_frame_result.is_empty;
-
-            if rendered {
-                let output_presentation_feedback = take_presentation_feedback(
-                    output,
-                    &pinnacle.space,
-                    &render_frame_result.states,
-                );
-
-                surface
-                    .compositor
-                    .queue_frame(Some(output_presentation_feedback))
-                    .map_err(SwapBuffersError::from)?;
-            }
-
-            Ok(rendered)
-        })();
-
-        match result {
-            Ok(true) => surface.render_state = RenderState::WaitingForVblank { dirty: false },
-            // TODO: Don't immediately set this to Idle; this allows hot loops of `render_surface`.
-            // Instead, pull a Niri and schedule a timer for the next estimated vblank to allow
-            // another scheduled render.
-            Ok(false) | Err(_) => surface.render_state = RenderState::Idle,
+        if failed {
+            surface.render_state = if let RenderState::WaitingForEstimatedVblank(token)
+            | RenderState::WaitingForEstimatedVblankAndScheduled(
+                token,
+            ) = surface.render_state
+            {
+                RenderState::WaitingForEstimatedVblank(token)
+            } else {
+                RenderState::Idle
+            };
         }
 
         if render_after_transaction_finish {
-            self.schedule_render(&pinnacle.loop_handle, output);
+            self.schedule_render(output);
+        }
+    }
+
+    fn queue_estimated_vblank_timer(
+        surface: &mut RenderSurface,
+        pinnacle: &mut Pinnacle,
+        output: &Output,
+        mut time_to_next_presentation: Duration,
+    ) {
+        match mem::take(&mut surface.render_state) {
+            RenderState::Idle => unreachable!(),
+            RenderState::Scheduled => (),
+            RenderState::WaitingForVblank { .. } => unreachable!(),
+            RenderState::WaitingForEstimatedVblank(token)
+            | RenderState::WaitingForEstimatedVblankAndScheduled(token) => {
+                surface.render_state = RenderState::WaitingForEstimatedVblank(token);
+                return;
+            }
+        }
+
+        // No use setting a zero timer, since we'll send frame callbacks anyway right after the call to
+        // render(). This can happen for example with unknown presentation time from DRM.
+        if time_to_next_presentation.is_zero() {
+            time_to_next_presentation += surface
+                .frame_clock
+                .refresh_interval()
+                // Unknown refresh interval, i.e. winit backend. Would be good to estimate it somehow
+                // but it's not that important for this code path.
+                .unwrap_or(Duration::from_micros(16_667));
+        }
+
+        let timer = Timer::from_duration(time_to_next_presentation);
+
+        let output = output.clone();
+        let token = pinnacle
+            .loop_handle
+            .insert_source(timer, move |_, _, state| {
+                state
+                    .backend
+                    .udev_mut()
+                    .on_estimated_vblank_timer(&mut state.pinnacle, &output);
+                TimeoutAction::Drop
+            })
+            .unwrap();
+
+        surface.render_state = RenderState::WaitingForEstimatedVblank(token);
+    }
+
+    fn on_estimated_vblank_timer(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
+            return;
+        };
+
+        surface.frame_callback_sequence.increment();
+
+        match mem::take(&mut surface.render_state) {
+            RenderState::Idle => unreachable!(),
+            RenderState::Scheduled => unreachable!(),
+            RenderState::WaitingForVblank { .. } => unreachable!(),
+            RenderState::WaitingForEstimatedVblank(_) => (),
+            RenderState::WaitingForEstimatedVblankAndScheduled(_) => {
+                surface.render_state = RenderState::Scheduled;
+                return;
+            }
+        }
+
+        if pinnacle.cursor_state.is_current_cursor_animated() {
+            self.schedule_render(output);
+        } else {
+            pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
         }
     }
 }
@@ -1514,7 +1595,7 @@ fn handle_pending_screencopy<'a>(
     let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
         return;
     };
-    assert!(screencopy.output() == output);
+    assert_eq!(screencopy.output(), output);
 
     let untransformed_output_size = output.current_mode().expect("output no mode").size;
 
