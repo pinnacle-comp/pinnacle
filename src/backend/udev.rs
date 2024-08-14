@@ -1398,7 +1398,7 @@ impl Udev {
                 .compositor
                 .render_frame(&mut renderer, &output_render_elements, clear_color);
 
-        match render_frame_result {
+        let failed = match render_frame_result {
             Ok(res) => {
                 if res.needs_sync() {
                     if let PrimaryPlaneElement::Swapchain(element) = &res.primary_element {
@@ -1460,32 +1460,42 @@ impl Udev {
                                 Some(surface.frame_callback_sequence),
                             );
 
+                            if render_after_transaction_finish {
+                                self.schedule_render(output);
+                            }
+
                             // Return here to not queue the estimated vblank timer on a submitted frame
                             return;
                         }
                         Err(err) => {
                             warn!("Error queueing frame: {err}");
+                            true
                         }
                     }
+                } else {
+                    false
                 }
             }
             Err(err) => {
                 // Can fail if we switched to a different TTY
                 warn!("Render failed for surface: {err}");
-
-                surface.render_state = if let RenderState::WaitingForEstimatedVblank(token)
-                | RenderState::WaitingForEstimatedVblankAndScheduled(
-                    token,
-                ) = surface.render_state
-                {
-                    RenderState::WaitingForEstimatedVblank(token)
-                } else {
-                    RenderState::Idle
-                };
+                true
             }
-        }
+        };
 
-        self.queue_estimated_vblank_timer(pinnacle, output, time_to_next_presentation);
+        Self::queue_estimated_vblank_timer(surface, pinnacle, output, time_to_next_presentation);
+
+        if failed {
+            surface.render_state = if let RenderState::WaitingForEstimatedVblank(token)
+            | RenderState::WaitingForEstimatedVblankAndScheduled(
+                token,
+            ) = surface.render_state
+            {
+                RenderState::WaitingForEstimatedVblank(token)
+            } else {
+                RenderState::Idle
+            };
+        }
 
         if render_after_transaction_finish {
             self.schedule_render(output);
@@ -1493,20 +1503,13 @@ impl Udev {
     }
 
     fn queue_estimated_vblank_timer(
-        &mut self,
+        surface: &mut RenderSurface,
         pinnacle: &mut Pinnacle,
         output: &Output,
         mut time_to_next_presentation: Duration,
     ) {
-        let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
-            return;
-        };
-
         match mem::take(&mut surface.render_state) {
-            RenderState::Idle => {
-                // TODO: supposed to be unreachable, fix above
-                // unreachable!()
-            }
+            RenderState::Idle => unreachable!(),
             RenderState::Scheduled => (),
             RenderState::WaitingForVblank { .. } => unreachable!(),
             RenderState::WaitingForEstimatedVblank(token)
