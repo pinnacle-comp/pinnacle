@@ -274,13 +274,6 @@ impl CompositorHandler for State {
                             } else {
                                 self.pinnacle.begin_layout_transaction(&focused_output);
                                 self.pinnacle.request_layout(&focused_output);
-
-                                // FIXME: Map immediately to get the primary scanout output to be correct
-                                // self.pinnacle.space.map_element(
-                                //     unmapped_window.clone(),
-                                //     focused_output.current_location(),
-                                //     true,
-                                // );
                             }
 
                             // It seems wlcs needs immediate frame sends for client tests to work

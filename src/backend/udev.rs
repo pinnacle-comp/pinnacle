@@ -1190,6 +1190,16 @@ impl Udev {
             return;
         };
 
+        let presentation_time = match metadata.time {
+            smithay::backend::drm::DrmEventTime::Monotonic(tp) => tp,
+            smithay::backend::drm::DrmEventTime::Realtime(_) => {
+                // Not supported
+
+                // This value will be ignored in the frame clock code
+                Duration::ZERO
+            }
+        };
+
         match surface
             .compositor
             .frame_submitted()
@@ -1197,15 +1207,6 @@ impl Udev {
         {
             Ok(user_data) => {
                 if let Some(mut feedback) = user_data.flatten() {
-                    let presentation_time = match metadata.time {
-                        smithay::backend::drm::DrmEventTime::Monotonic(tp) => tp,
-                        smithay::backend::drm::DrmEventTime::Realtime(_) => {
-                            // Not supported
-
-                            // This value will be ignored in the frame clock code
-                            Duration::ZERO
-                        }
-                    };
                     let seq = metadata.sequence as u64;
 
                     let mut flags = wp_presentation_feedback::Kind::Vsync
@@ -1224,8 +1225,6 @@ impl Udev {
                         seq,
                         flags,
                     );
-
-                    surface.frame_clock.presented(presentation_time);
                 }
 
                 output.with_state_mut(|state| {
@@ -1242,6 +1241,8 @@ impl Udev {
                 }
             }
         };
+
+        surface.frame_clock.presented(presentation_time);
 
         let render_needed = match mem::take(&mut surface.render_state) {
             RenderState::WaitingForVblank { render_needed } => render_needed,
@@ -1518,6 +1519,8 @@ impl Udev {
                 RenderState::Idle
             };
         }
+
+        pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
 
         if render_after_transaction_finish {
             self.schedule_render(output);
