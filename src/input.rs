@@ -37,7 +37,7 @@ use smithay::{
             RelativeMotionEvent,
         },
     },
-    reexports::input::{self, Led},
+    reexports::input,
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
         compositor::{self, RegionAttributes, SurfaceAttributes},
@@ -438,21 +438,6 @@ impl State {
             .seat
             .get_keyboard()
             .expect("Seat has no keyboard");
-
-        let modifiers = keyboard.modifier_state();
-
-        let mut leds = Led::empty();
-        if modifiers.num_lock {
-            leds |= Led::NUMLOCK;
-        }
-        if modifiers.caps_lock {
-            leds |= Led::CAPSLOCK;
-        }
-
-        // FIXME: Leds only update once another key is pressed.
-        for device in self.pinnacle.input_state.libinput_devices.iter_mut() {
-            device.led_update(leds);
-        }
 
         if self.pinnacle.lock_state.is_unlocked() {
             // Focus the topmost exclusive layer, if any

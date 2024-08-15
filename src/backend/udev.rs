@@ -1274,19 +1274,41 @@ impl Udev {
     /// Render to the [`RenderSurface`] associated with the given `output`.
     #[tracing::instrument(level = "debug", skip(self, pinnacle), fields(output = output.name()))]
     fn render_surface(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let UdevOutputData { device_id, .. } = output.user_data().get().unwrap();
+        let is_active = self
+            .backends
+            .get(device_id)
+            .map(|device| device.drm.is_active())
+            .unwrap_or_default();
+
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
 
+        let make_idle = |render_state: &mut RenderState,
+                         loop_handle: &LoopHandle<'static, State>| {
+            if let RenderState::WaitingForEstimatedVblankAndScheduled(token)
+            | RenderState::WaitingForEstimatedVblank(token) = mem::take(render_state)
+            {
+                loop_handle.remove(token);
+            }
+        };
+
+        if !is_active {
+            warn!("Device is inactive");
+            make_idle(&mut surface.render_state, &pinnacle.loop_handle);
+            return;
+        }
+
         if !pinnacle.outputs.contains_key(output) {
-            surface.render_state = RenderState::Idle;
+            make_idle(&mut surface.render_state, &pinnacle.loop_handle);
             return;
         }
 
         // TODO: possibly lift this out and make it so that scheduling a render
         // does nothing on powered off outputs
         if output.with_state(|state| !state.powered) {
-            surface.render_state = RenderState::Idle;
+            make_idle(&mut surface.render_state, &pinnacle.loop_handle);
             return;
         }
 

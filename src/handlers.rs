@@ -26,6 +26,7 @@ use smithay::{
         PopupManager, WindowSurfaceType,
     },
     input::{
+        keyboard::LedState,
         pointer::{CursorImageStatus, PointerHandle},
         Seat, SeatHandler, SeatState,
     },
@@ -669,6 +670,12 @@ impl SeatHandler for State {
         });
         set_data_device_focus(&self.pinnacle.display_handle, seat, focus_client.clone());
         set_primary_focus(&self.pinnacle.display_handle, seat, focus_client);
+    }
+
+    fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
+        for device in self.pinnacle.input_state.libinput_devices.iter_mut() {
+            device.led_update(led_state.into());
+        }
     }
 }
 delegate_seat!(State);
