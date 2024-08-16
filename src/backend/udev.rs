@@ -1580,7 +1580,9 @@ impl Udev {
         surface.frame_callback_sequence.increment();
 
         match mem::take(&mut surface.render_state) {
-            RenderState::Idle => unreachable!(),
+            RenderState::Idle => {
+                // FIXME: this is still reachable after sleep
+            }
             RenderState::Scheduled => unreachable!(),
             RenderState::WaitingForVblank { .. } => unreachable!(),
             RenderState::WaitingForEstimatedVblank(_) => (),
