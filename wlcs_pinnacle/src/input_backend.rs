@@ -286,6 +286,18 @@ pub struct WlcsTouchMotionEvent {
     pub position: Point<f64, Logical>,
 }
 
+// [MODIFICAÇÃO] Forçar atualização do layout após wakeup
+event_loop
+    .run(None, &mut state, |state| {
+        state.on_event_loop_cycle_completion();
+
+        // **Modificação**: Força a renderização do layout logo após o wakeup
+        if state.pinnacle.is_resumed_from_wakeup() {
+            state.pinnacle.space.refresh_layouts();
+        }
+    })
+    .expect("failed to run event_loop");
+
 impl From<WlcsTouchMotionEvent> for InputEvent<WlcsInputBackend> {
     fn from(event: WlcsTouchMotionEvent) -> Self {
         InputEvent::<WlcsInputBackend>::TouchMotion { event }
