@@ -103,10 +103,9 @@ TODO: other distros
 
 # Building
 
-Clone this repository and, if building with Snowcap integration, update the `snowcap` submodule:
+Clone this repository:
 ```sh
 git clone https://github.com/pinnacle-comp/pinnacle
-git submodule update --init
 ```
 
 > [!NOTE]
