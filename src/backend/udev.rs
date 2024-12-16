@@ -73,6 +73,7 @@ use smithay::{
     utils::{DeviceFd, Point, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+        presentation::Refresh,
         shm::shm_format_to_fourcc,
     },
 };
@@ -1221,7 +1222,11 @@ impl Udev {
 
                     feedback.presented::<_, smithay::utils::Monotonic>(
                         time,
-                        surface.frame_clock.refresh_interval().unwrap_or_default(),
+                        surface
+                            .frame_clock
+                            .refresh_interval()
+                            .map(Refresh::Fixed)
+                            .unwrap_or(Refresh::Unknown),
                         seq,
                         flags,
                     );

@@ -513,7 +513,8 @@ impl State {
                         .pinnacle
                         .input_state
                         .no_release_keys
-                        .contains(&event.key_code())
+                        .contains(&event.key_code().into())
+                // TODO: check keycode -> u32
                 {
                     return FilterResult::Intercept(KeyAction::Suppress);
                 }
@@ -521,7 +522,9 @@ impl State {
                 if press_state == KeyState::Pressed {
                     let mod_mask = ModifierMask::from(modifiers);
 
-                    let raw_sym = keysym.raw_syms().iter().next();
+                    // TODO: verify rawsyms are the right thing to do
+                    let raw_syms = keysym.raw_syms();
+                    let raw_sym = raw_syms.first();
                     let mod_sym = keysym.modified_sym();
 
                     if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
@@ -573,7 +576,7 @@ impl State {
             self.pinnacle
                 .input_state
                 .no_release_keys
-                .remove(&event.key_code());
+                .remove(&event.key_code().into()); // TODO: check keycode -> u32
             return;
         }
 
@@ -581,7 +584,7 @@ impl State {
             self.pinnacle
                 .input_state
                 .no_release_keys
-                .insert(event.key_code());
+                .insert(event.key_code().into()); // TODO: check keycode -> u32
             match action {
                 KeyAction::CallCallback(sender) => {
                     let _ = sender.send(Ok(SetKeybindResponse {}));

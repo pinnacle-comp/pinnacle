@@ -20,8 +20,8 @@ use smithay::{
 use crate::{
     pinnacle_render_elements,
     render::{
-        texture::CommonTextureRenderElement, util::snapshot::RenderSnapshot, AsGlesRenderer,
-        PRenderer,
+        util::{snapshot::RenderSnapshot, surface::WlSurfaceTextureRenderElement},
+        AsGlesRenderer, PRenderer,
     },
     state::{State, WithState},
     window::WindowElement,
@@ -31,7 +31,7 @@ use crate::{
 const TIMEOUT: Duration = Duration::from_millis(150);
 
 /// Type for window snapshots.
-pub type LayoutSnapshot = RenderSnapshot<CommonTextureRenderElement>;
+pub type LayoutSnapshot = RenderSnapshot<WlSurfaceTextureRenderElement>;
 
 pinnacle_render_elements! {
     /// Render elements for an output snapshot
@@ -40,7 +40,7 @@ pinnacle_render_elements! {
         /// Draw the window itself.
         Window = WaylandSurfaceRenderElement<R>,
         /// Draw a snapshot of the window.
-        Snapshot = RescaleRenderElement<CommonTextureRenderElement>,
+        Snapshot = RescaleRenderElement<WlSurfaceTextureRenderElement>,
     }
 }
 

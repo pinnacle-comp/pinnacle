@@ -4,10 +4,11 @@ use smithay::{
     backend::renderer::{
         element::{
             self,
-            surface::WaylandSurfaceRenderElement,
+            solid::{SolidColorBuffer, SolidColorRenderElement},
+            surface::{WaylandSurfaceRenderElement, WaylandSurfaceTexture},
             texture::{TextureBuffer, TextureRenderElement},
         },
-        gles::{GlesRenderer, GlesTexture},
+        gles::GlesRenderer,
         utils::RendererSurfaceStateUserData,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -16,7 +17,17 @@ use smithay::{
 };
 use tracing::warn;
 
-/// Render a surface tree as [TextureRenderElement]s instead of wayland ones.
+use crate::{pinnacle_render_elements, render::texture::CommonTextureRenderElement};
+
+pinnacle_render_elements! {
+    #[derive(Debug)]
+    pub enum WlSurfaceTextureRenderElement {
+        Texture = CommonTextureRenderElement,
+        SolidColor = SolidColorRenderElement,
+    }
+}
+
+/// Render a surface tree as [`WlSurfaceTextureRenderElement`]s instead of wayland ones.
 ///
 /// Needed to allow WaylandSurfaceRenderElements to be dropped to free shm buffers.
 pub fn texture_render_elements_from_surface_tree(
@@ -25,10 +36,10 @@ pub fn texture_render_elements_from_surface_tree(
     location: impl Into<Point<i32, Physical>>,
     scale: impl Into<Scale<f64>>,
     alpha: f32,
-) -> Vec<TextureRenderElement<GlesTexture>> {
+) -> Vec<WlSurfaceTextureRenderElement> {
     let location = location.into().to_f64();
     let scale = scale.into();
-    let mut surfaces: Vec<TextureRenderElement<GlesTexture>> = Vec::new();
+    let mut surfaces: Vec<WlSurfaceTextureRenderElement> = Vec::new();
 
     compositor::with_surface_tree_downward(
         surface,
@@ -80,24 +91,41 @@ pub fn texture_render_elements_from_surface_tree(
                             let data = data.lock().unwrap();
                             let view = data.view().unwrap();
 
-                            let texture_buffer = TextureBuffer::from_texture(
-                                renderer,
-                                surface.texture().clone(),
-                                data.buffer_scale(),
-                                data.buffer_transform(),
-                                None,
-                            );
+                            match surface.texture() {
+                                WaylandSurfaceTexture::Texture(texture) => {
+                                    let texture_buffer = TextureBuffer::from_texture(
+                                        renderer,
+                                        texture.clone(),
+                                        data.buffer_scale(),
+                                        data.buffer_transform(),
+                                        None,
+                                    );
 
-                            let texture_elem = TextureRenderElement::from_texture_buffer(
-                                location,
-                                &texture_buffer,
-                                Some(alpha),
-                                Some(view.src),
-                                Some(view.dst),
-                                element::Kind::Unspecified,
-                            );
+                                    let texture_elem = TextureRenderElement::from_texture_buffer(
+                                        location,
+                                        &texture_buffer,
+                                        Some(alpha),
+                                        Some(view.src),
+                                        Some(view.dst),
+                                        element::Kind::Unspecified,
+                                    );
 
-                            surfaces.push(texture_elem);
+                                    surfaces
+                                        .push(CommonTextureRenderElement::new(texture_elem).into());
+                                }
+                                WaylandSurfaceTexture::SolidColor(color) => {
+                                    let solid_color_buffer =
+                                        SolidColorBuffer::new(view.dst, *color);
+                                    let solid_color_elem = SolidColorRenderElement::from_buffer(
+                                        &solid_color_buffer,
+                                        location.to_i32_round(), // INFO: is this the correct rounding
+                                        scale,
+                                        alpha,
+                                        element::Kind::Unspecified,
+                                    );
+                                    surfaces.push(solid_color_elem.into());
+                                }
+                            }
                         }
                         Ok(None) => {} // surface is not mapped
                         Err(err) => {

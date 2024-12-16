@@ -134,7 +134,7 @@ fn render_elements_to_bound_framebuffer(
         .context("failed to start render")?;
 
     frame
-        .clear([0.0, 0.0, 0.0, 0.0], &[dst_rect])
+        .clear([0.0, 0.0, 0.0, 0.0].into(), &[dst_rect])
         .context("failed to clear frame")?;
 
     for elem in elements {

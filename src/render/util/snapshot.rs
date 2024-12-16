@@ -25,6 +25,7 @@ use crate::render::{AsGlesRenderer, PRenderer};
 use crate::state::{Pinnacle, State, WithState};
 use crate::window::WindowElement;
 
+use super::surface::WlSurfaceTextureRenderElement;
 use super::{render_to_encompassing_texture, EncompassingTexture};
 
 /// A snapshot of given elements that can be rendered at some point in the future.
@@ -119,7 +120,11 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
         let scale = Scale::from((1.0 / scale.x, 1.0 / scale.y));
 
         Some(SnapshotRenderElement::Snapshot(
-            RescaleRenderElement::from_element(common, loc, scale),
+            RescaleRenderElement::from_element(
+                WlSurfaceTextureRenderElement::Texture(common),
+                loc,
+                scale,
+            ),
         ))
     }
 }

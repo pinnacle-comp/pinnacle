@@ -3,6 +3,8 @@ use std::{num::NonZeroU64, time::Duration};
 use smithay::utils::{Clock, Monotonic};
 use tracing::error;
 
+// yo i gotta stop copying stuff from niri i don't remember what this is for
+
 pub struct FrameClock {
     last_presentation_time: Option<Duration>,
     refresh_interval_ns: Option<NonZeroU64>,

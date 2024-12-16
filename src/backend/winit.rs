@@ -30,7 +30,10 @@ use smithay::{
         },
     },
     utils::{Point, Rectangle, Transform},
-    wayland::dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+    wayland::{
+        dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
+        presentation::Refresh,
+    },
 };
 use tracing::{debug, error, trace, warn};
 
@@ -401,8 +404,12 @@ impl Winit {
                         now,
                         self.output
                             .current_mode()
-                            .map(|mode| Duration::from_secs_f64(1000f64 / mode.refresh as f64))
-                            .unwrap_or_default(),
+                            .map(|mode| {
+                                Refresh::Fixed(Duration::from_secs_f64(
+                                    1000f64 / mode.refresh as f64,
+                                ))
+                            })
+                            .unwrap_or(Refresh::Unknown),
                         0,
                         wp_presentation_feedback::Kind::Vsync,
                     );

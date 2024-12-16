@@ -51,7 +51,7 @@ tower = { version = "0.5.2", features = ["util"] }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "e7f0857"
+rev = "0f32e8d"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -92,7 +92,7 @@ version = "0.0.1"
 authors.workspace = true
 edition.workspace = true
 license = "GPL-3.0+"
-description = "A WIP Smithay-based Wayland compositor, inspired by AwesomeWM"
+description = "A WIP Smithay-based Wayland compositor"
 readme = "README.md"
 repository.workspace = true
 keywords = ["wayland", "compositor", "smithay", "lua"]
@@ -100,7 +100,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "e7f0857" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "0f32e8d" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -135,7 +135,7 @@ chrono = "0.4.39"
 bytemuck = "1.20.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
-drm-sys = "0.7.0" # TODO: remove and use libdisplay-info
+drm-sys = "0.8.0" # TODO: remove and use libdisplay-info
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }

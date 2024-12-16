@@ -26,6 +26,7 @@ use smithay::{
     utils::{Logical, Point, Scale},
     wayland::shell::wlr_layer,
 };
+use util::surface::WlSurfaceTextureRenderElement;
 
 use crate::{
     backend::{udev::UdevRenderer, Backend},
@@ -36,8 +37,7 @@ use crate::{
 };
 
 use self::{
-    pointer::PointerRenderElement, texture::CommonTextureRenderElement,
-    util::surface::texture_render_elements_from_surface_tree,
+    pointer::PointerRenderElement, util::surface::texture_render_elements_from_surface_tree,
 };
 
 pub const CLEAR_COLOR: [f32; 4] = [0.6, 0.6, 0.6, 1.0];
@@ -117,7 +117,7 @@ impl WindowElement {
         location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Vec<CommonTextureRenderElement> {
+    ) -> Vec<WlSurfaceTextureRenderElement> {
         let location = location - self.geometry().loc;
         let location = location.to_f64().to_physical_precise_round(scale);
 
@@ -139,23 +139,15 @@ impl WindowElement {
                         )
                     });
 
-                render_elements.extend(
-                    popup_render_elements
-                        .into_iter()
-                        .map(CommonTextureRenderElement::new),
-                );
+                render_elements.extend(popup_render_elements);
 
-                render_elements.extend(
-                    texture_render_elements_from_surface_tree(
-                        renderer.as_gles_renderer(),
-                        surface,
-                        location,
-                        scale,
-                        alpha,
-                    )
-                    .into_iter()
-                    .map(CommonTextureRenderElement::new),
-                );
+                render_elements.extend(texture_render_elements_from_surface_tree(
+                    renderer.as_gles_renderer(),
+                    surface,
+                    location,
+                    scale,
+                    alpha,
+                ));
 
                 render_elements
             }
@@ -168,9 +160,6 @@ impl WindowElement {
                         scale,
                         alpha,
                     )
-                    .into_iter()
-                    .map(CommonTextureRenderElement::new)
-                    .collect()
                 } else {
                     Vec::new()
                 }

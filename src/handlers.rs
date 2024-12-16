@@ -579,7 +579,7 @@ impl ClientDndGrabHandler for State {
         self.pinnacle.dnd_icon = icon;
     }
 
-    fn dropped(&mut self, _seat: Seat<Self>) {
+    fn dropped(&mut self, _target: Option<WlSurface>, _validated: bool, _seat: Seat<Self>) {
         self.pinnacle.dnd_icon = None;
     }
 }
@@ -906,6 +906,15 @@ impl PointerConstraintsHandler for State {
     fn new_constraint(&mut self, _surface: &WlSurface, pointer: &PointerHandle<Self>) {
         self.pinnacle
             .maybe_activate_pointer_constraint(pointer.current_location());
+    }
+
+    fn cursor_position_hint(
+        &mut self,
+        surface: &WlSurface,
+        pointer: &PointerHandle<Self>,
+        location: Point<f64, Logical>,
+    ) {
+        todo!()
     }
 }
 delegate_pointer_constraints!(State);
