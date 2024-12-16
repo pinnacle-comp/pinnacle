@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use prost::Message as _;
 use prost_types::{
     field_descriptor_proto::{Label, Type},
     DescriptorProto, EnumDescriptorProto, FieldDescriptorProto, ServiceDescriptorProto,
@@ -297,9 +296,25 @@ fn generate_returned_table(msgs: &MessageMap) -> String {
 }
 
 fn main() {
-    let file_descriptor_set_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/lua-build.bin"));
-    let file_descriptor_set =
-        prost_types::FileDescriptorSet::decode(&file_descriptor_set_bytes[..]).unwrap();
+    let Some(proto_dir) = std::env::args().nth(1) else {
+        eprintln!("Usage: ./lua-build <proto-dir>");
+        return;
+    };
+
+    let mut proto_paths = Vec::new();
+
+    for entry in walkdir::WalkDir::new(&proto_dir) {
+        let entry = entry.unwrap();
+
+        if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "proto")
+        {
+            proto_paths.push(entry.into_path());
+        }
+    }
+
+    let file_descriptor_set = prost_build::Config::new()
+        .load_fds(&proto_paths, &[proto_dir])
+        .unwrap();
 
     let mut enums = EnumMap::new();
     let mut msgs = MessageMap::new();

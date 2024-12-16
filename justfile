@@ -93,7 +93,7 @@ gen-lua-pb-defs:
     #!/usr/bin/env bash
     set -euxo pipefail
     cargo build --package lua-build
-    ./target/debug/lua-build > "./api/lua/pinnacle/grpc/defs.lua"
+    ./target/debug/lua-build ./api/protocol > "./api/lua/pinnacle/grpc/defs.lua"
 
 # Run `cargo run`
 run *args: gen-lua-pb-defs

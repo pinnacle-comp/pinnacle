@@ -1,26 +1,3 @@
-[workspace]
-members = [
-    "api/rust",
-    "snowcap-api-defs",
-    "api/lua/build"
-]
-
-[workspace.dependencies]
-tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
-tokio-stream = { version = "0.1.15", features = ["net"] }
-prost = "0.12.6"
-tonic = "0.11.0"
-tonic-reflection = "0.11.0"
-tonic-build = "0.11.0"
-xdg = "2.5.2"
-snowcap-api-defs = { path = "./snowcap-api-defs" }
-xkbcommon = "0.7.0"
-tracing = "0.1.40"
-
-[workspace.lints.clippy]
-too_many_arguments = "allow"
-type_complexity = "allow"
-
 [package]
 name = "snowcap"
 version = "0.0.1"
@@ -28,13 +5,13 @@ edition = "2021"
 
 [dependencies]
 smithay-client-toolkit = "0.19.1"
-anyhow = { version = "1.0.86", features = ["backtrace"] }
+anyhow = { workspace = true }
 iced = { version = "0.12.1", default-features = false, features = ["wgpu", "tokio"] }
 iced_wgpu = "0.12.1"
 iced_runtime = "0.12.1"
 iced_futures = "0.12.0"
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { workspace = true }
 raw-window-handle = "0.6.2"
 xdg = { workspace = true }
 smithay-clipboard = "0.7.1"

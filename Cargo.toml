@@ -4,10 +4,13 @@ members = [
     "api/rust",
     "api/rust/pinnacle-api-macros",
     "wlcs_pinnacle",
-    "api/lua/build"
+    "api/lua/build",
+    # snowcap
+    "snowcap",
+    "snowcap/api/rust",
+    "snowcap/snowcap-api-defs",
 ]
 exclude = [
-    "snowcap", # Submodule
     "lcat", # The docs building repo is currently cloned into this repo in CI
 ]
 
@@ -38,6 +41,9 @@ clap = { version = "4.5.7", features = ["derive"] }
 dircpy = "0.3.16"
 tempfile = "3.10.1"
 indexmap = "2.2.6"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
+snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
+hyper-util = { version = "0.1.6", features = ["tokio"] }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -96,7 +102,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
-anyhow = { version = "1.0.86", features = ["backtrace"] }
+anyhow = { workspace = true }
 thiserror = "1.0.61"
 # xcursor stuff
 xcursor = { version = "0.3.5" }

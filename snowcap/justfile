@@ -36,4 +36,4 @@ gen-lua-pb-defs:
     #!/usr/bin/env bash
     set -euxo pipefail
     cargo build --package lua-build
-    ./target/debug/lua-build > "./api/lua/snowcap/grpc/defs.lua"
+    ../target/debug/lua-build ./api/protobuf > "./api/lua/snowcap/grpc/defs.lua"

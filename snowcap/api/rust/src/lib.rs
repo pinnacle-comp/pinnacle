@@ -16,6 +16,7 @@ pub mod layer;
 pub mod snowcap;
 pub mod widget;
 
+use hyper_util::rt::TokioIo;
 use snowcap_api_defs::snowcap::{
     input::v0alpha1::input_service_client::InputServiceClient,
     layer::v0alpha1::layer_service_client::LayerServiceClient,
@@ -60,11 +61,13 @@ fn socket_name() -> String {
 ///
 /// Only one snowcap instance can be open per Wayland session.
 /// This function will search for a Snowcap socket at
-/// `$XDG_RUNTIME_DIR/$snowcap-grpc-$WAYLAND_DISPLAY.sock` and connect to it.
+/// `$XDG_RUNTIME_DIR/snowcap-grpc-$WAYLAND_DISPLAY.sock` and connect to it.
 pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
     let channel = Endpoint::try_from("http://[::]:50051")?
-        .connect_with_connector(service_fn(|_: Uri| {
-            tokio::net::UnixStream::connect(socket_dir().join(socket_name()))
+        .connect_with_connector(service_fn(|_: Uri| async {
+            Ok::<_, std::io::Error>(TokioIo::new(
+                tokio::net::UnixStream::connect(socket_dir().join(socket_name())).await?,
+            ))
         }))
         .await?;
 

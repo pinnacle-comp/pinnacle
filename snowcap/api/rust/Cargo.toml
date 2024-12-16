@@ -15,6 +15,7 @@ xkbcommon = { workspace = true }
 from_variants = "1.0.2"
 tracing = { workspace = true }
 thiserror = "1.0.62"
+hyper-util = { workspace = true }
 
 [lints.rust]
 missing_docs = "warn"
