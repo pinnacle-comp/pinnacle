@@ -657,10 +657,11 @@ impl process_service_server::ProcessService for ProcessService {
 
         run_server_streaming(&self.sender, move |state, sender| {
             if once {
-                state
-                    .pinnacle
-                    .system_processes
-                    .refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
+                state.pinnacle.system_processes.refresh_processes_specifics(
+                    ProcessesToUpdate::All,
+                    true,
+                    ProcessRefreshKind::nothing(),
+                );
 
                 let compositor_pid = std::process::id();
                 let already_running = state

@@ -257,10 +257,10 @@ impl Winit {
         let should_draw_cursor = !pinnacle.lock_state.is_unlocked()
             || self.output.with_state(|state| {
                 // Don't draw cursor when screencopy without cursor is pending
-                !state
+                state
                     .screencopy
                     .as_ref()
-                    .is_some_and(|sc| !sc.overlay_cursor())
+                    .is_none_or(|sc| sc.overlay_cursor())
             });
 
         if should_draw_cursor {

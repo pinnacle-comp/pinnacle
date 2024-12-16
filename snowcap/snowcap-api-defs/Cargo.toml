@@ -8,5 +8,5 @@ prost = { workspace = true }
 tonic = { workspace = true }
 
 [build-dependencies]
-walkdir = "2.5.0"
+walkdir = { workspace = true }
 tonic-build = { workspace = true }

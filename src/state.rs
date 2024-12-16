@@ -420,7 +420,7 @@ impl Pinnacle {
             xdisplay: None,
 
             system_processes: sysinfo::System::new_with_specifics(
-                RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+                RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
             ),
 
             grpc_server_join_handle: None,

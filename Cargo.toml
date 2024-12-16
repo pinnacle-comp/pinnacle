@@ -21,29 +21,33 @@ repository = "https://github.com/pinnacle-comp/pinnacle/"
 
 [workspace.dependencies]
 # Tokio
-tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"]}
-tokio-stream = { version = "0.1.15", features = ["net"] }
+tokio = { version = "1.42.0", features = ["macros", "rt-multi-thread"]}
+tokio-stream = { version = "0.1.17", features = ["net"] }
 # gRPC
-prost = "0.13.1"
-tonic = "0.12.0"
-tonic-reflection = "0.12.0"
-tonic-build = "0.12.0"
+prost = "0.13.4"
+tonic = "0.12.3"
+tonic-reflection = "0.12.3"
+tonic-build = "0.12.3"
 # Tracing
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "registry"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "registry"] }
 # API definitions
 pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 # Misc.
 xkbcommon = "0.8.0"
 xdg = "2.5.2"
-bitflags = "2.5.0"
-clap = { version = "4.5.7", features = ["derive"] }
-dircpy = "0.3.16"
-tempfile = "3.10.1"
-indexmap = "2.2.6"
-anyhow = { version = "1.0.86", features = ["backtrace"] }
+bitflags = "2.6.0"
+clap = { version = "4.5.23", features = ["derive"] }
+dircpy = "0.3.19"
+tempfile = "3.14.0"
+indexmap = "2.7.0"
+anyhow = { version = "1.0.94", features = ["backtrace"] }
 snowcap-api-defs = { path = "./snowcap/snowcap-api-defs" }
-hyper-util = { version = "0.1.6", features = ["tokio"] }
+hyper-util = { version = "0.1.10", features = ["tokio"] }
+futures = "0.3.31"
+thiserror = "2.0.7"
+walkdir = "2.5.0"
+tower = { version = "0.5.2", features = ["util"] }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -103,9 +107,9 @@ tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
 anyhow = { workspace = true }
-thiserror = "1.0.61"
+thiserror = { workspace = true }
 # xcursor stuff
-xcursor = { version = "0.3.5" }
+xcursor = { version = "0.3.8" }
 # gRPC
 prost = { workspace = true }
 tonic = { workspace = true }
@@ -115,23 +119,23 @@ tokio = { workspace = true, features = ["process", "io-util", "signal"] }
 tokio-stream = { workspace = true }
 # CLI
 clap = { workspace = true }
-cliclack = "0.3.1"
+cliclack = "0.3.5"
 # Misc.
 bitflags = { workspace = true }
-serde = { version = "1.0.203", features = ["derive"] }
-toml = "0.8.14"
+serde = { version = "1.0.216", features = ["derive"] }
+toml = "0.8.19"
 shellexpand = { version = "3.1.0", features = ["path"] }
 x11rb = { version = "0.13.1", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
-sysinfo = "0.31.2"
+sysinfo = "0.33.0"
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
-chrono = "0.4.38"
-bytemuck = "1.16.1"
+chrono = "0.4.39"
+bytemuck = "1.20.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
-drm-sys = "0.7.0"
+drm-sys = "0.7.0" # TODO: remove and use libdisplay-info
 libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
@@ -139,7 +143,7 @@ snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
 
 [build-dependencies]
-vergen-gitcl = { version = "1.0.0", features = ["rustc", "cargo", "si"] }
+vergen-gitcl = { version = "1.0.2", features = ["rustc", "cargo", "si"] }
 
 [dev-dependencies]
 temp-env = "0.3.6"

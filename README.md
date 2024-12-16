@@ -55,7 +55,7 @@ In the future, Snowcap will be used for everything Awesome uses its widget syste
 # Dependencies
 You will need:
 
-- [Rust](https://www.rust-lang.org/) 1.76 or newer
+- [Rust](https://www.rust-lang.org/) 1.82 or newer
 - The following external dependencies:
     - `libwayland`
     - `libxkbcommon`

@@ -88,7 +88,7 @@ impl AsGlesRenderer for GlesRenderer {
     }
 }
 
-impl<'a> AsGlesRenderer for UdevRenderer<'a> {
+impl AsGlesRenderer for UdevRenderer<'_> {
     fn as_gles_renderer(&mut self) -> &mut GlesRenderer {
         self.as_mut()
     }

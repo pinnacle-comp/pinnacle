@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-smithay-client-toolkit = "0.19.1"
+smithay-client-toolkit = "0.19.2"
 anyhow = { workspace = true }
 iced = { version = "0.12.1", default-features = false, features = ["wgpu", "tokio"] }
 iced_wgpu = "0.12.1"
@@ -14,10 +14,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 raw-window-handle = "0.6.2"
 xdg = { workspace = true }
-smithay-clipboard = "0.7.1"
+smithay-clipboard = "0.7.2"
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-futures = "0.3.30"
+futures = { workspace = true }
 prost = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }

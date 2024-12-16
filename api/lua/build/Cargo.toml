@@ -7,5 +7,5 @@ edition = "2021"
 prost = { workspace = true }
 prost-types = "0.13.4"
 indexmap = "2.2.6"
-walkdir = "2.5.0"
+walkdir = { workspace = true }
 prost-build = "0.13.4"

@@ -579,8 +579,12 @@ impl Pinnacle {
     }
 
     pub fn start_grpc_server(&mut self, socket_dir: &Path) -> anyhow::Result<()> {
-        self.system_processes
-            .refresh_processes_specifics(ProcessesToUpdate::All, ProcessRefreshKind::new());
+        // INFO: why is this here
+        self.system_processes.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing(),
+        );
 
         std::fs::create_dir_all(socket_dir)?;
 
@@ -620,7 +624,7 @@ impl Pinnacle {
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
-            .build()?;
+            .build_v1()?;
 
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);

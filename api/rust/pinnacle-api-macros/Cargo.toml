@@ -8,9 +8,9 @@ license = "MPL-2.0"
 repository.workspace = true
 
 [dependencies]
-quote = "1.0.35"
-syn = { version = "2.0.49", features = ["full", "parsing"] }
-proc-macro2 = "1.0.78"
+quote = "1.0.37"
+syn = { version = "2.0.90", features = ["full", "parsing"] }
+proc-macro2 = "1.0.92"
 
 [lib]
 proc-macro = true

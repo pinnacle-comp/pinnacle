@@ -15,10 +15,10 @@ pinnacle-api-macros = { path = "./pinnacle-api-macros" }
 tokio = { workspace = true, features = ["net"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-tower = { version = "0.4.13", features = ["util"] }
+tower = { workspace = true }
 hyper-util = { workspace = true }
-futures = "0.3.30"
-num_enum = "0.7.2"
+futures = { workspace = true }
+num_enum = "0.7.3"
 xkbcommon = { workspace = true }
 rand = "0.8.5"
 bitflags = { workspace = true }

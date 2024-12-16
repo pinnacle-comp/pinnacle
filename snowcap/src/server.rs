@@ -64,7 +64,7 @@ impl State {
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(snowcap_api_defs::FILE_DESCRIPTOR_SET)
-            .build()?;
+            .build_v1()?;
 
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);

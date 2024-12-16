@@ -8,13 +8,13 @@ snowcap-api-defs = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-tower = { version = "0.4.13", features = ["util"] }
-futures = "0.3.30"
+tower = { workspace = true }
+futures = { workspace = true }
 xdg = { workspace = true }
 xkbcommon = { workspace = true }
 from_variants = "1.0.2"
 tracing = { workspace = true }
-thiserror = "1.0.62"
+thiserror = { workspace = true }
 hyper-util = { workspace = true }
 
 [lints.rust]

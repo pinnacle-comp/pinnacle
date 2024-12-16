@@ -18,6 +18,6 @@ fn main() {
 
     tonic_build::configure()
         .file_descriptor_set_path(descriptor_path)
-        .compile(&proto_paths, &["../api/protobuf"])
+        .compile_protos(&proto_paths, &["../api/protobuf"])
         .unwrap();
 }

@@ -11,5 +11,5 @@ tonic = { workspace = true }
 prost = { workspace = true }
 
 [build-dependencies]
+walkdir = { workspace = true }
 tonic-build = { workspace = true }
-const_format = "0.2.32"
