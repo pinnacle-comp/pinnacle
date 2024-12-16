@@ -1,0 +1,24 @@
+[package]
+name = "snowcap-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+snowcap-api-defs = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tower = { version = "0.4.13", features = ["util"] }
+futures = "0.3.30"
+xdg = { workspace = true }
+xkbcommon = { workspace = true }
+from_variants = "1.0.2"
+tracing = { workspace = true }
+thiserror = "1.0.62"
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"

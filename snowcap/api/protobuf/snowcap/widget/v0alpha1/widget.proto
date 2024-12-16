@@ -1,0 +1,174 @@
+syntax = "proto2";
+
+package snowcap.widget.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+message Padding {
+  optional float top = 1;
+  optional float right = 2;
+  optional float bottom = 3;
+  optional float left = 4;
+}
+
+enum Alignment {
+  ALIGNMENT_UNSPECIFIED = 0;
+  ALIGNMENT_START = 1;
+  ALIGNMENT_CENTER = 2;
+  ALIGNMENT_END = 3;
+}
+
+message Length {
+  oneof strategy {
+    google.protobuf.Empty fill = 1;
+    uint32 fill_portion = 2;
+    google.protobuf.Empty shrink = 3;
+    float fixed = 4;
+  }
+}
+
+message Color {
+  optional float red = 1;
+  optional float green = 2;
+  optional float blue = 3;
+  optional float alpha = 4;
+}
+
+message Font {
+  message Family {
+    oneof family {
+      string name = 1;
+      google.protobuf.Empty serif = 2;
+      google.protobuf.Empty sans_serif = 3;
+      google.protobuf.Empty cursive = 4;
+      google.protobuf.Empty fantasy = 5;
+      google.protobuf.Empty monospace = 6;
+    }
+  }
+
+  enum Weight {
+    WEIGHT_UNSPECIFIED = 0;
+    WEIGHT_THIN = 1;
+    WEIGHT_EXTRA_LIGHT = 2;
+    WEIGHT_LIGHT = 3;
+    WEIGHT_NORMAL = 4;
+    WEIGHT_MEDIUM = 5;
+    WEIGHT_SEMIBOLD = 6;
+    WEIGHT_BOLD = 7;
+    WEIGHT_EXTRA_BOLD = 8;
+    WEIGHT_BLACK = 9;
+  }
+
+  enum Stretch {
+    STRETCH_UNSPECIFIED = 0;
+    STRETCH_ULTRA_CONDENSED = 1;
+    STRETCH_EXTRA_CONDENSED = 2;
+    STRETCH_CONDENSED = 3;
+    STRETCH_SEMI_CONDENSED = 4;
+    STRETCH_NORMAL = 5;
+    STRETCH_SEMI_EXPANDED = 6;
+    STRETCH_EXPANDED = 7;
+    STRETCH_EXTRA_EXPANDED = 8;
+    STRETCH_ULTRA_EXPANDED = 9;
+  }
+
+  enum Style {
+    STYLE_UNSPECIFIED = 0;
+    STYLE_NORMAL = 1;
+    STYLE_ITALIC = 2;
+    STYLE_OBLIQUE = 3;
+  }
+
+  optional Family family = 1;
+  optional Weight weight = 2;
+  optional Stretch stretch = 3;
+  optional Style style = 4;
+}
+
+
+message WidgetDef {
+  oneof widget {
+    Text text = 1;
+    Column column = 2;
+    Row row = 3;
+    Scrollable scrollable = 4;
+    Container container = 5;
+  }
+}
+
+message Text {
+  optional string text = 1;
+  optional float pixels = 2;
+  optional Length width = 3;
+  optional Length height = 4;
+  optional Alignment horizontal_alignment = 5;
+  optional Alignment vertical_alignment = 6;
+  optional Color color = 7;
+  optional Font font = 8;
+}
+
+message Column {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional float max_width = 6;
+  optional bool clip = 7;
+  repeated WidgetDef children = 8;
+}
+
+message Row {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional bool clip = 6;
+  repeated WidgetDef children = 7;
+}
+
+message ScrollableDirection {
+  optional ScrollableProperties vertical = 1;
+  optional ScrollableProperties horizontal = 2;
+}
+
+enum ScrollableAlignment {
+  SCROLLABLE_ALIGNMENT_UNSPECIFIED = 0;
+  SCROLLABLE_ALIGNMENT_START = 1;
+  SCROLLABLE_ALIGNMENT_END = 2;
+}
+
+message ScrollableProperties {
+  optional float width = 1;
+  optional float margin = 2;
+  optional float scroller_width = 3;
+  optional ScrollableAlignment alignment = 4;
+}
+
+message Scrollable {
+  optional Length width = 1;
+  optional Length height = 2;
+  optional ScrollableDirection direction = 3;
+  optional WidgetDef child = 4;
+}
+
+message Container {
+  optional Padding padding = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  optional float max_width = 4;
+  optional float max_height = 5;
+  optional Alignment horizontal_alignment = 6;
+  optional Alignment vertical_alignment = 7;
+  optional bool clip = 8;
+  optional WidgetDef child = 9;
+
+  // styling
+
+  optional Color text_color = 10;
+  optional Color background_color = 11; // TODO: gradient
+  optional float border_radius = 12;
+  optional float border_thickness = 13;
+  optional Color border_color = 14;
+}

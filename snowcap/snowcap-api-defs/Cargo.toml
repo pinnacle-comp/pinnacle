@@ -1,0 +1,12 @@
+[package]
+name = "snowcap-api-defs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = { workspace = true }
+tonic = { workspace = true }
+
+[build-dependencies]
+walkdir = "2.5.0"
+tonic-build = { workspace = true }

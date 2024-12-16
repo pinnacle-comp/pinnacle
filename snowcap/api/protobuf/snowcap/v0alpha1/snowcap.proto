@@ -1,0 +1,5 @@
+syntax = "proto2";
+
+package snowcap.v0alpha1;
+
+message Nothing {}

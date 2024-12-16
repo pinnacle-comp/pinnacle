@@ -1,0 +1,36 @@
+syntax = "proto2";
+
+package snowcap.input.v0alpha1;
+
+// import "google/protobuf/empty.proto";
+
+message Modifiers {
+  optional bool shift = 1;
+  optional bool ctrl = 2;
+  optional bool alt = 3;
+  optional bool super = 4;
+}
+
+message KeyboardKeyRequest {
+  optional uint32 id = 1;
+}
+
+message KeyboardKeyResponse {
+  optional uint32 key = 1;
+  optional Modifiers modifiers = 2;
+  optional bool pressed = 3;
+}
+
+message PointerButtonRequest {
+  optional uint32 id = 1;
+}
+
+message PointerButtonResponse {
+  optional uint32 button = 1;
+  optional bool pressed = 2;
+}
+
+service InputService {
+  rpc KeyboardKey(KeyboardKeyRequest) returns (stream KeyboardKeyResponse);
+  rpc PointerButton(PointerButtonRequest) returns (stream PointerButtonResponse);
+}

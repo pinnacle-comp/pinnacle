@@ -1,0 +1,16 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "workspace.library": [
+        "./",
+        "~/.luarocks/share/lua/5.4/grpc_client.lua",
+        "~/.luarocks/share/lua/5.4/grpc_client",
+        "~/.luarocks/share/lua/5.3/grpc_client.lua",
+        "~/.luarocks/share/lua/5.3/grpc_client",
+        "~/.luarocks/share/lua/5.2/grpc_client.lua",
+        "~/.luarocks/share/lua/5.2/grpc_client",
+    ],
+    "runtime.version": "Lua 5.2",
+
+    "--comment": "Format using Stylua instead",
+    "format.enable": false,
+}
