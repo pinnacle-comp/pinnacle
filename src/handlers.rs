@@ -22,8 +22,8 @@ use smithay::{
     delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
     delegate_xdg_activation, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
-        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output, PopupKind,
-        PopupManager, WindowSurfaceType,
+        self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
+        space::SpaceElement, PopupKind, PopupManager, WindowSurfaceType,
     },
     input::{
         keyboard::LedState,
@@ -914,7 +914,24 @@ impl PointerConstraintsHandler for State {
         pointer: &PointerHandle<Self>,
         location: Point<f64, Logical>,
     ) {
-        todo!()
+        if with_pointer_constraint(surface, pointer, |constraint| {
+            constraint.is_some_and(|c| c.is_active())
+        }) {
+            // TODO: cache the current focus's location so you don't have to get it on demand
+            // through the current pointer location
+            let Some((current_focus, current_focus_loc)) = self
+                .pinnacle
+                .pointer_focus_target_under(pointer.current_location())
+            else {
+                return;
+            };
+
+            if current_focus.wl_surface().as_deref() != Some(surface) {
+                return;
+            }
+
+            pointer.set_location(current_focus_loc + location);
+        }
     }
 }
 delegate_pointer_constraints!(State);

@@ -124,9 +124,6 @@ pub struct InputState {
     pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
     /// All libinput devices that have been connected
     pub libinput_devices: Vec<input::Device>,
-
-    locked_pointer_position_hint: Option<Point<f64, Logical>>,
-
     // Keys that were used in a keybind and should not be released
     no_release_keys: HashSet<u32>,
 }
@@ -340,46 +337,7 @@ impl State {
         let location = pointer.current_location();
         let surface_under = self.pinnacle.pointer_focus_target_under(location);
 
-        // PERF: I'm not really a fan of polling all the time looking for locked pointer
-        // updates, but there doesn't seem to be a great way to get the final cursor
-        // position hint before destruction. I experimented with a
-        // `PointerConstraintsHandler::constraint_destroyed` method but doing so
-        // required threading the state through a bunch of different functions.
-        // Additionally, `PointerConstraintRef::deactivate` gets called in `WlSurface::leave`,
-        // so that would require all compositors implement `PointerConstraintsHandler`
-        // which seems very scuffed.
         if pointer.current_focus().as_ref() == surface_under.as_ref().map(|s| &s.0) {
-            if let Some((surf, surf_loc)) =
-                surface_under.and_then(|(foc, loc)| Some((foc.wl_surface()?.into_owned(), loc)))
-            {
-                let unlocked = with_pointer_constraint(&surf, &pointer, |constraint| {
-                    let Some(constraint) = constraint else {
-                        return true;
-                    };
-                    if !constraint.is_active() {
-                        return true;
-                    }
-                    match &*constraint {
-                        PointerConstraint::Confined(_) => true,
-                        PointerConstraint::Locked(locked) => {
-                            self.pinnacle.input_state.locked_pointer_position_hint =
-                                locked.cursor_position_hint();
-                            false
-                        }
-                    }
-                });
-
-                if unlocked {
-                    if let Some(hint) = self
-                        .pinnacle
-                        .input_state
-                        .locked_pointer_position_hint
-                        .take()
-                    {
-                        self.warp_cursor_to_global_loc(hint + surf_loc.to_f64());
-                    }
-                }
-            }
             return;
         }
 
@@ -809,7 +767,7 @@ impl State {
                     let Some(constraint) = constraint else {
                         return;
                     };
-                    tracing::debug!(constraint = ?*constraint);
+
                     if !constraint.is_active() {
                         return;
                     }
