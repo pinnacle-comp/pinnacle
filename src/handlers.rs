@@ -19,8 +19,9 @@ use smithay::{
     delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit, delegate_layer_shell,
     delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
     delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
-    delegate_security_context, delegate_shm, delegate_tablet_manager, delegate_viewporter,
-    delegate_xdg_activation, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
+    delegate_security_context, delegate_shm, delegate_single_pixel_buffer, delegate_tablet_manager,
+    delegate_viewporter, delegate_xdg_activation, delegate_xwayland_keyboard_grab,
+    delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         space::SpaceElement, PopupKind, PopupManager, WindowSurfaceType,
@@ -1166,6 +1167,8 @@ impl XdgActivationHandler for State {
 delegate_xdg_activation!(State);
 
 delegate_pointer_gestures!(State);
+
+delegate_single_pixel_buffer!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {

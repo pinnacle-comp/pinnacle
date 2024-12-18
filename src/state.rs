@@ -76,6 +76,7 @@ use smithay::{
             xdg::{decoration::XdgDecorationState, XdgShellState},
         },
         shm::ShmState,
+        single_pixel_buffer::SinglePixelBufferState,
         socket::ListeningSocketSource,
         tablet_manager::TabletManagerState,
         viewporter::ViewporterState,
@@ -155,6 +156,7 @@ pub struct Pinnacle {
     pub xdg_decoration_state: XdgDecorationState,
     pub kde_decoration_state: KdeDecorationState,
     pub pointer_gestures_state: PointerGesturesState,
+    pub single_pixel_buffer_state: SinglePixelBufferState,
 
     pub lock_state: LockState,
 
@@ -397,6 +399,7 @@ impl Pinnacle {
                 org_kde_kwin_server_decoration_manager::Mode::Client,
             ),
             pointer_gestures_state: PointerGesturesState::new::<State>(&display_handle),
+            single_pixel_buffer_state: SinglePixelBufferState::new::<State>(&display_handle),
 
             lock_state: LockState::default(),
 
