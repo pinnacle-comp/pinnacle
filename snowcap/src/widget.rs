@@ -123,13 +123,13 @@ fn widget_def_to_fn_inner(
                 if let Some(pixels) = pixels {
                     text = text.size(pixels);
                 }
-                if let Some(width) = width.clone() {
+                if let Some(width) = width {
                     text = text.width(iced::Length::from_api(width));
                 }
-                if let Some(height) = height.clone() {
+                if let Some(height) = height {
                     text = text.height(iced::Length::from_api(height));
                 }
-                if let Some(color) = color.clone() {
+                if let Some(color) = color {
                     text = text.style(iced::theme::Text::Color(iced::Color::from_api(color)));
                 }
 
@@ -192,10 +192,10 @@ fn widget_def_to_fn_inner(
                     column = column.spacing(spacing);
                 }
 
-                if let Some(width) = width.clone() {
+                if let Some(width) = width {
                     column = column.width(iced::Length::from_api(width));
                 }
-                if let Some(height) = height.clone() {
+                if let Some(height) = height {
                     column = column.height(iced::Length::from_api(height));
                 }
                 if let Some(max_width) = max_width {
@@ -205,7 +205,7 @@ fn widget_def_to_fn_inner(
                     column = column.clip(clip);
                 }
 
-                if let Some(padding) = padding.clone() {
+                if let Some(padding) = padding {
                     column = column.padding(iced::Padding::from_api(padding));
                 }
 
@@ -252,10 +252,10 @@ fn widget_def_to_fn_inner(
                     row = row.spacing(spacing);
                 }
 
-                if let Some(width) = width.clone() {
+                if let Some(width) = width {
                     row = row.width(iced::Length::from_api(width));
                 }
-                if let Some(height) = height.clone() {
+                if let Some(height) = height {
                     row = row.height(iced::Length::from_api(height));
                 }
                 if let Some(clip) = clip {
@@ -317,13 +317,13 @@ fn widget_def_to_fn_inner(
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
-                if let Some(width) = width.clone() {
+                if let Some(width) = width {
                     scrollable = scrollable.width(iced::Length::from_api(width));
                 }
-                if let Some(height) = height.clone() {
+                if let Some(height) = height {
                     scrollable = scrollable.height(iced::Length::from_api(height));
                 }
-                if let Some(direction) = direction.clone() {
+                if let Some(direction) = direction {
                     scrollable = scrollable
                         .direction(iced::widget::scrollable::Direction::from_api(direction));
                 }
@@ -368,10 +368,10 @@ fn widget_def_to_fn_inner(
                         .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
                 );
 
-                if let Some(width) = width.clone() {
+                if let Some(width) = width {
                     container = container.width(iced::Length::from_api(width));
                 }
-                if let Some(height) = height.clone() {
+                if let Some(height) = height {
                     container = container.height(iced::Length::from_api(height));
                 }
                 if let Some(max_width) = max_width {
@@ -383,7 +383,7 @@ fn widget_def_to_fn_inner(
                 if let Some(clip) = clip {
                     container = container.clip(clip);
                 }
-                if let Some(padding) = padding.clone() {
+                if let Some(padding) = padding {
                     container = container.padding(iced::Padding::from_api(padding));
                 }
                 container = container.align_x(match horizontal_alignment {
@@ -399,9 +399,9 @@ fn widget_def_to_fn_inner(
                     widget::v0alpha1::Alignment::End => iced::alignment::Vertical::Bottom,
                 });
 
-                let text_color_clone = text_color.clone();
-                let background_color_clone = background_color.clone();
-                let border_color_clone = border_color.clone();
+                let text_color_clone = text_color;
+                let background_color_clone = background_color;
+                let border_color_clone = border_color;
 
                 let style = move |theme: &iced::Theme| {
                     use iced::widget::container::Appearance;
@@ -419,16 +419,16 @@ fn widget_def_to_fn_inner(
                         shadow: iced::Shadow::default(),
                     };
 
-                    if let Some(text_color) = text_color_clone.clone() {
+                    if let Some(text_color) = text_color_clone {
                         appearance.text_color = Some(iced::Color::from_api(text_color));
                     }
 
-                    if let Some(background_color) = background_color_clone.clone() {
+                    if let Some(background_color) = background_color_clone {
                         appearance.background =
                             Some(iced::Color::from_api(background_color).into());
                     }
 
-                    if let Some(border_color) = border_color_clone.clone() {
+                    if let Some(border_color) = border_color_clone {
                         appearance.border.color = iced::Color::from_api(border_color);
                     }
 

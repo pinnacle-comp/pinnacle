@@ -442,8 +442,6 @@ mod output {
     use super::*;
 
     mod handle {
-        use common::sleep_millis;
-
         use super::*;
 
         #[tokio::main]
