@@ -162,12 +162,7 @@ end
 ---
 ---@return boolean
 local function output_id_matches(id_str, op)
-    if id_str:match("^serial:") then
-        local serial = tonumber(id_str:sub(8))
-        return serial and serial == op:serial() or false
-    else
-        return id_str == op.name
-    end
+    return id_str == op.name
 end
 
 ---@class OutputSetup
@@ -194,11 +189,6 @@ end
 ---(See the example.)
 ---
 ---Otherwise, keys will attempt to match the exact name of an output.
----
----Use `"serial:<number>"` to match outputs by their EDID serial. For example, `"serial:143256"`.
----Note that not all displays have EDID serials. Also, serials are not guaranteed to be unique.
----If you're unlucky enough to have two displays with the same serial, you'll have to use their names
----or filter with wildcards instead.
 ---
 ---##### Setups
 ---
@@ -233,8 +223,6 @@ end
 ---    ["eDP-1"] = {
 ---        tags = { "6", "7" },
 ---    },
----    -- Match an output by its EDID serial number
----    ["serial:235987"] = { ... }
 ---})
 ---```
 ---
@@ -362,9 +350,6 @@ end
 ---
 ---Keys for `locs` should be output identifiers. These are strings of
 ---the name of the output, for example "eDP-1" or "HDMI-A-1".
----Additionally, if you want to match the EDID serial of an output,
----prepend the serial with "serial:", for example "serial:174652".
----You can find this by doing `get-edid | edid-decode`.
 ---
 ---#### Fallback relative-tos
 ---
@@ -400,16 +385,6 @@ end
 ---
 --- -- Only relayout on output connect and resize
 ---Output.setup_locs({ "connect", "resize" }, { ... })
----
---- -- Use EDID serials for identification.
---- -- You can run
---- -- require("pinnacle").run(function(Pinnacle)
---- --     print(Pinnacle.output.get_focused():serial())
---- -- end)
---- -- in a Lua repl to find the EDID serial of the focused output.
----Output.setup_locs("all" {
----    ["serial:139487"] = { ... },
----})
 ---```
 ---
 ---@param update_locs_on (UpdateLocsOn)[] | "all"
@@ -999,7 +974,7 @@ end
 ---@field tags TagHandle[]
 ---@field scale number?
 ---@field transform Transform?
----@field serial integer?
+---@field serial string?
 ---@field keyboard_focus_stack WindowHandle[]
 ---@field enabled boolean?
 ---@field powered boolean?
@@ -1043,7 +1018,7 @@ function OutputHandle:props()
         tags = tag_handles,
         scale = response.scale,
         transform = transform_name_to_code[response.transform] --[[@as Transform?]],
-        serial = response.serial,
+        serial = response.serial_str,
         keyboard_focus_stack = keyboard_focus_stack_handles,
         enabled = response.enabled,
         powered = response.powered,
@@ -1197,11 +1172,11 @@ function OutputHandle:transform()
     return self:props().transform
 end
 
----Get this output's EDID serial number.
+---Get this output's EDID serial.
 ---
 ---Shorthand for `handle:props().serial`.
 ---
----@return integer?
+---@return string?
 function OutputHandle:serial()
     return self:props().serial
 end

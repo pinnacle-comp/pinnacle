@@ -118,6 +118,7 @@ message GetPropertiesResponse {
   repeated uint32 keyboard_focus_stack_window_ids = 17;
   optional bool enabled = 18;
   optional bool powered = 19;
+  optional string serial_str = 20;
 }
 
 service OutputService {

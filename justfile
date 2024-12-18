@@ -101,7 +101,7 @@ run *args: gen-lua-pb-defs
 
 # Run `cargo test`
 test *args: gen-lua-pb-defs
-    cargo test {{args}}
+    cargo test --no-default-features {{args}}
 
 compile-wlcs:
     #!/usr/bin/env bash

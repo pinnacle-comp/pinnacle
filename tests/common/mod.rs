@@ -1,4 +1,4 @@
-use std::{panic::UnwindSafe, path::PathBuf, time::Duration};
+use std::{panic::UnwindSafe, path::PathBuf, sync::Mutex, time::Duration};
 
 use anyhow::anyhow;
 use pinnacle::{state::State, tag::TagId};
@@ -27,6 +27,8 @@ pub fn sleep_millis(millis: u64) {
     std::thread::sleep(Duration::from_millis(millis));
 }
 
+static MUTEX: Mutex<()> = Mutex::new(());
+
 pub fn test_api<F>(test: F) -> anyhow::Result<()>
 where
     F: FnOnce(Sender<Box<dyn FnOnce(&mut State) + Send>>) -> anyhow::Result<()>
@@ -34,6 +36,14 @@ where
         + UnwindSafe
         + 'static,
 {
+    let _guard = match MUTEX.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            MUTEX.clear_poison();
+            err.into_inner()
+        }
+    };
+
     let mut event_loop = EventLoop::<State>::try_new()?;
     let mut state = State::new(
         pinnacle::cli::Backend::Dummy,

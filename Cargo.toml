@@ -135,8 +135,8 @@ chrono = "0.4.39"
 bytemuck = "1.20.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
-drm-sys = "0.8.0" # TODO: remove and use libdisplay-info
-libdisplay-info-sys = { git = "https://github.com/Smithay/libdisplay-info-rs", rev = "a482d0d" }
+drm-sys = "0.8.0"
+libdisplay-info = "0.1.0"
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }

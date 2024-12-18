@@ -401,6 +401,7 @@ local pinnacle_signal_v0alpha1_StreamControl = {
 ---@field keyboard_focus_stack_window_ids integer[]?
 ---@field enabled boolean?
 ---@field powered boolean?
+---@field serial_str string?
 
 ---@class pinnacle.render.v0alpha1.SetUpscaleFilterRequest
 ---@field filter pinnacle.render.v0alpha1.Filter?

@@ -1477,9 +1477,11 @@ impl output_service_server::OutputService for OutputService {
                 }) as i32
             });
 
-            let serial = output.as_ref().and_then(|output| {
-                output.with_state(|state| state.serial.map(|serial| serial.get()))
-            });
+            let serial = Some(0);
+
+            let serial_str = output
+                .as_ref()
+                .map(|output| output.with_state(|state| state.serial.clone()));
 
             let keyboard_focus_stack_window_ids = output
                 .as_ref()
@@ -1527,6 +1529,7 @@ impl output_service_server::OutputService for OutputService {
                 keyboard_focus_stack_window_ids,
                 enabled,
                 powered,
+                serial_str,
             }
         })
         .await

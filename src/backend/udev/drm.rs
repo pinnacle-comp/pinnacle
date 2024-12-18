@@ -3,7 +3,6 @@ use smithay::{backend::drm::DrmDevice, reexports::drm::control::crtc};
 use tracing::warn;
 use util::get_drm_property;
 
-pub mod edid_manus;
 pub mod util;
 
 const DRM_CRTC_ACTIVE: &str = "ACTIVE";

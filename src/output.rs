@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{cell::RefCell, num::NonZeroU32};
+use std::cell::RefCell;
 
 use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
@@ -64,7 +64,8 @@ pub struct OutputState {
 
     pub focus_stack: WindowKeyboardFocusStack,
     pub screencopy: Option<Screencopy>,
-    pub serial: Option<NonZeroU32>,
+    // This monitor's edid serial. "Unknown" if it doesn't have one.
+    pub serial: String,
     pub modes: Vec<Mode>,
     pub lock_surface: Option<LockSurface>,
     pub blanking_state: BlankingState,

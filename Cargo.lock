@@ -2302,7 +2302,7 @@ dependencies = [
  "bitflags 2.6.0",
  "libc",
  "libdisplay-info-derive",
- "libdisplay-info-sys 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libdisplay-info-sys",
  "thiserror 1.0.69",
 ]
 
@@ -2322,11 +2322,6 @@ name = "libdisplay-info-sys"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea8cec1fa7872b621f40c756bc1304b1a975461282e250b0e76737b037c0c236"
-
-[[package]]
-name = "libdisplay-info-sys"
-version = "0.1.0"
-source = "git+https://github.com/Smithay/libdisplay-info-rs?rev=a482d0d#a482d0d4b71762c13d40fa394efe04473916f31c"
 
 [[package]]
 name = "libloading"
@@ -3197,7 +3192,7 @@ dependencies = [
  "drm-sys 0.8.0",
  "gag",
  "indexmap 2.7.0",
- "libdisplay-info-sys 0.1.0 (git+https://github.com/Smithay/libdisplay-info-rs?rev=a482d0d)",
+ "libdisplay-info",
  "pinnacle",
  "pinnacle-api",
  "pinnacle-api-defs",

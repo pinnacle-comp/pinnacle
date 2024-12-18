@@ -9,7 +9,7 @@
 //! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
 //! connected monitors and set them up.
 
-use std::{num::NonZeroU32, str::FromStr};
+use std::str::FromStr;
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::output::{
@@ -555,13 +555,6 @@ pub enum OutputLoc {
 pub enum OutputId {
     /// Identify using the output's name.
     Name(String),
-    /// Identify using the output's EDID serial number.
-    ///
-    /// Note: some displays (like laptop screens) don't have a serial number, in which case this won't match it.
-    /// Additionally the Rust API assumes monitor serial numbers are unique.
-    /// If you're unlucky enough to have two monitors with the same serial number,
-    /// use [`OutputId::Name`] instead.
-    Serial(NonZeroU32),
 }
 
 impl OutputId {
@@ -577,7 +570,6 @@ impl OutputId {
     pub fn matches(&self, output: &OutputHandle) -> bool {
         match self {
             OutputId::Name(name) => *name == output.name(),
-            OutputId::Serial(serial) => Some(serial.get()) == output.serial(),
         }
     }
 }
@@ -1028,7 +1020,7 @@ impl OutputHandle {
                 .collect(),
             scale: response.scale,
             transform: response.transform.and_then(|tf| tf.try_into().ok()),
-            serial: response.serial,
+            serial: response.serial_str,
             keyboard_focus_stack: response
                 .keyboard_focus_stack_window_ids
                 .into_iter()
@@ -1227,15 +1219,15 @@ impl OutputHandle {
         self.props_async().await.transform
     }
 
-    /// Get this output's EDID serial number.
+    /// Get this output's EDID serial.
     ///
     /// Shorthand for `self.props().serial`
-    pub fn serial(&self) -> Option<u32> {
+    pub fn serial(&self) -> Option<String> {
         self.props().serial
     }
 
     /// The async version of [`OutputHandle::serial`].
-    pub async fn serial_async(&self) -> Option<u32> {
+    pub async fn serial_async(&self) -> Option<String> {
         self.props_async().await.serial
     }
 
@@ -1355,8 +1347,8 @@ pub struct OutputProperties {
     pub scale: Option<f32>,
     /// This output's transform.
     pub transform: Option<Transform>,
-    /// This output's EDID serial number.
-    pub serial: Option<u32>,
+    /// This output's EDID serial.
+    pub serial: Option<String>,
     /// This output's window keyboard focus stack.
     pub keyboard_focus_stack: Vec<WindowHandle>,
     /// Whether this output is enabled.

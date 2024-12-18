@@ -91,8 +91,6 @@ use crate::{
     state::{FrameCallbackSequence, Pinnacle, State, WithState},
 };
 
-use self::drm::util::EdidInfo;
-
 use super::{BackendData, UninitBackend};
 
 const SUPPORTED_FORMATS: &[Fourcc] = &[
@@ -915,14 +913,20 @@ impl Udev {
             connector.interface_id()
         );
 
-        let (make, model, serial) = EdidInfo::try_from_connector(&device.drm, connector.handle())
-            .map(|info| (info.manufacturer, info.model, info.serial))
-            .unwrap_or_else(|err| {
-                warn!("Failed to parse EDID info: {err}");
-                ("Unknown".into(), "Unknown".into(), None)
-            });
+        let display_info =
+            smithay_drm_extras::display_info::for_connector(&device.drm, connector.handle());
 
-        let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+        let (make, model, serial) = display_info
+            .map(|info| {
+                (
+                    info.make().unwrap_or("Unknown".into()),
+                    info.model().unwrap_or("Unknown".into()),
+                    info.serial().unwrap_or("Unknown".into()),
+                )
+            })
+            .unwrap_or_else(|| ("Unknown".into(), "Unknown".into(), "Unknown".into()));
+
+        let (phys_w, phys_h) = connector.size().unwrap_or_default();
 
         if pinnacle.outputs.keys().any(|op| {
             op.user_data()
