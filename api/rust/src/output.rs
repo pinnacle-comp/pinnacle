@@ -12,330 +12,272 @@
 use std::str::FromStr;
 
 use futures::FutureExt;
-use pinnacle_api_defs::pinnacle::output::{
-    self,
-    v0alpha1::{
-        set_scale_request::AbsoluteOrRelative, SetLocationRequest, SetModeRequest,
-        SetModelineRequest, SetPoweredRequest, SetScaleRequest, SetTransformRequest,
+use pinnacle_api_defs::pinnacle::{
+    output::{
+        self,
+        v1::{
+            GetEnabledRequest, GetFocusStackWindowIdsRequest, GetFocusedRequest, GetInfoRequest,
+            GetLocRequest, GetLogicalSizeRequest, GetModesRequest, GetPhysicalSizeRequest,
+            GetPoweredRequest, GetRequest, GetScaleRequest, GetTagIdsRequest, GetTransformRequest,
+            SetLocRequest, SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
+            SetTransformRequest,
+        },
     },
+    util::v1::{AbsOrRel, SetOrToggle},
 };
-use tracing::{error, instrument};
 
 use crate::{
-    block_on_tokio,
+    client::Client,
     signal::{OutputSignal, SignalHandle},
     signal_module,
-    tag::{Tag, TagHandle},
-    util::Batch,
-    window::{Window, WindowHandle},
+    tag::TagHandle,
+    util::{Batch, Point, Size},
+    window::WindowHandle,
+    BlockOnTokio,
 };
 
-/// A struct that allows you to get handles to connected outputs and set them up.
+pub fn get_all() -> impl Iterator<Item = OutputHandle> {
+    get_all_async().block_on_tokio()
+}
+
+/// Get handles to all connected outputs.
 ///
-/// See [`OutputHandle`] for more information.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Output;
+/// # Examples
+///
+/// ```
+///
+///
+/// let outputs = output.get_all();
+/// ```
+pub async fn get_all_async() -> impl Iterator<Item = OutputHandle> {
+    Client::output()
+        .get(GetRequest {})
+        .await
+        .unwrap()
+        .into_inner()
+        .output_names
+        .into_iter()
+        .map(|name| OutputHandle { name })
+}
 
-impl Output {
-    pub(crate) fn new_handle(&self, name: impl Into<String>) -> OutputHandle {
-        OutputHandle { name: name.into() }
+pub fn get_all_enabled() -> impl Iterator<Item = OutputHandle> {
+    get_all_enabled_async().block_on_tokio()
+}
+
+/// Get handles to all outputs that are connected and enabled.
+///
+/// # Examples
+///
+/// ```
+///
+///
+/// let enabled = output.get_all_enabled();
+/// ```
+pub async fn get_all_enabled_async() -> impl Iterator<Item = OutputHandle> {
+    get_all_async()
+        .await
+        .batch_filter(|op| op.enabled_async().boxed(), |enabled| *enabled)
+}
+
+pub fn get_by_name(name: impl ToString) -> Option<OutputHandle> {
+    get_by_name_async(name).block_on_tokio()
+}
+
+/// Get a handle to the output with the given name.
+///
+/// By "name", we mean the name of the connector the output is connected to.
+///
+/// # Examples
+///
+/// ```
+/// let op = output.get_by_name("eDP-1")?;
+///
+///
+/// let op2 = output.get_by_name("HDMI-2")?;
+/// ```
+pub async fn get_by_name_async(name: impl ToString) -> Option<OutputHandle> {
+    get_all_async().await.find(|op| op.name == name.to_string())
+}
+
+pub fn get_focused() -> Option<OutputHandle> {
+    get_focused_async().block_on_tokio()
+}
+
+/// Get a handle to the focused output.
+///
+/// This is currently implemented as the one that has had the most recent pointer movement.
+///
+/// # Examples
+///
+/// ```
+///
+///
+/// let op = output.get_focused()?;
+/// ```
+pub async fn get_focused_async() -> Option<OutputHandle> {
+    get_all_async()
+        .await
+        .batch_find(|op| op.focused_async().boxed(), |focused| *focused)
+}
+
+/// Connect a closure to be run on all current and future outputs.
+///
+/// When called, `connect_for_all` will do two things:
+/// 1. Immediately run `for_all` with all currently connected outputs.
+/// 2. Create a future that will call `for_all` with any newly connected outputs.
+///
+/// Note that `for_all` will *not* run with outputs that have been unplugged and replugged.
+/// This is to prevent duplicate setup. Instead, the compositor keeps track of any tags and
+/// state the output had when unplugged and restores them on replug.
+///
+/// # Examples
+///
+/// ```
+/// // Add tags 1-3 to all outputs and set tag "1" to active
+/// output.connect_for_all(|op| {
+///     let tags = tag.add(&op, ["1", "2", "3"]);
+///     tags.first()?.set_active(true);
+/// });
+/// ```
+pub fn connect_for_all(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
+    for output in get_all() {
+        for_all(&output);
     }
 
-    /// Get handles to all connected outputs.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let outputs = output.get_all();
-    /// ```
-    pub fn get_all(&self) -> Vec<OutputHandle> {
-        block_on_tokio(self.get_all_async())
+    signal_module()
+        .output_connect
+        .add_callback(Box::new(for_all));
+}
+
+/// Connect to an output signal.
+///
+/// The compositor will fire off signals that your config can listen for and act upon.
+/// You can pass in an [`OutputSignal`] along with a callback and it will get run
+/// with the necessary arguments every time a signal of that type is received.
+pub fn connect_signal(signal: OutputSignal) -> SignalHandle {
+    let mut signal_state = signal_module();
+
+    match signal {
+        OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
+        OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
+        OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
+        OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
     }
+}
 
-    /// The async version of [`Output::get_all`].
-    pub async fn get_all_async(&self) -> Vec<OutputHandle> {
-        crate::output()
-            .get(output::v0alpha1::GetRequest {})
-            .await
-            .map(|resp| resp.into_inner().output_names)
-            .inspect_err(|err| error!("Failed to get outputs: {err}"))
-            .unwrap_or_default()
-            .into_iter()
-            .map(|name| self.new_handle(name))
-            .collect()
-    }
+/// Declaratively setup outputs.
+///
+/// This method allows you to specify [`OutputSetup`]s that will be applied to outputs already
+/// connected and that will be connected in the future. It handles the setting of modes,
+/// scales, tags, and more.
+///
+/// Setups will be applied top to bottom.
+///
+/// See [`OutputSetup`] for more information.
+///
+/// # Examples
+///
+/// ```
+/// use pinnacle_api::output::OutputSetup;
+/// use pinnacle_api::output::OutputId;
+///
+/// output.setup([
+///     // Give all outputs tags 1 through 5
+///     OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3", "4", "5"]),
+///     // Give outputs with a preferred mode of 4K a scale of 2.0
+///     OutputSetup::new_with_matcher(|op| op.preferred_mode()?.pixel_width == 2160)
+///         .with_scale(2.0),
+///     // Additionally give eDP-1 tags 6 and 7
+///     OutputSetup::new(OutputId::name("eDP-1")).with_tags(["6", "7"]),
+/// ]);
+/// ```
+pub fn setup(setups: impl IntoIterator<Item = OutputSetup>) {
+    let setups = setups.into_iter().collect::<Vec<_>>();
 
-    /// Get handles to all outputs that are connected and enabled.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let enabled = output.get_all_enabled();
-    /// ```
-    pub fn get_all_enabled(&self) -> Vec<OutputHandle> {
-        block_on_tokio(self.get_all_enabled_async())
-    }
-
-    /// The async version of [`Output::get_all_enabled`].
-    pub async fn get_all_enabled_async(&self) -> Vec<OutputHandle> {
-        let outputs = self.get_all_async().await;
-
-        let mut enabled_outputs = Vec::new();
-        for output in outputs {
-            if output.enabled_async().await.unwrap_or_default() {
-                enabled_outputs.push(output);
+    let apply_setups = move |output: &OutputHandle| {
+        for setup in setups.iter() {
+            if setup.output.matches(output) {
+                setup.apply(output);
             }
         }
-
-        enabled_outputs
-    }
-
-    /// Get a handle to the output with the given name.
-    ///
-    /// By "name", we mean the name of the connector the output is connected to.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let op = output.get_by_name("eDP-1")?;
-    /// let op2 = output.get_by_name("HDMI-2")?;
-    /// ```
-    pub fn get_by_name(&self, name: impl Into<String>) -> Option<OutputHandle> {
-        block_on_tokio(self.get_by_name_async(name))
-    }
-
-    /// The async version of [`Output::get_by_name`].
-    pub async fn get_by_name_async(&self, name: impl Into<String>) -> Option<OutputHandle> {
-        let name: String = name.into();
-        self.get_all_async()
-            .await
-            .into_iter()
-            .find(|output| output.name == name)
-    }
-
-    /// Get a handle to the focused output.
-    ///
-    /// This is currently implemented as the one that has had the most recent pointer movement.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let op = output.get_focused()?;
-    /// ```
-    pub fn get_focused(&self) -> Option<OutputHandle> {
-        self.get_all()
-            .into_iter()
-            .find(|output| matches!(output.props().focused, Some(true)))
-    }
-
-    /// The async version of [`Output::get_focused`].
-    pub async fn get_focused_async(&self) -> Option<OutputHandle> {
-        self.get_all_async().await.batch_find(
-            |output| output.props_async().boxed(),
-            |props| props.focused.is_some_and(|focused| focused),
-        )
-    }
-
-    /// Connect a closure to be run on all current and future outputs.
-    ///
-    /// When called, `connect_for_all` will do two things:
-    /// 1. Immediately run `for_all` with all currently connected outputs.
-    /// 2. Create a future that will call `for_all` with any newly connected outputs.
-    ///
-    /// Note that `for_all` will *not* run with outputs that have been unplugged and replugged.
-    /// This is to prevent duplicate setup. Instead, the compositor keeps track of any tags and
-    /// state the output had when unplugged and restores them on replug.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Add tags 1-3 to all outputs and set tag "1" to active
-    /// output.connect_for_all(|op| {
-    ///     let tags = tag.add(&op, ["1", "2", "3"]);
-    ///     tags.first()?.set_active(true);
-    /// });
-    /// ```
-    pub fn connect_for_all(&self, mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
-        for output in self.get_all() {
-            for_all(&output);
+        if let Some(tag) = output.tags().next() {
+            tag.set_active(true);
         }
+    };
 
-        signal_module()
-            .output_connect
-            .add_callback(Box::new(for_all));
-    }
+    connect_for_all(move |output| {
+        apply_setups(output);
+    });
+}
 
-    /// Connect to an output signal.
-    ///
-    /// The compositor will fire off signals that your config can listen for and act upon.
-    /// You can pass in an [`OutputSignal`] along with a callback and it will get run
-    /// with the necessary arguments every time a signal of that type is received.
-    pub fn connect_signal(&self, signal: OutputSignal) -> SignalHandle {
-        let mut signal_state = signal_module();
+/// Specify locations for outputs and when they should be laid out.
+///
+/// This method allows you to specify locations for outputs, either as a specific point
+/// or relative to another output.
+///
+/// This will relayout outputs according to the given [`UpdateLocsOn`] flags.
+///
+/// Layouts not specified in `setup` or that have cyclic relative-to outputs will be
+/// laid out in a line to the right of the rightmost output.
+///
+/// # Examples
+///
+/// ```
+/// use pinnacle_api::output::UpdateLocsOn;
+/// use pinnacle_api::output::OutputLoc;
+/// use pinnacle_api::output::OutputId;
+///
+/// output.setup_locs(
+///     // Relayout all outputs when outputs are connected, disconnected, and resized
+///     UpdateLocsOn::all(),
+///     [
+///         // Anchor eDP-1 to (0, 0) so other outputs can be placed relative to it
+///         (OutputId::name("eDP-1"), OutputLoc::Point(0, 0)),
+///         // Place HDMI-A-1 below it centered
+///         (
+///             OutputId::name("HDMI-A-1"),
+///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
+///         ),
+///         // Place HDMI-A-2 below HDMI-A-1.
+///         (
+///             OutputId::name("HDMI-A-2"),
+///             OutputLoc::RelativeTo(OutputId::name("HDMI-A-1"), Alignment::BottomAlignCenter),
+///         ),
+///         // Additionally, if HDMI-A-1 isn't connected, place it below eDP-1 instead.
+///         (
+///             OutputId::name("HDMI-A-2"),
+///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
+///         ),
+///     ]
+/// );
+/// ```
+pub fn setup_locs(
+    update_locs_on: UpdateLocsOn,
+    setup: impl IntoIterator<Item = (OutputId, OutputLoc)>,
+) {
+    let setup: Vec<_> = setup.into_iter().collect();
 
-        match signal {
-            OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),
-            OutputSignal::Disconnect(f) => signal_state.output_disconnect.add_callback(f),
-            OutputSignal::Resize(f) => signal_state.output_resize.add_callback(f),
-            OutputSignal::Move(f) => signal_state.output_move.add_callback(f),
-        }
-    }
+    let layout_outputs = move || {
+        let outputs = get_all_enabled().collect::<Vec<_>>();
 
-    /// Declaratively setup outputs.
-    ///
-    /// This method allows you to specify [`OutputSetup`]s that will be applied to outputs already
-    /// connected and that will be connected in the future. It handles the setting of modes,
-    /// scales, tags, and more.
-    ///
-    /// Setups will be applied top to bottom.
-    ///
-    /// See [`OutputSetup`] for more information.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::output::OutputSetup;
-    /// use pinnacle_api::output::OutputId;
-    ///
-    /// output.setup([
-    ///     // Give all outputs tags 1 through 5
-    ///     OutputSetup::new_with_matcher(|_| true).with_tags(["1", "2", "3", "4", "5"]),
-    ///     // Give outputs with a preferred mode of 4K a scale of 2.0
-    ///     OutputSetup::new_with_matcher(|op| op.preferred_mode()?.pixel_width == 2160)
-    ///         .with_scale(2.0),
-    ///     // Additionally give eDP-1 tags 6 and 7
-    ///     OutputSetup::new(OutputId::name("eDP-1")).with_tags(["6", "7"]),
-    /// ]);
-    /// ```
-    pub fn setup(&self, setups: impl IntoIterator<Item = OutputSetup>) {
-        let setups = setups.into_iter().collect::<Vec<_>>();
+        let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
 
-        let apply_setups = move |output: &OutputHandle| {
-            for setup in setups.iter() {
-                if setup.output.matches(output) {
-                    setup.apply(output);
-                }
-            }
-            if let Some(tag) = output.tags().first() {
-                tag.set_active(true);
-            }
-        };
+        let mut placed_outputs = Vec::<OutputHandle>::new();
 
-        self.connect_for_all(move |output| {
-            apply_setups(output);
-        });
-    }
-
-    /// Specify locations for outputs and when they should be laid out.
-    ///
-    /// This method allows you to specify locations for outputs, either as a specific point
-    /// or relative to another output.
-    ///
-    /// This will relayout outputs according to the given [`UpdateLocsOn`] flags.
-    ///
-    /// Layouts not specified in `setup` or that have cyclic relative-to outputs will be
-    /// laid out in a line to the right of the rightmost output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::output::UpdateLocsOn;
-    /// use pinnacle_api::output::OutputLoc;
-    /// use pinnacle_api::output::OutputId;
-    ///
-    /// output.setup_locs(
-    ///     // Relayout all outputs when outputs are connected, disconnected, and resized
-    ///     UpdateLocsOn::all(),
-    ///     [
-    ///         // Anchor eDP-1 to (0, 0) so other outputs can be placed relative to it
-    ///         (OutputId::name("eDP-1"), OutputLoc::Point(0, 0)),
-    ///         // Place HDMI-A-1 below it centered
-    ///         (
-    ///             OutputId::name("HDMI-A-1"),
-    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
-    ///         ),
-    ///         // Place HDMI-A-2 below HDMI-A-1.
-    ///         (
-    ///             OutputId::name("HDMI-A-2"),
-    ///             OutputLoc::RelativeTo(OutputId::name("HDMI-A-1"), Alignment::BottomAlignCenter),
-    ///         ),
-    ///         // Additionally, if HDMI-A-1 isn't connected, place it below eDP-1 instead.
-    ///         (
-    ///             OutputId::name("HDMI-A-2"),
-    ///             OutputLoc::RelativeTo(OutputId::name("eDP-1"), Alignment::BottomAlignCenter),
-    ///         ),
-    ///     ]
-    /// );
-    /// ```
-    pub fn setup_locs(
-        &self,
-        update_locs_on: UpdateLocsOn,
-        setup: impl IntoIterator<Item = (OutputId, OutputLoc)>,
-    ) {
-        let setup: Vec<_> = setup.into_iter().collect();
-
-        let layout_outputs = move || {
-            let outputs = Output.get_all_enabled();
-
-            let mut rightmost_output_and_x: Option<(OutputHandle, i32)> = None;
-
-            let mut placed_outputs = Vec::<OutputHandle>::new();
-
-            // Place outputs with OutputSetupLoc::Point
-            for output in outputs.iter() {
-                if let Some(&(_, OutputLoc::Point(x, y))) =
-                    setup.iter().find(|(op_id, _)| op_id.matches(output))
-                {
-                    output.set_location(x, y);
-
-                    placed_outputs.push(output.clone());
-                    let props = output.props();
-                    let x = props.x.expect("output should have x-coord");
-                    let width = props
-                        .logical_width
-                        .expect("output should have logical width")
-                        as i32;
-                    if rightmost_output_and_x.is_none()
-                        || rightmost_output_and_x
-                            .as_ref()
-                            .is_some_and(|(_, rm_x)| x + width > *rm_x)
-                    {
-                        rightmost_output_and_x = Some((output.clone(), x + width));
-                    }
-                }
-            }
-
-            // Attempt to place relative outputs
-            //
-            // Because this code is hideous I'm gonna comment what it does
-            while let Some((output, relative_to, alignment)) =
-                setup.iter().find_map(|(setup_op_id, loc)| {
-                    // For every location setup,
-                    // find the first unplaced output it refers to that has a relative location
-                    outputs
-                        .iter()
-                        .find(|setup_op| {
-                            !placed_outputs.contains(setup_op) && setup_op_id.matches(setup_op)
-                        })
-                        .and_then(|setup_op| match loc {
-                            OutputLoc::RelativeTo(rel_id, alignment) => {
-                                placed_outputs.iter().find_map(|placed_op| {
-                                    (rel_id.matches(placed_op))
-                                        .then_some((setup_op, placed_op, alignment))
-                                })
-                            }
-                            _ => None,
-                        })
-                })
+        // Place outputs with OutputSetupLoc::Point
+        for output in outputs.iter() {
+            if let Some(&(_, OutputLoc::Point(x, y))) =
+                setup.iter().find(|(op_id, _)| op_id.matches(output))
             {
-                output.set_loc_adj_to(relative_to, *alignment);
+                output.set_loc(x, y);
 
                 placed_outputs.push(output.clone());
-                let props = output.props();
-                let x = props.x.expect("output should have x-coord");
-                let width = props
-                    .logical_width
-                    .expect("output should have logical width") as i32;
+                // let props = output.props();
+                let (op_loc, op_size) =
+                    async { tokio::join!(output.loc_async(), output.logical_size_async()) }
+                        .block_on_tokio();
+                let x = op_loc.expect("output should have x-coord").x;
+                let width = op_size.expect("output should have logical width").w as i32;
                 if rightmost_output_and_x.is_none()
                     || rightmost_output_and_x
                         .as_ref()
@@ -344,57 +286,97 @@ impl Output {
                     rightmost_output_and_x = Some((output.clone(), x + width));
                 }
             }
+        }
 
-            // Place all remaining outputs right of the rightmost one
-            for output in outputs
-                .iter()
-                .filter(|op| !placed_outputs.contains(op))
-                .collect::<Vec<_>>()
+        // Attempt to place relative outputs
+        //
+        // Because this code is hideous I'm gonna comment what it does
+        while let Some((output, relative_to, alignment)) =
+            setup.iter().find_map(|(setup_op_id, loc)| {
+                // For every location setup,
+                // find the first unplaced output it refers to that has a relative location
+                outputs
+                    .iter()
+                    .find(|setup_op| {
+                        !placed_outputs.contains(setup_op) && setup_op_id.matches(setup_op)
+                    })
+                    .and_then(|setup_op| match loc {
+                        OutputLoc::RelativeTo(rel_id, alignment) => {
+                            placed_outputs.iter().find_map(|placed_op| {
+                                (rel_id.matches(placed_op))
+                                    .then_some((setup_op, placed_op, alignment))
+                            })
+                        }
+                        _ => None,
+                    })
+            })
+        {
+            output.set_loc_adj_to(relative_to, *alignment);
+
+            placed_outputs.push(output.clone());
+            let (op_loc, op_size) =
+                async { tokio::join!(output.loc_async(), output.logical_size_async()) }
+                    .block_on_tokio();
+            let x = op_loc.expect("output should have x-coord").x;
+            let width = op_size.expect("output should have logical width").w as i32;
+            if rightmost_output_and_x.is_none()
+                || rightmost_output_and_x
+                    .as_ref()
+                    .is_some_and(|(_, rm_x)| x + width > *rm_x)
             {
-                if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
-                    output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
-                } else {
-                    output.set_location(0, 0);
-                }
-
-                placed_outputs.push(output.clone());
-                let props = output.props();
-                let x = props.x.expect("output should have x-coord");
-                let width = props
-                    .logical_width
-                    .expect("output should have logical width") as i32;
-                if rightmost_output_and_x.is_none()
-                    || rightmost_output_and_x
-                        .as_ref()
-                        .is_some_and(|(_, rm_x)| x + width > *rm_x)
-                {
-                    rightmost_output_and_x = Some((output.clone(), x + width));
-                }
+                rightmost_output_and_x = Some((output.clone(), x + width));
             }
-        };
-
-        layout_outputs();
-
-        let layout_outputs_clone1 = layout_outputs.clone();
-        let layout_outputs_clone2 = layout_outputs.clone();
-
-        if update_locs_on.contains(UpdateLocsOn::CONNECT) {
-            self.connect_signal(OutputSignal::Connect(Box::new(move |_| {
-                layout_outputs_clone2();
-            })));
         }
 
-        if update_locs_on.contains(UpdateLocsOn::DISCONNECT) {
-            self.connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
-                layout_outputs_clone1();
-            })));
-        }
+        // Place all remaining outputs right of the rightmost one
+        for output in outputs
+            .iter()
+            .filter(|op| !placed_outputs.contains(op))
+            .collect::<Vec<_>>()
+        {
+            if let Some((rm_op, _)) = rightmost_output_and_x.as_ref() {
+                output.set_loc_adj_to(rm_op, Alignment::RightAlignTop);
+            } else {
+                output.set_loc(0, 0);
+            }
 
-        if update_locs_on.contains(UpdateLocsOn::RESIZE) {
-            self.connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
-                layout_outputs();
-            })));
+            placed_outputs.push(output.clone());
+            let (op_loc, op_size) =
+                async { tokio::join!(output.loc_async(), output.logical_size_async()) }
+                    .block_on_tokio();
+            let x = op_loc.expect("output should have x-coord").x;
+            let width = op_size.expect("output should have logical width").w as i32;
+            if rightmost_output_and_x.is_none()
+                || rightmost_output_and_x
+                    .as_ref()
+                    .is_some_and(|(_, rm_x)| x + width > *rm_x)
+            {
+                rightmost_output_and_x = Some((output.clone(), x + width));
+            }
         }
+    };
+
+    layout_outputs();
+
+    let layout_outputs_clone1 = layout_outputs.clone();
+    let layout_outputs_clone2 = layout_outputs.clone();
+
+    if update_locs_on.contains(UpdateLocsOn::CONNECT) {
+        connect_signal(OutputSignal::Connect(Box::new(move |_| {
+            layout_outputs_clone2();
+        })));
+    }
+
+    if update_locs_on.contains(UpdateLocsOn::DISCONNECT) {
+        connect_signal(OutputSignal::Disconnect(Box::new(move |_| {
+            layout_outputs_clone1();
+        })));
+    }
+
+    if update_locs_on.contains(UpdateLocsOn::RESIZE) {
+        connect_signal(OutputSignal::Resize(Box::new(move |_, _, _| {
+            layout_outputs();
+        })));
     }
 }
 
@@ -518,11 +500,7 @@ impl OutputSetup {
         if let Some(mode) = &self.mode {
             match mode {
                 OutputMode::Mode(mode) => {
-                    output.set_mode(
-                        mode.pixel_width,
-                        mode.pixel_height,
-                        Some(mode.refresh_rate_millihertz),
-                    );
+                    output.set_mode(mode.size.w, mode.size.h, Some(mode.refresh_rate_mhz));
                 }
                 OutputMode::Modeline(modeline) => {
                     output.set_modeline(*modeline);
@@ -533,7 +511,7 @@ impl OutputSetup {
             output.set_scale(scale);
         }
         if let Some(tag_names) = &self.tag_names {
-            Tag.add(output, tag_names);
+            crate::tag::add(output, tag_names);
         }
         if let Some(transform) = self.transform {
             output.set_transform(transform);
@@ -627,12 +605,12 @@ pub enum Alignment {
 /// An output transform.
 ///
 /// This determines what orientation outputs will render at.
-#[derive(num_enum::TryFromPrimitive, Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum Transform {
     /// No transform.
     #[default]
-    Normal = 1,
+    Normal,
     /// 90 degrees counter-clockwise.
     _90,
     /// 180 degrees counter-clockwise.
@@ -647,6 +625,39 @@ pub enum Transform {
     Flipped180,
     /// Flipped vertically and rotated 270 degrees counter-clockwise
     Flipped270,
+}
+
+impl TryFrom<output::v1::Transform> for Transform {
+    type Error = ();
+
+    fn try_from(value: output::v1::Transform) -> Result<Self, Self::Error> {
+        match value {
+            output::v1::Transform::Unspecified => Err(()),
+            output::v1::Transform::Normal => Ok(Transform::Normal),
+            output::v1::Transform::Transform90 => Ok(Transform::_90),
+            output::v1::Transform::Transform180 => Ok(Transform::_180),
+            output::v1::Transform::Transform270 => Ok(Transform::_270),
+            output::v1::Transform::Flipped => Ok(Transform::Flipped),
+            output::v1::Transform::Flipped90 => Ok(Transform::Flipped90),
+            output::v1::Transform::Flipped180 => Ok(Transform::Flipped180),
+            output::v1::Transform::Flipped270 => Ok(Transform::Flipped270),
+        }
+    }
+}
+
+impl From<Transform> for output::v1::Transform {
+    fn from(value: Transform) -> Self {
+        match value {
+            Transform::Normal => output::v1::Transform::Normal,
+            Transform::_90 => output::v1::Transform::Transform90,
+            Transform::_180 => output::v1::Transform::Transform180,
+            Transform::_270 => output::v1::Transform::Transform270,
+            Transform::Flipped => output::v1::Transform::Flipped,
+            Transform::Flipped90 => output::v1::Transform::Flipped90,
+            Transform::Flipped180 => output::v1::Transform::Flipped180,
+            Transform::Flipped270 => output::v1::Transform::Flipped270,
+        }
+    }
 }
 
 impl OutputHandle {
@@ -682,15 +693,15 @@ impl OutputHandle {
     /// //    └─────┴───────┘
     /// //          ^x=1920
     /// ```
-    #[instrument(skip(x, y))]
-    pub fn set_location(&self, x: impl Into<Option<i32>>, y: impl Into<Option<i32>>) {
-        if let Err(err) = block_on_tokio(crate::output().set_location(SetLocationRequest {
-            output_name: Some(self.name.clone()),
-            x: x.into(),
-            y: y.into(),
-        })) {
-            error!("{err}");
-        }
+    pub fn set_loc(&self, x: i32, y: i32) {
+        Client::output()
+            .set_loc(SetLocRequest {
+                output_name: self.name(),
+                x,
+                y,
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this output adjacent to another one.
@@ -731,18 +742,24 @@ impl OutputHandle {
     /// // "HDMI-1" was placed at (1920, 0) during the compositor's initial output layout.
     /// ```
     pub fn set_loc_adj_to(&self, other: &OutputHandle, alignment: Alignment) {
-        let self_props = self.props();
-        let other_props = other.props();
+        let (self_size, other_loc, other_size) = async {
+            tokio::join!(
+                self.logical_size_async(),
+                other.loc_async(),
+                other.logical_size_async()
+            )
+        }
+        .block_on_tokio();
 
         // poor man's try {}
         let attempt_set_loc = || -> Option<()> {
-            let other_x = other_props.x?;
-            let other_y = other_props.y?;
-            let other_width = other_props.logical_width? as i32;
-            let other_height = other_props.logical_height? as i32;
+            let other_x = other_loc?.x;
+            let other_y = other_loc?.y;
+            let other_width = other_size?.w as i32;
+            let other_height = other_size?.h as i32;
 
-            let self_width = self_props.logical_width? as i32;
-            let self_height = self_props.logical_height? as i32;
+            let self_width = self_size?.w as i32;
+            let self_height = self_size?.h as i32;
 
             use Alignment::*;
 
@@ -786,7 +803,7 @@ impl OutputHandle {
                 }
             }
 
-            self.set_location(Some(x), Some(y));
+            self.set_loc(x, y);
 
             Some(())
         };
@@ -810,21 +827,15 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.set_mode(2560, 1440, 144000);
     /// ```
-    #[instrument(skip(refresh_rate_millihertz))]
-    pub fn set_mode(
-        &self,
-        pixel_width: u32,
-        pixel_height: u32,
-        refresh_rate_millihertz: impl Into<Option<u32>>,
-    ) {
-        if let Err(err) = block_on_tokio(crate::output().set_mode(SetModeRequest {
-            output_name: Some(self.name.clone()),
-            pixel_width: Some(pixel_width),
-            pixel_height: Some(pixel_height),
-            refresh_rate_millihz: refresh_rate_millihertz.into(),
-        })) {
-            error!("{err}");
-        }
+    pub fn set_mode(&self, width: u32, height: u32, refresh_rate_mhz: impl Into<Option<u32>>) {
+        Client::output()
+            .set_mode(SetModeRequest {
+                output_name: self.name(),
+                size: Some(pinnacle_api_defs::pinnacle::util::v1::Size { width, height }),
+                refresh_rate_mhz: refresh_rate_mhz.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set a custom modeline for this output.
@@ -839,24 +850,14 @@ impl OutputHandle {
     /// ```
     /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
     /// ```
-    #[instrument(skip(modeline))]
     pub fn set_modeline(&self, modeline: Modeline) {
-        if let Err(err) = block_on_tokio(crate::output().set_modeline(SetModelineRequest {
-            output_name: Some(self.name.clone()),
-            clock: Some(modeline.clock),
-            hdisplay: Some(modeline.hdisplay),
-            hsync_start: Some(modeline.hsync_start),
-            hsync_end: Some(modeline.hsync_end),
-            htotal: Some(modeline.htotal),
-            vdisplay: Some(modeline.vdisplay),
-            vsync_start: Some(modeline.vsync_start),
-            vsync_end: Some(modeline.vsync_end),
-            vtotal: Some(modeline.vtotal),
-            hsync_pos: Some(modeline.hsync),
-            vsync_pos: Some(modeline.vsync),
-        })) {
-            error!("{err}");
-        }
+        Client::output()
+            .set_modeline(SetModelineRequest {
+                output_name: self.name(),
+                modeline: Some(modeline.into()),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this output's scaling factor.
@@ -866,14 +867,15 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.set_scale(1.5);
     /// ```
-    #[instrument]
     pub fn set_scale(&self, scale: f32) {
-        if let Err(err) = block_on_tokio(crate::output().set_scale(SetScaleRequest {
-            output_name: Some(self.name.clone()),
-            absolute_or_relative: Some(AbsoluteOrRelative::Absolute(scale)),
-        })) {
-            error!("{err}");
-        }
+        Client::output()
+            .set_scale(SetScaleRequest {
+                output_name: self.name(),
+                scale,
+                abs_or_rel: AbsOrRel::Absolute.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Increase this output's scaling factor by `increase_by`.
@@ -883,27 +885,15 @@ impl OutputHandle {
     /// ```
     /// output.get_focused()?.increase_scale(0.25);
     /// ```
-    #[instrument]
-    pub fn increase_scale(&self, increase_by: f32) {
-        if let Err(err) = block_on_tokio(crate::output().set_scale(SetScaleRequest {
-            output_name: Some(self.name.clone()),
-            absolute_or_relative: Some(AbsoluteOrRelative::Relative(increase_by)),
-        })) {
-            error!("{err}");
-        }
-    }
-
-    /// Decrease this output's scaling factor by `decrease_by`.
-    ///
-    /// This simply calls [`OutputHandle::increase_scale`] with the negative of `decrease_by`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// output.get_focused()?.decrease_scale(0.25);
-    /// ```
-    pub fn decrease_scale(&self, decrease_by: f32) {
-        self.increase_scale(-decrease_by);
+    pub fn change_scale(&self, change_by: f32) {
+        Client::output()
+            .set_scale(SetScaleRequest {
+                output_name: self.name(),
+                scale: change_by,
+                abs_or_rel: AbsOrRel::Relative.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this output's transform.
@@ -916,14 +906,14 @@ impl OutputHandle {
     /// // Rotate 90 degrees counter-clockwise
     /// output.set_transform(Transform::_90);
     /// ```
-    #[instrument]
     pub fn set_transform(&self, transform: Transform) {
-        if let Err(err) = block_on_tokio(crate::output().set_transform(SetTransformRequest {
-            output_name: Some(self.name.clone()),
-            transform: Some(transform as i32),
-        })) {
-            error!("{err}");
-        }
+        Client::output()
+            .set_transform(SetTransformRequest {
+                output_name: self.name(),
+                transform: output::v1::Transform::from(transform).into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Power on or off this output.
@@ -937,298 +927,327 @@ impl OutputHandle {
     /// // Power off `output`
     /// output.set_powered(false);
     /// ```
-    #[instrument]
     pub fn set_powered(&self, powered: bool) {
-        if let Err(err) = block_on_tokio(crate::output().set_powered(SetPoweredRequest {
-            output_name: Some(self.name.clone()),
-            powered: Some(powered),
-        })) {
-            error!("{err}");
-        }
-    }
-
-    /// Get all properties of this output.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::output::OutputProperties;
-    ///
-    /// let OutputProperties {
-    ///     ..
-    /// } = output.get_focused()?.props();
-    /// ```
-    pub fn props(&self) -> OutputProperties {
-        block_on_tokio(self.props_async())
-    }
-
-    /// The async version of [`OutputHandle::props`].
-    #[instrument]
-    pub async fn props_async(&self) -> OutputProperties {
-        let response = match crate::output()
-            .get_properties(output::v0alpha1::GetPropertiesRequest {
-                output_name: Some(self.name.clone()),
+        Client::output()
+            .set_powered(SetPoweredRequest {
+                output_name: self.name(),
+                set_or_toggle: match powered {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
             })
-            .await
-        {
-            Ok(resp) => resp.into_inner(),
-            Err(err) => {
-                error!("{err}");
-                return OutputProperties::default();
-            }
-        };
-
-        OutputProperties {
-            make: response.make,
-            model: response.model,
-            x: response.x,
-            y: response.y,
-            logical_width: response.logical_width,
-            logical_height: response.logical_height,
-            current_mode: response.current_mode.and_then(|mode| {
-                Some(Mode {
-                    pixel_width: mode.pixel_width?,
-                    pixel_height: mode.pixel_height?,
-                    refresh_rate_millihertz: mode.refresh_rate_millihz?,
-                })
-            }),
-            preferred_mode: response.preferred_mode.and_then(|mode| {
-                Some(Mode {
-                    pixel_width: mode.pixel_width?,
-                    pixel_height: mode.pixel_height?,
-                    refresh_rate_millihertz: mode.refresh_rate_millihz?,
-                })
-            }),
-            modes: response
-                .modes
-                .into_iter()
-                .flat_map(|mode| {
-                    Some(Mode {
-                        pixel_width: mode.pixel_width?,
-                        pixel_height: mode.pixel_height?,
-                        refresh_rate_millihertz: mode.refresh_rate_millihz?,
-                    })
-                })
-                .collect(),
-            physical_width: response.physical_width,
-            physical_height: response.physical_height,
-            focused: response.focused,
-            tags: response
-                .tag_ids
-                .into_iter()
-                .map(|id| Tag.new_handle(id))
-                .collect(),
-            scale: response.scale,
-            transform: response.transform.and_then(|tf| tf.try_into().ok()),
-            serial: response.serial_str,
-            keyboard_focus_stack: response
-                .keyboard_focus_stack_window_ids
-                .into_iter()
-                .map(|id| Window.new_handle(id))
-                .collect(),
-            enabled: response.enabled,
-            powered: response.powered,
-        }
+            .block_on_tokio()
+            .unwrap();
     }
 
-    // TODO: make a macro for the following or something
+    pub fn toggle_powered(&self) {
+        Client::output()
+            .set_powered(SetPoweredRequest {
+                output_name: self.name(),
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    pub fn make(&self) -> String {
+        self.make_async().block_on_tokio()
+    }
 
     /// Get this output's make.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().make`.
-    pub fn make(&self) -> Option<String> {
-        self.props().make
+    pub async fn make_async(&self) -> String {
+        Client::output()
+            .get_info(GetInfoRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .make
     }
 
-    /// The async version of [`OutputHandle::make`].
-    pub async fn make_async(&self) -> Option<String> {
-        self.props_async().await.make
+    pub fn model(&self) -> String {
+        self.model_async().block_on_tokio()
     }
 
     /// Get this output's model.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().make`.
-    pub fn model(&self) -> Option<String> {
-        self.props().model
+    pub async fn model_async(&self) -> String {
+        Client::output()
+            .get_info(GetInfoRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .model
     }
 
-    /// The async version of [`OutputHandle::model`].
-    pub async fn model_async(&self) -> Option<String> {
-        self.props_async().await.model
+    pub fn serial_async(&self) -> String {
+        self.serial_async_async().block_on_tokio()
+    }
+
+    pub async fn serial_async_async(&self) -> String {
+        Client::output()
+            .get_info(GetInfoRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .serial
+    }
+
+    pub fn loc(&self) -> Option<Point> {
+        self.loc_async().block_on_tokio()
     }
 
     /// Get this output's x position in the global space.
     ///
-    /// Shorthand for `self.props().x`.
-    pub fn x(&self) -> Option<i32> {
-        self.props().x
-    }
-
-    /// The async version of [`OutputHandle::x`].
-    pub async fn x_async(&self) -> Option<i32> {
-        self.props_async().await.x
-    }
-
-    /// Get this output's y position in the global space.
     ///
-    /// Shorthand for `self.props().y`.
-    pub fn y(&self) -> Option<i32> {
-        self.props().y
+    ///
+    /// Shorthand for `self.props().x`.
+    pub async fn loc_async(&self) -> Option<Point> {
+        Client::output()
+            .get_loc(GetLocRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .loc
+            .map(|loc| Point { x: loc.x, y: loc.y })
     }
 
-    /// The async version of [`OutputHandle::y`].
-    pub async fn y_async(&self) -> Option<i32> {
-        self.props_async().await.y
+    pub fn logical_size(&self) -> Option<Size> {
+        self.logical_size_async().block_on_tokio()
     }
 
     /// Get this output's logical width in pixels.
     ///
     /// If the output is disabled, this returns None.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().logical_width`.
-    pub fn logical_width(&self) -> Option<u32> {
-        self.props().logical_width
+    pub async fn logical_size_async(&self) -> Option<Size> {
+        Client::output()
+            .get_logical_size(GetLogicalSizeRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .logical_size
+            .map(|size| Size {
+                w: size.width,
+                h: size.height,
+            })
     }
 
-    /// The async version of [`OutputHandle::logical_width`].
-    pub async fn logical_width_async(&self) -> Option<u32> {
-        self.props_async().await.logical_width
-    }
-
-    /// Get this output's logical height in pixels.
-    ///
-    /// If the output is disabled, this returns None.
-    ///
-    /// Shorthand for `self.props().logical_height`.
-    pub fn logical_height(&self) -> Option<u32> {
-        self.props().logical_height
-    }
-
-    /// The async version of [`OutputHandle::logical_height`].
-    pub async fn logical_height_async(&self) -> Option<u32> {
-        self.props_async().await.logical_height
+    pub fn current_mode(&self) -> Option<Mode> {
+        self.current_mode_async().block_on_tokio()
     }
 
     /// Get this output's current mode.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().current_mode`.
-    pub fn current_mode(&self) -> Option<Mode> {
-        self.props().current_mode
+    pub async fn current_mode_async(&self) -> Option<Mode> {
+        Client::output()
+            .get_modes(GetModesRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .current_mode
+            .map(|mode| Mode {
+                size: Size {
+                    w: mode.size.expect("mode should have a size").width,
+                    h: mode.size.expect("mode should have a size").height,
+                },
+                refresh_rate_mhz: mode.refresh_rate_mhz,
+            })
     }
 
-    /// The async version of [`OutputHandle::current_mode`].
-    pub async fn current_mode_async(&self) -> Option<Mode> {
-        self.props_async().await.current_mode
+    pub fn preferred_mode(&self) -> Option<Mode> {
+        self.preferred_mode_async().block_on_tokio()
     }
 
     /// Get this output's preferred mode.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().preferred_mode`.
-    pub fn preferred_mode(&self) -> Option<Mode> {
-        self.props().preferred_mode
+    pub async fn preferred_mode_async(&self) -> Option<Mode> {
+        Client::output()
+            .get_modes(GetModesRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .preferred_mode
+            .map(|mode| Mode {
+                size: Size {
+                    w: mode.size.expect("mode should have a size").width,
+                    h: mode.size.expect("mode should have a size").height,
+                },
+                refresh_rate_mhz: mode.refresh_rate_mhz,
+            })
     }
 
-    /// The async version of [`OutputHandle::preferred_mode`].
-    pub async fn preferred_mode_async(&self) -> Option<Mode> {
-        self.props_async().await.preferred_mode
+    pub fn modes(&self) -> impl Iterator<Item = Mode> {
+        self.modes_async().block_on_tokio()
     }
 
     /// Get all available modes this output supports.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().modes`.
-    pub fn modes(&self) -> Vec<Mode> {
-        self.props().modes
+    pub async fn modes_async(&self) -> impl Iterator<Item = Mode> {
+        Client::output()
+            .get_modes(GetModesRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .modes
+            .into_iter()
+            .map(|mode| Mode {
+                size: Size {
+                    w: mode.size.expect("mode should have a size").width,
+                    h: mode.size.expect("mode should have a size").height,
+                },
+                refresh_rate_mhz: mode.refresh_rate_mhz,
+            })
     }
 
-    /// The async version of [`OutputHandle::modes`].
-    pub async fn modes_async(&self) -> Vec<Mode> {
-        self.props_async().await.modes
+    pub fn physical_size(&self) -> Size {
+        self.physical_size_async().block_on_tokio()
     }
 
     /// Get this output's physical width in millimeters.
     ///
-    /// Shorthand for `self.props().physical_width`.
-    pub fn physical_width(&self) -> Option<u32> {
-        self.props().physical_width
-    }
-
-    /// The async version of [`OutputHandle::physical_width`].
-    pub async fn physical_width_async(&self) -> Option<u32> {
-        self.props_async().await.physical_width
-    }
-
-    /// Get this output's physical height in millimeters.
     ///
-    /// Shorthand for `self.props().physical_height`.
-    pub fn physical_height(&self) -> Option<u32> {
-        self.props().physical_height
+    ///
+    /// Shorthand for `self.props().physical_width`.
+    pub async fn physical_size_async(&self) -> Size {
+        Client::output()
+            .get_physical_size(GetPhysicalSizeRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .physical_size
+            .map(|size| Size {
+                w: size.width,
+                h: size.height,
+            })
+            .unwrap_or_default()
     }
 
-    /// The async version of [`OutputHandle::physical_height`].
-    pub async fn physical_height_async(&self) -> Option<u32> {
-        self.props_async().await.physical_height
+    pub fn focused(&self) -> bool {
+        self.focused_async().block_on_tokio()
     }
 
     /// Get whether this output is focused or not.
     ///
     /// This is currently implemented as the output with the most recent pointer motion.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().focused`.
-    pub fn focused(&self) -> Option<bool> {
-        self.props().focused
+    pub async fn focused_async(&self) -> bool {
+        Client::output()
+            .get_focused(GetFocusedRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .focused
     }
 
-    /// The async version of [`OutputHandle::focused`].
-    pub async fn focused_async(&self) -> Option<bool> {
-        self.props_async().await.focused
+    pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
+        self.tags_async().block_on_tokio()
     }
 
     /// Get the tags this output has.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().tags`
-    pub fn tags(&self) -> Vec<TagHandle> {
-        self.props().tags
+    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
+        Client::output()
+            .get_tag_ids(GetTagIdsRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .tag_ids
+            .into_iter()
+            .map(|id| TagHandle { id })
     }
 
-    /// The async version of [`OutputHandle::tags`].
-    pub async fn tags_async(&self) -> Vec<TagHandle> {
-        self.props_async().await.tags
+    pub fn scale(&self) -> f32 {
+        self.scale_async().block_on_tokio()
     }
 
     /// Get this output's scaling factor.
     ///
+    ///
+    ///
     /// Shorthand for `self.props().scale`
-    pub fn scale(&self) -> Option<f32> {
-        self.props().scale
+    pub async fn scale_async(&self) -> f32 {
+        Client::output()
+            .get_scale(GetScaleRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .scale
     }
 
-    /// The async version of [`OutputHandle::scale`].
-    pub async fn scale_async(&self) -> Option<f32> {
-        self.props_async().await.scale
+    pub fn transform(&self) -> Transform {
+        self.transform_async().block_on_tokio()
     }
 
     /// Get this output's transform.
     ///
-    /// Shorthand for `self.props().transform`
-    pub fn transform(&self) -> Option<Transform> {
-        self.props().transform
-    }
-
-    /// The async version of [`OutputHandle::transform`].
-    pub async fn transform_async(&self) -> Option<Transform> {
-        self.props_async().await.transform
-    }
-
-    /// Get this output's EDID serial.
     ///
-    /// Shorthand for `self.props().serial`
-    pub fn serial(&self) -> Option<String> {
-        self.props().serial
+    ///
+    /// Shorthand for `self.props().transform`
+    pub async fn transform_async(&self) -> Transform {
+        Client::output()
+            .get_transform(GetTransformRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .transform()
+            .try_into()
+            .unwrap_or_default()
     }
 
-    /// The async version of [`OutputHandle::serial`].
-    pub async fn serial_async(&self) -> Option<String> {
-        self.props_async().await.serial
+    pub fn keyboard_focus_stack(&self) -> impl Iterator<Item = WindowHandle> {
+        self.keyboard_focus_stack_async().block_on_tokio()
     }
 
     /// Get this output's keyboard focus stack.
@@ -1237,38 +1256,55 @@ impl OutputHandle {
     /// If you only want windows on active tags, see
     /// [`OutputHandle::keyboard_focus_stack_visible`].
     ///
+    ///
+    ///
     /// Shorthand for `self.props().keyboard_focus_stack`
-    pub fn keyboard_focus_stack(&self) -> Vec<WindowHandle> {
-        self.props().keyboard_focus_stack
+    pub async fn keyboard_focus_stack_async(&self) -> impl Iterator<Item = WindowHandle> {
+        Client::output()
+            .get_focus_stack_window_ids(GetFocusStackWindowIdsRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .window_ids
+            .into_iter()
+            .map(|id| WindowHandle { id })
     }
 
-    /// The async version of [`OutputHandle::keyboard_focus_stack`].
-    pub async fn keyboard_focus_stack_async(&self) -> Vec<WindowHandle> {
-        self.props_async().await.keyboard_focus_stack
+    pub fn keyboard_focus_stack_visible(&self) -> impl Iterator<Item = WindowHandle> {
+        self.keyboard_focus_stack_visible_async().block_on_tokio()
     }
 
     /// Get this output's keyboard focus stack with only visible windows.
     ///
+    ///
+    ///
     /// If you only want a focus stack containing all windows on this output, see
     /// [`OutputHandle::keyboard_focus_stack`].
-    pub fn keyboard_focus_stack_visible(&self) -> Vec<WindowHandle> {
-        let keyboard_focus_stack = self.props().keyboard_focus_stack;
-
-        keyboard_focus_stack
+    pub async fn keyboard_focus_stack_visible_async(&self) -> impl Iterator<Item = WindowHandle> {
+        self.keyboard_focus_stack_async()
+            .await
             .batch_filter(|win| win.is_on_active_tag_async().boxed(), |is_on| *is_on)
-            .collect()
     }
 
     /// Get whether this output is enabled.
     ///
-    /// Disabled outputs act as if you unplugged them.
-    pub fn enabled(&self) -> Option<bool> {
-        self.props().enabled
+    ///
+    pub fn enabled(&self) -> bool {
+        self.enabled_async().block_on_tokio()
     }
-
-    /// The async version of [`OutputHandle::enabled`].
-    pub async fn enabled_async(&self) -> Option<bool> {
-        self.props_async().await.enabled
+    ///
+    /// Disabled outputs act as if you unplugged them.
+    pub async fn enabled_async(&self) -> bool {
+        Client::output()
+            .get_enabled(GetEnabledRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .enabled
     }
 
     /// Get whether this output is powered.
@@ -1276,15 +1312,22 @@ impl OutputHandle {
     /// Unpowered outputs will be turned off but you can still interact with them.
     ///
     /// Outputs can be disabled but still powered; this just means
+    ///
+    ///
+    pub fn powered(&self) -> bool {
+        self.powered_async().block_on_tokio()
+    }
     /// they will turn on when powered. Disabled and unpowered outputs
     /// will not power on when enabled, but will still be interactable.
-    pub fn powered(&self) -> Option<bool> {
-        self.props().powered
-    }
-
-    /// The async version of [`OutputHandle::powered`].
-    pub async fn powered_async(&self) -> Option<bool> {
-        self.props_async().await.powered
+    pub async fn powered_async(&self) -> bool {
+        Client::output()
+            .get_powered(GetPoweredRequest {
+                output_name: self.name(),
+            })
+            .await
+            .unwrap()
+            .into_inner()
+            .powered
     }
 
     /// Get this output's unique name (the name of its connector).
@@ -1296,70 +1339,11 @@ impl OutputHandle {
 /// A possible output pixel dimension and refresh rate configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Mode {
-    /// The width of the output, in pixels.
-    pub pixel_width: u32,
-    /// The height of the output, in pixels.
-    pub pixel_height: u32,
+    pub size: Size,
     /// The output's refresh rate, in millihertz.
     ///
     /// For example, 60Hz is returned as 60000.
-    pub refresh_rate_millihertz: u32,
-}
-
-/// The properties of an output.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct OutputProperties {
-    /// The make of the output.
-    pub make: Option<String>,
-    /// The model of the output.
-    ///
-    /// This is something like "27GL83A" or whatever crap monitor manufacturers name their monitors
-    /// these days.
-    pub model: Option<String>,
-    /// The x position of the output in the global space.
-    pub x: Option<i32>,
-    /// The y position of the output in the global space.
-    pub y: Option<i32>,
-    /// The logical width of this output in the global space
-    /// taking into account scaling, in pixels.
-    pub logical_width: Option<u32>,
-    /// The logical height of this output in the global space
-    /// taking into account scaling, in pixels.
-    pub logical_height: Option<u32>,
-    /// The output's current mode.
-    pub current_mode: Option<Mode>,
-    /// The output's preferred mode.
-    pub preferred_mode: Option<Mode>,
-    /// All available modes the output supports.
-    pub modes: Vec<Mode>,
-    /// The output's physical width in millimeters.
-    pub physical_width: Option<u32>,
-    /// The output's physical height in millimeters.
-    pub physical_height: Option<u32>,
-    /// Whether this output is focused or not.
-    ///
-    /// This is currently implemented as the output with the most recent pointer motion.
-    pub focused: Option<bool>,
-    /// The tags this output has.
-    pub tags: Vec<TagHandle>,
-    /// This output's scaling factor.
-    pub scale: Option<f32>,
-    /// This output's transform.
-    pub transform: Option<Transform>,
-    /// This output's EDID serial.
-    pub serial: Option<String>,
-    /// This output's window keyboard focus stack.
-    pub keyboard_focus_stack: Vec<WindowHandle>,
-    /// Whether this output is enabled.
-    ///
-    /// Enabled outputs are mapped in the global space and usable.
-    /// Disabled outputs function as if you unplugged them.
-    pub enabled: Option<bool>,
-    /// Whether this output is powered.
-    ///
-    /// Unpowered outputs will be off but you can still interact with them.
-    pub powered: Option<bool>,
+    pub refresh_rate_mhz: u32,
 }
 
 /// A custom modeline.
@@ -1377,6 +1361,24 @@ pub struct Modeline {
     pub vtotal: u32,
     pub hsync: bool,
     pub vsync: bool,
+}
+
+impl From<Modeline> for output::v1::Modeline {
+    fn from(modeline: Modeline) -> Self {
+        output::v1::Modeline {
+            clock: modeline.clock,
+            hdisplay: modeline.hdisplay,
+            hsync_start: modeline.hsync_start,
+            hsync_end: modeline.hsync_end,
+            htotal: modeline.htotal,
+            vdisplay: modeline.vdisplay,
+            vsync_start: modeline.vsync_start,
+            vsync_end: modeline.vsync_end,
+            vtotal: modeline.vtotal,
+            hsync: modeline.hsync,
+            vsync: modeline.vsync,
+        }
+    }
 }
 
 /// Error for the `FromStr` implementation for [`Modeline`].

@@ -12,10 +12,7 @@ use snowcap_api::{
 };
 use xkbcommon::xkb::Keysym;
 
-use crate::{
-    input::{Input, KeybindDescription, Mod},
-    pinnacle::Pinnacle,
-};
+use crate::input::{Input, KeybindDescription, Mod};
 
 /// Builtin widgets for Pinnacle.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -109,7 +106,7 @@ impl QuitPrompt {
             .unwrap()
             .on_key_press(|handle, key, _mods| {
                 if key == Keysym::Return {
-                    Pinnacle.quit();
+                    crate::pinnacle::quit();
                 } else {
                     handle.close();
                 }

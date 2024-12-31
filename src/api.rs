@@ -1,11 +1,13 @@
 pub mod layout;
+pub mod output;
+pub mod pinnacle;
 pub mod signal;
+pub mod tag;
 pub mod window;
 
 use std::{ffi::OsString, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
-    self,
     input::v0alpha1::{
         input_service_server,
         set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
@@ -14,34 +16,14 @@ use pinnacle_api_defs::pinnacle::{
         SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
         SetMousebindResponse, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
-    output::{
-        self,
-        v0alpha1::{
-            output_service_server, set_scale_request::AbsoluteOrRelative, SetLocationRequest,
-            SetModeRequest, SetModelineRequest, SetPoweredRequest, SetScaleRequest,
-            SetTransformRequest,
-        },
-    },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     render::v0alpha1::{
         render_service_server, Filter, SetDownscaleFilterRequest, SetUpscaleFilterRequest,
-    },
-    tag::{
-        self,
-        v0alpha1::{
-            tag_service_server, AddRequest, AddResponse, RemoveRequest, SetActiveRequest,
-            SwitchToRequest,
-        },
-    },
-    v0alpha1::{
-        pinnacle_service_server, BackendRequest, BackendResponse, PingRequest, PingResponse,
-        QuitRequest, ReloadConfigRequest, SetOrToggle, ShutdownWatchRequest, ShutdownWatchResponse,
     },
 };
 use smithay::{
     backend::renderer::TextureFilter,
     input::keyboard::XkbConfig,
-    output::Scale,
     reexports::{calloop, input as libinput},
 };
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
@@ -52,20 +34,18 @@ use tokio::{
 };
 use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
-    backend::{udev::drm_mode_from_api_modeline, BackendData},
-    config::ConnectorSavedState,
+    backend::BackendData,
     input::{KeybindData, ModifierMask},
-    output::{OutputMode, OutputName},
-    state::{State, WithState},
-    tag::{Tag, TagId},
+    state::State,
     util::restore_nofile_rlimit,
 };
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
+pub type TonicResult<T> = Result<Response<T>, Status>;
 
 async fn run_unary_no_response<F>(
     fn_sender: &StateFnSender,
@@ -187,78 +167,6 @@ where
     Ok(Response::new(Box::pin(receiver_stream)))
 }
 
-pub struct PinnacleService {
-    sender: StateFnSender,
-}
-
-impl PinnacleService {
-    pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
-    }
-}
-
-#[tonic::async_trait]
-impl pinnacle_service_server::PinnacleService for PinnacleService {
-    type ShutdownWatchStream = ResponseStream<ShutdownWatchResponse>;
-
-    async fn quit(&self, _request: Request<QuitRequest>) -> Result<Response<()>, Status> {
-        trace!("PinnacleService.quit");
-
-        run_unary_no_response(&self.sender, |state| {
-            state.pinnacle.shutdown();
-        })
-        .await
-    }
-
-    async fn reload_config(
-        &self,
-        _request: Request<ReloadConfigRequest>,
-    ) -> Result<Response<()>, Status> {
-        run_unary_no_response(&self.sender, |state| {
-            info!("Reloading config");
-            state
-                .pinnacle
-                .start_config(false)
-                .expect("failed to restart config");
-        })
-        .await
-    }
-
-    async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
-        let payload = request.into_inner().payload;
-        Ok(Response::new(PingResponse { payload }))
-    }
-
-    async fn shutdown_watch(
-        &self,
-        _request: Request<ShutdownWatchRequest>,
-    ) -> Result<Response<Self::ShutdownWatchStream>, Status> {
-        run_server_streaming(&self.sender, |state, sender| {
-            state.pinnacle.config.shutdown_sender.replace(sender);
-        })
-    }
-
-    async fn backend(
-        &self,
-        _request: Request<BackendRequest>,
-    ) -> Result<Response<BackendResponse>, Status> {
-        run_unary(&self.sender, |state| {
-            let backend = match &state.backend {
-                crate::backend::Backend::Winit(_) => pinnacle::v0alpha1::Backend::Window,
-                crate::backend::Backend::Udev(_) => pinnacle::v0alpha1::Backend::Tty,
-                #[cfg(feature = "testing")]
-                crate::backend::Backend::Dummy(_) => pinnacle::v0alpha1::Backend::Tty, // unused
-            };
-
-            let mut response = BackendResponse::default();
-            response.set_backend(backend);
-
-            response
-        })
-        .await
-    }
-}
-
 pub struct InputService {
     sender: StateFnSender,
 }
@@ -284,11 +192,19 @@ impl input_service_server::InputService for InputService {
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
-                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
-                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
-                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
+                    acc | ModifierMask::SHIFT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
+                    acc | ModifierMask::CTRL
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
+                    acc | ModifierMask::ALT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
+                    acc | ModifierMask::SUPER
+                }
             });
         let key = request
             .key
@@ -344,11 +260,19 @@ impl input_service_server::InputService for InputService {
         let modifiers = request
             .modifiers()
             .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle::input::v0alpha1::Modifier::Shift => acc | ModifierMask::SHIFT,
-                pinnacle::input::v0alpha1::Modifier::Ctrl => acc | ModifierMask::CTRL,
-                pinnacle::input::v0alpha1::Modifier::Alt => acc | ModifierMask::ALT,
-                pinnacle::input::v0alpha1::Modifier::Super => acc | ModifierMask::SUPER,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
+                    acc | ModifierMask::SHIFT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
+                    acc | ModifierMask::CTRL
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
+                    acc | ModifierMask::ALT
+                }
+                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
+                    acc | ModifierMask::SUPER
+                }
             });
         let button = request
             .button
@@ -803,736 +727,6 @@ impl process_service_server::ProcessService for ProcessService {
         std::env::set_var(key, value);
 
         Ok(Response::new(()))
-    }
-}
-
-pub struct TagService {
-    sender: StateFnSender,
-}
-
-impl TagService {
-    pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
-    }
-}
-
-#[tonic::async_trait]
-impl tag_service_server::TagService for TagService {
-    async fn set_active(&self, request: Request<SetActiveRequest>) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let tag_id = TagId::new(
-            request
-                .tag_id
-                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
-        );
-
-        let set_or_toggle = request.set_or_toggle();
-
-        if set_or_toggle == SetOrToggle::Unspecified {
-            return Err(Status::invalid_argument("unspecified set or toggle"));
-        }
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(tag) = tag_id.tag(&state.pinnacle) else {
-                return;
-            };
-
-            let Some(output) = tag.output(&state.pinnacle) else {
-                return;
-            };
-
-            state.capture_snapshots_on_output(&output, []);
-
-            let active = match set_or_toggle {
-                SetOrToggle::Set => true,
-                SetOrToggle::Unset => false,
-                SetOrToggle::Toggle => !tag.active(),
-                SetOrToggle::Unspecified => unreachable!(),
-            };
-
-            if tag.set_active(active) {
-                state.pinnacle.signal_state.tag_active.signal(|buf| {
-                    buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
-                        tag_id: Some(tag.id().to_inner()),
-                        active: Some(active),
-                    });
-                });
-            }
-
-            state.pinnacle.update_xwayland_stacking_order();
-
-            state.pinnacle.begin_layout_transaction(&output);
-            state.pinnacle.request_layout(&output);
-
-            state.update_keyboard_focus(&output);
-            state.schedule_render(&output);
-        })
-        .await
-    }
-
-    async fn switch_to(&self, request: Request<SwitchToRequest>) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let tag_id = TagId::new(
-            request
-                .tag_id
-                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
-        );
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(tag) = tag_id.tag(&state.pinnacle) else { return };
-            let Some(output) = tag.output(&state.pinnacle) else {
-                return;
-            };
-
-            state.capture_snapshots_on_output(&output, []);
-
-            output.with_state(|op_state| {
-                for op_tag in op_state.tags.iter() {
-                    if op_tag.set_active(false) {
-                        state.pinnacle.signal_state.tag_active.signal(|buf| {
-                            buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
-                                tag_id: Some(op_tag.id().to_inner()),
-                                active: Some(false),
-                            });
-                        });
-                    }
-                }
-                if tag.set_active(true) {
-                    state.pinnacle.signal_state.tag_active.signal(|buf| {
-                        buf.push_back(pinnacle::signal::v0alpha1::TagActiveResponse {
-                            tag_id: Some(tag.id().to_inner()),
-                            active: Some(true),
-                        });
-                    });
-                }
-            });
-
-            state.pinnacle.update_xwayland_stacking_order();
-
-            state.pinnacle.begin_layout_transaction(&output);
-            state.pinnacle.request_layout(&output);
-
-            state.update_keyboard_focus(&output);
-            state.schedule_render(&output);
-        })
-        .await
-    }
-
-    async fn add(&self, request: Request<AddRequest>) -> Result<Response<AddResponse>, Status> {
-        let request = request.into_inner();
-
-        let output_name = OutputName(
-            request
-                .output_name
-                .ok_or_else(|| Status::invalid_argument("no output specified"))?,
-        );
-
-        run_unary(&self.sender, move |state| {
-            let new_tags = request
-                .tag_names
-                .into_iter()
-                .map(Tag::new)
-                .collect::<Vec<_>>();
-
-            let tag_ids = new_tags
-                .iter()
-                .map(|tag| tag.id().to_inner())
-                .collect::<Vec<_>>();
-
-            state
-                .pinnacle
-                .config
-                .connector_saved_states
-                .entry(output_name.clone())
-                .or_default()
-                .tags
-                .extend(new_tags.clone());
-
-            if let Some(output) = output_name.output(&state.pinnacle) {
-                output.with_state_mut(|state| {
-                    state.add_tags(new_tags);
-                    debug!("tags added, are now {:?}", state.tags);
-                });
-            }
-
-            state.pinnacle.update_xwayland_stacking_order();
-
-            AddResponse { tag_ids }
-        })
-        .await
-    }
-
-    async fn remove(&self, request: Request<RemoveRequest>) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let tag_ids = request.tag_ids.into_iter().map(TagId::new);
-
-        run_unary_no_response(&self.sender, move |state| {
-            let tags_to_remove = tag_ids
-                .flat_map(|id| id.tag(&state.pinnacle))
-                .collect::<Vec<_>>();
-
-            for window in state.pinnacle.windows.iter() {
-                window.with_state_mut(|state| {
-                    for tag_to_remove in tags_to_remove.iter() {
-                        state.tags.shift_remove(tag_to_remove);
-                    }
-                })
-            }
-
-            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
-                output.with_state_mut(|state| {
-                    for tag_to_remove in tags_to_remove.iter() {
-                        state.tags.shift_remove(tag_to_remove);
-                    }
-                });
-
-                state.pinnacle.request_layout(&output);
-                state.schedule_render(&output);
-            }
-
-            for conn_saved_state in state.pinnacle.config.connector_saved_states.values_mut() {
-                for tag_to_remove in tags_to_remove.iter() {
-                    conn_saved_state.tags.shift_remove(tag_to_remove);
-                }
-            }
-
-            state.pinnacle.update_xwayland_stacking_order();
-        })
-        .await
-    }
-
-    async fn get(
-        &self,
-        _request: Request<tag::v0alpha1::GetRequest>,
-    ) -> Result<Response<tag::v0alpha1::GetResponse>, Status> {
-        run_unary(&self.sender, move |state| {
-            let tag_ids = state
-                .pinnacle
-                .outputs
-                .keys()
-                .flat_map(|op| op.with_state(|state| state.tags.clone()))
-                .map(|tag| tag.id().to_inner())
-                .collect::<Vec<_>>();
-
-            tag::v0alpha1::GetResponse { tag_ids }
-        })
-        .await
-    }
-
-    async fn get_properties(
-        &self,
-        request: Request<tag::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<tag::v0alpha1::GetPropertiesResponse>, Status> {
-        let request = request.into_inner();
-
-        let tag_id = TagId::new(
-            request
-                .tag_id
-                .ok_or_else(|| Status::invalid_argument("no tag specified"))?,
-        );
-
-        run_unary(&self.sender, move |state| {
-            let tag = tag_id.tag(&state.pinnacle);
-
-            let output_name = tag
-                .as_ref()
-                .and_then(|tag| tag.output(&state.pinnacle))
-                .map(|output| output.name());
-            let active = tag.as_ref().map(|tag| tag.active());
-            let name = tag.as_ref().map(|tag| tag.name());
-            let window_ids = tag
-                .as_ref()
-                .map(|tag| {
-                    state
-                        .pinnacle
-                        .windows
-                        .iter()
-                        .filter_map(|win| {
-                            win.with_state(|win_state| {
-                                win_state.tags.contains(tag).then_some(win_state.id.0)
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            tag::v0alpha1::GetPropertiesResponse {
-                active,
-                name,
-                output_name,
-                window_ids,
-            }
-        })
-        .await
-    }
-}
-
-pub struct OutputService {
-    sender: StateFnSender,
-}
-
-impl OutputService {
-    pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
-    }
-}
-
-#[tonic::async_trait]
-impl output_service_server::OutputService for OutputService {
-    async fn set_location(
-        &self,
-        request: Request<SetLocationRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let output_name = OutputName(
-            request
-                .output_name
-                .ok_or_else(|| Status::invalid_argument("no output specified"))?,
-        );
-
-        let x = request.x;
-        let y = request.y;
-
-        run_unary_no_response(&self.sender, move |state| {
-            if let Some(saved_state) = state
-                .pinnacle
-                .config
-                .connector_saved_states
-                .get_mut(&output_name)
-            {
-                if let Some(x) = x {
-                    saved_state.loc.x = x;
-                }
-                if let Some(y) = y {
-                    saved_state.loc.y = y;
-                }
-            } else {
-                state.pinnacle.config.connector_saved_states.insert(
-                    output_name.clone(),
-                    ConnectorSavedState {
-                        loc: (x.unwrap_or_default(), y.unwrap_or_default()).into(),
-                        ..Default::default()
-                    },
-                );
-            }
-
-            let Some(output) = output_name.output(&state.pinnacle) else {
-                return;
-            };
-            let mut loc = output.current_location();
-            if let Some(x) = x {
-                loc.x = x;
-            }
-            if let Some(y) = y {
-                loc.y = y;
-            }
-
-            state.capture_snapshots_on_output(&output, []);
-
-            state.pinnacle.change_output_state(
-                &mut state.backend,
-                &output,
-                None,
-                None,
-                None,
-                Some(loc),
-            );
-            debug!("Mapping output {} to {loc:?}", output.name());
-            state.pinnacle.begin_layout_transaction(&output);
-            state.pinnacle.request_layout(&output);
-            state
-                .pinnacle
-                .output_management_manager_state
-                .update::<State>();
-        })
-        .await
-    }
-
-    async fn set_mode(&self, request: Request<SetModeRequest>) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        run_unary_no_response(&self.sender, |state| {
-            let Some(output) = request
-                .output_name
-                .clone()
-                .map(OutputName)
-                .and_then(|name| name.output(&state.pinnacle))
-            else {
-                return;
-            };
-
-            // poor man's try v2
-            let Some(mode) = Some(request).and_then(|request| {
-                Some(smithay::output::Mode {
-                    size: (request.pixel_width? as i32, request.pixel_height? as i32).into(),
-                    // FIXME: this is nullable, pick a mode with highest refresh if None
-                    refresh: request.refresh_rate_millihz? as i32,
-                })
-            }) else {
-                return;
-            };
-
-            state.pinnacle.change_output_state(
-                &mut state.backend,
-                &output,
-                Some(OutputMode::Smithay(mode)),
-                None,
-                None,
-                None,
-            );
-            state.pinnacle.request_layout(&output);
-            state
-                .pinnacle
-                .output_management_manager_state
-                .update::<State>();
-        })
-        .await
-    }
-
-    async fn set_modeline(
-        &self,
-        request: Request<SetModelineRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        run_unary_no_response(&self.sender, |state| {
-            let Some(output) = request
-                .output_name
-                .clone()
-                .map(OutputName)
-                .and_then(|name| name.output(&state.pinnacle))
-            else {
-                return;
-            };
-
-            let Some(mode) = drm_mode_from_api_modeline(request) else {
-                // TODO: raise error
-                return;
-            };
-
-            state.pinnacle.change_output_state(
-                &mut state.backend,
-                &output,
-                Some(OutputMode::Drm(mode)),
-                None,
-                None,
-                None,
-            );
-            state.pinnacle.request_layout(&output);
-            state
-                .pinnacle
-                .output_management_manager_state
-                .update::<State>();
-        })
-        .await
-    }
-
-    async fn set_scale(&self, request: Request<SetScaleRequest>) -> Result<Response<()>, Status> {
-        let SetScaleRequest {
-            output_name: Some(output_name),
-            absolute_or_relative: Some(absolute_or_relative),
-        } = request.into_inner()
-        else {
-            return Err(Status::invalid_argument(
-                "output_name or absolute_or_relative were null",
-            ));
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
-                return;
-            };
-
-            let mut current_scale = output.current_scale().fractional_scale();
-
-            match absolute_or_relative {
-                AbsoluteOrRelative::Absolute(abs) => current_scale = abs as f64,
-                AbsoluteOrRelative::Relative(rel) => current_scale += rel as f64,
-            }
-
-            current_scale = f64::max(current_scale, 0.25);
-
-            state.capture_snapshots_on_output(&output, []);
-
-            state.pinnacle.change_output_state(
-                &mut state.backend,
-                &output,
-                None,
-                None,
-                Some(Scale::Fractional(current_scale)),
-                None,
-            );
-
-            state.pinnacle.begin_layout_transaction(&output);
-            state.pinnacle.request_layout(&output);
-
-            state.schedule_render(&output);
-            state
-                .pinnacle
-                .output_management_manager_state
-                .update::<State>();
-        })
-        .await
-    }
-
-    async fn set_transform(
-        &self,
-        request: Request<SetTransformRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let smithay_transform = match request.transform() {
-            output::v0alpha1::Transform::Unspecified => {
-                return Err(Status::invalid_argument("transform was unspecified"));
-            }
-            output::v0alpha1::Transform::Normal => smithay::utils::Transform::Normal,
-            output::v0alpha1::Transform::Transform90 => smithay::utils::Transform::_90,
-            output::v0alpha1::Transform::Transform180 => smithay::utils::Transform::_180,
-            output::v0alpha1::Transform::Transform270 => smithay::utils::Transform::_270,
-            output::v0alpha1::Transform::Flipped => smithay::utils::Transform::Flipped,
-            output::v0alpha1::Transform::Flipped90 => smithay::utils::Transform::Flipped90,
-            output::v0alpha1::Transform::Flipped180 => smithay::utils::Transform::Flipped180,
-            output::v0alpha1::Transform::Flipped270 => smithay::utils::Transform::Flipped270,
-        };
-
-        let Some(output_name) = request.output_name else {
-            return Err(Status::invalid_argument("output_name was null"));
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
-                return;
-            };
-
-            state.pinnacle.change_output_state(
-                &mut state.backend,
-                &output,
-                None,
-                Some(smithay_transform),
-                None,
-                None,
-            );
-            state.pinnacle.request_layout(&output);
-            state.schedule_render(&output);
-            state
-                .pinnacle
-                .output_management_manager_state
-                .update::<State>();
-        })
-        .await
-    }
-
-    async fn set_powered(
-        &self,
-        request: Request<SetPoweredRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let Some(powered) = request.powered else {
-            return Err(Status::invalid_argument("powered was unspecified"));
-        };
-        let Some(output_name) = request.output_name else {
-            return Err(Status::invalid_argument("output_name was unspecified"));
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            let Some(output) = OutputName(output_name).output(&state.pinnacle) else {
-                return;
-            };
-
-            state
-                .backend
-                .set_output_powered(&output, &state.pinnacle.loop_handle, powered);
-
-            if powered {
-                state.schedule_render(&output);
-            }
-        })
-        .await
-    }
-
-    async fn get(
-        &self,
-        _request: Request<output::v0alpha1::GetRequest>,
-    ) -> Result<Response<output::v0alpha1::GetResponse>, Status> {
-        run_unary(&self.sender, move |state| {
-            let output_names = state
-                .pinnacle
-                .outputs
-                .keys()
-                .map(|output| output.name())
-                .collect::<Vec<_>>();
-
-            output::v0alpha1::GetResponse { output_names }
-        })
-        .await
-    }
-
-    async fn get_properties(
-        &self,
-        request: Request<output::v0alpha1::GetPropertiesRequest>,
-    ) -> Result<Response<output::v0alpha1::GetPropertiesResponse>, Status> {
-        let request = request.into_inner();
-
-        let output_name = OutputName(
-            request
-                .output_name
-                .ok_or_else(|| Status::invalid_argument("no output specified"))?,
-        );
-
-        let from_smithay_mode = |mode: smithay::output::Mode| -> output::v0alpha1::Mode {
-            output::v0alpha1::Mode {
-                pixel_width: Some(mode.size.w as u32),
-                pixel_height: Some(mode.size.h as u32),
-                refresh_rate_millihz: Some(mode.refresh as u32),
-            }
-        };
-
-        run_unary(&self.sender, move |state| {
-            let output = output_name.output(&state.pinnacle);
-
-            let logical_size = output
-                .as_ref()
-                .and_then(|output| state.pinnacle.space.output_geometry(output))
-                .map(|geo| (geo.size.w, geo.size.h));
-
-            let current_mode = output
-                .as_ref()
-                .and_then(|output| output.current_mode().map(from_smithay_mode));
-
-            let preferred_mode = output
-                .as_ref()
-                .and_then(|output| output.preferred_mode().map(from_smithay_mode));
-
-            let modes = output
-                .as_ref()
-                .map(|output| {
-                    output.with_state(|state| {
-                        state.modes.iter().cloned().map(from_smithay_mode).collect()
-                    })
-                })
-                .unwrap_or_default();
-
-            let model = output
-                .as_ref()
-                .map(|output| output.physical_properties().model);
-
-            let physical_width = output
-                .as_ref()
-                .map(|output| output.physical_properties().size.w as u32);
-
-            let physical_height = output
-                .as_ref()
-                .map(|output| output.physical_properties().size.h as u32);
-
-            let make = output
-                .as_ref()
-                .map(|output| output.physical_properties().make);
-
-            let x = output.as_ref().map(|output| output.current_location().x);
-
-            let y = output.as_ref().map(|output| output.current_location().y);
-
-            let focused = state
-                .pinnacle
-                .focused_output()
-                .and_then(|foc_op| output.as_ref().map(|op| op == foc_op));
-
-            let tag_ids = output
-                .as_ref()
-                .map(|output| {
-                    output.with_state(|state| {
-                        state
-                            .tags
-                            .iter()
-                            .filter(|tag| !tag.defunct())
-                            .map(|tag| tag.id().to_inner())
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .unwrap_or_default();
-
-            let scale = output
-                .as_ref()
-                .map(|output| output.current_scale().fractional_scale() as f32);
-
-            let transform = output.as_ref().map(|output| {
-                (match output.current_transform() {
-                    smithay::utils::Transform::Normal => output::v0alpha1::Transform::Normal,
-                    smithay::utils::Transform::_90 => output::v0alpha1::Transform::Transform90,
-                    smithay::utils::Transform::_180 => output::v0alpha1::Transform::Transform180,
-                    smithay::utils::Transform::_270 => output::v0alpha1::Transform::Transform270,
-                    smithay::utils::Transform::Flipped => output::v0alpha1::Transform::Flipped,
-                    smithay::utils::Transform::Flipped90 => output::v0alpha1::Transform::Flipped90,
-                    smithay::utils::Transform::Flipped180 => {
-                        output::v0alpha1::Transform::Flipped180
-                    }
-                    smithay::utils::Transform::Flipped270 => {
-                        output::v0alpha1::Transform::Flipped270
-                    }
-                }) as i32
-            });
-
-            let serial = Some(0);
-
-            let serial_str = output
-                .as_ref()
-                .map(|output| output.with_state(|state| state.serial.clone()));
-
-            let keyboard_focus_stack_window_ids = output
-                .as_ref()
-                .map(|output| {
-                    output.with_state(|state| {
-                        state
-                            .focus_stack
-                            .stack
-                            .iter()
-                            .map(|win| win.with_state(|state| state.id.0))
-                            .collect::<Vec<_>>()
-                    })
-                })
-                .unwrap_or_default();
-
-            let enabled = output.as_ref().map(|output| {
-                state
-                    .pinnacle
-                    .outputs
-                    .get(output)
-                    .is_some_and(|global| global.is_some())
-            });
-
-            let powered = output
-                .as_ref()
-                .map(|output| output.with_state(|state| state.powered));
-
-            output::v0alpha1::GetPropertiesResponse {
-                make,
-                model,
-                x,
-                y,
-                logical_width: logical_size.map(|(w, _)| w as u32),
-                logical_height: logical_size.map(|(_, h)| h as u32),
-                current_mode,
-                preferred_mode,
-                modes,
-                physical_width,
-                physical_height,
-                focused,
-                tag_ids,
-                scale,
-                transform,
-                serial,
-                keyboard_focus_stack_window_ids,
-                enabled,
-                powered,
-                serial_str,
-            }
-        })
-        .await
     }
 }
 

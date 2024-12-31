@@ -5,8 +5,23 @@ fn main() {
 
     let mut proto_paths = Vec::new();
 
+    // TODO: remove this
     for entry in walkdir::WalkDir::new("../api/protocol") {
         let entry = entry.unwrap();
+
+        if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "proto")
+        {
+            proto_paths.push(entry.into_path());
+        }
+    }
+
+    for entry in walkdir::WalkDir::new("../api/protobuf") {
+        let entry = entry.unwrap();
+
+        // TODO: remove
+        if entry.path().ends_with("empty.proto") {
+            continue;
+        }
 
         if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "proto")
         {
@@ -18,6 +33,6 @@ fn main() {
 
     tonic_build::configure()
         .file_descriptor_set_path(descriptor_path)
-        .compile_protos(&proto_paths, &["../api/protocol"])
+        .compile_protos(&proto_paths, &["../api/protocol", "../api/protobuf"])
         .unwrap();
 }

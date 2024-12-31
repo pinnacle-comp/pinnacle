@@ -1,7 +1,8 @@
 use crate::{
     api::{
-        layout::LayoutService, signal::SignalService, window::WindowService, InputService,
-        OutputService, PinnacleService, ProcessService, RenderService, TagService,
+        layout::LayoutService, output::OutputService, pinnacle::PinnacleService,
+        signal::SignalService, tag::TagService, window::WindowService, InputService,
+        ProcessService, RenderService,
     },
     cli::Cli,
     input::ModifierMask,
@@ -21,13 +22,9 @@ use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
     layout::v0alpha1::layout_service_server::LayoutServiceServer,
-    output::v0alpha1::output_service_server::OutputServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
     render::v0alpha1::render_service_server::RenderServiceServer,
-    signal::v0alpha1::signal_service_server::SignalServiceServer,
-    tag::v0alpha1::tag_service_server::TagServiceServer,
-    v0alpha1::{pinnacle_service_server::PinnacleServiceServer, ShutdownWatchResponse},
-    window::v0alpha1::window_service_server::WindowServiceServer,
+    signal::v0alpha1::signal_service_server::SignalServiceServer, v0alpha1::ShutdownWatchResponse,
 };
 use smithay::{
     input::keyboard::keysyms,
@@ -633,12 +630,12 @@ impl Pinnacle {
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)
-            .add_service(PinnacleServiceServer::new(pinnacle_service))
+            .add_service(pinnacle_api_defs::pinnacle::v1::pinnacle_service_server::PinnacleServiceServer::new(pinnacle_service))
+            .add_service(pinnacle_api_defs::pinnacle::window::v1::window_service_server::WindowServiceServer::new(window_service))
+            .add_service(pinnacle_api_defs::pinnacle::tag::v1::tag_service_server::TagServiceServer::new(tag_service))
+            .add_service(pinnacle_api_defs::pinnacle::output::v1::output_service_server::OutputServiceServer::new(output_service))
             .add_service(InputServiceServer::new(input_service))
             .add_service(ProcessServiceServer::new(process_service))
-            .add_service(TagServiceServer::new(tag_service))
-            .add_service(OutputServiceServer::new(output_service))
-            .add_service(WindowServiceServer::new(window_service))
             .add_service(SignalServiceServer::new(signal_service))
             .add_service(LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));

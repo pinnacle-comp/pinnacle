@@ -61,7 +61,7 @@ mod output {
                         .with_mode(pinnacle_api::output::Mode {
                             pixel_width: 6900,
                             pixel_height: 420,
-                            refresh_rate_millihertz: 69420,
+                            refresh_rate_mhz: 69420,
                         })
                         .with_transform(pinnacle_api::output::Transform::_90),
                 ]);

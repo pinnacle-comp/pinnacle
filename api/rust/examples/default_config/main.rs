@@ -5,10 +5,14 @@ use pinnacle_api::layout::{
     CornerLayout, CornerLocation, CyclingLayoutManager, DwindleLayout, FairLayout, MasterSide,
     MasterStackLayout, SpiralLayout,
 };
+use pinnacle_api::output;
 use pinnacle_api::output::OutputSetup;
+use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::signal::WindowSignal;
+use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
+use pinnacle_api::window;
 use pinnacle_api::window::rules::{DecorationMode, WindowRule, WindowRuleCondition};
 use pinnacle_api::{
     input::{Mod, MouseButton, MouseEdge},
@@ -26,12 +30,8 @@ async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
     let ApiModules {
-        pinnacle,
         process,
-        window,
         input,
-        output,
-        tag,
         layout,
         render,
         #[cfg(feature = "snowcap")]
@@ -40,7 +40,7 @@ async fn main() {
     } = ApiModules::new();
 
     // Change the mod key to `Alt` when running as a nested window.
-    let mod_key = match pinnacle.backend() {
+    let mod_key = match pinnacle::backend() {
         Backend::Tty => Mod::Super,
         Backend::Window => Mod::Alt,
     };
@@ -53,12 +53,12 @@ async fn main() {
 
     // `mod_key + left click` starts moving a window
     input.mousebind([mod_key], MouseButton::Left, MouseEdge::Press, || {
-        window.begin_move(MouseButton::Left);
+        window::begin_move(MouseButton::Left);
     });
 
     // `mod_key + right click` starts resizing a window
     input.mousebind([mod_key], MouseButton::Right, MouseEdge::Press, || {
-        window.begin_resize(MouseButton::Right);
+        window::begin_resize(MouseButton::Right);
     });
 
     //------------------------
@@ -100,7 +100,7 @@ async fn main() {
         [mod_key, Mod::Ctrl],
         'r',
         || {
-            pinnacle.reload_config();
+            pinnacle::reload_config();
         },
         KeybindInfo {
             group: Some("Compositor".into()),
@@ -113,7 +113,7 @@ async fn main() {
         [mod_key, Mod::Shift],
         'c',
         || {
-            if let Some(window) = window.get_focused() {
+            if let Some(window) = window::get_focused() {
                 window.close();
             }
         },
@@ -141,7 +141,7 @@ async fn main() {
         [mod_key, Mod::Ctrl],
         Keysym::space,
         || {
-            if let Some(window) = window.get_focused() {
+            if let Some(window) = window::get_focused() {
                 window.toggle_floating();
                 window.raise();
             }
@@ -157,7 +157,7 @@ async fn main() {
         [mod_key],
         'f',
         || {
-            if let Some(window) = window.get_focused() {
+            if let Some(window) = window::get_focused() {
                 window.toggle_fullscreen();
                 window.raise();
             }
@@ -173,7 +173,7 @@ async fn main() {
         [mod_key],
         'm',
         || {
-            if let Some(window) = window.get_focused() {
+            if let Some(window) = window::get_focused() {
                 window.toggle_maximized();
                 window.raise();
             }
@@ -269,11 +269,13 @@ async fn main() {
         [mod_key],
         Keysym::space,
         move || {
-            let Some(focused_op) = output.get_focused() else { return };
-            let Some(first_active_tag) = focused_op.tags().batch_find(
-                |tg| Box::pin(tg.active_async()),
-                |active| active == &Some(true),
-            ) else {
+            let Some(focused_op) = output::get_focused() else {
+                return;
+            };
+            let Some(first_active_tag) = focused_op
+                .tags()
+                .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
+            else {
                 return;
             };
 
@@ -291,11 +293,13 @@ async fn main() {
         [mod_key, Mod::Shift],
         Keysym::space,
         move || {
-            let Some(focused_op) = output.get_focused() else { return };
-            let Some(first_active_tag) = focused_op.tags().batch_find(
-                |tg| Box::pin(tg.active_async()),
-                |active| active == &Some(true),
-            ) else {
+            let Some(focused_op) = output::get_focused() else {
+                return;
+            };
+            let Some(first_active_tag) = focused_op
+                .tags()
+                .batch_find(|tg| Box::pin(tg.active_async()), |active| *active)
+            else {
                 return;
             };
 
@@ -315,7 +319,7 @@ async fn main() {
     let tag_names = ["1", "2", "3", "4", "5"];
 
     // Setup all monitors with tags "1" through "5"
-    output.setup([OutputSetup::new_with_matcher(|_| true).with_tags(tag_names)]);
+    output::setup([OutputSetup::new_with_matcher(|_| true).with_tags(tag_names)]);
 
     for tag_name in tag_names {
         // `mod_key + 1-5` switches to tag "1" to "5"
@@ -323,8 +327,8 @@ async fn main() {
             [mod_key],
             tag_name,
             move || {
-                if let Some(tg) = tag.get(tag_name) {
-                    tg.switch_to();
+                if let Some(tag) = tag::get(tag_name) {
+                    tag.switch_to();
                 }
             },
             KeybindInfo {
@@ -338,8 +342,8 @@ async fn main() {
             [mod_key, Mod::Ctrl],
             tag_name,
             move || {
-                if let Some(tg) = tag.get(tag_name) {
-                    tg.toggle_active();
+                if let Some(tag) = tag::get(tag_name) {
+                    tag.toggle_active();
                 }
             },
             KeybindInfo {
@@ -353,9 +357,9 @@ async fn main() {
             [mod_key, Mod::Shift],
             tag_name,
             move || {
-                if let Some(tg) = tag.get(tag_name) {
-                    if let Some(win) = window.get_focused() {
-                        win.move_to_tag(&tg);
+                if let Some(tag) = tag::get(tag_name) {
+                    if let Some(win) = window::get_focused() {
+                        win.move_to_tag(&tag);
                     }
                 }
             },
@@ -370,8 +374,8 @@ async fn main() {
             [mod_key, Mod::Ctrl, Mod::Shift],
             tag_name,
             move || {
-                if let Some(tg) = tag.get(tag_name) {
-                    if let Some(win) = window.get_focused() {
+                if let Some(tg) = tag::get(tag_name) {
+                    if let Some(win) = window::get_focused() {
                         win.toggle_tag(&tg);
                     }
                 }
@@ -386,13 +390,13 @@ async fn main() {
     input.set_libinput_setting(LibinputSetting::Tap(true));
 
     // Request all windows use client-side decorations.
-    window.add_window_rule(
-        WindowRuleCondition::new().all([]),
-        WindowRule::new().decoration_mode(DecorationMode::ClientSide),
-    );
+    // window::add_window_rule(
+    //     WindowRuleCondition::new().all([]),
+    //     WindowRule::new().decoration_mode(DecorationMode::ClientSide),
+    // );
 
     // Enable sloppy focus
-    window.connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
+    window::connect_signal(WindowSignal::PointerEnter(Box::new(|win| {
         win.set_focused(true);
     })));
 

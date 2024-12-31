@@ -5,7 +5,7 @@ mod frame;
 mod gamma;
 
 use assert_matches::assert_matches;
-pub use drm::util::drm_mode_from_api_modeline;
+pub use drm::util::drm_mode_from_modeinfo;
 use frame::FrameClock;
 use indexmap::IndexSet;
 

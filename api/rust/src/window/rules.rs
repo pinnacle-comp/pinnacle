@@ -214,8 +214,6 @@ use pinnacle_api_defs::pinnacle::window;
 
 use crate::{output::OutputHandle, tag::TagHandle};
 
-use super::FullscreenOrMaximized;
-
 /// A condition for a [`WindowRule`] to apply to a window.
 ///
 /// `WindowRuleCondition`s are built using the builder pattern.
@@ -430,32 +428,6 @@ impl WindowRule {
             true => window::v0alpha1::WindowState::Floating,
             false => window::v0alpha1::WindowState::Tiled,
         });
-        self
-    }
-
-    /// This rule will force windows to open either fullscreen, maximized, or neither.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::window::rules::WindowRule;
-    /// use pinnacle_api::window::FullscreenOrMaximized;
-    ///
-    /// // Force the window to open fullscreen
-    /// let rule = WindowRule::new().fullscreen_or_maximized(FullscreenOrMaximized::Fullscreen);
-    ///
-    /// // Force the window to open maximized
-    /// let rule = WindowRule::new().fullscreen_or_maximized(FullscreenOrMaximized::Maximized);
-    ///
-    /// // Force the window to open not fullscreen nor maximized
-    /// let rule = WindowRule::new().fullscreen_or_maximized(FullscreenOrMaximized::Neither);
-    /// ```
-    #[deprecated = "use the `fullscreen` or `maximized` methods instead"]
-    pub fn fullscreen_or_maximized(
-        mut self,
-        fullscreen_or_maximized: FullscreenOrMaximized,
-    ) -> Self {
-        self.0.fullscreen_or_maximized = Some(fullscreen_or_maximized as i32);
         self
     }
 

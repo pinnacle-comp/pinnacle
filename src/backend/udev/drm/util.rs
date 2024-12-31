@@ -6,7 +6,6 @@ use drm_sys::{
     DRM_MODE_FLAG_PVSYNC, DRM_MODE_TYPE_USERDEF,
 };
 use libdisplay_info::cvt::{self, ReducedBlankingVersion};
-use pinnacle_api_defs::pinnacle::output::v0alpha1::SetModelineRequest;
 use smithay::reexports::drm::{
     self,
     control::{property, Device, ModeFlags, ResourceHandle},
@@ -32,35 +31,29 @@ pub(super) fn get_drm_property(
     anyhow::bail!("No prop found for {}", name)
 }
 
-pub fn drm_mode_from_api_modeline(modeline: SetModelineRequest) -> Option<drm::control::Mode> {
-    let SetModelineRequest {
-        output_name: _,
-        clock: Some(clock),
-        hdisplay: Some(hdisplay),
-        hsync_start: Some(hsync_start),
-        hsync_end: Some(hsync_end),
-        htotal: Some(htotal),
-        vdisplay: Some(vdisplay),
-        vsync_start: Some(vsync_start),
-        vsync_end: Some(vsync_end),
-        vtotal: Some(vtotal),
-        hsync_pos: Some(hsync_pos),
-        vsync_pos: Some(vsync_pos),
-    } = modeline
-    else {
-        return None;
-    };
-
+pub fn drm_mode_from_modeinfo(
+    clock: f32,
+    hdisplay: u32,
+    hsync_start: u32,
+    hsync_end: u32,
+    htotal: u32,
+    vdisplay: u32,
+    vsync_start: u32,
+    vsync_end: u32,
+    vtotal: u32,
+    hsync: bool,
+    vsync: bool,
+) -> drm::control::Mode {
     let clock = clock * 1000.0;
 
     let vrefresh = (clock * 1000.0 * 1000.0 / htotal as f32 / vtotal as f32) as u32;
 
     let mut flags = 0;
-    match hsync_pos {
+    match hsync {
         true => flags |= DRM_MODE_FLAG_PHSYNC,
         false => flags |= DRM_MODE_FLAG_NHSYNC,
     };
-    match vsync_pos {
+    match vsync {
         true => flags |= DRM_MODE_FLAG_PVSYNC,
         false => flags |= DRM_MODE_FLAG_NVSYNC,
     };
@@ -78,26 +71,24 @@ pub fn drm_mode_from_api_modeline(modeline: SetModelineRequest) -> Option<drm::c
     let _ = name_buf.as_mut_slice().write_all(name.as_bytes_with_nul());
     let name: [i8; 32] = bytemuck::cast(name_buf);
 
-    Some(
-        drm_mode_modeinfo {
-            clock: clock as u32,
-            hdisplay: hdisplay as u16,
-            hsync_start: hsync_start as u16,
-            hsync_end: hsync_end as u16,
-            htotal: htotal as u16,
-            hskew: 0,
-            vdisplay: vdisplay as u16,
-            vsync_start: vsync_start as u16,
-            vsync_end: vsync_end as u16,
-            vtotal: vtotal as u16,
-            vscan: 0,
-            vrefresh,
-            flags,
-            type_,
-            name,
-        }
-        .into(),
-    )
+    drm_mode_modeinfo {
+        clock: clock as u32,
+        hdisplay: hdisplay as u16,
+        hsync_start: hsync_start as u16,
+        hsync_end: hsync_end as u16,
+        htotal: htotal as u16,
+        hskew: 0,
+        vdisplay: vdisplay as u16,
+        vsync_start: vsync_start as u16,
+        vsync_end: vsync_end as u16,
+        vtotal: vtotal as u16,
+        vscan: 0,
+        vrefresh,
+        flags,
+        type_,
+        name,
+    }
+    .into()
 }
 
 /// Create a new drm mode from a given width, height, and optional refresh rate (defaults to 60Hz).

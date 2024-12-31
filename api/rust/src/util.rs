@@ -313,3 +313,15 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
             .map(|(item, _)| item)
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Size {
+    pub w: u32,
+    pub h: u32,
+}

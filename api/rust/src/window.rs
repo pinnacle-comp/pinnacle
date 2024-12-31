@@ -13,164 +13,104 @@
 //! This module also allows you to set window rules; see the [rules] module for more information.
 
 use futures::FutureExt;
-use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::{
-    v0alpha1::SetOrToggle,
+    util::v1::SetOrToggle,
     window::{
         self,
-        v0alpha1::{
-            AddWindowRuleRequest, CloseRequest, GetRequest, MoveGrabRequest, MoveToTagRequest,
+        v1::{
+            GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
+            GetSizeRequest, GetTagIdsRequest, GetTitleRequest, MoveGrabRequest, MoveToTagRequest,
             RaiseRequest, ResizeGrabRequest, SetFloatingRequest, SetFocusedRequest,
             SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
         },
     },
 };
-use tracing::{error, instrument};
 
 use crate::{
-    block_on_tokio,
+    client::Client,
     input::MouseButton,
     signal::{SignalHandle, WindowSignal},
     signal_module,
-    tag::{Tag, TagHandle},
-    util::{Batch, Geometry},
+    tag::TagHandle,
+    util::{Batch, Point, Size},
+    BlockOnTokio,
 };
 
 use self::rules::{WindowRule, WindowRuleCondition};
 
 pub mod rules;
 
-/// A struct containing methods that get [`WindowHandle`]s and move windows with the mouse.
+pub fn get_all() -> impl Iterator<Item = WindowHandle> {
+    get_all_async().block_on_tokio()
+}
+
+pub async fn get_all_async() -> impl Iterator<Item = WindowHandle> {
+    let window_ids = Client::window()
+        .get(pinnacle_api_defs::pinnacle::window::v1::GetRequest {})
+        .await
+        .unwrap()
+        .into_inner()
+        .window_ids;
+
+    window_ids.into_iter().map(|id| WindowHandle { id })
+}
+
+pub fn get_focused() -> Option<WindowHandle> {
+    get_focused_async().block_on_tokio()
+}
+
+pub async fn get_focused_async() -> Option<WindowHandle> {
+    let windows = get_all_async().await;
+
+    windows.batch_find(|win| win.focused_async().boxed(), |focused| *focused)
+}
+
+pub fn begin_move(button: MouseButton) {
+    Client::window()
+        .move_grab(MoveGrabRequest {
+            button: button as u32,
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+pub fn begin_resize(button: MouseButton) {
+    Client::window()
+        .resize_grab(ResizeGrabRequest {
+            button: button as u32,
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+///// Add a window rule.
+/////
+///// A window rule is a set of criteria that a window must open with.
+///// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
+/////
+///// See the [`rules`] module for more information.
+// pub fn add_window_rule(cond: WindowRuleCondition, rule: WindowRule) {
+//     if let Err(err) = block_on_tokio(crate::window().add_window_rule(
+//         window::v0alpha1::AddWindowRuleRequest {
+//             cond: Some(cond.0),
+//             rule: Some(rule.0),
+//         },
+//     )) {
+//         error!("Failed to add window rule: {err}");
+//     }
+// }
+
+/// Connect to a window signal.
 ///
-/// See [`WindowHandle`] for more information.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Window;
+/// The compositor will fire off signals that your config can listen for and act upon.
+/// You can pass in a [`WindowSignal`] along with a callback and it will get run
+/// with the necessary arguments every time a signal of that type is received.
+pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
+    let mut signal_state = signal_module();
 
-impl Window {
-    pub(crate) fn new_handle(&self, id: u32) -> WindowHandle {
-        WindowHandle { id }
-    }
-
-    /// Start moving the window with the mouse.
-    ///
-    /// This will begin moving the window under the pointer using the specified [`MouseButton`].
-    /// The button must be held down at the time this method is called for the move to start.
-    ///
-    /// This is intended to be used with [`Input::mousebind`][crate::input::Input::mousebind].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
-    ///
-    /// // Set `Super + left click` to begin moving a window
-    /// input.mousebind([Mod::Super], MouseButton::Left, MouseEdge::Press, || {
-    ///     window.begin_move(MouseButton::Left);
-    /// });
-    /// ```
-    pub fn begin_move(&self, button: MouseButton) {
-        if let Err(err) = block_on_tokio(crate::window().move_grab(MoveGrabRequest {
-            button: Some(button as u32),
-        })) {
-            error!("Failed to begin window move: {err}");
-        }
-    }
-
-    /// Start resizing the window with the mouse.
-    ///
-    /// This will begin resizing the window under the pointer using the specified [`MouseButton`].
-    /// The button must be held down at the time this method is called for the resize to start.
-    ///
-    /// This is intended to be used with [`Input::mousebind`][crate::input::Input::mousebind].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
-    ///
-    /// // Set `Super + right click` to begin moving a window
-    /// input.mousebind([Mod::Super], MouseButton::Right, MouseEdge::Press, || {
-    ///     window.begin_resize(MouseButton::Right);
-    /// });
-    /// ```
-    pub fn begin_resize(&self, button: MouseButton) {
-        if let Err(err) = block_on_tokio(crate::window().resize_grab(ResizeGrabRequest {
-            button: Some(button as u32),
-        })) {
-            error!("Failed to begin window resize: {err}");
-        }
-    }
-
-    /// Get all windows.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let windows = window.get_all();
-    /// ```
-    pub fn get_all(&self) -> Vec<WindowHandle> {
-        block_on_tokio(self.get_all_async())
-    }
-
-    /// The async version of [`Window::get_all`].
-    pub async fn get_all_async(&self) -> Vec<WindowHandle> {
-        crate::window()
-            .get(GetRequest {})
-            .await
-            .map(|resp| resp.into_inner().window_ids)
-            .inspect_err(|err| error!("Failed to get windows: {err}"))
-            .unwrap_or_default()
-            .into_iter()
-            .map(move |id| self.new_handle(id))
-            .collect::<Vec<_>>()
-    }
-
-    /// Get the currently focused window.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let focused_window = window.get_focused()?;
-    /// ```
-    pub fn get_focused(&self) -> Option<WindowHandle> {
-        block_on_tokio(self.get_focused_async())
-    }
-
-    /// The async version of [`Window::get_focused`].
-    pub async fn get_focused_async(&self) -> Option<WindowHandle> {
-        self.get_all_async().await.batch_find(
-            |win| win.focused_async().boxed(),
-            |focused| focused.is_some_and(|focused| focused),
-        )
-    }
-
-    /// Add a window rule.
-    ///
-    /// A window rule is a set of criteria that a window must open with.
-    /// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
-    ///
-    /// See the [`rules`] module for more information.
-    pub fn add_window_rule(&self, cond: WindowRuleCondition, rule: WindowRule) {
-        if let Err(err) = block_on_tokio(crate::window().add_window_rule(AddWindowRuleRequest {
-            cond: Some(cond.0),
-            rule: Some(rule.0),
-        })) {
-            error!("Failed to add window rule: {err}");
-        }
-    }
-
-    /// Connect to a window signal.
-    ///
-    /// The compositor will fire off signals that your config can listen for and act upon.
-    /// You can pass in a [`WindowSignal`] along with a callback and it will get run
-    /// with the necessary arguments every time a signal of that type is received.
-    pub fn connect_signal(&self, signal: WindowSignal) -> SignalHandle {
-        let mut signal_state = signal_module();
-
-        match signal {
-            WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
-            WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
-        }
+    match signal {
+        WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
+        WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
     }
 }
 
@@ -179,27 +119,14 @@ impl Window {
 /// This allows you to manipulate the window and get its properties.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WindowHandle {
-    id: u32,
+    pub(crate) id: u32,
 }
 
-/// Whether a window is fullscreen, maximized, or neither.
-#[repr(i32)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
-pub enum FullscreenOrMaximized {
-    /// The window is neither fullscreen nor maximized
-    Neither = 1,
-    /// The window is fullscreen
-    Fullscreen,
-    /// The window is maximized
-    Maximized,
-}
-
-/// A window's current display state.
-#[repr(i32)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
-pub enum WindowState {
+/// A window's current layout mode.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum LayoutMode {
     /// The window is tiled.
-    Tiled = 1,
+    Tiled,
     /// The window is floating.
     Floating,
     /// The window is fullscreen.
@@ -208,30 +135,20 @@ pub enum WindowState {
     Maximized,
 }
 
-/// Properties of a window.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct WindowProperties {
-    /// The location and size of the window
-    pub geometry: Option<Geometry>,
-    /// The window's class
-    pub class: Option<String>,
-    /// The window's title
-    pub title: Option<String>,
-    /// Whether the window is focused or not
-    pub focused: Option<bool>,
-    /// Whether the window is floating or not
-    ///
-    /// Note that a window can still be floating even if it's fullscreen or maximized; those two
-    /// states will just override the floating state.
-    #[deprecated = "use `state` instead"]
-    pub floating: Option<bool>,
-    /// Whether the window is fullscreen, maximized, or neither
-    #[deprecated = "use `state` instead"]
-    pub fullscreen_or_maximized: Option<FullscreenOrMaximized>,
-    /// All the tags on the window
-    pub tags: Vec<TagHandle>,
-    /// The state of the window.
-    pub state: Option<WindowState>,
+impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode {
+    type Error = ();
+
+    fn try_from(
+        value: pinnacle_api_defs::pinnacle::window::v1::LayoutMode,
+    ) -> Result<Self, Self::Error> {
+        match value {
+            window::v1::LayoutMode::Unspecified => Err(()),
+            window::v1::LayoutMode::Tiled => Ok(LayoutMode::Tiled),
+            window::v1::LayoutMode::Floating => Ok(LayoutMode::Floating),
+            window::v1::LayoutMode::Fullscreen => Ok(LayoutMode::Fullscreen),
+            window::v1::LayoutMode::Maximized => Ok(LayoutMode::Maximized),
+        }
+    }
 }
 
 impl WindowHandle {
@@ -245,13 +162,14 @@ impl WindowHandle {
     /// // Close the focused window
     /// window.get_focused()?.close()
     /// ```
-    #[instrument]
     pub fn close(&self) {
-        if let Err(err) = block_on_tokio(crate::window().close(CloseRequest {
-            window_id: Some(self.id),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .close(pinnacle_api_defs::pinnacle::window::v1::CloseRequest { window_id })
+                .await
+                .unwrap();
+        });
     }
 
     /// Set this window to fullscreen or not.
@@ -264,17 +182,21 @@ impl WindowHandle {
     /// // Set the focused window to fullscreen.
     /// window.get_focused()?.set_fullscreen(true);
     /// ```
-    #[instrument]
     pub fn set_fullscreen(&self, set: bool) {
-        if let Err(err) = block_on_tokio(crate::window().set_fullscreen(SetFullscreenRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(match set {
-                true => SetOrToggle::Set,
-                false => SetOrToggle::Unset,
-            } as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_fullscreen(SetFullscreenRequest {
+                    window_id,
+                    set_or_toggle: match set {
+                        true => SetOrToggle::Set,
+                        false => SetOrToggle::Unset,
+                    }
+                    .into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Toggle this window between fullscreen and not.
@@ -287,14 +209,17 @@ impl WindowHandle {
     /// // Toggle the focused window to and from fullscreen.
     /// window.get_focused()?.toggle_fullscreen();
     /// ```
-    #[instrument]
     pub fn toggle_fullscreen(&self) {
-        if let Err(err) = block_on_tokio(crate::window().set_fullscreen(SetFullscreenRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_fullscreen(SetFullscreenRequest {
+                    window_id,
+                    set_or_toggle: SetOrToggle::Toggle.into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Set this window to maximized or not.
@@ -307,17 +232,21 @@ impl WindowHandle {
     /// // Set the focused window to maximized.
     /// window.get_focused()?.set_maximized(true);
     /// ```
-    #[instrument]
     pub fn set_maximized(&self, set: bool) {
-        if let Err(err) = block_on_tokio(crate::window().set_maximized(SetMaximizedRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(match set {
-                true => SetOrToggle::Set,
-                false => SetOrToggle::Unset,
-            } as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_maximized(SetMaximizedRequest {
+                    window_id,
+                    set_or_toggle: match set {
+                        true => SetOrToggle::Set,
+                        false => SetOrToggle::Unset,
+                    }
+                    .into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Toggle this window between maximized and not.
@@ -330,14 +259,17 @@ impl WindowHandle {
     /// // Toggle the focused window to and from maximized.
     /// window.get_focused()?.toggle_maximized();
     /// ```
-    #[instrument]
     pub fn toggle_maximized(&self) {
-        if let Err(err) = block_on_tokio(crate::window().set_maximized(SetMaximizedRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_maximized(SetMaximizedRequest {
+                    window_id,
+                    set_or_toggle: SetOrToggle::Toggle.into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Set this window to floating or not.
@@ -353,17 +285,21 @@ impl WindowHandle {
     /// // Set the focused window to floating.
     /// window.get_focused()?.set_floating(true);
     /// ```
-    #[instrument]
     pub fn set_floating(&self, set: bool) {
-        if let Err(err) = block_on_tokio(crate::window().set_floating(SetFloatingRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(match set {
-                true => SetOrToggle::Set,
-                false => SetOrToggle::Unset,
-            } as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_floating(SetFloatingRequest {
+                    window_id,
+                    set_or_toggle: match set {
+                        true => SetOrToggle::Set,
+                        false => SetOrToggle::Unset,
+                    }
+                    .into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Toggle this window to and from floating.
@@ -379,14 +315,17 @@ impl WindowHandle {
     /// // Toggle the focused window to and from floating.
     /// window.get_focused()?.toggle_floating();
     /// ```
-    #[instrument]
     pub fn toggle_floating(&self) {
-        if let Err(err) = block_on_tokio(crate::window().set_floating(SetFloatingRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_floating(SetFloatingRequest {
+                    window_id,
+                    set_or_toggle: SetOrToggle::Toggle.into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Focus or unfocus this window.
@@ -397,17 +336,21 @@ impl WindowHandle {
     /// // Unfocus the focused window
     /// window.get_focused()?.set_focused(false);
     /// ```
-    #[instrument]
     pub fn set_focused(&self, set: bool) {
-        if let Err(err) = block_on_tokio(crate::window().set_focused(SetFocusedRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(match set {
-                true => SetOrToggle::Set,
-                false => SetOrToggle::Unset,
-            } as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_focused(SetFocusedRequest {
+                    window_id,
+                    set_or_toggle: match set {
+                        true => SetOrToggle::Set,
+                        false => SetOrToggle::Unset,
+                    }
+                    .into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Toggle this window to and from focused.
@@ -420,14 +363,17 @@ impl WindowHandle {
     /// // be a focused window.
     /// window.get_focused()?.toggle_focused();
     /// ```
-    #[instrument]
     pub fn toggle_focused(&self) {
-        if let Err(err) = block_on_tokio(crate::window().set_focused(SetFocusedRequest {
-            window_id: Some(self.id),
-            set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        tokio::spawn(async move {
+            Client::window()
+                .set_focused(SetFocusedRequest {
+                    window_id,
+                    set_or_toggle: SetOrToggle::Toggle.into(),
+                })
+                .await
+                .unwrap();
+        });
     }
 
     /// Move this window to the given `tag`.
@@ -441,14 +387,13 @@ impl WindowHandle {
     /// // Move the focused window to tag "Code" on the focused output
     /// window.get_focused()?.move_to_tag(&tag.get("Code", None)?);
     /// ```
-    #[instrument]
     pub fn move_to_tag(&self, tag: &TagHandle) {
-        if let Err(err) = block_on_tokio(crate::window().move_to_tag(MoveToTagRequest {
-            window_id: Some(self.id),
-            tag_id: Some(tag.id),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        let tag_id = tag.id;
+        Client::window()
+            .move_to_tag(MoveToTagRequest { window_id, tag_id })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set or unset a tag on this window.
@@ -462,18 +407,21 @@ impl WindowHandle {
     /// focused.set_tag(&tg, true); // `focused` now has tag "Potato"
     /// focused.set_tag(&tg, false); // `focused` no longer has tag "Potato"
     /// ```
-    #[instrument]
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
-        if let Err(err) = block_on_tokio(crate::window().set_tag(SetTagRequest {
-            window_id: Some(self.id),
-            tag_id: Some(tag.id),
-            set_or_toggle: Some(match set {
-                true => SetOrToggle::Set,
-                false => SetOrToggle::Unset,
-            } as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        let tag_id = tag.id;
+        Client::window()
+            .set_tag(SetTagRequest {
+                window_id,
+                tag_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Toggle a tag on this window.
@@ -489,15 +437,17 @@ impl WindowHandle {
     /// focused.toggle_tag(&tg); // `focused` now has tag "Potato"
     /// focused.toggle_tag(&tg); // `focused` no longer has tag "Potato"
     /// ```
-    #[instrument]
     pub fn toggle_tag(&self, tag: &TagHandle) {
-        if let Err(err) = block_on_tokio(crate::window().set_tag(SetTagRequest {
-            window_id: Some(self.id),
-            tag_id: Some(tag.id),
-            set_or_toggle: Some(SetOrToggle::Toggle as i32),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        let tag_id = tag.id;
+        Client::window()
+            .set_tag(SetTagRequest {
+                window_id,
+                tag_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Raise this window.
@@ -509,248 +459,163 @@ impl WindowHandle {
     /// ```
     /// window.get_focused()?.raise();
     /// ```
-    #[instrument]
     pub fn raise(&self) {
-        if let Err(err) = block_on_tokio(crate::window().raise(RaiseRequest {
-            window_id: Some(self.id),
-        })) {
-            error!("{err}");
-        }
+        let window_id = self.id;
+        Client::window()
+            .raise(RaiseRequest { window_id })
+            .block_on_tokio()
+            .unwrap();
     }
 
-    /// Get all properties of this window.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::window::WindowProperties;
-    ///
-    /// let WindowProperties {
-    ///     geometry,
-    ///     class,
-    ///     title,
-    ///     focused,
-    ///     floating,
-    ///     fullscreen_or_maximized,
-    ///     tags,
-    /// } = window.get_focused()?.props();
-    /// ```
-    pub fn props(&self) -> WindowProperties {
-        block_on_tokio(self.props_async())
+    pub fn loc(&self) -> Option<Point> {
+        self.loc_async().block_on_tokio()
     }
 
-    /// The async version of [`props`][Self::props].
-    pub async fn props_async(&self) -> WindowProperties {
-        let response = match crate::window()
-            .get_properties(window::v0alpha1::GetPropertiesRequest {
-                window_id: Some(self.id),
-            })
+    /// Get this window's location.
+    pub async fn loc_async(&self) -> Option<Point> {
+        let window_id = self.id;
+        Client::window()
+            .get_loc(GetLocRequest { window_id })
             .await
-        {
-            Ok(response) => response.into_inner(),
-            Err(status) => {
-                eprintln!("ERROR: {status}");
-                return WindowProperties::default();
-            }
-        };
-
-        let state = match response.state() {
-            window::v0alpha1::WindowState::Unspecified => None,
-            window::v0alpha1::WindowState::Tiled => Some(WindowState::Tiled),
-            window::v0alpha1::WindowState::Floating => Some(WindowState::Floating),
-            window::v0alpha1::WindowState::Fullscreen => Some(WindowState::Fullscreen),
-            window::v0alpha1::WindowState::Maximized => Some(WindowState::Maximized),
-        };
-
-        #[allow(deprecated)]
-        let fullscreen_or_maximized = response
-            .fullscreen_or_maximized
-            .unwrap_or_default()
-            .try_into()
-            .ok();
-
-        let geometry = response.geometry.map(|geo| Geometry {
-            x: geo.x(),
-            y: geo.y(),
-            width: geo.width() as u32,
-            height: geo.height() as u32,
-        });
-
-        #[allow(deprecated)]
-        WindowProperties {
-            geometry,
-            class: response.class,
-            title: response.title,
-            focused: response.focused,
-            floating: response.floating,
-            fullscreen_or_maximized,
-            tags: response
-                .tag_ids
-                .into_iter()
-                .map(|id| Tag.new_handle(id))
-                .collect(),
-            state,
-        }
+            .unwrap()
+            .into_inner()
+            .loc
+            .map(|loc| Point { x: loc.x, y: loc.y })
     }
 
-    /// Get this window's location and size.
-    ///
-    /// Shorthand for `self.props().geometry`.
-    pub fn geometry(&self) -> Option<Geometry> {
-        self.props().geometry
+    pub fn size(&self) -> Option<Size> {
+        self.size_async().block_on_tokio()
     }
 
-    /// The async version of [`geometry`][Self::geometry].
-    pub async fn geometry_async(&self) -> Option<Geometry> {
-        self.props_async().await.geometry
+    /// Get this window's size.
+    pub async fn size_async(&self) -> Option<Size> {
+        let window_id = self.id;
+        Client::window()
+            .get_size(GetSizeRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .size
+            .map(|size| Size {
+                w: size.width,
+                h: size.height,
+            })
     }
 
-    /// Get this window's class.
-    ///
-    /// Shorthand for `self.props().class`.
-    pub fn class(&self) -> Option<String> {
-        self.props().class
+    pub fn app_id(&self) -> String {
+        self.app_id_async().block_on_tokio()
     }
 
-    /// The async version of [`class`][Self::class].
-    pub async fn class_async(&self) -> Option<String> {
-        self.props_async().await.class
+    /// Get this window's app id.
+    pub async fn app_id_async(&self) -> String {
+        let window_id = self.id;
+        Client::window()
+            .get_app_id(GetAppIdRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .app_id
+    }
+
+    pub fn title(&self) -> String {
+        self.title_async().block_on_tokio()
     }
 
     /// Get this window's title.
-    ///
-    /// Shorthand for `self.props().title`.
-    pub fn title(&self) -> Option<String> {
-        self.props().title
+    pub async fn title_async(&self) -> String {
+        let window_id = self.id;
+        Client::window()
+            .get_title(GetTitleRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .title
     }
 
-    /// The async version of [`title`][Self::title].
-    pub async fn title_async(&self) -> Option<String> {
-        self.props_async().await.title
+    pub fn focused(&self) -> bool {
+        self.focused_async().block_on_tokio()
     }
 
     /// Get whether or not this window is focused.
-    ///
-    /// Shorthand for `self.props().focused`.
-    pub fn focused(&self) -> Option<bool> {
-        self.props().focused
-    }
-
-    /// The async version of [`focused`][Self::focused].
-    pub async fn focused_async(&self) -> Option<bool> {
-        self.props_async().await.focused
-    }
-
-    /// Get whether or not this window is floating.
-    ///
-    /// Shorthand for `self.props().floating`.
-    pub fn floating(&self) -> Option<bool> {
-        self.props()
-            .state
-            .map(|state| state == WindowState::Floating)
-    }
-
-    /// The async version of [`floating`][Self::floating]
-    pub async fn floating_async(&self) -> Option<bool> {
-        self.props_async()
+    pub async fn focused_async(&self) -> bool {
+        let window_id = self.id;
+        Client::window()
+            .get_focused(GetFocusedRequest { window_id })
             .await
-            .state
-            .map(|state| state == WindowState::Floating)
+            .unwrap()
+            .into_inner()
+            .focused
     }
 
-    /// Get whether this window is fullscreen, maximized, or neither.
-    ///
-    /// Shorthand for `self.props().fullscreen_or_maximized`.
-    #[deprecated = "use the `fullscreen` or `maximized` methods instead"]
-    pub fn fullscreen_or_maximized(&self) -> Option<FullscreenOrMaximized> {
-        self.props().state.map(|state| match state {
-            WindowState::Tiled | WindowState::Floating => FullscreenOrMaximized::Neither,
-            WindowState::Fullscreen => FullscreenOrMaximized::Fullscreen,
-            WindowState::Maximized => FullscreenOrMaximized::Maximized,
-        })
-    }
-
-    /// The async version of [`fullscreen_or_maximized`][Self::fullscreen_or_maximized].
-    #[deprecated = "use the `fullscreen_async` or `maximized_async` methods instead"]
-    pub async fn fullscreen_or_maximized_async(&self) -> Option<FullscreenOrMaximized> {
-        self.props_async().await.state.map(|state| match state {
-            WindowState::Tiled | WindowState::Floating => FullscreenOrMaximized::Neither,
-            WindowState::Fullscreen => FullscreenOrMaximized::Fullscreen,
-            WindowState::Maximized => FullscreenOrMaximized::Maximized,
-        })
+    pub fn layout_mode(&self) -> LayoutMode {
+        self.layout_mode_async().block_on_tokio()
     }
 
     /// Get whether or not this window is tiled.
-    pub fn tiled(&self) -> Option<bool> {
-        self.props().state.map(|state| state == WindowState::Tiled)
-    }
-
-    /// The async version of [`tiled`][Self::tiled].
-    pub async fn tiled_async(&self) -> Option<bool> {
-        self.props_async()
+    pub async fn layout_mode_async(&self) -> LayoutMode {
+        let window_id = self.id;
+        Client::window()
+            .get_layout_mode(GetLayoutModeRequest { window_id })
             .await
-            .state
-            .map(|state| state == WindowState::Tiled)
+            .unwrap()
+            .into_inner()
+            .layout_mode()
+            .try_into()
+            .unwrap_or(LayoutMode::Tiled)
     }
 
-    /// Get whether or not this window is fullscreen.
-    pub fn fullscreen(&self) -> Option<bool> {
-        self.props()
-            .state
-            .map(|state| state == WindowState::Fullscreen)
+    /// Get whether or not this window is floating.
+    pub fn floating(&self) -> bool {
+        self.floating_async().block_on_tokio()
     }
 
-    /// The async version of [`fullscreen`][Self::fullscreen].
-    pub async fn fullscreen_async(&self) -> Option<bool> {
-        self.props_async()
-            .await
-            .state
-            .map(|state| state == WindowState::Fullscreen)
+    pub async fn floating_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Floating
     }
 
-    /// Get whether or not this window is maximized.
-    pub fn maximized(&self) -> Option<bool> {
-        self.props()
-            .state
-            .map(|state| state == WindowState::Maximized)
+    pub fn fullscreen(&self) -> bool {
+        self.fullscreen_async().block_on_tokio()
     }
 
-    /// The async version of [`maximized`][Self::maximized].
-    pub async fn maximized_async(&self) -> Option<bool> {
-        self.props_async()
-            .await
-            .state
-            .map(|state| state == WindowState::Maximized)
+    pub async fn fullscreen_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Fullscreen
+    }
+
+    pub fn maximized(&self) -> bool {
+        self.maximized_async().block_on_tokio()
+    }
+
+    pub async fn maximized_async(&self) -> bool {
+        self.layout_mode_async().await == LayoutMode::Maximized
     }
 
     /// Get all the tags on this window.
-    ///
-    /// Shorthand for `self.props().tags`.
-    pub fn tags(&self) -> Vec<TagHandle> {
-        self.props().tags
+    pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
+        self.tags_async().block_on_tokio()
     }
 
-    /// The async version of [`tags`][Self::tags].
-    pub async fn tags_async(&self) -> Vec<TagHandle> {
-        self.props_async().await.tags
+    pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
+        let window_id = self.id;
+        Client::window()
+            .get_tag_ids(GetTagIdsRequest { window_id })
+            .await
+            .unwrap()
+            .into_inner()
+            .tag_ids
+            .into_iter()
+            .map(|id| TagHandle { id })
+    }
+
+    pub fn is_on_active_tag(&self) -> bool {
+        self.is_on_active_tag_async().block_on_tokio()
     }
 
     /// Returns whether this window is on an active tag.
-    pub fn is_on_active_tag(&self) -> bool {
-        self.tags()
-            .batch_find(
-                |tag| tag.active_async().boxed(),
-                |active| active.unwrap_or_default(),
-            )
-            .is_some()
-    }
-
-    /// The async version of [`WindowHandle::is_on_active_tag`].
     pub async fn is_on_active_tag_async(&self) -> bool {
-        let tags = self.tags_async().await;
-        crate::util::batch_async(tags.iter().map(|tag| tag.active_async()))
+        self.tags_async()
             .await
-            .contains(&Some(true))
+            .batch_find(|tag| tag.active_async().boxed(), |active| *active)
+            .is_some()
     }
 
     /// Get this window's raw compositor id.

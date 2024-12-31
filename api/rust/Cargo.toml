@@ -18,9 +18,7 @@ tonic = { workspace = true }
 tower = { workspace = true }
 hyper-util = { workspace = true }
 futures = { workspace = true }
-num_enum = "0.7.3"
 xkbcommon = { workspace = true }
-rand = "0.8.5"
 bitflags = { workspace = true }
 snowcap-api = { path = "../../snowcap/api/rust", optional = true }
 indexmap = { workspace = true }

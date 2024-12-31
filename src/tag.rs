@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    cell::{Cell, RefCell},
     hash::Hash,
-    rc::Rc,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use smithay::output::Output;
@@ -49,17 +50,18 @@ impl TagId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TagInner {
     /// The internal id of this tag.
-    id: Cell<TagId>,
+    id: TagId,
     /// The name of this tag.
-    name: RefCell<String>,
+    name: String,
     /// Whether this tag is active or not.
-    active: Cell<bool>,
+    active: bool,
     /// This tag is defunct as a result of a config reload
     /// and will be replaced by the next added tag.
-    defunct: Cell<bool>,
+    defunct: bool,
+    client_state: ClientState,
 }
 
 /// A marker for windows.
@@ -68,12 +70,19 @@ struct TagInner {
 /// on each output at a time.
 #[derive(Debug, Clone)]
 pub struct Tag {
-    inner: Rc<TagInner>,
+    inner: Arc<Mutex<TagInner>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientState {
+    pub name: String,
+    pub active: bool,
+    pub defunct: bool,
 }
 
 impl PartialEq for Tag {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.inner, &other.inner)
+        Arc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
@@ -81,7 +90,7 @@ impl Eq for Tag {}
 
 impl Hash for Tag {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let ptr = Rc::as_ptr(&self.inner);
+        let ptr = Arc::as_ptr(&self.inner);
         ptr.hash(state);
     }
 }
@@ -90,12 +99,17 @@ impl Hash for Tag {
 impl Tag {
     pub fn new(name: String) -> Self {
         Self {
-            inner: Rc::new(TagInner {
-                id: Cell::new(TagId::next()),
-                name: RefCell::new(name),
-                active: Cell::new(false),
-                defunct: Cell::new(false),
-            }),
+            inner: Arc::new(Mutex::new(TagInner {
+                id: TagId::next(),
+                name: name.clone(),
+                active: false,
+                defunct: false,
+                client_state: ClientState {
+                    name,
+                    active: false,
+                    defunct: false,
+                },
+            })),
         }
     }
 
@@ -112,44 +126,48 @@ impl Tag {
 
     /// Replace all inner fields of this tag with ones from the `new_tag`.
     pub fn replace(&self, new_tag: Tag) {
-        self.inner.id.set(new_tag.inner.id.get());
-        self.inner
-            .name
-            .borrow_mut()
-            .clone_from(&new_tag.inner.name.borrow());
-        self.inner.active.set(new_tag.inner.active.get());
-        self.inner.defunct.set(false);
+        let mut tag = self.inner.lock().unwrap();
+        *tag = new_tag.inner.lock().unwrap().clone();
+        tag.defunct = false;
     }
 
     /// Gets this tag's unique numeric ID.
     pub fn id(&self) -> TagId {
-        self.inner.id.get()
+        self.inner.lock().unwrap().id
     }
 
     /// Gets this tag's name.
     pub fn name(&self) -> String {
-        self.inner.name.borrow().clone()
+        self.inner.lock().unwrap().name.clone()
     }
 
     /// Gets whether this tag is active.
     pub fn active(&self) -> bool {
-        self.inner.active.get()
+        self.inner.lock().unwrap().active
     }
 
     /// Sets this tag's active state.
     ///
     /// Returns whether the new state is different from the old one,
     pub fn set_active(&self, active: bool) -> bool {
-        self.inner.active.replace(active) != active
+        std::mem::replace(&mut self.inner.lock().unwrap().active, active) != active
     }
 
     /// Gets whether this tag is defunct as a result of a config reload.
     pub fn defunct(&self) -> bool {
-        self.inner.defunct.get()
+        self.inner.lock().unwrap().defunct
     }
 
     /// Make this tag defunct.
     pub fn make_defunct(&self) {
-        self.inner.defunct.set(true);
+        self.inner.lock().unwrap().defunct = true;
+    }
+
+    pub fn client_state(&self) -> ClientState {
+        self.inner.lock().unwrap().client_state.clone()
+    }
+
+    pub fn set_client_state(&self, client_state: ClientState) {
+        self.inner.lock().unwrap().client_state = client_state;
     }
 }

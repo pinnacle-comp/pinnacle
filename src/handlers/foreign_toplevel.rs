@@ -83,8 +83,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_fullscreen(true));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_fullscreen(self, &window, true);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -92,8 +91,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_fullscreen(false));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_fullscreen(self, &window, false);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -101,8 +99,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_maximized(true));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_maximized(self, &window, true);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -110,8 +107,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_maximized(false));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_maximized(self, &window, false);
     }
 
     // TODO:

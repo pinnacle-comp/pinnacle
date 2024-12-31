@@ -8,7 +8,6 @@
 //! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
 //! View the struct's documentation for more information.
 
-use num_enum::TryFromPrimitive;
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v0alpha1::{
@@ -48,8 +47,7 @@ pub enum MouseButton {
 }
 
 /// Keyboard modifiers.
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Mod {
     /// The shift key
     Shift = 1,
@@ -62,8 +60,7 @@ pub enum Mod {
 }
 
 /// Press or release.
-#[repr(i32)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, TryFromPrimitive)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum MouseEdge {
     /// Perform actions on button press
     Press = 1,

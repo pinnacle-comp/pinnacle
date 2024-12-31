@@ -21,10 +21,10 @@ use tracing::debug;
 
 use crate::{
     block_on_tokio, layout,
-    output::{Output, OutputHandle},
-    tag::{Tag, TagHandle},
+    output::OutputHandle,
+    tag::TagHandle,
     util::{Axis, Geometry},
-    window::{Window, WindowHandle},
+    window::WindowHandle,
 };
 
 /// A struct that allows you to manage layouts.
@@ -59,16 +59,18 @@ impl Layout {
         let fut = async move {
             while let Some(Ok(response)) = from_server.next().await {
                 let args = LayoutArgs {
-                    output: Output.new_handle(response.output_name()),
+                    output: OutputHandle {
+                        name: response.output_name().to_string(),
+                    },
                     windows: response
                         .window_ids
                         .into_iter()
-                        .map(|id| Window.new_handle(id))
+                        .map(|id| WindowHandle { id })
                         .collect(),
                     tags: response
                         .tag_ids
                         .into_iter()
-                        .map(|id| Tag.new_handle(id))
+                        .map(|id| TagHandle { id })
                         .collect(),
                     output_width: response.output_width.unwrap_or_default(),
                     output_height: response.output_height.unwrap_or_default(),
@@ -238,7 +240,7 @@ impl<T> LayoutRequester<T> {
     /// This uses the focused output for the request.
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
-        let output_name = Output.get_focused().map(|op| op.name);
+        let output_name = crate::output::get_focused().map(|op| op.name);
         if self
             .sender
             .send(LayoutRequest {

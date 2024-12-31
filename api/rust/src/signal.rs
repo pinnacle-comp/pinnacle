@@ -25,12 +25,7 @@ use tokio::sync::{
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::Streaming;
 
-use crate::{
-    block_on_tokio,
-    output::{Output, OutputHandle},
-    tag::{Tag, TagHandle},
-    window::{Window, WindowHandle},
-};
+use crate::{block_on_tokio, output::OutputHandle, tag::TagHandle, window::WindowHandle};
 
 pub(crate) trait Signal {
     type Callback;
@@ -135,7 +130,7 @@ signals! {
             client_request = output_connect,
             on_response = |response, callbacks| {
                 if let Some(output_name) = response.output_name {
-                    let handle = Output.new_handle(output_name);
+                    let handle = OutputHandle { name: output_name };
 
                     for callback in callbacks {
                         callback(&handle);
@@ -152,7 +147,7 @@ signals! {
             client_request = output_disconnect,
             on_response = |response, callbacks| {
                 if let Some(output_name) = response.output_name {
-                    let handle = Output.new_handle(output_name);
+                    let handle = OutputHandle { name: output_name };
 
                     for callback in callbacks {
                         callback(&handle);
@@ -169,7 +164,7 @@ signals! {
             client_request = output_resize,
             on_response = |response, callbacks| {
                 if let Some(output_name) = &response.output_name {
-                    let handle = Output.new_handle(output_name);
+                    let handle = OutputHandle { name: output_name.to_string() };
 
                     for callback in callbacks {
                         callback(&handle, response.logical_width(), response.logical_height())
@@ -186,7 +181,7 @@ signals! {
             client_request = output_move,
             on_response = |response, callbacks| {
                 if let Some(output_name) = &response.output_name {
-                    let handle = Output.new_handle(output_name);
+                    let handle = OutputHandle { name: output_name.to_string() };
 
                     for callback in callbacks {
                         callback(&handle, response.x(), response.y())
@@ -206,7 +201,7 @@ signals! {
             client_request = window_pointer_enter,
             on_response = |response, callbacks| {
                 if let Some(window_id) = response.window_id {
-                    let handle = Window.new_handle(window_id);
+                    let handle = WindowHandle { id: window_id };
 
                     for callback in callbacks {
                         callback(&handle);
@@ -223,7 +218,7 @@ signals! {
             client_request = window_pointer_leave,
             on_response = |response, callbacks| {
                 if let Some(window_id) = response.window_id {
-                    let handle = Window.new_handle(window_id);
+                    let handle = WindowHandle { id: window_id };
 
                     for callback in callbacks {
                         callback(&handle);
@@ -241,7 +236,7 @@ signals! {
             client_request = tag_active,
             on_response = |response, callbacks| {
                 if let Some(tag_id) = response.tag_id {
-                    let handle = Tag.new_handle(tag_id);
+                    let handle = TagHandle { id: tag_id };
 
                     for callback in callbacks {
                         callback(&handle, response.active.unwrap());

@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package pinnacle.v1;
+
+import "google/protobuf/empty.proto";
+
+message QuitRequest {}
+
+message ReloadConfigRequest {}
+
+message KeepaliveRequest {}
+message KeepaliveResponse {}
+
+enum Backend {
+    BACKEND_UNSPECIFIED = 0;
+    // The compositor is running in a nested window.
+    BACKEND_WINDOW = 1;
+    // The compositor is running in a TTY.
+    BACKEND_TTY = 2;
+}
+
+message BackendRequest {}
+message BackendResponse {
+    Backend backend = 1;
+}
+
+service PinnacleService {
+    // Quits the compositor.
+    rpc Quit(QuitRequest) returns (google.protobuf.Empty);
+    // Kills and restarts the current config.
+    rpc ReloadConfig(ReloadConfigRequest) returns (google.protobuf.Empty);
+    // Starts a bidirectional keepalive stream. If the compositor-to-client
+    // side stream dies, this enables the client to exit without hanging.
+    rpc Keepalive(stream KeepaliveRequest) returns (stream KeepaliveResponse);
+    // Returns the currently running backend.
+    rpc Backend(BackendRequest) returns (BackendResponse);
+}

@@ -84,34 +84,27 @@
 //!
 //! You can peruse the documentation for things to configure.
 
+use client::Client;
 use futures::{Future, StreamExt};
 use hyper_util::rt::TokioIo;
 use input::Input;
 use layout::Layout;
-use output::Output;
-use pinnacle::Pinnacle;
 use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_client::InputServiceClient,
     layout::v0alpha1::layout_service_client::LayoutServiceClient,
-    output::v0alpha1::output_service_client::OutputServiceClient,
     process::v0alpha1::process_service_client::ProcessServiceClient,
     render::v0alpha1::render_service_client::RenderServiceClient,
     signal::v0alpha1::signal_service_client::SignalServiceClient,
-    tag::v0alpha1::tag_service_client::TagServiceClient,
-    v0alpha1::pinnacle_service_client::PinnacleServiceClient,
-    window::v0alpha1::window_service_client::WindowServiceClient,
 };
 use process::Process;
 use render::Render;
 use signal::SignalState;
 #[cfg(feature = "snowcap")]
 use snowcap::Snowcap;
-use tag::Tag;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 use tracing::info;
-use window::Window;
 
 pub mod input;
 pub mod layout;
@@ -126,6 +119,8 @@ pub mod tag;
 pub mod util;
 pub mod window;
 
+mod client;
+
 pub use pinnacle_api_macros::config;
 #[cfg(feature = "snowcap")]
 pub use snowcap_api;
@@ -135,45 +130,21 @@ pub use tokio;
 // tonic doesn't like it when you use clients across tokio runtimes, and these are static
 // meaning they would get reused, so this allows us to recreate the client on a
 // different runtime when testing.
-static PINNACLE: RwLock<Option<PinnacleServiceClient<Channel>>> = RwLock::const_new(None);
 static PROCESS: RwLock<Option<ProcessServiceClient<Channel>>> = RwLock::const_new(None);
-static WINDOW: RwLock<Option<WindowServiceClient<Channel>>> = RwLock::const_new(None);
 static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::const_new(None);
-static OUTPUT: RwLock<Option<OutputServiceClient<Channel>>> = RwLock::const_new(None);
-static TAG: RwLock<Option<TagServiceClient<Channel>>> = RwLock::const_new(None);
 static LAYOUT: RwLock<Option<LayoutServiceClient<Channel>>> = RwLock::const_new(None);
 static RENDER: RwLock<Option<RenderServiceClient<Channel>>> = RwLock::const_new(None);
 static SIGNAL: RwLock<Option<SignalServiceClient<Channel>>> = RwLock::const_new(None);
 
 static SIGNAL_MODULE: Mutex<Option<SignalState>> = Mutex::const_new(None);
 
-pub(crate) fn pinnacle() -> PinnacleServiceClient<Channel> {
-    block_on_tokio(PINNACLE.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
 pub(crate) fn process() -> ProcessServiceClient<Channel> {
     block_on_tokio(PROCESS.read())
         .clone()
         .expect("grpc connection was not initialized")
 }
-pub(crate) fn window() -> WindowServiceClient<Channel> {
-    block_on_tokio(WINDOW.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
 pub(crate) fn input() -> InputServiceClient<Channel> {
     block_on_tokio(INPUT.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
-pub(crate) fn output() -> OutputServiceClient<Channel> {
-    block_on_tokio(OUTPUT.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
-pub(crate) fn tag() -> TagServiceClient<Channel> {
-    block_on_tokio(TAG.read())
         .clone()
         .expect("grpc connection was not initialized")
 }
@@ -207,18 +178,10 @@ pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ApiModules {
-    /// The [`Pinnacle`] struct
-    pub pinnacle: &'static Pinnacle,
     /// The [`Process`] struct
     pub process: &'static Process,
-    /// The [`Window`] struct
-    pub window: &'static Window,
     /// The [`Input`] struct
     pub input: &'static Input,
-    /// The [`Output`] struct
-    pub output: &'static Output,
-    /// The [`Tag`] struct
-    pub tag: &'static Tag,
     /// The [`Layout`] struct
     pub layout: &'static Layout,
     /// The [`Render`] struct
@@ -239,12 +202,8 @@ impl ApiModules {
     /// Creates all the API modules.
     pub const fn new() -> Self {
         Self {
-            pinnacle: &Pinnacle,
             process: &Process,
-            window: &Window,
             input: &Input,
-            output: &Output,
-            tag: &Tag,
             layout: &Layout,
             render: &Render,
             #[cfg(feature = "snowcap")]
@@ -275,29 +234,16 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = std::env::var("PINNACLE_GRPC_SOCKET").unwrap();
     info!("Connected to {socket_path}");
 
-    PINNACLE
-        .write()
-        .await
-        .replace(PinnacleServiceClient::new(channel.clone()));
+    Client::init(channel.clone());
+
     PROCESS
         .write()
         .await
         .replace(ProcessServiceClient::new(channel.clone()));
-    WINDOW
-        .write()
-        .await
-        .replace(WindowServiceClient::new(channel.clone()));
     INPUT
         .write()
         .await
         .replace(InputServiceClient::new(channel.clone()));
-    OUTPUT
-        .write()
-        .await
-        .replace(OutputServiceClient::new(channel.clone()));
-    TAG.write()
-        .await
-        .replace(TagServiceClient::new(channel.clone()));
     RENDER
         .write()
         .await
@@ -327,7 +273,7 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
 /// This function is inserted at the end of your config through the [`config`] macro.
 /// You should use the macro instead of this function directly.
 pub async fn listen() {
-    let mut shutdown_stream = Pinnacle.shutdown_watch().await;
+    let (_sender, mut shutdown_stream) = crate::pinnacle::keepalive().await;
 
     // This will trigger either when the compositor sends the shutdown signal
     // or when it exits (in which case the stream received an error)
@@ -348,10 +294,29 @@ pub fn set_default_tracing_subscriber() {
         .init();
 }
 
+// TODO: get rid of this
 /// Block on a future using the current Tokio runtime.
 pub(crate) fn block_on_tokio<F: Future>(future: F) -> F::Output {
     tokio::task::block_in_place(|| {
         let handle = tokio::runtime::Handle::current();
         handle.block_on(future)
     })
+}
+
+trait BlockOnTokio {
+    type Output;
+
+    fn block_on_tokio(self) -> Self::Output;
+}
+
+impl<F: Future> BlockOnTokio for F {
+    type Output = F::Output;
+
+    /// Block on a future using the current Tokio runtime.
+    fn block_on_tokio(self) -> Self::Output {
+        tokio::task::block_in_place(|| {
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(self)
+        })
+    }
 }
