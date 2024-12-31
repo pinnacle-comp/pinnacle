@@ -1,4 +1,3 @@
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -10,6 +9,7 @@ use smithay::{
     utils::Transform,
 };
 
+use crate::api::signal::Signal;
 use crate::output::OutputMode;
 use crate::state::{Pinnacle, State, WithState};
 
@@ -144,10 +144,6 @@ impl Pinnacle {
 
         self.space.map_output(&output, (0, 0));
 
-        self.signal_state.output_connect.signal(|buf| {
-            buf.push_back(OutputConnectResponse {
-                output_name: Some(output.name()),
-            });
-        });
+        self.signal_state.output_connect.signal(&output);
     }
 }

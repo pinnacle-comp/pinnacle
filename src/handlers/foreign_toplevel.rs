@@ -1,6 +1,7 @@
 use smithay::reexports::wayland_server::protocol::{wl_output::WlOutput, wl_surface::WlSurface};
 
 use crate::{
+    api::signal::Signal,
     delegate_foreign_toplevel,
     protocol::foreign_toplevel::{ForeignToplevelHandler, ForeignToplevelManagerState},
     state::{State, WithState},
@@ -31,29 +32,16 @@ impl ForeignToplevelHandler for State {
             if let Some(tag) = new_active_tag {
                 self.capture_snapshots_on_output(&output, []);
 
+                // FIXME: use `crate::api:tag::switch_to`
                 output.with_state(|state| {
                     if state.tags.contains(&tag) {
                         for op_tag in state.tags.iter() {
                             if op_tag.set_active(false) {
-                                self.pinnacle.signal_state.tag_active.signal(|buf| {
-                                    buf.push_back(
-                                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                            tag_id: Some(op_tag.id().to_inner()),
-                                            active: Some(false),
-                                        },
-                                    );
-                                });
+                                self.pinnacle.signal_state.tag_active.signal(op_tag);
                             }
                         }
                         if tag.set_active(true) {
-                            self.pinnacle.signal_state.tag_active.signal(|buf| {
-                                buf.push_back(
-                                    pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                        tag_id: Some(tag.id().to_inner()),
-                                        active: Some(true),
-                                    },
-                                );
-                            });
+                            self.pinnacle.signal_state.tag_active.signal(&tag);
                         }
                     }
                 });

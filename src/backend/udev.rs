@@ -16,7 +16,6 @@ use drm::{
     set_crtc_active,
     util::{create_drm_mode, refresh_interval},
 };
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -81,6 +80,7 @@ use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
+    api::signal::Signal,
     backend::Backend,
     config::ConnectorSavedState,
     output::{BlankingState, OutputMode, OutputName},
@@ -1062,11 +1062,7 @@ impl Udev {
             output.with_state_mut(|state| state.tags.clone_from(tags));
             pinnacle.change_output_state(self, &output, None, None, *scale, Some(*loc));
         } else {
-            pinnacle.signal_state.output_connect.signal(|buffer| {
-                buffer.push_back(OutputConnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
+            pinnacle.signal_state.output_connect.signal(&output);
         }
 
         pinnacle.output_management_manager_state.update::<State>();

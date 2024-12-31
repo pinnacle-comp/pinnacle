@@ -51,8 +51,8 @@ pub mod pinnacle {
     }
 
     pub mod signal {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.signal.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.signal.v1");
 
             pub trait SignalRequest {
                 fn from_control(control: StreamControl) -> Self;
@@ -65,7 +65,7 @@ pub mod pinnacle {
                         impl SignalRequest for $request {
                             fn from_control(control: StreamControl) -> Self {
                                 $request {
-                                    control: Some(control as i32),
+                                    control: control.into(),
                                 }
                             }
 

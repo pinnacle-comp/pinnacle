@@ -23,8 +23,7 @@ use pinnacle_api_defs::pinnacle::{
     input::v0alpha1::input_service_server::InputServiceServer,
     layout::v0alpha1::layout_service_server::LayoutServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
-    render::v0alpha1::render_service_server::RenderServiceServer,
-    signal::v0alpha1::signal_service_server::SignalServiceServer, v0alpha1::ShutdownWatchResponse,
+    render::v0alpha1::render_service_server::RenderServiceServer, v0alpha1::ShutdownWatchResponse,
 };
 use smithay::{
     input::keyboard::keysyms,
@@ -636,7 +635,7 @@ impl Pinnacle {
             .add_service(pinnacle_api_defs::pinnacle::output::v1::output_service_server::OutputServiceServer::new(output_service))
             .add_service(InputServiceServer::new(input_service))
             .add_service(ProcessServiceServer::new(process_service))
-            .add_service(SignalServiceServer::new(signal_service))
+            .add_service(pinnacle_api_defs::pinnacle::signal::v1::signal_service_server::SignalServiceServer::new(signal_service))
             .add_service(LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));
 

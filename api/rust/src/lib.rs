@@ -94,7 +94,7 @@ use pinnacle_api_defs::pinnacle::{
     layout::v0alpha1::layout_service_client::LayoutServiceClient,
     process::v0alpha1::process_service_client::ProcessServiceClient,
     render::v0alpha1::render_service_client::RenderServiceClient,
-    signal::v0alpha1::signal_service_client::SignalServiceClient,
+    signal::v1::signal_service_client::SignalServiceClient,
 };
 use process::Process;
 use render::Render;

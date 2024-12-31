@@ -6,7 +6,7 @@ use crate::{
     tag::Tag,
 };
 
-use super::StateFnSender;
+use super::{signal::Signal, StateFnSender};
 
 pub struct TagService {
     sender: StateFnSender,
@@ -28,14 +28,7 @@ pub fn set_active(state: &mut State, tag: &Tag, set: Option<bool>) {
     let active = set.unwrap_or(!tag.active());
 
     if tag.set_active(active) {
-        state.pinnacle.signal_state.tag_active.signal(|buf| {
-            buf.push_back(
-                pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                    tag_id: Some(tag.id().to_inner()),
-                    active: Some(active),
-                },
-            );
-        });
+        state.pinnacle.signal_state.tag_active.signal(tag);
     }
 
     state.pinnacle.update_xwayland_stacking_order();
@@ -57,25 +50,11 @@ pub fn switch_to(state: &mut State, tag: &Tag) {
     output.with_state(|op_state| {
         for op_tag in op_state.tags.iter() {
             if op_tag.set_active(false) {
-                state.pinnacle.signal_state.tag_active.signal(|buf| {
-                    buf.push_back(
-                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                            tag_id: Some(op_tag.id().to_inner()),
-                            active: Some(false),
-                        },
-                    );
-                });
+                state.pinnacle.signal_state.tag_active.signal(op_tag);
             }
         }
         if tag.set_active(true) {
-            state.pinnacle.signal_state.tag_active.signal(|buf| {
-                buf.push_back(
-                    pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                        tag_id: Some(tag.id().to_inner()),
-                        active: Some(true),
-                    },
-                );
-            });
+            state.pinnacle.signal_state.tag_active.signal(tag);
         }
     });
 

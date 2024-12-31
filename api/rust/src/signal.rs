@@ -17,7 +17,7 @@ use std::{
 };
 
 use futures::{pin_mut, FutureExt};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{SignalRequest, StreamControl};
+use pinnacle_api_defs::pinnacle::signal::v1::{SignalRequest, StreamControl};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedSender},
     oneshot,
@@ -129,12 +129,10 @@ signals! {
             callback_type = SingleOutputFn,
             client_request = output_connect,
             on_response = |response, callbacks| {
-                if let Some(output_name) = response.output_name {
-                    let handle = OutputHandle { name: output_name };
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -146,12 +144,10 @@ signals! {
             callback_type = SingleOutputFn,
             client_request = output_disconnect,
             on_response = |response, callbacks| {
-                if let Some(output_name) = response.output_name {
-                    let handle = OutputHandle { name: output_name };
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -163,12 +159,10 @@ signals! {
             callback_type = Box<dyn FnMut(&OutputHandle, u32, u32) + Send + 'static>,
             client_request = output_resize,
             on_response = |response, callbacks| {
-                if let Some(output_name) = &response.output_name {
-                    let handle = OutputHandle { name: output_name.to_string() };
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle, response.logical_width(), response.logical_height())
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.logical_width, response.logical_height)
                 }
             },
         }
@@ -180,12 +174,10 @@ signals! {
             callback_type = Box<dyn FnMut(&OutputHandle, i32, i32) + Send + 'static>,
             client_request = output_move,
             on_response = |response, callbacks| {
-                if let Some(output_name) = &response.output_name {
-                    let handle = OutputHandle { name: output_name.to_string() };
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle, response.x(), response.y())
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.x, response.y)
                 }
             },
         }
@@ -200,12 +192,10 @@ signals! {
             callback_type = SingleWindowFn,
             client_request = window_pointer_enter,
             on_response = |response, callbacks| {
-                if let Some(window_id) = response.window_id {
-                    let handle = WindowHandle { id: window_id };
+                let handle = WindowHandle { id: response.window_id };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -217,12 +207,10 @@ signals! {
             callback_type = SingleWindowFn,
             client_request = window_pointer_leave,
             on_response = |response, callbacks| {
-                if let Some(window_id) = response.window_id {
-                    let handle = WindowHandle { id: window_id };
+                let handle = WindowHandle { id: response.window_id };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -235,12 +223,10 @@ signals! {
             callback_type = Box<dyn FnMut(&TagHandle, bool) + Send + 'static>,
             client_request = tag_active,
             on_response = |response, callbacks| {
-                if let Some(tag_id) = response.tag_id {
-                    let handle = TagHandle { id: tag_id };
+                let handle = TagHandle { id: response.tag_id };
 
-                    for callback in callbacks {
-                        callback(&handle, response.active.unwrap());
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.active);
                 }
             },
         }
