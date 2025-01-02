@@ -68,7 +68,7 @@ pub async fn get_focused_async() -> Option<WindowHandle> {
 pub fn begin_move(button: MouseButton) {
     Client::window()
         .move_grab(MoveGrabRequest {
-            button: button as u32,
+            button: button.into(),
         })
         .block_on_tokio()
         .unwrap();
@@ -77,7 +77,7 @@ pub fn begin_move(button: MouseButton) {
 pub fn begin_resize(button: MouseButton) {
     Client::window()
         .resize_grab(ResizeGrabRequest {
-            button: button as u32,
+            button: button.into(),
         })
         .block_on_tokio()
         .unwrap();

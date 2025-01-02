@@ -24,6 +24,7 @@ snowcap-api = { path = "../../snowcap/api/rust", optional = true }
 indexmap = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+num_enum = "0.7.3"
 
 [features]
 default = ["snowcap"]

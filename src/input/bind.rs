@@ -42,6 +42,22 @@ impl BindState {
     pub fn enter_previous_layer(&mut self) {
         self.layer_stack.pop();
     }
+
+    pub fn set_bind_group(&self, bind_id: u32, group: Option<String>) {
+        if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.group = group;
+        } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.group = group;
+        }
+    }
+
+    pub fn set_bind_desc(&self, bind_id: u32, desc: Option<String>) {
+        if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.desc = desc;
+        } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.desc = desc;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -245,6 +261,7 @@ pub struct Mousebinds {
     pub last_pressed_triggered_binds: HashMap<u32, Vec<u32>>,
 }
 
+// TODO: may be able to dedup with Keybinds above
 impl Mousebinds {
     // Notifies configs that a button was pressed.
     //

@@ -5,8 +5,8 @@ use pinnacle_api_defs::pinnacle::input::{
         BindInfo, BindRequest, BindResponse, EnterBindLayerRequest, GetBindInfosRequest,
         GetBindInfosResponse, GetBindLayerStackRequest, GetBindLayerStackResponse,
         KeybindStreamRequest, KeybindStreamResponse, MousebindStreamRequest,
-        MousebindStreamResponse, SetLibinputSettingRequest, SetRepeatRateRequest,
-        SetXcursorRequest, SetXkbConfigRequest,
+        MousebindStreamResponse, SetBindDescriptionRequest, SetBindGroupRequest,
+        SetLibinputSettingRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
 use smithay::input::keyboard::XkbConfig;
@@ -124,6 +124,23 @@ impl input::v1::input_service_server::InputService for InputService {
         _request: Request<GetBindInfosRequest>,
     ) -> TonicResult<GetBindInfosResponse> {
         run_unary(&self.sender, |state| {
+            // So I don't forget to add info here for new bind types
+            match input::v1::bind::Bind::Key(input::v1::Keybind::default()) {
+                input::v1::bind::Bind::Key(_) => (),
+                input::v1::bind::Bind::Mouse(_) => (),
+            }
+
+            let push_mods = |mods: &mut Vec<input::v1::Modifier>,
+                             ignore_mods: &mut Vec<input::v1::Modifier>,
+                             mask: Option<bool>,
+                             modif: input::v1::Modifier| {
+                match mask {
+                    Some(true) => mods.push(modif),
+                    None => ignore_mods.push(modif),
+                    Some(false) => (),
+                };
+            };
+
             let keybind_infos = state
                 .pinnacle
                 .input_state
@@ -137,23 +154,39 @@ impl input::v1::input_service_server::InputService for InputService {
                     let mut mods = Vec::new();
                     let mut ignore_mods = Vec::new();
 
-                    let mut push_mods = |mask: Option<bool>, modif: input::v1::Modifier| {
-                        match mask {
-                            Some(true) => mods.push(modif),
-                            None => ignore_mods.push(modif),
-                            Some(false) => (),
-                        };
-                    };
-
-                    push_mods(keybind.bind_data.mods.shift, input::v1::Modifier::Shift);
-                    push_mods(keybind.bind_data.mods.ctrl, input::v1::Modifier::Ctrl);
-                    push_mods(keybind.bind_data.mods.alt, input::v1::Modifier::Alt);
-                    push_mods(keybind.bind_data.mods.super_, input::v1::Modifier::Super);
                     push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        keybind.bind_data.mods.shift,
+                        input::v1::Modifier::Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        keybind.bind_data.mods.ctrl,
+                        input::v1::Modifier::Ctrl,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        keybind.bind_data.mods.alt,
+                        input::v1::Modifier::Alt,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        keybind.bind_data.mods.super_,
+                        input::v1::Modifier::Super,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
                         keybind.bind_data.mods.iso_level3_shift,
                         input::v1::Modifier::IsoLevel3Shift,
                     );
                     push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
                         keybind.bind_data.mods.iso_level5_shift,
                         input::v1::Modifier::IsoLevel5Shift,
                     );
@@ -174,9 +207,107 @@ impl input::v1::input_service_server::InputService for InputService {
                     }
                 });
 
+            let mousebind_infos = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .mousebinds
+                .id_map
+                .values()
+                .map(|mousebind| {
+                    let mousebind = mousebind.borrow();
+
+                    let mut mods = Vec::new();
+                    let mut ignore_mods = Vec::new();
+
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.shift,
+                        input::v1::Modifier::Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.ctrl,
+                        input::v1::Modifier::Ctrl,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.alt,
+                        input::v1::Modifier::Alt,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.super_,
+                        input::v1::Modifier::Super,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.iso_level3_shift,
+                        input::v1::Modifier::IsoLevel3Shift,
+                    );
+                    push_mods(
+                        &mut mods,
+                        &mut ignore_mods,
+                        mousebind.bind_data.mods.iso_level5_shift,
+                        input::v1::Modifier::IsoLevel5Shift,
+                    );
+
+                    BindInfo {
+                        bind_id: mousebind.bind_data.id,
+                        bind: Some(input::v1::Bind {
+                            mods: mods.into_iter().map(|m| m.into()).collect(),
+                            ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
+                            layer_name: mousebind.bind_data.layer.clone(),
+                            group: mousebind.bind_data.group.clone(),
+                            description: mousebind.bind_data.desc.clone(),
+                            bind: Some(input::v1::bind::Bind::Mouse(input::v1::Mousebind {
+                                button: mousebind.button,
+                            })),
+                        }),
+                    }
+                });
+
             Ok(GetBindInfosResponse {
-                bind_infos: keybind_infos.collect(),
+                bind_infos: keybind_infos.chain(mousebind_infos).collect(),
             })
+        })
+        .await
+    }
+
+    async fn set_bind_group(&self, request: Request<SetBindGroupRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+        let bind_id = request.bind_id;
+        let group = request.group;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .set_bind_group(bind_id, group);
+        })
+        .await
+    }
+
+    async fn set_bind_description(
+        &self,
+        request: Request<SetBindDescriptionRequest>,
+    ) -> TonicResult<()> {
+        let request = request.into_inner();
+        let bind_id = request.bind_id;
+        let desc = request.desc;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .set_bind_desc(bind_id, desc);
         })
         .await
     }

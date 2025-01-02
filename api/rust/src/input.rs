@@ -8,11 +8,13 @@
 //! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
 //! View the struct's documentation for more information.
 
+use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
         set_libinput_setting_request::{CalibrationMatrix, Setting},
-        BindRequest, EnterBindLayerRequest, KeybindStreamRequest, MousebindStreamRequest,
+        BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindStreamRequest,
+        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest,
         SetLibinputSettingRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
@@ -28,7 +30,8 @@ pub mod libinput;
 pub use xkbcommon::xkb::Keysym;
 
 /// A mouse button.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[repr(u32)]
 pub enum MouseButton {
     /// The left mouse button
     Left = 0x110,
@@ -44,10 +47,12 @@ pub enum MouseButton {
     Forward = 0x115,
     /// The backward mouse button
     Back = 0x116,
+    #[num_enum(catch_all)]
+    Other(u32),
 }
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
     pub struct Mod: u16 {
         /// The shift key
         const SHIFT = 1;
@@ -147,6 +152,11 @@ impl BindLayer {
             .block_on_tokio()
             .unwrap();
     }
+
+    /// Returns this bind layer's name, or `None` if this is the default bind layer.
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
 }
 
 enum Edge {
@@ -179,6 +189,28 @@ impl Keybind {
             .get_or_insert_with(|| new_keybind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_release), Edge::Release));
 
+        self
+    }
+
+    pub fn group(&mut self, group: impl ToString) -> &mut Self {
+        Client::input()
+            .set_bind_group(SetBindGroupRequest {
+                bind_id: self.bind_id,
+                group: Some(group.to_string()),
+            })
+            .block_on_tokio()
+            .unwrap();
+        self
+    }
+
+    pub fn description(&mut self, desc: impl ToString) -> &mut Self {
+        Client::input()
+            .set_bind_description(SetBindDescriptionRequest {
+                bind_id: self.bind_id,
+                desc: Some(desc.to_string()),
+            })
+            .block_on_tokio()
+            .unwrap();
         self
     }
 }
@@ -287,6 +319,28 @@ impl Mousebind {
 
         self
     }
+
+    pub fn group(&mut self, group: impl ToString) -> &mut Self {
+        Client::input()
+            .set_bind_group(SetBindGroupRequest {
+                bind_id: self.bind_id,
+                group: Some(group.to_string()),
+            })
+            .block_on_tokio()
+            .unwrap();
+        self
+    }
+
+    pub fn description(&mut self, desc: impl ToString) -> &mut Self {
+        Client::input()
+            .set_bind_description(SetBindDescriptionRequest {
+                bind_id: self.bind_id,
+                desc: Some(desc.to_string()),
+            })
+            .block_on_tokio()
+            .unwrap();
+        self
+    }
 }
 
 async fn new_mousebind(mods: Mod, button: MouseButton, layer: &BindLayer) -> Mousebind {
@@ -302,7 +356,7 @@ async fn new_mousebind(mods: Mod, button: MouseButton, layer: &BindLayer) -> Mou
                 group: None,       // TODO:
                 description: None, // TODO:
                 bind: Some(input::v1::bind::Bind::Mouse(input::v1::Mousebind {
-                    button: button as u32,
+                    button: button.into(),
                 })),
             }),
         })
@@ -413,108 +467,24 @@ pub fn set_xkb_config(xkb_config: XkbConfig) {
 /// Keybind information.
 ///
 /// Mainly used for the keybind list.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct KeybindInfo {
-    /// The group to place this keybind in.
-    pub group: Option<String>,
-    /// The description of this keybind.
-    pub description: Option<String>,
-}
-
-/// The description of a keybind.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct KeybindDescription {
-    /// The keybind's modifiers.
-    pub modifiers: Vec<Mod>,
-    /// The keysym code.
-    pub key_code: u32,
-    /// The name of the key.
-    pub xkb_name: String,
-    /// The group.
+pub struct BindInfo {
+    /// The group to place this bind in.
     pub group: Option<String>,
-    /// The description of the keybind.
+    /// The description of this bind.
     pub description: Option<String>,
+    /// The bind's modifiers.
+    pub mods: Mod,
+    /// The bind's layer.
+    pub layer: BindLayer,
+    pub kind: BindInfoKind,
 }
 
-/// Set a mousebind.
-///
-/// If called with an already set mousebind, it gets replaced.
-///
-/// You must supply:
-/// - `mods`: A list of [`Mod`]s. These must be held down for the keybind to trigger.
-/// - `button`: A [`MouseButton`].
-/// - `edge`: A [`MouseEdge`]. This allows you to trigger the bind on either mouse press or release.
-/// - `action`: A closure that will be run when the mousebind is triggered.
-///     - Currently, any captures must be both `Send` and `'static`. If you want to mutate
-///       something, consider using channels or [`Box::leak`].
-///
-/// # Examples
-///
-/// ```
-/// use pinnacle_api::input::{Mod, MouseButton, MouseEdge};
-///
-/// // Set `Super + left click` to start moving a window
-/// input.mousebind([Mod::Super], MouseButton::Left, MouseEdge::Press, || {
-///     window.begin_move(MouseButton::Press);
-/// });
-/// ```
-// pub fn mousebind(
-//     &self,
-//     mods: impl IntoIterator<Item = Mod>,
-//     button: MouseButton,
-//     edge: MouseEdge,
-//     mut action: impl FnMut() + 'static + Send,
-// ) {
-//     let modifiers = mods.into_iter().map(|modif| modif as i32).collect();
-//     let mut stream = match block_on_tokio(crate::input().set_mousebind(SetMousebindRequest {
-//         modifiers,
-//         button: Some(button as u32),
-//         edge: Some(edge as i32),
-//     })) {
-//         Ok(stream) => stream.into_inner(),
-//         Err(err) => {
-//             error!("Failed to set keybind: {err}");
-//             return;
-//         }
-//     };
-//
-//     tokio::spawn(async move {
-//         while let Some(Ok(_response)) = stream.next().await {
-//             action();
-//             tokio::task::yield_now().await;
-//         }
-//     });
-// }
-
-/// Get all keybinds and their information.
-// pub fn keybind_descriptions(&self) -> impl Iterator<Item = KeybindDescription> {
-//     let descriptions = match block_on_tokio(
-//         crate::input().keybind_descriptions(KeybindDescriptionsRequest {}),
-//     ) {
-//         Ok(descs) => descs.into_inner().descriptions,
-//         Err(err) => {
-//             error!("Failed to get keybind descriptions: {err}");
-//             Vec::new()
-//         }
-//     };
-//
-//     descriptions.into_iter().map(|desc| {
-//         let mods = desc.modifiers().flat_map(|m| match m {
-//             input::v0alpha1::Modifier::Unspecified => None,
-//             input::v0alpha1::Modifier::Shift => Some(Mod::Shift),
-//             input::v0alpha1::Modifier::Ctrl => Some(Mod::Ctrl),
-//             input::v0alpha1::Modifier::Alt => Some(Mod::Alt),
-//             input::v0alpha1::Modifier::Super => Some(Mod::Super),
-//         });
-//         KeybindDescription {
-//             modifiers: mods.collect(),
-//             key_code: desc.raw_code(),
-//             xkb_name: desc.xkb_name().to_string(),
-//             group: desc.group,
-//             description: desc.description,
-//         }
-//     })
-// }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum BindInfoKind {
+    Key { key_code: u32, xkb_name: String },
+    Mouse { button: MouseButton },
+}
 
 /// Set the keyboard's repeat rate.
 ///
@@ -670,4 +640,62 @@ impl ToKeysym for u32 {
     fn to_keysym(&self) -> Keysym {
         Keysym::from(*self)
     }
+}
+
+pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
+    let infos = Client::input()
+        .get_bind_infos(GetBindInfosRequest {})
+        .block_on_tokio()
+        .unwrap()
+        .into_inner()
+        .bind_infos;
+
+    infos.into_iter().filter_map(|info| {
+        let info = info.bind?;
+        let mut mods = info.mods().fold(Mod::empty(), |acc, m| match m {
+            input::v1::Modifier::Unspecified => acc,
+            input::v1::Modifier::Shift => acc | Mod::SHIFT,
+            input::v1::Modifier::Ctrl => acc | Mod::CTRL,
+            input::v1::Modifier::Alt => acc | Mod::ALT,
+            input::v1::Modifier::Super => acc | Mod::SUPER,
+            input::v1::Modifier::IsoLevel3Shift => acc | Mod::ISO_LEVEL3_SHIFT,
+            input::v1::Modifier::IsoLevel5Shift => acc | Mod::ISO_LEVEL5_SHIFT,
+        });
+
+        for ignore_mod in info.ignore_mods() {
+            match ignore_mod {
+                input::v1::Modifier::Unspecified => (),
+                input::v1::Modifier::Shift => mods |= Mod::IGNORE_SHIFT,
+                input::v1::Modifier::Ctrl => mods |= Mod::IGNORE_CTRL,
+                input::v1::Modifier::Alt => mods |= Mod::IGNORE_ALT,
+                input::v1::Modifier::Super => mods |= Mod::IGNORE_SUPER,
+                input::v1::Modifier::IsoLevel3Shift => mods |= Mod::ISO_LEVEL3_SHIFT,
+                input::v1::Modifier::IsoLevel5Shift => mods |= Mod::ISO_LEVEL5_SHIFT,
+            }
+        }
+
+        let bind_kind = match info.bind? {
+            input::v1::bind::Bind::Key(keybind) => BindInfoKind::Key {
+                key_code: keybind.key_code(),
+                xkb_name: keybind.xkb_name().to_string(),
+            },
+            input::v1::bind::Bind::Mouse(mousebind) => BindInfoKind::Mouse {
+                button: MouseButton::from(mousebind.button),
+            },
+        };
+
+        let layer = BindLayer {
+            name: info.layer_name,
+        };
+        let group = info.group;
+        let description = info.description;
+
+        Some(BindInfo {
+            group,
+            description,
+            mods,
+            layer,
+            kind: bind_kind,
+        })
+    })
 }

@@ -72,12 +72,12 @@ message MousebindStreamResponse {
 
 message SetBindGroupRequest {
     uint32 bind_id = 1;
-    string group = 2;
+    optional string group = 2;
 }
 
 message SetBindDescriptionRequest {
     uint32 bind_id = 1;
-    string desc = 2;
+    optional string desc = 2;
 }
 
 message GetBindInfosRequest {}
@@ -201,6 +201,8 @@ message SetXcursorRequest {
 service InputService {
   rpc Bind(BindRequest) returns (BindResponse);
   rpc GetBindInfos(GetBindInfosRequest) returns (GetBindInfosResponse);
+  rpc SetBindGroup(SetBindGroupRequest) returns (google.protobuf.Empty);
+  rpc SetBindDescription(SetBindDescriptionRequest) returns (google.protobuf.Empty);
 
   rpc GetBindLayerStack(GetBindLayerStackRequest) returns (GetBindLayerStackResponse);
   rpc EnterBindLayer(EnterBindLayerRequest) returns (google.protobuf.Empty);
