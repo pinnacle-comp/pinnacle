@@ -1,3 +1,4 @@
+pub mod input;
 pub mod layout;
 pub mod output;
 pub mod pinnacle;
@@ -8,24 +9,12 @@ pub mod window;
 use std::{ffi::OsString, pin::Pin, process::Stdio};
 
 use pinnacle_api_defs::pinnacle::{
-    input::v0alpha1::{
-        input_service_server,
-        set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
-        set_mousebind_request::MouseEdge,
-        KeybindDescription, KeybindDescriptionsRequest, KeybindDescriptionsResponse, Modifier,
-        SetKeybindRequest, SetKeybindResponse, SetLibinputSettingRequest, SetMousebindRequest,
-        SetMousebindResponse, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
-    },
     process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
     render::v0alpha1::{
         render_service_server, Filter, SetDownscaleFilterRequest, SetUpscaleFilterRequest,
     },
 };
-use smithay::{
-    backend::renderer::TextureFilter,
-    input::keyboard::XkbConfig,
-    reexports::{calloop, input as libinput},
-};
+use smithay::{backend::renderer::TextureFilter, reexports::calloop};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
 use tokio::{
     io::AsyncBufReadExt,
@@ -36,12 +25,7 @@ use tokio_stream::{Stream, StreamExt};
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, error, warn};
 
-use crate::{
-    backend::BackendData,
-    input::{KeybindData, ModifierMask},
-    state::State,
-    util::restore_nofile_rlimit,
-};
+use crate::{backend::BackendData, state::State, util::restore_nofile_rlimit};
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
@@ -63,10 +47,10 @@ where
 
 async fn run_unary<F, T>(fn_sender: &StateFnSender, with_state: F) -> Result<Response<T>, Status>
 where
-    F: FnOnce(&mut State) -> T + Send + 'static,
+    F: FnOnce(&mut State) -> Result<T, Status> + Send + 'static,
     T: Send + 'static,
 {
-    let (sender, receiver) = tokio::sync::oneshot::channel::<T>();
+    let (sender, receiver) = tokio::sync::oneshot::channel::<Result<T, Status>>();
 
     let f = Box::new(|state: &mut State| {
         // TODO: find a way to handle this error
@@ -79,33 +63,59 @@ where
         .send(f)
         .map_err(|_| Status::internal("failed to execute request"))?;
 
-    receiver.await.map(Response::new).map_err(|err| {
+    let res = receiver.await.map_err(|err| {
         Status::internal(format!(
             "failed to transfer response for transport to client: {err}"
         ))
-    })
+    });
+
+    match res {
+        Ok(res) => res.map(Response::new),
+        Err(err) => Err(err),
+    }
 }
 
-fn run_server_streaming<F, T>(
+async fn run_server_streaming<F, T>(
     fn_sender: &StateFnSender,
     with_state: F,
 ) -> Result<Response<ResponseStream<T>>, Status>
 where
-    F: FnOnce(&mut State, UnboundedSender<Result<T, Status>>) + Send + 'static,
+    F: FnOnce(&mut State, UnboundedSender<Result<T, Status>>) -> Result<(), Status>
+        + Send
+        + 'static,
     T: Send + 'static,
 {
+    let (msg_send, msg_recv) = tokio::sync::oneshot::channel::<Result<(), Status>>();
     let (sender, receiver) = unbounded_channel::<Result<T, Status>>();
 
     let f = Box::new(|state: &mut State| {
-        with_state(state, sender);
+        if msg_send.send(with_state(state, sender)).is_err() {
+            warn!("failed to send result of API call to config; receiver already dropped");
+        }
     });
 
     fn_sender
         .send(f)
         .map_err(|_| Status::internal("failed to execute request"))?;
 
-    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
-    Ok(Response::new(Box::pin(receiver_stream)))
+    let res = msg_recv.await.map_err(|err| {
+        Status::internal(format!(
+            "failed to transfer response for transport to client: {err}"
+        ))
+    });
+
+    let res = match res {
+        Ok(res) => res.map(move |()| {
+            Response::new(
+                Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(
+                    receiver,
+                )) as _,
+            )
+        }),
+        Err(err) => return Err(err),
+    };
+
+    res
 }
 
 /// Begin a bidirectional grpc stream.
@@ -167,390 +177,6 @@ where
     Ok(Response::new(Box::pin(receiver_stream)))
 }
 
-pub struct InputService {
-    sender: StateFnSender,
-}
-
-impl InputService {
-    pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
-    }
-}
-
-#[tonic::async_trait]
-impl input_service_server::InputService for InputService {
-    type SetKeybindStream = ResponseStream<SetKeybindResponse>;
-    type SetMousebindStream = ResponseStream<SetMousebindResponse>;
-
-    async fn set_keybind(
-        &self,
-        request: Request<SetKeybindRequest>,
-    ) -> Result<Response<Self::SetKeybindStream>, Status> {
-        let request = request.into_inner();
-
-        // TODO: impl From<&[Modifier]> for ModifierMask
-        let modifiers = request
-            .modifiers()
-            .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
-                    acc | ModifierMask::SHIFT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
-                    acc | ModifierMask::CTRL
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
-                    acc | ModifierMask::ALT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
-                    acc | ModifierMask::SUPER
-                }
-            });
-        let key = request
-            .key
-            .ok_or_else(|| Status::invalid_argument("no key specified"))?;
-
-        use pinnacle_api_defs::pinnacle::input::v0alpha1::set_keybind_request::Key;
-        let keysym = match key {
-            Key::RawCode(num) => {
-                debug!("Set keybind: {:?}, raw {}", modifiers, num);
-                xkbcommon::xkb::Keysym::new(num)
-            }
-            Key::XkbName(s) => {
-                if s.chars().count() == 1 {
-                    let Some(ch) = s.chars().next() else { unreachable!() };
-                    let keysym = xkbcommon::xkb::Keysym::from_char(ch);
-                    debug!("Set keybind: {:?}, {:?}", modifiers, keysym);
-                    keysym
-                } else {
-                    let keysym =
-                        xkbcommon::xkb::keysym_from_name(&s, xkbcommon::xkb::KEYSYM_NO_FLAGS);
-                    debug!("Set keybind: {:?}, {:?}", modifiers, keysym);
-                    keysym
-                }
-            }
-        };
-
-        let group = request.group;
-        let description = request.description;
-
-        run_server_streaming(&self.sender, move |state, sender| {
-            let keybind_data = KeybindData {
-                sender,
-                group,
-                description,
-            };
-
-            state
-                .pinnacle
-                .input_state
-                .keybinds
-                .insert((modifiers, keysym), keybind_data);
-        })
-    }
-
-    async fn set_mousebind(
-        &self,
-        request: Request<SetMousebindRequest>,
-    ) -> Result<Response<Self::SetMousebindStream>, Status> {
-        let request = request.into_inner();
-
-        debug!(request = ?request);
-
-        let modifiers = request
-            .modifiers()
-            .fold(ModifierMask::empty(), |acc, modifier| match modifier {
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Unspecified => acc,
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Shift => {
-                    acc | ModifierMask::SHIFT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Ctrl => {
-                    acc | ModifierMask::CTRL
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Alt => {
-                    acc | ModifierMask::ALT
-                }
-                pinnacle_api_defs::pinnacle::input::v0alpha1::Modifier::Super => {
-                    acc | ModifierMask::SUPER
-                }
-            });
-        let button = request
-            .button
-            .ok_or_else(|| Status::invalid_argument("no key specified"))?;
-
-        let edge = request.edge();
-
-        if let MouseEdge::Unspecified = edge {
-            return Err(Status::invalid_argument("press or release not specified"));
-        }
-
-        run_server_streaming(&self.sender, move |state, sender| {
-            state
-                .pinnacle
-                .input_state
-                .mousebinds
-                .insert((modifiers, button, edge), sender);
-        })
-    }
-
-    async fn keybind_descriptions(
-        &self,
-        _request: Request<KeybindDescriptionsRequest>,
-    ) -> Result<Response<KeybindDescriptionsResponse>, Status> {
-        run_unary(&self.sender, |state| {
-            let descriptions =
-                state
-                    .pinnacle
-                    .input_state
-                    .keybinds
-                    .iter()
-                    .map(|((mods, key), data)| {
-                        let mut modifiers = Vec::<i32>::new();
-                        if mods.contains(ModifierMask::CTRL) {
-                            modifiers.push(Modifier::Ctrl as i32);
-                        }
-                        if mods.contains(ModifierMask::ALT) {
-                            modifiers.push(Modifier::Alt as i32);
-                        }
-                        if mods.contains(ModifierMask::SUPER) {
-                            modifiers.push(Modifier::Super as i32);
-                        }
-                        if mods.contains(ModifierMask::SHIFT) {
-                            modifiers.push(Modifier::Shift as i32);
-                        }
-                        KeybindDescription {
-                            modifiers,
-                            raw_code: Some(key.raw()),
-                            xkb_name: Some(xkbcommon::xkb::keysym_get_name(*key)),
-                            group: data.group.clone(),
-                            description: data.description.clone(),
-                        }
-                    });
-
-            KeybindDescriptionsResponse {
-                descriptions: descriptions.collect(),
-            }
-        })
-        .await
-    }
-
-    async fn set_xkb_config(
-        &self,
-        request: Request<SetXkbConfigRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        run_unary_no_response(&self.sender, move |state| {
-            let new_config = XkbConfig {
-                rules: request.rules(),
-                variant: request.variant(),
-                model: request.model(),
-                layout: request.layout(),
-                options: request.options.clone(),
-            };
-            if let Some(kb) = state.pinnacle.seat.get_keyboard() {
-                if let Err(err) = kb.set_xkb_config(state, new_config) {
-                    error!("Failed to set xkbconfig: {err}");
-                }
-            }
-        })
-        .await
-    }
-
-    async fn set_repeat_rate(
-        &self,
-        request: Request<SetRepeatRateRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let rate = request
-            .rate
-            .ok_or_else(|| Status::invalid_argument("no rate specified"))?;
-        let delay = request
-            .delay
-            .ok_or_else(|| Status::invalid_argument("no rate specified"))?;
-
-        run_unary_no_response(&self.sender, move |state| {
-            if let Some(kb) = state.pinnacle.seat.get_keyboard() {
-                kb.change_repeat_info(rate, delay);
-            }
-        })
-        .await
-    }
-
-    async fn set_libinput_setting(
-        &self,
-        request: Request<SetLibinputSettingRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let setting = request
-            .setting
-            .ok_or_else(|| Status::invalid_argument("no setting specified"))?;
-
-        let discriminant = std::mem::discriminant(&setting);
-
-        use pinnacle_api_defs::pinnacle::input::v0alpha1::set_libinput_setting_request::Setting;
-        let apply_setting: Box<dyn Fn(&mut libinput::Device) + Send> = match setting {
-            Setting::AccelProfile(profile) => {
-                let profile = AccelProfile::try_from(profile).unwrap_or(AccelProfile::Unspecified);
-
-                match profile {
-                    AccelProfile::Unspecified => {
-                        return Err(Status::invalid_argument("unspecified accel profile"));
-                    }
-                    AccelProfile::Flat => Box::new(|device| {
-                        let _ = device.config_accel_set_profile(libinput::AccelProfile::Flat);
-                    }),
-                    AccelProfile::Adaptive => Box::new(|device| {
-                        let _ = device.config_accel_set_profile(libinput::AccelProfile::Adaptive);
-                    }),
-                }
-            }
-            Setting::AccelSpeed(speed) => Box::new(move |device| {
-                let _ = device.config_accel_set_speed(speed);
-            }),
-            Setting::CalibrationMatrix(matrix) => {
-                let matrix = <[f32; 6]>::try_from(matrix.matrix).map_err(|vec| {
-                    Status::invalid_argument(format!(
-                        "matrix requires exactly 6 floats but {} were specified",
-                        vec.len()
-                    ))
-                })?;
-
-                Box::new(move |device| {
-                    let _ = device.config_calibration_set_matrix(matrix);
-                })
-            }
-            Setting::ClickMethod(method) => {
-                let method = ClickMethod::try_from(method).unwrap_or(ClickMethod::Unspecified);
-
-                match method {
-                    ClickMethod::Unspecified => {
-                        return Err(Status::invalid_argument("unspecified click method"))
-                    }
-                    ClickMethod::ButtonAreas => Box::new(|device| {
-                        let _ = device.config_click_set_method(libinput::ClickMethod::ButtonAreas);
-                    }),
-                    ClickMethod::ClickFinger => Box::new(|device| {
-                        let _ = device.config_click_set_method(libinput::ClickMethod::Clickfinger);
-                    }),
-                }
-            }
-            Setting::DisableWhileTyping(disable) => Box::new(move |device| {
-                let _ = device.config_dwt_set_enabled(disable);
-            }),
-            Setting::LeftHanded(enable) => Box::new(move |device| {
-                let _ = device.config_left_handed_set(enable);
-            }),
-            Setting::MiddleEmulation(enable) => Box::new(move |device| {
-                let _ = device.config_middle_emulation_set_enabled(enable);
-            }),
-            Setting::RotationAngle(angle) => Box::new(move |device| {
-                let _ = device.config_rotation_set_angle(angle % 360);
-            }),
-            Setting::ScrollButton(button) => Box::new(move |device| {
-                let _ = device.config_scroll_set_button(button);
-            }),
-            Setting::ScrollButtonLock(enable) => Box::new(move |device| {
-                let _ = device.config_scroll_set_button_lock(match enable {
-                    true => libinput::ScrollButtonLockState::Enabled,
-                    false => libinput::ScrollButtonLockState::Disabled,
-                });
-            }),
-            Setting::ScrollMethod(method) => {
-                let method = ScrollMethod::try_from(method).unwrap_or(ScrollMethod::Unspecified);
-
-                match method {
-                    ScrollMethod::Unspecified => {
-                        return Err(Status::invalid_argument("unspecified scroll method"));
-                    }
-                    ScrollMethod::NoScroll => Box::new(|device| {
-                        let _ = device.config_scroll_set_method(libinput::ScrollMethod::NoScroll);
-                    }),
-                    ScrollMethod::TwoFinger => Box::new(|device| {
-                        let _ = device.config_scroll_set_method(libinput::ScrollMethod::TwoFinger);
-                    }),
-                    ScrollMethod::Edge => Box::new(|device| {
-                        let _ = device.config_scroll_set_method(libinput::ScrollMethod::Edge);
-                    }),
-                    ScrollMethod::OnButtonDown => Box::new(|device| {
-                        let _ =
-                            device.config_scroll_set_method(libinput::ScrollMethod::OnButtonDown);
-                    }),
-                }
-            }
-            Setting::NaturalScroll(enable) => Box::new(move |device| {
-                let _ = device.config_scroll_set_natural_scroll_enabled(enable);
-            }),
-            Setting::TapButtonMap(map) => {
-                let map = TapButtonMap::try_from(map).unwrap_or(TapButtonMap::Unspecified);
-
-                match map {
-                    TapButtonMap::Unspecified => {
-                        return Err(Status::invalid_argument("unspecified tap button map"));
-                    }
-                    TapButtonMap::LeftRightMiddle => Box::new(|device| {
-                        let _ = device
-                            .config_tap_set_button_map(libinput::TapButtonMap::LeftRightMiddle);
-                    }),
-                    TapButtonMap::LeftMiddleRight => Box::new(|device| {
-                        let _ = device
-                            .config_tap_set_button_map(libinput::TapButtonMap::LeftMiddleRight);
-                    }),
-                }
-            }
-            Setting::TapDrag(enable) => Box::new(move |device| {
-                let _ = device.config_tap_set_drag_enabled(enable);
-            }),
-            Setting::TapDragLock(enable) => Box::new(move |device| {
-                let _ = device.config_tap_set_drag_lock_enabled(enable);
-            }),
-            Setting::Tap(enable) => Box::new(move |device| {
-                let _ = device.config_tap_set_enabled(enable);
-            }),
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            for device in state.pinnacle.input_state.libinput_devices.iter_mut() {
-                apply_setting(device);
-            }
-
-            state
-                .pinnacle
-                .input_state
-                .libinput_settings
-                .insert(discriminant, apply_setting);
-        })
-        .await
-    }
-
-    async fn set_xcursor(
-        &self,
-        request: Request<SetXcursorRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-
-        let theme = request.theme;
-        let size = request.size;
-
-        run_unary_no_response(&self.sender, move |state| {
-            if let Some(theme) = theme {
-                state.pinnacle.cursor_state.set_theme(&theme);
-            }
-
-            if let Some(size) = size {
-                state.pinnacle.cursor_state.set_size(size);
-            }
-
-            if let Some(output) = state.pinnacle.focused_output().cloned() {
-                state.schedule_render(&output)
-            }
-        })
-        .await
-    }
-}
-
 pub struct ProcessService {
     sender: StateFnSender,
 }
@@ -598,7 +224,7 @@ impl process_service_server::ProcessService for ProcessService {
                     });
 
                 if already_running {
-                    return;
+                    return Ok(());
                 }
             }
 
@@ -627,11 +253,11 @@ impl process_service_server::ProcessService for ProcessService {
 
             let Ok(mut child) = cmd.spawn() else {
                 warn!("Tried to run {arg0}, but it doesn't exist",);
-                return;
+                return Ok(());
             };
 
             if !has_callback {
-                return;
+                return Ok(());
             }
 
             let stdout = child.stdout.take();
@@ -699,7 +325,10 @@ impl process_service_server::ProcessService for ProcessService {
                     Err(err) => warn!("child wait() err: {err}"),
                 }
             });
+
+            Ok(())
         })
+        .await
     }
 
     async fn set_env(&self, request: Request<SetEnvRequest>) -> Result<Response<()>, Status> {

@@ -1,4 +1,6 @@
+use pinnacle_api::input;
 use pinnacle_api::input::libinput::LibinputSetting;
+use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::KeybindInfo;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::layout::{
@@ -15,7 +17,7 @@ use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
 use pinnacle_api::window::rules::{DecorationMode, WindowRule, WindowRuleCondition};
 use pinnacle_api::{
-    input::{Mod, MouseButton, MouseEdge},
+    input::{Mod, MouseButton},
     ApiModules,
 };
 
@@ -31,7 +33,6 @@ async fn main() {
     #[allow(unused_variables)]
     let ApiModules {
         process,
-        input,
         layout,
         render,
         #[cfg(feature = "snowcap")]
@@ -41,8 +42,8 @@ async fn main() {
 
     // Change the mod key to `Alt` when running as a nested window.
     let mod_key = match pinnacle::backend() {
-        Backend::Tty => Mod::Super,
-        Backend::Window => Mod::Alt,
+        Backend::Tty => Mod::SUPER,
+        Backend::Window => Mod::ALT,
     };
 
     let terminal = "alacritty";
@@ -52,137 +53,104 @@ async fn main() {
     //------------------------
 
     // `mod_key + left click` starts moving a window
-    input.mousebind([mod_key], MouseButton::Left, MouseEdge::Press, || {
+    input::mousebind(mod_key, MouseButton::Left).on_press(|| {
         window::begin_move(MouseButton::Left);
     });
 
     // `mod_key + right click` starts resizing a window
-    input.mousebind([mod_key], MouseButton::Right, MouseEdge::Press, || {
+    input::mousebind(mod_key, MouseButton::Right).on_press(|| {
         window::begin_resize(MouseButton::Right);
     });
+
+    input::mousebind(mod_key | Mod::SHIFT, MouseButton::Right)
+        .on_press(|| println!("right click press"))
+        .on_release(|| println!("right click release"));
 
     //------------------------
     // Keybinds              |
     //------------------------
 
     // `mod_key + s` shows the keybind overlay
-    #[cfg(feature = "snowcap")]
-    input.keybind(
-        [mod_key],
-        's',
-        || {
-            snowcap.integration.keybind_overlay().show();
-        },
-        KeybindInfo {
-            group: Some("Compositor".into()),
-            description: Some("Show the keybind overlay".into()),
-        },
-    );
+    // #[cfg(feature = "snowcap")]
+    // input::keybind(
+    //     [mod_key],
+    //     's',
+    //     || {
+    //         snowcap.integration.keybind_overlay().show();
+    //     },
+    //     KeybindInfo {
+    //         group: Some("Compositor".into()),
+    //         description: Some("Show the keybind overlay".into()),
+    //     },
+    // );
+
+    let another_layer = BindLayer::get("another");
+    another_layer
+        .keybind(mod_key, 'f')
+        .on_press(|| println!("pressed f in another"))
+        .on_press(|| println!("pressed f in another again"))
+        .on_release(|| println!("released f in another"));
+    another_layer
+        .keybind(Mod::empty(), Keysym::Escape)
+        .on_press(|| BindLayer::DEFAULT.enter());
+
+    input::keybind(mod_key, 'a').on_press(move || {
+        println!("entering another");
+        another_layer.enter()
+    });
 
     // `mod_key + shift + q` quits Pinnacle
-    input.keybind(
-        [mod_key, Mod::Shift],
-        'q',
-        || {
-            #[cfg(feature = "snowcap")]
-            snowcap.integration.quit_prompt().show();
-            #[cfg(not(feature = "snowcap"))]
-            pinnacle.quit();
-        },
-        KeybindInfo {
-            group: Some("Compositor".into()),
-            description: Some("Quit Pinnacle".into()),
-        },
-    );
+    input::keybind(mod_key | Mod::SHIFT, 'q').on_press(pinnacle::quit);
+
+    // || {
+    //     // #[cfg(feature = "snowcap")]
+    //     // snowcap.integration.quit_prompt().show();
+    //     // #[cfg(not(feature = "snowcap"))]
+    //     pinnacle::quit();
+    // },
+    // KeybindInfo {
+    //     group: Some("Compositor".into()),
+    //     description: Some("Quit Pinnacle".into()),
+    // },
 
     // `mod_key + ctrl + r` reloads the config
-    input.keybind(
-        [mod_key, Mod::Ctrl],
-        'r',
-        || {
-            pinnacle::reload_config();
-        },
-        KeybindInfo {
-            group: Some("Compositor".into()),
-            description: Some("Reload the config".into()),
-        },
-    );
+    input::keybind(mod_key | Mod::SHIFT, 'r').on_press(pinnacle::reload_config);
 
     // `mod_key + shift + c` closes the focused window
-    input.keybind(
-        [mod_key, Mod::Shift],
-        'c',
-        || {
-            if let Some(window) = window::get_focused() {
-                window.close();
-            }
-        },
-        KeybindInfo {
-            group: Some("Window".into()),
-            description: Some("Close the focused window".into()),
-        },
-    );
+    input::keybind(mod_key | Mod::SHIFT, 'c').on_press(|| {
+        if let Some(window) = window::get_focused() {
+            window.close();
+        }
+    });
 
     // `mod_key + Return` spawns a terminal
-    input.keybind(
-        [mod_key],
-        Keysym::Return,
-        move || {
-            process.spawn([terminal]);
-        },
-        KeybindInfo {
-            group: Some("Process".into()),
-            description: Some(format!("Spawn `{terminal}`")),
-        },
-    );
+    input::keybind(mod_key, Keysym::Return).on_press(move || {
+        process.spawn([terminal]);
+    });
 
     // `mod_key + ctrl + space` toggles floating
-    input.keybind(
-        [mod_key, Mod::Ctrl],
-        Keysym::space,
-        || {
-            if let Some(window) = window::get_focused() {
-                window.toggle_floating();
-                window.raise();
-            }
-        },
-        KeybindInfo {
-            group: Some("Window".into()),
-            description: Some("Toggle floating on the focused window".into()),
-        },
-    );
+    input::keybind(mod_key | Mod::CTRL, Keysym::space).on_press(|| {
+        if let Some(window) = window::get_focused() {
+            window.toggle_floating();
+            window.raise();
+        }
+    });
 
     // `mod_key + f` toggles fullscreen
-    input.keybind(
-        [mod_key],
-        'f',
-        || {
-            if let Some(window) = window::get_focused() {
-                window.toggle_fullscreen();
-                window.raise();
-            }
-        },
-        KeybindInfo {
-            group: Some("Window".into()),
-            description: Some("Toggle fullscreen on the focused window".into()),
-        },
-    );
+    input::keybind(mod_key, 'f').on_press(|| {
+        if let Some(window) = window::get_focused() {
+            window.toggle_fullscreen();
+            window.raise();
+        }
+    });
 
     // `mod_key + m` toggles maximized
-    input.keybind(
-        [mod_key],
-        'm',
-        || {
-            if let Some(window) = window::get_focused() {
-                window.toggle_maximized();
-                window.raise();
-            }
-        },
-        KeybindInfo {
-            group: Some("Window".into()),
-            description: Some("Toggle maximized on the focused window".into()),
-        },
-    );
+    input::keybind(mod_key, 'm').on_press(|| {
+        if let Some(window) = window::get_focused() {
+            window.toggle_maximized();
+            window.raise();
+        }
+    });
 
     //------------------------
     // Window rules          |
@@ -265,52 +233,36 @@ async fn main() {
     let mut layout_requester_clone = layout_requester.clone();
 
     // `mod_key + space` cycles to the next layout
-    input.keybind(
-        [mod_key],
-        Keysym::space,
-        move || {
-            let Some(focused_op) = output::get_focused() else {
-                return;
-            };
-            let Some(first_active_tag) = focused_op
-                .tags()
-                .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
-            else {
-                return;
-            };
+    input::keybind(mod_key, Keysym::space).on_press(move || {
+        let Some(focused_op) = output::get_focused() else {
+            return;
+        };
+        let Some(first_active_tag) = focused_op
+            .tags()
+            .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
+        else {
+            return;
+        };
 
-            layout_requester.cycle_layout_forward(&first_active_tag);
-            layout_requester.request_layout_on_output(&focused_op);
-        },
-        KeybindInfo {
-            group: Some("Layout".into()),
-            description: Some("Cycle the layout forward on the first active tag".into()),
-        },
-    );
+        layout_requester.cycle_layout_forward(&first_active_tag);
+        layout_requester.request_layout_on_output(&focused_op);
+    });
 
     // `mod_key + shift + space` cycles to the previous layout
-    input.keybind(
-        [mod_key, Mod::Shift],
-        Keysym::space,
-        move || {
-            let Some(focused_op) = output::get_focused() else {
-                return;
-            };
-            let Some(first_active_tag) = focused_op
-                .tags()
-                .batch_find(|tg| Box::pin(tg.active_async()), |active| *active)
-            else {
-                return;
-            };
+    input::keybind(mod_key | Mod::SHIFT, Keysym::space).on_press(move || {
+        let Some(focused_op) = output::get_focused() else {
+            return;
+        };
+        let Some(first_active_tag) = focused_op
+            .tags()
+            .batch_find(|tg| Box::pin(tg.active_async()), |active| *active)
+        else {
+            return;
+        };
 
-            layout_requester_clone.cycle_layout_backward(&first_active_tag);
-            layout_requester_clone.request_layout_on_output(&focused_op);
-        },
-        KeybindInfo {
-            group: Some("Layout".into()),
-            description: Some("Cycle the layout backward on the first active tag".into()),
-        },
-    );
+        layout_requester_clone.cycle_layout_backward(&first_active_tag);
+        layout_requester_clone.request_layout_on_output(&focused_op);
+    });
 
     //------------------------
     // Tags                  |
@@ -323,71 +275,39 @@ async fn main() {
 
     for tag_name in tag_names {
         // `mod_key + 1-5` switches to tag "1" to "5"
-        input.keybind(
-            [mod_key],
-            tag_name,
-            move || {
-                if let Some(tag) = tag::get(tag_name) {
-                    tag.switch_to();
-                }
-            },
-            KeybindInfo {
-                group: Some("Tag".into()),
-                description: Some(format!("Switch to tag {tag_name}")),
-            },
-        );
+        input::keybind(mod_key, tag_name).on_press(move || {
+            if let Some(tag) = tag::get(tag_name) {
+                tag.switch_to();
+            }
+        });
 
         // `mod_key + ctrl + 1-5` toggles tag "1" to "5"
-        input.keybind(
-            [mod_key, Mod::Ctrl],
-            tag_name,
-            move || {
-                if let Some(tag) = tag::get(tag_name) {
-                    tag.toggle_active();
-                }
-            },
-            KeybindInfo {
-                group: Some("Tag".into()),
-                description: Some(format!("Toggle tag {tag_name}")),
-            },
-        );
+        input::keybind(mod_key | Mod::CTRL, tag_name).on_press(move || {
+            if let Some(tag) = tag::get(tag_name) {
+                tag.toggle_active();
+            }
+        });
 
         // `mod_key + shift + 1-5` moves the focused window to tag "1" to "5"
-        input.keybind(
-            [mod_key, Mod::Shift],
-            tag_name,
-            move || {
-                if let Some(tag) = tag::get(tag_name) {
-                    if let Some(win) = window::get_focused() {
-                        win.move_to_tag(&tag);
-                    }
+        input::keybind(mod_key | Mod::SHIFT, tag_name).on_press(move || {
+            if let Some(tag) = tag::get(tag_name) {
+                if let Some(win) = window::get_focused() {
+                    win.move_to_tag(&tag);
                 }
-            },
-            KeybindInfo {
-                group: Some("Tag".into()),
-                description: Some(format!("Move the focused window to tag {tag_name}")),
-            },
-        );
+            }
+        });
 
         // `mod_key + ctrl + shift + 1-5` toggles tag "1" to "5" on the focused window
-        input.keybind(
-            [mod_key, Mod::Ctrl, Mod::Shift],
-            tag_name,
-            move || {
-                if let Some(tg) = tag::get(tag_name) {
-                    if let Some(win) = window::get_focused() {
-                        win.toggle_tag(&tg);
-                    }
+        input::keybind(mod_key | Mod::CTRL | Mod::SHIFT, tag_name).on_press(move || {
+            if let Some(tg) = tag::get(tag_name) {
+                if let Some(win) = window::get_focused() {
+                    win.toggle_tag(&tg);
                 }
-            },
-            KeybindInfo {
-                group: Some("Tag".into()),
-                description: Some(format!("Toggle tag {tag_name} on the focused window")),
-            },
-        );
+            }
+        });
     }
 
-    input.set_libinput_setting(LibinputSetting::Tap(true));
+    input::set_libinput_setting(LibinputSetting::Tap(true));
 
     // Request all windows use client-side decorations.
     // window::add_window_rule(

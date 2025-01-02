@@ -538,6 +538,7 @@ impl State {
     /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         if let Backend::Udev(udev) = &mut self.backend {
+            info!("Switching to vt {vt}");
             if let Err(err) = udev.session.change_vt(vt) {
                 error!("Failed to switch to vt {vt}: {err}");
             }

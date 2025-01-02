@@ -87,10 +87,8 @@
 use client::Client;
 use futures::{Future, StreamExt};
 use hyper_util::rt::TokioIo;
-use input::Input;
 use layout::Layout;
 use pinnacle_api_defs::pinnacle::{
-    input::v0alpha1::input_service_client::InputServiceClient,
     layout::v0alpha1::layout_service_client::LayoutServiceClient,
     process::v0alpha1::process_service_client::ProcessServiceClient,
     render::v0alpha1::render_service_client::RenderServiceClient,
@@ -131,7 +129,6 @@ pub use tokio;
 // meaning they would get reused, so this allows us to recreate the client on a
 // different runtime when testing.
 static PROCESS: RwLock<Option<ProcessServiceClient<Channel>>> = RwLock::const_new(None);
-static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::const_new(None);
 static LAYOUT: RwLock<Option<LayoutServiceClient<Channel>>> = RwLock::const_new(None);
 static RENDER: RwLock<Option<RenderServiceClient<Channel>>> = RwLock::const_new(None);
 static SIGNAL: RwLock<Option<SignalServiceClient<Channel>>> = RwLock::const_new(None);
@@ -140,11 +137,6 @@ static SIGNAL_MODULE: Mutex<Option<SignalState>> = Mutex::const_new(None);
 
 pub(crate) fn process() -> ProcessServiceClient<Channel> {
     block_on_tokio(PROCESS.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
-pub(crate) fn input() -> InputServiceClient<Channel> {
-    block_on_tokio(INPUT.read())
         .clone()
         .expect("grpc connection was not initialized")
 }
@@ -180,8 +172,6 @@ pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
 pub struct ApiModules {
     /// The [`Process`] struct
     pub process: &'static Process,
-    /// The [`Input`] struct
-    pub input: &'static Input,
     /// The [`Layout`] struct
     pub layout: &'static Layout,
     /// The [`Render`] struct
@@ -203,7 +193,6 @@ impl ApiModules {
     pub const fn new() -> Self {
         Self {
             process: &Process,
-            input: &Input,
             layout: &Layout,
             render: &Render,
             #[cfg(feature = "snowcap")]
@@ -240,10 +229,6 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
         .write()
         .await
         .replace(ProcessServiceClient::new(channel.clone()));
-    INPUT
-        .write()
-        .await
-        .replace(InputServiceClient::new(channel.clone()));
     RENDER
         .write()
         .await

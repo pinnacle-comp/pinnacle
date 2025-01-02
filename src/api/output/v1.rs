@@ -40,7 +40,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .map(|output| output.name())
                 .collect::<Vec<_>>();
 
-            GetResponse { output_names }
+            Ok(GetResponse { output_names })
         })
         .await
     }
@@ -335,11 +335,11 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .map(|op| op.with_state(|state| state.serial.clone()))
                 .unwrap_or_default();
 
-            GetInfoResponse {
+            Ok(GetInfoResponse {
                 make,
                 model,
                 serial,
-            }
+            })
         })
         .await
     }
@@ -352,9 +352,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
 
             let loc = output.map(|op| op.current_location());
 
-            GetLocResponse {
+            Ok(GetLocResponse {
                 loc: loc.map(|loc| util::v1::Point { x: loc.x, y: loc.y }),
-            }
+            })
         })
         .await
     }
@@ -372,12 +372,12 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .and_then(|op| op.current_mode())
                 .map(|mode| mode.size);
 
-            GetLogicalSizeResponse {
+            Ok(GetLogicalSizeResponse {
                 logical_size: size.map(|size| util::v1::Size {
                     width: size.w.try_into().unwrap_or_default(),
                     height: size.h.try_into().unwrap_or_default(),
                 }),
-            }
+            })
         })
         .await
     }
@@ -395,12 +395,12 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .map(|op| op.physical_properties().size)
                 .unwrap_or_default();
 
-            GetPhysicalSizeResponse {
+            Ok(GetPhysicalSizeResponse {
                 physical_size: Some(util::v1::Size {
                     width: size.w.try_into().unwrap_or_default(),
                     height: size.h.try_into().unwrap_or_default(),
                 }),
-            }
+            })
         })
         .await
     }
@@ -438,11 +438,11 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetModesResponse {
+            Ok(GetModesResponse {
                 current_mode,
                 preferred_mode,
                 modes,
-            }
+            })
         })
         .await
     }
@@ -461,7 +461,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .focused_output()
                 .is_some_and(|foc_op| Some(foc_op) == output.as_ref());
 
-            GetFocusedResponse { focused }
+            Ok(GetFocusedResponse { focused })
         })
         .await
     }
@@ -487,7 +487,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetTagIdsResponse { tag_ids }
+            Ok(GetTagIdsResponse { tag_ids })
         })
         .await
     }
@@ -502,9 +502,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .map(|op| op.current_scale().fractional_scale())
                 .unwrap_or(1.0);
 
-            GetScaleResponse {
+            Ok(GetScaleResponse {
                 scale: scale as f32,
-            }
+            })
         })
         .await
     }
@@ -535,9 +535,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetTransformResponse {
+            Ok(GetTransformResponse {
                 transform: transform.into(),
-            }
+            })
         })
         .await
     }
@@ -563,7 +563,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetEnabledResponse { enabled }
+            Ok(GetEnabledResponse { enabled })
         })
         .await
     }
@@ -584,7 +584,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetPoweredResponse { powered }
+            Ok(GetPoweredResponse { powered })
         })
         .await
     }
@@ -612,9 +612,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 })
                 .unwrap_or_default();
 
-            GetFocusStackWindowIdsResponse {
+            Ok(GetFocusStackWindowIdsResponse {
                 window_ids: focus_stack_window_ids,
-            }
+            })
         })
         .await
     }

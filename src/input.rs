@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod bind;
 pub mod libinput;
 
 use std::{
@@ -13,11 +14,9 @@ use crate::{
     state::{Pinnacle, WithState},
     window::WindowElement,
 };
-use indexmap::IndexMap;
-use pinnacle_api_defs::pinnacle::input::v0alpha1::{
-    set_libinput_setting_request::Setting, set_mousebind_request, SetKeybindResponse,
-    SetMousebindResponse,
-};
+use bind::BindState;
+// FIXME: remove
+use pinnacle_api_defs::pinnacle::input::v1::set_libinput_setting_request::Setting;
 use smithay::{
     backend::{
         input::{
@@ -101,40 +100,27 @@ impl From<&ModifiersState> for ModifierMask {
     }
 }
 
-#[derive(Debug)]
-pub struct KeybindData {
-    pub sender: UnboundedSender<Result<SetKeybindResponse, tonic::Status>>,
-    pub group: Option<String>,
-    pub description: Option<String>,
-}
-
 #[derive(Default)]
 pub struct InputState {
     // TODO: move all of these to config
     pub reload_keybind: Option<(ModifierMask, Keysym)>,
     pub kill_keybind: Option<(ModifierMask, Keysym)>,
 
-    pub keybinds: IndexMap<(ModifierMask, Keysym), KeybindData>,
-    pub mousebinds: HashMap<
-        (ModifierMask, u32, set_mousebind_request::MouseEdge),
-        UnboundedSender<Result<SetMousebindResponse, tonic::Status>>,
-    >,
+    pub bind_state: BindState,
+
     //--------------------------------------------------
     #[allow(clippy::type_complexity)]
     pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
     /// All libinput devices that have been connected
     pub libinput_devices: Vec<input::Device>,
-    // Keys that were used in a keybind and should not be released
-    no_release_keys: HashSet<u32>,
 }
 
 impl InputState {
     pub fn clear(&mut self) {
         self.reload_keybind = None;
         self.kill_keybind = None;
-        self.keybinds.clear();
-        self.mousebinds.clear();
         self.libinput_settings.clear();
+        self.bind_state.clear();
     }
 }
 
@@ -144,8 +130,6 @@ impl std::fmt::Debug for InputState {
             .field("reload_keybind", &self.reload_keybind)
             .field("kill_keybind", &self.kill_keybind)
             .field("libinput_devices", &self.libinput_devices)
-            .field("keybinds", &self.keybinds)
-            .field("mousebinds", &self.mousebinds)
             .field("libinput_settings", &"...")
             .finish()
     }
@@ -159,8 +143,6 @@ impl InputState {
 
 #[derive(Debug)]
 enum KeyAction {
-    /// Call a config callback.
-    CallCallback(UnboundedSender<Result<SetKeybindResponse, tonic::Status>>),
     /// Quit the compositor.
     Quit,
     /// Switch ttys.
@@ -466,93 +448,65 @@ impl State {
             serial,
             time,
             |state, modifiers, keysym| {
-                if press_state == KeyState::Released
-                    && state
-                        .pinnacle
-                        .input_state
-                        .no_release_keys
-                        .contains(&event.key_code().into())
-                // TODO: check keycode -> u32
-                {
-                    return FilterResult::Intercept(KeyAction::Suppress);
-                }
-
                 if press_state == KeyState::Pressed {
-                    let mod_mask = ModifierMask::from(modifiers);
-
-                    // TODO: verify rawsyms are the right thing to do
-                    let raw_syms = keysym.raw_syms();
-                    let raw_sym = raw_syms.first();
-                    let mod_sym = keysym.modified_sym();
-
                     if let mut vt @ keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12 =
                         keysym.modified_sym().raw()
                     {
                         vt = vt - keysyms::KEY_XF86Switch_VT_1 + 1;
-                        tracing::info!("Switching to vt {vt}");
                         return FilterResult::Intercept(KeyAction::SwitchVt(vt as i32));
-                    }
-
-                    if !shortcuts_inhibited {
-                        if let Some(keybind_data) = state
-                            .pinnacle
-                            .input_state
-                            .keybinds
-                            .get(&(mod_mask, mod_sym))
-                            .or_else(|| {
-                                raw_sym.and_then(|raw_sym| {
-                                    state
-                                        .pinnacle
-                                        .input_state
-                                        .keybinds
-                                        .get(&(mod_mask, *raw_sym))
-                                })
-                            })
-                        {
-                            if state.pinnacle.lock_state.is_unlocked() {
-                                return FilterResult::Intercept(KeyAction::CallCallback(
-                                    keybind_data.sender.clone(),
-                                ));
-                            }
-                        }
-
-                        if kill_keybind == Some((mod_mask, mod_sym)) {
-                            return FilterResult::Intercept(KeyAction::Quit);
-                        }
-
-                        if reload_keybind == Some((mod_mask, mod_sym)) {
-                            return FilterResult::Intercept(KeyAction::ReloadConfig);
-                        }
                     }
                 }
 
-                FilterResult::Forward
+                // FIXME: metaconfig keybinds
+                // if kill_keybind == Some((mod_mask, mod_sym)) {
+                //     return FilterResult::Intercept(KeyAction::Quit);
+                // }
+                //
+                // if reload_keybind == Some((mod_mask, mod_sym)) {
+                //     return FilterResult::Intercept(KeyAction::ReloadConfig);
+                // }
+
+                if shortcuts_inhibited {
+                    return FilterResult::Forward;
+                }
+
+                let Some(raw_sym) = keysym.raw_latin_sym_or_raw_current_sym() else {
+                    return FilterResult::Forward;
+                };
+
+                let edge = match press_state {
+                    KeyState::Released => bind::Edge::Release,
+                    KeyState::Pressed => bind::Edge::Press,
+                };
+
+                let suppress = state.pinnacle.input_state.bind_state.keybinds.key(
+                    raw_sym,
+                    *modifiers,
+                    edge,
+                    state.pinnacle.input_state.bind_state.current_layer(),
+                );
+
+                if suppress {
+                    FilterResult::Intercept(KeyAction::Suppress)
+                } else {
+                    FilterResult::Forward
+                }
             },
         );
 
-        if let Some(KeyAction::Suppress) = action.as_ref() {
-            self.pinnacle
-                .input_state
-                .no_release_keys
-                .remove(&event.key_code().into()); // TODO: check keycode -> u32
-            return;
-        }
-
         if let Some(action) = action {
-            self.pinnacle
-                .input_state
-                .no_release_keys
-                .insert(event.key_code().into()); // TODO: check keycode -> u32
             match action {
-                KeyAction::CallCallback(sender) => {
-                    let _ = sender.send(Ok(SetKeybindResponse {}));
-                }
                 KeyAction::Quit => {
                     self.pinnacle.shutdown();
                 }
                 KeyAction::SwitchVt(vt) => {
                     self.switch_vt(vt);
-                    self.pinnacle.input_state.no_release_keys.clear();
+                    self.pinnacle
+                        .input_state
+                        .bind_state
+                        .keybinds
+                        .last_pressed_triggered_binds
+                        .clear();
                 }
                 KeyAction::ReloadConfig => {
                     info!("Reloading config");
@@ -560,7 +514,7 @@ impl State {
                         .start_config(false)
                         .expect("failed to restart config");
                 }
-                KeyAction::Suppress => unreachable!("handled above"),
+                KeyAction::Suppress => (),
             }
         }
     }
@@ -581,20 +535,22 @@ impl State {
 
         let pointer_loc = pointer.current_location();
 
-        let mod_mask = ModifierMask::from(keyboard.modifier_state());
+        let mods = keyboard.modifier_state();
 
-        let mouse_edge = match button_state {
-            ButtonState::Released => set_mousebind_request::MouseEdge::Release,
-            ButtonState::Pressed => set_mousebind_request::MouseEdge::Press,
+        let edge = match button_state {
+            ButtonState::Released => bind::Edge::Release,
+            ButtonState::Pressed => bind::Edge::Press,
         };
 
-        if let Some(stream) = self
-            .pinnacle
-            .input_state
-            .mousebinds
-            .get(&(mod_mask, button, mouse_edge))
-        {
-            let _ = stream.send(Ok(SetMousebindResponse {}));
+        let current_layer = self.pinnacle.input_state.bind_state.current_layer();
+        let suppress =
+            self.pinnacle
+                .input_state
+                .bind_state
+                .mousebinds
+                .btn(button, mods, edge, current_layer);
+
+        if suppress && !pointer.is_grabbed() {
             return;
         }
 

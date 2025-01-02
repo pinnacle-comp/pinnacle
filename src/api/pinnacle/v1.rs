@@ -63,7 +63,7 @@ impl v1::pinnacle_service_server::PinnacleService for super::PinnacleService {
             let mut response = BackendResponse::default();
             response.set_backend(backend);
 
-            response
+            Ok(response)
         })
         .await
     }

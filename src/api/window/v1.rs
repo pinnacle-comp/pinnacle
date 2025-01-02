@@ -29,7 +29,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .map(|win| win.with_state(|state| state.id.0))
                 .collect::<Vec<_>>();
 
-            GetResponse { window_ids }
+            Ok(GetResponse { window_ids })
         })
         .await
     }
@@ -43,7 +43,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .and_then(|win| win.class())
                 .unwrap_or_default();
 
-            GetAppIdResponse { app_id }
+            Ok(GetAppIdResponse { app_id })
         })
         .await
     }
@@ -57,7 +57,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .and_then(|win| win.title())
                 .unwrap_or_default();
 
-            GetTitleResponse { title }
+            Ok(GetTitleResponse { title })
         })
         .await
     }
@@ -70,9 +70,9 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .window(&state.pinnacle)
                 .and_then(|win| state.pinnacle.space.element_location(&win));
 
-            GetLocResponse {
+            Ok(GetLocResponse {
                 loc: loc.map(|loc| util::v1::Point { x: loc.x, y: loc.y }),
-            }
+            })
         })
         .await
     }
@@ -85,12 +85,12 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .window(&state.pinnacle)
                 .map(|win| win.geometry().size);
 
-            GetSizeResponse {
+            Ok(GetSizeResponse {
                 size: size.map(|size| util::v1::Size {
                     width: size.w.try_into().unwrap_or_default(),
                     height: size.h.try_into().unwrap_or_default(),
                 }),
-            }
+            })
         })
         .await
     }
@@ -113,7 +113,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 })
                 .unwrap_or_default();
 
-            GetFocusedResponse { focused }
+            Ok(GetFocusedResponse { focused })
         })
         .await
     }
@@ -130,7 +130,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 .map(|win| win.with_state(|state| state.window_state))
                 .unwrap_or(WindowState::Tiled);
 
-            GetLayoutModeResponse {
+            Ok(GetLayoutModeResponse {
                 layout_mode: match layout_mode {
                     WindowState::Tiled => LayoutMode::Tiled,
                     WindowState::Floating => LayoutMode::Floating,
@@ -138,7 +138,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                     WindowState::Fullscreen { .. } => LayoutMode::Fullscreen,
                 }
                 .into(),
-            }
+            })
         })
         .await
     }
@@ -163,7 +163,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 })
                 .unwrap_or_default();
 
-            GetTagIdsResponse { tag_ids }
+            Ok(GetTagIdsResponse { tag_ids })
         })
         .await
     }

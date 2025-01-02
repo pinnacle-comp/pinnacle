@@ -25,7 +25,7 @@ impl v1::tag_service_server::TagService for super::TagService {
 
             let tag_ids = tags.map(|tag| tag.id().to_inner()).collect();
 
-            GetResponse { tag_ids }
+            Ok(GetResponse { tag_ids })
         })
         .await
     }
@@ -41,7 +41,7 @@ impl v1::tag_service_server::TagService for super::TagService {
                 .map(|tag| tag.active())
                 .unwrap_or_default();
 
-            GetActiveResponse { active }
+            Ok(GetActiveResponse { active })
         })
         .await
     }
@@ -54,7 +54,7 @@ impl v1::tag_service_server::TagService for super::TagService {
                 .map(|tag| tag.name())
                 .unwrap_or_default();
 
-            GetNameResponse { name }
+            Ok(GetNameResponse { name })
         })
         .await
     }
@@ -70,7 +70,7 @@ impl v1::tag_service_server::TagService for super::TagService {
                 .and_then(|tag| Some(tag.output(&state.pinnacle)?.name()))
                 .unwrap_or_default();
 
-            GetOutputNameResponse { output_name }
+            Ok(GetOutputNameResponse { output_name })
         })
         .await
     }
@@ -127,7 +127,7 @@ impl v1::tag_service_server::TagService for super::TagService {
 
             let tag_ids = tags.into_iter().map(|tag| tag.id().to_inner()).collect();
 
-            AddResponse { tag_ids }
+            Ok(AddResponse { tag_ids })
         })
         .await
     }

@@ -1,7 +1,7 @@
 use crate::{
     api::{
-        layout::LayoutService, output::OutputService, pinnacle::PinnacleService,
-        signal::SignalService, tag::TagService, window::WindowService, InputService,
+        input::InputService, layout::LayoutService, output::OutputService,
+        pinnacle::PinnacleService, signal::SignalService, tag::TagService, window::WindowService,
         ProcessService, RenderService,
     },
     cli::Cli,
@@ -633,7 +633,7 @@ impl Pinnacle {
             .add_service(pinnacle_api_defs::pinnacle::window::v1::window_service_server::WindowServiceServer::new(window_service))
             .add_service(pinnacle_api_defs::pinnacle::tag::v1::tag_service_server::TagServiceServer::new(tag_service))
             .add_service(pinnacle_api_defs::pinnacle::output::v1::output_service_server::OutputServiceServer::new(output_service))
-            .add_service(InputServiceServer::new(input_service))
+            .add_service(pinnacle_api_defs::pinnacle::input::v1::input_service_server::InputServiceServer::new(input_service))
             .add_service(ProcessServiceServer::new(process_service))
             .add_service(pinnacle_api_defs::pinnacle::signal::v1::signal_service_server::SignalServiceServer::new(signal_service))
             .add_service(LayoutServiceServer::new(layout_service))
