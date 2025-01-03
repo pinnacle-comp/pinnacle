@@ -1,5 +1,6 @@
 use pinnacle_api::input;
-use pinnacle_api::input::libinput::LibinputSetting;
+use pinnacle_api::input::libinput::AccelProfile;
+use pinnacle_api::input::libinput::Capability;
 use pinnacle_api::input::Bind;
 use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
@@ -360,7 +361,16 @@ async fn main() {
             .description(format!("Toggle tag {tag_name} on the focused window"));
     }
 
-    input::set_libinput_setting(LibinputSetting::Tap(true));
+    input::libinput::for_all_devices(|device| {
+        // TODO: remove this
+        if device.capabilities().contains(Capability::POINTER) {
+            device.set_accel_profile(AccelProfile::Flat);
+        }
+
+        if device.get_type().is_touchpad() {
+            device.set_natural_scroll(true);
+        }
+    });
 
     // Request all windows use client-side decorations.
     // window::add_window_rule(

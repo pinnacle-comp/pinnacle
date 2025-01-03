@@ -25,7 +25,10 @@ use tokio::sync::{
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::Streaming;
 
-use crate::{block_on_tokio, output::OutputHandle, tag::TagHandle, window::WindowHandle};
+use crate::{
+    block_on_tokio, input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle,
+    window::WindowHandle,
+};
 
 pub(crate) trait Signal {
     type Callback;
@@ -231,6 +234,22 @@ signals! {
             },
         }
     }
+    /// Signals relating to input events.
+    InputSignal => {
+        /// A tag was set to active or not active.
+        InputDeviceAdded = {
+            enum_name = DeviceAdded,
+            callback_type = Box<dyn FnMut(&DeviceHandle) + Send + 'static>,
+            client_request = input_device_added,
+            on_response = |response, callbacks| {
+                let handle = DeviceHandle { sysname: response.device_sysname };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
+    }
 }
 
 pub(crate) type SingleOutputFn = Box<dyn FnMut(&OutputHandle) + Send + 'static>;
@@ -246,6 +265,8 @@ pub(crate) struct SignalState {
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
 
     pub(crate) tag_active: SignalData<TagActive>,
+
+    pub(crate) input_device_added: SignalData<InputDeviceAdded>,
 }
 
 impl std::fmt::Debug for SignalState {
@@ -264,6 +285,7 @@ impl SignalState {
             window_pointer_enter: SignalData::new(),
             window_pointer_leave: SignalData::new(),
             tag_active: SignalData::new(),
+            input_device_added: SignalData::new(),
         }
     }
 
@@ -275,6 +297,7 @@ impl SignalState {
         self.window_pointer_enter.reset();
         self.window_pointer_leave.reset();
         self.tag_active.reset();
+        self.input_device_added.reset();
     }
 }
 

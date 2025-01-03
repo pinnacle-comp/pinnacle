@@ -6,10 +6,11 @@ use std::{
 use pinnacle_api_defs::pinnacle::signal::{
     self,
     v1::{
-        OutputConnectRequest, OutputDisconnectRequest, OutputDisconnectResponse, OutputMoveRequest,
-        OutputMoveResponse, OutputResizeRequest, OutputResizeResponse, SignalRequest,
-        StreamControl, TagActiveRequest, TagActiveResponse, WindowPointerEnterRequest,
-        WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+        InputDeviceAddedRequest, InputDeviceAddedResponse, OutputConnectRequest,
+        OutputDisconnectRequest, OutputDisconnectResponse, OutputMoveRequest, OutputMoveResponse,
+        OutputResizeRequest, OutputResizeResponse, SignalRequest, StreamControl, TagActiveRequest,
+        TagActiveResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
+        WindowPointerLeaveRequest, WindowPointerLeaveResponse,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -38,6 +39,9 @@ pub struct SignalState {
 
     // Tag
     pub tag_active: TagActive,
+
+    // Input
+    pub input_device_added: InputDeviceAdded,
 }
 
 impl SignalState {
@@ -49,6 +53,7 @@ impl SignalState {
         self.window_pointer_enter.clear();
         self.window_pointer_leave.clear();
         self.tag_active.clear();
+        self.input_device_added.clear();
     }
 }
 
@@ -225,6 +230,27 @@ impl Signal for TagActive {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct InputDeviceAdded {
+    v1: SignalData<signal::v1::InputDeviceAddedResponse>,
+}
+
+impl Signal for InputDeviceAdded {
+    type Args<'a> = &'a smithay::reexports::input::Device;
+
+    fn signal(&mut self, device: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::InputDeviceAddedResponse {
+                device_sysname: device.sysname().to_string(),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
 ////////////////////////////////////////////////////
 
 type ClientSignalId = u32;
@@ -340,6 +366,8 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
 
+    type InputDeviceAddedStream = ResponseStream<InputDeviceAddedResponse>;
+
     async fn output_connect(
         &self,
         request: Request<Streaming<OutputConnectRequest>>,
@@ -414,6 +442,17 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.tag_active.v1
+        })
+    }
+
+    async fn input_device_added(
+        &self,
+        request: Request<Streaming<InputDeviceAddedRequest>>,
+    ) -> Result<Response<Self::InputDeviceAddedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.input_device_added.v1
         })
     }
 }

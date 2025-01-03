@@ -12,19 +12,19 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_libinput_setting_request::{CalibrationMatrix, Setting},
         BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindStreamRequest,
-        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest,
-        SetLibinputSettingRequest, SetQuitBindRequest, SetReloadConfigBindRequest,
-        SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
+        SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
 
-use crate::{client::Client, BlockOnTokio};
-
-use self::libinput::LibinputSetting;
+use crate::{
+    client::Client,
+    signal::{InputSignal, SignalHandle},
+    signal_module, BlockOnTokio,
+};
 
 pub mod libinput;
 
@@ -531,62 +531,6 @@ pub fn set_repeat_rate(rate: i32, delay: i32) {
         .unwrap();
 }
 
-/// Set a libinput setting.
-///
-/// From [freedesktop.org](https://www.freedesktop.org/wiki/Software/libinput/):
-/// > libinput is a library to handle input devices in Wayland compositors
-///
-/// As such, this method allows you to set various settings related to input devices.
-/// This includes things like pointer acceleration and natural scrolling.
-///
-/// See [`LibinputSetting`] for all the settings you can change.
-///
-/// Note: currently Pinnacle applies anything set here to *every* device, regardless of what it
-/// actually is. This will be fixed in the future.
-///
-/// # Examples
-///
-/// ```
-/// use pinnacle_api::input::libinput::*;
-///
-/// // Set pointer acceleration to flat
-/// input.set_libinput_setting(LibinputSetting::AccelProfile(AccelProfile::Flat));
-///
-/// // Enable natural scrolling (reverses scroll direction; usually used with trackpads)
-/// input.set_libinput_setting(LibinputSetting::NaturalScroll(true));
-/// ```
-pub fn set_libinput_setting(setting: LibinputSetting) {
-    let setting = match setting {
-        LibinputSetting::AccelProfile(profile) => Setting::AccelProfile(profile as i32),
-        LibinputSetting::AccelSpeed(speed) => Setting::AccelSpeed(speed),
-        LibinputSetting::CalibrationMatrix(matrix) => {
-            Setting::CalibrationMatrix(CalibrationMatrix {
-                matrix: matrix.to_vec(),
-            })
-        }
-        LibinputSetting::ClickMethod(method) => Setting::ClickMethod(method as i32),
-        LibinputSetting::DisableWhileTyping(disable) => Setting::DisableWhileTyping(disable),
-        LibinputSetting::LeftHanded(enable) => Setting::LeftHanded(enable),
-        LibinputSetting::MiddleEmulation(enable) => Setting::MiddleEmulation(enable),
-        LibinputSetting::RotationAngle(angle) => Setting::RotationAngle(angle),
-        LibinputSetting::ScrollButton(button) => Setting::RotationAngle(button),
-        LibinputSetting::ScrollButtonLock(enable) => Setting::ScrollButtonLock(enable),
-        LibinputSetting::ScrollMethod(method) => Setting::ScrollMethod(method as i32),
-        LibinputSetting::NaturalScroll(enable) => Setting::NaturalScroll(enable),
-        LibinputSetting::TapButtonMap(map) => Setting::TapButtonMap(map as i32),
-        LibinputSetting::TapDrag(enable) => Setting::TapDrag(enable),
-        LibinputSetting::TapDragLock(enable) => Setting::TapDragLock(enable),
-        LibinputSetting::Tap(enable) => Setting::Tap(enable),
-    };
-
-    Client::input()
-        .set_libinput_setting(SetLibinputSettingRequest {
-            setting: Some(setting),
-        })
-        .block_on_tokio()
-        .unwrap();
-}
-
 /// Set the xcursor theme.
 ///
 /// Pinnacle reads `$XCURSOR_THEME` on startup to determine the theme.
@@ -719,4 +663,12 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
             kind: bind_kind,
         })
     })
+}
+
+pub fn connect_signal(signal: InputSignal) -> SignalHandle {
+    let mut signal_state = signal_module();
+
+    match signal {
+        InputSignal::DeviceAdded(f) => signal_state.input_device_added.add_callback(f),
+    }
 }

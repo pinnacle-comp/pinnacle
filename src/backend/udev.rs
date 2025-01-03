@@ -256,7 +256,30 @@ impl Udev {
                     pinnacle
                         .loop_handle
                         .insert_source(libinput_backend, move |event, _, state| {
-                            state.pinnacle.apply_libinput_settings(&event);
+                            match &event {
+                                smithay::backend::input::InputEvent::DeviceAdded { device } => {
+                                    state
+                                        .pinnacle
+                                        .input_state
+                                        .libinput_state
+                                        .devices
+                                        .insert(device.clone());
+                                    state
+                                        .pinnacle
+                                        .signal_state
+                                        .input_device_added
+                                        .signal(device);
+                                }
+                                smithay::backend::input::InputEvent::DeviceRemoved { device } => {
+                                    state
+                                        .pinnacle
+                                        .input_state
+                                        .libinput_state
+                                        .devices
+                                        .remove(device);
+                                }
+                                _ => (),
+                            }
                             state.process_input_event(event);
                         });
 

@@ -70,6 +70,13 @@ message TagActiveResponse {
     bool active = 2;
 }
 
+message InputDeviceAddedRequest {
+    StreamControl control = 1;
+}
+message InputDeviceAddedResponse {
+    string device_sysname = 1;
+}
+
 service SignalService {
     rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
     rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
@@ -80,4 +87,6 @@ service SignalService {
     rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
     
     rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
+
+    rpc InputDeviceAdded(stream InputDeviceAddedRequest) returns (stream InputDeviceAddedResponse);
 }

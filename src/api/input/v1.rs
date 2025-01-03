@@ -1,13 +1,15 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_libinput_setting_request::{AccelProfile, ClickMethod, ScrollMethod, TapButtonMap},
-        BindInfo, BindRequest, BindResponse, EnterBindLayerRequest, GetBindInfosRequest,
-        GetBindInfosResponse, GetBindLayerStackRequest, GetBindLayerStackResponse,
-        KeybindStreamRequest, KeybindStreamResponse, MousebindStreamRequest,
-        MousebindStreamResponse, SetBindDescriptionRequest, SetBindGroupRequest,
-        SetLibinputSettingRequest, SetQuitBindRequest, SetReloadConfigBindRequest,
-        SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
+        GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
+        GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
+        GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
+        GetDevicesRequest, GetDevicesResponse, KeybindStreamRequest, KeybindStreamResponse,
+        MousebindStreamRequest, MousebindStreamResponse, ScrollMethod, SendEventsMode,
+        SetBindDescriptionRequest, SetBindGroupRequest, SetDeviceLibinputSettingRequest,
+        SetQuitBindRequest, SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest,
+        SetXkbConfigRequest, TapButtonMap,
     },
 };
 use smithay::input::keyboard::XkbConfig;
@@ -17,7 +19,10 @@ use tracing::error;
 
 use crate::{
     api::{run_server_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult},
-    input::bind::{Edge, ModMask},
+    input::{
+        bind::{Edge, ModMask},
+        libinput::device_type,
+    },
 };
 
 use super::InputService;
@@ -497,19 +502,20 @@ impl input::v1::input_service_server::InputService for InputService {
         .await
     }
 
-    async fn set_libinput_setting(
+    // FIXME: FROM IMPLS PLEASE
+    async fn set_device_libinput_setting(
         &self,
-        request: Request<SetLibinputSettingRequest>,
+        request: Request<SetDeviceLibinputSettingRequest>,
     ) -> TonicResult<()> {
         let request = request.into_inner();
 
+        let device_sysname = request.device_sysname;
         let setting = request
             .setting
             .ok_or_else(|| Status::invalid_argument("no setting specified"))?;
 
-        let discriminant = std::mem::discriminant(&setting);
-
-        use pinnacle_api_defs::pinnacle::input::v1::set_libinput_setting_request::Setting;
+        use pinnacle_api_defs::pinnacle::input::v1::set_device_libinput_setting_request::Setting;
+        // TODO: move into input/libinput.rs
         let apply_setting: Box<dyn Fn(&mut libinput::Device) + Send> = match setting {
             Setting::AccelProfile(profile) => {
                 let profile = AccelProfile::try_from(profile).unwrap_or(AccelProfile::Unspecified);
@@ -628,18 +634,42 @@ impl input::v1::input_service_server::InputService for InputService {
             Setting::Tap(enable) => Box::new(move |device| {
                 let _ = device.config_tap_set_enabled(enable);
             }),
+            Setting::SendEventsMode(mode) => {
+                let mode = SendEventsMode::try_from(mode).unwrap_or(SendEventsMode::Unspecified);
+
+                match mode {
+                    SendEventsMode::Unspecified => {
+                        return Err(Status::invalid_argument("unspecified send events mode"));
+                    }
+                    SendEventsMode::Enabled => Box::new(|device| {
+                        let _ =
+                            device.config_send_events_set_mode(libinput::SendEventsMode::ENABLED);
+                    }),
+                    SendEventsMode::Disabled => Box::new(|device| {
+                        let _ =
+                            device.config_send_events_set_mode(libinput::SendEventsMode::DISABLED);
+                    }),
+                    SendEventsMode::DisabledOnExternalMouse => Box::new(|device| {
+                        let _ = device.config_send_events_set_mode(
+                            libinput::SendEventsMode::DISABLED_ON_EXTERNAL_MOUSE,
+                        );
+                    }),
+                }
+            }
         };
 
         run_unary_no_response(&self.sender, move |state| {
-            for device in state.pinnacle.input_state.libinput_devices.iter_mut() {
-                apply_setting(device);
-            }
-
-            state
+            let device = state
                 .pinnacle
                 .input_state
-                .libinput_settings
-                .insert(discriminant, apply_setting);
+                .libinput_state
+                .devices
+                .iter()
+                .find(|device| device.sysname() == device_sysname);
+
+            if let Some(device) = device {
+                apply_setting(&mut device.clone());
+            }
         })
         .await
     }
@@ -662,6 +692,120 @@ impl input::v1::input_service_server::InputService for InputService {
             if let Some(output) = state.pinnacle.focused_output().cloned() {
                 state.schedule_render(&output)
             }
+        })
+        .await
+    }
+
+    async fn get_devices(
+        &self,
+        _request: Request<GetDevicesRequest>,
+    ) -> TonicResult<GetDevicesResponse> {
+        run_unary(&self.sender, |state| {
+            let device_sysnames = state
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .iter()
+                .map(|device| device.sysname().to_string())
+                .collect();
+
+            Ok(GetDevicesResponse { device_sysnames })
+        })
+        .await
+    }
+
+    async fn get_device_info(
+        &self,
+        request: Request<GetDeviceInfoRequest>,
+    ) -> TonicResult<GetDeviceInfoResponse> {
+        let device_sysname = request.into_inner().device_sysname;
+
+        run_unary(&self.sender, move |state| {
+            let info = state
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .iter()
+                .find(|device| device.sysname() == device_sysname)
+                .map(|device| GetDeviceInfoResponse {
+                    name: device.name().to_string(),
+                    product_id: device.id_product(),
+                    vendor_id: device.id_vendor(),
+                })
+                .unwrap_or_default();
+
+            Ok(info)
+        })
+        .await
+    }
+
+    async fn get_device_capabilities(
+        &self,
+        request: Request<GetDeviceCapabilitiesRequest>,
+    ) -> TonicResult<GetDeviceCapabilitiesResponse> {
+        let device_sysname = request.into_inner().device_sysname;
+
+        run_unary(&self.sender, move |state| {
+            let caps = state
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .iter()
+                .find(|device| device.sysname() == device_sysname)
+                .map(|device| GetDeviceCapabilitiesResponse {
+                    keyboard: device.has_capability(libinput::DeviceCapability::Keyboard),
+                    pointer: device.has_capability(libinput::DeviceCapability::Pointer),
+                    touch: device.has_capability(libinput::DeviceCapability::Touch),
+                    tablet_tool: device.has_capability(libinput::DeviceCapability::TabletTool),
+                    tablet_pad: device.has_capability(libinput::DeviceCapability::TabletPad),
+                    gesture: device.has_capability(libinput::DeviceCapability::Gesture),
+                    switch: device.has_capability(libinput::DeviceCapability::Switch),
+                })
+                .unwrap_or_default();
+
+            Ok(caps)
+        })
+        .await
+    }
+
+    async fn get_device_type(
+        &self,
+        request: Request<GetDeviceTypeRequest>,
+    ) -> TonicResult<GetDeviceTypeResponse> {
+        let device_sysname = request.into_inner().device_sysname;
+
+        run_unary(&self.sender, move |state| {
+            let device_type = state
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .iter()
+                .find(|device| device.sysname() == device_sysname)
+                .map(|device| match device_type(device) {
+                    crate::input::libinput::DeviceType::Unknown => {
+                        input::v1::DeviceType::Unspecified
+                    }
+                    crate::input::libinput::DeviceType::Touchpad => input::v1::DeviceType::Touchpad,
+                    crate::input::libinput::DeviceType::Trackball => {
+                        input::v1::DeviceType::Trackball
+                    }
+                    crate::input::libinput::DeviceType::Trackpoint => {
+                        input::v1::DeviceType::Trackpoint
+                    }
+                    crate::input::libinput::DeviceType::Mouse => input::v1::DeviceType::Mouse,
+                    crate::input::libinput::DeviceType::Tablet => input::v1::DeviceType::Tablet,
+                    crate::input::libinput::DeviceType::Keyboard => input::v1::DeviceType::Keyboard,
+                    crate::input::libinput::DeviceType::Switch => input::v1::DeviceType::Switch,
+                })
+                .unwrap_or_default();
+
+            Ok(GetDeviceTypeResponse {
+                device_type: device_type.into(),
+            })
         })
         .await
     }

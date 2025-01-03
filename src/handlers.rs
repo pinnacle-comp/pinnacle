@@ -667,8 +667,8 @@ impl SeatHandler for State {
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
-        for device in self.pinnacle.input_state.libinput_devices.iter_mut() {
-            device.led_update(led_state.into());
+        for device in self.pinnacle.input_state.libinput_state.devices.iter() {
+            device.clone().led_update(led_state.into());
         }
     }
 }

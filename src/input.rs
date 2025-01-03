@@ -15,8 +15,9 @@ use crate::{
     window::WindowElement,
 };
 use bind::BindState;
+use libinput::LibinputState;
 // FIXME: remove
-use pinnacle_api_defs::pinnacle::input::v1::set_libinput_setting_request::Setting;
+use pinnacle_api_defs::pinnacle::input::v1::set_device_libinput_setting_request::Setting;
 use smithay::{
     backend::{
         input::{
@@ -99,38 +100,15 @@ impl From<&ModifiersState> for ModifierMask {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InputState {
-    // TODO: move all of these to config
-    pub reload_keybind: Option<(ModifierMask, Keysym)>,
-    pub kill_keybind: Option<(ModifierMask, Keysym)>,
-
     pub bind_state: BindState,
-
-    //--------------------------------------------------
-    #[allow(clippy::type_complexity)]
-    pub libinput_settings: HashMap<Discriminant<Setting>, Box<dyn Fn(&mut input::Device) + Send>>,
-    /// All libinput devices that have been connected
-    pub libinput_devices: Vec<input::Device>,
+    pub libinput_state: LibinputState,
 }
 
 impl InputState {
     pub fn clear(&mut self) {
-        self.reload_keybind = None;
-        self.kill_keybind = None;
-        self.libinput_settings.clear();
         self.bind_state.clear();
-    }
-}
-
-impl std::fmt::Debug for InputState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InputState")
-            .field("reload_keybind", &self.reload_keybind)
-            .field("kill_keybind", &self.kill_keybind)
-            .field("libinput_devices", &self.libinput_devices)
-            .field("libinput_settings", &"...")
-            .finish()
     }
 }
 
