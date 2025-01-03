@@ -20,19 +20,7 @@
 # The command Pinnacle will run on startup and when you reload your config.
 # Paths are relative to the directory the metaconfig.toml file is in.
 # This must be an array.
-command = ["cargo", "run"]
-
-### Keybinds ###
-# Each keybind takes in a table with two fields: `modifiers` and `key`.
-# - `modifiers` can be one of "Ctrl", "Alt", "Shift", or "Super".
-# - `key` can be a string of any lowercase letter, number,
-#   "numN" where N is a number for numpad keys, or "esc"/"escape".
-# Support for any xkbcommon key is planned for a future update.
-
-# The keybind that will reload your config.
-reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-# The keybind that will kill Pinnacle.
-kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+run = ["cargo", "run"]
 
 ### Socket directory ###
 # Pinnacle will open a Unix socket at `$XDG_RUNTIME_DIR` by default, falling back to `/tmp` if it doesn't exist.

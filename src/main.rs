@@ -8,7 +8,7 @@ use std::{
 use anyhow::Context;
 use pinnacle::{
     cli::{self, Cli},
-    config::{get_config_dir, parse_metaconfig, Metaconfig},
+    config::{get_config_dir, parse_startup_config, StartupConfig},
     state::State,
     util::increase_nofile_rlimit,
 };
@@ -85,47 +85,9 @@ async fn main() -> anyhow::Result<()> {
         warn!("You may see LOTS of file descriptors open under Pinnacle.");
     }
 
-    let backend: cli::Backend = match (cli.backend, cli.force) {
-        (None, _) => {
-            if in_graphical_env {
-                cli::Backend::Winit
-            } else {
-                cli::Backend::Udev
-            }
-        }
-        (Some(cli::Backend::Winit), force) => {
-            if !in_graphical_env {
-                if force {
-                    warn!("Starting winit backend with no detected graphical environment");
-                    cli::Backend::Winit
-                } else {
-                    warn!("Both WAYLAND_DISPLAY and DISPLAY are not set.");
-                    warn!("If you are trying to run the winit backend in a tty, it won't work.");
-                    warn!("If you really want to, additionally pass in the `--force` flag.");
-                    return Ok(());
-                }
-            } else {
-                cli::Backend::Winit
-            }
-        }
-        (Some(cli::Backend::Udev), force) => {
-            if in_graphical_env {
-                if force {
-                    warn!("Starting udev backend with a detected graphical environment");
-                    cli::Backend::Udev
-                } else {
-                    warn!("WAYLAND_DISPLAY and/or DISPLAY are set.");
-                    warn!("If you are trying to run the udev backend in a graphical environment,");
-                    warn!("it won't work and may mess some things up.");
-                    warn!("If you really want to, additionally pass in the `--force` flag.");
-                    return Ok(());
-                }
-            } else {
-                cli::Backend::Udev
-            }
-        }
-        #[cfg(feature = "testing")]
-        (Some(cli::Backend::Dummy), _) => cli::Backend::Dummy,
+    let backend = match in_graphical_env {
+        true => cli::Backend::Winit,
+        false => cli::Backend::Udev,
     };
 
     let config_dir = cli
@@ -136,18 +98,18 @@ async fn main() -> anyhow::Result<()> {
     // Parse the metaconfig once to resolve it with CLI flags.
     // The metaconfig is parsed a second time when `start_config`
     // is called below which is not ideal but I'm lazy.
-    let metaconfig = match parse_metaconfig(&config_dir) {
+    let startup_config = match parse_startup_config(&config_dir) {
         Ok(metaconfig) => metaconfig,
         Err(err) => {
             warn!(
                 "Could not load `metaconfig.toml` at {}: {err}",
                 config_dir.display()
             );
-            Metaconfig::default()
+            StartupConfig::default()
         }
     };
 
-    let metaconfig = metaconfig.merge_and_resolve(Some(&cli), &config_dir)?;
+    let startup_config = startup_config.merge_and_resolve(Some(&cli), &config_dir)?;
 
     let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
 
@@ -161,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
 
     state
         .pinnacle
-        .start_grpc_server(&metaconfig.socket_dir.clone())?;
+        .start_grpc_server(&startup_config.socket_dir.clone())?;
 
     #[cfg(feature = "snowcap")]
     {
@@ -192,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
         state.pinnacle.snowcap_join_handle = Some(join_handle);
     }
 
-    if !metaconfig.no_xwayland {
+    if !startup_config.no_xwayland {
         match state.pinnacle.insert_xwayland_source() {
             Ok(()) => {
                 // Wait for xwayland to start so the config gets DISPLAY
@@ -205,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    if !metaconfig.no_config {
+    if !startup_config.no_config {
         state.pinnacle.start_config(false)?;
     } else {
         info!("`no-config` option was set, not spawning config");

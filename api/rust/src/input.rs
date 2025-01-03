@@ -15,7 +15,8 @@ use pinnacle_api_defs::pinnacle::input::{
         set_libinput_setting_request::{CalibrationMatrix, Setting},
         BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindStreamRequest,
         MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest,
-        SetLibinputSettingRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        SetLibinputSettingRequest, SetQuitBindRequest, SetReloadConfigBindRequest,
+        SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -159,6 +160,66 @@ impl BindLayer {
     }
 }
 
+/// Functionality common to all bind types.
+pub trait Bind {
+    /// Sets this bind's group.
+    fn group(&mut self, group: impl ToString) -> &mut Self;
+    /// Sets this bind's description.
+    fn description(&mut self, desc: impl ToString) -> &mut Self;
+    /// Sets this bind as a quit keybind.
+    fn set_as_quit(&mut self) -> &mut Self;
+    /// Sets this bind as a reload config keybind.
+    fn set_as_reload_config(&mut self) -> &mut Self;
+}
+
+macro_rules! bind_impl {
+    ($ty:ty) => {
+        impl Bind for $ty {
+            fn group(&mut self, group: impl ToString) -> &mut Self {
+                Client::input()
+                    .set_bind_group(SetBindGroupRequest {
+                        bind_id: self.bind_id,
+                        group: Some(group.to_string()),
+                    })
+                    .block_on_tokio()
+                    .unwrap();
+                self
+            }
+
+            fn description(&mut self, desc: impl ToString) -> &mut Self {
+                Client::input()
+                    .set_bind_description(SetBindDescriptionRequest {
+                        bind_id: self.bind_id,
+                        desc: Some(desc.to_string()),
+                    })
+                    .block_on_tokio()
+                    .unwrap();
+                self
+            }
+
+            fn set_as_quit(&mut self) -> &mut Self {
+                Client::input()
+                    .set_quit_bind(SetQuitBindRequest {
+                        bind_id: self.bind_id,
+                    })
+                    .block_on_tokio()
+                    .unwrap();
+                self
+            }
+
+            fn set_as_reload_config(&mut self) -> &mut Self {
+                Client::input()
+                    .set_reload_config_bind(SetReloadConfigBindRequest {
+                        bind_id: self.bind_id,
+                    })
+                    .block_on_tokio()
+                    .unwrap();
+                self
+            }
+        }
+    };
+}
+
 enum Edge {
     Press,
     Release,
@@ -168,6 +229,8 @@ pub struct Keybind {
     bind_id: u32,
     callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
 }
+
+bind_impl!(Keybind);
 
 pub fn keybind(mods: Mod, key: impl ToKeysym) -> Keybind {
     BindLayer::DEFAULT.keybind(mods, key)
@@ -189,28 +252,6 @@ impl Keybind {
             .get_or_insert_with(|| new_keybind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_release), Edge::Release));
 
-        self
-    }
-
-    pub fn group(&mut self, group: impl ToString) -> &mut Self {
-        Client::input()
-            .set_bind_group(SetBindGroupRequest {
-                bind_id: self.bind_id,
-                group: Some(group.to_string()),
-            })
-            .block_on_tokio()
-            .unwrap();
-        self
-    }
-
-    pub fn description(&mut self, desc: impl ToString) -> &mut Self {
-        Client::input()
-            .set_bind_description(SetBindDescriptionRequest {
-                bind_id: self.bind_id,
-                desc: Some(desc.to_string()),
-            })
-            .block_on_tokio()
-            .unwrap();
         self
     }
 }
@@ -297,6 +338,8 @@ pub struct Mousebind {
     callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
 }
 
+bind_impl!(Mousebind);
+
 pub fn mousebind(mods: Mod, button: MouseButton) -> Mousebind {
     BindLayer::DEFAULT.mousebind(mods, button)
 }
@@ -317,28 +360,6 @@ impl Mousebind {
             .get_or_insert_with(|| new_mousebind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_release), Edge::Release));
 
-        self
-    }
-
-    pub fn group(&mut self, group: impl ToString) -> &mut Self {
-        Client::input()
-            .set_bind_group(SetBindGroupRequest {
-                bind_id: self.bind_id,
-                group: Some(group.to_string()),
-            })
-            .block_on_tokio()
-            .unwrap();
-        self
-    }
-
-    pub fn description(&mut self, desc: impl ToString) -> &mut Self {
-        Client::input()
-            .set_bind_description(SetBindDescriptionRequest {
-                bind_id: self.bind_id,
-                desc: Some(desc.to_string()),
-            })
-            .block_on_tokio()
-            .unwrap();
         self
     }
 }

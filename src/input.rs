@@ -46,7 +46,6 @@ use smithay::{
         shell::wlr_layer::{self, KeyboardInteractivity, LayerSurfaceCachedState},
     },
 };
-use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info};
 use xkbcommon::xkb::Keysym;
 
@@ -370,9 +369,6 @@ impl State {
         let time = event.time_msec();
         let press_state = event.state();
 
-        let reload_keybind = self.pinnacle.input_state.reload_keybind;
-        let kill_keybind = self.pinnacle.input_state.kill_keybind;
-
         let keyboard = self
             .pinnacle
             .seat
@@ -479,17 +475,20 @@ impl State {
                     KeyState::Pressed => bind::Edge::Press,
                 };
 
-                let suppress = state.pinnacle.input_state.bind_state.keybinds.key(
+                let bind_action = state.pinnacle.input_state.bind_state.keybinds.key(
                     raw_sym,
                     *modifiers,
                     edge,
                     state.pinnacle.input_state.bind_state.current_layer(),
                 );
 
-                if suppress {
-                    FilterResult::Intercept(KeyAction::Suppress)
-                } else {
-                    FilterResult::Forward
+                match bind_action {
+                    bind::BindAction::Forward => FilterResult::Forward,
+                    bind::BindAction::Suppress => FilterResult::Intercept(KeyAction::Suppress),
+                    bind::BindAction::Quit => FilterResult::Intercept(KeyAction::Quit),
+                    bind::BindAction::ReloadConfig => {
+                        FilterResult::Intercept(KeyAction::ReloadConfig)
+                    }
                 }
             },
         );
@@ -543,15 +542,31 @@ impl State {
         };
 
         let current_layer = self.pinnacle.input_state.bind_state.current_layer();
-        let suppress =
+        let bind_action =
             self.pinnacle
                 .input_state
                 .bind_state
                 .mousebinds
                 .btn(button, mods, edge, current_layer);
 
-        if suppress && !pointer.is_grabbed() {
-            return;
+        match bind_action {
+            bind::BindAction::Forward => (),
+            bind::BindAction::Suppress => {
+                if !pointer.is_grabbed() {
+                    return;
+                }
+            }
+            bind::BindAction::Quit => {
+                self.pinnacle.shutdown();
+                return;
+            }
+            bind::BindAction::ReloadConfig => {
+                info!("Reloading config");
+                self.pinnacle
+                    .start_config(false)
+                    .expect("failed to restart config");
+                return;
+            }
         }
 
         if button_state == ButtonState::Pressed {

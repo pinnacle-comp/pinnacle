@@ -1,5 +1,6 @@
 use pinnacle_api::input;
 use pinnacle_api::input::libinput::LibinputSetting;
+use pinnacle_api::input::Bind;
 use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::layout::{
@@ -68,7 +69,10 @@ async fn main() {
         .description("Start an interactive window resize");
 
     input::mousebind(mod_key | Mod::SHIFT, MouseButton::Right)
-        .on_press(|| println!("right click press"))
+        .on_press(|| {
+            pinnacle::reload_config();
+            println!("right click press")
+        })
         .on_release(|| println!("right click release"));
 
     //------------------------
@@ -103,20 +107,28 @@ async fn main() {
         println!("mod o");
     });
 
-    input::keybind(mod_key | Mod::IGNORE_SHIFT, 'o').on_press(move || {
-        println!("mod o");
-    });
-
-    // `mod_key + shift + q` quits Pinnacle
+    #[cfg(not(feature = "snowcap"))]
     input::keybind(mod_key | Mod::SHIFT, 'q')
-        .on_press(|| {
-            #[cfg(feature = "snowcap")]
-            snowcap.integration.quit_prompt().show();
-            #[cfg(not(feature = "snowcap"))]
-            pinnacle::quit();
-        })
+        .set_as_quit()
         .group("Compositor")
         .description("Quit Pinnacle");
+
+    #[cfg(feature = "snowcap")]
+    {
+        // `mod_key + shift + q` shows the quit prompt
+        input::keybind(mod_key | Mod::SHIFT, 'q')
+            .on_press(|| {
+                snowcap.integration.quit_prompt().show();
+            })
+            .group("Compositor")
+            .description("Show quit prompt");
+
+        // `mod_key + ctrl + shift + q` for the hard shutdown
+        input::keybind(mod_key | Mod::CTRL | Mod::SHIFT, 'q')
+            .set_as_quit()
+            .group("Compositor")
+            .description("Quit Pinnacle without prompt");
+    }
 
     // `mod_key + ctrl + r` reloads the config
     input::keybind(mod_key | Mod::SHIFT, 'r')

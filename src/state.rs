@@ -477,9 +477,9 @@ impl Pinnacle {
         if let Some(join_handle) = self.config.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
-            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
-                warn!("Failed to send shutdown signal to config: {err}");
+        if let Some(shutdown_sender) = self.config.keepalive_sender.take() {
+            if shutdown_sender.send(()).is_err() {
+                warn!("failed to send shutdown signal to config");
             }
         }
 

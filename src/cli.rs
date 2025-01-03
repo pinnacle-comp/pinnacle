@@ -25,17 +25,6 @@ pub struct Cli {
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
     pub config_dir: Option<PathBuf>,
 
-    /// Run Pinnacle with the specified backend
-    ///
-    /// This is usually not necessary, but if your environment variables are mucked up
-    /// then this can be used to choose a backend.
-    #[arg(short, long)]
-    pub backend: Option<Backend>,
-
-    /// Force Pinnacle to run with the provided backend
-    #[arg(long, requires = "backend")]
-    pub force: bool,
-
     /// Allow running Pinnacle as root (this is NOT recommended)
     #[arg(long)]
     pub allow_root: bool,

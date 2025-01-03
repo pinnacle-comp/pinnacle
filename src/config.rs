@@ -5,7 +5,6 @@ use crate::{
         ProcessService, RenderService,
     },
     cli::Cli,
-    input::ModifierMask,
     output::OutputName,
     state::Pinnacle,
     tag::Tag,
@@ -20,13 +19,11 @@ use std::{
 use anyhow::Context;
 use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
-    input::v0alpha1::input_service_server::InputServiceServer,
     layout::v0alpha1::layout_service_server::LayoutServiceServer,
     process::v0alpha1::process_service_server::ProcessServiceServer,
-    render::v0alpha1::render_service_server::RenderServiceServer, v0alpha1::ShutdownWatchResponse,
+    render::v0alpha1::render_service_server::RenderServiceServer,
 };
 use smithay::{
-    input::keyboard::keysyms,
     reexports::calloop::{self, channel::Event, LoopHandle, RegistrationToken},
     utils::{Logical, Point},
 };
@@ -39,7 +36,6 @@ use toml::Table;
 
 use tracing::{debug, error, info, info_span, warn, Instrument};
 use xdg::BaseDirectories;
-use xkbcommon::xkb::Keysym;
 
 use crate::{
     state::{State, WithState},
@@ -54,19 +50,16 @@ mod builtin {
     pub fn run() {
         main();
     }
-
-    pub const METACONFIG: &str =
-        include_str!("../api/rust/examples/default_config/metaconfig.toml");
 }
 
-/// The metaconfig struct containing what to run, what envs to run it with, various keybinds, and
+const STARTUP_CONFIG_TOML_NAME: &str = "pinnacle.toml";
+
+/// The startup config struct containing what to run, what envs to run it with, various keybinds, and
 /// the target socket directory.
 #[derive(serde::Deserialize, Debug, PartialEq, Default)]
-pub struct Metaconfig {
-    pub command: Option<Vec<String>>,
+pub struct StartupConfig {
+    pub run: Vec<String>,
     pub envs: Option<Table>,
-    pub reload_keybind: Option<Keybind>,
-    pub kill_keybind: Option<Keybind>,
     pub socket_dir: Option<PathBuf>,
     pub no_config: Option<bool>,
     pub no_xwayland: Option<bool>,
@@ -76,30 +69,25 @@ pub struct Metaconfig {
 ///
 /// The priority is:
 /// 1. CLI options
-/// 2. Metaconfig options
-/// 3. Default metaconfig options where applicable
+/// 2. Startup config options
+/// 3. Defaults
 #[derive(Debug, PartialEq)]
-pub struct ResolvedMetaconfig {
-    pub command: Vec<String>,
+pub struct ResolvedStartupConfig {
+    pub run: Vec<String>,
     pub envs: Table,
-    pub reload_keybind: Keybind,
-    pub kill_keybind: Keybind,
+
     pub socket_dir: PathBuf,
     pub no_config: bool,
     pub no_xwayland: bool,
 }
 
-impl Metaconfig {
-    /// Merge CLI options with this metaconfig, additionally filling in empty fields
-    /// with ones from the default metaconfig.
+impl StartupConfig {
+    /// Merges CLI options with this startup config.
     pub fn merge_and_resolve(
         self,
         cli: Option<&crate::cli::Cli>,
         config_dir: &Path,
-    ) -> anyhow::Result<ResolvedMetaconfig> {
-        let default: Metaconfig =
-            toml::from_str(builtin::METACONFIG).expect("default metaconfig should be error-free");
-
+    ) -> anyhow::Result<ResolvedStartupConfig> {
         let socket_dir = if let Some(socket_dir) = cli
             .and_then(|cli| cli.socket_dir.as_ref())
             .or(self.socket_dir.as_ref())
@@ -122,19 +110,9 @@ impl Metaconfig {
                 .unwrap_or(PathBuf::from(DEFAULT_SOCKET_DIR))
         };
 
-        Ok(ResolvedMetaconfig {
-            command: self.command.unwrap_or_default(),
+        Ok(ResolvedStartupConfig {
+            run: self.run,
             envs: self.envs.unwrap_or_default(),
-            reload_keybind: self.reload_keybind.unwrap_or_else(|| {
-                default
-                    .reload_keybind
-                    .expect("default metaconfig should have a reload keybind")
-            }),
-            kill_keybind: self.kill_keybind.unwrap_or_else(|| {
-                default
-                    .kill_keybind
-                    .expect("default metaconfig should have a kill keybind")
-            }),
             socket_dir,
             no_config: cli
                 .and_then(|cli| cli.no_config.then_some(true))
@@ -149,131 +127,16 @@ impl Metaconfig {
 }
 
 #[cfg(feature = "testing")]
-impl ResolvedMetaconfig {
+impl ResolvedStartupConfig {
     pub fn new_for_testing(no_config: bool, no_xwayland: bool) -> Self {
-        ResolvedMetaconfig {
-            command: vec![],
+        ResolvedStartupConfig {
+            run: vec![],
             envs: Default::default(),
-            reload_keybind: Keybind {
-                modifiers: vec![],
-                key: Key::A,
-            },
-            kill_keybind: Keybind {
-                modifiers: vec![],
-                key: Key::A,
-            },
             socket_dir: PathBuf::from(""),
             no_config,
             no_xwayland,
         }
     }
-}
-
-#[derive(serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct Keybind {
-    modifiers: Vec<Modifier>,
-    key: Key,
-}
-
-#[derive(serde::Deserialize, Debug, Clone, Copy, PartialEq)]
-enum Modifier {
-    Shift,
-    Ctrl,
-    Alt,
-    Super,
-}
-
-// TODO: refactor metaconfig input
-impl From<Vec<self::Modifier>> for ModifierMask {
-    fn from(mods: Vec<self::Modifier>) -> Self {
-        let mut mask = ModifierMask::empty();
-
-        for m in mods {
-            match m {
-                Modifier::Shift => mask |= ModifierMask::SHIFT,
-                Modifier::Ctrl => mask |= ModifierMask::CTRL,
-                Modifier::Alt => mask |= ModifierMask::ALT,
-                Modifier::Super => mask |= ModifierMask::SUPER,
-            }
-        }
-
-        mask
-    }
-}
-
-// TODO: accept xkbcommon names instead
-#[derive(serde::Deserialize, Debug, Clone, Copy, PartialEq)]
-#[serde(rename_all = "snake_case")]
-#[repr(u32)]
-pub enum Key {
-    A = keysyms::KEY_a,
-    B = keysyms::KEY_b,
-    C = keysyms::KEY_c,
-    D = keysyms::KEY_d,
-    E = keysyms::KEY_e,
-    F = keysyms::KEY_f,
-    G = keysyms::KEY_g,
-    H = keysyms::KEY_h,
-    I = keysyms::KEY_i,
-    J = keysyms::KEY_j,
-    K = keysyms::KEY_k,
-    L = keysyms::KEY_l,
-    M = keysyms::KEY_m,
-    N = keysyms::KEY_n,
-    O = keysyms::KEY_o,
-    P = keysyms::KEY_p,
-    Q = keysyms::KEY_q,
-    R = keysyms::KEY_r,
-    S = keysyms::KEY_s,
-    T = keysyms::KEY_t,
-    U = keysyms::KEY_u,
-    V = keysyms::KEY_v,
-    W = keysyms::KEY_w,
-    X = keysyms::KEY_x,
-    Y = keysyms::KEY_y,
-    Z = keysyms::KEY_z,
-    #[serde(alias = "0")]
-    Zero = keysyms::KEY_0,
-    #[serde(alias = "1")]
-    One = keysyms::KEY_1,
-    #[serde(alias = "2")]
-    Two = keysyms::KEY_2,
-    #[serde(alias = "3")]
-    Three = keysyms::KEY_3,
-    #[serde(alias = "4")]
-    Four = keysyms::KEY_4,
-    #[serde(alias = "5")]
-    Five = keysyms::KEY_5,
-    #[serde(alias = "6")]
-    Six = keysyms::KEY_6,
-    #[serde(alias = "7")]
-    Seven = keysyms::KEY_7,
-    #[serde(alias = "8")]
-    Eight = keysyms::KEY_8,
-    #[serde(alias = "9")]
-    Nine = keysyms::KEY_9,
-    #[serde(alias = "num0")]
-    NumZero = keysyms::KEY_KP_0,
-    #[serde(alias = "num1")]
-    NumOne = keysyms::KEY_KP_1,
-    #[serde(alias = "num2")]
-    NumTwo = keysyms::KEY_KP_2,
-    #[serde(alias = "num3")]
-    NumThree = keysyms::KEY_KP_3,
-    #[serde(alias = "num4")]
-    NumFour = keysyms::KEY_KP_4,
-    #[serde(alias = "num5")]
-    NumFive = keysyms::KEY_KP_5,
-    #[serde(alias = "num6")]
-    NumSix = keysyms::KEY_KP_6,
-    #[serde(alias = "num7")]
-    NumSeven = keysyms::KEY_KP_7,
-    #[serde(alias = "num8")]
-    NumEight = keysyms::KEY_KP_8,
-    #[serde(alias = "num9")]
-    NumNine = keysyms::KEY_KP_9,
-    #[serde(alias = "esc")]
-    Escape = keysyms::KEY_Escape,
 }
 
 /// The current state of configuration.
@@ -287,8 +150,7 @@ pub struct Config {
     pub config_join_handle: Option<JoinHandle<()>>,
     pub(crate) config_reload_on_crash_token: Option<RegistrationToken>,
 
-    pub shutdown_sender:
-        Option<tokio::sync::mpsc::UnboundedSender<Result<ShutdownWatchResponse, tonic::Status>>>,
+    pub keepalive_sender: Option<tokio::sync::oneshot::Sender<()>>,
 
     pub config_dir: PathBuf,
     pub cli: Option<Cli>,
@@ -310,7 +172,7 @@ impl Config {
             connector_saved_states: HashMap::new(),
             config_join_handle: None,
             config_reload_on_crash_token: None,
-            shutdown_sender: None,
+            keepalive_sender: None,
             config_dir,
             cli,
             socket_path: None,
@@ -323,9 +185,9 @@ impl Config {
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.shutdown_sender.take() {
-            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
-                warn!("Failed to send shutdown signal to config: {err}");
+        if let Some(shutdown_sender) = self.keepalive_sender.take() {
+            if shutdown_sender.send(()).is_err() {
+                warn!("Failed to send shutdown signal to config");
             }
         }
         if let Some(token) = self.config_reload_on_crash_token.take() {
@@ -347,17 +209,17 @@ pub struct ConnectorSavedState {
     // TODO: transform
 }
 
-/// Parse a metaconfig file in `config_dir`, if any.
-pub fn parse_metaconfig(config_dir: &Path) -> anyhow::Result<Metaconfig> {
-    let metaconfig_path = config_dir.join("metaconfig.toml");
+/// Parse a `pinnacle.toml` file in `config_dir`, if any.
+pub fn parse_startup_config(config_dir: &Path) -> anyhow::Result<StartupConfig> {
+    let startup_config_path = config_dir.join(STARTUP_CONFIG_TOML_NAME);
 
-    std::fs::read_to_string(&metaconfig_path)
-        .with_context(|| format!("Failed to read {}", metaconfig_path.display()))
+    std::fs::read_to_string(&startup_config_path)
+        .with_context(|| format!("Failed to read {}", startup_config_path.display()))
         .and_then(|data| {
             toml::from_str(&data).with_context(|| {
                 format!(
                     "Failed to deserialize toml in {}",
-                    metaconfig_path.display()
+                    startup_config_path.display()
                 )
             })
         })
@@ -409,14 +271,14 @@ impl Pinnacle {
             pinnacle.start_config(true)
         };
 
-        let metaconfig = if builtin {
-            Metaconfig::default()
+        let startup_config = if builtin {
+            StartupConfig::default()
         } else {
-            match parse_metaconfig(&self.config.config_dir) {
-                Ok(metaconfig) => metaconfig,
+            match parse_startup_config(&self.config.config_dir) {
+                Ok(startup_config) => startup_config,
                 Err(err) => {
                     let msg = format!(
-                        "Could not load `metaconfig.toml` at {}: {err}",
+                        "Could not load `{STARTUP_CONFIG_TOML_NAME}` at {}: {err}",
                         self.config.config_dir.display()
                     );
                     return load_default_config(self, &msg);
@@ -424,22 +286,10 @@ impl Pinnacle {
             }
         };
 
-        let metaconfig =
-            metaconfig.merge_and_resolve(self.config.cli.as_ref(), &self.config.config_dir)?;
+        let startup_config =
+            startup_config.merge_and_resolve(self.config.cli.as_ref(), &self.config.config_dir)?;
 
-        let reload_keybind = metaconfig.reload_keybind.clone();
-        let kill_keybind = metaconfig.kill_keybind.clone();
-
-        let reload_mask = ModifierMask::from(reload_keybind.modifiers);
-        let kill_mask = ModifierMask::from(kill_keybind.modifiers);
-
-        let reload_keybind = (reload_mask, Keysym::from(reload_keybind.key as u32));
-        let kill_keybind = (kill_mask, Keysym::from(kill_keybind.key as u32));
-
-        self.input_state.reload_keybind = Some(reload_keybind);
-        self.input_state.kill_keybind = Some(kill_keybind);
-
-        if metaconfig.no_config {
+        if startup_config.no_config {
             info!("`no-config` option was set, not spawning config");
             return Ok(());
         }
@@ -462,7 +312,7 @@ impl Pinnacle {
             self.config.config_reload_on_crash_token = Some(token);
         } else {
             let config_dir = &self.config.config_dir;
-            let command = metaconfig.command.clone();
+            let command = startup_config.run.clone();
             let mut command_iter = command.iter();
 
             let arg0 = match command_iter.next() {
@@ -474,7 +324,7 @@ impl Pinnacle {
 
             debug!(arg0, ?command_rest);
 
-            let envs = metaconfig
+            let envs = startup_config
                 .envs
                 .clone()
                 .into_iter()
@@ -653,6 +503,7 @@ impl Pinnacle {
     }
 }
 
+// FIXME: update tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -739,12 +590,9 @@ mod tests {
     }
 
     #[test]
-    fn full_metaconfig_successfully_parses() -> anyhow::Result<()> {
-        let metaconfig_text = r#"
-            command = ["lua", "init.lua"]
-
-            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-            kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+    fn full_startup_config_successfully_parses() -> anyhow::Result<()> {
+        let startup_config_text = r#"
+            run = ["lua", "init.lua"]
 
             socket_dir = "/path/to/socket/dir"
 
@@ -756,94 +604,75 @@ mod tests {
             SUN = "chips"
         "#;
 
-        let metaconfig_dir = tempfile::tempdir()?;
+        let config_dir = tempfile::tempdir()?;
         std::fs::write(
-            metaconfig_dir.path().join("metaconfig.toml"),
-            metaconfig_text,
+            config_dir.path().join(STARTUP_CONFIG_TOML_NAME),
+            startup_config_text,
         )?;
 
-        let expected_metaconfig = Metaconfig {
-            command: Some(vec!["lua".to_string(), "init.lua".to_string()]),
+        let expected_startup_config = StartupConfig {
+            run: vec!["lua".to_string(), "init.lua".to_string()],
             envs: Some(toml::Table::from_iter([
                 ("MARCO".to_string(), toml::Value::String("polo".to_string())),
                 ("SUN".to_string(), toml::Value::String("chips".to_string())),
             ])),
-            reload_keybind: Some(Keybind {
-                modifiers: vec![Modifier::Ctrl, Modifier::Alt],
-                key: Key::R,
-            }),
-            kill_keybind: Some(Keybind {
-                modifiers: vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift],
-                key: Key::Escape,
-            }),
             socket_dir: Some("/path/to/socket/dir".into()),
             no_config: Some(true),
             no_xwayland: Some(true),
         };
 
         assert_eq!(
-            parse_metaconfig(metaconfig_dir.path())?,
-            expected_metaconfig
+            parse_startup_config(config_dir.path())?,
+            expected_startup_config
         );
 
         Ok(())
     }
 
     #[test]
-    fn minimal_metaconfig_successfully_parses() -> anyhow::Result<()> {
-        let metaconfig_text = r#"
-            command = ["lua", "init.lua"]
-
-            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
-            kill_keybind = { modifiers = ["Ctrl", "Alt", "Shift"], key = "escape" }
+    fn minimal_startup_config_successfully_parses() -> anyhow::Result<()> {
+        let startup_config_text = r#"
+            run = ["lua", "init.lua"]
         "#;
 
-        let metaconfig_dir = tempfile::tempdir()?;
+        let startup_config_dir = tempfile::tempdir()?;
         std::fs::write(
-            metaconfig_dir.path().join("metaconfig.toml"),
-            metaconfig_text,
+            startup_config_dir.path().join(STARTUP_CONFIG_TOML_NAME),
+            startup_config_text,
         )?;
 
-        let expected_metaconfig = Metaconfig {
-            command: Some(vec!["lua".to_string(), "init.lua".to_string()]),
+        let expected_startup_config = StartupConfig {
+            run: vec!["lua".to_string(), "init.lua".to_string()],
             envs: None,
-            reload_keybind: Some(Keybind {
-                modifiers: vec![Modifier::Ctrl, Modifier::Alt],
-                key: Key::R,
-            }),
-            kill_keybind: Some(Keybind {
-                modifiers: vec![Modifier::Ctrl, Modifier::Alt, Modifier::Shift],
-                key: Key::Escape,
-            }),
             socket_dir: None,
             no_config: None,
             no_xwayland: None,
         };
 
         assert_eq!(
-            parse_metaconfig(metaconfig_dir.path())?,
-            expected_metaconfig
+            parse_startup_config(startup_config_dir.path())?,
+            expected_startup_config
         );
 
         Ok(())
     }
 
     #[test]
-    fn incorrect_metaconfig_does_not_parse() -> anyhow::Result<()> {
-        let metaconfig_text = r#"
-            command = "lua" # not an array
-
-            reload_keybind = { modifiers = ["Ctrl", "Alt"], key = "r" }
+    fn incorrect_startup_config_does_not_parse() -> anyhow::Result<()> {
+        let startup_config_text = r#"
+            run = "lua" # not an array
         "#;
 
-        let metaconfig_dir = tempfile::tempdir()?;
+        let config_dir = tempfile::tempdir()?;
         std::fs::write(
-            metaconfig_dir.path().join("metaconfig.toml"),
-            metaconfig_text,
+            config_dir.path().join("metaconfig.toml"),
+            startup_config_text,
         )?;
 
-        assert!(parse_metaconfig(metaconfig_dir.path()).is_err());
+        assert!(parse_startup_config(config_dir.path()).is_err());
 
         Ok(())
     }
+
+    // TODO: test for error if `run` isn't present
 }

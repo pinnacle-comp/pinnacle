@@ -45,8 +45,13 @@ impl v1::pinnacle_service_server::PinnacleService for super::PinnacleService {
             _request.into_inner(),
             |_, _| {},
             |state, sender, _| {
-                // FIXME: store the sender
-                Box::leak(Box::new(sender));
+                let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel::<()>();
+                state.pinnacle.config.keepalive_sender.replace(oneshot_tx);
+                tokio::spawn(async move {
+                    let _sender = sender;
+                    let _ = oneshot_rx.await;
+                    // sender should drop here and kill the config
+                });
             },
         )
     }

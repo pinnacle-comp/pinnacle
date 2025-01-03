@@ -6,7 +6,8 @@ use pinnacle_api_defs::pinnacle::input::{
         GetBindInfosResponse, GetBindLayerStackRequest, GetBindLayerStackResponse,
         KeybindStreamRequest, KeybindStreamResponse, MousebindStreamRequest,
         MousebindStreamResponse, SetBindDescriptionRequest, SetBindGroupRequest,
-        SetLibinputSettingRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        SetLibinputSettingRequest, SetQuitBindRequest, SetReloadConfigBindRequest,
+        SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
 use smithay::input::keyboard::XkbConfig;
@@ -275,6 +276,31 @@ impl input::v1::input_service_server::InputService for InputService {
             Ok(GetBindInfosResponse {
                 bind_infos: keybind_infos.chain(mousebind_infos).collect(),
             })
+        })
+        .await
+    }
+
+    async fn set_quit_bind(&self, request: Request<SetQuitBindRequest>) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.pinnacle.input_state.bind_state.set_quit_bind(bind_id);
+        })
+        .await
+    }
+
+    async fn set_reload_config_bind(
+        &self,
+        request: Request<SetReloadConfigBindRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .set_reload_config_bind(bind_id);
         })
         .await
     }

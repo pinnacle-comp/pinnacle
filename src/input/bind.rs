@@ -23,6 +23,8 @@ impl BindState {
     pub fn clear(&mut self) {
         self.keybinds.id_map.clear();
         self.keybinds.keysym_map.clear();
+        self.mousebinds.id_map.clear();
+        self.mousebinds.button_map.clear();
     }
 
     pub fn enter_layer(&mut self, layer: Option<String>) {
@@ -56,6 +58,22 @@ impl BindState {
             bind.borrow_mut().bind_data.desc = desc;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
+        }
+    }
+
+    pub fn set_quit_bind(&self, bind_id: u32) {
+        if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_quit_bind = true;
+        } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_quit_bind = true;
+        }
+    }
+
+    pub fn set_reload_config_bind(&self, bind_id: u32) {
+        if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_reload_config_bind = true;
+        } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.is_reload_config_bind = true;
         }
     }
 }
@@ -111,6 +129,16 @@ pub struct BindData {
     pub layer: Option<String>,
     pub group: Option<String>,
     pub desc: Option<String>,
+    pub is_quit_bind: bool,
+    pub is_reload_config_bind: bool,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum BindAction {
+    Forward,
+    Suppress,
+    Quit,
+    ReloadConfig,
 }
 
 // Keybinds
@@ -141,34 +169,44 @@ impl Keybinds {
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
-    ) -> bool {
+    ) -> BindAction {
         let Some(keybinds) = self.keysym_map.get_mut(&key) else {
-            return false;
+            return BindAction::Forward;
         };
 
         if edge == Edge::Release {
             let last_triggered_binds_on_press = self.last_pressed_triggered_binds.remove(&key);
-            let should_suppress = if let Some(bind_ids) = last_triggered_binds_on_press {
+            let bind_action = if let Some(bind_ids) = last_triggered_binds_on_press {
                 for bind_id in bind_ids {
                     let keybind = self.id_map.entry(bind_id);
                     let Entry::Occupied(kb_entry) = keybind else {
                         continue;
                     };
+                    if kb_entry.get().borrow().bind_data.is_quit_bind {
+                        return BindAction::Quit;
+                    }
+                    if kb_entry.get().borrow().bind_data.is_reload_config_bind {
+                        return BindAction::ReloadConfig;
+                    }
                     let sent = kb_entry.get().borrow().sender.send(Edge::Release).is_ok();
                     if !sent {
                         kb_entry.shift_remove();
                     }
                 }
-                true
+                BindAction::Suppress
             } else {
-                false
+                BindAction::Forward
             };
-            return should_suppress;
+            return bind_action;
         }
 
-        let mut should_suppress = false;
+        let mut bind_action = BindAction::Forward;
 
         keybinds.retain(|keybind| {
+            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
+                return true;
+            }
+
             let Some(keybind) = keybind.upgrade() else {
                 return false;
             };
@@ -189,15 +227,25 @@ impl Keybinds {
                     }
                     Edge::Release => unreachable!(),
                 }
-                should_suppress = true;
 
-                keybind.sender.send(edge).is_ok()
+                let mut retain = true;
+
+                bind_action = if keybind.bind_data.is_quit_bind {
+                    BindAction::Quit
+                } else if keybind.bind_data.is_reload_config_bind {
+                    BindAction::ReloadConfig
+                } else {
+                    retain = keybind.sender.send(edge).is_ok();
+                    BindAction::Suppress
+                };
+
+                retain
             } else {
                 true
             }
         });
 
-        should_suppress
+        bind_action
     }
 
     pub fn add_keybind(
@@ -219,6 +267,8 @@ impl Keybinds {
                 layer,
                 group,
                 desc,
+                is_quit_bind: false,
+                is_reload_config_bind: false,
             },
             key,
             sender,
@@ -274,34 +324,44 @@ impl Mousebinds {
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
-    ) -> bool {
+    ) -> BindAction {
         let Some(mousebinds) = self.button_map.get_mut(&button) else {
-            return false;
+            return BindAction::Forward;
         };
 
         if edge == Edge::Release {
             let last_triggered_binds_on_press = self.last_pressed_triggered_binds.remove(&button);
-            let should_suppress = if let Some(bind_ids) = last_triggered_binds_on_press {
+            let bind_action = if let Some(bind_ids) = last_triggered_binds_on_press {
                 for bind_id in bind_ids {
                     let mousebind = self.id_map.entry(bind_id);
-                    let Entry::Occupied(kb_entry) = mousebind else {
+                    let Entry::Occupied(mb_entry) = mousebind else {
                         continue;
                     };
-                    let sent = kb_entry.get().borrow().sender.send(Edge::Release).is_ok();
+                    if mb_entry.get().borrow().bind_data.is_quit_bind {
+                        return BindAction::Quit;
+                    }
+                    if mb_entry.get().borrow().bind_data.is_reload_config_bind {
+                        return BindAction::ReloadConfig;
+                    }
+                    let sent = mb_entry.get().borrow().sender.send(Edge::Release).is_ok();
                     if !sent {
-                        kb_entry.shift_remove();
+                        mb_entry.shift_remove();
                     }
                 }
-                true
+                BindAction::Suppress
             } else {
-                false
+                BindAction::Forward
             };
-            return should_suppress;
+            return bind_action;
         }
 
-        let mut should_suppress = false;
+        let mut bind_action = BindAction::Forward;
 
         mousebinds.retain(|mousebind| {
+            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
+                return true;
+            }
+
             let Some(mousebind) = mousebind.upgrade() else {
                 return false;
             };
@@ -322,15 +382,25 @@ impl Mousebinds {
                     }
                     Edge::Release => unreachable!(),
                 }
-                should_suppress = true;
 
-                mousebind.sender.send(edge).is_ok()
+                let mut retain = true;
+
+                bind_action = if mousebind.bind_data.is_quit_bind {
+                    BindAction::Quit
+                } else if mousebind.bind_data.is_reload_config_bind {
+                    BindAction::ReloadConfig
+                } else {
+                    retain = mousebind.sender.send(edge).is_ok();
+                    BindAction::Suppress
+                };
+
+                retain
             } else {
                 true
             }
         });
 
-        should_suppress
+        bind_action
     }
 
     pub fn add_mousebind(
@@ -352,6 +422,8 @@ impl Mousebinds {
                 layer,
                 group,
                 desc,
+                is_quit_bind: false,
+                is_reload_config_bind: false,
             },
             button,
             sender,
