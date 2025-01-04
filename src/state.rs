@@ -15,6 +15,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     handlers::session_lock::LockState,
     layout::LayoutState,
+    process::ProcessState,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
@@ -26,7 +27,6 @@ use crate::{
 };
 use anyhow::Context;
 use indexmap::IndexMap;
-use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     backend::renderer::element::{
         default_primary_scanout_output_compare, utils::select_dmabuf_feedback, Id,
@@ -182,7 +182,7 @@ pub struct Pinnacle {
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
-    pub system_processes: sysinfo::System,
+    pub process_state: ProcessState,
 
     // Currently only used to keep track of if the server has started
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
@@ -422,9 +422,9 @@ impl Pinnacle {
             xwm: None,
             xdisplay: None,
 
-            system_processes: sysinfo::System::new_with_specifics(
+            process_state: ProcessState::new(sysinfo::System::new_with_specifics(
                 RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
-            ),
+            )),
 
             grpc_server_join_handle: None,
 

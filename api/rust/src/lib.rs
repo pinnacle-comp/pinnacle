@@ -90,11 +90,9 @@ use hyper_util::rt::TokioIo;
 use layout::Layout;
 use pinnacle_api_defs::pinnacle::{
     layout::v0alpha1::layout_service_client::LayoutServiceClient,
-    process::v0alpha1::process_service_client::ProcessServiceClient,
     render::v0alpha1::render_service_client::RenderServiceClient,
     signal::v1::signal_service_client::SignalServiceClient,
 };
-use process::Process;
 use render::Render;
 use signal::SignalState;
 #[cfg(feature = "snowcap")]
@@ -128,18 +126,12 @@ pub use tokio;
 // tonic doesn't like it when you use clients across tokio runtimes, and these are static
 // meaning they would get reused, so this allows us to recreate the client on a
 // different runtime when testing.
-static PROCESS: RwLock<Option<ProcessServiceClient<Channel>>> = RwLock::const_new(None);
 static LAYOUT: RwLock<Option<LayoutServiceClient<Channel>>> = RwLock::const_new(None);
 static RENDER: RwLock<Option<RenderServiceClient<Channel>>> = RwLock::const_new(None);
 static SIGNAL: RwLock<Option<SignalServiceClient<Channel>>> = RwLock::const_new(None);
 
 static SIGNAL_MODULE: Mutex<Option<SignalState>> = Mutex::const_new(None);
 
-pub(crate) fn process() -> ProcessServiceClient<Channel> {
-    block_on_tokio(PROCESS.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
 pub(crate) fn layout() -> LayoutServiceClient<Channel> {
     block_on_tokio(LAYOUT.read())
         .clone()
@@ -170,8 +162,6 @@ pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ApiModules {
-    /// The [`Process`] struct
-    pub process: &'static Process,
     /// The [`Layout`] struct
     pub layout: &'static Layout,
     /// The [`Render`] struct
@@ -192,7 +182,6 @@ impl ApiModules {
     /// Creates all the API modules.
     pub const fn new() -> Self {
         Self {
-            process: &Process,
             layout: &Layout,
             render: &Render,
             #[cfg(feature = "snowcap")]
@@ -225,10 +214,6 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
 
     Client::init(channel.clone());
 
-    PROCESS
-        .write()
-        .await
-        .replace(ProcessServiceClient::new(channel.clone()));
     RENDER
         .write()
         .await

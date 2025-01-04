@@ -12,7 +12,7 @@ categories = ["api-bindings", "config"]
 [dependencies]
 pinnacle-api-defs = { workspace = true }
 pinnacle-api-macros = { path = "./pinnacle-api-macros" }
-tokio = { workspace = true, features = ["net"] }
+tokio = { workspace = true, features = ["net", "process"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tower = { workspace = true }

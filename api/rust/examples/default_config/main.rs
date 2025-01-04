@@ -12,6 +12,7 @@ use pinnacle_api::output;
 use pinnacle_api::output::OutputSetup;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
+use pinnacle_api::process::Command;
 use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
@@ -33,7 +34,6 @@ async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
     let ApiModules {
-        process,
         layout,
         render,
         #[cfg(feature = "snowcap")]
@@ -150,7 +150,7 @@ async fn main() {
     // `mod_key + Return` spawns a terminal
     input::keybind(mod_key, Keysym::Return)
         .on_press(move || {
-            process.spawn([terminal]);
+            Command::new(terminal).spawn();
         })
         .group("Process")
         .description("Spawn a terminal");
@@ -383,5 +383,5 @@ async fn main() {
         win.set_focused(true);
     })));
 
-    process.spawn_once([terminal]);
+    Command::new(terminal).once().spawn();
 }

@@ -52,6 +52,10 @@ pub mod pinnacle {
         pub mod v0alpha1 {
             tonic::include_proto!("pinnacle.process.v0alpha1");
         }
+
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.process.v1");
+        }
     }
 
     pub mod signal {
