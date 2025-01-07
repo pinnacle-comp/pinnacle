@@ -7,100 +7,212 @@
 //! TODO: finish this documentation
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    rc::Rc,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex,
+    },
 };
 
-use pinnacle_api_defs::pinnacle::layout::v0alpha1::{
-    layout_request::{Body, ExplicitLayout, Geometries},
-    LayoutRequest,
-};
+use pinnacle_api_defs::pinnacle::layout::v1::{layout_request, LayoutRequest};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
 use tracing::debug;
 
-use crate::{
-    block_on_tokio, layout,
-    output::OutputHandle,
-    tag::TagHandle,
-    util::{Axis, Geometry},
-    window::WindowHandle,
-};
+use crate::{client::Client, output::OutputHandle, tag::TagHandle, util::Axis, BlockOnTokio};
 
-/// A struct that allows you to manage layouts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Layout;
+/// Consume the given [`LayoutManager`] and set it as the global layout handler.
+///
+/// This returns a [`LayoutRequester`] that allows you to manually request layouts from
+/// the compositor. The requester also contains your layout manager wrapped in an `Arc<Mutex>`
+/// to allow you to mutate its settings.
+pub fn set_manager<M>(manager: M) -> LayoutRequester<M>
+where
+    M: LayoutManager + Send + 'static,
+{
+    let (from_client, to_server) = unbounded_channel::<LayoutRequest>();
+    let to_server_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(to_server);
+    let mut from_server = Client::layout()
+        .layout(to_server_stream)
+        .block_on_tokio()
+        .unwrap()
+        .into_inner();
 
-impl Layout {
-    /// Consume the given [`LayoutManager`] and set it as the global layout handler.
-    ///
-    /// This returns a [`LayoutRequester`] that allows you to manually request layouts from
-    /// the compositor. The requester also contains your layout manager wrapped in an `Arc<Mutex>`
-    /// to allow you to mutate its settings.
-    pub fn set_manager<M>(&self, manager: M) -> LayoutRequester<M>
-    where
-        M: LayoutManager + Send + 'static,
-    {
-        let (from_client, to_server) = unbounded_channel::<LayoutRequest>();
-        let to_server_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(to_server);
-        let mut from_server = block_on_tokio(layout().clone().layout(to_server_stream))
-            .expect("TODO")
-            .into_inner();
+    let from_client_clone = from_client.clone();
 
-        let from_client_clone = from_client.clone();
+    let manager = Arc::new(Mutex::new(manager));
 
-        let manager = Arc::new(Mutex::new(manager));
+    let requester = LayoutRequester {
+        sender: from_client_clone,
+        manager: manager.clone(),
+    };
 
-        let requester = LayoutRequester {
-            sender: from_client_clone,
-            manager: manager.clone(),
-        };
-
-        let fut = async move {
-            while let Some(Ok(response)) = from_server.next().await {
-                let args = LayoutArgs {
-                    output: OutputHandle {
-                        name: response.output_name().to_string(),
-                    },
-                    windows: response
-                        .window_ids
-                        .into_iter()
-                        .map(|id| WindowHandle { id })
-                        .collect(),
-                    tags: response
-                        .tag_ids
-                        .into_iter()
-                        .map(|id| TagHandle { id })
-                        .collect(),
-                    output_width: response.output_width.unwrap_or_default(),
-                    output_height: response.output_height.unwrap_or_default(),
-                };
-                let geos = manager.lock().unwrap().active_layout(&args).layout(&args);
-                if from_client
-                    .send(LayoutRequest {
-                        body: Some(Body::Geometries(Geometries {
+    let fut = async move {
+        while let Some(Ok(response)) = from_server.next().await {
+            let args = LayoutArgs {
+                output: OutputHandle {
+                    name: response.output_name.clone(),
+                },
+                window_count: response.window_count,
+                tags: response
+                    .tag_ids
+                    .into_iter()
+                    .map(|id| TagHandle { id })
+                    .collect(),
+            };
+            let tree = manager.lock().unwrap().active_layout(&args).layout(&args);
+            if from_client
+                .send(LayoutRequest {
+                    request: Some(layout_request::Request::TreeResponse(
+                        layout_request::TreeResponse {
                             request_id: response.request_id,
+                            tree: Some(pinnacle_api_defs::pinnacle::layout::v1::LayoutTree {
+                                tree_id: tree.tree_id,
+                                root: tree.root.map(|root| root.into()),
+                                inner_gaps: tree.inner_gaps,
+                                outer_gaps: tree.outer_gaps,
+                            }),
                             output_name: response.output_name,
-                            geometries: geos
-                                .into_iter()
-                                .map(|geo| pinnacle_api_defs::pinnacle::v0alpha1::Geometry {
-                                    x: Some(geo.x),
-                                    y: Some(geo.y),
-                                    width: Some(geo.width as i32),
-                                    height: Some(geo.height as i32),
-                                })
-                                .collect(),
-                        })),
-                    })
-                    .is_err()
-                {
-                    debug!("Failed to send layout geometries: channel closed");
-                }
+                        },
+                    )),
+                })
+                .is_err()
+            {
+                debug!("Failed to send layout geometries: channel closed");
             }
-        };
+        }
+    };
 
-        tokio::spawn(fut);
-        requester
+    tokio::spawn(fut);
+    requester
+}
+
+#[derive(Debug, Clone)]
+pub struct LayoutNode {
+    id_ctr: Arc<AtomicU32>,
+    inner: Rc<RefCell<LayoutNodeInner>>,
+}
+
+#[derive(Debug)]
+struct LayoutNodeInner {
+    node_id: u32,
+    style: Style,
+    children: Vec<LayoutNode>,
+}
+
+impl LayoutNodeInner {
+    fn new(id: u32) -> Self {
+        LayoutNodeInner {
+            node_id: id,
+            style: Style {
+                layout_dir: LayoutDir::Row,
+                size_proportion: 1.0,
+            },
+            children: Vec::new(),
+        }
+    }
+}
+
+impl LayoutNode {
+    pub fn add_child(&self, child: Self) {
+        self.inner.borrow_mut().children.push(child);
+    }
+
+    pub fn set_children(&self, children: impl IntoIterator<Item = Self>) {
+        self.inner.borrow_mut().children.extend(children);
+    }
+
+    pub fn dir(&self, dir: LayoutDir) -> &Self {
+        self.inner.borrow_mut().style.layout_dir = dir;
+        self
+    }
+
+    pub fn size_proportion(&self, proportion: f32) -> &Self {
+        self.inner.borrow_mut().style.size_proportion = proportion;
+        self
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct LayoutTree {
+    tree_id: u32,
+    inner_gaps: f32,
+    outer_gaps: f32,
+    id_ctr: Arc<AtomicU32>,
+    root: Option<LayoutNode>,
+}
+
+impl LayoutTree {
+    pub fn new(tree_id: u32) -> Self {
+        Self {
+            tree_id,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_gaps(mut self, gaps: Gaps) -> Self {
+        let (inner, outer) = gaps.to_inner_outer();
+        self.inner_gaps = inner;
+        self.outer_gaps = outer;
+        self
+    }
+
+    pub fn new_node(&self) -> LayoutNode {
+        LayoutNode {
+            id_ctr: self.id_ctr.clone(),
+            inner: Rc::new(RefCell::new(LayoutNodeInner::new(
+                self.id_ctr.fetch_add(1, Ordering::Relaxed),
+            ))),
+        }
+    }
+
+    /// Creates and returns the root layout node.
+    pub fn set_root(&mut self, node: LayoutNode) {
+        self.root.replace(node);
+    }
+}
+
+#[derive(Debug)]
+pub enum LayoutDir {
+    Row,
+    Column,
+}
+
+#[derive(Debug)]
+pub struct Style {
+    layout_dir: LayoutDir,
+    size_proportion: f32,
+}
+
+impl From<LayoutNode> for pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
+    fn from(value: LayoutNode) -> Self {
+        fn api_node_from_layout_node(
+            node: LayoutNode,
+        ) -> pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
+            pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
+                node_id: node.inner.borrow().node_id,
+                style: Some(pinnacle_api_defs::pinnacle::layout::v1::NodeStyle {
+                    flex_dir: match node.inner.borrow().style.layout_dir {
+                        LayoutDir::Row => pinnacle_api_defs::pinnacle::layout::v1::FlexDir::Row,
+                        LayoutDir::Column => {
+                            pinnacle_api_defs::pinnacle::layout::v1::FlexDir::Column
+                        }
+                    }
+                    .into(),
+                    size_proportion: node.inner.borrow().style.size_proportion,
+                }),
+                children: node
+                    .inner
+                    .borrow()
+                    .children
+                    .iter()
+                    .map(|node| api_node_from_layout_node(node.clone()))
+                    .collect(),
+            }
+        }
+        api_node_from_layout_node(value)
     }
 }
 
@@ -109,14 +221,10 @@ impl Layout {
 pub struct LayoutArgs {
     /// The output that is being laid out.
     pub output: OutputHandle,
-    /// The windows that are being laid out.
-    pub windows: Vec<WindowHandle>,
+    /// The number of windows being laid out.
+    pub window_count: u32,
     /// The *focused* tags on the output.
     pub tags: Vec<TagHandle>,
-    /// The width of the layout area, in pixels.
-    pub output_width: u32,
-    /// The height of the layout area, in pixels.
-    pub output_height: u32,
 }
 
 /// Types that can manage layouts.
@@ -128,7 +236,7 @@ pub trait LayoutManager {
 /// Types that can generate layouts by computing a vector of [geometries][Geometry].
 pub trait LayoutGenerator {
     /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry>;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree;
 }
 
 /// Gaps between windows.
@@ -149,6 +257,15 @@ pub enum Gaps {
         /// The amount of gap in pixels inset from the edge of the output.
         outer: u32,
     },
+}
+
+impl Gaps {
+    fn to_inner_outer(self) -> (f32, f32) {
+        match self {
+            Gaps::Absolute(abs) => (abs as f32 / 2.0, abs as f32 / 2.0),
+            Gaps::Split { inner, outer } => (inner as f32, outer as f32),
+        }
+    }
 }
 
 /// A [`LayoutManager`] that keeps track of layouts per output and provides
@@ -240,11 +357,15 @@ impl<T> LayoutRequester<T> {
     /// This uses the focused output for the request.
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
     pub fn request_layout(&self) {
-        let output_name = crate::output::get_focused().map(|op| op.name);
+        let Some(output_name) = crate::output::get_focused().map(|op| op.name) else {
+            return;
+        };
         if self
             .sender
             .send(LayoutRequest {
-                body: Some(Body::Layout(ExplicitLayout { output_name })),
+                request: Some(layout_request::Request::ForceLayout(
+                    layout_request::ForceLayout { output_name },
+                )),
             })
             .is_err()
         {
@@ -257,9 +378,11 @@ impl<T> LayoutRequester<T> {
         if self
             .sender
             .send(LayoutRequest {
-                body: Some(Body::Layout(ExplicitLayout {
-                    output_name: Some(output.name.clone()),
-                })),
+                request: Some(layout_request::Request::ForceLayout(
+                    layout_request::ForceLayout {
+                        output_name: output.name.clone(),
+                    },
+                )),
             })
             .is_err()
         {
@@ -286,8 +409,8 @@ impl LayoutRequester<CyclingLayoutManager> {
 struct NoopLayout;
 
 impl LayoutGenerator for NoopLayout {
-    fn layout(&self, _args: &LayoutArgs) -> Vec<Geometry> {
-        Vec::new()
+    fn layout(&self, _args: &LayoutArgs) -> LayoutTree {
+        LayoutTree::default()
     }
 }
 
@@ -340,162 +463,68 @@ impl Default for MasterStackLayout {
 }
 
 impl LayoutGenerator for MasterStackLayout {
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-        let win_count = args.windows.len() as u32;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+        let win_count = args.window_count;
 
         if win_count == 0 {
-            return Vec::new();
+            return LayoutTree::default();
         }
 
-        let width = args.output_width;
-        let height = args.output_height;
+        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+        let root = tree.new_node();
+        root.dir(match self.master_side {
+            MasterSide::Left | MasterSide::Right => LayoutDir::Row,
+            MasterSide::Top | MasterSide::Bottom => LayoutDir::Column,
+        });
 
-        let mut geos = Vec::<Geometry>::new();
+        tree.set_root(root.clone());
 
-        let (outer_gaps, inner_gaps) = match self.gaps {
-            Gaps::Absolute(gaps) => (gaps, None),
-            Gaps::Split { inner, outer } => (outer, Some(inner)),
-        };
+        let master_factor = self.master_factor.clamp(0.1, 0.9);
 
-        let rect = Geometry {
-            x: 0,
-            y: 0,
-            width,
-            height,
+        let master_side_node = tree.new_node();
+
+        master_side_node
+            .dir(match self.master_side {
+                MasterSide::Left | MasterSide::Right => LayoutDir::Column,
+                MasterSide::Top | MasterSide::Bottom => LayoutDir::Row,
+            })
+            .size_proportion(master_factor * 10.0);
+
+        for _ in 0..u32::min(win_count, self.master_count) {
+            let child = tree.new_node();
+            child.size_proportion(10.0);
+            master_side_node.add_child(child);
         }
-        .split_at(Axis::Horizontal, 0, outer_gaps)
-        .0
-        .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, 0, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-        .0;
 
-        let master_factor = if win_count > self.master_count {
-            self.master_factor.clamp(0.1, 0.9)
-        } else {
-            1.0
-        };
+        let stack_side_node = tree.new_node();
+        stack_side_node
+            .dir(match self.master_side {
+                MasterSide::Left | MasterSide::Right => LayoutDir::Column,
+                MasterSide::Top | MasterSide::Bottom => LayoutDir::Row,
+            })
+            .size_proportion((1.0 - master_factor) * 10.0);
 
-        let gaps = match inner_gaps {
-            Some(_) => 0,
-            None => outer_gaps,
-        };
+        for _ in self.master_count..win_count {
+            let child = tree.new_node();
+            child.size_proportion(10.0);
+            stack_side_node.add_child(child);
+        }
 
-        let (master_rect, mut stack_rect) = match self.master_side {
-            MasterSide::Left => {
-                let (rect1, rect2) = rect.split_at(
-                    Axis::Vertical,
-                    (width as f32 * master_factor).floor() as i32 - gaps as i32 / 2,
-                    gaps,
-                );
-                (Some(rect1), rect2)
+        if win_count <= self.master_count {
+            root.set_children([master_side_node]);
+            return tree;
+        }
+
+        match self.master_side {
+            MasterSide::Left | MasterSide::Top => {
+                root.set_children([master_side_node, stack_side_node]);
             }
-            MasterSide::Right => {
-                let (rect2, rect1) = rect.split_at(
-                    Axis::Vertical,
-                    (width as f32 * master_factor).floor() as i32 - gaps as i32 / 2,
-                    gaps,
-                );
-                (rect1, Some(rect2))
-            }
-            MasterSide::Top => {
-                let (rect1, rect2) = rect.split_at(
-                    Axis::Horizontal,
-                    (height as f32 * master_factor).floor() as i32 - gaps as i32 / 2,
-                    gaps,
-                );
-                (Some(rect1), rect2)
-            }
-            MasterSide::Bottom => {
-                let (rect2, rect1) = rect.split_at(
-                    Axis::Horizontal,
-                    (height as f32 * master_factor).floor() as i32 - gaps as i32 / 2,
-                    gaps,
-                );
-                (rect1, Some(rect2))
-            }
-        };
-
-        let mut master_rect = master_rect.unwrap_or_else(|| stack_rect.take().unwrap());
-
-        let (master_count, stack_count) = if win_count > self.master_count {
-            (self.master_count, Some(win_count - self.master_count))
-        } else {
-            (win_count, None)
-        };
-
-        if master_count > 1 {
-            let (coord, len, axis) = match self.master_side {
-                MasterSide::Left | MasterSide::Right => (
-                    master_rect.y,
-                    master_rect.height as f32 / master_count as f32,
-                    Axis::Horizontal,
-                ),
-                MasterSide::Top | MasterSide::Bottom => (
-                    master_rect.x,
-                    master_rect.width as f32 / master_count as f32,
-                    Axis::Vertical,
-                ),
-            };
-
-            for i in 1..master_count {
-                let slice_point = coord + (len * i as f32) as i32 - gaps as i32 / 2;
-                let (to_push, rest) = master_rect.split_at(axis, slice_point, gaps);
-                geos.push(to_push);
-                if let Some(rest) = rest {
-                    master_rect = rest;
-                } else {
-                    break;
-                }
+            MasterSide::Right | MasterSide::Bottom => {
+                root.set_children([stack_side_node, master_side_node]);
             }
         }
 
-        geos.push(master_rect);
-
-        if let Some(stack_count) = stack_count {
-            let mut stack_rect = stack_rect.unwrap();
-
-            if stack_count > 1 {
-                let (coord, len, axis) = match self.master_side {
-                    MasterSide::Left | MasterSide::Right => (
-                        stack_rect.y,
-                        stack_rect.height as f32 / stack_count as f32,
-                        Axis::Horizontal,
-                    ),
-                    MasterSide::Top | MasterSide::Bottom => (
-                        stack_rect.x,
-                        stack_rect.width as f32 / stack_count as f32,
-                        Axis::Vertical,
-                    ),
-                };
-
-                for i in 1..stack_count {
-                    let slice_point = coord + (len * i as f32) as i32 - gaps as i32 / 2;
-                    let (to_push, rest) = stack_rect.split_at(axis, slice_point, gaps);
-                    geos.push(to_push);
-                    if let Some(rest) = rest {
-                        stack_rect = rest;
-                    } else {
-                        break;
-                    }
-                }
-            }
-
-            geos.push(stack_rect);
-        }
-
-        if let Some(inner_gaps) = inner_gaps {
-            for geo in geos.iter_mut() {
-                geo.x += inner_gaps as i32;
-                geo.y += inner_gaps as i32;
-                geo.width -= inner_gaps * 2;
-                geo.height -= inner_gaps * 2;
-            }
-        }
-
-        geos
+        tree
     }
 }
 
@@ -526,88 +555,46 @@ impl Default for DwindleLayout {
 }
 
 impl LayoutGenerator for DwindleLayout {
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-        let win_count = args.windows.len() as u32;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+        let win_count = args.window_count;
 
         if win_count == 0 {
-            return Vec::new();
+            return LayoutTree::default();
         }
 
-        let width = args.output_width;
-        let height = args.output_height;
+        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+        let root = tree.new_node();
+        root.dir(LayoutDir::Row);
 
-        let mut geos = Vec::<Geometry>::new();
-
-        let (outer_gaps, inner_gaps) = match self.gaps {
-            Gaps::Absolute(gaps) => (gaps, None),
-            Gaps::Split { inner, outer } => (outer, Some(inner)),
-        };
-
-        let gaps = match inner_gaps {
-            Some(_) => 0,
-            None => outer_gaps,
-        };
-
-        let mut rect = Geometry {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        }
-        .split_at(Axis::Horizontal, 0, outer_gaps)
-        .0
-        .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, 0, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-        .0;
+        tree.set_root(root.clone());
 
         if win_count == 1 {
-            geos.push(rect)
-        } else {
-            for i in 1..win_count {
-                let factor = self
-                    .split_factors
-                    .get(&(i as usize))
-                    .copied()
-                    .unwrap_or(0.5)
-                    .clamp(0.1, 0.9);
-
-                let (axis, mut split_coord) = if i % 2 == 1 {
-                    (Axis::Vertical, rect.x + (rect.width as f32 * factor) as i32)
-                } else {
-                    (
-                        Axis::Horizontal,
-                        rect.y + (rect.height as f32 * factor) as i32,
-                    )
-                };
-                split_coord -= gaps as i32 / 2;
-
-                let (to_push, rest) = rect.split_at(axis, split_coord, gaps);
-
-                geos.push(to_push);
-
-                if let Some(rest) = rest {
-                    rect = rest;
-                } else {
-                    break;
-                }
-            }
-
-            geos.push(rect)
+            return tree;
         }
 
-        if let Some(inner_gaps) = inner_gaps {
-            for geo in geos.iter_mut() {
-                geo.x += inner_gaps as i32;
-                geo.y += inner_gaps as i32;
-                geo.width -= inner_gaps * 2;
-                geo.height -= inner_gaps * 2;
-            }
+        let windows_left = win_count - 1;
+
+        let mut current_node = root.clone();
+
+        for i in 0..windows_left {
+            let child1 = tree.new_node();
+            child1.dir(match i % 2 == 0 {
+                true => LayoutDir::Column,
+                false => LayoutDir::Row,
+            });
+            current_node.add_child(child1);
+
+            let child2 = tree.new_node();
+            child2.dir(match i % 2 == 0 {
+                true => LayoutDir::Column,
+                false => LayoutDir::Row,
+            });
+            current_node.add_child(child2.clone());
+
+            current_node = child2;
         }
 
-        geos
+        tree
     }
 }
 
@@ -640,96 +627,50 @@ impl Default for SpiralLayout {
 }
 
 impl LayoutGenerator for SpiralLayout {
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-        let win_count = args.windows.len() as u32;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+        let win_count = args.window_count;
 
         if win_count == 0 {
-            return Vec::new();
+            return LayoutTree::default();
         }
 
-        let width = args.output_width;
-        let height = args.output_height;
+        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+        let root = tree.new_node();
+        root.dir(LayoutDir::Row);
 
-        let mut geos = Vec::<Geometry>::new();
-
-        let (outer_gaps, inner_gaps) = match self.gaps {
-            Gaps::Absolute(gaps) => (gaps, None),
-            Gaps::Split { inner, outer } => (outer, Some(inner)),
-        };
-
-        let gaps = match inner_gaps {
-            Some(_) => 0,
-            None => outer_gaps,
-        };
-
-        let mut rect = Geometry {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        }
-        .split_at(Axis::Horizontal, 0, outer_gaps)
-        .0
-        .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, 0, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-        .0;
+        tree.set_root(root.clone());
 
         if win_count == 1 {
-            geos.push(rect)
-        } else {
-            for i in 1..win_count {
-                let factor = self
-                    .split_factors
-                    .get(&(i as usize))
-                    .copied()
-                    .unwrap_or(0.5)
-                    .clamp(0.1, 0.9);
-
-                let (axis, mut split_coord) = if i % 2 == 1 {
-                    (Axis::Vertical, rect.x + (rect.width as f32 * factor) as i32)
-                } else {
-                    (
-                        Axis::Horizontal,
-                        rect.y + (rect.height as f32 * factor) as i32,
-                    )
-                };
-                split_coord -= gaps as i32 / 2;
-
-                let (to_push, rest) = if let 1 | 2 = i % 4 {
-                    let (to_push, rest) = rect.split_at(axis, split_coord, gaps);
-                    (Some(to_push), rest)
-                } else {
-                    let (rest, to_push) = rect.split_at(axis, split_coord, gaps);
-                    (to_push, Some(rest))
-                };
-
-                if let Some(to_push) = to_push {
-                    geos.push(to_push);
-                }
-
-                if let Some(rest) = rest {
-                    rect = rest;
-                } else {
-                    break;
-                }
-            }
-
-            geos.push(rect)
+            return tree;
         }
 
-        if let Some(inner_gaps) = inner_gaps {
-            for geo in geos.iter_mut() {
-                geo.x += inner_gaps as i32;
-                geo.y += inner_gaps as i32;
-                geo.width -= inner_gaps * 2;
-                geo.height -= inner_gaps * 2;
-            }
+        let windows_left = win_count - 1;
+
+        let mut current_node = root;
+
+        for i in 0..windows_left {
+            let child1 = tree.new_node();
+            child1.dir(match i % 2 == 0 {
+                true => LayoutDir::Column,
+                false => LayoutDir::Row,
+            });
+            current_node.add_child(child1.clone());
+
+            let child2 = tree.new_node();
+            child2.dir(match i % 2 == 0 {
+                true => LayoutDir::Column,
+                false => LayoutDir::Row,
+            });
+            current_node.add_child(child2.clone());
+
+            current_node = match i % 4 {
+                0 | 1 => child2,
+                2 | 3 => child1,
+                _ => unreachable!(),
+            };
         }
 
-        geos
+        tree
     }
 }
 
@@ -778,172 +719,77 @@ impl Default for CornerLayout {
 }
 
 impl LayoutGenerator for CornerLayout {
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-        let win_count = args.windows.len() as u32;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+        let win_count = args.window_count;
 
         if win_count == 0 {
-            return Vec::new();
+            return LayoutTree::default();
         }
 
-        let width = args.output_width;
-        let height = args.output_height;
+        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+        let root = tree.new_node();
+        root.dir(LayoutDir::Row);
 
-        let mut geos = Vec::<Geometry>::new();
-
-        let (outer_gaps, inner_gaps) = match self.gaps {
-            Gaps::Absolute(gaps) => (gaps, None),
-            Gaps::Split { inner, outer } => (outer, Some(inner)),
-        };
-
-        let gaps = match inner_gaps {
-            Some(_) => 0,
-            None => outer_gaps,
-        };
-
-        let rect = Geometry {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        }
-        .split_at(Axis::Horizontal, 0, outer_gaps)
-        .0
-        .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, 0, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-        .0;
+        tree.set_root(root.clone());
 
         if win_count == 1 {
-            geos.push(rect)
-        } else {
-            let (mut corner_rect, vert_stack_rect) = match self.corner_loc {
-                CornerLocation::TopLeft | CornerLocation::BottomLeft => {
-                    let x_slice_point = rect.x
-                        + (rect.width as f32 * self.corner_width_factor).round() as i32
-                        - gaps as i32 / 2;
-                    let (corner_rect, vert_stack_rect) =
-                        rect.split_at(Axis::Vertical, x_slice_point, gaps);
-                    (Some(corner_rect), vert_stack_rect)
-                }
-                CornerLocation::TopRight | CornerLocation::BottomRight => {
-                    let x_slice_point = rect.x
-                        + (rect.width as f32 * (1.0 - self.corner_width_factor)).round() as i32
-                        - gaps as i32 / 2;
-                    let (vert_stack_rect, corner_rect) =
-                        rect.split_at(Axis::Vertical, x_slice_point, gaps);
-                    (corner_rect, Some(vert_stack_rect))
-                }
-            };
+            return tree;
+        }
 
-            if win_count == 2 {
-                geos.extend([corner_rect, vert_stack_rect].into_iter().flatten());
+        let corner_width_factor = self.corner_width_factor.clamp(0.1, 0.9);
+        let corner_height_factor = self.corner_height_factor.clamp(0.1, 0.9);
+
+        let corner_and_horiz_stack_node = tree.new_node();
+        corner_and_horiz_stack_node
+            .dir(LayoutDir::Column)
+            .size_proportion(corner_width_factor * 10.0);
+
+        let vert_stack_node = tree.new_node();
+        vert_stack_node
+            .dir(LayoutDir::Column)
+            .size_proportion((1.0 - corner_width_factor) * 10.0);
+
+        root.set_children(match self.corner_loc {
+            CornerLocation::TopLeft | CornerLocation::BottomLeft => {
+                [corner_and_horiz_stack_node.clone(), vert_stack_node.clone()]
+            }
+            CornerLocation::TopRight | CornerLocation::BottomRight => {
+                [vert_stack_node.clone(), corner_and_horiz_stack_node.clone()]
+            }
+        });
+
+        if win_count == 2 {
+            return tree;
+        }
+
+        let corner_node = tree.new_node();
+        corner_node.size_proportion(corner_height_factor * 10.0);
+
+        let horiz_stack_node = tree.new_node();
+        horiz_stack_node
+            .dir(LayoutDir::Row)
+            .size_proportion((1.0 - corner_height_factor) * 10.0);
+
+        corner_and_horiz_stack_node.set_children(match self.corner_loc {
+            CornerLocation::TopLeft | CornerLocation::TopRight => {
+                [corner_node, horiz_stack_node.clone()]
+            }
+            CornerLocation::BottomLeft | CornerLocation::BottomRight => {
+                [horiz_stack_node.clone(), corner_node]
+            }
+        });
+
+        for i in 0..win_count - 1 {
+            if i % 2 == 0 {
+                let child = tree.new_node();
+                vert_stack_node.add_child(child);
             } else {
-                let horiz_stack_rect = match self.corner_loc {
-                    CornerLocation::TopLeft | CornerLocation::TopRight => {
-                        let y_slice_point = rect.y
-                            + (rect.height as f32 * self.corner_height_factor).round() as i32
-                            - gaps as i32 / 2;
-
-                        corner_rect.and_then(|corner| {
-                            let (corner, horiz) =
-                                corner.split_at(Axis::Horizontal, y_slice_point, gaps);
-                            corner_rect = Some(corner);
-                            horiz
-                        })
-                    }
-                    CornerLocation::BottomLeft | CornerLocation::BottomRight => {
-                        let y_slice_point = rect.y
-                            + (rect.height as f32 * (1.0 - self.corner_height_factor)).round()
-                                as i32
-                            - gaps as i32 / 2;
-
-                        corner_rect.map(|corner| {
-                            let (horiz, corner) =
-                                corner.split_at(Axis::Horizontal, y_slice_point, gaps);
-                            corner_rect = corner;
-                            horiz
-                        })
-                    }
-                };
-
-                if let (Some(mut horiz_stack_rect), Some(mut vert_stack_rect), Some(corner_rect)) =
-                    (horiz_stack_rect, vert_stack_rect, corner_rect)
-                {
-                    geos.push(corner_rect);
-
-                    let mut vert_geos = Vec::new();
-                    let mut horiz_geos = Vec::new();
-
-                    let vert_stack_count = ((win_count - 1) as f32 / 2.0).ceil() as i32;
-                    let horiz_stack_count = ((win_count - 1) as f32 / 2.0).floor() as i32;
-
-                    let vert_stack_y = vert_stack_rect.y;
-                    let vert_win_height = vert_stack_rect.height as f32 / vert_stack_count as f32;
-
-                    for i in 1..vert_stack_count {
-                        let slice_point = vert_stack_y
-                            + (vert_win_height * i as f32).round() as i32
-                            - gaps as i32 / 2;
-
-                        let (to_push, rest) =
-                            vert_stack_rect.split_at(Axis::Horizontal, slice_point, gaps);
-
-                        vert_geos.push(to_push);
-
-                        if let Some(rest) = rest {
-                            vert_stack_rect = rest;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    vert_geos.push(vert_stack_rect);
-
-                    let horiz_stack_x = horiz_stack_rect.x;
-                    let horiz_win_width = horiz_stack_rect.width as f32 / horiz_stack_count as f32;
-
-                    for i in 1..horiz_stack_count {
-                        let slice_point = horiz_stack_x
-                            + (horiz_win_width * i as f32).round() as i32
-                            - gaps as i32 / 2;
-
-                        let (to_push, rest) =
-                            horiz_stack_rect.split_at(Axis::Vertical, slice_point, gaps);
-
-                        horiz_geos.push(to_push);
-
-                        if let Some(rest) = rest {
-                            horiz_stack_rect = rest;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    horiz_geos.push(horiz_stack_rect);
-
-                    for i in 0..(vert_geos.len() + horiz_geos.len()) {
-                        if i % 2 == 0 {
-                            geos.push(vert_geos[i / 2]);
-                        } else {
-                            geos.push(horiz_geos[i / 2]);
-                        }
-                    }
-                }
+                let child = tree.new_node();
+                horiz_stack_node.add_child(child);
             }
         }
 
-        if let Some(inner_gaps) = inner_gaps {
-            for geo in geos.iter_mut() {
-                geo.x += inner_gaps as i32;
-                geo.y += inner_gaps as i32;
-                geo.width -= inner_gaps * 2;
-                geo.height -= inner_gaps * 2;
-            }
-        }
-
-        geos
+        tree
     }
 }
 
@@ -971,150 +817,215 @@ impl Default for FairLayout {
 }
 
 impl LayoutGenerator for FairLayout {
-    fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-        let win_count = args.windows.len() as u32;
+    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+        let win_count = args.window_count;
 
         if win_count == 0 {
-            return Vec::new();
+            return LayoutTree::default();
         }
 
-        let width = args.output_width;
-        let height = args.output_height;
+        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+        let root = tree.new_node();
+        root.dir(match self.axis {
+            Axis::Horizontal => LayoutDir::Column,
+            Axis::Vertical => LayoutDir::Row,
+        });
 
-        let mut geos = Vec::<Geometry>::new();
-
-        let (outer_gaps, inner_gaps) = match self.gaps {
-            Gaps::Absolute(gaps) => (gaps, None),
-            Gaps::Split { inner, outer } => (outer, Some(inner)),
-        };
-
-        let gaps = match inner_gaps {
-            Some(_) => 0,
-            None => outer_gaps,
-        };
-
-        let mut rect = Geometry {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        }
-        .split_at(Axis::Horizontal, 0, outer_gaps)
-        .0
-        .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, 0, outer_gaps)
-        .0
-        .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-        .0;
+        tree.set_root(root.clone());
 
         if win_count == 1 {
-            geos.push(rect);
-        } else if win_count == 2 {
-            let len = match self.axis {
-                Axis::Vertical => rect.width,
-                Axis::Horizontal => rect.height,
-            };
+            return tree;
+        }
 
-            let coord = match self.axis {
-                Axis::Vertical => rect.x,
-                Axis::Horizontal => rect.y,
-            };
+        if win_count == 2 {
+            let child1 = tree.new_node();
+            let child2 = tree.new_node();
+            root.set_children([child1, child2]);
+            return tree;
+        }
 
-            let (rect1, rect2) =
-                rect.split_at(self.axis, coord + len as i32 / 2 - gaps as i32 / 2, gaps);
+        let line_count = (win_count as f32).sqrt().round() as u32;
 
-            geos.push(rect1);
-            if let Some(rect2) = rect2 {
-                geos.push(rect2);
-            }
+        let mut wins_per_line = Vec::new();
+
+        let max_per_line = if win_count > line_count * line_count {
+            line_count + 1
         } else {
-            let line_count = (win_count as f32).sqrt().round() as u32;
+            line_count
+        };
 
-            let mut wins_per_line = Vec::new();
-
-            let max_per_line = if win_count > line_count * line_count {
-                line_count + 1
-            } else {
-                line_count
-            };
-
-            for i in 1..=win_count {
-                let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
-                if wins_per_line.get(index).is_none() {
-                    wins_per_line.push(0);
-                }
-                wins_per_line[index] += 1;
+        for i in 1..=win_count {
+            let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
+            if wins_per_line.get(index).is_none() {
+                wins_per_line.push(0);
             }
-
-            assert_eq!(wins_per_line.len(), line_count as usize);
-
-            let mut line_rects = Vec::new();
-
-            let (coord, len, axis) = match self.axis {
-                Axis::Horizontal => (
-                    rect.y,
-                    rect.height as f32 / line_count as f32,
-                    Axis::Horizontal,
-                ),
-                Axis::Vertical => (
-                    rect.x,
-                    rect.width as f32 / line_count as f32,
-                    Axis::Vertical,
-                ),
-            };
-
-            for i in 1..line_count {
-                let slice_point = coord + (len * i as f32) as i32 - gaps as i32 / 2;
-                let (to_push, rest) = rect.split_at(axis, slice_point, gaps);
-                line_rects.push(to_push);
-                if let Some(rest) = rest {
-                    rect = rest;
-                } else {
-                    break;
-                }
-            }
-
-            line_rects.push(rect);
-
-            for (i, mut line_rect) in line_rects.into_iter().enumerate() {
-                let (coord, len, axis) = match self.axis {
-                    Axis::Vertical => (
-                        line_rect.y,
-                        line_rect.height as f32 / wins_per_line[i] as f32,
-                        Axis::Horizontal,
-                    ),
-                    Axis::Horizontal => (
-                        line_rect.x,
-                        line_rect.width as f32 / wins_per_line[i] as f32,
-                        Axis::Vertical,
-                    ),
-                };
-
-                for j in 1..wins_per_line[i] {
-                    let slice_point = coord + (len * j as f32) as i32 - gaps as i32 / 2;
-                    let (to_push, rest) = line_rect.split_at(axis, slice_point, gaps);
-                    geos.push(to_push);
-                    if let Some(rest) = rest {
-                        line_rect = rest;
-                    } else {
-                        break;
-                    }
-                }
-
-                geos.push(line_rect);
-            }
+            wins_per_line[index] += 1;
         }
 
-        if let Some(inner_gaps) = inner_gaps {
-            for geo in geos.iter_mut() {
-                geo.x += inner_gaps as i32;
-                geo.y += inner_gaps as i32;
-                geo.width -= inner_gaps * 2;
-                geo.height -= inner_gaps * 2;
-            }
-        }
+        let lines = wins_per_line.into_iter().map(|win_ct| {
+            let line_root = tree.new_node();
+            line_root.dir(match self.axis {
+                Axis::Horizontal => LayoutDir::Row,
+                Axis::Vertical => LayoutDir::Column,
+            });
 
-        geos
+            for _ in 0..win_ct {
+                let child = tree.new_node();
+                line_root.add_child(child);
+            }
+
+            line_root
+        });
+
+        root.set_children(lines);
+
+        tree
     }
 }
+//     fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
+//         let win_count = args.windows.len() as u32;
+//
+//         if win_count == 0 {
+//             return Vec::new();
+//         }
+//
+//         let width = args.output_width;
+//         let height = args.output_height;
+//
+//         let mut geos = Vec::<Geometry>::new();
+//
+//         let (outer_gaps, inner_gaps) = match self.gaps {
+//             Gaps::Absolute(gaps) => (gaps, None),
+//             Gaps::Split { inner, outer } => (outer, Some(inner)),
+//         };
+//
+//         let gaps = match inner_gaps {
+//             Some(_) => 0,
+//             None => outer_gaps,
+//         };
+//
+//         let mut rect = Geometry {
+//             x: 0,
+//             y: 0,
+//             width,
+//             height,
+//         }
+//         .split_at(Axis::Horizontal, 0, outer_gaps)
+//         .0
+//         .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
+//         .0
+//         .split_at(Axis::Vertical, 0, outer_gaps)
+//         .0
+//         .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
+//         .0;
+//
+//         if win_count == 1 {
+//             geos.push(rect);
+//         } else if win_count == 2 {
+//             let len = match self.axis {
+//                 Axis::Vertical => rect.width,
+//                 Axis::Horizontal => rect.height,
+//             };
+//
+//             let coord = match self.axis {
+//                 Axis::Vertical => rect.x,
+//                 Axis::Horizontal => rect.y,
+//             };
+//
+//             let (rect1, rect2) =
+//                 rect.split_at(self.axis, coord + len as i32 / 2 - gaps as i32 / 2, gaps);
+//
+//             geos.push(rect1);
+//             if let Some(rect2) = rect2 {
+//                 geos.push(rect2);
+//             }
+//         } else {
+//             let line_count = (win_count as f32).sqrt().round() as u32;
+//
+//             let mut wins_per_line = Vec::new();
+//
+//             let max_per_line = if win_count > line_count * line_count {
+//                 line_count + 1
+//             } else {
+//                 line_count
+//             };
+//
+//             for i in 1..=win_count {
+//                 let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
+//                 if wins_per_line.get(index).is_none() {
+//                     wins_per_line.push(0);
+//                 }
+//                 wins_per_line[index] += 1;
+//             }
+//
+//             assert_eq!(wins_per_line.len(), line_count as usize);
+//
+//             let mut line_rects = Vec::new();
+//
+//             let (coord, len, axis) = match self.axis {
+//                 Axis::Horizontal => (
+//                     rect.y,
+//                     rect.height as f32 / line_count as f32,
+//                     Axis::Horizontal,
+//                 ),
+//                 Axis::Vertical => (
+//                     rect.x,
+//                     rect.width as f32 / line_count as f32,
+//                     Axis::Vertical,
+//                 ),
+//             };
+//
+//             for i in 1..line_count {
+//                 let slice_point = coord + (len * i as f32) as i32 - gaps as i32 / 2;
+//                 let (to_push, rest) = rect.split_at(axis, slice_point, gaps);
+//                 line_rects.push(to_push);
+//                 if let Some(rest) = rest {
+//                     rect = rest;
+//                 } else {
+//                     break;
+//                 }
+//             }
+//
+//             line_rects.push(rect);
+//
+//             for (i, mut line_rect) in line_rects.into_iter().enumerate() {
+//                 let (coord, len, axis) = match self.axis {
+//                     Axis::Vertical => (
+//                         line_rect.y,
+//                         line_rect.height as f32 / wins_per_line[i] as f32,
+//                         Axis::Horizontal,
+//                     ),
+//                     Axis::Horizontal => (
+//                         line_rect.x,
+//                         line_rect.width as f32 / wins_per_line[i] as f32,
+//                         Axis::Vertical,
+//                     ),
+//                 };
+//
+//                 for j in 1..wins_per_line[i] {
+//                     let slice_point = coord + (len * j as f32) as i32 - gaps as i32 / 2;
+//                     let (to_push, rest) = line_rect.split_at(axis, slice_point, gaps);
+//                     geos.push(to_push);
+//                     if let Some(rest) = rest {
+//                         line_rect = rest;
+//                     } else {
+//                         break;
+//                     }
+//                 }
+//
+//                 geos.push(line_rect);
+//             }
+//         }
+//
+//         if let Some(inner_gaps) = inner_gaps {
+//             for geo in geos.iter_mut() {
+//                 geo.x += inner_gaps as i32;
+//                 geo.y += inner_gaps as i32;
+//                 geo.width -= inner_gaps * 2;
+//                 geo.height -= inner_gaps * 2;
+//             }
+//         }
+//
+//         geos
+//     }
+// }

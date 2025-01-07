@@ -479,7 +479,7 @@ impl Pinnacle {
             .add_service(pinnacle_api_defs::pinnacle::input::v1::input_service_server::InputServiceServer::new(input_service))
             .add_service(pinnacle_api_defs::pinnacle::process::v1::process_service_server::ProcessServiceServer::new(process_service))
             .add_service(pinnacle_api_defs::pinnacle::signal::v1::signal_service_server::SignalServiceServer::new(signal_service))
-            .add_service(LayoutServiceServer::new(layout_service))
+            .add_service(pinnacle_api_defs::pinnacle::layout::v1::layout_service_server::LayoutServiceServer::new(layout_service))
             .add_service(RenderServiceServer::new(render_service));
 
         self.grpc_server_join_handle = Some(tokio::spawn(async move {

@@ -186,23 +186,9 @@ pub fn connect_signal(signal: TagSignal) -> SignalHandle {
 /// A handle to a tag.
 ///
 /// This handle allows you to do things like switch to tags and get their properties.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TagHandle {
     pub(crate) id: u32,
-}
-
-impl PartialEq for TagHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for TagHandle {}
-
-impl std::hash::Hash for TagHandle {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
 }
 
 impl TagHandle {

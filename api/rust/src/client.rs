@@ -1,5 +1,6 @@
 use pinnacle_api_defs::pinnacle::{
     input::v1::input_service_client::InputServiceClient,
+    layout::v1::layout_service_client::LayoutServiceClient,
     output::v1::output_service_client::OutputServiceClient,
     process::v1::process_service_client::ProcessServiceClient,
     tag::v1::tag_service_client::TagServiceClient,
@@ -20,6 +21,7 @@ pub struct Client {
     output: OutputServiceClient<Channel>,
     input: InputServiceClient<Channel>,
     process: ProcessServiceClient<Channel>,
+    layout: LayoutServiceClient<Channel>,
 }
 
 impl Client {
@@ -59,6 +61,10 @@ impl Client {
         Self::get().process.clone()
     }
 
+    pub fn layout() -> LayoutServiceClient<Channel> {
+        Self::get().layout.clone()
+    }
+
     fn new(channel: Channel) -> Self {
         Self {
             pinnacle: PinnacleServiceClient::new(channel.clone()),
@@ -67,6 +73,7 @@ impl Client {
             output: OutputServiceClient::new(channel.clone()),
             input: InputServiceClient::new(channel.clone()),
             process: ProcessServiceClient::new(channel.clone()),
+            layout: LayoutServiceClient::new(channel.clone()),
         }
     }
 }

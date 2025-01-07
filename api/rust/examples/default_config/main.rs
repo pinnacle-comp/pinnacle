@@ -4,10 +4,15 @@ use pinnacle_api::input::libinput::Capability;
 use pinnacle_api::input::Bind;
 use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
-use pinnacle_api::layout::{
-    CornerLayout, CornerLocation, CyclingLayoutManager, DwindleLayout, FairLayout, MasterSide,
-    MasterStackLayout, SpiralLayout,
-};
+use pinnacle_api::layout;
+use pinnacle_api::layout::CornerLayout;
+use pinnacle_api::layout::CornerLocation;
+use pinnacle_api::layout::CyclingLayoutManager;
+use pinnacle_api::layout::DwindleLayout;
+use pinnacle_api::layout::FairLayout;
+use pinnacle_api::layout::MasterSide;
+use pinnacle_api::layout::MasterStackLayout;
+use pinnacle_api::layout::SpiralLayout;
 use pinnacle_api::output;
 use pinnacle_api::output::OutputSetup;
 use pinnacle_api::pinnacle;
@@ -34,7 +39,6 @@ async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
     let ApiModules {
-        layout,
         render,
         #[cfg(feature = "snowcap")]
         snowcap,
@@ -230,7 +234,8 @@ async fn main() {
     // Create a `CyclingLayoutManager` that can cycle between layouts on different tags.
     //
     // It takes in some layout generators that need to be boxed and dyn-coerced.
-    let layout_requester = layout.set_manager(CyclingLayoutManager::new([
+
+    let layout_requester = layout::set_manager(CyclingLayoutManager::new([
         Box::<MasterStackLayout>::default() as _,
         Box::new(MasterStackLayout {
             master_side: MasterSide::Right,
@@ -295,7 +300,7 @@ async fn main() {
             };
             let Some(first_active_tag) = focused_op
                 .tags()
-                .batch_find(|tg| Box::pin(tg.active_async()), |active| *active)
+                .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
             else {
                 return;
             };
@@ -362,11 +367,6 @@ async fn main() {
     }
 
     input::libinput::for_all_devices(|device| {
-        // TODO: remove this
-        if device.capabilities().contains(Capability::POINTER) {
-            device.set_accel_profile(AccelProfile::Flat);
-        }
-
         if device.get_type().is_touchpad() {
             device.set_natural_scroll(true);
         }

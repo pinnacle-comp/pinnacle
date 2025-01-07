@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package pinnacle.layout.v1;
+
+message LayoutTree {
+    uint32 tree_id = 1;
+    float outer_gaps = 2;
+    float inner_gaps = 3;
+    LayoutNode root = 4;
+}
+
+message LayoutNode {
+    uint32 node_id = 1;
+    NodeStyle style = 2;
+    repeated LayoutNode children = 3;
+}
+
+enum FlexDir {
+    FLEX_DIR_UNSPECIFIED = 0;
+    FLEX_DIR_ROW = 1;
+    FLEX_DIR_COLUMN = 2;
+}
+
+message NodeStyle {
+    FlexDir flex_dir = 1;
+    float size_proportion = 2;
+}
+
+message LayoutRequest {
+    message TreeResponse {
+        uint32 request_id = 1;
+        LayoutTree tree = 2;
+        string output_name = 3;
+    }
+
+    message ForceLayout {
+        string output_name = 1;
+    }
+
+    oneof request {
+        TreeResponse tree_response = 1;
+        ForceLayout force_layout = 2;
+    }
+}
+
+message LayoutResponse {
+    uint32 request_id = 1;
+    string output_name = 2;
+    uint32 window_count = 3;
+    repeated uint32 tag_ids = 4;
+}
+
+service LayoutService {
+    rpc Layout(stream LayoutRequest) returns (stream LayoutResponse);
+}

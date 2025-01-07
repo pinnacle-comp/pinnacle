@@ -1692,6 +1692,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "grid"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36119f3a540b086b4e436bb2b588cf98a68863470e0e880f4d0842f112a3183a"
+
+[[package]]
 name = "guillotiere"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3204,6 +3210,7 @@ dependencies = [
  "snowcap",
  "snowcap-api",
  "sysinfo 0.33.0",
+ "taffy",
  "temp-env",
  "tempfile",
  "test-log",
@@ -3216,6 +3223,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "treediff",
  "vergen-gitcl",
  "x11rb",
  "xcursor",
@@ -4204,6 +4212,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "taffy"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5ee7dc8eeb09b5952509850485cf7e73b81af1a4cd5d71f2ee34ed2aa0c562a"
+dependencies = [
+ "arrayvec",
+ "grid",
+ "serde",
+ "slotmap",
+]
+
+[[package]]
 name = "temp-env"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4665,6 +4685,12 @@ dependencies = [
  "tracing-core",
  "tracing-log",
 ]
+
+[[package]]
+name = "treediff"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2ce481b2b7c2534fe7b5242cccebf37f9084392665c6a3783c414a1bada5432"
 
 [[package]]
 name = "try-lock"
