@@ -14,7 +14,6 @@ use pinnacle_api::layout::MasterSide;
 use pinnacle_api::layout::MasterStackLayout;
 use pinnacle_api::layout::SpiralLayout;
 use pinnacle_api::output;
-use pinnacle_api::output::OutputSetup;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::process::Command;
@@ -318,7 +317,10 @@ async fn main() {
     let tag_names = ["1", "2", "3", "4", "5"];
 
     // Setup all monitors with tags "1" through "5"
-    output::setup([OutputSetup::new_with_matcher(|_| true).with_tags(tag_names)]);
+    output::for_all_outputs(move |output| {
+        let mut tags = tag::add(output, tag_names);
+        tags.next().unwrap().set_active(true);
+    });
 
     for tag_name in tag_names {
         // `mod_key + 1-5` switches to tag "1" to "5"
