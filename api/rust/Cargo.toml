@@ -11,7 +11,6 @@ categories = ["api-bindings", "config"]
 
 [dependencies]
 pinnacle-api-defs = { workspace = true }
-pinnacle-api-macros = { path = "./pinnacle-api-macros" }
 tokio = { workspace = true, features = ["net", "process"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
@@ -22,10 +21,11 @@ xkbcommon = { workspace = true }
 bitflags = { workspace = true }
 snowcap-api = { path = "../../snowcap/api/rust", optional = true }
 indexmap = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 num_enum = "0.7.3"
 
 [features]
 default = ["snowcap"]
 snowcap = ["dep:snowcap-api"]
+
+[lints.rust]
+missing_docs = "warn"

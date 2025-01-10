@@ -8,10 +8,9 @@ use std::pin::Pin;
 
 use futures::{stream::FuturesOrdered, Future, StreamExt};
 
-use crate::block_on_tokio;
-
 pub use crate::batch_boxed;
 pub use crate::batch_boxed_async;
+use crate::BlockOnTokio;
 
 /// The size and location of something.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -169,7 +168,7 @@ impl Geometry {
 /// ```
 ///
 pub fn batch<T>(requests: impl IntoIterator<Item = impl Future<Output = T>>) -> Vec<T> {
-    block_on_tokio(batch_async(requests))
+    batch_async(requests).block_on_tokio()
 }
 
 /// The async version of [`batch`].

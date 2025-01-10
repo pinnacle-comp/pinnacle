@@ -3240,14 +3240,11 @@ dependencies = [
  "indexmap 2.7.0",
  "num_enum",
  "pinnacle-api-defs",
- "pinnacle-api-macros",
  "snowcap-api",
  "tokio",
  "tokio-stream",
  "tonic",
  "tower 0.5.2",
- "tracing",
- "tracing-subscriber",
  "xkbcommon 0.8.0",
 ]
 
@@ -3259,15 +3256,6 @@ dependencies = [
  "tonic",
  "tonic-build",
  "walkdir",
-]
-
-[[package]]
-name = "pinnacle-api-macros"
-version = "0.0.2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.90",
 ]
 
 [[package]]

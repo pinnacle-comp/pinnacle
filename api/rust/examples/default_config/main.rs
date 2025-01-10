@@ -23,14 +23,7 @@ use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
 
-// Pinnacle needs to perform some setup before and after your config,
-// which is what this macro does.
-//
-// By default, logging is disabled here because this config is embedded inside Pinnacle
-// and that would cause a panic. Remove `internal_tracing = false` if you want to
-// enable logging for debugging.
-#[pinnacle_api::config(internal_tracing = false)]
-async fn main() {
+async fn config() {
     // Change the mod key to `Alt` when running as a nested window.
     let mod_key = match pinnacle::backend() {
         Backend::Tty => Mod::SUPER,
@@ -373,3 +366,5 @@ async fn main() {
 
     Command::new(terminal).once().spawn();
 }
+
+pinnacle_api::main!(config);
