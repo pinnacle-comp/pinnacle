@@ -1,9 +1,8 @@
 use pinnacle_api::input;
-use pinnacle_api::input::libinput::AccelProfile;
-use pinnacle_api::input::libinput::Capability;
 use pinnacle_api::input::Bind;
 use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
+use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
 use pinnacle_api::layout::CornerLayout;
 use pinnacle_api::layout::CornerLocation;
@@ -18,13 +17,11 @@ use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::process::Command;
 use pinnacle_api::signal::WindowSignal;
+use pinnacle_api::snowcap::BindOverlay;
+use pinnacle_api::snowcap::QuitPrompt;
 use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
-use pinnacle_api::{
-    input::{Mod, MouseButton},
-    ApiModules,
-};
 
 // Pinnacle needs to perform some setup before and after your config,
 // which is what this macro does.
@@ -34,14 +31,6 @@ use pinnacle_api::{
 // enable logging for debugging.
 #[pinnacle_api::config(internal_tracing = false)]
 async fn main() {
-    // Deconstruct to get all the APIs.
-    #[allow(unused_variables)]
-    let ApiModules {
-        #[cfg(feature = "snowcap")]
-        snowcap,
-        ..
-    } = ApiModules::new();
-
     // Change the mod key to `Alt` when running as a nested window.
     let mod_key = match pinnacle::backend() {
         Backend::Tty => Mod::SUPER,
@@ -85,7 +74,7 @@ async fn main() {
     #[cfg(feature = "snowcap")]
     input::keybind(mod_key, 's')
         .on_press(|| {
-            snowcap.integration.keybind_overlay().show();
+            BindOverlay::new().show();
         })
         .group("Compositor")
         .description("Show the bindings overlay");
@@ -120,7 +109,7 @@ async fn main() {
         // `mod_key + shift + q` shows the quit prompt
         input::keybind(mod_key | Mod::SHIFT, 'q')
             .on_press(|| {
-                snowcap.integration.quit_prompt().show();
+                QuitPrompt::new().show();
             })
             .group("Compositor")
             .description("Show quit prompt");

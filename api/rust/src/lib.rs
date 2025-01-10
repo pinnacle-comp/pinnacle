@@ -87,10 +87,6 @@
 use client::Client;
 use futures::{Future, StreamExt};
 use hyper_util::rt::TokioIo;
-use signal::SignalState;
-#[cfg(feature = "snowcap")]
-use snowcap::Snowcap;
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use tracing::info;
@@ -111,43 +107,10 @@ pub mod window;
 mod client;
 
 pub use pinnacle_api_macros::config;
-#[cfg(feature = "snowcap")]
-pub use snowcap_api;
 pub use tokio;
+pub use xkbcommon::xkb::Keysym;
 
-/// A struct containing all of the config module structs.
-///
-/// Everything in here is a static reference because even though the modules are
-/// copy-able unit structs, you still have to put `move` when using them in closures,
-/// so this is just a minor quality-of-life thing.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ApiModules {
-    #[cfg(feature = "snowcap")]
-    /// The snowcap widget system.
-    pub snowcap: &'static Snowcap,
-}
-
-impl Default for ApiModules {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ApiModules {
-    /// Creates all the API modules.
-    pub const fn new() -> Self {
-        Self {
-            #[cfg(feature = "snowcap")]
-            snowcap: {
-                const SNOWCAP: Snowcap = Snowcap::new();
-                &SNOWCAP
-            },
-        }
-    }
-}
-
-/// Connects to Pinnacle and builds the configuration structs.
+/// Connects to Pinnacle.
 ///
 /// This function is inserted at the top of your config through the [`config`] macro.
 /// You should use that macro instead of this function directly.
