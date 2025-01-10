@@ -32,7 +32,7 @@ install-protos:
     proto_dir="{{xdg_data_dir}}/protobuf"
     rm -rf "${proto_dir}"
     mkdir -p "{{xdg_data_dir}}"
-    cp -r "{{rootdir}}/api/protocol" "${proto_dir}"
+    cp -r "{{rootdir}}/api/protobuf" "${proto_dir}"
 
 # Install the Lua library (requires Luarocks)
 install-lua-lib: gen-lua-pb-defs
@@ -75,7 +75,7 @@ install-protos-root:
     proto_dir="{{root_xdg_data_dir}}/protobuf"
     rm -rf "${proto_dir}"
     mkdir -p "{{root_xdg_data_dir}}"
-    cp -r "{{rootdir}}/api/protocol" "${proto_dir}"
+    cp -r "{{rootdir}}/api/protobuf" "${proto_dir}"
 
 # [root] Install the Lua library (requires Luarocks)
 install-lua-lib-root:
@@ -93,7 +93,7 @@ gen-lua-pb-defs:
     #!/usr/bin/env bash
     set -euxo pipefail
     cargo build --package lua-build
-    ./target/debug/lua-build ./api/protocol > "./api/lua/pinnacle/grpc/defs.lua"
+    ./target/debug/lua-build ./api/protobuf > "./api/lua/pinnacle/grpc/defs.lua"
 
 # Run `cargo run`
 run *args: gen-lua-pb-defs
