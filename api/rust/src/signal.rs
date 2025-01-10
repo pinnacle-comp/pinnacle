@@ -26,8 +26,8 @@ use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::Streaming;
 
 use crate::{
-    block_on_tokio, input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle,
-    window::WindowHandle,
+    input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle, window::WindowHandle,
+    BlockOnTokio,
 };
 
 pub(crate) trait Signal {
@@ -96,7 +96,8 @@ macro_rules! signals {
                     let channels = connect_signal::<_, _, <$name as Signal>::Callback, _, _>(
                         self.callback_count.clone(),
                         |out| {
-                            block_on_tokio($crate::signal().$req(out))
+                            $crate::client::Client::signal().$req(out)
+                                .block_on_tokio()
                                 .expect("failed to request signal connection")
                                 .into_inner()
                         },

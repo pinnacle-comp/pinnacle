@@ -32,15 +32,10 @@ use crate::{
     client::Client,
     input::MouseButton,
     signal::{SignalHandle, WindowSignal},
-    signal_module,
     tag::TagHandle,
     util::{Batch, Point, Size},
     BlockOnTokio,
 };
-
-use self::rules::{WindowRule, WindowRuleCondition};
-
-pub mod rules;
 
 pub fn get_all() -> impl Iterator<Item = WindowHandle> {
     get_all_async().block_on_tokio()
@@ -85,30 +80,13 @@ pub fn begin_resize(button: MouseButton) {
         .unwrap();
 }
 
-///// Add a window rule.
-/////
-///// A window rule is a set of criteria that a window must open with.
-///// For it to apply, a [`WindowRuleCondition`] must evaluate to true for the window in question.
-/////
-///// See the [`rules`] module for more information.
-// pub fn add_window_rule(cond: WindowRuleCondition, rule: WindowRule) {
-//     if let Err(err) = block_on_tokio(crate::window().add_window_rule(
-//         window::v0alpha1::AddWindowRuleRequest {
-//             cond: Some(cond.0),
-//             rule: Some(rule.0),
-//         },
-//     )) {
-//         error!("Failed to add window rule: {err}");
-//     }
-// }
-
 /// Connect to a window signal.
 ///
 /// The compositor will fire off signals that your config can listen for and act upon.
 /// You can pass in a [`WindowSignal`] along with a callback and it will get run
 /// with the necessary arguments every time a signal of that type is received.
 pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
-    let mut signal_state = signal_module();
+    let mut signal_state = Client::signal_state();
 
     match signal {
         WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),

@@ -3,30 +3,23 @@ pub mod layout;
 pub mod output;
 pub mod pinnacle;
 pub mod process;
+pub mod render;
 pub mod signal;
 pub mod tag;
 pub mod window;
 
-use std::{ffi::OsString, pin::Pin, process::Stdio};
+use std::pin::Pin;
 
-use pinnacle_api_defs::pinnacle::{
-    process::v0alpha1::{process_service_server, SetEnvRequest, SpawnRequest, SpawnResponse},
-    render::v0alpha1::{
-        render_service_server, Filter, SetDownscaleFilterRequest, SetUpscaleFilterRequest,
-    },
-};
-use smithay::{backend::renderer::TextureFilter, reexports::calloop};
-use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
+use smithay::reexports::calloop;
 use tokio::{
-    io::AsyncBufReadExt,
     sync::mpsc::{unbounded_channel, UnboundedSender},
     task::JoinHandle,
 };
 use tokio_stream::{Stream, StreamExt};
-use tonic::{Request, Response, Status, Streaming};
-use tracing::{debug, error, warn};
+use tonic::{Response, Status, Streaming};
+use tracing::{debug, warn};
 
-use crate::{backend::BackendData, state::State, util::restore_nofile_rlimit};
+use crate::state::State;
 
 type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
@@ -164,7 +157,6 @@ where
     };
 
     let join_handle = tokio::spawn(with_in_stream);
-    // let join_handle = tokio::spawn(async {});
 
     let with_out_stream_and_in_stream_join_handle = Box::new(|state: &mut State| {
         with_out_stream_and_in_stream_join_handle(state, sender, join_handle);
@@ -176,67 +168,4 @@ where
 
     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     Ok(Response::new(Box::pin(receiver_stream)))
-}
-
-pub struct RenderService {
-    sender: StateFnSender,
-}
-
-impl RenderService {
-    pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
-    }
-}
-
-#[tonic::async_trait]
-impl render_service_server::RenderService for RenderService {
-    async fn set_upscale_filter(
-        &self,
-        request: Request<SetUpscaleFilterRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-        if let Filter::Unspecified = request.filter() {
-            return Err(Status::invalid_argument("unspecified filter"));
-        }
-
-        let filter = match request.filter() {
-            Filter::Bilinear => TextureFilter::Linear,
-            Filter::NearestNeighbor => TextureFilter::Nearest,
-            _ => unreachable!(),
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            state.backend.set_upscale_filter(filter);
-            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
-                state.backend.reset_buffers(&output);
-                state.schedule_render(&output);
-            }
-        })
-        .await
-    }
-
-    async fn set_downscale_filter(
-        &self,
-        request: Request<SetDownscaleFilterRequest>,
-    ) -> Result<Response<()>, Status> {
-        let request = request.into_inner();
-        if let Filter::Unspecified = request.filter() {
-            return Err(Status::invalid_argument("unspecified filter"));
-        }
-
-        let filter = match request.filter() {
-            Filter::Bilinear => TextureFilter::Linear,
-            Filter::NearestNeighbor => TextureFilter::Nearest,
-            _ => unreachable!(),
-        };
-
-        run_unary_no_response(&self.sender, move |state| {
-            state.backend.set_downscale_filter(filter);
-            for output in state.pinnacle.outputs.keys().cloned().collect::<Vec<_>>() {
-                state.backend.reset_buffers(&output);
-                state.schedule_render(&output);
-            }
-        })
-        .await
-    }
 }

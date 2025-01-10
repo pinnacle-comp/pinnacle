@@ -21,7 +21,6 @@ use pinnacle_api::signal::WindowSignal;
 use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
-use pinnacle_api::window::rules::{DecorationMode, WindowRule, WindowRuleCondition};
 use pinnacle_api::{
     input::{Mod, MouseButton},
     ApiModules,
@@ -38,7 +37,6 @@ async fn main() {
     // Deconstruct to get all the APIs.
     #[allow(unused_variables)]
     let ApiModules {
-        render,
         #[cfg(feature = "snowcap")]
         snowcap,
         ..

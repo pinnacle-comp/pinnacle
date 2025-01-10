@@ -23,7 +23,7 @@ use tokio_stream::StreamExt;
 use crate::{
     client::Client,
     signal::{InputSignal, SignalHandle},
-    signal_module, BlockOnTokio,
+    BlockOnTokio,
 };
 
 pub mod libinput;
@@ -666,7 +666,7 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
 }
 
 pub fn connect_signal(signal: InputSignal) -> SignalHandle {
-    let mut signal_state = signal_module();
+    let mut signal_state = Client::signal_state();
 
     match signal {
         InputSignal::DeviceAdded(f) => signal_state.input_device_added.add_callback(f),

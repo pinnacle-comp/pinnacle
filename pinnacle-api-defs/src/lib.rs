@@ -112,6 +112,10 @@ pub mod pinnacle {
         pub mod v0alpha1 {
             tonic::include_proto!("pinnacle.render.v0alpha1");
         }
+
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.render.v1");
+        }
     }
 
     pub mod util {

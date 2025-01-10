@@ -87,16 +87,11 @@
 use client::Client;
 use futures::{Future, StreamExt};
 use hyper_util::rt::TokioIo;
-use pinnacle_api_defs::pinnacle::{
-    render::v0alpha1::render_service_client::RenderServiceClient,
-    signal::v1::signal_service_client::SignalServiceClient,
-};
-use render::Render;
 use signal::SignalState;
 #[cfg(feature = "snowcap")]
 use snowcap::Snowcap;
-use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
-use tonic::transport::{Channel, Endpoint, Uri};
+use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
+use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 use tracing::info;
 
@@ -120,32 +115,6 @@ pub use pinnacle_api_macros::config;
 pub use snowcap_api;
 pub use tokio;
 
-// These are all `RwLock<Option>` instead of `OnceLock` purely for the fact that
-// tonic doesn't like it when you use clients across tokio runtimes, and these are static
-// meaning they would get reused, so this allows us to recreate the client on a
-// different runtime when testing.
-static RENDER: RwLock<Option<RenderServiceClient<Channel>>> = RwLock::const_new(None);
-static SIGNAL: RwLock<Option<SignalServiceClient<Channel>>> = RwLock::const_new(None);
-
-static SIGNAL_MODULE: Mutex<Option<SignalState>> = Mutex::const_new(None);
-
-pub(crate) fn render() -> RenderServiceClient<Channel> {
-    block_on_tokio(RENDER.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
-pub(crate) fn signal() -> SignalServiceClient<Channel> {
-    block_on_tokio(SIGNAL.read())
-        .clone()
-        .expect("grpc connection was not initialized")
-}
-
-pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
-    MutexGuard::map(block_on_tokio(SIGNAL_MODULE.lock()), |state| {
-        state.as_mut().expect("grpc connection was not initialized")
-    })
-}
-
 /// A struct containing all of the config module structs.
 ///
 /// Everything in here is a static reference because even though the modules are
@@ -154,9 +123,6 @@ pub(crate) fn signal_module() -> MappedMutexGuard<'static, SignalState> {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ApiModules {
-    /// The [`Render`] struct
-    pub render: &'static Render,
-
     #[cfg(feature = "snowcap")]
     /// The snowcap widget system.
     pub snowcap: &'static Snowcap,
@@ -172,7 +138,6 @@ impl ApiModules {
     /// Creates all the API modules.
     pub const fn new() -> Self {
         Self {
-            render: &Render,
             #[cfg(feature = "snowcap")]
             snowcap: {
                 const SNOWCAP: Snowcap = Snowcap::new();
@@ -203,17 +168,6 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
 
     Client::init(channel.clone());
 
-    RENDER
-        .write()
-        .await
-        .replace(RenderServiceClient::new(channel.clone()));
-    SIGNAL
-        .write()
-        .await
-        .replace(SignalServiceClient::new(channel.clone()));
-
-    SIGNAL_MODULE.lock().await.replace(SignalState::new());
-
     #[cfg(feature = "snowcap")]
     snowcap_api::connect().await.unwrap();
 
@@ -234,7 +188,7 @@ pub async fn listen() {
     // or when it exits (in which case the stream received an error)
     shutdown_stream.next().await;
 
-    signal_module().shutdown();
+    Client::signal_state().shutdown();
 }
 
 /// Sets the default `tracing_subscriber` to output logs.

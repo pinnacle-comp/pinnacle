@@ -29,7 +29,6 @@ use pinnacle_api_defs::pinnacle::{
 use crate::{
     client::Client,
     signal::{OutputSignal, SignalHandle},
-    signal_module,
     tag::TagHandle,
     util::{Batch, Point, Size},
     window::WindowHandle,
@@ -144,7 +143,7 @@ pub fn for_all_outputs(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) 
         for_all(&output);
     }
 
-    signal_module()
+    Client::signal_state()
         .output_connect
         .add_callback(Box::new(for_all));
 }
@@ -155,7 +154,7 @@ pub fn for_all_outputs(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) 
 /// You can pass in an [`OutputSignal`] along with a callback and it will get run
 /// with the necessary arguments every time a signal of that type is received.
 pub fn connect_signal(signal: OutputSignal) -> SignalHandle {
-    let mut signal_state = signal_module();
+    let mut signal_state = Client::signal_state();
 
     match signal {
         OutputSignal::Connect(f) => signal_state.output_connect.add_callback(f),

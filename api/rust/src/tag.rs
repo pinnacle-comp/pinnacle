@@ -42,7 +42,6 @@ use crate::{
     client::Client,
     output::OutputHandle,
     signal::{SignalHandle, TagSignal},
-    signal_module,
     util::Batch,
     BlockOnTokio,
 };
@@ -176,7 +175,7 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
 /// You can pass in a [`TagSignal`] along with a callback and it will get run
 /// with the necessary arguments every time a signal of that type is received.
 pub fn connect_signal(signal: TagSignal) -> SignalHandle {
-    let mut signal_state = signal_module();
+    let mut signal_state = Client::signal_state();
 
     match signal {
         TagSignal::Active(f) => signal_state.tag_active.add_callback(f),
