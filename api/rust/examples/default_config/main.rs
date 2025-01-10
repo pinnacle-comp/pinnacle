@@ -349,7 +349,7 @@ async fn config() {
     }
 
     input::libinput::for_all_devices(|device| {
-        if device.get_type().is_touchpad() {
+        if device.device_type().is_touchpad() {
             device.set_natural_scroll(true);
         }
     });

@@ -15,7 +15,7 @@ use pinnacle_api_defs::pinnacle::input::{
 
 use crate::{client::Client, signal::InputSignal, BlockOnTokio};
 
-/// Pointer acceleration profile
+/// A pointer acceleration profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AccelProfile {
     /// A flat acceleration profile.
@@ -100,10 +100,14 @@ impl From<TapButtonMap> for input::v1::TapButtonMap {
     }
 }
 
+/// A libinput send events mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SendEventsMode {
+    /// Enable this device.
     Enabled,
+    /// Disable this device.
     Disabled,
+    /// Disable this device only when an external mouse is connected.
     DisabledOnExternalMouse,
 }
 
@@ -120,28 +124,50 @@ impl From<SendEventsMode> for input::v1::SendEventsMode {
 }
 
 bitflags::bitflags! {
+    /// A device's libinput capabilities.
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
     pub struct Capability: u16 {
+        /// This device has keyboard capabilities.
         const KEYBOARD = 1;
+        /// This device has pointer capabilities.
         const POINTER = 1 << 1;
+        /// This device has touch capabilities.
         const TOUCH = 1 << 2;
+        /// This device has tablet tool capabilities.
         const TABLET_TOOL = 1 << 3;
+        /// This device has tablet pad capabilities.
         const TABLET_PAD = 1 << 4;
+        /// This device has gesture capabilities.
         const GESTURE = 1 << 5;
+        /// This device has switch capabilities.
         const SWITCH = 1 << 6;
     }
 }
 
+/// A device's type.
+///
+/// Note: this uses heuristics to determine device type.
+/// *This may be incorrect*. For example, a device with both pointer
+/// and keyboard capabilities will be labeled as a `Mouse` when it might actually be
+/// a keyboard.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum DeviceType {
+    /// The device type is unknown.
     #[default]
     Unknown,
+    /// This device is a touchpad.
     Touchpad,
+    /// This device is a trackball.
     Trackball,
+    /// This device is a trackpoint.
     Trackpoint,
+    /// This device is a mouse.
     Mouse,
+    /// This device is a tablet.
     Tablet,
+    /// This device is a keyboard.
     Keyboard,
+    /// This device is a switch.
     Switch,
 }
 
@@ -233,10 +259,12 @@ pub struct DeviceHandle {
 }
 
 impl DeviceHandle {
+    /// Gets the [capabilities][Capability] of this device.
     pub fn capabilities(&self) -> Capability {
         self.capabilities_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::capabilities`].
     pub async fn capabilities_async(&self) -> Capability {
         let caps = Client::input()
             .get_device_capabilities(GetDeviceCapabilitiesRequest {
@@ -273,10 +301,12 @@ impl DeviceHandle {
         capability
     }
 
+    /// Gets this device's name.
     pub fn name(&self) -> String {
         self.name_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::name`].
     pub async fn name_async(&self) -> String {
         Client::input()
             .get_device_info(GetDeviceInfoRequest {
@@ -288,10 +318,12 @@ impl DeviceHandle {
             .name
     }
 
+    /// Gets this device's product id.
     pub fn product_id(&self) -> u32 {
         self.product_id_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::product_id`].
     pub async fn product_id_async(&self) -> u32 {
         Client::input()
             .get_device_info(GetDeviceInfoRequest {
@@ -303,10 +335,12 @@ impl DeviceHandle {
             .product_id
     }
 
+    /// Gets this device's vendor id.
     pub fn vendor_id(&self) -> u32 {
         self.vendor_id_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::vendor_id`].
     pub async fn vendor_id_async(&self) -> u32 {
         Client::input()
             .get_device_info(GetDeviceInfoRequest {
@@ -318,11 +352,13 @@ impl DeviceHandle {
             .vendor_id
     }
 
-    pub fn get_type(&self) -> DeviceType {
-        self.get_type_async().block_on_tokio()
+    /// Gets this device's [`DeviceType`].
+    pub fn device_type(&self) -> DeviceType {
+        self.device_type_async().block_on_tokio()
     }
 
-    pub async fn get_type_async(&self) -> DeviceType {
+    /// Async impl for [`Self::device_type`].
+    pub async fn device_type_async(&self) -> DeviceType {
         Client::input()
             .get_device_type(GetDeviceTypeRequest {
                 device_sysname: self.sysname.clone(),
@@ -334,6 +370,7 @@ impl DeviceHandle {
             .into()
     }
 
+    /// Sets this device's acceleration profile.
     pub fn set_accel_profile(&self, accel_profile: AccelProfile) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -346,6 +383,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's acceleration speed.
     pub fn set_accel_speed(&self, accel_speed: f64) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -356,6 +394,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's calibration matrix.
     pub fn set_calibration_matrix(&self, calibration_matrix: [f32; 6]) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -368,6 +407,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's click method.
     pub fn set_click_method(&self, click_method: ClickMethod) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -380,6 +420,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets whether or not this device is disabled while typing.
     pub fn set_disable_while_typing(&self, disable_while_typing: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -390,6 +431,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device to left-handed or not.
     pub fn set_left_handed(&self, left_handed: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -400,6 +442,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets whether or not middle emulation is enabled.
     pub fn set_middle_emulation(&self, middle_emulation: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -410,6 +453,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's rotation angle.
     pub fn set_rotation_angle(&self, rotation_angle: u32) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -420,6 +464,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's scroll button.
     pub fn set_scroll_button(&self, scroll_button: u32) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -430,6 +475,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets whether or not the scroll button locks on this device.
     pub fn set_scroll_button_lock(&self, scroll_button_lock: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -440,6 +486,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's scroll method.
     pub fn set_scroll_method(&self, scroll_method: ScrollMethod) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -452,6 +499,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Enables or disables natural scroll on this device.
     pub fn set_natural_scroll(&self, natural_scroll: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -462,6 +510,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's tap button map.
     pub fn set_tap_button_map(&self, tap_button_map: TapButtonMap) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -474,6 +523,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Enables or disables tap dragging on this device.
     pub fn set_tap_drag(&self, tap_drag: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -484,6 +534,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets whether or not tap dragging locks on this device.
     pub fn set_tap_drag_lock(&self, tap_drag_lock: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -494,6 +545,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Enables or disables tap-to-click on this device.
     pub fn set_tap(&self, tap: bool) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -504,6 +556,7 @@ impl DeviceHandle {
             .unwrap();
     }
 
+    /// Sets this device's send events mode.
     pub fn set_send_events_mode(&self, send_events_mode: SendEventsMode) {
         Client::input()
             .set_device_libinput_setting(SetDeviceLibinputSettingRequest {
@@ -517,6 +570,7 @@ impl DeviceHandle {
     }
 }
 
+/// Gets handles to all connected input devices.
 pub fn get_devices() -> impl Iterator<Item = DeviceHandle> {
     Client::input()
         .get_devices(GetDevicesRequest {})
@@ -528,6 +582,13 @@ pub fn get_devices() -> impl Iterator<Item = DeviceHandle> {
         .map(|sysname| DeviceHandle { sysname })
 }
 
+/// Runs a closure for all current and future input devices.
+///
+/// This function does two things:
+///   1. Runs `for_all` with all currently connected input devices, and
+///   2. Runs it with all newly connected devices.
+///
+/// Use this function for input device setup.
 pub fn for_all_devices<F: FnMut(&DeviceHandle) + Send + 'static>(mut for_all: F) {
     for device in get_devices() {
         for_all(&device);
@@ -535,28 +596,3 @@ pub fn for_all_devices<F: FnMut(&DeviceHandle) + Send + 'static>(mut for_all: F)
 
     super::connect_signal(InputSignal::DeviceAdded(Box::new(for_all)));
 }
-
-// Set a libinput setting.
-//
-// From [freedesktop.org](https://www.freedesktop.org/wiki/Software/libinput/):
-// > libinput is a library to handle input devices in Wayland compositors
-//
-// As such, this method allows you to set various settings related to input devices.
-// This includes things like pointer acceleration and natural scrolling.
-//
-// See [`LibinputSetting`] for all the settings you can change.
-//
-// Note: currently Pinnacle applies anything set here to *every* device, regardless of what it
-// actually is. This will be fixed in the future.
-//
-// # Examples
-//
-// ```
-// use pinnacle_api::input::libinput::*;
-//
-// // Set pointer acceleration to flat
-// input.set_libinput_setting(LibinputSetting::AccelProfile(AccelProfile::Flat));
-//
-// // Enable natural scrolling (reverses scroll direction; usually used with trackpads)
-// input.set_libinput_setting(LibinputSetting::NaturalScroll(true));
-// ```

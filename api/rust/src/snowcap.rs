@@ -16,6 +16,7 @@ use crate::input::{BindInfoKind, Mod};
 /// A quit prompt.
 ///
 /// When opened, pressing ENTER will quit the compositor.
+#[derive(Default, Clone, Debug)]
 pub struct QuitPrompt {
     /// The radius of the prompt's corners.
     pub border_radius: f32,
@@ -34,6 +35,7 @@ pub struct QuitPrompt {
 }
 
 impl QuitPrompt {
+    /// Creates a quit prompt with sane defaults.
     pub fn new() -> Self {
         QuitPrompt {
             border_radius: 12.0,
@@ -46,7 +48,7 @@ impl QuitPrompt {
         }
     }
 
-    /// Show this quit prompt.
+    /// Shows this quit prompt.
     pub fn show(&self) {
         let widget = Container::new(Column::new_with_children([
             Text::new("Quit Pinnacle?")
@@ -90,6 +92,7 @@ impl QuitPrompt {
 }
 
 /// A keybind overlay.
+#[derive(Default, Clone, Debug)]
 pub struct BindOverlay {
     /// The radius of the prompt's corners.
     pub border_radius: f32,

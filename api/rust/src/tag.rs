@@ -43,20 +43,20 @@ use crate::{
     output::OutputHandle,
     signal::{SignalHandle, TagSignal},
     util::Batch,
+    window::WindowHandle,
     BlockOnTokio,
 };
 
-/// Add tags to the specified output.
+/// Adds tags to the specified output.
 ///
 /// This will add tags with the given names to `output` and return [`TagHandle`]s to all of
 /// them.
 ///
-/// # Examples
-///
-/// ```
+/// # Example
+/// ```no_run
 /// // Add tags 1-5 to the focused output
-/// if let Some(op) = output.get_focused() {
-///     let tags = tag.add(&op, ["1", "2", "3", "4", "5"]);
+/// if let Some(op) = output::get_focused() {
+///     let tags = tag::add(&op, ["1", "2", "3", "4", "5"]);
 /// }
 /// ```
 pub fn add(
@@ -79,19 +79,19 @@ pub fn add(
         .map(|id| TagHandle { id })
 }
 
+/// Gets handles to all tags across all outputs.
+///
+/// # Examples
+/// ```no_run
+/// for tag in tag::get_all() {
+///     println!("{}", tag.name());
+/// }
+/// ```
 pub fn get_all() -> impl Iterator<Item = TagHandle> {
     get_all_async().block_on_tokio()
 }
 
-/// Get handles to all tags across all outputs.
-///
-/// # Examples
-///
-/// ```
-///
-///
-/// let all_tags = tag.get_all();
-/// ```
+/// Async impl for [`get_all_async`].
 pub async fn get_all_async() -> impl Iterator<Item = TagHandle> {
     Client::tag()
         .get(GetRequest {})
@@ -103,22 +103,20 @@ pub async fn get_all_async() -> impl Iterator<Item = TagHandle> {
         .map(|id| TagHandle { id })
 }
 
+/// Gets a handle to the first tag with the given `name` on the focused output.
+///
+/// To get the first tag with the given `name` on a specific output, see
+/// [`get_on_output`].
+///
+/// # Example
+/// ```no_run
+/// let tag = tag::get("2")?;
+/// ```
 pub fn get(name: impl ToString) -> Option<TagHandle> {
     get_async(name).block_on_tokio()
 }
 
-/// Get a handle to the first tag with the given name on the focused output.
-///
-/// If you need to get a tag on a specific output, see [`Tag::get_on_output`].
-///
-/// # Examples
-///
-/// ```
-/// // Get tag "Thing" on the focused output
-///
-///
-/// let tg = tag.get("Thing");
-/// ```
+/// Async impl for [`get`].
 pub async fn get_async(name: impl ToString) -> Option<TagHandle> {
     let name = name.to_string();
     let focused_op = crate::output::get_focused_async().await?;
@@ -126,22 +124,20 @@ pub async fn get_async(name: impl ToString) -> Option<TagHandle> {
     get_on_output_async(name, &focused_op).await
 }
 
+/// Gets a handle to the first tag with the given `name` on `output`.
+///
+/// For a simpler way to get a tag on the focused output, see [`get`].
+///
+/// # Example
+/// ```no_run
+/// let output = output::get_by_name("eDP-1")?;
+/// let tag = tag::get_on_output("2", &output)?;
+/// ```
 pub fn get_on_output(name: impl ToString, output: &OutputHandle) -> Option<TagHandle> {
     get_on_output_async(name, output).block_on_tokio()
 }
 
-/// Get a handle to the first tag with the given name on the specified output.
-///
-/// If you just need to get a tag on the focused output, see [`Tag::get`].
-///
-/// # Examples
-///
-/// ```
-/// // Get tag "Thing" on "HDMI-1"
-///
-///
-/// let tg = tag.get_on_output("Thing", output.get_by_name("HDMI-2")?);
-/// ```
+/// Async impl for [`get_on_output`].
 pub async fn get_on_output_async(name: impl ToString, output: &OutputHandle) -> Option<TagHandle> {
     let name = name.to_string();
     let output = output.clone();
@@ -151,12 +147,11 @@ pub async fn get_on_output_async(name: impl ToString, output: &OutputHandle) -> 
     )
 }
 
-/// Remove the given tags from their outputs.
+/// Removes the given tags from their outputs.
 ///
-/// # Examples
-///
-/// ```
-/// let tags = tag.add(output.get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
+/// # Example
+/// ```no_run
+/// let tags = tag::add(output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
 ///
 /// tag.remove(tags); // "DP-1" no longer has any tags
 /// ```
@@ -169,7 +164,7 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
         .unwrap();
 }
 
-/// Connect to a tag signal.
+/// Connects to a tag signal.
 ///
 /// The compositor will fire off signals that your config can listen for and act upon.
 /// You can pass in a [`TagSignal`] along with a callback and it will get run
@@ -185,25 +180,24 @@ pub fn connect_signal(signal: TagSignal) -> SignalHandle {
 /// A handle to a tag.
 ///
 /// This handle allows you to do things like switch to tags and get their properties.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TagHandle {
     pub(crate) id: u32,
 }
 
 impl TagHandle {
-    /// Activate this tag and deactivate all other ones on the same output.
+    /// Activates this tag and deactivates all other ones on the same output.
     ///
-    /// This essentially emulates what a traditional workspace is.
+    /// This emulates what a traditional workspace is.
     ///
-    /// # Examples
-    ///
-    /// ```
+    /// # Example
+    /// ```no_run
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
-    /// tag.get("2")?.switch_to(); // Displays Firefox and Discord
-    /// tag.get("3")?.switch_to(); // Displays Steam
+    /// tag::get("2")?.switch_to(); // Displays Firefox and Discord
+    /// tag::get("3")?.switch_to(); // Displays Steam
     /// ```
     pub fn switch_to(&self) {
         let tag_id = self.id;
@@ -214,23 +208,22 @@ impl TagHandle {
             .unwrap();
     }
 
-    /// Set this tag to active or not.
+    /// Sets this tag to active or not.
     ///
     /// While active, windows with this tag will be displayed.
     ///
     /// While inactive, windows with this tag will not be displayed unless they have other active
     /// tags.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
-    /// tag.get("2")?.set_active(true);  // Displays Firefox and Discord
-    /// tag.get("3")?.set_active(true);  // Displays Firefox, Discord, and Steam
-    /// tag.get("2")?.set_active(false); // Displays Steam
+    /// tag::get("2")?.set_active(true);  // Displays Firefox and Discord
+    /// tag::get("3")?.set_active(true);  // Displays Firefox, Discord, and Steam
+    /// tag::get("2")?.set_active(false); // Displays Steam
     /// ```
     pub fn set_active(&self, set: bool) {
         let tag_id = self.id;
@@ -248,24 +241,23 @@ impl TagHandle {
             .unwrap();
     }
 
-    /// Toggle this tag between active and inactive.
+    /// Toggles this tag between active and inactive.
     ///
     /// While active, windows with this tag will be displayed.
     ///
     /// While inactive, windows with this tag will not be displayed unless they have other active
     /// tags.
     ///
-    /// # Examples
-    ///
-    /// ```
+    /// # Example
+    /// ```no_run
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
-    /// tag.get("2")?.toggle(); // Displays Firefox and Discord
-    /// tag.get("3")?.toggle(); // Displays Firefox, Discord, and Steam
-    /// tag.get("3")?.toggle(); // Displays Firefox, Discord
-    /// tag.get("2")?.toggle(); // Displays nothing
+    /// tag::get("2")?.toggle(); // Displays Firefox and Discord
+    /// tag::get("3")?.toggle(); // Displays Firefox, Discord, and Steam
+    /// tag::get("3")?.toggle(); // Displays Firefox, Discord
+    /// tag::get("2")?.toggle(); // Displays nothing
     /// ```
     pub fn toggle_active(&self) {
         let tag_id = self.id;
@@ -279,14 +271,12 @@ impl TagHandle {
             .unwrap();
     }
 
-    /// Remove this tag from its output.
+    /// Removes this tag from its output.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// let tags = tag
-    ///     .add(output.get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"])
-    ///     .collect::<Vec<_>>;
+    /// let tags =
+    ///     tag::add(output.get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).collect::<Vec<_>>;
     ///
     /// tags[1].remove();
     /// tags[3].remove();
@@ -303,15 +293,12 @@ impl TagHandle {
             .unwrap();
     }
 
+    /// Gets whether or not this tag is active.
     pub fn active(&self) -> bool {
         self.active_async().block_on_tokio()
     }
 
-    /// Get this tag's active status.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().active`.
+    /// Async impl for [`Self::active`].
     pub async fn active_async(&self) -> bool {
         let tag_id = self.id;
 
@@ -323,15 +310,12 @@ impl TagHandle {
             .active
     }
 
+    /// Gets this tag's name.
     pub fn name(&self) -> String {
         self.name_async().block_on_tokio()
     }
 
-    /// Get this tag's name.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().name`.
+    /// Async impl for [`Self::name`].
     pub async fn name_async(&self) -> String {
         let tag_id = self.id;
 
@@ -343,15 +327,12 @@ impl TagHandle {
             .name
     }
 
+    /// Gets a handle to the output this tag is on.
     pub fn output(&self) -> OutputHandle {
         self.output_async().block_on_tokio()
     }
 
-    /// Get a handle to the output this tag is on.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().output`.
+    /// Async impl for [`Self::output`].
     pub async fn output_async(&self) -> OutputHandle {
         let tag_id = self.id;
 
@@ -364,18 +345,20 @@ impl TagHandle {
         OutputHandle { name }
     }
 
-    // TODO:
-    /// Get all windows with this tag.
-    ///
-    /// Shorthand for `self.props().windows`.
-    // pub fn windows(&self) -> Vec<WindowHandle> {
-    //     self.props().windows
-    // }
-    //
-    // /// The async version of [`TagHandle::windows`].
-    // pub async fn windows_async(&self) -> Vec<WindowHandle> {
-    //     self.props_async().await.windows
-    // }
+    /// Gets all windows with this tag.
+    pub fn windows(&self) -> impl Iterator<Item = WindowHandle> {
+        self.windows_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::windows`].
+    pub async fn windows_async(&self) -> impl Iterator<Item = WindowHandle> {
+        let windows = crate::window::get_all_async().await;
+        let this = self.clone();
+        windows.batch_filter(
+            |win| win.tags_async().boxed(),
+            move |mut tags| tags.any(|tag| tag == this),
+        )
+    }
 
     /// Get this tag's raw compositor id.
     pub fn id(&self) -> u32 {

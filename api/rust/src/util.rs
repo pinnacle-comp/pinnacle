@@ -256,7 +256,7 @@ pub trait Batch<I> {
     where
         Self: Sized,
         M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
-        F: FnMut(&FutOp) -> bool;
+        F: FnMut(FutOp) -> bool;
 }
 
 impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
@@ -297,7 +297,7 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
     where
         Self: Sized,
         M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
-        F: FnMut(&FutOp) -> bool,
+        F: FnMut(FutOp) -> bool,
     {
         let items = self.into_iter().collect::<Vec<_>>();
         let futures = items.iter().map(map_to_future);
@@ -308,8 +308,7 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
         items
             .into_iter()
             .zip(results)
-            .filter(move |(_, fut_op)| predicate(fut_op))
-            .map(|(item, _)| item)
+            .filter_map(move |(item, fut_op)| predicate(fut_op).then_some(item))
     }
 }
 

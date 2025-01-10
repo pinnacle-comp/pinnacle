@@ -17,6 +17,7 @@ use tokio_stream::StreamExt;
 
 use crate::{client::Client, BlockOnTokio};
 
+/// A process builder that allows you to spawn programs.
 pub struct Command {
     cmd: Vec<String>,
     envs: HashMap<String, String>,
@@ -25,25 +26,34 @@ pub struct Command {
     once: bool,
 }
 
+/// The result of spawning a [`Command`].
 #[derive(Debug)]
 pub struct Child {
     pid: u32,
+    /// This process's standard in.
     pub stdin: Option<tokio::process::ChildStdin>,
+    /// This process's standard out.
     pub stdout: Option<tokio::process::ChildStdout>,
+    /// This process's standard error.
     pub stderr: Option<tokio::process::ChildStderr>,
 }
 
+/// Information from an exited process.
 #[derive(Debug, Default)]
 pub struct ExitInfo {
+    /// The process's exit code.
     pub exit_code: Option<i32>,
+    /// The process's exit message.
     pub exit_msg: Option<String>,
 }
 
 impl Child {
+    /// Waits for this process to exit, blocking the current thread.
     pub fn wait(self) -> ExitInfo {
         self.wait_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::wait`].
     pub async fn wait_async(self) -> ExitInfo {
         let mut exit_status = Client::process()
             .wait_on_spawn(WaitOnSpawnRequest { pid: self.pid })
@@ -79,6 +89,7 @@ impl Drop for Child {
 }
 
 impl Command {
+    /// Creates a new [`Command`] that will spawn the provided `program`.
     pub fn new(program: impl ToString) -> Self {
         Self {
             cmd: vec![program.to_string()],
@@ -89,21 +100,25 @@ impl Command {
         }
     }
 
+    /// Adds an argument to the command.
     pub fn arg(&mut self, arg: impl ToString) -> &mut Self {
         self.cmd.push(arg.to_string());
         self
     }
 
+    /// Adds multiple arguments to the command.
     pub fn args(&mut self, args: impl IntoIterator<Item = impl ToString>) -> &mut Self {
         self.cmd.extend(args.into_iter().map(|arg| arg.to_string()));
         self
     }
 
+    /// Sets an environment variable that the process will spawn with.
     pub fn env(&mut self, key: impl ToString, value: impl ToString) -> &mut Self {
         self.envs.insert(key.to_string(), value.to_string());
         self
     }
 
+    /// Sets multiple environment variables that the process will spawn with.
     pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
     where
         I: IntoIterator<Item = (K, V)>,
@@ -117,16 +132,19 @@ impl Command {
         self
     }
 
+    /// Causes this command to only spawn the program if it is the only instance currently running.
     pub fn unique(&mut self) -> &mut Self {
         self.unique = true;
         self
     }
 
+    /// Causes this command to spawn the program exactly once in the compositor's lifespan.
     pub fn once(&mut self) -> &mut Self {
         self.once = true;
         self
     }
 
+    /// Spawns this command, returning the spawned process's standard io, if any.
     pub fn spawn(&mut self) -> Option<Child> {
         let child = Client::process()
             .spawn(SpawnRequest {
@@ -144,7 +162,9 @@ impl Command {
                 let stdin = data
                     .stdin_fd
                     .map(|stdin_fd| {
-                        // SAFETY: lmao let's find out
+                        // SAFETY: The fd was obtained from a compositor-side
+                        // `ChildStdin::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
+                        // compositor has given up ownership of the fd.
                         unsafe { OwnedFd::from_raw_fd(stdin_fd) }
                     })
                     .map(std::process::ChildStdin::from)
@@ -152,7 +172,9 @@ impl Command {
                 let stdout = data
                     .stdout_fd
                     .map(|stdout_fd| {
-                        // SAFETY: lmao let's find out
+                        // SAFETY: The fd was obtained from a compositor-side
+                        // `ChildStdout::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
+                        // compositor has given up ownership of the fd.
                         unsafe { OwnedFd::from_raw_fd(stdout_fd) }
                     })
                     .map(std::process::ChildStdout::from)
@@ -160,7 +182,9 @@ impl Command {
                 let stderr = data
                     .stderr_fd
                     .map(|stderr_fd| {
-                        // SAFETY: lmao let's find out
+                        // SAFETY: The fd was obtained from a compositor-side
+                        // `ChildStderr::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
+                        // compositor has given up ownership of the fd.
                         unsafe { OwnedFd::from_raw_fd(stderr_fd) }
                     })
                     .map(std::process::ChildStderr::from)

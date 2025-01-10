@@ -31,7 +31,7 @@ async fn setup_rust_inner(run: impl FnOnce(ApiModules) + Send + 'static) {
 
     run(ApiModules::new());
 
-    pinnacle_api::listen().await;
+    pinnacle_api::block().await;
 }
 
 fn setup_rust(run: impl FnOnce(ApiModules) + Send + 'static) -> JoinHandle<()> {

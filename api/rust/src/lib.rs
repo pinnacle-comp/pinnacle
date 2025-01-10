@@ -120,7 +120,7 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// This function is called by the [`main`] and [`config`] macros.
 /// You'll only need to use this if you aren't using them.
-pub async fn listen() {
+pub async fn block() {
     let (_sender, mut keepalive_stream) = crate::pinnacle::keepalive().await;
 
     // This will trigger either when the compositor sends the shutdown signal
@@ -192,6 +192,6 @@ macro_rules! config {
     ($func:ident) => {
         $crate::connect().await.unwrap();
         $func().await;
-        $crate::listen().await;
+        $crate::block().await;
     };
 }

@@ -9,8 +9,6 @@
 //!
 //! [`WindowHandle`]s allow you to do things like resize and move windows, toggle them between
 //! floating and tiled, close them, and more.
-//!
-//! This module also allows you to set window rules; see the [rules] module for more information.
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
@@ -37,10 +35,19 @@ use crate::{
     BlockOnTokio,
 };
 
+/// Gets handles to all windows.
+///
+/// # Example
+/// ```
+/// for win in window::get_all() {
+///     println!("{}", win.title());
+/// }
+/// ```
 pub fn get_all() -> impl Iterator<Item = WindowHandle> {
     get_all_async().block_on_tokio()
 }
 
+/// Async impl for [`get_all`].
 pub async fn get_all_async() -> impl Iterator<Item = WindowHandle> {
     let window_ids = Client::window()
         .get(pinnacle_api_defs::pinnacle::window::v1::GetRequest {})
@@ -52,16 +59,38 @@ pub async fn get_all_async() -> impl Iterator<Item = WindowHandle> {
     window_ids.into_iter().map(|id| WindowHandle { id })
 }
 
+/// Gets a handle to the window with the current keyboard focus.
+///
+/// # Example
+/// ```
+/// if let Some(focused) = window::get_focused() {
+///     println!("{}", focused.title());
+/// }
+/// ```
 pub fn get_focused() -> Option<WindowHandle> {
     get_focused_async().block_on_tokio()
 }
 
+/// Async impl for [`get_focused`].
 pub async fn get_focused_async() -> Option<WindowHandle> {
     let windows = get_all_async().await;
 
     windows.batch_find(|win| win.focused_async().boxed(), |focused| *focused)
 }
 
+/// Begins an interactive window move.
+///
+/// This will start moving the window under the pointer until `button` is released.
+///
+/// `button` should be the mouse button that is held at the time
+/// this function is called. Otherwise, the move will not start.
+/// This is intended for use in tandem with a mousebind.
+///
+/// # Example
+/// ```
+/// input::mousebind(Mod::SUPER, MouseButton::Left)
+///     .on_press(|| window::begin_move(MouseButton::Left));
+/// ```
 pub fn begin_move(button: MouseButton) {
     Client::window()
         .move_grab(MoveGrabRequest {
@@ -71,6 +100,19 @@ pub fn begin_move(button: MouseButton) {
         .unwrap();
 }
 
+/// Begins an interactive window resize.
+///
+/// This will start resizing the window under the pointer until `button` is released.
+///
+/// `button` should be the mouse button that is held at the time
+/// this function is called. Otherwise, the move will not start.
+/// This is intended for use in tandem with a mousebind.
+///
+/// # Example
+/// ```
+/// input::mousebind(Mod::SUPER, MouseButton::Right)
+///     .on_press(|| window::begin_resize(MouseButton::Right));
+/// ```
 pub fn begin_resize(button: MouseButton) {
     Client::window()
         .resize_grab(ResizeGrabRequest {
@@ -131,22 +173,23 @@ impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode
     }
 }
 
+/// A mode for window decorations (titlebar, shadows, etc).
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum DecorationMode {
+    /// The client should draw its own decorations.
     ClientSide,
+    /// The server should draw decorations.
     ServerSide,
 }
 
 impl WindowHandle {
-    /// Send a close request to this window.
+    /// Sends a close request to this window.
     ///
     /// If the window is unresponsive, it may not close.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// // Close the focused window
-    /// window.get_focused()?.close()
+    /// window::get_focused()?.close();
     /// ```
     pub fn close(&self) {
         let window_id = self.id;
@@ -156,15 +199,11 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Set this window to fullscreen or not.
+    /// Sets this window to fullscreen or not.
     ///
-    /// If it is maximized, setting it to fullscreen will remove the maximized state.
-    ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// // Set the focused window to fullscreen.
-    /// window.get_focused()?.set_fullscreen(true);
+    /// window::get_focused()?.set_fullscreen(true);
     /// ```
     pub fn set_fullscreen(&self, set: bool) {
         let window_id = self.id;
@@ -181,15 +220,11 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Toggle this window between fullscreen and not.
+    /// Toggles this window between fullscreen and not.
     ///
-    /// If it is maximized, toggling it to fullscreen will remove the maximized state.
-    ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// // Toggle the focused window to and from fullscreen.
-    /// window.get_focused()?.toggle_fullscreen();
+    /// window::get_focused()?.toggle_fullscreen();
     /// ```
     pub fn toggle_fullscreen(&self) {
         let window_id = self.id;
@@ -202,14 +237,10 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Set this window to maximized or not.
+    /// Sets this window to maximized or not.
     ///
-    /// If it is fullscreen, setting it to maximized will remove the fullscreen state.
-    ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// // Set the focused window to maximized.
     /// window.get_focused()?.set_maximized(true);
     /// ```
     pub fn set_maximized(&self, set: bool) {
@@ -227,15 +258,11 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Toggle this window between maximized and not.
-    ///
-    /// If it is fullscreen, toggling it to maximized will remove the fullscreen state.
+    /// Toggles this window between maximized and not.
     ///
     /// # Examples
-    ///
     /// ```
-    /// // Toggle the focused window to and from maximized.
-    /// window.get_focused()?.toggle_maximized();
+    /// window::get_focused()?.toggle_maximized();
     /// ```
     pub fn toggle_maximized(&self) {
         let window_id = self.id;
@@ -248,18 +275,13 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Set this window to floating or not.
+    /// Sets this window to floating or not.
     ///
     /// Floating windows will not be tiled and can be moved around and resized freely.
     ///
-    /// Note that fullscreen and maximized windows can still be floating; those two states will
-    /// just override the floating state.
-    ///
     /// # Examples
-    ///
     /// ```
-    /// // Set the focused window to floating.
-    /// window.get_focused()?.set_floating(true);
+    /// window::get_focused()?.set_floating(true);
     /// ```
     pub fn set_floating(&self, set: bool) {
         let window_id = self.id;
@@ -276,18 +298,13 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Toggle this window to and from floating.
+    /// Toggles this window to and from floating.
     ///
     /// Floating windows will not be tiled and can be moved around and resized freely.
     ///
-    /// Note that fullscreen and maximized windows can still be floating; those two states will
-    /// just override the floating state.
-    ///
     /// # Examples
-    ///
     /// ```
-    /// // Toggle the focused window to and from floating.
-    /// window.get_focused()?.toggle_floating();
+    /// window::get_focused()?.toggle_floating();
     /// ```
     pub fn toggle_floating(&self) {
         let window_id = self.id;
@@ -300,13 +317,11 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Focus or unfocus this window.
+    /// Focuses or unfocuses this window.
     ///
     /// # Examples
-    ///
     /// ```
-    /// // Unfocus the focused window
-    /// window.get_focused()?.set_focused(false);
+    /// window::get_focused()?.set_focused(true);
     /// ```
     pub fn set_focused(&self, set: bool) {
         let window_id = self.id;
@@ -323,6 +338,29 @@ impl WindowHandle {
             .unwrap();
     }
 
+    /// Toggles this window between focused and unfocused.
+    ///
+    /// # Examples
+    /// ```
+    /// window.get_focused()?.toggle_focused();
+    /// ```
+    pub fn toggle_focused(&self) {
+        let window_id = self.id;
+        Client::window()
+            .set_focused(SetFocusedRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets this window's decoration mode.
+    ///
+    /// # Examples
+    /// ```
+    /// window::get_focused()?.set_decoration_mode(DecorationMode::ClientSide);
+    /// ```
     pub fn set_decoration_mode(&self, mode: DecorationMode) {
         Client::window()
             .set_decoration_mode(SetDecorationModeRequest {
@@ -337,37 +375,15 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Toggle this window to and from focused.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// // Toggle the focused window to and from floating.
-    /// // Calling this a second time will do nothing because there won't
-    /// // be a focused window.
-    /// window.get_focused()?.toggle_focused();
-    /// ```
-    pub fn toggle_focused(&self) {
-        let window_id = self.id;
-        Client::window()
-            .set_focused(SetFocusedRequest {
-                window_id,
-                set_or_toggle: SetOrToggle::Toggle.into(),
-            })
-            .block_on_tokio()
-            .unwrap();
-    }
-
-    /// Move this window to the given `tag`.
+    /// Moves this window to the given `tag`.
     ///
     /// This will remove all tags from this window then tag it with `tag`, essentially moving the
     /// window to that tag.
     ///
     /// # Examples
-    ///
     /// ```
     /// // Move the focused window to tag "Code" on the focused output
-    /// window.get_focused()?.move_to_tag(&tag.get("Code", None)?);
+    /// window::get_focused()?.move_to_tag(&tag::get("Code")?);
     /// ```
     pub fn move_to_tag(&self, tag: &TagHandle) {
         let window_id = self.id;
@@ -378,16 +394,15 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Set or unset a tag on this window.
+    /// Sets or unsets a tag on this window.
     ///
     /// # Examples
-    ///
     /// ```
-    /// let focused = window.get_focused()?;
-    /// let tg = tag.get("Potato", None)?;
+    /// let focused = window::get_focused()?;
+    /// let tag = tag::get("Potato")?;
     ///
-    /// focused.set_tag(&tg, true); // `focused` now has tag "Potato"
-    /// focused.set_tag(&tg, false); // `focused` no longer has tag "Potato"
+    /// focused.set_tag(&tag, true); // `focused` now has tag "Potato"
+    /// focused.set_tag(&tag, false); // `focused` no longer has tag "Potato"
     /// ```
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
         let window_id = self.id;
@@ -406,18 +421,15 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Toggle a tag on this window.
+    /// Toggles a tag on this window.
     ///
     /// # Examples
-    ///
     /// ```
-    /// let focused = window.get_focused()?;
-    /// let tg = tag.get("Potato", None)?;
+    /// let focused = window::get_focused()?;
+    /// let tg = tag::get("Potato", None)?;
     ///
-    /// // Assume `focused` does not have tag `tg`
-    ///
-    /// focused.toggle_tag(&tg); // `focused` now has tag "Potato"
-    /// focused.toggle_tag(&tg); // `focused` no longer has tag "Potato"
+    /// focused.toggle_tag(&tag); // `focused` now has tag "Potato"
+    /// focused.toggle_tag(&tag); // `focused` no longer has tag "Potato"
     /// ```
     pub fn toggle_tag(&self, tag: &TagHandle) {
         let window_id = self.id;
@@ -432,14 +444,11 @@ impl WindowHandle {
             .unwrap();
     }
 
-    /// Raise this window.
-    ///
-    /// This will raise this window all the way to the top of the z-stack.
+    /// Raises this window to the front.
     ///
     /// # Examples
-    ///
     /// ```
-    /// window.get_focused()?.raise();
+    /// window::get_focused()?.raise();
     /// ```
     pub fn raise(&self) {
         let window_id = self.id;
@@ -449,11 +458,12 @@ impl WindowHandle {
             .unwrap();
     }
 
+    /// Gets this window's current location in the global space.
     pub fn loc(&self) -> Option<Point> {
         self.loc_async().block_on_tokio()
     }
 
-    /// Get this window's location.
+    /// Async impl for [`Self::loc`].
     pub async fn loc_async(&self) -> Option<Point> {
         let window_id = self.id;
         Client::window()
@@ -465,11 +475,12 @@ impl WindowHandle {
             .map(|loc| Point { x: loc.x, y: loc.y })
     }
 
+    /// Gets this window's current size.
     pub fn size(&self) -> Option<Size> {
         self.size_async().block_on_tokio()
     }
 
-    /// Get this window's size.
+    /// Async impl for [`Self::size`].
     pub async fn size_async(&self) -> Option<Size> {
         let window_id = self.id;
         Client::window()
@@ -484,11 +495,14 @@ impl WindowHandle {
             })
     }
 
+    /// Gets this window's app id (class if it's an xwayland window).
+    ///
+    /// If it doesn't have one, this returns an empty string.
     pub fn app_id(&self) -> String {
         self.app_id_async().block_on_tokio()
     }
 
-    /// Get this window's app id.
+    /// Async impl for [`Self::app_id`].
     pub async fn app_id_async(&self) -> String {
         let window_id = self.id;
         Client::window()
@@ -499,11 +513,14 @@ impl WindowHandle {
             .app_id
     }
 
+    /// Gets this window's title.
+    ///
+    /// If it doesn't have one, this returns an empty string.
     pub fn title(&self) -> String {
         self.title_async().block_on_tokio()
     }
 
-    /// Get this window's title.
+    /// Async impl for [`Self::title`].
     pub async fn title_async(&self) -> String {
         let window_id = self.id;
         Client::window()
@@ -514,11 +531,12 @@ impl WindowHandle {
             .title
     }
 
+    /// Gets whether or not this window has keyboard focus.
     pub fn focused(&self) -> bool {
         self.focused_async().block_on_tokio()
     }
 
-    /// Get whether or not this window is focused.
+    /// Async impl for [`Self::focused`].
     pub async fn focused_async(&self) -> bool {
         let window_id = self.id;
         Client::window()
@@ -529,11 +547,12 @@ impl WindowHandle {
             .focused
     }
 
+    /// Gets this window's current [`LayoutMode`].
     pub fn layout_mode(&self) -> LayoutMode {
         self.layout_mode_async().block_on_tokio()
     }
 
-    /// Get whether or not this window is tiled.
+    /// Async impl for [`Self::layout_mode`].
     pub async fn layout_mode_async(&self) -> LayoutMode {
         let window_id = self.id;
         Client::window()
@@ -546,36 +565,42 @@ impl WindowHandle {
             .unwrap_or(LayoutMode::Tiled)
     }
 
-    /// Get whether or not this window is floating.
+    /// Gets whether or not this window is floating.
     pub fn floating(&self) -> bool {
         self.floating_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::floating`].
     pub async fn floating_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Floating
     }
 
+    /// Gets whether or not this window is fullscreen.
     pub fn fullscreen(&self) -> bool {
         self.fullscreen_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::fullscreen`].
     pub async fn fullscreen_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Fullscreen
     }
 
+    /// Gets whether or not this window is maximized.
     pub fn maximized(&self) -> bool {
         self.maximized_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::maximized`].
     pub async fn maximized_async(&self) -> bool {
         self.layout_mode_async().await == LayoutMode::Maximized
     }
 
-    /// Get all the tags on this window.
+    /// Gets handles to all tags on this window.
     pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
         self.tags_async().block_on_tokio()
     }
 
+    /// Async impl for [`Self::tags`].
     pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
         let window_id = self.id;
         Client::window()
@@ -588,11 +613,12 @@ impl WindowHandle {
             .map(|id| TagHandle { id })
     }
 
+    /// Gets whether or not this window has an active tag.
     pub fn is_on_active_tag(&self) -> bool {
         self.is_on_active_tag_async().block_on_tokio()
     }
 
-    /// Returns whether this window is on an active tag.
+    /// Async impl for [`Self::is_on_active_tag`].
     pub async fn is_on_active_tag_async(&self) -> bool {
         self.tags_async()
             .await
@@ -606,6 +632,30 @@ impl WindowHandle {
     }
 }
 
+/// Runs a closure for every new window.
+///
+/// This function is how you implement window rules.
+/// Instead of a declarative window rule system with match conditions,
+/// you can use standard `if` statements and apply rules using the same
+/// methods that are used everywhere else in this API.
+///
+/// Note: this function is special in that if it is called, Pinnacle will wait for
+/// the provided closure to finish running before it sends windows an initial configure event.
+/// *Do not block here*. At best, short blocks will increase the time it takes for a window to
+/// open. At worst, a complete deadlock will prevent windows from opening at all.
+///
+/// # Example
+/// ```
+/// window::for_all_windows(|window| {
+///     // Make Alacritty always open on the "Terminal" tag
+///     if window.app_id() == "Alacritty" {
+///         window.set_tag(&tag::get("Terminal"));
+///     }
+///
+///     // Make all windows use client-side decorations
+///     window.set_decoration_mode(DecorationMode::ClientSide);
+/// });
+/// ```
 pub fn for_all_windows(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
     let (client_outgoing, client_outgoing_to_server) = unbounded_channel();
     let client_outgoing_to_server =

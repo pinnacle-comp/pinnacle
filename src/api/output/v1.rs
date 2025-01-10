@@ -520,18 +520,14 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
 
             let transform = output
                 .map(|output| match output.current_transform() {
-                    smithay::utils::Transform::Normal => output::v0alpha1::Transform::Normal,
-                    smithay::utils::Transform::_90 => output::v0alpha1::Transform::Transform90,
-                    smithay::utils::Transform::_180 => output::v0alpha1::Transform::Transform180,
-                    smithay::utils::Transform::_270 => output::v0alpha1::Transform::Transform270,
-                    smithay::utils::Transform::Flipped => output::v0alpha1::Transform::Flipped,
-                    smithay::utils::Transform::Flipped90 => output::v0alpha1::Transform::Flipped90,
-                    smithay::utils::Transform::Flipped180 => {
-                        output::v0alpha1::Transform::Flipped180
-                    }
-                    smithay::utils::Transform::Flipped270 => {
-                        output::v0alpha1::Transform::Flipped270
-                    }
+                    smithay::utils::Transform::Normal => output::v1::Transform::Normal,
+                    smithay::utils::Transform::_90 => output::v1::Transform::Transform90,
+                    smithay::utils::Transform::_180 => output::v1::Transform::Transform180,
+                    smithay::utils::Transform::_270 => output::v1::Transform::Transform270,
+                    smithay::utils::Transform::Flipped => output::v1::Transform::Flipped,
+                    smithay::utils::Transform::Flipped90 => output::v1::Transform::Flipped90,
+                    smithay::utils::Transform::Flipped180 => output::v1::Transform::Flipped180,
+                    smithay::utils::Transform::Flipped270 => output::v1::Transform::Flipped270,
                 })
                 .unwrap_or_default();
 

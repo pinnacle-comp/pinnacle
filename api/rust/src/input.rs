@@ -3,10 +3,6 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Input management.
-//!
-//! This module provides [`Input`], a struct that gives you several different
-//! methods for setting key- and mousebinds, changing xkeyboard settings, and more.
-//! View the struct's documentation for more information.
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
@@ -48,11 +44,24 @@ pub enum MouseButton {
     Forward = 0x115,
     /// The backward mouse button
     Back = 0x116,
+    /// Some other mouse button
     #[num_enum(catch_all)]
     Other(u32),
 }
 
 bitflags::bitflags! {
+    /// A keyboard modifier for use in binds.
+    ///
+    /// Binds can be configured to require certain keyboard modifiers to be held down to trigger.
+    /// For example, a bind with `Mod::SUPER | Mod::CTRL` requires both the super and control keys
+    /// to be held down.
+    ///
+    /// Normally, modifiers must be in the exact same state as passed in to trigger a bind.
+    /// This means if you use `Mod::SUPER` in a bind, *only* super must be held down; holding
+    /// down any other modifier will invalidate the bind.
+    ///
+    /// To circumvent this, you can ignore certain modifiers by OR-ing with the respective
+    /// `Mod::IGNORE_*`.
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
     pub struct Mod: u16 {
         /// The shift key
@@ -63,14 +72,22 @@ bitflags::bitflags! {
         const ALT = 1 << 2;
         /// The super key, aka meta, win, mod4
         const SUPER = 1 << 3;
+        /// The IsoLevel3Shift modifier
         const ISO_LEVEL3_SHIFT = 1 << 4;
+        /// The IsoLevel5Shift modifer
         const ISO_LEVEL5_SHIFT = 1 << 5;
 
+        /// Ignore the shift key
         const IGNORE_SHIFT = 1 << 6;
+        /// Ignore the ctrl key
         const IGNORE_CTRL = 1 << 7;
+        /// Ignore the alt key
         const IGNORE_ALT = 1 << 8;
+        /// Ignore the super key
         const IGNORE_SUPER = 1 << 9;
+        /// Ignore the IsoLevel3Shift modifier
         const IGNORE_ISO_LEVEL3_SHIFT = 1 << 10;
+        /// Ignore the IsoLevel5Shift modifier
         const IGNORE_ISO_LEVEL5_SHIFT = 1 << 11;
     }
 }
@@ -123,28 +140,39 @@ impl Mod {
     }
 }
 
+/// A bind layer, also known as a bind mode.
+///
+/// Normally all binds belong to the [`DEFAULT`][Self::DEFAULT] mode.
+/// You can bind binding to different layers and switch between them to enable modal binds.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct BindLayer {
     name: Option<String>,
 }
 
 impl BindLayer {
+    /// The default bind layer.
+    ///
+    /// This is the layer [`input::keybind`][self::keybind] uses.
     pub const DEFAULT: Self = Self { name: None };
 
+    /// Gets the bind layer with the given `name`.
     pub fn get(name: impl ToString) -> Self {
         Self {
             name: Some(name.to_string()),
         }
     }
 
+    /// Creates a keybind on this layer.
     pub fn keybind(&self, mods: Mod, key: impl ToKeysym) -> Keybind {
         new_keybind(mods, key, self).block_on_tokio()
     }
 
+    /// Creates a mousebind on this layer.
     pub fn mousebind(&self, mods: Mod, button: MouseButton) -> Mousebind {
         new_mousebind(mods, button, self).block_on_tokio()
     }
 
+    /// Enters this layer, causing only its binds to be in effect.
     pub fn enter(&self) {
         Client::input()
             .enter_bind_layer(EnterBindLayerRequest {
@@ -166,9 +194,9 @@ pub trait Bind {
     fn group(&mut self, group: impl ToString) -> &mut Self;
     /// Sets this bind's description.
     fn description(&mut self, desc: impl ToString) -> &mut Self;
-    /// Sets this bind as a quit keybind.
+    /// Sets this bind as a quit bind.
     fn set_as_quit(&mut self) -> &mut Self;
-    /// Sets this bind as a reload config keybind.
+    /// Sets this bind as a reload config bind.
     fn set_as_reload_config(&mut self) -> &mut Self;
 }
 
@@ -225,6 +253,7 @@ enum Edge {
     Release,
 }
 
+/// A keybind.
 pub struct Keybind {
     bind_id: u32,
     callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
@@ -232,11 +261,13 @@ pub struct Keybind {
 
 bind_impl!(Keybind);
 
+/// Creates a keybind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
 pub fn keybind(mods: Mod, key: impl ToKeysym) -> Keybind {
     BindLayer::DEFAULT.keybind(mods, key)
 }
 
 impl Keybind {
+    /// Runs a closure whenever this keybind is pressed.
     pub fn on_press<F: FnMut() + Send + 'static>(&mut self, on_press: F) -> &mut Self {
         let sender = self
             .callback_sender
@@ -246,6 +277,7 @@ impl Keybind {
         self
     }
 
+    /// Runs a closure whenever this keybind is released.
     pub fn on_release<F: FnMut() + Send + 'static>(&mut self, on_release: F) -> &mut Self {
         let sender = self
             .callback_sender
@@ -333,6 +365,7 @@ async fn new_keybind_stream(
 
 // Mousebinds
 
+/// A mousebind.
 pub struct Mousebind {
     bind_id: u32,
     callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
@@ -340,11 +373,13 @@ pub struct Mousebind {
 
 bind_impl!(Mousebind);
 
+/// Creates a mousebind on the [`DEFAULT`][BindLayer::DEFAULT] bind layer.
 pub fn mousebind(mods: Mod, button: MouseButton) -> Mousebind {
     BindLayer::DEFAULT.mousebind(mods, button)
 }
 
 impl Mousebind {
+    /// Runs a closure whenever this mousebind is pressed.
     pub fn on_press<F: FnMut() + Send + 'static>(&mut self, on_press: F) -> &mut Self {
         let sender = self
             .callback_sender
@@ -354,6 +389,7 @@ impl Mousebind {
         self
     }
 
+    /// Runs a closure whenever this mousebind is released.
     pub fn on_release<F: FnMut() + Send + 'static>(&mut self, on_release: F) -> &mut Self {
         let sender = self
             .callback_sender
@@ -441,21 +477,58 @@ async fn new_mousebind_stream(
 /// A struct that lets you define xkeyboard config options.
 ///
 /// See `xkeyboard-config(7)` for more information.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
 pub struct XkbConfig {
     /// Files of rules to be used for keyboard mapping composition
-    pub rules: Option<&'static str>,
+    pub rules: Option<String>,
     /// Name of the model of your keyboard type
-    pub model: Option<&'static str>,
+    pub model: Option<String>,
     /// Layout(s) you intend to use
-    pub layout: Option<&'static str>,
+    pub layout: Option<String>,
     /// Variant(s) of the layout you intend to use
-    pub variant: Option<&'static str>,
+    pub variant: Option<String>,
     /// Extra xkb configuration options
-    pub options: Option<&'static str>,
+    pub options: Option<String>,
 }
 
-/// Set the xkeyboard config.
+impl XkbConfig {
+    /// Creates a new, empty [`XkbConfig`].
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Sets this config's `rules`.
+    pub fn with_rules(mut self, rules: impl ToString) -> Self {
+        self.rules = Some(rules.to_string());
+        self
+    }
+
+    /// Sets this config's `model`.
+    pub fn with_model(mut self, model: impl ToString) -> Self {
+        self.model = Some(model.to_string());
+        self
+    }
+
+    /// Sets this config's `layout`.
+    pub fn with_layout(mut self, layout: impl ToString) -> Self {
+        self.layout = Some(layout.to_string());
+        self
+    }
+
+    /// Sets this config's `variant`.
+    pub fn with_variant(mut self, variant: impl ToString) -> Self {
+        self.variant = Some(variant.to_string());
+        self
+    }
+
+    /// Sets this config's `options`.
+    pub fn with_options(mut self, options: impl ToString) -> Self {
+        self.options = Some(options.to_string());
+        self
+    }
+}
+
+/// Sets the xkeyboard config.
 ///
 /// This allows you to set several xkeyboard options like `layout` and `rules`.
 ///
@@ -466,28 +539,26 @@ pub struct XkbConfig {
 /// ```
 /// use pinnacle_api::input::XkbConfig;
 ///
-/// input.set_xkb_config(XkbConfig {
-///     layout: Some("us,fr,ge"),
-///     options: Some("ctrl:swapcaps,caps:shift"),
-///     ..Default::default()
-/// });
+/// input::set_xkb_config(XkbConfig::new()
+///     .layout("us,fr,ge")
+///     .options("ctrl:swapcaps,caps:shift"));
 /// ```
 pub fn set_xkb_config(xkb_config: XkbConfig) {
     Client::input()
         .set_xkb_config(SetXkbConfigRequest {
-            rules: xkb_config.rules.map(String::from),
-            variant: xkb_config.variant.map(String::from),
-            layout: xkb_config.layout.map(String::from),
-            model: xkb_config.model.map(String::from),
-            options: xkb_config.options.map(String::from),
+            rules: xkb_config.rules,
+            variant: xkb_config.variant,
+            layout: xkb_config.layout,
+            model: xkb_config.model,
+            options: xkb_config.options,
         })
         .block_on_tokio()
         .unwrap();
 }
 
-/// Keybind information.
+/// Bind information.
 ///
-/// Mainly used for the keybind list.
+/// Mainly used for the bind overlay.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BindInfo {
     /// The group to place this bind in.
@@ -498,16 +569,28 @@ pub struct BindInfo {
     pub mods: Mod,
     /// The bind's layer.
     pub layer: BindLayer,
+    /// What kind of bind this is.
     pub kind: BindInfoKind,
 }
 
+/// The kind of a bind (hey that rhymes).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BindInfoKind {
-    Key { key_code: u32, xkb_name: String },
-    Mouse { button: MouseButton },
+    /// This is a keybind.
+    Key {
+        /// The numeric key code.
+        key_code: u32,
+        /// The xkeyboard name of this key.
+        xkb_name: String,
+    },
+    /// This is a mousebind.
+    Mouse {
+        /// Which mouse button this bind uses.
+        button: MouseButton,
+    },
 }
 
-/// Set the keyboard's repeat rate.
+/// Sets the keyboard's repeat rate.
 ///
 /// This allows you to set the time between holding down a key and it repeating
 /// as well as the time between each repeat.
@@ -519,7 +602,7 @@ pub enum BindInfoKind {
 /// ```
 /// // Set keyboard to repeat after holding down for half a second,
 /// // and repeat once every 25ms (40 times a second)
-/// input.set_repeat_rate(25, 500);
+/// input::set_repeat_rate(25, 500);
 /// ```
 pub fn set_repeat_rate(rate: i32, delay: i32) {
     Client::input()
@@ -531,7 +614,7 @@ pub fn set_repeat_rate(rate: i32, delay: i32) {
         .unwrap();
 }
 
-/// Set the xcursor theme.
+/// Sets the xcursor theme.
 ///
 /// Pinnacle reads `$XCURSOR_THEME` on startup to determine the theme.
 /// This allows you to set it at runtime.
@@ -539,7 +622,7 @@ pub fn set_repeat_rate(rate: i32, delay: i32) {
 /// # Examples
 ///
 /// ```
-/// input.set_xcursor_theme("Adwaita");
+/// input::set_xcursor_theme("Adwaita");
 /// ```
 pub fn set_xcursor_theme(theme: impl ToString) {
     Client::input()
@@ -551,7 +634,7 @@ pub fn set_xcursor_theme(theme: impl ToString) {
         .unwrap();
 }
 
-/// Set the xcursor size.
+/// Sets the xcursor size.
 ///
 /// Pinnacle reads `$XCURSOR_SIZE` on startup to determine the cursor size.
 /// This allows you to set it at runtime.
@@ -559,7 +642,7 @@ pub fn set_xcursor_theme(theme: impl ToString) {
 /// # Examples
 ///
 /// ```
-/// input.set_xcursor_size(64);
+/// input::set_xcursor_size(64);
 /// ```
 pub fn set_xcursor_size(size: u32) {
     Client::input()
@@ -573,7 +656,7 @@ pub fn set_xcursor_size(size: u32) {
 
 /// A trait that designates anything that can be converted into a [`Keysym`].
 pub trait ToKeysym {
-    /// Convert this into a [`Keysym`].
+    /// Converts this into a [`Keysym`].
     fn to_keysym(&self) -> Keysym;
 }
 
@@ -607,6 +690,7 @@ impl ToKeysym for u32 {
     }
 }
 
+/// Gets all bind information.
 pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
     let infos = Client::input()
         .get_bind_infos(GetBindInfosRequest {})
@@ -665,6 +749,7 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
     })
 }
 
+/// Connects to an [`InputSignal`].
 pub fn connect_signal(signal: InputSignal) -> SignalHandle {
     let mut signal_state = Client::signal_state();
 

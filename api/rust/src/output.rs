@@ -4,10 +4,9 @@
 
 //! Output management.
 //!
-//! An output is Pinnacle's terminology for a monitor.
+//! An output is the general Wayland term for a monitor.
 //!
-//! This module provides [`Output`], which allows you to get [`OutputHandle`]s for different
-//! connected monitors and set them up.
+//! TODO: expand
 
 use std::str::FromStr;
 
@@ -35,19 +34,19 @@ use crate::{
     BlockOnTokio,
 };
 
+/// Gets handles to all currently plugged-in outputs.
+///
+/// # Example
+/// ```
+/// for output in output::get_all() {
+///     println!("{} {} {}", output.make(), output.model(), output.serial());
+/// }
+/// ```
 pub fn get_all() -> impl Iterator<Item = OutputHandle> {
     get_all_async().block_on_tokio()
 }
 
-/// Get handles to all connected outputs.
-///
-/// # Examples
-///
-/// ```
-///
-///
-/// let outputs = output.get_all();
-/// ```
+/// Async impl for [`get_all`].
 pub async fn get_all_async() -> impl Iterator<Item = OutputHandle> {
     Client::output()
         .get(GetRequest {})
@@ -59,83 +58,79 @@ pub async fn get_all_async() -> impl Iterator<Item = OutputHandle> {
         .map(|name| OutputHandle { name })
 }
 
+/// Gets handles to all currently plugged-in *and enabled* outputs.
+///
+/// This ignores outputs you have explicitly disabled.
+///
+/// # Example
+/// ```
+/// for output in output::get_all_enabled() {
+///     println!("{} {} {}", output.make(), output.model(), output.serial());
+/// }
+/// ```
 pub fn get_all_enabled() -> impl Iterator<Item = OutputHandle> {
     get_all_enabled_async().block_on_tokio()
 }
 
-/// Get handles to all outputs that are connected and enabled.
-///
-/// # Examples
-///
-/// ```
-///
-///
-/// let enabled = output.get_all_enabled();
-/// ```
+/// Async impl for [`get_all_enabled`].
 pub async fn get_all_enabled_async() -> impl Iterator<Item = OutputHandle> {
     get_all_async()
         .await
-        .batch_filter(|op| op.enabled_async().boxed(), |enabled| *enabled)
+        .batch_filter(|op| op.enabled_async().boxed(), |enabled| enabled)
 }
 
+/// Gets a handle to the output with the given name.
+///
+/// By "name", we mean the name of the connector the output is connected to.
+///
+/// # Example
+/// ```
+/// let op = output.get_by_name("eDP-1")?;
+/// ```
 pub fn get_by_name(name: impl ToString) -> Option<OutputHandle> {
     get_by_name_async(name).block_on_tokio()
 }
 
-/// Get a handle to the output with the given name.
-///
-/// By "name", we mean the name of the connector the output is connected to.
-///
-/// # Examples
-///
-/// ```
-/// let op = output.get_by_name("eDP-1")?;
-///
-///
-/// let op2 = output.get_by_name("HDMI-2")?;
-/// ```
+/// Async impl for [`get_by_name`].
 pub async fn get_by_name_async(name: impl ToString) -> Option<OutputHandle> {
     get_all_async().await.find(|op| op.name == name.to_string())
 }
 
+/// Gets a handle to the currently focused output.
+///
+/// This is currently implemented as the one that has had the most recent pointer movement.
+///
+/// # Example
+/// ```
+/// let op = output.get_focused()?;
+/// ```
 pub fn get_focused() -> Option<OutputHandle> {
     get_focused_async().block_on_tokio()
 }
 
-/// Get a handle to the focused output.
-///
-/// This is currently implemented as the one that has had the most recent pointer movement.
-///
-/// # Examples
-///
-/// ```
-///
-///
-/// let op = output.get_focused()?;
-/// ```
+/// Async impl for [`get_focused`].
 pub async fn get_focused_async() -> Option<OutputHandle> {
     get_all_async()
         .await
         .batch_find(|op| op.focused_async().boxed(), |focused| *focused)
 }
 
-/// Connect a closure to be run on all current and future outputs.
+/// Runs a closure on all current and future outputs.
 ///
-/// When called, `connect_for_all` will do two things:
+/// When called, `for_all_outputs` will do two things:
 /// 1. Immediately run `for_all` with all currently connected outputs.
-/// 2. Create a future that will call `for_all` with any newly connected outputs.
+/// 2. Call `for_all` with any newly connected outputs.
 ///
 /// Note that `for_all` will *not* run with outputs that have been unplugged and replugged.
 /// This is to prevent duplicate setup. Instead, the compositor keeps track of any tags and
-/// state the output had when unplugged and restores them on replug.
+/// state the output had when unplugged and restores them on replug. This may change in the future.
 ///
-/// # Examples
-///
+/// # Example
 /// ```
 /// // Add tags 1-3 to all outputs and set tag "1" to active
-/// output.connect_for_all(|op| {
-///     let tags = tag.add(&op, ["1", "2", "3"]);
-///     tags.first()?.set_active(true);
+/// output::for_all_outputs(|op| {
+///     let tags = tag::add(op, ["1", "2", "3"]);
+///     tags.next().unwrap().set_active(true);
 /// });
 /// ```
 pub fn for_all_outputs(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
@@ -148,7 +143,7 @@ pub fn for_all_outputs(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) 
         .add_callback(Box::new(for_all));
 }
 
-/// Connect to an output signal.
+/// Connects to an output signal.
 ///
 /// The compositor will fire off signals that your config can listen for and act upon.
 /// You can pass in an [`OutputSignal`] along with a callback and it will get run
@@ -203,7 +198,7 @@ pub enum Alignment {
 
 /// An output transform.
 ///
-/// This determines what orientation outputs will render at.
+/// This determines what orientation outputs will render with.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum Transform {
@@ -260,7 +255,7 @@ impl From<Transform> for output::v1::Transform {
 }
 
 impl OutputHandle {
-    /// Set the location of this output in the global space.
+    /// Sets the location of this output in the global space.
     ///
     /// On startup, Pinnacle will lay out all connected outputs starting at (0, 0)
     /// and going to the right, with their top borders aligned.
@@ -270,8 +265,7 @@ impl OutputHandle {
     /// Note: If you leave space between two outputs when setting their locations,
     /// the pointer will not be able to move between them.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
@@ -282,8 +276,8 @@ impl OutputHandle {
     /// //              │ 1440  │
     /// //              └───────┘
     ///
-    /// output.get_by_name("DP-1")?.set_location(0, 0);
-    /// output.get_by_name("HDMI-1")?.set_location(1920, -360);
+    /// output::get_by_name("DP-1")?.set_loc(0, 0);
+    /// output::get_by_name("HDMI-1")?.set_loc(1920, -360);
     ///
     /// // Results in:
     /// //   x=0    ┌───────┐y=-360
@@ -303,9 +297,9 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Set this output adjacent to another one.
+    /// Sets this output adjacent to another one.
     ///
-    /// This is a helper method over [`OutputHandle::set_location`] to make laying out outputs
+    /// This is a helper method over [`OutputHandle::set_loc`] to make laying out outputs
     /// easier.
     ///
     /// `alignment` is an [`Alignment`] of how you want this output to be placed.
@@ -314,11 +308,8 @@ impl OutputHandle {
     /// Similarly, [`RightAlignCenter`][Alignment::RightAlignCenter] will place this output
     /// to the right of `other` and align their centers.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// use pinnacle_api::output::Alignment;
-    ///
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
     /// //              │     │1920x1080
@@ -328,7 +319,7 @@ impl OutputHandle {
     /// //              │ 1440  │
     /// //              └───────┘
     ///
-    /// output.get_by_name("DP-1")?.set_loc_adj_to(output.get_by_name("HDMI-1")?, Alignment::BottomAlignRight);
+    /// output::get_by_name("DP-1")?.set_loc_adj_to(output::get_by_name("HDMI-1")?, Alignment::BottomAlignRight);
     ///
     /// // Results in:
     /// // ┌───────┐
@@ -410,9 +401,9 @@ impl OutputHandle {
         attempt_set_loc();
     }
 
-    /// Set this output's mode.
+    /// Sets this output's mode.
     ///
-    /// If `refresh_rate_millihertz` is provided, Pinnacle will attempt to use the mode with that
+    /// If `refresh_rate_mhz` is provided, Pinnacle will attempt to use the mode with that
     /// refresh rate. If it is not, Pinnacle will attempt to use the mode with the
     /// highest refresh rate that matches the given size.
     ///
@@ -420,11 +411,11 @@ impl OutputHandle {
     /// 60Hz, use 60000.
     ///
     /// If this output doesn't support the given mode, it will be ignored.
+    /// // FIXME: check that i don't remember lol
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// output.get_focused()?.set_mode(2560, 1440, 144000);
+    /// output::get_focused()?.set_mode(2560, 1440, 144000);
     /// ```
     pub fn set_mode(&self, width: u32, height: u32, refresh_rate_mhz: impl Into<Option<u32>>) {
         Client::output()
@@ -437,17 +428,16 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Set a custom modeline for this output.
+    /// Sets a custom modeline for this output.
     ///
     /// See `xorg.conf(5)` for more information.
     ///
     /// You can parse a modeline from a string of the form
     /// "<clock> <hdisplay> <hsync_start> <hsync_end> <htotal> <vdisplay> <vsync_start> <vsync_end> <hsync> <vsync>".
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
+    /// output::set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
     /// ```
     pub fn set_modeline(&self, modeline: Modeline) {
         Client::output()
@@ -459,12 +449,12 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Set this output's scaling factor.
+    /// Sets this output's scaling factor.
     ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
-    /// output.get_focused()?.set_scale(1.5);
+    /// output::get_focused()?.set_scale(1.5);
     /// ```
     pub fn set_scale(&self, scale: f32) {
         Client::output()
@@ -477,12 +467,13 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Increase this output's scaling factor by `increase_by`.
+    /// Changes this output's scaling factor by a relative amount.
     ///
     /// # Examples
     ///
     /// ```
-    /// output.get_focused()?.increase_scale(0.25);
+    /// output::get_focused()?.change_scale(0.25);
+    /// output::get_focused()?.change_scale(-0.25);
     /// ```
     pub fn change_scale(&self, change_by: f32) {
         Client::output()
@@ -495,15 +486,13 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Set this output's transform.
+    /// Sets this output's [`Transform`].
     ///
     /// # Examples
     ///
     /// ```
-    /// use pinnacle_api::output::Transform;
-    ///
     /// // Rotate 90 degrees counter-clockwise
-    /// output.set_transform(Transform::_90);
+    /// output::get_focused()?.set_transform(Transform::_90);
     /// ```
     pub fn set_transform(&self, transform: Transform) {
         Client::output()
@@ -515,16 +504,14 @@ impl OutputHandle {
             .unwrap();
     }
 
-    /// Power on or off this output.
+    /// Powers on or off this output.
     ///
     /// This will not remove it from the space and your tags and windows
     /// will still be interactable; only the monitor is turned off.
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
-    /// // Power off `output`
-    /// output.set_powered(false);
+    /// output::get_focused()?.set_powered(false);
     /// ```
     pub fn set_powered(&self, powered: bool) {
         Client::output()
@@ -540,6 +527,15 @@ impl OutputHandle {
             .unwrap();
     }
 
+    /// Toggles the power on this output.
+    ///
+    /// This will not remove it from the space and your tags and windows
+    /// will still be interactable; only the monitor is turned off.
+    ///
+    /// # Example
+    /// ```
+    /// output::get_focused()?.toggle_powered();
+    /// ```
     pub fn toggle_powered(&self) {
         Client::output()
             .set_powered(SetPoweredRequest {
@@ -550,15 +546,12 @@ impl OutputHandle {
             .unwrap();
     }
 
+    /// Gets this output's make.
     pub fn make(&self) -> String {
         self.make_async().block_on_tokio()
     }
 
-    /// Get this output's make.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().make`.
+    /// Async impl for [`Self::make`].
     pub async fn make_async(&self) -> String {
         Client::output()
             .get_info(GetInfoRequest {
@@ -570,15 +563,12 @@ impl OutputHandle {
             .make
     }
 
+    /// Gets this output's model.
     pub fn model(&self) -> String {
         self.model_async().block_on_tokio()
     }
 
-    /// Get this output's model.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().make`.
+    /// Async impl for [`Self::model`].
     pub async fn model_async(&self) -> String {
         Client::output()
             .get_info(GetInfoRequest {
@@ -590,11 +580,13 @@ impl OutputHandle {
             .model
     }
 
-    pub fn serial_async(&self) -> String {
-        self.serial_async_async().block_on_tokio()
+    /// Gets this output's serial.
+    pub fn serial(&self) -> String {
+        self.serial_async().block_on_tokio()
     }
 
-    pub async fn serial_async_async(&self) -> String {
+    /// Async impl for [`Self::serial`].
+    pub async fn serial_async(&self) -> String {
         Client::output()
             .get_info(GetInfoRequest {
                 output_name: self.name(),
@@ -605,15 +597,14 @@ impl OutputHandle {
             .serial
     }
 
+    /// Gets this output's location in the global space.
+    ///
+    /// May return `None` if it is disabled.
     pub fn loc(&self) -> Option<Point> {
         self.loc_async().block_on_tokio()
     }
 
-    /// Get this output's x position in the global space.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().x`.
+    /// Async impl for [`Self::loc`].
     pub async fn loc_async(&self) -> Option<Point> {
         Client::output()
             .get_loc(GetLocRequest {
@@ -626,17 +617,19 @@ impl OutputHandle {
             .map(|loc| Point { x: loc.x, y: loc.y })
     }
 
+    /// Gets this output's logical size in logical pixels.
+    ///
+    /// If this output has a scale of 1, this will equal the output's
+    /// actual pixel size. If it has an output of 2, it will have half the
+    /// logical pixel width and height. Similarly, if it has a scale of 0.5,
+    /// it will have double the logical pixel width and height.
+    ///
+    /// May return `None` if it is disabled.
     pub fn logical_size(&self) -> Option<Size> {
         self.logical_size_async().block_on_tokio()
     }
 
-    /// Get this output's logical width in pixels.
-    ///
-    /// If the output is disabled, this returns None.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().logical_width`.
+    /// Async impl for [`Self::logical_size`].
     pub async fn logical_size_async(&self) -> Option<Size> {
         Client::output()
             .get_logical_size(GetLogicalSizeRequest {
@@ -652,15 +645,14 @@ impl OutputHandle {
             })
     }
 
+    /// Gets this output's current mode.
+    ///
+    /// May return `None` if it is disabled.
     pub fn current_mode(&self) -> Option<Mode> {
         self.current_mode_async().block_on_tokio()
     }
 
-    /// Get this output's current mode.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().current_mode`.
+    /// Async impl for [`Self::current_mode`].
     pub async fn current_mode_async(&self) -> Option<Mode> {
         Client::output()
             .get_modes(GetModesRequest {
@@ -679,15 +671,14 @@ impl OutputHandle {
             })
     }
 
+    /// Gets this output's current mode.
+    ///
+    /// May return `None` if it is disabled.
     pub fn preferred_mode(&self) -> Option<Mode> {
         self.preferred_mode_async().block_on_tokio()
     }
 
-    /// Get this output's preferred mode.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().preferred_mode`.
+    /// Async impl for [`Self::preferred_mode`].
     pub async fn preferred_mode_async(&self) -> Option<Mode> {
         Client::output()
             .get_modes(GetModesRequest {
@@ -706,15 +697,12 @@ impl OutputHandle {
             })
     }
 
+    /// Gets all modes currently known to this output.
     pub fn modes(&self) -> impl Iterator<Item = Mode> {
         self.modes_async().block_on_tokio()
     }
 
-    /// Get all available modes this output supports.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().modes`.
+    /// Async impl for [`Self::modes`].
     pub async fn modes_async(&self) -> impl Iterator<Item = Mode> {
         Client::output()
             .get_modes(GetModesRequest {
@@ -734,15 +722,14 @@ impl OutputHandle {
             })
     }
 
+    /// Gets this output's physical size in millimeters.
+    ///
+    /// Returns a size of 0, 0 if unknown.
     pub fn physical_size(&self) -> Size {
         self.physical_size_async().block_on_tokio()
     }
 
-    /// Get this output's physical width in millimeters.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().physical_width`.
+    /// Async impl for [`Self::physical_size`].
     pub async fn physical_size_async(&self) -> Size {
         Client::output()
             .get_physical_size(GetPhysicalSizeRequest {
@@ -759,17 +746,14 @@ impl OutputHandle {
             .unwrap_or_default()
     }
 
+    /// Gets whether or not this output is focused.
+    ///
+    /// This is currently implemented as the output with the most recent pointer motion.
     pub fn focused(&self) -> bool {
         self.focused_async().block_on_tokio()
     }
 
-    /// Get whether this output is focused or not.
-    ///
-    /// This is currently implemented as the output with the most recent pointer motion.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().focused`.
+    /// Async impl for [`Self::focused`].
     pub async fn focused_async(&self) -> bool {
         Client::output()
             .get_focused(GetFocusedRequest {
@@ -781,15 +765,12 @@ impl OutputHandle {
             .focused
     }
 
+    /// Gets handles to all tags on this output.
     pub fn tags(&self) -> impl Iterator<Item = TagHandle> {
         self.tags_async().block_on_tokio()
     }
 
-    /// Get the tags this output has.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().tags`
+    /// Async impl for [`Self::tags`].
     pub async fn tags_async(&self) -> impl Iterator<Item = TagHandle> {
         Client::output()
             .get_tag_ids(GetTagIdsRequest {
@@ -803,15 +784,12 @@ impl OutputHandle {
             .map(|id| TagHandle { id })
     }
 
+    /// Gets this output's current scale.
     pub fn scale(&self) -> f32 {
         self.scale_async().block_on_tokio()
     }
 
-    /// Get this output's scaling factor.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().scale`
+    /// Async impl for [`Self::scale`].
     pub async fn scale_async(&self) -> f32 {
         Client::output()
             .get_scale(GetScaleRequest {
@@ -823,15 +801,12 @@ impl OutputHandle {
             .scale
     }
 
+    /// Gets this output's current transform.
     pub fn transform(&self) -> Transform {
         self.transform_async().block_on_tokio()
     }
 
-    /// Get this output's transform.
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().transform`
+    /// Async impl for [`Self::transform`].
     pub async fn transform_async(&self) -> Transform {
         Client::output()
             .get_transform(GetTransformRequest {
@@ -845,19 +820,20 @@ impl OutputHandle {
             .unwrap_or_default()
     }
 
-    pub fn keyboard_focus_stack(&self) -> impl Iterator<Item = WindowHandle> {
-        self.keyboard_focus_stack_async().block_on_tokio()
-    }
-
-    /// Get this output's keyboard focus stack.
+    /// Gets this window's keyboard focus stack.
+    ///
+    /// Pinnacle keeps a stack of the windows that get keyboard focus.
+    /// This can be used, for example, for an `Alt + Tab`-style keybind
+    /// that focused the previously focused window.
     ///
     /// This will return the focus stack containing *all* windows on this output.
     /// If you only want windows on active tags, see
     /// [`OutputHandle::keyboard_focus_stack_visible`].
-    ///
-    ///
-    ///
-    /// Shorthand for `self.props().keyboard_focus_stack`
+    pub fn keyboard_focus_stack(&self) -> impl Iterator<Item = WindowHandle> {
+        self.keyboard_focus_stack_async().block_on_tokio()
+    }
+
+    /// Async impl for [`Self::keyboard_focus_stack`].
     pub async fn keyboard_focus_stack_async(&self) -> impl Iterator<Item = WindowHandle> {
         Client::output()
             .get_focus_stack_window_ids(GetFocusStackWindowIdsRequest {
@@ -871,30 +847,31 @@ impl OutputHandle {
             .map(|id| WindowHandle { id })
     }
 
+    /// Gets this window's keyboard focus stack with only windows on active tags.
+    ///
+    /// Pinnacle keeps a stack of the windows that get keyboard focus.
+    /// This can be used, for example, for an `Alt + Tab`-style keybind
+    /// that focused the previously focused window.
+    ///
+    /// This will return the focus stack containing only windows on active tags on this output.
+    /// If you want *all* windows on this output, see [`OutputHandle::keyboard_focus_stack`].
     pub fn keyboard_focus_stack_visible(&self) -> impl Iterator<Item = WindowHandle> {
         self.keyboard_focus_stack_visible_async().block_on_tokio()
     }
 
-    /// Get this output's keyboard focus stack with only visible windows.
-    ///
-    ///
-    ///
-    /// If you only want a focus stack containing all windows on this output, see
-    /// [`OutputHandle::keyboard_focus_stack`].
+    /// Async impl for [`Self::keyboard_focus_stack`].
     pub async fn keyboard_focus_stack_visible_async(&self) -> impl Iterator<Item = WindowHandle> {
         self.keyboard_focus_stack_async()
             .await
-            .batch_filter(|win| win.is_on_active_tag_async().boxed(), |is_on| *is_on)
+            .batch_filter(|win| win.is_on_active_tag_async().boxed(), |is_on| is_on)
     }
 
-    /// Get whether this output is enabled.
-    ///
-    ///
+    /// Gets whether this output is enabled.
     pub fn enabled(&self) -> bool {
         self.enabled_async().block_on_tokio()
     }
-    ///
-    /// Disabled outputs act as if you unplugged them.
+
+    /// Async impl for [`Self::enabled`].
     pub async fn enabled_async(&self) -> bool {
         Client::output()
             .get_enabled(GetEnabledRequest {
@@ -906,18 +883,14 @@ impl OutputHandle {
             .enabled
     }
 
-    /// Get whether this output is powered.
+    /// Gets whether or not this output is powered.
     ///
-    /// Unpowered outputs will be turned off but you can still interact with them.
-    ///
-    /// Outputs can be disabled but still powered; this just means
-    ///
-    ///
+    /// Unpowered outputs are turned off but you can still interact with them.
     pub fn powered(&self) -> bool {
         self.powered_async().block_on_tokio()
     }
-    /// they will turn on when powered. Disabled and unpowered outputs
-    /// will not power on when enabled, but will still be interactable.
+
+    /// Async impl for [`Self::powered`].
     pub async fn powered_async(&self) -> bool {
         Client::output()
             .get_powered(GetPoweredRequest {
@@ -929,7 +902,7 @@ impl OutputHandle {
             .powered
     }
 
-    /// Get this output's unique name (the name of its connector).
+    /// Gets this output's unique name (the name of its connector).
     pub fn name(&self) -> String {
         self.name.to_string()
     }
@@ -938,6 +911,7 @@ impl OutputHandle {
 /// A possible output pixel dimension and refresh rate configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Mode {
+    /// The size of the mode, in pixels.
     pub size: Size,
     /// The output's refresh rate, in millihertz.
     ///
@@ -1025,6 +999,7 @@ impl From<ParseModelineErrorKind> for ParseModelineError {
 impl FromStr for Modeline {
     type Err = ParseModelineError;
 
+    /// Tries to convert the provided modeline string to a [`Modeline`].
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut args = s.split_whitespace();
 
