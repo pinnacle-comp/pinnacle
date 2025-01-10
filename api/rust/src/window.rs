@@ -20,11 +20,13 @@ use pinnacle_api_defs::pinnacle::{
         v1::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, MoveGrabRequest, MoveToTagRequest,
-            RaiseRequest, ResizeGrabRequest, SetFloatingRequest, SetFocusedRequest,
-            SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
+            RaiseRequest, ResizeGrabRequest, SetDecorationModeRequest, SetFloatingRequest,
+            SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
         },
     },
 };
+use tokio::sync::mpsc::unbounded_channel;
+use tokio_stream::StreamExt;
 
 use crate::{
     client::Client,
@@ -151,6 +153,12 @@ impl TryFrom<pinnacle_api_defs::pinnacle::window::v1::LayoutMode> for LayoutMode
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum DecorationMode {
+    ClientSide,
+    ServerSide,
+}
+
 impl WindowHandle {
     /// Send a close request to this window.
     ///
@@ -164,12 +172,10 @@ impl WindowHandle {
     /// ```
     pub fn close(&self) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .close(pinnacle_api_defs::pinnacle::window::v1::CloseRequest { window_id })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .close(pinnacle_api_defs::pinnacle::window::v1::CloseRequest { window_id })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this window to fullscreen or not.
@@ -184,19 +190,17 @@ impl WindowHandle {
     /// ```
     pub fn set_fullscreen(&self, set: bool) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_fullscreen(SetFullscreenRequest {
-                    window_id,
-                    set_or_toggle: match set {
-                        true => SetOrToggle::Set,
-                        false => SetOrToggle::Unset,
-                    }
-                    .into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_fullscreen(SetFullscreenRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Toggle this window between fullscreen and not.
@@ -211,15 +215,13 @@ impl WindowHandle {
     /// ```
     pub fn toggle_fullscreen(&self) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_fullscreen(SetFullscreenRequest {
-                    window_id,
-                    set_or_toggle: SetOrToggle::Toggle.into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_fullscreen(SetFullscreenRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this window to maximized or not.
@@ -234,19 +236,17 @@ impl WindowHandle {
     /// ```
     pub fn set_maximized(&self, set: bool) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_maximized(SetMaximizedRequest {
-                    window_id,
-                    set_or_toggle: match set {
-                        true => SetOrToggle::Set,
-                        false => SetOrToggle::Unset,
-                    }
-                    .into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_maximized(SetMaximizedRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Toggle this window between maximized and not.
@@ -261,15 +261,13 @@ impl WindowHandle {
     /// ```
     pub fn toggle_maximized(&self) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_maximized(SetMaximizedRequest {
-                    window_id,
-                    set_or_toggle: SetOrToggle::Toggle.into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_maximized(SetMaximizedRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Set this window to floating or not.
@@ -287,19 +285,17 @@ impl WindowHandle {
     /// ```
     pub fn set_floating(&self, set: bool) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_floating(SetFloatingRequest {
-                    window_id,
-                    set_or_toggle: match set {
-                        true => SetOrToggle::Set,
-                        false => SetOrToggle::Unset,
-                    }
-                    .into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_floating(SetFloatingRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Toggle this window to and from floating.
@@ -317,15 +313,13 @@ impl WindowHandle {
     /// ```
     pub fn toggle_floating(&self) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_floating(SetFloatingRequest {
-                    window_id,
-                    set_or_toggle: SetOrToggle::Toggle.into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_floating(SetFloatingRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Focus or unfocus this window.
@@ -338,19 +332,31 @@ impl WindowHandle {
     /// ```
     pub fn set_focused(&self, set: bool) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_focused(SetFocusedRequest {
-                    window_id,
-                    set_or_toggle: match set {
-                        true => SetOrToggle::Set,
-                        false => SetOrToggle::Unset,
-                    }
-                    .into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_focused(SetFocusedRequest {
+                window_id,
+                set_or_toggle: match set {
+                    true => SetOrToggle::Set,
+                    false => SetOrToggle::Unset,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    pub fn set_decoration_mode(&self, mode: DecorationMode) {
+        Client::window()
+            .set_decoration_mode(SetDecorationModeRequest {
+                window_id: self.id,
+                decoration_mode: match mode {
+                    DecorationMode::ClientSide => window::v1::DecorationMode::ClientSide,
+                    DecorationMode::ServerSide => window::v1::DecorationMode::ServerSide,
+                }
+                .into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Toggle this window to and from focused.
@@ -365,15 +371,13 @@ impl WindowHandle {
     /// ```
     pub fn toggle_focused(&self) {
         let window_id = self.id;
-        tokio::spawn(async move {
-            Client::window()
-                .set_focused(SetFocusedRequest {
-                    window_id,
-                    set_or_toggle: SetOrToggle::Toggle.into(),
-                })
-                .await
-                .unwrap();
-        });
+        Client::window()
+            .set_focused(SetFocusedRequest {
+                window_id,
+                set_or_toggle: SetOrToggle::Toggle.into(),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Move this window to the given `tag`.
@@ -622,4 +626,46 @@ impl WindowHandle {
     pub fn id(&self) -> u32 {
         self.id
     }
+}
+
+pub fn for_all_windows(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
+    let (client_outgoing, client_outgoing_to_server) = unbounded_channel();
+    let client_outgoing_to_server =
+        tokio_stream::wrappers::UnboundedReceiverStream::new(client_outgoing_to_server);
+    let mut client_incoming = Client::window()
+        .window_rule(client_outgoing_to_server)
+        .block_on_tokio()
+        .unwrap()
+        .into_inner();
+
+    let fut = async move {
+        while let Some(Ok(response)) = client_incoming.next().await {
+            let Some(response) = response.response else {
+                continue;
+            };
+
+            match response {
+                window::v1::window_rule_response::Response::NewWindow(new_window_request) => {
+                    let request_id = new_window_request.request_id;
+                    let window_id = new_window_request.window_id;
+
+                    for_all(WindowHandle { id: window_id });
+
+                    let sent = client_outgoing
+                        .send(window::v1::WindowRuleRequest {
+                            request: Some(window::v1::window_rule_request::Request::Finished(
+                                window::v1::window_rule_request::Finished { request_id },
+                            )),
+                        })
+                        .is_ok();
+
+                    if !sent {
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    tokio::spawn(fut);
 }

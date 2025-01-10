@@ -23,7 +23,7 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::WindowElement,
+    window::{rules::WindowRuleState, WindowElement},
 };
 use anyhow::Context;
 use indexmap::IndexMap;
@@ -192,6 +192,8 @@ pub struct Pinnacle {
     pub signal_state: SignalState,
 
     pub layout_state: LayoutState,
+
+    pub window_rule_state: WindowRuleState,
 
     /// A cache of surfaces to their root surface.
     pub root_surface_cache: HashMap<WlSurface, WlSurface>,
@@ -434,6 +436,8 @@ impl Pinnacle {
             signal_state: SignalState::default(),
 
             layout_state: LayoutState::default(),
+
+            window_rule_state: WindowRuleState::default(),
 
             root_surface_cache: HashMap::new(),
 

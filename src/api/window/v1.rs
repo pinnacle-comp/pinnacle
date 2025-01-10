@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
+
 use pinnacle_api_defs::pinnacle::{
     util::{self, v1::SetOrToggle},
     window::v1::{
@@ -5,14 +10,19 @@ use pinnacle_api_defs::pinnacle::{
         GetFocusedResponse, GetLayoutModeRequest, GetLayoutModeResponse, GetLocRequest,
         GetLocResponse, GetRequest, GetResponse, GetSizeRequest, GetSizeResponse, GetTagIdsRequest,
         GetTagIdsResponse, GetTitleRequest, GetTitleResponse, LayoutMode, MoveGrabRequest,
-        MoveToTagRequest, RaiseRequest, ResizeGrabRequest, SetFloatingRequest, SetFocusedRequest,
-        SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest, SetTagRequest,
+        MoveToTagRequest, RaiseRequest, ResizeGrabRequest, SetDecorationModeRequest,
+        SetFloatingRequest, SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest,
+        SetMaximizedRequest, SetTagRequest, WindowRuleRequest, WindowRuleResponse,
     },
 };
-use tonic::{Request, Status};
+use smithay::wayland::seat::WaylandFocus;
+use tokio::sync::mpsc::unbounded_channel;
+use tonic::{Request, Status, Streaming};
 
 use crate::{
-    api::{run_unary, run_unary_no_response, TonicResult},
+    api::{
+        run_bidirectional_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult,
+    },
     state::WithState,
     tag::TagId,
     window::window_state::{WindowId, WindowState},
@@ -20,6 +30,8 @@ use crate::{
 
 #[tonic::async_trait]
 impl v1::window_service_server::WindowService for super::WindowService {
+    type WindowRuleStream = ResponseStream<WindowRuleResponse>;
+
     async fn get(&self, _request: Request<GetRequest>) -> TonicResult<GetResponse> {
         run_unary(&self.sender, move |state| {
             let window_ids = state
@@ -315,6 +327,32 @@ impl v1::window_service_server::WindowService for super::WindowService {
         .await
     }
 
+    async fn set_decoration_mode(
+        &self,
+        request: Request<SetDecorationModeRequest>,
+    ) -> TonicResult<()> {
+        let request = request.into_inner();
+
+        let window_id = WindowId(request.window_id);
+
+        let mode = match request.decoration_mode() {
+            v1::DecorationMode::Unspecified => {
+                return Err(Status::invalid_argument("decoration mode was unspecified"))
+            }
+            v1::DecorationMode::ClientSide => crate::window::rules::DecorationMode::ClientSide,
+            v1::DecorationMode::ServerSide => crate::window::rules::DecorationMode::ServerSide,
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(window) = window_id.window(&state.pinnacle) else {
+                return;
+            };
+
+            crate::api::window::set_decoration_mode(state, &window, mode);
+        })
+        .await
+    }
+
     async fn move_to_tag(&self, request: Request<MoveToTagRequest>) -> TonicResult<()> {
         let request = request.into_inner();
 
@@ -396,5 +434,79 @@ impl v1::window_service_server::WindowService for super::WindowService {
             crate::api::window::resize_grab(state, button);
         })
         .await
+    }
+
+    async fn window_rule(
+        &self,
+        request: Request<Streaming<WindowRuleRequest>>,
+    ) -> TonicResult<Self::WindowRuleStream> {
+        let in_stream = request.into_inner();
+
+        let id_ctr = Arc::new(AtomicU32::default());
+
+        run_bidirectional_streaming(
+            self.sender.clone(),
+            in_stream,
+            {
+                let id_ctr = id_ctr.clone();
+                move |state, request| {
+                    let Some(request) = request.request else {
+                        return;
+                    };
+
+                    match request {
+                        v1::window_rule_request::Request::Finished(finished) => {
+                            let id = finished.request_id;
+                            id_ctr.store(id, Ordering::Release);
+
+                            for win in state.pinnacle.window_rule_state.finished_windows() {
+                                // TODO: may be able to update_window_state here instead
+                                if win.with_state(|state| state.window_state.is_floating()) {
+                                    let size = win.with_state(|state| state.floating_size);
+                                    if let Some(size) = size {
+                                        if let Some(toplevel) = win.toplevel() {
+                                            toplevel.with_pending_state(|state| {
+                                                state.size = Some(size)
+                                            });
+                                        }
+                                    }
+                                }
+
+                                // TODO: don't know if I want this here
+                                if let Some(toplevel) = win.toplevel() {
+                                    assert!(
+                                        !toplevel.is_initial_configure_sent(),
+                                        "toplevel already configured after window rules"
+                                    );
+                                    toplevel.send_configure();
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            |state, sender, _join_handle| {
+                let (send, mut recv) =
+                    unbounded_channel::<crate::window::rules::WindowRuleRequest>();
+                tokio::spawn(async move {
+                    while let Some(request) = recv.recv().await {
+                        let sent = sender
+                            .send(Ok(WindowRuleResponse {
+                                response: Some(v1::window_rule_response::Response::NewWindow(
+                                    v1::window_rule_response::NewWindowRequest {
+                                        request_id: request.request_id,
+                                        window_id: request.window_id.0,
+                                    },
+                                )),
+                            }))
+                            .is_ok();
+                        if !sent {
+                            break;
+                        }
+                    }
+                });
+                state.pinnacle.window_rule_state.new_sender(send, id_ctr);
+            },
+        )
     }
 }

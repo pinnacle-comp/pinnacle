@@ -8,19 +8,6 @@ pub struct LayoutNode {
     pub children: indexmap::IndexMap<u32, LayoutNode>,
 }
 
-impl treediff::Value for LayoutNode {
-    type Key = u32;
-
-    type Item = Self;
-
-    fn items<'a>(&'a self) -> Option<Box<dyn Iterator<Item = (Self::Key, &'a Self::Item)> + 'a>> {
-        if self.children.is_empty() {
-            return None;
-        }
-        Some(Box::new(self.children.iter().map(|(id, node)| (*id, node))) as _)
-    }
-}
-
 #[derive(Debug)]
 pub struct LayoutTree {
     pub(super) tree: taffy::TaffyTree<u32>,
@@ -130,8 +117,6 @@ impl LayoutTree {
                 },
             )
             .unwrap();
-
-        self.tree.print_tree(self.taffy_root_id);
 
         let mut geos = BTreeMap::<u32, Rectangle<i32, Logical>>::new();
 

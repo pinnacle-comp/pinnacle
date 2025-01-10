@@ -3223,7 +3223,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "treediff",
  "vergen-gitcl",
  "x11rb",
  "xcursor",
@@ -4685,12 +4684,6 @@ dependencies = [
  "tracing-core",
  "tracing-log",
 ]
-
-[[package]]
-name = "treediff"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2ce481b2b7c2534fe7b5242cccebf37f9084392665c6a3783c414a1bada5432"
 
 [[package]]
 name = "try-lock"

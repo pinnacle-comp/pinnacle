@@ -103,6 +103,17 @@ message SetFocusedRequest {
     pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
+enum DecorationMode {
+    DECORATION_MODE_UNSPECIFIED = 0;
+    DECORATION_MODE_CLIENT_SIDE = 1;
+    DECORATION_MODE_SERVER_SIDE = 2;
+}
+
+message SetDecorationModeRequest {
+    uint32 window_id = 1;
+    DecorationMode decoration_mode = 2;
+}
+
 message MoveToTagRequest {
     uint32 window_id = 1;
     uint32 tag_id = 2;
@@ -126,6 +137,26 @@ message ResizeGrabRequest {
     uint32 button = 1;
 }
 
+message WindowRuleRequest {
+    message Finished {
+        uint32 request_id = 1;
+    }
+
+    oneof request {
+        Finished finished = 1;
+    }
+}
+message WindowRuleResponse {
+    message NewWindowRequest {
+        uint32 request_id = 1;
+        uint32 window_id = 2;
+    }
+
+    oneof response {
+        NewWindowRequest new_window = 1;
+    }
+}
+
 service WindowService {
     rpc Get(GetRequest) returns (GetResponse);
 
@@ -143,9 +174,12 @@ service WindowService {
     rpc SetMaximized(SetMaximizedRequest) returns (google.protobuf.Empty);
     rpc SetFloating(SetFloatingRequest) returns (google.protobuf.Empty);
     rpc SetFocused(SetFocusedRequest) returns (google.protobuf.Empty);
+    rpc SetDecorationMode(SetDecorationModeRequest) returns (google.protobuf.Empty);
     rpc MoveToTag(MoveToTagRequest) returns (google.protobuf.Empty);
     rpc SetTag(SetTagRequest) returns (google.protobuf.Empty);
     rpc Raise(RaiseRequest) returns (google.protobuf.Empty);
     rpc MoveGrab(MoveGrabRequest) returns (google.protobuf.Empty);
     rpc ResizeGrab(ResizeGrabRequest) returns (google.protobuf.Empty);
+
+    rpc WindowRule(stream WindowRuleRequest) returns (stream WindowRuleResponse);
 }

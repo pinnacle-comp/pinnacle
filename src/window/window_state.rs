@@ -40,10 +40,12 @@ impl WindowId {
 
     /// Get the window that has this WindowId.
     pub fn window(&self, pinnacle: &Pinnacle) -> Option<WindowElement> {
+        let find = |win: &&WindowElement| win.with_state(|state| &state.id == self);
         pinnacle
             .windows
             .iter()
-            .find(|win| win.with_state(|state| &state.id == self))
+            .find(find)
+            .or_else(|| pinnacle.unmapped_windows.iter().find(find))
             .cloned()
     }
 }
@@ -304,25 +306,25 @@ impl Pinnacle {
                     .unwrap_or_else(|| window.geometry().size);
                 let loc = window
                     .with_state(|state| state.floating_loc)
-                    .or_else(|| self.space.element_location(window).map(|loc| loc.to_f64()))
-                    .or_else(|| {
-                        self.focused_output().map(|op| {
-                            let op_geo = self
-                                .space
-                                .output_geometry(op)
-                                .expect("focused output wasn't mapped");
-
-                            let x = op_geo.loc.x + op_geo.size.w / 2 - (size.w / 2);
-                            let y = op_geo.loc.y + op_geo.size.h / 2 - (size.h / 2);
-
-                            (x as f64, y as f64).into()
-                        })
-                    })
-                    .unwrap_or_default();
+                    .or_else(|| self.space.element_location(window).map(|loc| loc.to_f64()));
+                // .or_else(|| {
+                //     self.focused_output().map(|op| {
+                //         let op_geo = self
+                //             .space
+                //             .output_geometry(op)
+                //             .expect("focused output wasn't mapped");
+                //
+                //         let x = op_geo.loc.x + op_geo.size.w / 2 - (size.w / 2);
+                //         let y = op_geo.loc.y + op_geo.size.h / 2 - (size.h / 2);
+                //
+                //         (x as f64, y as f64).into()
+                //     })
+                // });
+                // .unwrap_or_default();
 
                 window.with_state_mut(|state| {
                     state.floating_size = Some(size);
-                    state.floating_loc = Some(loc);
+                    state.floating_loc = loc;
                 });
 
                 window.change_geometry(loc, size);

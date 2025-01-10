@@ -14,7 +14,7 @@ use smithay::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
-use tree::{LayoutNode, LayoutTree};
+use tree::LayoutTree;
 
 use crate::{
     output::OutputName,
@@ -71,7 +71,7 @@ impl Pinnacle {
         }));
 
         for (win, geo) in zipped.by_ref() {
-            win.change_geometry(geo.loc.to_f64(), geo.size);
+            win.change_geometry(Some(geo.loc.to_f64()), geo.size);
             self.space.map_element(win, geo.loc, false);
         }
 
@@ -89,13 +89,13 @@ impl Pinnacle {
         for window in windows_on_foc_tags.iter() {
             match window.with_state(|state| state.window_state) {
                 WindowState::Fullscreen { .. } => {
-                    window.change_geometry(output_geo.loc.to_f64(), output_geo.size);
+                    window.change_geometry(Some(output_geo.loc.to_f64()), output_geo.size);
                     self.space
                         .map_element(window.clone(), output_geo.loc, false);
                 }
                 WindowState::Maximized { .. } => {
                     let loc = output_geo.loc + non_exclusive_geo.loc;
-                    window.change_geometry(loc.to_f64(), non_exclusive_geo.size);
+                    window.change_geometry(Some(loc.to_f64()), non_exclusive_geo.size);
                     self.space.map_element(window.clone(), loc, false);
                 }
                 _ => (),

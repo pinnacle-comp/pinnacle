@@ -375,10 +375,9 @@ async fn main() {
     });
 
     // Request all windows use client-side decorations.
-    // window::add_window_rule(
-    //     WindowRuleCondition::new().all([]),
-    //     WindowRule::new().decoration_mode(DecorationMode::ClientSide),
-    // );
+    window::for_all_windows(|window| {
+        window.set_decoration_mode(window::DecorationMode::ClientSide);
+    });
 
     // Enable sloppy focus
     window::connect_signal(WindowSignal::PointerEnter(Box::new(|win| {

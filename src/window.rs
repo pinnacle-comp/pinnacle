@@ -54,7 +54,11 @@ impl WindowElement {
     /// Xwayland windows will still receive a configure.
     ///
     /// RefCell Safety: This method uses a [`RefCell`] on this window.
-    pub fn change_geometry(&self, new_loc: Point<f64, Logical>, new_size: Size<i32, Logical>) {
+    pub fn change_geometry(
+        &self,
+        new_loc: Option<Point<f64, Logical>>,
+        new_size: Size<i32, Logical>,
+    ) {
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 toplevel.with_pending_state(|state| {
@@ -66,7 +70,7 @@ impl WindowElement {
                     // FIXME: rounded loc here
                     surface
                         .configure(Rectangle::from_loc_and_size(
-                            new_loc.to_i32_round(),
+                            new_loc.unwrap_or_default().to_i32_round(), // FIXME: unwrap_or_default
                             new_size,
                         ))
                         .expect("failed to configure x11 win");

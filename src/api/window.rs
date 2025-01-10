@@ -1,23 +1,22 @@
 mod v1;
 
-use std::num::NonZeroU32;
-
-use pinnacle_api_defs::pinnacle::window::{
-    self,
-    v0alpha1::{FullscreenOrMaximized, WindowRule, WindowRuleCondition},
-};
 use smithay::{
     desktop::space::SpaceElement,
-    reexports::wayland_protocols::xdg::shell::server,
+    reexports::{
+        wayland_protocols::xdg::{
+            decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
+        },
+        wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration,
+    },
     utils::{Point, SERIAL_COUNTER},
-    wayland::seat::WaylandFocus,
+    wayland::{compositor, seat::WaylandFocus},
 };
 
 use crate::{
-    output::OutputName,
+    handlers::decoration::KdeDecorationObject,
     state::{State, WithState},
-    tag::{Tag, TagId},
-    window::{rules::DecorationMode, window_state::WindowState, WindowElement},
+    tag::Tag,
+    window::{rules::DecorationMode, WindowElement},
 };
 
 use super::StateFnSender;
@@ -157,6 +156,51 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
 
     for window in state.pinnacle.space.elements() {
         if let Some(toplevel) = window.toplevel() {
+            if toplevel.is_initial_configure_sent() {
+                toplevel.send_pending_configure();
+            }
+        }
+    }
+
+    // TODO: check if the below is needed
+    // state.schedule_render(&output);
+}
+
+pub fn set_decoration_mode(
+    _state: &mut State,
+    window: &WindowElement,
+    decoration_mode: DecorationMode,
+) {
+    window.with_state_mut(|state| {
+        state.decoration_mode = Some(decoration_mode);
+    });
+    if let Some(toplevel) = window.toplevel() {
+        toplevel.with_pending_state(|state| {
+            state.decoration_mode = Some(match decoration_mode {
+                DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
+                DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
+            })
+        });
+
+        compositor::with_states(toplevel.wl_surface(), |states| {
+            let kde_decoration = states.data_map.get::<KdeDecorationObject>();
+            if let Some(kde_decoration) = kde_decoration {
+                if let Some(object) = kde_decoration
+                    .borrow()
+                    .as_ref()
+                    .and_then(|obj| obj.upgrade().ok())
+                {
+                    let mode = match decoration_mode {
+                        DecorationMode::ClientSide => org_kde_kwin_server_decoration::Mode::Client,
+                        DecorationMode::ServerSide => org_kde_kwin_server_decoration::Mode::Server,
+                    };
+                    tracing::debug!(?mode, "Window rule set KDE decoration mode");
+                    object.mode(mode);
+                }
+            }
+        });
+
+        if toplevel.is_initial_configure_sent() {
             toplevel.send_pending_configure();
         }
     }
@@ -332,140 +376,5 @@ pub fn resize_grab(state: &mut State, button: u32) {
 
     if let Some(output) = state.pinnacle.focused_output().cloned() {
         state.schedule_render(&output);
-    }
-}
-
-// #[tonic::async_trait]
-// impl window_service_server::WindowService for WindowService {
-//     async fn add_window_rule(
-//         &self,
-//         request: Request<AddWindowRuleRequest>,
-//     ) -> Result<Response<()>, Status> {
-//         let request = request.into_inner();
-//
-//         let cond = request
-//             .cond
-//             .ok_or_else(|| Status::invalid_argument("no condition specified"))?
-//             .into();
-//
-//         let rule = request
-//             .rule
-//             .ok_or_else(|| Status::invalid_argument("no rule specified"))?
-//             .into();
-//
-//         run_unary_no_response(&self.sender, move |state| {
-//             state.pinnacle.config.window_rules.push((cond, rule));
-//         })
-//         .await
-//     }
-// }
-
-impl From<WindowRuleCondition> for crate::window::rules::WindowRuleCondition {
-    fn from(cond: WindowRuleCondition) -> Self {
-        let cond_any = match cond.any.is_empty() {
-            true => None,
-            false => Some(
-                cond.any
-                    .into_iter()
-                    .map(crate::window::rules::WindowRuleCondition::from)
-                    .collect::<Vec<_>>(),
-            ),
-        };
-
-        let cond_all = match cond.all.is_empty() {
-            true => None,
-            false => Some(
-                cond.all
-                    .into_iter()
-                    .map(crate::window::rules::WindowRuleCondition::from)
-                    .collect::<Vec<_>>(),
-            ),
-        };
-
-        let class = match cond.classes.is_empty() {
-            true => None,
-            false => Some(cond.classes),
-        };
-
-        let title = match cond.titles.is_empty() {
-            true => None,
-            false => Some(cond.titles),
-        };
-
-        let tag = match cond.tags.is_empty() {
-            true => None,
-            false => Some(cond.tags.into_iter().map(TagId::new).collect::<Vec<_>>()),
-        };
-
-        crate::window::rules::WindowRuleCondition {
-            cond_any,
-            cond_all,
-            class,
-            title,
-            tag,
-        }
-    }
-}
-
-impl From<WindowRule> for crate::window::rules::WindowRule {
-    fn from(rule: WindowRule) -> Self {
-        let fullscreen_or_maximized = match rule.fullscreen_or_maximized() {
-            FullscreenOrMaximized::Unspecified => None,
-            FullscreenOrMaximized::Neither => {
-                Some(crate::window::window_state::FullscreenOrMaximized::Neither)
-            }
-            FullscreenOrMaximized::Fullscreen => {
-                Some(crate::window::window_state::FullscreenOrMaximized::Fullscreen)
-            }
-            FullscreenOrMaximized::Maximized => {
-                Some(crate::window::window_state::FullscreenOrMaximized::Maximized)
-            }
-        };
-
-        let window_state = match rule.state() {
-            window::v0alpha1::WindowState::Unspecified => None,
-            window::v0alpha1::WindowState::Tiled => Some(WindowState::Tiled),
-            window::v0alpha1::WindowState::Floating => Some(WindowState::Floating),
-            window::v0alpha1::WindowState::Fullscreen => Some(WindowState::Fullscreen {
-                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
-            }),
-            window::v0alpha1::WindowState::Maximized => Some(WindowState::Fullscreen {
-                previous_state: crate::window::window_state::FloatingOrTiled::Tiled,
-            }),
-        };
-
-        let output = rule.output.map(OutputName);
-        let tags = match rule.tags.is_empty() {
-            true => None,
-            false => Some(rule.tags.into_iter().map(TagId::new).collect::<Vec<_>>()),
-        };
-        let floating_or_tiled = rule.floating.map(|floating| match floating {
-            true => crate::window::window_state::FloatingOrTiled::Floating,
-            false => crate::window::window_state::FloatingOrTiled::Tiled,
-        });
-        let size = rule.width.and_then(|w| {
-            rule.height.and_then(|h| {
-                Some((
-                    NonZeroU32::try_from(w as u32).ok()?,
-                    NonZeroU32::try_from(h as u32).ok()?,
-                ))
-            })
-        });
-        let location = rule.x.and_then(|x| rule.y.map(|y| (x, y)));
-        let decoration_mode = rule.ssd.map(|ssd| match ssd {
-            true => DecorationMode::ServerSide,
-            false => DecorationMode::ClientSide,
-        });
-
-        crate::window::rules::WindowRule {
-            output,
-            tags,
-            floating_or_tiled,
-            fullscreen_or_maximized,
-            size,
-            location,
-            decoration_mode,
-            window_state,
-        }
     }
 }
