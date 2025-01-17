@@ -207,10 +207,6 @@ async fn config() {
     let layout_requester = layout::set_manager(CyclingLayoutManager::new([
         Box::<MasterStackLayout>::default() as _,
         Box::new(MasterStackLayout {
-            reversed: true,
-            ..Default::default()
-        }) as _,
-        Box::new(MasterStackLayout {
             master_side: MasterSide::Right,
             ..Default::default()
         }) as _,

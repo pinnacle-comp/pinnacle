@@ -765,7 +765,16 @@ fn chawathe_edit_script<T: Clone + Default + PartialEq + std::fmt::Debug>(
             });
         } else {
             w = mappings.src_for_dst(x.node_id()).unwrap();
-            if x.node_id() != prev_root {
+            if x.node_id() == prev_root {
+                let mut w_mut = t1.get_mut(w).unwrap();
+                if w_mut.data() != x.data() {
+                    *w_mut.data() = x.data().clone();
+                    edits.push(EditAction::Update(
+                        index_path_to_node(&t1, w),
+                        x.data().clone(),
+                    ));
+                }
+            } else {
                 let v = {
                     let mut w_mut = t1.get_mut(w).unwrap();
                     let v = w_mut.parent().unwrap().node_id();

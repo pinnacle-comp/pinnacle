@@ -88,7 +88,6 @@ impl LayoutTree {
 
             let mut parent_style = tree.style(parent).unwrap().clone();
             parent_style.margin = margin;
-
             tree.set_style(parent, parent_style).unwrap();
 
             tree.remove(node).unwrap();
@@ -240,6 +239,19 @@ impl LayoutTree {
                     let to_move = node_id_for_path(&self.taffy_tree, &src);
                     let dst_parent_node = node_id_for_path(&self.taffy_tree, &dst);
 
+                    let parent_of_to_move = self.taffy_tree.parent(to_move).unwrap();
+                    let old_idx = self
+                        .taffy_tree
+                        .children(parent_of_to_move)
+                        .unwrap()
+                        .iter()
+                        .position(|sib| *sib == to_move)
+                        .unwrap();
+
+                    self.taffy_tree
+                        .remove_child_at_index(parent_of_to_move, old_idx)
+                        .unwrap();
+
                     self.taffy_tree
                         .insert_child_at_index(dst_parent_node, idx, to_move)
                         .unwrap();
@@ -266,6 +278,8 @@ impl std::fmt::Debug for LayoutNodeData {
             .field("label", &self.label)
             .field("traversal_index", &self.traversal_index)
             .field("style", &"...")
+            .field("style.margin", &self.style.margin)
+            .field("style.flex_direction", &self.style.flex_direction)
             .finish()
     }
 }
