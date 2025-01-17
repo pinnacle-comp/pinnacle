@@ -26,6 +26,3 @@ num_enum = "0.7.3"
 [features]
 default = ["snowcap"]
 snowcap = ["dep:snowcap-api"]
-
-[lints.rust]
-missing_docs = "warn"

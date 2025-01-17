@@ -14,7 +14,7 @@ use smithay::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
-use tree::LayoutTree;
+use tree::{LayoutNode, LayoutTree};
 
 use crate::{
     output::OutputName,
@@ -230,7 +230,7 @@ impl State {
     pub fn apply_layout_tree(
         &mut self,
         tree_id: u32,
-        tree: LayoutTree,
+        root_node: LayoutNode,
         request_id: u32,
         output_name: String,
     ) -> anyhow::Result<()> {
@@ -242,10 +242,10 @@ impl State {
         let tree = match tree_entry {
             Entry::Occupied(occupied_entry) => {
                 let tree_inner = occupied_entry.into_mut();
-                tree_inner.diff(tree.root, tree.root_id);
+                tree_inner.diff(root_node);
                 tree_inner
             }
-            Entry::Vacant(vacant_entry) => vacant_entry.insert(tree),
+            Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };
 
         let request_id = LayoutRequestId(request_id);
@@ -274,11 +274,7 @@ impl State {
             .context("output has no size")?
             .size;
 
-        let geometries = tree
-            .compute_geos(output_size.w as u32, output_size.h as u32)
-            .values()
-            .copied()
-            .collect();
+        let geometries = tree.compute_geos(output_size.w as u32, output_size.h as u32);
 
         self.pinnacle.layout_state.pending_requests.remove(&output);
         self.pinnacle

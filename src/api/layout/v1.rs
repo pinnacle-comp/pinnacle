@@ -31,11 +31,11 @@ impl layout::v1::layout_service_server::LayoutService for super::LayoutService {
 
                 match request {
                     layout::v1::layout_request::Request::TreeResponse(tree_response) => {
-                        let tree = tree_response.tree.unwrap();
-                        let tree_id = tree.tree_id;
+                        let root_node = tree_response.root_node.unwrap(); // TODO: unwrap
+                        let tree_id = tree_response.tree_id;
 
-                        let tree = match crate::layout::tree::LayoutTree::try_from(tree) {
-                            Ok(tree) => tree,
+                        let root_node = match crate::layout::tree::LayoutNode::try_from(root_node) {
+                            Ok(root_node) => root_node,
                             Err(()) => {
                                 tracing::debug!("failed to create layout tree");
                                 return;
@@ -44,7 +44,7 @@ impl layout::v1::layout_service_server::LayoutService for super::LayoutService {
 
                         if let Err(err) = state.apply_layout_tree(
                             tree_id,
-                            tree,
+                            root_node,
                             tree_response.request_id,
                             tree_response.output_name,
                         ) {
@@ -103,34 +103,27 @@ impl TryFrom<layout::v1::LayoutNode> for crate::layout::tree::LayoutNode {
                 layout::v1::FlexDir::Column => taffy::FlexDirection::Column,
             },
             flex_basis: taffy::Dimension::Percent(style.size_proportion),
+            margin: style
+                .gaps
+                .map(|gaps| taffy::Rect {
+                    left: taffy::LengthPercentageAuto::Length(gaps.left),
+                    right: taffy::LengthPercentageAuto::Length(gaps.right),
+                    top: taffy::LengthPercentageAuto::Length(gaps.top),
+                    bottom: taffy::LengthPercentageAuto::Length(gaps.bottom),
+                })
+                .unwrap_or(taffy::Rect::length(0.0)),
             ..Default::default()
         };
 
         Ok(Self {
+            label: node.label,
+            traversal_index: node.traversal_index,
             style: taffy_style,
             children: node
                 .children
                 .into_iter()
-                .map(|child| {
-                    let node_id = child.node_id;
-                    Self::try_from(child).map(|child| (node_id, child))
-                })
-                .collect::<Result<indexmap::IndexMap<_, _>, _>>()?,
+                .map(Self::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
         })
-    }
-}
-
-impl TryFrom<layout::v1::LayoutTree> for crate::layout::tree::LayoutTree {
-    type Error = ();
-
-    fn try_from(tree: layout::v1::LayoutTree) -> Result<Self, Self::Error> {
-        let root = tree.root.ok_or(())?;
-        let root_id = root.node_id;
-        Ok(Self::new(
-            root.try_into()?,
-            root_id,
-            tree.inner_gaps,
-            tree.outer_gaps,
-        ))
     }
 }

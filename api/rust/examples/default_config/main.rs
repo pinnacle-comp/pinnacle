@@ -4,14 +4,10 @@ use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
-use pinnacle_api::layout::CornerLayout;
-use pinnacle_api::layout::CornerLocation;
+use pinnacle_api::layout::generator::DwindleLayout;
+use pinnacle_api::layout::generator::MasterSide;
+use pinnacle_api::layout::generator::MasterStackLayout;
 use pinnacle_api::layout::CyclingLayoutManager;
-use pinnacle_api::layout::DwindleLayout;
-use pinnacle_api::layout::FairLayout;
-use pinnacle_api::layout::MasterSide;
-use pinnacle_api::layout::MasterStackLayout;
-use pinnacle_api::layout::SpiralLayout;
 use pinnacle_api::output;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
@@ -172,12 +168,6 @@ async fn config() {
         .description("Toggle maximized on the focused window");
 
     //------------------------
-    // Window rules          |
-    //------------------------
-    // You can define window rules to get windows to open with desired properties.
-    // See `pinnacle_api::window::rules` in the docs for more information.
-
-    //------------------------
     // Layouts               |
     //------------------------
 
@@ -217,6 +207,10 @@ async fn config() {
     let layout_requester = layout::set_manager(CyclingLayoutManager::new([
         Box::<MasterStackLayout>::default() as _,
         Box::new(MasterStackLayout {
+            reversed: true,
+            ..Default::default()
+        }) as _,
+        Box::new(MasterStackLayout {
             master_side: MasterSide::Right,
             ..Default::default()
         }) as _,
@@ -229,25 +223,25 @@ async fn config() {
             ..Default::default()
         }) as _,
         Box::<DwindleLayout>::default() as _,
-        Box::<SpiralLayout>::default() as _,
-        Box::<CornerLayout>::default() as _,
-        Box::new(CornerLayout {
-            corner_loc: CornerLocation::TopRight,
-            ..Default::default()
-        }) as _,
-        Box::new(CornerLayout {
-            corner_loc: CornerLocation::BottomLeft,
-            ..Default::default()
-        }) as _,
-        Box::new(CornerLayout {
-            corner_loc: CornerLocation::BottomRight,
-            ..Default::default()
-        }) as _,
-        Box::<FairLayout>::default() as _,
-        Box::new(FairLayout {
-            axis: Axis::Horizontal,
-            ..Default::default()
-        }) as _,
+        // Box::<SpiralLayout>::default() as _,
+        // Box::<CornerLayout>::default() as _,
+        // Box::new(CornerLayout {
+        //     corner_loc: CornerLocation::TopRight,
+        //     ..Default::default()
+        // }) as _,
+        // Box::new(CornerLayout {
+        //     corner_loc: CornerLocation::BottomLeft,
+        //     ..Default::default()
+        // }) as _,
+        // Box::new(CornerLayout {
+        //     corner_loc: CornerLocation::BottomRight,
+        //     ..Default::default()
+        // }) as _,
+        // Box::<FairLayout>::default() as _,
+        // Box::new(FairLayout {
+        //     axis: Axis::Horizontal,
+        //     ..Default::default()
+        // }) as _,
     ]));
 
     let mut layout_requester_clone = layout_requester.clone();

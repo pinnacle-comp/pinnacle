@@ -2,17 +2,18 @@ syntax = "proto3";
 
 package pinnacle.layout.v1;
 
-message LayoutTree {
-    uint32 tree_id = 1;
-    float outer_gaps = 2;
-    float inner_gaps = 3;
-    LayoutNode root = 4;
+message Gaps {
+    float left = 1;
+    float right = 2;
+    float top = 3;
+    float bottom = 4;
 }
 
 message LayoutNode {
-    uint32 node_id = 1;
-    NodeStyle style = 2;
-    repeated LayoutNode children = 3;
+    optional string label = 1;
+    uint32 traversal_index = 2;
+    NodeStyle style = 3;
+    repeated LayoutNode children = 4;
 }
 
 enum FlexDir {
@@ -24,13 +25,15 @@ enum FlexDir {
 message NodeStyle {
     FlexDir flex_dir = 1;
     float size_proportion = 2;
+    Gaps gaps = 3;
 }
 
 message LayoutRequest {
     message TreeResponse {
         uint32 request_id = 1;
-        LayoutTree tree = 2;
-        string output_name = 3;
+        uint32 tree_id = 2;
+        LayoutNode root_node = 3;
+        string output_name = 4;
     }
 
     message ForceLayout {

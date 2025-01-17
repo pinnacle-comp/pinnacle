@@ -141,6 +141,9 @@ snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
 taffy = "0.7.2"
+slab_tree = "0.3.2"
+bimap = "0.6.3"
+itertools = "0.14.0"
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.2", features = ["rustc", "cargo", "si"] }

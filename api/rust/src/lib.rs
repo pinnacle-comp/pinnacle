@@ -2,6 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#![warn(missing_docs)]
+
 //! The Rust implementation of [Pinnacle](https://github.com/pinnacle-comp/pinnacle)'s
 //! configuration API.
 //!

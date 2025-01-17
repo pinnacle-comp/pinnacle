@@ -6,17 +6,19 @@
 //!
 //! TODO: finish this documentation
 
+pub mod generator;
+
 use std::{
     cell::RefCell,
     collections::HashMap,
     rc::Rc,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
-use pinnacle_api_defs::pinnacle::layout::v1::{layout_request, LayoutRequest};
+use pinnacle_api_defs::pinnacle::layout::{
+    self,
+    v1::{layout_request, LayoutRequest},
+};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
 
@@ -61,19 +63,15 @@ where
                     .map(|id| TagHandle { id })
                     .collect(),
             };
-            let tree = manager.lock().unwrap().active_layout(&args).layout(&args);
+            let tree = manager.lock().unwrap().active_layout(&args).layout(args);
             from_client
                 .send(LayoutRequest {
                     request: Some(layout_request::Request::TreeResponse(
                         layout_request::TreeResponse {
+                            tree_id: 0, // TODO:
                             request_id: response.request_id,
-                            tree: Some(pinnacle_api_defs::pinnacle::layout::v1::LayoutTree {
-                                tree_id: tree.tree_id,
-                                root: tree.root.map(|root| root.into()),
-                                inner_gaps: tree.inner_gaps,
-                                outer_gaps: tree.outer_gaps,
-                            }),
                             output_name: response.output_name,
+                            root_node: Some(tree.into()),
                         },
                     )),
                 })
@@ -87,23 +85,31 @@ where
 
 #[derive(Debug, Clone)]
 pub struct LayoutNode {
-    id_ctr: Arc<AtomicU32>,
     inner: Rc<RefCell<LayoutNodeInner>>,
 }
 
-#[derive(Debug)]
+impl PartialEq for LayoutNode {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+#[derive(Debug, Clone)]
 struct LayoutNodeInner {
-    node_id: u32,
+    label: Option<String>,
+    traversal_index: u32,
     style: Style,
     children: Vec<LayoutNode>,
 }
 
 impl LayoutNodeInner {
-    fn new(id: u32) -> Self {
+    fn new(label: Option<String>, traversal_index: u32) -> Self {
         LayoutNodeInner {
-            node_id: id,
+            label,
+            traversal_index,
             style: Style {
                 layout_dir: LayoutDir::Row,
+                gaps: GapsAll::default(),
                 size_proportion: 1.0,
             },
             children: Vec::new(),
@@ -112,92 +118,128 @@ impl LayoutNodeInner {
 }
 
 impl LayoutNode {
-    pub fn add_child(&self, child: Self) {
-        self.inner.borrow_mut().children.push(child);
-    }
-
-    pub fn set_children(&self, children: impl IntoIterator<Item = Self>) {
-        self.inner.borrow_mut().children.extend(children);
-    }
-
-    pub fn dir(&self, dir: LayoutDir) -> &Self {
-        self.inner.borrow_mut().style.layout_dir = dir;
-        self
-    }
-
-    pub fn size_proportion(&self, proportion: f32) -> &Self {
-        self.inner.borrow_mut().style.size_proportion = proportion;
-        self
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct LayoutTree {
-    tree_id: u32,
-    inner_gaps: f32,
-    outer_gaps: f32,
-    id_ctr: Arc<AtomicU32>,
-    root: Option<LayoutNode>,
-}
-
-impl LayoutTree {
-    pub fn new(tree_id: u32) -> Self {
-        Self {
-            tree_id,
-            ..Default::default()
+    pub fn new() -> Self {
+        LayoutNode {
+            inner: Rc::new(RefCell::new(LayoutNodeInner::new(None, 0))),
         }
     }
 
-    pub fn with_gaps(mut self, gaps: Gaps) -> Self {
-        let (inner, outer) = gaps.to_inner_outer();
-        self.inner_gaps = inner;
-        self.outer_gaps = outer;
-        self
-    }
-
-    pub fn new_node(&self) -> LayoutNode {
+    pub fn new_with_label(label: impl ToString) -> Self {
         LayoutNode {
-            id_ctr: self.id_ctr.clone(),
             inner: Rc::new(RefCell::new(LayoutNodeInner::new(
-                self.id_ctr.fetch_add(1, Ordering::Relaxed),
+                Some(label.to_string()),
+                0,
             ))),
         }
     }
 
-    /// Creates and returns the root layout node.
-    pub fn set_root(&mut self, node: LayoutNode) {
-        self.root.replace(node);
+    pub fn new_with_traversal_index(index: u32) -> Self {
+        LayoutNode {
+            inner: Rc::new(RefCell::new(LayoutNodeInner::new(None, index))),
+        }
+    }
+
+    pub fn new_with_label_and_index(label: impl ToString, index: u32) -> Self {
+        LayoutNode {
+            inner: Rc::new(RefCell::new(LayoutNodeInner::new(
+                Some(label.to_string()),
+                index,
+            ))),
+        }
+    }
+
+    pub fn add_child(&self, child: Self) {
+        self.inner.borrow_mut().children.push(child);
+    }
+
+    pub fn set_label(&self, label: Option<impl ToString>) {
+        self.inner.borrow_mut().label = label.map(|label| label.to_string());
+    }
+
+    pub fn set_traversal_index(&self, index: u32) {
+        self.inner.borrow_mut().traversal_index = index;
+    }
+
+    pub fn set_children(&self, children: impl IntoIterator<Item = Self>) {
+        self.inner.borrow_mut().children = children.into_iter().collect();
+    }
+
+    pub fn set_dir(&self, dir: LayoutDir) {
+        self.inner.borrow_mut().style.layout_dir = dir;
+    }
+
+    pub fn set_size_proportion(&self, proportion: f32) {
+        self.inner.borrow_mut().style.size_proportion = proportion;
+    }
+
+    pub fn set_gaps(&self, gaps: impl Into<GapsAll>) {
+        self.inner.borrow_mut().style.gaps = gaps.into();
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum LayoutDir {
     Row,
     Column,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct GapsAll {
+    pub left: f32,
+    pub right: f32,
+    pub top: f32,
+    pub bottom: f32,
+}
+
+impl GapsAll {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn uniform(gaps: f32) -> Self {
+        gaps.into()
+    }
+}
+
+impl From<f32> for GapsAll {
+    fn from(value: f32) -> Self {
+        Self {
+            left: value,
+            right: value,
+            top: value,
+            bottom: value,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Style {
     layout_dir: LayoutDir,
+    gaps: GapsAll,
     size_proportion: f32,
 }
 
-impl From<LayoutNode> for pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
+impl From<LayoutNode> for layout::v1::LayoutNode {
     fn from(value: LayoutNode) -> Self {
-        fn api_node_from_layout_node(
-            node: LayoutNode,
-        ) -> pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
-            pinnacle_api_defs::pinnacle::layout::v1::LayoutNode {
-                node_id: node.inner.borrow().node_id,
-                style: Some(pinnacle_api_defs::pinnacle::layout::v1::NodeStyle {
+        fn api_node_from_layout_node(node: LayoutNode) -> layout::v1::LayoutNode {
+            let style = node.inner.borrow().style.clone();
+
+            layout::v1::LayoutNode {
+                label: node.inner.borrow().label.clone(),
+                traversal_index: node.inner.borrow().traversal_index,
+                style: Some(layout::v1::NodeStyle {
                     flex_dir: match node.inner.borrow().style.layout_dir {
-                        LayoutDir::Row => pinnacle_api_defs::pinnacle::layout::v1::FlexDir::Row,
-                        LayoutDir::Column => {
-                            pinnacle_api_defs::pinnacle::layout::v1::FlexDir::Column
-                        }
+                        LayoutDir::Row => layout::v1::FlexDir::Row,
+                        LayoutDir::Column => layout::v1::FlexDir::Column,
                     }
                     .into(),
                     size_proportion: node.inner.borrow().style.size_proportion,
+                    gaps: Some(layout::v1::Gaps {
+                        left: style.gaps.left,
+                        right: style.gaps.right,
+                        top: style.gaps.top,
+                        bottom: style.gaps.bottom,
+                    }),
                 }),
                 children: node
                     .inner
@@ -232,7 +274,7 @@ pub trait LayoutManager {
 /// Types that can generate layouts by computing a vector of [geometries][Geometry].
 pub trait LayoutGenerator {
     /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree;
+    fn layout(&self, args: LayoutArgs) -> LayoutNode;
 }
 
 /// Gaps between windows.
@@ -320,7 +362,7 @@ impl CyclingLayoutManager {
 impl LayoutManager for CyclingLayoutManager {
     fn active_layout(&mut self, args: &LayoutArgs) -> &dyn LayoutGenerator {
         let Some(first_tag) = args.tags.first() else {
-            return &NoopLayout;
+            panic!();
         };
 
         self.layouts
@@ -393,627 +435,293 @@ impl LayoutRequester<CyclingLayoutManager> {
     }
 }
 
-/// A layout generator that does nothing.
-struct NoopLayout;
-
-impl LayoutGenerator for NoopLayout {
-    fn layout(&self, _args: &LayoutArgs) -> LayoutTree {
-        LayoutTree::default()
-    }
-}
-
-/// Which side the master area will be.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum MasterSide {
-    /// The master area will be on the left.
-    Left,
-    /// The master area will be on the right.
-    Right,
-    /// The master area will be at the top.
-    Top,
-    /// The master area will be at the bottom.
-    Bottom,
-}
-
-/// A [`LayoutGenerator`] that has one master area to one side and a stack of windows
-/// next to it.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MasterStackLayout {
-    /// Gaps between windows.
-    ///
-    /// Defaults to `Gaps::Absolute(8)`.
-    pub gaps: Gaps,
-    /// The proportion of the output the master area will take up.
-    ///
-    /// This will be clamped between 0.1 and 0.9.
-    ///
-    /// Defaults to 0.5
-    pub master_factor: f32,
-    /// Which side the master area will be.
-    ///
-    /// Defaults to [`MasterSide::Left`].
-    pub master_side: MasterSide,
-    /// How many windows will be in the master area.
-    ///
-    /// Defaults to 1.
-    pub master_count: u32,
-}
-
-impl Default for MasterStackLayout {
-    fn default() -> Self {
-        Self {
-            gaps: Gaps::Absolute(8),
-            master_factor: 0.5,
-            master_side: MasterSide::Left,
-            master_count: 1,
-        }
-    }
-}
-
-impl LayoutGenerator for MasterStackLayout {
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-        let win_count = args.window_count;
-
-        if win_count == 0 {
-            return LayoutTree::default();
-        }
-
-        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-        let root = tree.new_node();
-        root.dir(match self.master_side {
-            MasterSide::Left | MasterSide::Right => LayoutDir::Row,
-            MasterSide::Top | MasterSide::Bottom => LayoutDir::Column,
-        });
-
-        tree.set_root(root.clone());
-
-        let master_factor = self.master_factor.clamp(0.1, 0.9);
-
-        let master_side_node = tree.new_node();
-
-        master_side_node
-            .dir(match self.master_side {
-                MasterSide::Left | MasterSide::Right => LayoutDir::Column,
-                MasterSide::Top | MasterSide::Bottom => LayoutDir::Row,
-            })
-            .size_proportion(master_factor * 10.0);
-
-        for _ in 0..u32::min(win_count, self.master_count) {
-            let child = tree.new_node();
-            child.size_proportion(10.0);
-            master_side_node.add_child(child);
-        }
-
-        let stack_side_node = tree.new_node();
-        stack_side_node
-            .dir(match self.master_side {
-                MasterSide::Left | MasterSide::Right => LayoutDir::Column,
-                MasterSide::Top | MasterSide::Bottom => LayoutDir::Row,
-            })
-            .size_proportion((1.0 - master_factor) * 10.0);
-
-        for _ in self.master_count..win_count {
-            let child = tree.new_node();
-            child.size_proportion(10.0);
-            stack_side_node.add_child(child);
-        }
-
-        if win_count <= self.master_count {
-            root.set_children([master_side_node]);
-            return tree;
-        }
-
-        match self.master_side {
-            MasterSide::Left | MasterSide::Top => {
-                root.set_children([master_side_node, stack_side_node]);
-            }
-            MasterSide::Right | MasterSide::Bottom => {
-                root.set_children([stack_side_node, master_side_node]);
-            }
-        }
-
-        tree
-    }
-}
-
-/// A [`LayoutGenerator`] that lays out windows in a shrinking fashion
-/// towards the bottom right corner.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DwindleLayout {
-    /// Gaps between windows.
-    ///
-    /// Defaults to `Gaps::Absolute(8)`.
-    pub gaps: Gaps,
-    /// The ratio for each dwindle split.
-    ///
-    /// The first split will use the factor at key `1`,
-    /// the second at key `2`, and so on.
-    ///
-    /// Splits without a factor will default to 0.5.
-    pub split_factors: HashMap<usize, f32>,
-}
-
-impl Default for DwindleLayout {
-    fn default() -> Self {
-        Self {
-            gaps: Gaps::Absolute(8),
-            split_factors: Default::default(),
-        }
-    }
-}
-
-impl LayoutGenerator for DwindleLayout {
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-        let win_count = args.window_count;
-
-        if win_count == 0 {
-            return LayoutTree::default();
-        }
-
-        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-        let root = tree.new_node();
-        root.dir(LayoutDir::Row);
-
-        tree.set_root(root.clone());
-
-        if win_count == 1 {
-            return tree;
-        }
-
-        let windows_left = win_count - 1;
-
-        let mut current_node = root.clone();
-
-        for i in 0..windows_left {
-            let child1 = tree.new_node();
-            child1.dir(match i % 2 == 0 {
-                true => LayoutDir::Column,
-                false => LayoutDir::Row,
-            });
-            current_node.add_child(child1);
-
-            let child2 = tree.new_node();
-            child2.dir(match i % 2 == 0 {
-                true => LayoutDir::Column,
-                false => LayoutDir::Row,
-            });
-            current_node.add_child(child2.clone());
-
-            current_node = child2;
-        }
-
-        tree
-    }
-}
-
-/// A [`LayoutGenerator`] that lays out windows in a spiral.
-///
-/// This is similar to the [`DwindleLayout`] but in a spiral instead of
-/// towards the bottom right corner.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SpiralLayout {
-    /// Gaps between windows.
-    ///
-    /// Defaults to `Gaps::Absolute(8)`.
-    pub gaps: Gaps,
-    /// The ratio for each dwindle split.
-    ///
-    /// The first split will use the factor at key `1`,
-    /// the second at key `2`, and so on.
-    ///
-    /// Splits without a factor will default to 0.5.
-    pub split_factors: HashMap<usize, f32>,
-}
-
-impl Default for SpiralLayout {
-    fn default() -> Self {
-        Self {
-            gaps: Gaps::Absolute(8),
-            split_factors: Default::default(),
-        }
-    }
-}
-
-impl LayoutGenerator for SpiralLayout {
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-        let win_count = args.window_count;
-
-        if win_count == 0 {
-            return LayoutTree::default();
-        }
-
-        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-        let root = tree.new_node();
-        root.dir(LayoutDir::Row);
-
-        tree.set_root(root.clone());
-
-        if win_count == 1 {
-            return tree;
-        }
-
-        let windows_left = win_count - 1;
-
-        let mut current_node = root;
-
-        for i in 0..windows_left {
-            let child1 = tree.new_node();
-            child1.dir(match i % 2 == 0 {
-                true => LayoutDir::Column,
-                false => LayoutDir::Row,
-            });
-            current_node.add_child(child1.clone());
-
-            let child2 = tree.new_node();
-            child2.dir(match i % 2 == 0 {
-                true => LayoutDir::Column,
-                false => LayoutDir::Row,
-            });
-            current_node.add_child(child2.clone());
-
-            current_node = match i % 4 {
-                0 | 1 => child2,
-                2 | 3 => child1,
-                _ => unreachable!(),
-            };
-        }
-
-        tree
-    }
-}
-
-/// Which corner the corner window will in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CornerLocation {
-    /// The corner window will be in the top left.
-    TopLeft,
-    /// The corner window will be in the top right.
-    TopRight,
-    /// The corner window will be in the bottom left.
-    BottomLeft,
-    /// The corner window will be in the bottom right.
-    BottomRight,
-}
-
-/// A [`LayoutGenerator`] that has one main corner window and a
-/// horizontal and vertical stack flanking it on the other two sides.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CornerLayout {
-    /// Gaps between windows.
-    ///
-    /// Defaults to `Gaps::Absolute(8)`.
-    pub gaps: Gaps,
-    /// The proportion of the output that the width of the window takes up.
-    ///
-    /// Defaults to 0.5.
-    pub corner_width_factor: f32,
-    /// The proportion of the output that the height of the window takes up.
-    ///
-    /// Defaults to 0.5.
-    pub corner_height_factor: f32,
-    /// The location of the corner window.
-    pub corner_loc: CornerLocation,
-}
-
-impl Default for CornerLayout {
-    fn default() -> Self {
-        Self {
-            gaps: Gaps::Absolute(8),
-            corner_width_factor: 0.5,
-            corner_height_factor: 0.5,
-            corner_loc: CornerLocation::TopLeft,
-        }
-    }
-}
-
-impl LayoutGenerator for CornerLayout {
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-        let win_count = args.window_count;
-
-        if win_count == 0 {
-            return LayoutTree::default();
-        }
-
-        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-        let root = tree.new_node();
-        root.dir(LayoutDir::Row);
-
-        tree.set_root(root.clone());
-
-        if win_count == 1 {
-            return tree;
-        }
-
-        let corner_width_factor = self.corner_width_factor.clamp(0.1, 0.9);
-        let corner_height_factor = self.corner_height_factor.clamp(0.1, 0.9);
-
-        let corner_and_horiz_stack_node = tree.new_node();
-        corner_and_horiz_stack_node
-            .dir(LayoutDir::Column)
-            .size_proportion(corner_width_factor * 10.0);
-
-        let vert_stack_node = tree.new_node();
-        vert_stack_node
-            .dir(LayoutDir::Column)
-            .size_proportion((1.0 - corner_width_factor) * 10.0);
-
-        root.set_children(match self.corner_loc {
-            CornerLocation::TopLeft | CornerLocation::BottomLeft => {
-                [corner_and_horiz_stack_node.clone(), vert_stack_node.clone()]
-            }
-            CornerLocation::TopRight | CornerLocation::BottomRight => {
-                [vert_stack_node.clone(), corner_and_horiz_stack_node.clone()]
-            }
-        });
-
-        if win_count == 2 {
-            return tree;
-        }
-
-        let corner_node = tree.new_node();
-        corner_node.size_proportion(corner_height_factor * 10.0);
-
-        let horiz_stack_node = tree.new_node();
-        horiz_stack_node
-            .dir(LayoutDir::Row)
-            .size_proportion((1.0 - corner_height_factor) * 10.0);
-
-        corner_and_horiz_stack_node.set_children(match self.corner_loc {
-            CornerLocation::TopLeft | CornerLocation::TopRight => {
-                [corner_node, horiz_stack_node.clone()]
-            }
-            CornerLocation::BottomLeft | CornerLocation::BottomRight => {
-                [horiz_stack_node.clone(), corner_node]
-            }
-        });
-
-        for i in 0..win_count - 1 {
-            if i % 2 == 0 {
-                let child = tree.new_node();
-                vert_stack_node.add_child(child);
-            } else {
-                let child = tree.new_node();
-                horiz_stack_node.add_child(child);
-            }
-        }
-
-        tree
-    }
-}
-
-/// A [`LayoutGenerator`] that attempts to layout windows such that
-/// they are the same size.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct FairLayout {
-    /// The proportion of the output that the width of the window takes up.
-    ///
-    /// Defaults to 0.5.
-    pub gaps: Gaps,
-    /// Which axis the lines of windows will run.
-    ///
-    /// Defaults to [`Axis::Vertical`].
-    pub axis: Axis,
-}
-
-impl Default for FairLayout {
-    fn default() -> Self {
-        Self {
-            gaps: Gaps::Absolute(8),
-            axis: Axis::Vertical,
-        }
-    }
-}
-
-impl LayoutGenerator for FairLayout {
-    fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-        let win_count = args.window_count;
-
-        if win_count == 0 {
-            return LayoutTree::default();
-        }
-
-        let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-        let root = tree.new_node();
-        root.dir(match self.axis {
-            Axis::Horizontal => LayoutDir::Column,
-            Axis::Vertical => LayoutDir::Row,
-        });
-
-        tree.set_root(root.clone());
-
-        if win_count == 1 {
-            return tree;
-        }
-
-        if win_count == 2 {
-            let child1 = tree.new_node();
-            let child2 = tree.new_node();
-            root.set_children([child1, child2]);
-            return tree;
-        }
-
-        let line_count = (win_count as f32).sqrt().round() as u32;
-
-        let mut wins_per_line = Vec::new();
-
-        let max_per_line = if win_count > line_count * line_count {
-            line_count + 1
-        } else {
-            line_count
-        };
-
-        for i in 1..=win_count {
-            let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
-            if wins_per_line.get(index).is_none() {
-                wins_per_line.push(0);
-            }
-            wins_per_line[index] += 1;
-        }
-
-        let lines = wins_per_line.into_iter().map(|win_ct| {
-            let line_root = tree.new_node();
-            line_root.dir(match self.axis {
-                Axis::Horizontal => LayoutDir::Row,
-                Axis::Vertical => LayoutDir::Column,
-            });
-
-            for _ in 0..win_ct {
-                let child = tree.new_node();
-                line_root.add_child(child);
-            }
-
-            line_root
-        });
-
-        root.set_children(lines);
-
-        tree
-    }
-}
-//     fn layout(&self, args: &LayoutArgs) -> Vec<Geometry> {
-//         let win_count = args.windows.len() as u32;
+// /// A layout generator that does nothing.
+// struct NoopLayout;
+//
+// impl LayoutGenerator for NoopLayout {
+//     fn layout(&self, _args: &LayoutArgs) -> LayoutTree {
+//         LayoutTree::default()
+//     }
+// }
+//
+// /// A [`LayoutGenerator`] that lays out windows in a spiral.
+// ///
+// /// This is similar to the [`DwindleLayout`] but in a spiral instead of
+// /// towards the bottom right corner.
+// #[derive(Clone, Debug, PartialEq)]
+// pub struct SpiralLayout {
+//     /// Gaps between windows.
+//     ///
+//     /// Defaults to `Gaps::Absolute(8)`.
+//     pub gaps: Gaps,
+//     /// The ratio for each dwindle split.
+//     ///
+//     /// The first split will use the factor at key `1`,
+//     /// the second at key `2`, and so on.
+//     ///
+//     /// Splits without a factor will default to 0.5.
+//     pub split_factors: HashMap<usize, f32>,
+// }
+//
+// impl Default for SpiralLayout {
+//     fn default() -> Self {
+//         Self {
+//             gaps: Gaps::Absolute(8),
+//             split_factors: Default::default(),
+//         }
+//     }
+// }
+//
+// impl LayoutGenerator for SpiralLayout {
+//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+//         let win_count = args.window_count;
 //
 //         if win_count == 0 {
-//             return Vec::new();
+//             return LayoutTree::default();
 //         }
 //
-//         let width = args.output_width;
-//         let height = args.output_height;
+//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+//         let root = tree.new_node();
+//         root.set_dir(LayoutDir::Row);
 //
-//         let mut geos = Vec::<Geometry>::new();
-//
-//         let (outer_gaps, inner_gaps) = match self.gaps {
-//             Gaps::Absolute(gaps) => (gaps, None),
-//             Gaps::Split { inner, outer } => (outer, Some(inner)),
-//         };
-//
-//         let gaps = match inner_gaps {
-//             Some(_) => 0,
-//             None => outer_gaps,
-//         };
-//
-//         let mut rect = Geometry {
-//             x: 0,
-//             y: 0,
-//             width,
-//             height,
-//         }
-//         .split_at(Axis::Horizontal, 0, outer_gaps)
-//         .0
-//         .split_at(Axis::Horizontal, (height - outer_gaps) as i32, outer_gaps)
-//         .0
-//         .split_at(Axis::Vertical, 0, outer_gaps)
-//         .0
-//         .split_at(Axis::Vertical, (width - outer_gaps) as i32, outer_gaps)
-//         .0;
+//         tree.set_root(root.clone());
 //
 //         if win_count == 1 {
-//             geos.push(rect);
-//         } else if win_count == 2 {
-//             let len = match self.axis {
-//                 Axis::Vertical => rect.width,
-//                 Axis::Horizontal => rect.height,
+//             return tree;
+//         }
+//
+//         let windows_left = win_count - 1;
+//
+//         let mut current_node = root;
+//
+//         for i in 0..windows_left {
+//             let child1 = tree.new_node();
+//             child1.set_dir(match i % 2 == 0 {
+//                 true => LayoutDir::Column,
+//                 false => LayoutDir::Row,
+//             });
+//             current_node.add_child(child1.clone());
+//
+//             let child2 = tree.new_node();
+//             child2.set_dir(match i % 2 == 0 {
+//                 true => LayoutDir::Column,
+//                 false => LayoutDir::Row,
+//             });
+//             current_node.add_child(child2.clone());
+//
+//             current_node = match i % 4 {
+//                 0 | 1 => child2,
+//                 2 | 3 => child1,
+//                 _ => unreachable!(),
 //             };
+//         }
 //
-//             let coord = match self.axis {
-//                 Axis::Vertical => rect.x,
-//                 Axis::Horizontal => rect.y,
-//             };
+//         tree
+//     }
+// }
 //
-//             let (rect1, rect2) =
-//                 rect.split_at(self.axis, coord + len as i32 / 2 - gaps as i32 / 2, gaps);
+// /// Which corner the corner window will in.
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// pub enum CornerLocation {
+//     /// The corner window will be in the top left.
+//     TopLeft,
+//     /// The corner window will be in the top right.
+//     TopRight,
+//     /// The corner window will be in the bottom left.
+//     BottomLeft,
+//     /// The corner window will be in the bottom right.
+//     BottomRight,
+// }
 //
-//             geos.push(rect1);
-//             if let Some(rect2) = rect2 {
-//                 geos.push(rect2);
+// /// A [`LayoutGenerator`] that has one main corner window and a
+// /// horizontal and vertical stack flanking it on the other two sides.
+// #[derive(Debug, Clone, Copy, PartialEq)]
+// pub struct CornerLayout {
+//     /// Gaps between windows.
+//     ///
+//     /// Defaults to `Gaps::Absolute(8)`.
+//     pub gaps: Gaps,
+//     /// The proportion of the output that the width of the window takes up.
+//     ///
+//     /// Defaults to 0.5.
+//     pub corner_width_factor: f32,
+//     /// The proportion of the output that the height of the window takes up.
+//     ///
+//     /// Defaults to 0.5.
+//     pub corner_height_factor: f32,
+//     /// The location of the corner window.
+//     pub corner_loc: CornerLocation,
+// }
+//
+// impl Default for CornerLayout {
+//     fn default() -> Self {
+//         Self {
+//             gaps: Gaps::Absolute(8),
+//             corner_width_factor: 0.5,
+//             corner_height_factor: 0.5,
+//             corner_loc: CornerLocation::TopLeft,
+//         }
+//     }
+// }
+//
+// impl LayoutGenerator for CornerLayout {
+//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+//         let win_count = args.window_count;
+//
+//         if win_count == 0 {
+//             return LayoutTree::default();
+//         }
+//
+//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+//         let root = tree.new_node();
+//         root.set_dir(LayoutDir::Row);
+//
+//         tree.set_root(root.clone());
+//
+//         if win_count == 1 {
+//             return tree;
+//         }
+//
+//         let corner_width_factor = self.corner_width_factor.clamp(0.1, 0.9);
+//         let corner_height_factor = self.corner_height_factor.clamp(0.1, 0.9);
+//
+//         let corner_and_horiz_stack_node = tree.new_node();
+//         corner_and_horiz_stack_node.set_dir(LayoutDir::Column);
+//         corner_and_horiz_stack_node.set_size_proportion(corner_width_factor * 10.0);
+//
+//         let vert_stack_node = tree.new_node();
+//         vert_stack_node.set_dir(LayoutDir::Column);
+//         vert_stack_node.set_size_proportion((1.0 - corner_width_factor) * 10.0);
+//
+//         root.set_children(match self.corner_loc {
+//             CornerLocation::TopLeft | CornerLocation::BottomLeft => {
+//                 [corner_and_horiz_stack_node.clone(), vert_stack_node.clone()]
 //             }
-//         } else {
-//             let line_count = (win_count as f32).sqrt().round() as u32;
+//             CornerLocation::TopRight | CornerLocation::BottomRight => {
+//                 [vert_stack_node.clone(), corner_and_horiz_stack_node.clone()]
+//             }
+//         });
 //
-//             let mut wins_per_line = Vec::new();
+//         if win_count == 2 {
+//             return tree;
+//         }
 //
-//             let max_per_line = if win_count > line_count * line_count {
-//                 line_count + 1
+//         let corner_node = tree.new_node();
+//         corner_node.set_size_proportion(corner_height_factor * 10.0);
+//
+//         let horiz_stack_node = tree.new_node();
+//         horiz_stack_node.set_dir(LayoutDir::Row);
+//         horiz_stack_node.set_size_proportion((1.0 - corner_height_factor) * 10.0);
+//
+//         corner_and_horiz_stack_node.set_children(match self.corner_loc {
+//             CornerLocation::TopLeft | CornerLocation::TopRight => {
+//                 [corner_node, horiz_stack_node.clone()]
+//             }
+//             CornerLocation::BottomLeft | CornerLocation::BottomRight => {
+//                 [horiz_stack_node.clone(), corner_node]
+//             }
+//         });
+//
+//         for i in 0..win_count - 1 {
+//             if i % 2 == 0 {
+//                 let child = tree.new_node();
+//                 vert_stack_node.add_child(child);
 //             } else {
-//                 line_count
-//             };
-//
-//             for i in 1..=win_count {
-//                 let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
-//                 if wins_per_line.get(index).is_none() {
-//                     wins_per_line.push(0);
-//                 }
-//                 wins_per_line[index] += 1;
-//             }
-//
-//             assert_eq!(wins_per_line.len(), line_count as usize);
-//
-//             let mut line_rects = Vec::new();
-//
-//             let (coord, len, axis) = match self.axis {
-//                 Axis::Horizontal => (
-//                     rect.y,
-//                     rect.height as f32 / line_count as f32,
-//                     Axis::Horizontal,
-//                 ),
-//                 Axis::Vertical => (
-//                     rect.x,
-//                     rect.width as f32 / line_count as f32,
-//                     Axis::Vertical,
-//                 ),
-//             };
-//
-//             for i in 1..line_count {
-//                 let slice_point = coord + (len * i as f32) as i32 - gaps as i32 / 2;
-//                 let (to_push, rest) = rect.split_at(axis, slice_point, gaps);
-//                 line_rects.push(to_push);
-//                 if let Some(rest) = rest {
-//                     rect = rest;
-//                 } else {
-//                     break;
-//                 }
-//             }
-//
-//             line_rects.push(rect);
-//
-//             for (i, mut line_rect) in line_rects.into_iter().enumerate() {
-//                 let (coord, len, axis) = match self.axis {
-//                     Axis::Vertical => (
-//                         line_rect.y,
-//                         line_rect.height as f32 / wins_per_line[i] as f32,
-//                         Axis::Horizontal,
-//                     ),
-//                     Axis::Horizontal => (
-//                         line_rect.x,
-//                         line_rect.width as f32 / wins_per_line[i] as f32,
-//                         Axis::Vertical,
-//                     ),
-//                 };
-//
-//                 for j in 1..wins_per_line[i] {
-//                     let slice_point = coord + (len * j as f32) as i32 - gaps as i32 / 2;
-//                     let (to_push, rest) = line_rect.split_at(axis, slice_point, gaps);
-//                     geos.push(to_push);
-//                     if let Some(rest) = rest {
-//                         line_rect = rest;
-//                     } else {
-//                         break;
-//                     }
-//                 }
-//
-//                 geos.push(line_rect);
+//                 let child = tree.new_node();
+//                 horiz_stack_node.add_child(child);
 //             }
 //         }
 //
-//         if let Some(inner_gaps) = inner_gaps {
-//             for geo in geos.iter_mut() {
-//                 geo.x += inner_gaps as i32;
-//                 geo.y += inner_gaps as i32;
-//                 geo.width -= inner_gaps * 2;
-//                 geo.height -= inner_gaps * 2;
-//             }
+//         tree
+//     }
+// }
+//
+// /// A [`LayoutGenerator`] that attempts to layout windows such that
+// /// they are the same size.
+// #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+// pub struct FairLayout {
+//     /// The proportion of the output that the width of the window takes up.
+//     ///
+//     /// Defaults to 0.5.
+//     pub gaps: Gaps,
+//     /// Which axis the lines of windows will run.
+//     ///
+//     /// Defaults to [`Axis::Vertical`].
+//     pub axis: Axis,
+// }
+//
+// impl Default for FairLayout {
+//     fn default() -> Self {
+//         Self {
+//             gaps: Gaps::Absolute(8),
+//             axis: Axis::Vertical,
+//         }
+//     }
+// }
+//
+// impl LayoutGenerator for FairLayout {
+//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
+//         let win_count = args.window_count;
+//
+//         if win_count == 0 {
+//             return LayoutTree::default();
 //         }
 //
-//         geos
+//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
+//         let root = tree.new_node();
+//         root.set_dir(match self.axis {
+//             Axis::Horizontal => LayoutDir::Column,
+//             Axis::Vertical => LayoutDir::Row,
+//         });
+//
+//         tree.set_root(root.clone());
+//
+//         if win_count == 1 {
+//             return tree;
+//         }
+//
+//         if win_count == 2 {
+//             let child1 = tree.new_node();
+//             let child2 = tree.new_node();
+//             root.set_children([child1, child2]);
+//             return tree;
+//         }
+//
+//         let line_count = (win_count as f32).sqrt().round() as u32;
+//
+//         let mut wins_per_line = Vec::new();
+//
+//         let max_per_line = if win_count > line_count * line_count {
+//             line_count + 1
+//         } else {
+//             line_count
+//         };
+//
+//         for i in 1..=win_count {
+//             let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
+//             if wins_per_line.get(index).is_none() {
+//                 wins_per_line.push(0);
+//             }
+//             wins_per_line[index] += 1;
+//         }
+//
+//         let lines = wins_per_line.into_iter().map(|win_ct| {
+//             let line_root = tree.new_node();
+//             line_root.set_dir(match self.axis {
+//                 Axis::Horizontal => LayoutDir::Row,
+//                 Axis::Vertical => LayoutDir::Column,
+//             });
+//
+//             for _ in 0..win_ct {
+//                 let child = tree.new_node();
+//                 line_root.add_child(child);
+//             }
+//
+//             line_root
+//         });
+//
+//         root.set_children(lines);
+//
+//         tree
 //     }
 // }
