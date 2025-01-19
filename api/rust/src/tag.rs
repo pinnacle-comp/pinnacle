@@ -22,12 +22,6 @@
 //! the ability to tag windows with multiple tags allows you to have one window show up on multiple
 //! different "workspaces". As you can see, this system is much more powerful than workspaces
 //! alone.
-//!
-//! # Configuration
-//! `tag` contains the [`Tag`] struct, which allows you to add new tags
-//! and get handles to already defined ones.
-//!
-//! These [`TagHandle`]s allow you to manipulate individual tags and get their properties.
 
 use futures::FutureExt;
 use pinnacle_api_defs::pinnacle::{
@@ -52,7 +46,8 @@ use crate::{
 /// This will add tags with the given names to `output` and return [`TagHandle`]s to all of
 /// them.
 ///
-/// # Example
+/// # Examples
+///
 /// ```no_run
 /// // Add tags 1-5 to the focused output
 /// if let Some(op) = output::get_focused() {
@@ -82,6 +77,7 @@ pub fn add(
 /// Gets handles to all tags across all outputs.
 ///
 /// # Examples
+///
 /// ```no_run
 /// for tag in tag::get_all() {
 ///     println!("{}", tag.name());
@@ -108,7 +104,8 @@ pub async fn get_all_async() -> impl Iterator<Item = TagHandle> {
 /// To get the first tag with the given `name` on a specific output, see
 /// [`get_on_output`].
 ///
-/// # Example
+/// # Examples
+///
 /// ```no_run
 /// let tag = tag::get("2")?;
 /// ```
@@ -128,7 +125,8 @@ pub async fn get_async(name: impl ToString) -> Option<TagHandle> {
 ///
 /// For a simpler way to get a tag on the focused output, see [`get`].
 ///
-/// # Example
+/// # Examples
+///
 /// ```no_run
 /// let output = output::get_by_name("eDP-1")?;
 /// let tag = tag::get_on_output("2", &output)?;
@@ -149,7 +147,8 @@ pub async fn get_on_output_async(name: impl ToString, output: &OutputHandle) -> 
 
 /// Removes the given tags from their outputs.
 ///
-/// # Example
+/// # Examples
+///
 /// ```no_run
 /// let tags = tag::add(output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
 ///
@@ -164,11 +163,15 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
         .unwrap();
 }
 
-/// Connects to a tag signal.
+/// Connects to a [`TagSignal`].
 ///
-/// The compositor will fire off signals that your config can listen for and act upon.
-/// You can pass in a [`TagSignal`] along with a callback and it will get run
-/// with the necessary arguments every time a signal of that type is received.
+/// # Examples
+///
+/// ```
+/// tag::connect_signal(TagSignal::Active(Box::new(|tag, active| {
+///     println!("Tag is active = {active}");
+/// })));
+/// ```
 pub fn connect_signal(signal: TagSignal) -> SignalHandle {
     let mut signal_state = Client::signal_state();
 
@@ -190,7 +193,8 @@ impl TagHandle {
     ///
     /// This emulates what a traditional workspace is.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```no_run
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
@@ -215,7 +219,8 @@ impl TagHandle {
     /// While inactive, windows with this tag will not be displayed unless they have other active
     /// tags.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
@@ -248,7 +253,8 @@ impl TagHandle {
     /// While inactive, windows with this tag will not be displayed unless they have other active
     /// tags.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```no_run
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
@@ -273,7 +279,8 @@ impl TagHandle {
 
     /// Removes this tag from its output.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// let tags =
     ///     tag::add(output.get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).collect::<Vec<_>>;
@@ -360,7 +367,7 @@ impl TagHandle {
         )
     }
 
-    /// Get this tag's raw compositor id.
+    /// Gets this tag's raw compositor id.
     pub fn id(&self) -> u32 {
         self.id
     }

@@ -36,7 +36,8 @@ use crate::{
 
 /// Gets handles to all currently plugged-in outputs.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// for output in output::get_all() {
 ///     println!("{} {} {}", output.make(), output.model(), output.serial());
@@ -62,7 +63,8 @@ pub async fn get_all_async() -> impl Iterator<Item = OutputHandle> {
 ///
 /// This ignores outputs you have explicitly disabled.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// for output in output::get_all_enabled() {
 ///     println!("{} {} {}", output.make(), output.model(), output.serial());
@@ -83,7 +85,8 @@ pub async fn get_all_enabled_async() -> impl Iterator<Item = OutputHandle> {
 ///
 /// By "name", we mean the name of the connector the output is connected to.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// let op = output.get_by_name("eDP-1")?;
 /// ```
@@ -100,7 +103,8 @@ pub async fn get_by_name_async(name: impl ToString) -> Option<OutputHandle> {
 ///
 /// This is currently implemented as the one that has had the most recent pointer movement.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// let op = output.get_focused()?;
 /// ```
@@ -117,37 +121,42 @@ pub async fn get_focused_async() -> Option<OutputHandle> {
 
 /// Runs a closure on all current and future outputs.
 ///
-/// When called, `for_all_outputs` will do two things:
-/// 1. Immediately run `for_all` with all currently connected outputs.
-/// 2. Call `for_all` with any newly connected outputs.
+/// When called, this will do two things:
+/// 1. Immediately run `for_each` with all currently connected outputs.
+/// 2. Call `for_each` with any newly connected outputs.
 ///
-/// Note that `for_all` will *not* run with outputs that have been unplugged and replugged.
+/// Note that `for_each` will *not* run with outputs that have been unplugged and replugged.
 /// This is to prevent duplicate setup. Instead, the compositor keeps track of any tags and
 /// state the output had when unplugged and restores them on replug. This may change in the future.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// // Add tags 1-3 to all outputs and set tag "1" to active
-/// output::for_all_outputs(|op| {
+/// output::for_each_output(|op| {
 ///     let tags = tag::add(op, ["1", "2", "3"]);
 ///     tags.next().unwrap().set_active(true);
 /// });
 /// ```
-pub fn for_all_outputs(mut for_all: impl FnMut(&OutputHandle) + Send + 'static) {
+pub fn for_each_output(mut for_each: impl FnMut(&OutputHandle) + Send + 'static) {
     for output in get_all() {
-        for_all(&output);
+        for_each(&output);
     }
 
     Client::signal_state()
         .output_connect
-        .add_callback(Box::new(for_all));
+        .add_callback(Box::new(for_each));
 }
 
-/// Connects to an output signal.
+/// Connects to an [`OutputSignal`].
 ///
-/// The compositor will fire off signals that your config can listen for and act upon.
-/// You can pass in an [`OutputSignal`] along with a callback and it will get run
-/// with the necessary arguments every time a signal of that type is received.
+/// # Examples
+///
+/// ```
+/// output::connect_signal(OutputSignal::Connect(Box::new(|output| {
+///     println!("New output: {}", output.name());
+/// })));
+/// ```
 pub fn connect_signal(signal: OutputSignal) -> SignalHandle {
     let mut signal_state = Client::signal_state();
 
@@ -265,7 +274,8 @@ impl OutputHandle {
     /// Note: If you leave space between two outputs when setting their locations,
     /// the pointer will not be able to move between them.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
@@ -308,7 +318,8 @@ impl OutputHandle {
     /// Similarly, [`RightAlignCenter`][Alignment::RightAlignCenter] will place this output
     /// to the right of `other` and align their centers.
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
@@ -411,9 +422,10 @@ impl OutputHandle {
     /// 60Hz, use 60000.
     ///
     /// If this output doesn't support the given mode, it will be ignored.
-    /// // FIXME: check that i don't remember lol
+    /// // FIXME: check that, i don't remember lol
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// output::get_focused()?.set_mode(2560, 1440, 144000);
     /// ```
@@ -433,9 +445,10 @@ impl OutputHandle {
     /// See `xorg.conf(5)` for more information.
     ///
     /// You can parse a modeline from a string of the form
-    /// "<clock> <hdisplay> <hsync_start> <hsync_end> <htotal> <vdisplay> <vsync_start> <vsync_end> <hsync> <vsync>".
+    /// "\<clock> \<hdisplay> \<hsync_start> \<hsync_end> \<htotal> \<vdisplay> \<vsync_start> \<vsync_end> \<hsync> \<vsync>".
     ///
-    /// # Example
+    /// # Examples
+    ///
     /// ```
     /// output::set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
     /// ```
@@ -450,12 +463,6 @@ impl OutputHandle {
     }
 
     /// Sets this output's scaling factor.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// output::get_focused()?.set_scale(1.5);
-    /// ```
     pub fn set_scale(&self, scale: f32) {
         Client::output()
             .set_scale(SetScaleRequest {
@@ -508,11 +515,6 @@ impl OutputHandle {
     ///
     /// This will not remove it from the space and your tags and windows
     /// will still be interactable; only the monitor is turned off.
-    ///
-    /// # Example
-    /// ```
-    /// output::get_focused()?.set_powered(false);
-    /// ```
     pub fn set_powered(&self, powered: bool) {
         Client::output()
             .set_powered(SetPoweredRequest {
@@ -531,11 +533,6 @@ impl OutputHandle {
     ///
     /// This will not remove it from the space and your tags and windows
     /// will still be interactable; only the monitor is turned off.
-    ///
-    /// # Example
-    /// ```
-    /// output::get_focused()?.toggle_powered();
-    /// ```
     pub fn toggle_powered(&self) {
         Client::output()
             .set_powered(SetPoweredRequest {
@@ -859,7 +856,7 @@ impl OutputHandle {
         self.keyboard_focus_stack_visible_async().block_on_tokio()
     }
 
-    /// Async impl for [`Self::keyboard_focus_stack`].
+    /// Async impl for [`Self::keyboard_focus_stack_visible`].
     pub async fn keyboard_focus_stack_visible_async(&self) -> impl Iterator<Item = WindowHandle> {
         self.keyboard_focus_stack_async()
             .await

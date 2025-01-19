@@ -1,5 +1,8 @@
-//! The Snowcap widget system.
-//! // TODO: these docs
+//! Integration with the
+//! [Snowcap](https://github.com/pinnacle-comp/pinnacle/tree/main/snowcap) widget system.
+//!
+//! Snowcap is a really-early-in-development widget system, designed for Pinnacle.
+//! This module contains preliminary widgets made with the system.
 
 use indexmap::IndexMap;
 use snowcap_api::{
@@ -91,7 +94,7 @@ impl QuitPrompt {
     }
 }
 
-/// A keybind overlay.
+/// A bindings overlay.
 #[derive(Default, Clone, Debug)]
 pub struct BindOverlay {
     /// The radius of the prompt's corners.
@@ -111,7 +114,7 @@ pub struct BindOverlay {
 }
 
 impl BindOverlay {
-    /// Create the default keybind overlay.
+    /// Creates the default bind overlay.
     ///
     /// Some of its characteristics can be changed by setting its fields.
     pub fn new() -> Self {
@@ -126,7 +129,7 @@ impl BindOverlay {
         }
     }
 
-    /// Show this keybind overlay.
+    /// Shows this bind overlay.
     pub fn show(&self) {
         #[derive(PartialEq, Eq, Hash)]
         struct KeybindRepr {

@@ -4,7 +4,7 @@
 
 //! Compositor management.
 //!
-//! This module provides [`Pinnacle`], which allows you to quit the compositor.
+//! This module provides general compositor actions like quitting and reloading the config.
 
 use pinnacle_api_defs::pinnacle::{
     self,
@@ -37,7 +37,7 @@ pub fn quit() {
     let _ = Client::pinnacle().quit(QuitRequest {}).block_on_tokio();
 }
 
-/// Reload the currently active config.
+/// Reloads the currently active config.
 pub fn reload_config() {
     // Ignore errors here, the config is meant to be killed
     let _ = Client::pinnacle()

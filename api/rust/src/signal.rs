@@ -237,7 +237,7 @@ signals! {
     }
     /// Signals relating to input events.
     InputSignal => {
-        /// A tag was set to active or not active.
+        /// A new input device was connected.
         InputDeviceAdded = {
             enum_name = DeviceAdded,
             callback_type = Box<dyn FnMut(&DeviceHandle) + Send + 'static>,

@@ -4,7 +4,7 @@
 
 //! Window management.
 //!
-//! This module provides [`Window`], which allows you to get [`WindowHandle`]s and move and resize
+//! This module provides ways to get [`WindowHandle`]s and move and resize
 //! windows using the mouse.
 //!
 //! [`WindowHandle`]s allow you to do things like resize and move windows, toggle them between
@@ -37,7 +37,8 @@ use crate::{
 
 /// Gets handles to all windows.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// for win in window::get_all() {
 ///     println!("{}", win.title());
@@ -61,7 +62,8 @@ pub async fn get_all_async() -> impl Iterator<Item = WindowHandle> {
 
 /// Gets a handle to the window with the current keyboard focus.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// if let Some(focused) = window::get_focused() {
 ///     println!("{}", focused.title());
@@ -86,7 +88,8 @@ pub async fn get_focused_async() -> Option<WindowHandle> {
 /// this function is called. Otherwise, the move will not start.
 /// This is intended for use in tandem with a mousebind.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// input::mousebind(Mod::SUPER, MouseButton::Left)
 ///     .on_press(|| window::begin_move(MouseButton::Left));
@@ -108,7 +111,8 @@ pub fn begin_move(button: MouseButton) {
 /// this function is called. Otherwise, the move will not start.
 /// This is intended for use in tandem with a mousebind.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
 /// input::mousebind(Mod::SUPER, MouseButton::Right)
 ///     .on_press(|| window::begin_resize(MouseButton::Right));
@@ -122,11 +126,15 @@ pub fn begin_resize(button: MouseButton) {
         .unwrap();
 }
 
-/// Connect to a window signal.
+/// Connects to a [`WindowSignal`].
 ///
-/// The compositor will fire off signals that your config can listen for and act upon.
-/// You can pass in a [`WindowSignal`] along with a callback and it will get run
-/// with the necessary arguments every time a signal of that type is received.
+/// # Examples
+///
+/// ```
+/// window::connect_signal(WindowSignal::PointerEnter(Box::new(|window| {
+///     window.set_focused(true);
+/// })));
+/// ```
 pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
     let mut signal_state = Client::signal_state();
 
@@ -139,7 +147,7 @@ pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
 /// A handle to a window.
 ///
 /// This allows you to manipulate the window and get its properties.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WindowHandle {
     pub(crate) id: u32,
 }
@@ -186,11 +194,6 @@ impl WindowHandle {
     /// Sends a close request to this window.
     ///
     /// If the window is unresponsive, it may not close.
-    ///
-    /// # Example
-    /// ```
-    /// window::get_focused()?.close();
-    /// ```
     pub fn close(&self) {
         let window_id = self.id;
         Client::window()
@@ -200,11 +203,6 @@ impl WindowHandle {
     }
 
     /// Sets this window to fullscreen or not.
-    ///
-    /// # Example
-    /// ```
-    /// window::get_focused()?.set_fullscreen(true);
-    /// ```
     pub fn set_fullscreen(&self, set: bool) {
         let window_id = self.id;
         Client::window()
@@ -221,11 +219,6 @@ impl WindowHandle {
     }
 
     /// Toggles this window between fullscreen and not.
-    ///
-    /// # Example
-    /// ```
-    /// window::get_focused()?.toggle_fullscreen();
-    /// ```
     pub fn toggle_fullscreen(&self) {
         let window_id = self.id;
         Client::window()
@@ -238,11 +231,6 @@ impl WindowHandle {
     }
 
     /// Sets this window to maximized or not.
-    ///
-    /// # Example
-    /// ```
-    /// window.get_focused()?.set_maximized(true);
-    /// ```
     pub fn set_maximized(&self, set: bool) {
         let window_id = self.id;
         Client::window()
@@ -259,11 +247,6 @@ impl WindowHandle {
     }
 
     /// Toggles this window between maximized and not.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.toggle_maximized();
-    /// ```
     pub fn toggle_maximized(&self) {
         let window_id = self.id;
         Client::window()
@@ -278,11 +261,6 @@ impl WindowHandle {
     /// Sets this window to floating or not.
     ///
     /// Floating windows will not be tiled and can be moved around and resized freely.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.set_floating(true);
-    /// ```
     pub fn set_floating(&self, set: bool) {
         let window_id = self.id;
         Client::window()
@@ -301,11 +279,6 @@ impl WindowHandle {
     /// Toggles this window to and from floating.
     ///
     /// Floating windows will not be tiled and can be moved around and resized freely.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.toggle_floating();
-    /// ```
     pub fn toggle_floating(&self) {
         let window_id = self.id;
         Client::window()
@@ -318,11 +291,6 @@ impl WindowHandle {
     }
 
     /// Focuses or unfocuses this window.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.set_focused(true);
-    /// ```
     pub fn set_focused(&self, set: bool) {
         let window_id = self.id;
         Client::window()
@@ -339,11 +307,6 @@ impl WindowHandle {
     }
 
     /// Toggles this window between focused and unfocused.
-    ///
-    /// # Examples
-    /// ```
-    /// window.get_focused()?.toggle_focused();
-    /// ```
     pub fn toggle_focused(&self) {
         let window_id = self.id;
         Client::window()
@@ -356,11 +319,6 @@ impl WindowHandle {
     }
 
     /// Sets this window's decoration mode.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.set_decoration_mode(DecorationMode::ClientSide);
-    /// ```
     pub fn set_decoration_mode(&self, mode: DecorationMode) {
         Client::window()
             .set_decoration_mode(SetDecorationModeRequest {
@@ -445,11 +403,6 @@ impl WindowHandle {
     }
 
     /// Raises this window to the front.
-    ///
-    /// # Examples
-    /// ```
-    /// window::get_focused()?.raise();
-    /// ```
     pub fn raise(&self) {
         let window_id = self.id;
         Client::window()
@@ -626,7 +579,7 @@ impl WindowHandle {
             .is_some()
     }
 
-    /// Get this window's raw compositor id.
+    /// Gets this window's raw compositor id.
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -644,9 +597,10 @@ impl WindowHandle {
 /// *Do not block here*. At best, short blocks will increase the time it takes for a window to
 /// open. At worst, a complete deadlock will prevent windows from opening at all.
 ///
-/// # Example
+/// # Examples
+///
 /// ```
-/// window::for_all_windows(|window| {
+/// window::for_each_window(|window| {
 ///     // Make Alacritty always open on the "Terminal" tag
 ///     if window.app_id() == "Alacritty" {
 ///         window.set_tag(&tag::get("Terminal"));
@@ -656,7 +610,7 @@ impl WindowHandle {
 ///     window.set_decoration_mode(DecorationMode::ClientSide);
 /// });
 /// ```
-pub fn for_all_windows(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
+pub fn for_each_window(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
     let (client_outgoing, client_outgoing_to_server) = unbounded_channel();
     let client_outgoing_to_server =
         tokio_stream::wrappers::UnboundedReceiverStream::new(client_outgoing_to_server);

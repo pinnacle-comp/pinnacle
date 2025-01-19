@@ -1,14 +1,21 @@
-use std::{collections::HashMap, sync::Arc};
+//! Various builtin generators.
+
+use std::collections::HashMap;
 
 use crate::{tag::TagHandle, util::Axis};
 
 use super::{Gaps, LayoutDir, LayoutGenerator, LayoutNode};
 
-#[derive(Debug, Clone)]
+/// A [`LayoutGenerator`] that lays out windows in a line.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Line {
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
     pub inner_gaps: Gaps,
+    /// THe direction the windows should be laid out.
     pub direction: LayoutDir,
+    /// Whether or not windows are inserted backwards.
     pub reversed: bool,
 }
 
@@ -63,22 +70,17 @@ pub enum MasterSide {
 /// next to it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MasterStack {
-    /// Gaps between windows.
-    pub inner_gaps: Gaps,
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
+    pub inner_gaps: Gaps,
     /// The proportion of the output the master area will take up.
     ///
     /// This will be clamped between 0.1 and 0.9.
-    ///
-    /// Defaults to 0.5
     pub master_factor: f32,
     /// Which side the master area will be.
-    ///
-    /// Defaults to [`MasterSide::Left`].
     pub master_side: MasterSide,
     /// How many windows will be in the master area.
-    ///
-    /// Defaults to 1.
     pub master_count: u32,
     /// Reverses the direction of window insertion i.e. new windows
     /// are inserted at the top of the master stack instead of at the
@@ -162,9 +164,10 @@ impl LayoutGenerator for MasterStack {
 /// towards the bottom right corner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dwindle {
-    /// Gaps between windows.
-    pub inner_gaps: Gaps,
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
+    pub inner_gaps: Gaps,
 }
 
 impl Default for Dwindle {
@@ -225,12 +228,14 @@ impl LayoutGenerator for Dwindle {
 
 /// A [`LayoutGenerator`] that lays out windows in a spiral.
 ///
-/// This is similar to the [`DwindleLayout`] but in a spiral instead of
+/// This is similar to the [`Dwindle`] layout but in a spiral instead of
 /// towards the bottom right corner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Spiral {
-    pub inner_gaps: Gaps,
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
+    pub inner_gaps: Gaps,
 }
 
 impl Default for Spiral {
@@ -310,15 +315,13 @@ pub enum CornerLocation {
 /// horizontal and vertical stack flanking it on the other two sides.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Corner {
-    pub inner_gaps: Gaps,
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
+    pub inner_gaps: Gaps,
     /// The proportion of the output that the width of the window takes up.
-    ///
-    /// Defaults to 0.5.
     pub corner_width_factor: f32,
     /// The proportion of the output that the height of the window takes up.
-    ///
-    /// Defaults to 0.5.
     pub corner_height_factor: f32,
     /// The location of the corner window.
     pub corner_loc: CornerLocation,
@@ -424,11 +427,11 @@ impl LayoutGenerator for Corner {
 /// they are the same size.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Fair {
-    pub inner_gaps: Gaps,
+    /// The gaps between the outer container and this layout.
     pub outer_gaps: Gaps,
+    /// The gaps between windows within this layout.
+    pub inner_gaps: Gaps,
     /// Which axis the lines of windows will run.
-    ///
-    /// Defaults to [`Axis::Vertical`].
     pub axis: Axis,
 }
 
@@ -509,9 +512,10 @@ impl LayoutGenerator for Fair {
     }
 }
 
-/// A [`LayoutManager`] that keeps track of layouts per output and provides
+/// A [`LayoutGenerator`] that keeps track of layouts per tag and provides
 /// methods to cycle between them.
 pub struct Cycle<T> {
+    /// The layouts this generator will cycle between.
     pub layouts: Vec<T>,
     tag_indices: HashMap<u32, usize>,
     current_tag: Option<TagHandle>,
@@ -536,20 +540,13 @@ impl<T: LayoutGenerator + ?Sized> LayoutGenerator for std::rc::Rc<T> {
 }
 
 impl<T: LayoutGenerator> Cycle<T> {
-    /// Create a new [`CyclingLayoutManager`] from the given [`LayoutGenerator`]s.
-    ///
-    /// `LayoutGenerator`s must be boxed then coerced to trait objects, so you
-    /// will need to do an unsizing cast to use them here.
+    /// Creates a new [`Cycle`] from the given [`LayoutGenerator`]s.
     ///
     /// # Examples
     ///
     /// ```
-    /// use pinnacle_api::layout::CyclingLayoutManager;
-    /// use pinnacle_api::layout::{MasterStackLayout, DwindleLayout, CornerLayout};
-    ///
     /// let cycling_layout_manager = CyclingLayoutManager::new([
-    ///     // The `as _` is necessary to coerce to a boxed trait object
-    ///     Box::<MasterStackLayout>::default() as _,
+    ///     Box::<MasterStackLayout>::default() as Box<dyn LayoutGenerator + Send>,
     ///     Box::<DwindleLayout>::default() as _,
     ///     Box::<CornerLayout>::default() as _,
     /// ]);
@@ -562,7 +559,7 @@ impl<T: LayoutGenerator> Cycle<T> {
         }
     }
 
-    /// Cycle the layout forward on the given tag.
+    /// Cycles the layout forward on the given tag.
     pub fn cycle_layout_forward(&mut self, tag: &TagHandle) {
         let index = self.tag_indices.entry(tag.id).or_default();
         *index += 1;
@@ -571,7 +568,7 @@ impl<T: LayoutGenerator> Cycle<T> {
         }
     }
 
-    /// Cycle the layout backward on the given tag.
+    /// Cycles the layout backward on the given tag.
     pub fn cycle_layout_backward(&mut self, tag: &TagHandle) {
         let index = self.tag_indices.entry(tag.id).or_default();
         if let Some(i) = index.checked_sub(1) {
@@ -581,11 +578,15 @@ impl<T: LayoutGenerator> Cycle<T> {
         }
     }
 
+    /// Retrieves the current layout.
+    ///
+    /// Returns `None` if no layouts were given.
     pub fn current_layout(&self, tag: &TagHandle) -> Option<&T> {
         self.layouts
             .get(self.tag_indices.get(&tag.id).copied().unwrap_or_default())
     }
 
+    /// Sets the current tag to choose a layout for.
     pub fn set_current_tag(&mut self, tag: TagHandle) {
         self.current_tag = Some(tag);
     }

@@ -298,8 +298,8 @@ async fn new_keybind(mods: Mod, key: impl ToKeysym, layer: &BindLayer) -> Keybin
                 mods: mods.into_iter().map(|m| m.into()).collect(),
                 ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                 layer_name: layer.name.clone(),
-                group: None,       // TODO:
-                description: None, // TODO:
+                group: None,
+                description: None,
                 bind: Some(input::v1::bind::Bind::Key(input::v1::Keybind {
                     key_code: Some(key.to_keysym().raw()),
                     xkb_name: None,
@@ -410,8 +410,8 @@ async fn new_mousebind(mods: Mod, button: MouseButton, layer: &BindLayer) -> Mou
                 mods: mods.into_iter().map(|m| m.into()).collect(),
                 ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                 layer_name: layer.name.clone(),
-                group: None,       // TODO:
-                description: None, // TODO:
+                group: None,
+                description: None,
                 bind: Some(input::v1::bind::Bind::Mouse(input::v1::Mousebind {
                     button: button.into(),
                 })),
@@ -750,6 +750,14 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
 }
 
 /// Connects to an [`InputSignal`].
+///
+/// # Examples
+///
+/// ```
+/// input::connect_signal(InputSignal::DeviceAdded(Box::new(|device| {
+///     println!("New device: {}", device.name());
+/// })));
+/// ```
 pub fn connect_signal(signal: InputSignal) -> SignalHandle {
     let mut signal_state = Client::signal_state();
 

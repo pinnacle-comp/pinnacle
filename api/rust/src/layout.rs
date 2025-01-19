@@ -6,7 +6,7 @@
 //!
 //! TODO: finish this documentation
 
-pub mod generator;
+pub mod generators;
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -19,6 +19,16 @@ use tokio_stream::StreamExt;
 
 use crate::{client::Client, output::OutputHandle, tag::TagHandle, BlockOnTokio};
 
+/// Manages layout requests from the compositor.
+///
+/// You must call this function to begin handling incoming layout requests.
+/// Whenever a layout request comes in, `on_layout` will be called with the arguments of the
+/// layout. The closure must then return the root of a layout tree through a [`LayoutNode`].
+///
+/// This returns a [`LayoutRequester`] that allows you to force the compositor to emit a
+/// layout request.
+///
+/// See the module level documentation for more information on how to generate layouts.
 pub fn manage(
     mut on_layout: impl FnMut(LayoutArgs) -> LayoutNode + Send + 'static,
 ) -> LayoutRequester {
@@ -69,6 +79,27 @@ pub fn manage(
     requester
 }
 
+/// A single node of a layout tree.
+///
+/// [`LayoutNode`]s allow you to hierarchically represent layouts in a tree structure.
+/// They have the following properties:
+/// - A layout direction, set with [`set_dir`][Self::set_dir]: This determines the direction
+///   that children layout nodes are laid out in.
+/// - A size proportion, set with [`set_size_proportion`][Self::set_size_proportion]: This
+///   determines the proportion of space a layout node takes up in relation to its siblings.
+/// - Gaps, set with [`set_gaps`][Self::set_gaps]: This determines the gaps surrounding a
+///   layout node.
+/// - A traversal index, set with [`set_traversal_index`][Self::set_traversal_index]: This
+///   determines the order that the layout tree is traversed in when assigning layout node
+///   geometries to windows.
+/// - Traversal overrides, set with [`set_traversal_overrides`][Self::set_traversal_overrides]:
+///   This provides a way to provide per-window overrides to tree traversal. This is used to
+///   enable otherwise impossible window insertion strategies. For example, the
+///   [`Corner`][self::generators::Corner] layout generator overrides traversal to allow
+///   windows to be inserted into the vertical and horizontal stacks in an alternating fashion.
+/// - An optional label, set with [`set_label`][Self::set_label]: This gives the compositor a hint
+///   when diffing layout trees, allowing it to, for example, decide whether to move a node or
+///   delete it and insert a new one.
 #[derive(Debug, Clone)]
 pub struct LayoutNode {
     inner: Rc<RefCell<LayoutNodeInner>>,
@@ -105,13 +136,21 @@ impl LayoutNodeInner {
     }
 }
 
+impl Default for LayoutNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LayoutNode {
+    /// Creates a new layout node.
     pub fn new() -> Self {
         LayoutNode {
             inner: Rc::new(RefCell::new(LayoutNodeInner::new(None, 0))),
         }
     }
 
+    /// Creates a new layout node with the given label.
     pub fn new_with_label(label: impl ToString) -> Self {
         LayoutNode {
             inner: Rc::new(RefCell::new(LayoutNodeInner::new(
@@ -121,12 +160,14 @@ impl LayoutNode {
         }
     }
 
+    /// Creates a new layout node with the given traversal index.
     pub fn new_with_traversal_index(index: u32) -> Self {
         LayoutNode {
             inner: Rc::new(RefCell::new(LayoutNodeInner::new(None, index))),
         }
     }
 
+    /// Creates a new layout node with the given label and traversal index.
     pub fn new_with_label_and_index(label: impl ToString, index: u32) -> Self {
         LayoutNode {
             inner: Rc::new(RefCell::new(LayoutNodeInner::new(
@@ -136,58 +177,78 @@ impl LayoutNode {
         }
     }
 
+    /// Sets this node's traversal overrides, allowing it to change how windows are assigned
+    /// geometries.
     pub fn set_traversal_overrides(&self, overrides: impl IntoIterator<Item = (u32, Vec<u32>)>) {
         self.inner.borrow_mut().traversal_overrides = overrides.into_iter().collect();
     }
 
+    /// Adds a child layout node to this node.
     pub fn add_child(&self, child: Self) {
         self.inner.borrow_mut().children.push(child);
     }
 
+    /// Sets this node's label.
     pub fn set_label(&self, label: Option<impl ToString>) {
         self.inner.borrow_mut().label = label.map(|label| label.to_string());
     }
 
+    /// Sets this node's traversal index, changing how the compositor traverses the tree when
+    /// assigning geometries to windows.
     pub fn set_traversal_index(&self, index: u32) {
         self.inner.borrow_mut().traversal_index = index;
     }
 
+    /// Sets this node's children.
     pub fn set_children(&self, children: impl IntoIterator<Item = Self>) {
         self.inner.borrow_mut().children = children.into_iter().collect();
     }
 
+    /// Sets this node's [`LayoutDir`].
     pub fn set_dir(&self, dir: LayoutDir) {
         self.inner.borrow_mut().style.layout_dir = dir;
     }
 
+    /// Sets this node's size proportion in relation to its siblings.
     pub fn set_size_proportion(&self, proportion: f32) {
         self.inner.borrow_mut().style.size_proportion = proportion;
     }
 
+    /// Sets the gaps this node places around its children.
     pub fn set_gaps(&self, gaps: impl Into<Gaps>) {
         self.inner.borrow_mut().style.gaps = gaps.into();
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+/// A layout direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LayoutDir {
+    /// Lays out nodes in a row.
     Row,
+    /// Lays out nodes in a column.
     Column,
 }
 
+/// Gaps around a layout node.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Gaps {
+    /// How many pixels should be inset from the left.
     pub left: f32,
+    /// How many pixels should be inset from the right.
     pub right: f32,
+    /// How many pixels should be inset from the top.
     pub top: f32,
+    /// How many pixels should be inset from the bottom.
     pub bottom: f32,
 }
 
 impl Gaps {
+    /// Creates a gap of 0 pixels on all sides.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Creates a gap with a uniform number of pixels on all sides.
     pub fn uniform(gaps: f32) -> Self {
         gaps.into()
     }
@@ -204,8 +265,44 @@ impl From<f32> for Gaps {
     }
 }
 
+impl From<u32> for Gaps {
+    fn from(value: u32) -> Self {
+        let value = value as f32;
+        Self {
+            left: value,
+            right: value,
+            top: value,
+            bottom: value,
+        }
+    }
+}
+
+impl From<u16> for Gaps {
+    fn from(value: u16) -> Self {
+        let value = value as f32;
+        Self {
+            left: value,
+            right: value,
+            top: value,
+            bottom: value,
+        }
+    }
+}
+
+impl From<u8> for Gaps {
+    fn from(value: u8) -> Self {
+        let value = value as f32;
+        Self {
+            left: value,
+            right: value,
+            top: value,
+            bottom: value,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct Style {
+struct Style {
     layout_dir: LayoutDir,
     gaps: Gaps,
     size_proportion: f32,
@@ -260,7 +357,7 @@ impl From<LayoutNode> for layout::v1::LayoutNode {
     }
 }
 
-/// Arguments that [`LayoutGenerator`]s receive when a layout is requested.
+/// Arguments from an incoming layout request.
 #[derive(Clone, Debug)]
 pub struct LayoutArgs {
     /// The output that is being laid out.
@@ -271,9 +368,9 @@ pub struct LayoutArgs {
     pub tags: Vec<TagHandle>,
 }
 
-/// Types that can generate layouts by computing a vector of [geometries][Geometry].
+/// Types that can generate layouts by computing a tree of [`LayoutNode`]s.
 pub trait LayoutGenerator {
-    /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
+    /// Generates a tree of [`LayoutNode`]s.
     fn layout(&self, window_count: u32) -> LayoutNode;
 }
 
@@ -284,7 +381,7 @@ pub struct LayoutRequester {
 }
 
 impl LayoutRequester {
-    /// Request a layout from the compositor.
+    /// Requests a layout from the compositor.
     ///
     /// This uses the focused output for the request.
     /// If you want to layout a specific output, see [`LayoutRequester::request_layout_on_output`].
@@ -301,7 +398,7 @@ impl LayoutRequester {
             .unwrap();
     }
 
-    /// Request a layout from the compositor for the given output.
+    /// Requests a layout from the compositor for the given output.
     pub fn request_layout_on_output(&self, output: &OutputHandle) {
         self.sender
             .send(LayoutRequest {

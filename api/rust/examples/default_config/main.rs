@@ -7,14 +7,14 @@ use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
-use pinnacle_api::layout::generator::Corner
-use pinnacle_api::layout::generator::CornerLocation;
-use pinnacle_api::layout::generator::Cycle;
-use pinnacle_api::layout::generator::Dwindle
-use pinnacle_api::layout::generator::Fair
-use pinnacle_api::layout::generator::MasterSide;
-use pinnacle_api::layout::generator::MasterStack
-use pinnacle_api::layout::generator::Spiral
+use pinnacle_api::layout::generators::Corner;
+use pinnacle_api::layout::generators::CornerLocation;
+use pinnacle_api::layout::generators::Cycle;
+use pinnacle_api::layout::generators::Dwindle;
+use pinnacle_api::layout::generators::Fair;
+use pinnacle_api::layout::generators::MasterSide;
+use pinnacle_api::layout::generators::MasterStack;
+use pinnacle_api::layout::generators::Spiral;
 use pinnacle_api::layout::LayoutGenerator;
 use pinnacle_api::layout::LayoutNode;
 use pinnacle_api::output;
@@ -220,36 +220,36 @@ async fn config() {
     }
 
     let cycler = Arc::new(Mutex::new(Cycle::new([
-        into_box(MasterStackLault()),
-        into_box(MasterStack
+        into_box(MasterStack::default()),
+        into_box(MasterStack {
             master_side: MasterSide::Right,
             ..Default::default()
         }),
-        into_box(MasterStack
+        into_box(MasterStack {
             master_side: MasterSide::Top,
             ..Default::default()
         }),
-        into_box(MasterStack
+        into_box(MasterStack {
             master_side: MasterSide::Bottom,
             ..Default::default()
         }),
-        into_box(Dwindleult()),
-        into_box(Spiralult()),
-        into_box(Cornerult()),
-        into_box(Corner
+        into_box(Dwindle::default()),
+        into_box(Spiral::default()),
+        into_box(Corner::default()),
+        into_box(Corner {
             corner_loc: CornerLocation::TopRight,
             ..Default::default()
         }),
-        into_box(Corner
+        into_box(Corner {
             corner_loc: CornerLocation::BottomLeft,
             ..Default::default()
         }),
-        into_box(Corner
+        into_box(Corner {
             corner_loc: CornerLocation::BottomRight,
             ..Default::default()
         }),
-        into_box(Fairult()),
-        into_box(Fair
+        into_box(Fair::default()),
+        into_box(Fair {
             axis: Axis::Horizontal,
             ..Default::default()
         }),
@@ -322,7 +322,7 @@ async fn config() {
     let tag_names = ["1", "2", "3", "4", "5"];
 
     // Setup all monitors with tags "1" through "5"
-    output::for_all_outputs(move |output| {
+    output::for_each_output(move |output| {
         let mut tags = tag::add(output, tag_names);
         tags.next().unwrap().set_active(true);
     });
@@ -380,7 +380,7 @@ async fn config() {
     });
 
     // Request all windows use client-side decorations.
-    window::for_all_windows(|window| {
+    window::for_each_window(|window| {
         window.set_decoration_mode(window::DecorationMode::ClientSide);
     });
 

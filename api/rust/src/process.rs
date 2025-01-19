@@ -4,8 +4,7 @@
 
 //! Process management.
 //!
-//! This module provides [`Process`], which allows you to spawn processes and set environment
-//! variables.
+//! This module provides ways to spawn processes and handle their output.
 
 use std::{
     collections::HashMap,

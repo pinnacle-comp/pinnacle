@@ -156,7 +156,7 @@ impl<F: Future> BlockOnTokio for F {
 /// `#[pinnacle_api::tokio::main]` that performs necessary setup
 /// and calls the provided async function.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// async fn config() {}
@@ -179,7 +179,7 @@ macro_rules! main {
 /// This macro is called by [`main`]. It is exposed for use in case you
 /// need to change the generated main function.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// async fn config() {}

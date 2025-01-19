@@ -28,14 +28,14 @@ impl From<ScalingFilter> for render::v1::Filter {
     }
 }
 
-/// Set the upscaling filter that will be used for rendering.
+/// Sets the upscaling filter that will be used for rendering.
 ///
 /// # Examples
 ///
 /// ```
 /// use pinnacle_api::render::ScalingFilter;
 ///
-/// render.set_upscale_filter(ScalingFilter::NearestNeighbor);
+/// render::set_upscale_filter(ScalingFilter::NearestNeighbor);
 /// ```
 pub fn set_upscale_filter(filter: ScalingFilter) {
     Client::render()
@@ -46,14 +46,14 @@ pub fn set_upscale_filter(filter: ScalingFilter) {
         .unwrap();
 }
 
-/// Set the downscaling filter that will be used for rendering.
+/// Sets the downscaling filter that will be used for rendering.
 ///
 /// # Examples
 ///
 /// ```
 /// use pinnacle_api::render::ScalingFilter;
 ///
-/// render.set_downscale_filter(ScalingFilter::NearestNeighbor);
+/// render::set_downscale_filter(ScalingFilter::NearestNeighbor);
 /// ```
 pub fn set_downscale_filter(filter: ScalingFilter) {
     Client::render()
