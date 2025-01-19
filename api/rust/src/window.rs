@@ -39,7 +39,8 @@ use crate::{
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::window;
 /// for win in window::get_all() {
 ///     println!("{}", win.title());
 /// }
@@ -64,7 +65,8 @@ pub async fn get_all_async() -> impl Iterator<Item = WindowHandle> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::window;
 /// if let Some(focused) = window::get_focused() {
 ///     println!("{}", focused.title());
 /// }
@@ -90,7 +92,11 @@ pub async fn get_focused_async() -> Option<WindowHandle> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::window;
+/// # use pinnacle_api::input;
+/// # use pinnacle_api::input::Mod;
+/// # use pinnacle_api::input::MouseButton;
 /// input::mousebind(Mod::SUPER, MouseButton::Left)
 ///     .on_press(|| window::begin_move(MouseButton::Left));
 /// ```
@@ -113,7 +119,11 @@ pub fn begin_move(button: MouseButton) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::window;
+/// # use pinnacle_api::input;
+/// # use pinnacle_api::input::Mod;
+/// # use pinnacle_api::input::MouseButton;
 /// input::mousebind(Mod::SUPER, MouseButton::Right)
 ///     .on_press(|| window::begin_resize(MouseButton::Right));
 /// ```
@@ -130,7 +140,9 @@ pub fn begin_resize(button: MouseButton) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::window;
+/// # use pinnacle_api::signal::WindowSignal;
 /// window::connect_signal(WindowSignal::PointerEnter(Box::new(|window| {
 ///     window.set_focused(true);
 /// })));
@@ -339,9 +351,15 @@ impl WindowHandle {
     /// window to that tag.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # use pinnacle_api::tag;
+    /// # || {
     /// // Move the focused window to tag "Code" on the focused output
     /// window::get_focused()?.move_to_tag(&tag::get("Code")?);
+    /// # Some(())
+    /// # };
     /// ```
     pub fn move_to_tag(&self, tag: &TagHandle) {
         let window_id = self.id;
@@ -355,12 +373,18 @@ impl WindowHandle {
     /// Sets or unsets a tag on this window.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # use pinnacle_api::tag;
+    /// # || {
     /// let focused = window::get_focused()?;
     /// let tag = tag::get("Potato")?;
     ///
     /// focused.set_tag(&tag, true); // `focused` now has tag "Potato"
     /// focused.set_tag(&tag, false); // `focused` no longer has tag "Potato"
+    /// # Some(())
+    /// # };
     /// ```
     pub fn set_tag(&self, tag: &TagHandle, set: bool) {
         let window_id = self.id;
@@ -382,12 +406,18 @@ impl WindowHandle {
     /// Toggles a tag on this window.
     ///
     /// # Examples
-    /// ```
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::window;
+    /// # use pinnacle_api::tag;
+    /// # || {
     /// let focused = window::get_focused()?;
-    /// let tg = tag::get("Potato", None)?;
+    /// let tag = tag::get("Potato")?;
     ///
     /// focused.toggle_tag(&tag); // `focused` now has tag "Potato"
     /// focused.toggle_tag(&tag); // `focused` no longer has tag "Potato"
+    /// # Some(())
+    /// # };
     /// ```
     pub fn toggle_tag(&self, tag: &TagHandle) {
         let window_id = self.id;
@@ -599,11 +629,15 @@ impl WindowHandle {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// use pinnacle_api::window;
+/// use pinnacle_api::window::DecorationMode;
+/// use pinnacle_api::tag;
+///
 /// window::for_each_window(|window| {
 ///     // Make Alacritty always open on the "Terminal" tag
 ///     if window.app_id() == "Alacritty" {
-///         window.set_tag(&tag::get("Terminal"));
+///         window.set_tag(&tag::get("Terminal").unwrap(), true);
 ///     }
 ///
 ///     // Make all windows use client-side decorations

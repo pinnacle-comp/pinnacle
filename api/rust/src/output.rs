@@ -38,7 +38,8 @@ use crate::{
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::output;
 /// for output in output::get_all() {
 ///     println!("{} {} {}", output.make(), output.model(), output.serial());
 /// }
@@ -65,7 +66,8 @@ pub async fn get_all_async() -> impl Iterator<Item = OutputHandle> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::output;
 /// for output in output::get_all_enabled() {
 ///     println!("{} {} {}", output.make(), output.model(), output.serial());
 /// }
@@ -84,12 +86,6 @@ pub async fn get_all_enabled_async() -> impl Iterator<Item = OutputHandle> {
 /// Gets a handle to the output with the given name.
 ///
 /// By "name", we mean the name of the connector the output is connected to.
-///
-/// # Examples
-///
-/// ```
-/// let op = output.get_by_name("eDP-1")?;
-/// ```
 pub fn get_by_name(name: impl ToString) -> Option<OutputHandle> {
     get_by_name_async(name).block_on_tokio()
 }
@@ -102,12 +98,6 @@ pub async fn get_by_name_async(name: impl ToString) -> Option<OutputHandle> {
 /// Gets a handle to the currently focused output.
 ///
 /// This is currently implemented as the one that has had the most recent pointer movement.
-///
-/// # Examples
-///
-/// ```
-/// let op = output.get_focused()?;
-/// ```
 pub fn get_focused() -> Option<OutputHandle> {
     get_focused_async().block_on_tokio()
 }
@@ -131,10 +121,12 @@ pub async fn get_focused_async() -> Option<OutputHandle> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::tag;
 /// // Add tags 1-3 to all outputs and set tag "1" to active
 /// output::for_each_output(|op| {
-///     let tags = tag::add(op, ["1", "2", "3"]);
+///     let mut tags = tag::add(op, ["1", "2", "3"]);
 ///     tags.next().unwrap().set_active(true);
 /// });
 /// ```
@@ -152,7 +144,9 @@ pub fn for_each_output(mut for_each: impl FnMut(&OutputHandle) + Send + 'static)
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::signal::OutputSignal;
 /// output::connect_signal(OutputSignal::Connect(Box::new(|output| {
 ///     println!("New output: {}", output.name());
 /// })));
@@ -276,7 +270,8 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::output;
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
     /// //              │     │1920x1080
@@ -285,10 +280,11 @@ impl OutputHandle {
     /// //              │ 2560x │
     /// //              │ 1440  │
     /// //              └───────┘
-    ///
+    /// # || {
     /// output::get_by_name("DP-1")?.set_loc(0, 0);
     /// output::get_by_name("HDMI-1")?.set_loc(1920, -360);
-    ///
+    /// # Some(())
+    /// # };
     /// // Results in:
     /// //   x=0    ┌───────┐y=-360
     /// // y=0┌─────┤       │
@@ -320,7 +316,9 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # use pinnacle_api::output::Alignment;
     /// // Assume two monitors in order, "DP-1" and "HDMI-1", with the following dimensions:
     /// //  - "DP-1":   ┌─────┐
     /// //              │     │1920x1080
@@ -329,9 +327,12 @@ impl OutputHandle {
     /// //              │ 2560x │
     /// //              │ 1440  │
     /// //              └───────┘
-    ///
-    /// output::get_by_name("DP-1")?.set_loc_adj_to(output::get_by_name("HDMI-1")?, Alignment::BottomAlignRight);
-    ///
+    /// # || {
+    /// let dp_1 = output::get_by_name("DP-1")?;
+    /// let hdmi_1 = output::get_by_name("HDMI-1")?;
+    /// dp_1.set_loc_adj_to(&hdmi_1, Alignment::BottomAlignRight);
+    /// # Some(())
+    /// # };
     /// // Results in:
     /// // ┌───────┐
     /// // │       │
@@ -426,8 +427,13 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # || {
+    /// // Sets the focused output to 2560x1440 at 144Hz
     /// output::get_focused()?.set_mode(2560, 1440, 144000);
+    /// # Some(())
+    /// # };
     /// ```
     pub fn set_mode(&self, width: u32, height: u32, refresh_rate_mhz: impl Into<Option<u32>>) {
         Client::output()
@@ -449,8 +455,13 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
-    /// output::set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse()?);
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # || {
+    /// let output = output::get_focused()?;
+    /// output.set_modeline("173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync".parse().unwrap());
+    /// # Some(())
+    /// # };
     /// ```
     pub fn set_modeline(&self, modeline: Modeline) {
         Client::output()
@@ -478,9 +489,13 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # || {
     /// output::get_focused()?.change_scale(0.25);
     /// output::get_focused()?.change_scale(-0.25);
+    /// # Some(())
+    /// # };
     /// ```
     pub fn change_scale(&self, change_by: f32) {
         Client::output()
@@ -497,9 +512,14 @@ impl OutputHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # use pinnacle_api::output::Transform;
     /// // Rotate 90 degrees counter-clockwise
+    /// # || {
     /// output::get_focused()?.set_transform(Transform::_90);
+    /// # Some(())
+    /// # };
     /// ```
     pub fn set_transform(&self, transform: Transform) {
         Client::output()

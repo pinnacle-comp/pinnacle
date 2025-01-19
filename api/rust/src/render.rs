@@ -32,9 +32,9 @@ impl From<ScalingFilter> for render::v1::Filter {
 ///
 /// # Examples
 ///
-/// ```
-/// use pinnacle_api::render::ScalingFilter;
-///
+/// ```no_run
+/// # use pinnacle_api::render;
+/// # use pinnacle_api::render::ScalingFilter;
 /// render::set_upscale_filter(ScalingFilter::NearestNeighbor);
 /// ```
 pub fn set_upscale_filter(filter: ScalingFilter) {
@@ -50,9 +50,9 @@ pub fn set_upscale_filter(filter: ScalingFilter) {
 ///
 /// # Examples
 ///
-/// ```
-/// use pinnacle_api::render::ScalingFilter;
-///
+/// ```no_run
+/// # use pinnacle_api::render;
+/// # use pinnacle_api::render::ScalingFilter;
 /// render::set_downscale_filter(ScalingFilter::NearestNeighbor);
 /// ```
 pub fn set_downscale_filter(filter: ScalingFilter) {

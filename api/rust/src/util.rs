@@ -48,8 +48,11 @@ pub enum Axis {
 ///
 /// # Examples
 ///
-/// ```
-/// let props: Vec<String> = batch(window::get_all().map(|window| window.app_id_async()));
+/// ```no_run
+/// # use pinnacle_api::util::batch;
+/// # use pinnacle_api::window;
+/// let windows = window::get_all().collect::<Vec<_>>();
+/// let props: Vec<String> = batch(windows.iter().map(|window| window.app_id_async()));
 /// ```
 ///
 pub fn batch<T>(requests: impl IntoIterator<Item = impl Future<Output = T>>) -> Vec<T> {
@@ -69,36 +72,39 @@ pub async fn batch_async<T>(requests: impl IntoIterator<Item = impl Future<Outpu
 /// The [`batch`] function only accepts a collection of the same concrete future e.g.
 /// from a single async function or method.
 ///
-/// To support different futures (that still return the same value), this macro will place provided
+/// To support different futures (that still return the same type), this macro will place provided
 /// futures in a `Pin<Box<_>>` to erase their type and pass them along to `batch`.
 ///
 /// # Examples
-/// ```
-/// use pinnacle_api::util::batch_boxed;
 ///
-/// let mut windows = window.get_all();
+/// ```no_run
+/// # use pinnacle_api::util::batch_boxed;
+/// # use pinnacle_api::window;
+/// # || {
+/// let mut windows = window::get_all();
 /// let first = windows.next()?;
 /// let last = windows.last()?;
 ///
 /// let classes: Vec<String> = batch_boxed![
 ///     async {
-///         let class = first.class_async().await;
-///         class.unwrap_or("no class".to_string())
+///         let class = first.app_id_async().await;
+///         class
 ///     },
 ///     async {
-///         let mut class = last.class_async().await.unwrap_or("alalala");
+///         let mut class = last.app_id_async().await;
 ///         class += "hello";
 ///         class
 ///     },
 /// ];
+/// # Some(())
+/// # };
 /// ```
 #[macro_export]
 macro_rules! batch_boxed {
-    [ $first:expr, $($request:expr),* ] => {
+    [ $($request:expr),* $(,)? ] => {
         $crate::util::batch([
-            ::std::boxed::Box::pin($first) as ::std::pin::Pin<::std::boxed::Box<dyn std::future::Future<Output = _>>>,
             $(
-                ::std::boxed::Box::pin($request),
+                ::std::boxed::Box::pin($request) as ::std::pin::Pin<::std::boxed::Box<dyn std::future::Future<Output = _>>>,
             )*
         ])
     };

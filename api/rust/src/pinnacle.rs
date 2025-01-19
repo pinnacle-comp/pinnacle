@@ -25,13 +25,6 @@ pub enum Backend {
 }
 
 /// Quits Pinnacle.
-///
-/// # Examples
-///
-/// ```
-/// // Quits Pinnacle. What else were you expecting?
-/// pinnacle.quit();
-/// ```
 pub fn quit() {
     // Ignore errors here, the config is meant to be killed
     let _ = Client::pinnacle().quit(QuitRequest {}).block_on_tokio();

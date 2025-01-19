@@ -91,6 +91,8 @@ mod client;
 pub use tokio;
 pub use xkbcommon::xkb::Keysym;
 
+const SOCKET_PATH: &str = "PINNACLE_GRPC_SOCKET";
+
 /// Connects to Pinnacle.
 ///
 /// This function is called by the [`main`] and [`config`] macros.
@@ -99,7 +101,7 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
     // port doesn't matter, we use a unix socket
     let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| async {
-            let path = std::env::var("PINNACLE_GRPC_SOCKET")
+            let path = std::env::var(SOCKET_PATH)
                 .expect("PINNACLE_GRPC_SOCKET was not set; is Pinnacle running?");
 
             Ok::<_, std::io::Error>(TokioIo::new(tokio::net::UnixStream::connect(path).await?))
@@ -107,7 +109,7 @@ pub async fn connect() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
 
-    let socket_path = std::env::var("PINNACLE_GRPC_SOCKET").unwrap();
+    let socket_path = std::env::var(SOCKET_PATH).unwrap();
     println!("Connected to {socket_path}");
 
     Client::init(channel.clone());
@@ -126,7 +128,7 @@ pub async fn block() {
     let (_sender, mut keepalive_stream) = crate::pinnacle::keepalive().await;
 
     // This will trigger either when the compositor sends the shutdown signal
-    // or when it exits (in which case the stream received an error)
+    // or when it exits (in which case the stream receives an error)
     keepalive_stream.next().await;
 
     Client::signal_state().shutdown();
@@ -158,7 +160,7 @@ impl<F: Future> BlockOnTokio for F {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// async fn config() {}
 ///
 /// pinnacle_api::main!(config);
@@ -181,7 +183,7 @@ macro_rules! main {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// async fn config() {}
 ///
 /// #[pinnacle_api::tokio::main(worker_threads = 8)]

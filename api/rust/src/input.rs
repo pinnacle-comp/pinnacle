@@ -3,6 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Input management.
+//!
+//! This module provides ways to manage bindings, input devices, and other input settings.
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
@@ -536,12 +538,12 @@ impl XkbConfig {
 ///
 /// # Examples
 ///
-/// ```
-/// use pinnacle_api::input::XkbConfig;
-///
+/// ```no_run
+/// # use pinnacle_api::input;
+/// # use pinnacle_api::input::XkbConfig;
 /// input::set_xkb_config(XkbConfig::new()
-///     .layout("us,fr,ge")
-///     .options("ctrl:swapcaps,caps:shift"));
+///     .with_layout("us,fr,ge")
+///     .with_options("ctrl:swapcaps,caps:shift"));
 /// ```
 pub fn set_xkb_config(xkb_config: XkbConfig) {
     Client::input()
@@ -599,7 +601,8 @@ pub enum BindInfoKind {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::input;
 /// // Set keyboard to repeat after holding down for half a second,
 /// // and repeat once every 25ms (40 times a second)
 /// input::set_repeat_rate(25, 500);
@@ -621,7 +624,8 @@ pub fn set_repeat_rate(rate: i32, delay: i32) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::input;
 /// input::set_xcursor_theme("Adwaita");
 /// ```
 pub fn set_xcursor_theme(theme: impl ToString) {
@@ -641,7 +645,8 @@ pub fn set_xcursor_theme(theme: impl ToString) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::input;
 /// input::set_xcursor_size(64);
 /// ```
 pub fn set_xcursor_size(size: u32) {
@@ -753,7 +758,9 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::input;
+/// # use pinnacle_api::signal::InputSignal;
 /// input::connect_signal(InputSignal::DeviceAdded(Box::new(|device| {
 ///     println!("New device: {}", device.name());
 /// })));

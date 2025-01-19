@@ -545,10 +545,15 @@ impl<T: LayoutGenerator> Cycle<T> {
     /// # Examples
     ///
     /// ```
-    /// let cycling_layout_manager = CyclingLayoutManager::new([
-    ///     Box::<MasterStackLayout>::default() as Box<dyn LayoutGenerator + Send>,
-    ///     Box::<DwindleLayout>::default() as _,
-    ///     Box::<CornerLayout>::default() as _,
+    /// # use pinnacle_api::layout::generators::Cycle;
+    /// # use pinnacle_api::layout::generators::MasterStack;
+    /// # use pinnacle_api::layout::generators::Dwindle;
+    /// # use pinnacle_api::layout::generators::Corner;
+    /// # use pinnacle_api::layout::LayoutGenerator;
+    /// let cycler = Cycle::new([
+    ///     Box::<MasterStack>::default() as Box<dyn LayoutGenerator + Send>,
+    ///     Box::<Dwindle>::default() as _,
+    ///     Box::<Corner>::default() as _,
     /// ]);
     /// ```
     pub fn new(layouts: impl IntoIterator<Item = T>) -> Self {

@@ -49,6 +49,8 @@ use crate::{
 /// # Examples
 ///
 /// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::tag;
 /// // Add tags 1-5 to the focused output
 /// if let Some(op) = output::get_focused() {
 ///     let tags = tag::add(&op, ["1", "2", "3", "4", "5"]);
@@ -79,6 +81,7 @@ pub fn add(
 /// # Examples
 ///
 /// ```no_run
+/// # use pinnacle_api::tag;
 /// for tag in tag::get_all() {
 ///     println!("{}", tag.name());
 /// }
@@ -107,7 +110,11 @@ pub async fn get_all_async() -> impl Iterator<Item = TagHandle> {
 /// # Examples
 ///
 /// ```no_run
+/// # use pinnacle_api::tag;
+/// # || {
 /// let tag = tag::get("2")?;
+/// # Some(())
+/// # };
 /// ```
 pub fn get(name: impl ToString) -> Option<TagHandle> {
     get_async(name).block_on_tokio()
@@ -128,8 +135,13 @@ pub async fn get_async(name: impl ToString) -> Option<TagHandle> {
 /// # Examples
 ///
 /// ```no_run
+/// # use pinnacle_api::output;
+/// # use pinnacle_api::tag;
+/// # || {
 /// let output = output::get_by_name("eDP-1")?;
 /// let tag = tag::get_on_output("2", &output)?;
+/// # Some(())
+/// # };
 /// ```
 pub fn get_on_output(name: impl ToString, output: &OutputHandle) -> Option<TagHandle> {
     get_on_output_async(name, output).block_on_tokio()
@@ -150,9 +162,14 @@ pub async fn get_on_output_async(name: impl ToString, output: &OutputHandle) -> 
 /// # Examples
 ///
 /// ```no_run
-/// let tags = tag::add(output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
+/// # use pinnacle_api::tag;
+/// # use pinnacle_api::output;
+/// # || {
+/// let tags = tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]);
 ///
-/// tag.remove(tags); // "DP-1" no longer has any tags
+/// tag::remove(tags); // "DP-1" no longer has any tags
+/// # Some(())
+/// # };
 /// ```
 pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
     let tag_ids = tags.into_iter().map(|handle| handle.id).collect::<Vec<_>>();
@@ -167,7 +184,9 @@ pub fn remove(tags: impl IntoIterator<Item = TagHandle>) {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
+/// # use pinnacle_api::tag;
+/// # use pinnacle_api::signal::TagSignal;
 /// tag::connect_signal(TagSignal::Active(Box::new(|tag, active| {
 ///     println!("Tag is active = {active}");
 /// })));
@@ -196,12 +215,16 @@ impl TagHandle {
     /// # Examples
     ///
     /// ```no_run
+    /// # use pinnacle_api::tag;
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
+    /// # || {
     /// tag::get("2")?.switch_to(); // Displays Firefox and Discord
     /// tag::get("3")?.switch_to(); // Displays Steam
+    /// # Some(())
+    /// # };
     /// ```
     pub fn switch_to(&self) {
         let tag_id = self.id;
@@ -221,14 +244,18 @@ impl TagHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::tag;
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
+    /// # || {
     /// tag::get("2")?.set_active(true);  // Displays Firefox and Discord
     /// tag::get("3")?.set_active(true);  // Displays Firefox, Discord, and Steam
     /// tag::get("2")?.set_active(false); // Displays Steam
+    /// # Some(())
+    /// # };
     /// ```
     pub fn set_active(&self, set: bool) {
         let tag_id = self.id;
@@ -256,14 +283,18 @@ impl TagHandle {
     /// # Examples
     ///
     /// ```no_run
+    /// # use pinnacle_api::tag;
     /// // Assume the focused output has the following inactive tags and windows:
     /// // "1": Alacritty
     /// // "2": Firefox, Discord
     /// // "3": Steam
-    /// tag::get("2")?.toggle(); // Displays Firefox and Discord
-    /// tag::get("3")?.toggle(); // Displays Firefox, Discord, and Steam
-    /// tag::get("3")?.toggle(); // Displays Firefox, Discord
-    /// tag::get("2")?.toggle(); // Displays nothing
+    /// # || {
+    /// tag::get("2")?.toggle_active(); // Displays Firefox and Discord
+    /// tag::get("3")?.toggle_active(); // Displays Firefox, Discord, and Steam
+    /// tag::get("3")?.toggle_active(); // Displays Firefox, Discord
+    /// tag::get("2")?.toggle_active(); // Displays nothing
+    /// # Some(())
+    /// # };
     /// ```
     pub fn toggle_active(&self) {
         let tag_id = self.id;
@@ -281,12 +312,17 @@ impl TagHandle {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
+    /// # use pinnacle_api::tag;
+    /// # use pinnacle_api::output;
+    /// # || {
     /// let tags =
-    ///     tag::add(output.get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).collect::<Vec<_>>;
+    ///     tag::add(&output::get_by_name("DP-1")?, ["1", "2", "Buckle", "Shoe"]).collect::<Vec<_>>();
     ///
     /// tags[1].remove();
     /// tags[3].remove();
+    /// # Some(())
+    /// # };
     /// // "DP-1" now only has tags "1" and "Buckle"
     /// ```
     pub fn remove(&self) {
