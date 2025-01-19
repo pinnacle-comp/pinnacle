@@ -1,9 +1,11 @@
-use super::{GapsAll, LayoutDir, LayoutGenerator, LayoutNode};
+use crate::util::Axis;
+
+use super::{Gaps, LayoutDir, LayoutGenerator, LayoutNode};
 
 #[derive(Debug, Clone)]
 pub struct Line {
-    pub outer_gaps: GapsAll,
-    pub inner_gaps: GapsAll,
+    pub outer_gaps: Gaps,
+    pub inner_gaps: Gaps,
     pub direction: LayoutDir,
     pub reversed: bool,
 }
@@ -60,8 +62,8 @@ pub enum MasterSide {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MasterStackLayout {
     /// Gaps between windows.
-    pub inner_gaps: GapsAll,
-    pub outer_gaps: GapsAll,
+    pub inner_gaps: Gaps,
+    pub outer_gaps: Gaps,
     /// The proportion of the output the master area will take up.
     ///
     /// This will be clamped between 0.1 and 0.9.
@@ -85,8 +87,8 @@ pub struct MasterStackLayout {
 impl Default for MasterStackLayout {
     fn default() -> Self {
         Self {
-            outer_gaps: GapsAll::from(4.0),
-            inner_gaps: GapsAll::from(4.0),
+            outer_gaps: Gaps::from(4.0),
+            inner_gaps: Gaps::from(4.0),
             master_factor: 0.5,
             master_side: MasterSide::Left,
             master_count: 1,
@@ -159,8 +161,8 @@ impl LayoutGenerator for MasterStackLayout {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DwindleLayout {
     /// Gaps between windows.
-    pub inner_gaps: GapsAll,
-    pub outer_gaps: GapsAll,
+    pub inner_gaps: Gaps,
+    pub outer_gaps: Gaps,
 }
 
 impl Default for DwindleLayout {
@@ -225,8 +227,8 @@ impl LayoutGenerator for DwindleLayout {
 /// towards the bottom right corner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpiralLayout {
-    pub inner_gaps: GapsAll,
-    pub outer_gaps: GapsAll,
+    pub inner_gaps: Gaps,
+    pub outer_gaps: Gaps,
 }
 
 impl Default for SpiralLayout {
@@ -306,8 +308,8 @@ pub enum CornerLocation {
 /// horizontal and vertical stack flanking it on the other two sides.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CornerLayout {
-    pub inner_gaps: GapsAll,
-    pub outer_gaps: GapsAll,
+    pub inner_gaps: Gaps,
+    pub outer_gaps: Gaps,
     /// The proportion of the output that the width of the window takes up.
     ///
     /// Defaults to 0.5.
@@ -363,7 +365,7 @@ impl LayoutGenerator for CornerLayout {
             outer_gaps: 0.0.into(),
             inner_gaps: self.inner_gaps,
             direction: LayoutDir::Column,
-            reversed: false, // TODO:
+            reversed: false,
         };
 
         let vert_stack_node = vert_stack.layout(vert_count);
@@ -392,7 +394,7 @@ impl LayoutGenerator for CornerLayout {
             outer_gaps: 0.0.into(),
             inner_gaps: self.inner_gaps,
             direction: LayoutDir::Row,
-            reversed: false, // TODO:
+            reversed: false,
         };
 
         let horiz_stack_node = horiz_stack.layout(horiz_count);
@@ -411,6 +413,95 @@ impl LayoutGenerator for CornerLayout {
         let traversal_overrides = (0..win_count).map(|idx| (idx, vec![(idx % 2 == 1) as u32]));
 
         root.set_traversal_overrides(traversal_overrides);
+
+        root
+    }
+}
+
+/// A [`LayoutGenerator`] that attempts to layout windows such that
+/// they are the same size.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct FairLayout {
+    pub inner_gaps: Gaps,
+    pub outer_gaps: Gaps,
+    /// Which axis the lines of windows will run.
+    ///
+    /// Defaults to [`Axis::Vertical`].
+    pub axis: Axis,
+}
+
+impl Default for FairLayout {
+    fn default() -> Self {
+        Self {
+            inner_gaps: 4.0.into(),
+            outer_gaps: 4.0.into(),
+            axis: Axis::Vertical,
+        }
+    }
+}
+
+impl LayoutGenerator for FairLayout {
+    fn layout(&self, win_count: u32) -> LayoutNode {
+        let root = LayoutNode::new_with_label("builtin.fair");
+        root.set_gaps(self.outer_gaps);
+
+        if win_count == 0 {
+            return root;
+        }
+
+        if win_count == 1 {
+            let child = LayoutNode::new();
+            child.set_gaps(self.inner_gaps);
+            root.add_child(child);
+            return root;
+        }
+
+        if win_count == 2 {
+            let child = LayoutNode::new();
+            child.set_gaps(self.inner_gaps);
+            root.add_child(child);
+            let child2 = LayoutNode::new();
+            child2.set_gaps(self.inner_gaps);
+            root.add_child(child2);
+            return root;
+        }
+
+        let line_count = (win_count as f32).sqrt().round() as u32;
+
+        let mut wins_per_line = Vec::new();
+
+        let max_per_line = if win_count > line_count * line_count {
+            line_count + 1
+        } else {
+            line_count
+        };
+
+        for i in 1..=win_count {
+            let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
+            if wins_per_line.get(index).is_none() {
+                wins_per_line.push(0);
+            }
+            wins_per_line[index] += 1;
+        }
+
+        let line = Line {
+            outer_gaps: 0.0.into(),
+            inner_gaps: self.inner_gaps,
+            direction: match self.axis {
+                Axis::Horizontal => LayoutDir::Row,
+                Axis::Vertical => LayoutDir::Column,
+            },
+            reversed: false,
+        };
+
+        let lines = wins_per_line.into_iter().map(|win_ct| line.layout(win_ct));
+
+        root.set_children(lines);
+
+        root.set_dir(match self.axis {
+            Axis::Horizontal => LayoutDir::Column,
+            Axis::Vertical => LayoutDir::Row,
+        });
 
         root
     }

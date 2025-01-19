@@ -4,7 +4,9 @@ use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
+use pinnacle_api::layout::generator::CornerLayout;
 use pinnacle_api::layout::generator::DwindleLayout;
+use pinnacle_api::layout::generator::FairLayout;
 use pinnacle_api::layout::generator::MasterSide;
 use pinnacle_api::layout::generator::MasterStackLayout;
 use pinnacle_api::layout::CyclingLayoutManager;
@@ -220,7 +222,7 @@ async fn config() {
         }) as _,
         Box::<DwindleLayout>::default() as _,
         // Box::<SpiralLayout>::default() as _,
-        Box::<layout::generator::CornerLayout>::default() as _,
+        Box::<CornerLayout>::default() as _,
         // Box::new(CornerLayout {
         //     corner_loc: CornerLocation::TopRight,
         //     ..Default::default()
@@ -233,11 +235,11 @@ async fn config() {
         //     corner_loc: CornerLocation::BottomRight,
         //     ..Default::default()
         // }) as _,
-        // Box::<FairLayout>::default() as _,
-        // Box::new(FairLayout {
-        //     axis: Axis::Horizontal,
-        //     ..Default::default()
-        // }) as _,
+        Box::<FairLayout>::default() as _,
+        Box::new(FairLayout {
+            axis: Axis::Horizontal,
+            ..Default::default()
+        }) as _,
     ]));
 
     let mut layout_requester_clone = layout_requester.clone();

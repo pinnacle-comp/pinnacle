@@ -115,7 +115,7 @@ impl LayoutNodeInner {
             traversal_overrides: Default::default(),
             style: Style {
                 layout_dir: LayoutDir::Row,
-                gaps: GapsAll::default(),
+                gaps: Gaps::default(),
                 size_proportion: 1.0,
             },
             children: Vec::new(),
@@ -182,7 +182,7 @@ impl LayoutNode {
         self.inner.borrow_mut().style.size_proportion = proportion;
     }
 
-    pub fn set_gaps(&self, gaps: impl Into<GapsAll>) {
+    pub fn set_gaps(&self, gaps: impl Into<Gaps>) {
         self.inner.borrow_mut().style.gaps = gaps.into();
     }
 }
@@ -194,14 +194,14 @@ pub enum LayoutDir {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct GapsAll {
+pub struct Gaps {
     pub left: f32,
     pub right: f32,
     pub top: f32,
     pub bottom: f32,
 }
 
-impl GapsAll {
+impl Gaps {
     pub fn new() -> Self {
         Default::default()
     }
@@ -211,7 +211,7 @@ impl GapsAll {
     }
 }
 
-impl From<f32> for GapsAll {
+impl From<f32> for Gaps {
     fn from(value: f32) -> Self {
         Self {
             left: value,
@@ -225,7 +225,7 @@ impl From<f32> for GapsAll {
 #[derive(Debug, Clone)]
 pub struct Style {
     layout_dir: LayoutDir,
-    gaps: GapsAll,
+    gaps: Gaps,
     size_proportion: f32,
 }
 
@@ -299,35 +299,6 @@ pub trait LayoutManager {
 pub trait LayoutGenerator {
     /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
     fn layout(&self, window_count: u32) -> LayoutNode;
-}
-
-/// Gaps between windows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Gaps {
-    /// An absolute amount of pixels between windows and the edge of the output.
-    ///
-    /// For example, `Gaps::Absolute(8)` means there will be 8 pixels between each window
-    /// and between the edge of the output.
-    Absolute(u32),
-    /// A split amount of pixels between windows and the edge of the output.
-    Split {
-        /// The amount of gap in pixels around *each* window.
-        ///
-        /// For example, `Gaps::Split { inner: 2, ... }` means there will be
-        /// 4 pixels between windows, 2 around each window.
-        inner: u32,
-        /// The amount of gap in pixels inset from the edge of the output.
-        outer: u32,
-    },
-}
-
-impl Gaps {
-    fn to_inner_outer(self) -> (f32, f32) {
-        match self {
-            Gaps::Absolute(abs) => (abs as f32 / 2.0, abs as f32 / 2.0),
-            Gaps::Split { inner, outer } => (inner as f32, outer as f32),
-        }
-    }
 }
 
 /// A [`LayoutManager`] that keeps track of layouts per output and provides
@@ -458,103 +429,3 @@ impl LayoutRequester<CyclingLayoutManager> {
         lock.cycle_layout_backward(tag);
     }
 }
-
-// /// A layout generator that does nothing.
-// struct NoopLayout;
-//
-// impl LayoutGenerator for NoopLayout {
-//     fn layout(&self, _args: &LayoutArgs) -> LayoutTree {
-//         LayoutTree::default()
-//     }
-// }
-//
-//
-// /// A [`LayoutGenerator`] that attempts to layout windows such that
-// /// they are the same size.
-// #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-// pub struct FairLayout {
-//     /// The proportion of the output that the width of the window takes up.
-//     ///
-//     /// Defaults to 0.5.
-//     pub gaps: Gaps,
-//     /// Which axis the lines of windows will run.
-//     ///
-//     /// Defaults to [`Axis::Vertical`].
-//     pub axis: Axis,
-// }
-//
-// impl Default for FairLayout {
-//     fn default() -> Self {
-//         Self {
-//             gaps: Gaps::Absolute(8),
-//             axis: Axis::Vertical,
-//         }
-//     }
-// }
-//
-// impl LayoutGenerator for FairLayout {
-//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-//         let win_count = args.window_count;
-//
-//         if win_count == 0 {
-//             return LayoutTree::default();
-//         }
-//
-//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-//         let root = tree.new_node();
-//         root.set_dir(match self.axis {
-//             Axis::Horizontal => LayoutDir::Column,
-//             Axis::Vertical => LayoutDir::Row,
-//         });
-//
-//         tree.set_root(root.clone());
-//
-//         if win_count == 1 {
-//             return tree;
-//         }
-//
-//         if win_count == 2 {
-//             let child1 = tree.new_node();
-//             let child2 = tree.new_node();
-//             root.set_children([child1, child2]);
-//             return tree;
-//         }
-//
-//         let line_count = (win_count as f32).sqrt().round() as u32;
-//
-//         let mut wins_per_line = Vec::new();
-//
-//         let max_per_line = if win_count > line_count * line_count {
-//             line_count + 1
-//         } else {
-//             line_count
-//         };
-//
-//         for i in 1..=win_count {
-//             let index = (i as f32 / max_per_line as f32).ceil() as usize - 1;
-//             if wins_per_line.get(index).is_none() {
-//                 wins_per_line.push(0);
-//             }
-//             wins_per_line[index] += 1;
-//         }
-//
-//         let lines = wins_per_line.into_iter().map(|win_ct| {
-//             let line_root = tree.new_node();
-//             line_root.set_dir(match self.axis {
-//                 Axis::Horizontal => LayoutDir::Row,
-//                 Axis::Vertical => LayoutDir::Column,
-//             });
-//
-//             for _ in 0..win_ct {
-//                 let child = tree.new_node();
-//                 line_root.add_child(child);
-//             }
-//
-//             line_root
-//         });
-//
-//         root.set_children(lines);
-//
-//         tree
-//     }
-// }
