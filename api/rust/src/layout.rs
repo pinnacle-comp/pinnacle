@@ -17,7 +17,7 @@ use std::{
 
 use pinnacle_api_defs::pinnacle::layout::{
     self,
-    v1::{layout_request, LayoutRequest},
+    v1::{layout_request, LayoutRequest, TraversalOverrides},
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
@@ -63,7 +63,11 @@ where
                     .map(|id| TagHandle { id })
                     .collect(),
             };
-            let tree = manager.lock().unwrap().active_layout(&args).layout(args);
+            let tree = manager
+                .lock()
+                .unwrap()
+                .active_layout(&args)
+                .layout(args.window_count);
             from_client
                 .send(LayoutRequest {
                     request: Some(layout_request::Request::TreeResponse(
@@ -98,6 +102,7 @@ impl PartialEq for LayoutNode {
 struct LayoutNodeInner {
     label: Option<String>,
     traversal_index: u32,
+    traversal_overrides: HashMap<u32, Vec<u32>>,
     style: Style,
     children: Vec<LayoutNode>,
 }
@@ -107,6 +112,7 @@ impl LayoutNodeInner {
         LayoutNodeInner {
             label,
             traversal_index,
+            traversal_overrides: Default::default(),
             style: Style {
                 layout_dir: LayoutDir::Row,
                 gaps: GapsAll::default(),
@@ -146,6 +152,10 @@ impl LayoutNode {
                 index,
             ))),
         }
+    }
+
+    pub fn set_traversal_overrides(&self, overrides: impl IntoIterator<Item = (u32, Vec<u32>)>) {
+        self.inner.borrow_mut().traversal_overrides = overrides.into_iter().collect();
     }
 
     pub fn add_child(&self, child: Self) {
@@ -226,6 +236,20 @@ impl From<LayoutNode> for layout::v1::LayoutNode {
 
             layout::v1::LayoutNode {
                 label: node.inner.borrow().label.clone(),
+                traversal_overrides: node
+                    .inner
+                    .borrow()
+                    .traversal_overrides
+                    .iter()
+                    .map(|(idx, overrides)| {
+                        (
+                            *idx,
+                            TraversalOverrides {
+                                overrides: overrides.clone(),
+                            },
+                        )
+                    })
+                    .collect(),
                 traversal_index: node.inner.borrow().traversal_index,
                 style: Some(layout::v1::NodeStyle {
                     flex_dir: match node.inner.borrow().style.layout_dir {
@@ -274,7 +298,7 @@ pub trait LayoutManager {
 /// Types that can generate layouts by computing a vector of [geometries][Geometry].
 pub trait LayoutGenerator {
     /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
-    fn layout(&self, args: LayoutArgs) -> LayoutNode;
+    fn layout(&self, window_count: u32) -> LayoutNode;
 }
 
 /// Gaps between windows.
@@ -444,197 +468,6 @@ impl LayoutRequester<CyclingLayoutManager> {
 //     }
 // }
 //
-// /// A [`LayoutGenerator`] that lays out windows in a spiral.
-// ///
-// /// This is similar to the [`DwindleLayout`] but in a spiral instead of
-// /// towards the bottom right corner.
-// #[derive(Clone, Debug, PartialEq)]
-// pub struct SpiralLayout {
-//     /// Gaps between windows.
-//     ///
-//     /// Defaults to `Gaps::Absolute(8)`.
-//     pub gaps: Gaps,
-//     /// The ratio for each dwindle split.
-//     ///
-//     /// The first split will use the factor at key `1`,
-//     /// the second at key `2`, and so on.
-//     ///
-//     /// Splits without a factor will default to 0.5.
-//     pub split_factors: HashMap<usize, f32>,
-// }
-//
-// impl Default for SpiralLayout {
-//     fn default() -> Self {
-//         Self {
-//             gaps: Gaps::Absolute(8),
-//             split_factors: Default::default(),
-//         }
-//     }
-// }
-//
-// impl LayoutGenerator for SpiralLayout {
-//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-//         let win_count = args.window_count;
-//
-//         if win_count == 0 {
-//             return LayoutTree::default();
-//         }
-//
-//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-//         let root = tree.new_node();
-//         root.set_dir(LayoutDir::Row);
-//
-//         tree.set_root(root.clone());
-//
-//         if win_count == 1 {
-//             return tree;
-//         }
-//
-//         let windows_left = win_count - 1;
-//
-//         let mut current_node = root;
-//
-//         for i in 0..windows_left {
-//             let child1 = tree.new_node();
-//             child1.set_dir(match i % 2 == 0 {
-//                 true => LayoutDir::Column,
-//                 false => LayoutDir::Row,
-//             });
-//             current_node.add_child(child1.clone());
-//
-//             let child2 = tree.new_node();
-//             child2.set_dir(match i % 2 == 0 {
-//                 true => LayoutDir::Column,
-//                 false => LayoutDir::Row,
-//             });
-//             current_node.add_child(child2.clone());
-//
-//             current_node = match i % 4 {
-//                 0 | 1 => child2,
-//                 2 | 3 => child1,
-//                 _ => unreachable!(),
-//             };
-//         }
-//
-//         tree
-//     }
-// }
-//
-// /// Which corner the corner window will in.
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum CornerLocation {
-//     /// The corner window will be in the top left.
-//     TopLeft,
-//     /// The corner window will be in the top right.
-//     TopRight,
-//     /// The corner window will be in the bottom left.
-//     BottomLeft,
-//     /// The corner window will be in the bottom right.
-//     BottomRight,
-// }
-//
-// /// A [`LayoutGenerator`] that has one main corner window and a
-// /// horizontal and vertical stack flanking it on the other two sides.
-// #[derive(Debug, Clone, Copy, PartialEq)]
-// pub struct CornerLayout {
-//     /// Gaps between windows.
-//     ///
-//     /// Defaults to `Gaps::Absolute(8)`.
-//     pub gaps: Gaps,
-//     /// The proportion of the output that the width of the window takes up.
-//     ///
-//     /// Defaults to 0.5.
-//     pub corner_width_factor: f32,
-//     /// The proportion of the output that the height of the window takes up.
-//     ///
-//     /// Defaults to 0.5.
-//     pub corner_height_factor: f32,
-//     /// The location of the corner window.
-//     pub corner_loc: CornerLocation,
-// }
-//
-// impl Default for CornerLayout {
-//     fn default() -> Self {
-//         Self {
-//             gaps: Gaps::Absolute(8),
-//             corner_width_factor: 0.5,
-//             corner_height_factor: 0.5,
-//             corner_loc: CornerLocation::TopLeft,
-//         }
-//     }
-// }
-//
-// impl LayoutGenerator for CornerLayout {
-//     fn layout(&self, args: &LayoutArgs) -> LayoutTree {
-//         let win_count = args.window_count;
-//
-//         if win_count == 0 {
-//             return LayoutTree::default();
-//         }
-//
-//         let mut tree = LayoutTree::new(0).with_gaps(self.gaps);
-//         let root = tree.new_node();
-//         root.set_dir(LayoutDir::Row);
-//
-//         tree.set_root(root.clone());
-//
-//         if win_count == 1 {
-//             return tree;
-//         }
-//
-//         let corner_width_factor = self.corner_width_factor.clamp(0.1, 0.9);
-//         let corner_height_factor = self.corner_height_factor.clamp(0.1, 0.9);
-//
-//         let corner_and_horiz_stack_node = tree.new_node();
-//         corner_and_horiz_stack_node.set_dir(LayoutDir::Column);
-//         corner_and_horiz_stack_node.set_size_proportion(corner_width_factor * 10.0);
-//
-//         let vert_stack_node = tree.new_node();
-//         vert_stack_node.set_dir(LayoutDir::Column);
-//         vert_stack_node.set_size_proportion((1.0 - corner_width_factor) * 10.0);
-//
-//         root.set_children(match self.corner_loc {
-//             CornerLocation::TopLeft | CornerLocation::BottomLeft => {
-//                 [corner_and_horiz_stack_node.clone(), vert_stack_node.clone()]
-//             }
-//             CornerLocation::TopRight | CornerLocation::BottomRight => {
-//                 [vert_stack_node.clone(), corner_and_horiz_stack_node.clone()]
-//             }
-//         });
-//
-//         if win_count == 2 {
-//             return tree;
-//         }
-//
-//         let corner_node = tree.new_node();
-//         corner_node.set_size_proportion(corner_height_factor * 10.0);
-//
-//         let horiz_stack_node = tree.new_node();
-//         horiz_stack_node.set_dir(LayoutDir::Row);
-//         horiz_stack_node.set_size_proportion((1.0 - corner_height_factor) * 10.0);
-//
-//         corner_and_horiz_stack_node.set_children(match self.corner_loc {
-//             CornerLocation::TopLeft | CornerLocation::TopRight => {
-//                 [corner_node, horiz_stack_node.clone()]
-//             }
-//             CornerLocation::BottomLeft | CornerLocation::BottomRight => {
-//                 [horiz_stack_node.clone(), corner_node]
-//             }
-//         });
-//
-//         for i in 0..win_count - 1 {
-//             if i % 2 == 0 {
-//                 let child = tree.new_node();
-//                 vert_stack_node.add_child(child);
-//             } else {
-//                 let child = tree.new_node();
-//                 horiz_stack_node.add_child(child);
-//             }
-//         }
-//
-//         tree
-//     }
-// }
 //
 // /// A [`LayoutGenerator`] that attempts to layout windows such that
 // /// they are the same size.

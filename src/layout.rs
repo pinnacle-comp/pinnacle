@@ -241,9 +241,9 @@ impl State {
         let tree_entry = self.pinnacle.layout_state.layout_trees.entry(tree_id);
         let tree = match tree_entry {
             Entry::Occupied(occupied_entry) => {
-                let tree_inner = occupied_entry.into_mut();
-                tree_inner.diff(root_node);
-                tree_inner
+                let tree = occupied_entry.into_mut();
+                tree.diff(root_node);
+                tree
             }
             Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
         };

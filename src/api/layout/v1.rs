@@ -118,6 +118,11 @@ impl TryFrom<layout::v1::LayoutNode> for crate::layout::tree::LayoutNode {
         Ok(Self {
             label: node.label,
             traversal_index: node.traversal_index,
+            traversal_overrides: node
+                .traversal_overrides
+                .into_iter()
+                .map(|(idx, overrides)| (idx, overrides.overrides))
+                .collect(),
             style: taffy_style,
             children: node
                 .children

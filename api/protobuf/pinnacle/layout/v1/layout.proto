@@ -12,8 +12,13 @@ message Gaps {
 message LayoutNode {
     optional string label = 1;
     uint32 traversal_index = 2;
-    NodeStyle style = 3;
-    repeated LayoutNode children = 4;
+    map<uint32, TraversalOverrides> traversal_overrides = 3;
+    NodeStyle style = 4;
+    repeated LayoutNode children = 5;
+}
+
+message TraversalOverrides {
+    repeated uint32 overrides = 1;
 }
 
 enum FlexDir {

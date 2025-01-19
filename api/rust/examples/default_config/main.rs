@@ -220,7 +220,7 @@ async fn config() {
         }) as _,
         Box::<DwindleLayout>::default() as _,
         // Box::<SpiralLayout>::default() as _,
-        // Box::<CornerLayout>::default() as _,
+        Box::<layout::generator::CornerLayout>::default() as _,
         // Box::new(CornerLayout {
         //     corner_loc: CornerLocation::TopRight,
         //     ..Default::default()
