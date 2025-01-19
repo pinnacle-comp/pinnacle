@@ -1,15 +1,22 @@
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use pinnacle_api::input;
 use pinnacle_api::input::Bind;
 use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
-use pinnacle_api::layout::generator::CornerLayout;
-use pinnacle_api::layout::generator::DwindleLayout;
-use pinnacle_api::layout::generator::FairLayout;
+use pinnacle_api::layout::generator::Corner
+use pinnacle_api::layout::generator::CornerLocation;
+use pinnacle_api::layout::generator::Cycle;
+use pinnacle_api::layout::generator::Dwindle
+use pinnacle_api::layout::generator::Fair
 use pinnacle_api::layout::generator::MasterSide;
-use pinnacle_api::layout::generator::MasterStackLayout;
-use pinnacle_api::layout::CyclingLayoutManager;
+use pinnacle_api::layout::generator::MasterStack
+use pinnacle_api::layout::generator::Spiral
+use pinnacle_api::layout::LayoutGenerator;
+use pinnacle_api::layout::LayoutNode;
 use pinnacle_api::output;
 use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
@@ -206,59 +213,82 @@ async fn config() {
     //
     // It takes in some layout generators that need to be boxed and dyn-coerced.
 
-    let layout_requester = layout::set_manager(CyclingLayoutManager::new([
-        Box::<MasterStackLayout>::default() as _,
-        Box::new(MasterStackLayout {
+    fn into_box<'a, T: LayoutGenerator + Send + 'a>(
+        generator: T,
+    ) -> Box<dyn LayoutGenerator + Send + 'a> {
+        Box::new(generator) as _
+    }
+
+    let cycler = Arc::new(Mutex::new(Cycle::new([
+        into_box(MasterStackLault()),
+        into_box(MasterStack
             master_side: MasterSide::Right,
             ..Default::default()
-        }) as _,
-        Box::new(MasterStackLayout {
+        }),
+        into_box(MasterStack
             master_side: MasterSide::Top,
             ..Default::default()
-        }) as _,
-        Box::new(MasterStackLayout {
+        }),
+        into_box(MasterStack
             master_side: MasterSide::Bottom,
             ..Default::default()
-        }) as _,
-        Box::<DwindleLayout>::default() as _,
-        // Box::<SpiralLayout>::default() as _,
-        Box::<CornerLayout>::default() as _,
-        // Box::new(CornerLayout {
-        //     corner_loc: CornerLocation::TopRight,
-        //     ..Default::default()
-        // }) as _,
-        // Box::new(CornerLayout {
-        //     corner_loc: CornerLocation::BottomLeft,
-        //     ..Default::default()
-        // }) as _,
-        // Box::new(CornerLayout {
-        //     corner_loc: CornerLocation::BottomRight,
-        //     ..Default::default()
-        // }) as _,
-        Box::<FairLayout>::default() as _,
-        Box::new(FairLayout {
+        }),
+        into_box(Dwindleult()),
+        into_box(Spiralult()),
+        into_box(Cornerult()),
+        into_box(Corner
+            corner_loc: CornerLocation::TopRight,
+            ..Default::default()
+        }),
+        into_box(Corner
+            corner_loc: CornerLocation::BottomLeft,
+            ..Default::default()
+        }),
+        into_box(Corner
+            corner_loc: CornerLocation::BottomRight,
+            ..Default::default()
+        }),
+        into_box(Fairult()),
+        into_box(Fair
             axis: Axis::Horizontal,
             ..Default::default()
-        }) as _,
-    ]));
+        }),
+    ])));
 
-    let mut layout_requester_clone = layout_requester.clone();
+    let layout_requester = layout::manage({
+        let cycler = cycler.clone();
+        move |args| {
+            let Some(tag) = args.tags.first() else {
+                return LayoutNode::new();
+            };
+            let mut generator = cycler.lock().unwrap();
+            generator.set_current_tag(tag.clone());
+            generator.layout(args.window_count)
+        }
+    });
 
     // `mod_key + space` cycles to the next layout
     input::keybind(mod_key, Keysym::space)
-        .on_press(move || {
-            let Some(focused_op) = output::get_focused() else {
-                return;
-            };
-            let Some(first_active_tag) = focused_op
-                .tags()
-                .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
-            else {
-                return;
-            };
+        .on_press({
+            let cycler = cycler.clone();
+            let requester = layout_requester.clone();
+            move || {
+                let Some(focused_op) = output::get_focused() else {
+                    return;
+                };
+                let Some(first_active_tag) = focused_op
+                    .tags()
+                    .batch_find(|tag| Box::pin(tag.active_async()), |active| *active)
+                else {
+                    return;
+                };
 
-            layout_requester.cycle_layout_forward(&first_active_tag);
-            layout_requester.request_layout_on_output(&focused_op);
+                cycler
+                    .lock()
+                    .unwrap()
+                    .cycle_layout_forward(&first_active_tag);
+                requester.request_layout_on_output(&focused_op);
+            }
         })
         .group("Layout")
         .description("Cycle the layout forward");
@@ -276,8 +306,11 @@ async fn config() {
                 return;
             };
 
-            layout_requester_clone.cycle_layout_backward(&first_active_tag);
-            layout_requester_clone.request_layout_on_output(&focused_op);
+            cycler
+                .lock()
+                .unwrap()
+                .cycle_layout_backward(&first_active_tag);
+            layout_requester.request_layout_on_output(&focused_op);
         })
         .group("Layout")
         .description("Cycle the layout backward");

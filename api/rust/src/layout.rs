@@ -8,12 +8,7 @@
 
 pub mod generator;
 
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use pinnacle_api_defs::pinnacle::layout::{
     self,
@@ -22,17 +17,11 @@ use pinnacle_api_defs::pinnacle::layout::{
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio_stream::StreamExt;
 
-use crate::{client::Client, output::OutputHandle, tag::TagHandle, util::Axis, BlockOnTokio};
+use crate::{client::Client, output::OutputHandle, tag::TagHandle, BlockOnTokio};
 
-/// Consume the given [`LayoutManager`] and set it as the global layout handler.
-///
-/// This returns a [`LayoutRequester`] that allows you to manually request layouts from
-/// the compositor. The requester also contains your layout manager wrapped in an `Arc<Mutex>`
-/// to allow you to mutate its settings.
-pub fn set_manager<M>(manager: M) -> LayoutRequester<M>
-where
-    M: LayoutManager + Send + 'static,
-{
+pub fn manage(
+    mut on_layout: impl FnMut(LayoutArgs) -> LayoutNode + Send + 'static,
+) -> LayoutRequester {
     let (from_client, to_server) = unbounded_channel::<LayoutRequest>();
     let to_server_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(to_server);
     let mut from_server = Client::layout()
@@ -43,11 +32,8 @@ where
 
     let from_client_clone = from_client.clone();
 
-    let manager = Arc::new(Mutex::new(manager));
-
     let requester = LayoutRequester {
         sender: from_client_clone,
-        manager: manager.clone(),
     };
 
     let fut = async move {
@@ -63,11 +49,7 @@ where
                     .map(|id| TagHandle { id })
                     .collect(),
             };
-            let tree = manager
-                .lock()
-                .unwrap()
-                .active_layout(&args)
-                .layout(args.window_count);
+            let tree = on_layout(args);
             from_client
                 .send(LayoutRequest {
                     request: Some(layout_request::Request::TreeResponse(
@@ -289,102 +271,19 @@ pub struct LayoutArgs {
     pub tags: Vec<TagHandle>,
 }
 
-/// Types that can manage layouts.
-pub trait LayoutManager {
-    /// Get the currently active layout for layouting.
-    fn active_layout(&mut self, args: &LayoutArgs) -> &dyn LayoutGenerator;
-}
-
 /// Types that can generate layouts by computing a vector of [geometries][Geometry].
 pub trait LayoutGenerator {
     /// Generate a vector of [geometries][Geometry] using the given [`LayoutArgs`].
     fn layout(&self, window_count: u32) -> LayoutNode;
 }
 
-/// A [`LayoutManager`] that keeps track of layouts per output and provides
-/// methods to cycle between them.
-pub struct CyclingLayoutManager {
-    layouts: Vec<Box<dyn LayoutGenerator + Send>>,
-    tag_indices: HashMap<u32, usize>,
-}
-
-impl CyclingLayoutManager {
-    /// Create a new [`CyclingLayoutManager`] from the given [`LayoutGenerator`]s.
-    ///
-    /// `LayoutGenerator`s must be boxed then coerced to trait objects, so you
-    /// will need to do an unsizing cast to use them here.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::layout::CyclingLayoutManager;
-    /// use pinnacle_api::layout::{MasterStackLayout, DwindleLayout, CornerLayout};
-    ///
-    /// let cycling_layout_manager = CyclingLayoutManager::new([
-    ///     // The `as _` is necessary to coerce to a boxed trait object
-    ///     Box::<MasterStackLayout>::default() as _,
-    ///     Box::<DwindleLayout>::default() as _,
-    ///     Box::<CornerLayout>::default() as _,
-    /// ]);
-    /// ```
-    pub fn new(layouts: impl IntoIterator<Item = Box<dyn LayoutGenerator + Send>>) -> Self {
-        Self {
-            layouts: layouts.into_iter().collect(),
-            tag_indices: HashMap::default(),
-        }
-    }
-
-    /// Cycle the layout forward on the given tag.
-    pub fn cycle_layout_forward(&mut self, tag: &TagHandle) {
-        let index = self.tag_indices.entry(tag.id).or_default();
-        *index += 1;
-        if *index >= self.layouts.len() {
-            *index = 0;
-        }
-    }
-
-    /// Cycle the layout backward on the given tag.
-    pub fn cycle_layout_backward(&mut self, tag: &TagHandle) {
-        let index = self.tag_indices.entry(tag.id).or_default();
-        if let Some(i) = index.checked_sub(1) {
-            *index = i;
-        } else {
-            *index = self.layouts.len().saturating_sub(1);
-        }
-    }
-}
-
-impl LayoutManager for CyclingLayoutManager {
-    fn active_layout(&mut self, args: &LayoutArgs) -> &dyn LayoutGenerator {
-        let Some(first_tag) = args.tags.first() else {
-            panic!();
-        };
-
-        self.layouts
-            .get(*self.tag_indices.entry(first_tag.id).or_default())
-            .expect("no layouts in manager")
-            .as_ref()
-    }
-}
-
-/// A struct that can request layouts and provides access to a consumed [`LayoutManager`].
-#[derive(Debug)]
-pub struct LayoutRequester<T> {
+/// A struct that can request layouts.
+#[derive(Debug, Clone)]
+pub struct LayoutRequester {
     sender: UnboundedSender<LayoutRequest>,
-    /// The manager that was consumed, wrapped in an `Arc<Mutex>`.
-    pub manager: Arc<Mutex<T>>,
 }
 
-impl<T> Clone for LayoutRequester<T> {
-    fn clone(&self) -> Self {
-        Self {
-            sender: self.sender.clone(),
-            manager: self.manager.clone(),
-        }
-    }
-}
-
-impl<T> LayoutRequester<T> {
+impl LayoutRequester {
     /// Request a layout from the compositor.
     ///
     /// This uses the focused output for the request.
@@ -413,19 +312,5 @@ impl<T> LayoutRequester<T> {
                 )),
             })
             .unwrap();
-    }
-}
-
-impl LayoutRequester<CyclingLayoutManager> {
-    /// Cycle the layout forward for the given tag.
-    pub fn cycle_layout_forward(&self, tag: &TagHandle) {
-        let mut lock = self.manager.lock().unwrap();
-        lock.cycle_layout_forward(tag);
-    }
-
-    /// Cycle the layout backward for the given tag.
-    pub fn cycle_layout_backward(&mut self, tag: &TagHandle) {
-        let mut lock = self.manager.lock().unwrap();
-        lock.cycle_layout_backward(tag);
     }
 }
