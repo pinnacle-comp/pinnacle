@@ -43,7 +43,6 @@ pub struct WaitOutput {
 }
 
 impl ProcessState {
-    #[tracing::instrument(skip(self))]
     pub fn spawn(
         &mut self,
         cmd: &[String],

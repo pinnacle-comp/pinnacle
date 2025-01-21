@@ -4,16 +4,19 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local window_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1
-local window_service = require("pinnacle.grpc.defs").pinnacle.window.v0alpha1.WindowService
+local window_v1 = require("pinnacle.grpc.defs").pinnacle.window.v1
+local window_service = require("pinnacle.grpc.defs").pinnacle.window.v1.WindowService
+local defs = require("pinnacle.grpc.defs")
 
 local set_or_toggle = {
-    SET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
-    [true] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
-    UNSET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
-    [false] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
-    TOGGLE = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
+    SET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    [true] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    UNSET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    [false] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    TOGGLE = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
+
+local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.window.v1.LayoutMode
 
 ---@lcat nodoc
 ---@class WindowHandleModule
@@ -59,7 +62,7 @@ function window.get_all()
         return {}
     end
 
-    ---@cast response pinnacle.window.v0alpha1.GetResponse
+    ---@cast response pinnacle.window.v1.GetResponse
 
     local handles = window_handle.new_from_table(response.window_ids or {})
 
@@ -79,19 +82,19 @@ end
 function window.get_focused()
     local handles = window.get_all()
 
-    ---@type (fun(): WindowProperties)[]
+    ---@type (fun(): bool)[]
     local requests = {}
 
     for i, handle in ipairs(handles) do
         requests[i] = function()
-            return handle:props()
+            return handle:focused()
         end
     end
 
     local props = require("pinnacle.util").batch(requests)
 
-    for i, prop in ipairs(props) do
-        if prop.focused then
+    for i, focused in ipairs(props) do
+        if focused then
             return handles[i]
         end
     end
@@ -143,202 +146,14 @@ function window.begin_resize(button)
     end
 end
 
----@class WindowRuleCondition
----@field any WindowRuleCondition[]?
----@field all WindowRuleCondition[]?
----@field classes string[]?
----@field titles string[]?
----@field tags TagHandle[]?
-
----@enum (key) WindowState
-local window_state = {
-    tiled = window_v0alpha1.WindowState.WINDOW_STATE_TILED,
-    floating = window_v0alpha1.WindowState.WINDOW_STATE_FLOATING,
-    fullscreen = window_v0alpha1.WindowState.WINDOW_STATE_FULLSCREEN,
-    maximized = window_v0alpha1.WindowState.WINDOW_STATE_MAXIMIZED,
+---@enum (key) LayoutMode
+local layout_mode = {
+    tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
+    floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
+    fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
+    maximized = window_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
 }
-require("pinnacle.util").make_bijective(window_state)
-
----@class WindowRule
----@field output OutputHandle?
----@field tags TagHandle[]?
----@field floating boolean? -- Deprecated; use `state` with "floating" or "tiled" instead
----@field fullscreen_or_maximized FullscreenOrMaximized? -- Deprecated; use `state` with "fullscreen" or "maximized" instead
----@field x integer?
----@field y integer?
----@field width integer?
----@field height integer?
----@field decoration_mode ("client_side" | "server_side")?
----@field state WindowState?
-
----@enum (key) FullscreenOrMaximized
-local fullscreen_or_maximized = {
-    neither = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_NEITHER,
-    fullscreen = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_FULLSCREEN,
-    maximized = window_v0alpha1.FullscreenOrMaximized.FULLSCREEN_OR_MAXIMIZED_MAXIMIZED,
-}
-require("pinnacle.util").make_bijective(fullscreen_or_maximized)
-
----@param rule WindowRule
-local function process_window_rule(rule)
-    if rule.output then
-        ---@diagnostic disable-next-line: assign-type-mismatch
-        rule.output = rule.output.name
-    end
-
-    if rule.tags then
-        local ids = {}
-        for _, tg in ipairs(rule.tags) do
-            table.insert(ids, tg.id)
-        end
-        rule.tags = ids
-    end
-
-    if rule.fullscreen_or_maximized then
-        rule.fullscreen_or_maximized = fullscreen_or_maximized[rule.fullscreen_or_maximized]
-    end
-
-    if rule.decoration_mode then
-        if rule.decoration_mode == "client_side" then
-            ---@diagnostic disable-next-line: inject-field
-            rule.ssd = false
-        elseif rule.decoration_mode == "server_side" then
-            ---@diagnostic disable-next-line: inject-field
-            rule.ssd = true
-        end
-    end
-
-    if rule.state then
-        rule.state = window_state[rule.state]
-    end
-end
-
----@param cond WindowRuleCondition
-local function process_window_rule_cond(cond)
-    if cond.tags then
-        local ids = {}
-        for _, tg in ipairs(cond.tags) do
-            table.insert(ids, tg.id)
-        end
-        cond.tags = ids
-    end
-
-    if cond.all then
-        for _, con in ipairs(cond.all) do
-            process_window_rule_cond(con)
-        end
-    end
-
-    if cond.any then
-        for _, con in ipairs(cond.any) do
-            process_window_rule_cond(con)
-        end
-    end
-end
-
----Add a window rule.
----
----A window rule defines what properties a window will spawn with given certain conditions.
----For example, if Firefox is spawned, you can set it to open on a specific tag.
----
----This method takes in a table with two keys:
----
---- - `cond`: The condition for `rule` to apply to a new window.
---- - `rule`: What gets applied to the new window if `cond` is true.
----
----There are some important mechanics you should know when using window rules:
----
---- - All children inside an `all` block must be true for the block to be true.
---- - At least one child inside an `any` block must be true for the block to be true.
---- - The outermost block of a window rule condition is implicitly an `all` block.
---- - Within an `all` block, all items in each array must be true for the attribute to be true.
---- - Within an `any` block, only one item in each array needs to be true for the attribute to be true.
----
----`cond` can be a bit confusing and quite table heavy. Examples are shown below for guidance.
----
----#### Examples
----```lua
---- -- A simple window rule. This one will cause Firefox to open on tag "Browser".
----Window.add_window_rule({
----    cond = { classes = { "firefox" } },
----    rule = { tags = { Tag.get("Browser") } },
----})
----
---- -- To apply rules when *all* provided conditions are true, use `all`.
---- -- `all` takes an array of conditions and checks if all are true.
---- -- The following will open Steam fullscreen only if it opens on tag "5".
----Window.add_window_rule({
----    cond = {
----        all = {
----            {
----                classes = { "steam" },
----                tags = { Tag.get("5") },
----            }
----        }
----    },
----    rule = { fullscreen_or_maximized = "fullscreen" },
----})
----
---- -- The outermost block of a `cond` is implicitly an `all` block.
---- -- Thus, the above can be shortened to:
----Window.add_window_rule({
----    cond = {
----        classes = { "steam" },
----        tags = { Tag.get("5") },
----    },
----    rule = { fullscreen_or_maximized = "fullscreen" },
----})
----
---- -- `any` also exists to allow at least one provided condition to match.
---- -- The following will open either xterm or Alacritty floating.
----Window.add_window_rule({
----    cond = {
----        any = { { classes = { "xterm", "Alacritty" } } }
----    },
----    rule = { floating = true },
----})
----
---- -- You can arbitrarily nest `any` and `all` to achieve desired logic.
---- -- The following will open Discord, Thunderbird, or Firefox floating if they
---- -- open on either *all* of tags "A", "B", and "C" or both tags "1" and "2".
----Window.add_window_rule({
----    cond = {
----        all = { -- This `all` block is needed because the outermost block cannot be an array.
----            { any = {
----                { classes = { "firefox", "thunderbird", "discord" } }
----            } },
----            { any = {
----                -- Because `tag` is inside an `all` block,
----                -- the window must have all these tags for this to be true.
----                -- If it was in an `any` block, only one tag would need to match.
----                { all = {
----                    { tags = { Tag.get("A"), Tag.get("B"), Tag.get("C") } }
----                } },
----                { all = {
----                    { tags = { Tag.get("1"), Tag.get("2") } }
----                } },
----            } }
----        }
----    },
----    rule = { floating = true },
----})
----```
----
----@param rule { cond: WindowRuleCondition, rule: WindowRule } The condition and rule
-function window.add_window_rule(rule)
-    process_window_rule(rule.rule)
-
-    process_window_rule_cond(rule.cond)
-
-    local _, err = client:unary_request(window_service.AddWindowRule, {
-        cond = rule.cond,
-        rule = rule.rule,
-    })
-
-    if err then
-        log:error(err)
-    end
-end
+require("pinnacle.util").make_bijective(layout_mode)
 
 local signal_name_to_SignalName = {
     pointer_enter = "WindowPointerEnter",
@@ -386,6 +201,36 @@ function window.connect_signal(signals)
     return handles
 end
 
+---@param for_each fun(window: WindowHandle)
+function window.for_each_window(for_each)
+    local _stream, err = client:bidirectional_streaming_request(
+        window_service.WindowRule,
+        function(response, stream)
+            local handle = window_handle.new(response.new_window.window_id)
+
+            for_each(handle)
+
+            local chunk =
+                require("pinnacle.grpc.protobuf").encode("pinnacle.window.v1.WindowRuleRequest", {
+                    finished = {
+                        request_id = response.new_window.request_id,
+                    },
+                })
+
+            local success, err = pcall(stream.write_chunk, stream, chunk)
+
+            if not success then
+                print("error sending to stream:", err)
+            end
+        end
+    )
+
+    if err then
+        log:error("failed to start bidir stream")
+        os.exit(1)
+    end
+end
+
 ------------------------------------------------------------------------
 
 ---Send a close request to this window.
@@ -430,8 +275,10 @@ end
 ---```
 ---@param geo { x: integer?, y: integer?, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
-    local _, err =
-        client:unary_request(window_service.SetGeometry, { window_id = self.id, geometry = geo })
+    local _, err = client:unary_request(
+        window_service.SetGeometry,
+        { window_id = self.id, x = geo.x, y = geo.y, w = geo.width, h = geo.height }
+    )
 
     if err then
         log:error(err)
@@ -609,6 +456,23 @@ function WindowHandle:toggle_focused()
     end
 end
 
+---@param mode "client_side" | "server_side"
+function WindowHandle:set_decoration_mode(mode)
+    local _, err = client:unary_request(
+        window_service.SetDecorationMode,
+        {
+            window_id = self.id,
+            decoration_mode = mode == "client_side"
+                    and defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_CLIENT_SIDE
+                or defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_SERVER_SIDE,
+        }
+    )
+
+    if err then
+        log:error(err)
+    end
+end
+
 ---Move this window to the specified tag.
 ---
 ---This will remove all tags from this window and tag it with `tag`.
@@ -735,82 +599,54 @@ function WindowHandle:is_on_active_tag()
     return false
 end
 
----@class WindowProperties
----@field geometry { x: integer?, y: integer?, width: integer?, height: integer? }? The location and size of the window
----@field class string? The window's class
----@field title string? The window's title
----@field focused boolean? Whether or not the window is focused
----@field floating boolean? Whether or not the window is floating
----@field fullscreen_or_maximized FullscreenOrMaximized? Whether the window is fullscreen, maximized, or neither
----@field tags TagHandle[] The tags the window has
----@field state WindowState?
-
----Get all the properties of this window.
----
----@return WindowProperties
-function WindowHandle:props()
-    local response, err =
-        client:unary_request(window_service.GetProperties, { window_id = self.id })
-
-    if err then
-        log:error(err)
-        return {} -- TODO: make nullable
-    end
-
-    ---@cast response pinnacle.window.v0alpha1.GetPropertiesResponse
-
-    ---@type WindowProperties
-    local props = {
-        geometry = response.geometry,
-        class = response.class,
-        title = response.title,
-        focused = response.focused,
-        floating = response.floating,
-        fullscreen_or_maximized = fullscreen_or_maximized[response.fullscreen_or_maximized],
-        tags = response.tag_ids
-                ---@diagnostic disable-next-line: invisible
-                and require("pinnacle.tag").handle.new_from_table(response.tag_ids)
-            or {},
-        state = response.state and window_state[response.state],
-    }
-
-    return props
-end
-
 ---Get this window's location and size.
 ---
----Shorthand for `handle:props().geometry`.
----
----@return { x: integer?, y: integer?, width: integer?, height: integer? }?
-function WindowHandle:geometry()
-    return self:props().geometry
+---@return { x: integer, y: integer }?
+function WindowHandle:loc()
+    local loc, err = client:unary_request(window_service.GetLoc, { window_id = self.id })
+
+    ---@cast loc pinnacle.window.v1.GetLocResponse|nil
+
+    return loc and loc.loc
 end
 
 ---Get this window's class.
 ---
 ---Shorthand for `handle:props().class`.
 ---
----@return string?
-function WindowHandle:class()
-    return self:props().class
+---@return string
+function WindowHandle:app_id()
+    local response, err = client:unary_request(window_service.GetAppId, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetAppIdResponse|nil
+
+    return response and response.app_id
 end
 
 ---Get this window's title.
 ---
 ---Shorthand for `handle:props().title`.
 ---
----@return string?
+---@return string
 function WindowHandle:title()
-    return self:props().title
+    local response, err = client:unary_request(window_service.GetTitle, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetTitleResponse|nil
+
+    return response and response.title
 end
 
 ---Get whether or not this window is focused.
 ---
 ---Shorthand for `handle:props().focused`.
 ---
----@return boolean?
+---@return boolean
 function WindowHandle:focused()
-    return self:props().focused
+    local response, err = client:unary_request(window_service.GetFocused, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetFocusedResponse|nil
+
+    return response and response.focused
 end
 
 ---Get whether or not this window is floating.
@@ -819,49 +655,65 @@ end
 ---
 ---@return boolean
 function WindowHandle:floating()
-    return self:props().state == "floating"
+    local response, err =
+        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+
+    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FLOATING or false
 end
 
 ---Get whether this window is tiled.
 ---
 ---@return boolean
 function WindowHandle:tiled()
-    return self:props().state == "tiled"
+    local response, err =
+        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+
+    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_TILED or false
 end
 
 ---Get whether this window is fullscreen.
 ---
 ---@return boolean
 function WindowHandle:fullscreen()
-    return self:props().state == "fullscreen"
+    local response, err =
+        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+
+    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FULLSCREEN or false
 end
 
 ---Get whether this window is maximized.
 ---
 ---@return boolean
 function WindowHandle:maximized()
-    return self:props().state == "maximized"
-end
+    local response, err =
+        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
 
----Deprecated; use the `fullscreen` or `maximized` methods instead.
----
----Get whether this window is fullscreen, maximized, or neither.
----
----Shorthand for `handle:props().fullscreen_or_maximized`.
----
----@return FullscreenOrMaximized?
----@deprecated
-function WindowHandle:fullscreen_or_maximized()
-    return self:props().fullscreen_or_maximized
+    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+
+    return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_MAXIMIZED or false
 end
 
 ---Get all tags on this window.
 ---
 ---Shorthand for `handle:props().tags`.
 ---
----@return TagHandle[]?
+---@return TagHandle[]
 function WindowHandle:tags()
-    return self:props().tags
+    local response, err = client:unary_request(window_service.GetTagIds, { window_id = self.id })
+
+    ---@cast response pinnacle.window.v1.GetTagIdsResponse|nil
+
+    local tag_ids = response and response.tag_ids or {}
+
+    local handles = require("pinnacle.tag").handle.new_from_table(tag_ids)
+
+    return handles
 end
 
 ---Create a new `WindowHandle` from an id.

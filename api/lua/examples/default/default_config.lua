@@ -1,14 +1,15 @@
--- neovim users be like
-require("pinnacle").setup(function(Pinnacle)
-    local Input = Pinnacle.input
-    local Process = Pinnacle.process
-    local Output = Pinnacle.output
-    local Tag = Pinnacle.tag
-    local Window = Pinnacle.window
-    local Layout = Pinnacle.layout
-    local Util = Pinnacle.util
-    local Snowcap = Pinnacle.snowcap
+local Pinnacle = require("pinnacle")
+local Input = require("pinnacle.input")
+local Process = require("pinnacle.process")
+local Output = require("pinnacle.output")
+local Tag = require("pinnacle.tag")
+local Window = require("pinnacle.window")
+local Layout = require("pinnacle.layout")
+local Util = require("pinnacle.util")
+-- local Snowcap = require("pinnacle.snowcap")
 
+-- neovim users be like
+Pinnacle.setup(function()
     -- `Snowcap` will be nil when the Snowcap API isn't installed or Snowcap isn't running
     -- A normal installation of Pinnacle won't have this issue, so you can remove this cast if desired.
     ---@cast Snowcap +?
@@ -28,11 +29,11 @@ require("pinnacle").setup(function(Pinnacle)
     -- Mousebinds     --
     --------------------
 
-    Input.mousebind({ mod_key }, "btn_left", "press", function()
+    Input.mousebind({ mod_key }, "btn_left", function()
         Window.begin_move("btn_left")
     end)
 
-    Input.mousebind({ mod_key }, "btn_right", "press", function()
+    Input.mousebind({ mod_key }, "btn_right", function()
         Window.begin_resize("btn_right")
     end)
 
@@ -41,31 +42,41 @@ require("pinnacle").setup(function(Pinnacle)
     --------------------
 
     -- mod_key + s shows the keybind overlay
-    if Snowcap then
-        Input.keybind({ mod_key }, "s", function()
-            Snowcap.integration.keybind_overlay():show()
-        end, {
-            group = "Compositor",
-            description = "Show the keybind overlay",
-        })
-    end
+    -- if Snowcap then
+    --     Input.keybind({ mod_key }, "s", function()
+    --         Snowcap.integration.keybind_overlay():show()
+    --     end, {
+    --         group = "Compositor",
+    --         description = "Show the keybind overlay",
+    --     })
+    -- end
 
     -- mod_key + shift + q = Quit Pinnacle
-    Input.keybind({ mod_key, "shift" }, "q", function()
-        if Snowcap then
-            Snowcap.integration.quit_prompt():show()
-        else
-            Pinnacle.quit()
-        end
-    end, {
+    Input.keybind({
+        mods = { mod_key, "shift" },
+        key = "q",
+        quit = true,
         group = "Compositor",
         description = "Quit Pinnacle",
     })
 
+    -- Input.keybind({ mod_key, "shift" }, "q", function()
+    --     -- if Snowcap then
+    --     --     Snowcap.integration.quit_prompt():show()
+    --     -- else
+    --     --     Pinnacle.quit()
+    --     -- end
+    --     Pinnacle.quit()
+    -- end, {
+    --     group = "Compositor",
+    --     description = "Quit Pinnacle",
+    -- })
+
     -- mod_key + ctrl + r = Reload config
-    Input.keybind({ mod_key, "ctrl" }, "r", function()
-        Pinnacle.reload_config()
-    end, {
+    Input.keybind({
+        mods = { mod_key, "ctrl" },
+        key = "r",
+        reload_config = true,
         group = "Compositor",
         description = "Reload the config",
     })
@@ -131,14 +142,10 @@ require("pinnacle").setup(function(Pinnacle)
 
     local tag_names = { "1", "2", "3", "4", "5" }
 
-    -- Setup outputs.
-    --
-    -- `Output.setup` allows you to declare things like mode, scale, and tags for outputs.
-    -- Here we give all outputs tags 1 through 5.
-    Output.setup({
-        -- "*" matches all outputs
-        ["*"] = { tags = tag_names },
-    })
+    Output.for_each_output(function(output)
+        local tags = Tag.add(output, tag_names)
+        tags[1]:set_active(true)
+    end)
 
     -- If you want to declare output locations as well, you can use `Output.setup_locs`.
     -- This will additionally allow you to recalculate output locations on signals like
@@ -226,27 +233,36 @@ require("pinnacle").setup(function(Pinnacle)
 
     -- Create a cycling layout manager. This provides methods to cycle
     -- between the given layout generators below.
-    local layout_manager = Layout.new_cycling_manager({
+    local layout_cycler = Layout.builtin.cycle({
         -- `Layout.builtins` contains functions that create various layout generators.
         -- Each of these has settings that can be overridden by passing in a table with
         -- overriding options.
-        Layout.builtins.master_stack(),
-        Layout.builtins.master_stack({ master_side = "right" }),
-        Layout.builtins.master_stack({ master_side = "top" }),
-        Layout.builtins.master_stack({ master_side = "bottom" }),
-        Layout.builtins.dwindle(),
-        Layout.builtins.spiral(),
-        Layout.builtins.corner(),
-        Layout.builtins.corner({ corner_loc = "top_right" }),
-        Layout.builtins.corner({ corner_loc = "bottom_left" }),
-        Layout.builtins.corner({ corner_loc = "bottom_right" }),
-        Layout.builtins.fair(),
-        Layout.builtins.fair({ direction = "horizontal" }),
+        Layout.builtin.master_stack(),
+        Layout.builtin.master_stack({ master_side = "right" }),
+        Layout.builtin.master_stack({ master_side = "top" }),
+        Layout.builtin.master_stack({ master_side = "bottom" }),
+        Layout.builtin.dwindle(),
+        Layout.builtin.spiral(),
+        Layout.builtin.corner(),
+        Layout.builtin.corner({ corner_loc = "top_right" }),
+        Layout.builtin.corner({ corner_loc = "bottom_left" }),
+        Layout.builtin.corner({ corner_loc = "bottom_right" }),
+        Layout.builtin.fair(),
+        Layout.builtin.fair({ direction = "horizontal" }),
     })
 
     -- Set the cycling layout manager as the layout manager that will be used.
     -- This then allows you to call `Layout.request_layout` to manually layout windows.
-    Layout.set_manager(layout_manager)
+    local layout_requester = Layout.manage(function(args)
+        local first_tag = args.tags[1]
+        if not first_tag then
+            return {
+                children = {},
+            }
+        end
+        layout_cycler.current_tag = first_tag
+        return layout_cycler:layout(args.window_count)
+    end)
 
     -- mod_key + space = Cycle forward one layout on the focused output
     --
@@ -278,8 +294,8 @@ require("pinnacle").setup(function(Pinnacle)
             end
 
             if tag then
-                layout_manager:cycle_layout_forward(tag)
-                Layout.request_layout(focused_op)
+                layout_cycler:cycle_layout_forward(tag)
+                layout_requester:request_layout(focused_op)
             end
         end
     end, {
@@ -312,17 +328,13 @@ require("pinnacle").setup(function(Pinnacle)
             end
 
             if tag then
-                layout_manager:cycle_layout_backward(tag)
-                Layout.request_layout(focused_op)
+                layout_cycler:cycle_layout_forward(tag)
+                layout_requester:request_layout(focused_op)
             end
         end
     end, {
         group = "Layout",
         description = "Cycle the layout backward on the first active tag",
-    })
-
-    Input.set_libinput_settings({
-        tap = true,
     })
 
     -- Enable sloppy focus
@@ -332,16 +344,13 @@ require("pinnacle").setup(function(Pinnacle)
         end,
     })
 
-    -- Request all windows use client-side decorations
-    Window.add_window_rule({
-        cond = {
-            all = {},
-        },
-        rule = {
-            decoration_mode = "client_side",
-        },
-    })
+    Window.for_each_window(function(window)
+        window:set_decoration_mode("client_side")
+    end)
 
     -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
-    Process.spawn_once(terminal)
+    Process.command({
+        cmd = { "alacritty" },
+        unique = true,
+    }):spawn()
 end)

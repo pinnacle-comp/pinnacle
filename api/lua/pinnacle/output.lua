@@ -4,8 +4,8 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local output_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1
-local output_service = require("pinnacle.grpc.defs").pinnacle.output.v0alpha1.OutputService
+local output_v1 = require("pinnacle.grpc.defs").pinnacle.output.v1
+local output_service = require("pinnacle.grpc.defs").pinnacle.output.v1.OutputService
 
 ---@lcat nodoc
 ---@class OutputHandleModule
@@ -50,7 +50,7 @@ function output.get_all()
         return {}
     end
 
-    ---@cast response pinnacle.output.v0alpha1.GetResponse
+    ---@cast response pinnacle.output.v1.GetResponse
 
     ---@type OutputHandle[]
     local handles = {}
@@ -118,7 +118,7 @@ function output.get_focused()
     local handles = output.get_all()
 
     for _, handle in ipairs(handles) do
-        if handle:props().focused then
+        if handle:focused() then
             return handle
         end
     end
@@ -146,7 +146,7 @@ end
 ---```
 ---
 ---@param callback fun(output: OutputHandle)
-function output.connect_for_all(callback)
+function output.for_each_output(callback)
     local handles = output.get_all()
     for _, handle in ipairs(handles) do
         callback(handle)
@@ -155,437 +155,6 @@ function output.connect_for_all(callback)
     output.connect_signal({
         connect = callback,
     })
-end
-
----@param id_str string
----@param op OutputHandle
----
----@return boolean
-local function output_id_matches(id_str, op)
-    return id_str == op.name
-end
-
----@class OutputSetup
----@field filter (fun(output: OutputHandle): boolean)? -- A filter for wildcard matches that should return true if this setup should apply to the passed in output.
----@field mode Mode? -- Makes this setup apply the given mode to outputs.
----@field modeline (string|Modeline)? -- Makes this setup apply the given modeline to outputs. This takes precedence over `mode`.
----@field scale number? -- Makes this setup apply the given scale to outputs.
----@field tags string[]? -- Makes this setup add tags with the given name to outputs.
----@field transform Transform? -- Makes this setup applt the given transform to outputs.
-
----Declaratively setup outputs.
----
----`Output.setup` allows you to specify output properties that will be applied immediately and
----on output connection. These include mode, scale, tags, and more.
----
----`setups` is a table of output identifier strings to `OutputSetup`s.
----
----##### Keys
----
----Keys attempt to match outputs.
----
----Wildcard keys (`"*"`) will match all outputs. You can additionally filter these outputs
----by setting a `filter` function in the setup that returns true if it should apply to the output.
----(See the example.)
----
----Otherwise, keys will attempt to match the exact name of an output.
----
----##### Setups
----
----If an output is matched, the corresponding `OutputSetup` entry will be applied to it.
----Any given `tags` will be added, and things like `transform`s, `scale`s, and `mode`s will be set.
----
----##### Ordering setups
----
----You may need to specify multiple wildcard matches for different setup applications.
----You can't just add another key of `"*"`, because that would overwrite the old `"*"`.
----In this case, you can order setups by prepending `n:` to the key, where n is an ordering number.
----`n` should be between `1` and `#setups`. Setting higher orders without setting lower ones
----will cause entries without orders to fill up lower numbers in an arbitrary order. Setting
----orders above `#setups` may cause their entries to not apply.
----
----
----#### Example
----```lua
----Output.setup({
----    -- Give all outputs tags 1 through 5
----    ["1:*"] = {
----        tags = { "1", "2", "3", "4", "5" },
----    },
----    -- Give outputs with a preferred mode of 4K a scale of 2.0
----    ["2:*"] = {
----        filter = function(op)
----            return op:preferred_mode().pixel_height == 2160
----        end,
----        scale = 2.0,
----    },
----    -- Additionally give eDP-1 tags 6 and 7
----    ["eDP-1"] = {
----        tags = { "6", "7" },
----    },
----})
----```
----
----@param setups table<string, OutputSetup>
-function output.setup(setups)
-    ---@type { [1]: string, setup: OutputSetup }[]
-    local op_setups = {}
-
-    local setup_len = 0
-
-    -- Index entries with an index
-    for op_id, op_setup in pairs(setups) do
-        setup_len = setup_len + 1
-
-        ---@type string|nil
-        if op_id:match("^%d+:") then
-            ---@type string
-            local index = op_id:match("^%d+")
-            ---@diagnostic disable-next-line: redefined-local
-            local op_id = op_id:sub(index:len() + 2)
-            ---@diagnostic disable-next-line: redefined-local
-            local index = tonumber(index)
-
-            ---@cast index number
-
-            op_setups[index] = { op_id, setup = op_setup }
-        end
-    end
-
-    -- Insert *s first
-    for op_id, op_setup in pairs(setups) do
-        if op_id:match("^*$") then
-            -- Fill up holes if there are any
-            for i = 1, setup_len do
-                if not op_setups[i] then
-                    op_setups[i] = { op_id, setup = op_setup }
-                    break
-                end
-            end
-        end
-    end
-
-    -- Insert rest of the entries
-    for op_id, op_setup in pairs(setups) do
-        if not op_id:match("^%d+:") and op_id ~= "*" then
-            -- Fill up holes if there are any
-            for i = 1, setup_len do
-                if not op_setups[i] then
-                    op_setups[i] = { op_id, setup = op_setup }
-                    break
-                end
-            end
-        end
-    end
-
-    ---@param op OutputHandle
-    local function apply_setups(op)
-        for _, op_setup in ipairs(op_setups) do
-            if output_id_matches(op_setup[1], op) or op_setup[1] == "*" then
-                local setup = op_setup.setup
-
-                if setup.filter and not setup.filter(op) then
-                    goto continue
-                end
-
-                if setup.modeline then
-                    op:set_modeline(setup.modeline)
-                elseif setup.mode then
-                    op:set_mode(
-                        setup.mode.pixel_width,
-                        setup.mode.pixel_height,
-                        setup.mode.refresh_rate_millihz
-                    )
-                end
-                if setup.scale then
-                    op:set_scale(setup.scale)
-                end
-                if setup.tags then
-                    require("pinnacle.tag").add(op, setup.tags)
-                end
-                if setup.transform then
-                    op:set_transform(setup.transform)
-                end
-            end
-
-            ::continue::
-        end
-
-        local tags = op:tags() or {}
-        if tags[1] then
-            tags[1]:set_active(true)
-        end
-    end
-
-    output.connect_for_all(function(op)
-        apply_setups(op)
-    end)
-end
-
----@alias OutputLoc
----| { [1]: integer, [2]: integer } -- A specific point
----| { [1]: string, [2]: Alignment } -- A location relative to another output
-
----@alias UpdateLocsOn
----| "connect" -- Update output locations on output connect
----| "disconnect" -- Update output locations on output disconnect
----| "resize" -- Update output locations on output resize
-
----Setup locations for outputs.
----
----This function lets you declare positions for outputs, either as a specific point in the global
----space or relative to another output.
----
----##### Choosing when to recompute output positions
----
----`update_locs_on` specifies when output positions should be recomputed. It can be `"all"`, signaling you
----want positions to update on all of output connect, disconnect, and resize, or it can be a table
----containing `"connect"`, `"disconnect"`, and/or `"resize"`.
----
----##### Specifying locations
----
----`locs` should be a table of output identifiers to locations.
----
----##### Output identifiers
----
----Keys for `locs` should be output identifiers. These are strings of
----the name of the output, for example "eDP-1" or "HDMI-A-1".
----
----#### Fallback relative-tos
----
----Sometimes you have an output with a relative location, but the output
----it's relative to isn't connected. In this case you can specify an
----order that locations will be placed by prepending "n:" to the key.
----For example, "4:HDMI-1" will be applied before "5:HDMI-1", allowing
----you to specify more than one relative output. The first connected
----relative output will be chosen for placement. See the example below.
----
----#### Example
----```lua
----               -- vvvvv Relayout on output connect, disconnect, and resize
----Output.setup_locs("all", {
----    -- Anchor eDP-1 to (0, 0) so we can place other outputs relative to it
----    ["eDP-1"] = { 0, 0 },
----    -- Place HDMI-A-1 below it centered
----    ["HDMI-A-1"] = { "eDP-1", "bottom_align_center" },
----    -- Place HDMI-A-2 below HDMI-A-1.
----    ["3:HDMI-A-2"] = { "HDMI-A-1", "bottom_align_center" },
----    -- Additionally, if HDMI-A-1 isn't connected, fallback to placing it below eDP-1 instead.
----    ["4:HDMI-A-2"] = { "eDP-1", "bottom_align_center" },
----
----    -- Note that the last two have a number followed by a colon. This dictates the order of application.
----    -- Because Lua tables with string keys don't index by declaration order, this is needed to specify that.
----    -- You can also put a "1:" and "2:" in front of "eDP-1" and "HDMI-A-1" if you want to be explicit
----    -- about their ordering.
----    --
----    -- Just note that orders must be from 1 to the length of the array. Entries without an order
----    -- will be filled in from 1 upwards, taking any open slots. Entries with orders above
----    -- #locs may not be applied.
----})
----
---- -- Only relayout on output connect and resize
----Output.setup_locs({ "connect", "resize" }, { ... })
----```
----
----@param update_locs_on (UpdateLocsOn)[] | "all"
----@param locs table<string, OutputLoc>
-function output.setup_locs(update_locs_on, locs)
-    ---@type { [1]: string, loc: OutputLoc }[]
-    local setups = {}
-
-    local setup_len = 0
-
-    -- Index entries with an index
-    for op_id, op_loc in pairs(locs) do
-        setup_len = setup_len + 1
-
-        ---@type string|nil
-        if op_id:match("^%d+:") then
-            ---@type string
-            local index = op_id:match("^%d+")
-            ---@diagnostic disable-next-line: redefined-local
-            local op_id = op_id:sub(index:len() + 2)
-            ---@diagnostic disable-next-line: redefined-local
-            local index = tonumber(index)
-
-            ---@cast index number
-
-            setups[index] = { op_id, loc = op_loc }
-        end
-    end
-
-    -- Insert rest of the entries
-    for op_id, op_loc in pairs(locs) do
-        if not op_id:match("^%d+:") then
-            -- Fill up holes if there are any
-            for i = 1, setup_len do
-                if not setups[i] then
-                    setups[i] = { op_id, loc = op_loc }
-                    break
-                end
-            end
-        end
-    end
-
-    local function layout_outputs()
-        local outputs = output.get_all_enabled()
-
-        ---@type OutputHandle[]
-        local placed_outputs = {}
-
-        local rightmost_output = {
-            output = nil,
-            x = nil,
-        }
-
-        -- Place outputs with a specified location first
-        ---@diagnostic disable-next-line: redefined-local
-        for _, setup in ipairs(setups) do
-            for _, op in ipairs(outputs) do
-                if output_id_matches(setup[1], op) then
-                    if type(setup.loc[1]) == "number" then
-                        local loc = { x = setup.loc[1], y = setup.loc[2] }
-                        op:set_location(loc)
-                        table.insert(placed_outputs, op)
-
-                        local props = op:props()
-                        if
-                            not rightmost_output.x
-                            or rightmost_output.x < props.x + props.logical_width
-                        then
-                            rightmost_output.output = op
-                            rightmost_output.x = props.x + props.logical_width
-                        end
-                    end
-                    break
-                end
-            end
-        end
-
-        -- Place outputs that are relative to other outputs
-        local function next_output_with_relative_to()
-            ---@diagnostic disable-next-line: redefined-local
-            for _, setup in ipairs(setups) do
-                for _, op in ipairs(outputs) do
-                    for _, placed_op in ipairs(placed_outputs) do
-                        if placed_op.name == op.name then
-                            goto continue
-                        end
-                    end
-
-                    if not output_id_matches(setup[1], op) or type(setup.loc[1]) == "number" then
-                        goto continue
-                    end
-
-                    local relative_to_name = setup.loc[1]
-                    local alignment = setup.loc[2]
-                    for _, placed_op in ipairs(placed_outputs) do
-                        if placed_op.name == relative_to_name then
-                            return op, placed_op, alignment
-                        end
-                    end
-
-                    goto continue_outer
-
-                    ::continue::
-                end
-                ::continue_outer::
-            end
-
-            return nil, nil, nil
-        end
-
-        while true do
-            local op, relative_to, alignment = next_output_with_relative_to()
-            if not op then
-                break
-            end
-
-            ---@cast relative_to OutputHandle
-            ---@cast alignment Alignment
-
-            op:set_loc_adj_to(relative_to, alignment)
-            table.insert(placed_outputs, op)
-
-            local props = op:props()
-            if not rightmost_output.x or rightmost_output.x < props.x + props.logical_width then
-                rightmost_output.output = op
-                rightmost_output.x = props.x + props.logical_width
-            end
-        end
-
-        -- Place still-not-placed outputs
-        for _, op in ipairs(outputs) do
-            for _, placed_op in ipairs(placed_outputs) do
-                if placed_op.name == op.name then
-                    goto continue
-                end
-            end
-
-            if not rightmost_output.output then
-                op:set_location({ x = 0, y = 0 })
-            else
-                op:set_loc_adj_to(rightmost_output.output, "right_align_top")
-            end
-
-            local props = op:props()
-
-            rightmost_output.output = op
-            rightmost_output.x = props.x
-
-            table.insert(placed_outputs, op)
-
-            ::continue::
-        end
-    end
-
-    layout_outputs()
-
-    local layout_on_connect = false
-    local layout_on_disconnect = false
-    local layout_on_resize = false
-
-    if update_locs_on == "all" then
-        layout_on_connect = true
-        layout_on_disconnect = true
-        layout_on_resize = true
-    else
-        ---@cast update_locs_on UpdateLocsOn[]
-
-        for _, update_on in ipairs(update_locs_on) do
-            if update_on == "connect" then
-                layout_on_connect = true
-            elseif update_on == "disconnect" then
-                layout_on_disconnect = true
-            elseif update_on == "resize" then
-                layout_on_resize = true
-            end
-        end
-    end
-
-    if layout_on_connect then
-        -- FIXME: This currently does not duplicate tags because the connect signal does not fire for
-        -- |      previously connected outputs. However, this is unintended behavior, so fix this when you fix that.
-        output.connect_signal({
-            connect = function(_)
-                layout_outputs()
-            end,
-        })
-    end
-    if layout_on_disconnect then
-        output.connect_signal({
-            disconnect = function(_)
-                layout_outputs()
-            end,
-        })
-    end
-    if layout_on_resize then
-        output.connect_signal({
-            resize = function(_)
-                layout_outputs()
-            end,
-        })
-    end
 end
 
 local signal_name_to_SignalName = {
@@ -670,14 +239,15 @@ end
 --- -- Notice that y = 0 aligns with the top of "DP-1", and the top of "HDMI-1" is at y = -360.
 ---```
 ---
----@param loc { x: integer?, y: integer? }
+---@param x integer
+---@param y integer
 ---
 ---@see OutputHandle.set_loc_adj_to
-function OutputHandle:set_location(loc)
-    local _, err = client:unary_request(output_service.SetLocation, {
+function OutputHandle:set_loc(x, y)
+    local _, err = client:unary_request(output_service.SetLoc, {
         output_name = self.name,
-        x = loc.x,
-        y = loc.y,
+        x = x,
+        y = y,
     })
 
     if err then
@@ -730,10 +300,11 @@ end
 ---@param other OutputHandle
 ---@param alignment Alignment
 function OutputHandle:set_loc_adj_to(other, alignment)
-    local self_props = self:props()
-    local other_props = other:props()
+    local self_logical_size = self:logical_size()
+    local other_logical_size = other:logical_size()
+    local other_loc = other:loc()
 
-    if not self_props.x or not other_props.x then
+    if not self_logical_size or not other_logical_size or not other_loc then
         -- TODO: notify
         return
     end
@@ -754,10 +325,10 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     ---@type integer
     local y
 
-    local self_width = self_props.logical_width
-    local self_height = self_props.logical_height
-    local other_width = other_props.logical_width
-    local other_height = other_props.logical_height
+    local self_width = self_logical_size.width
+    local self_height = self_logical_size.height
+    local other_width = other_logical_size.width
+    local other_height = other_logical_size.height
 
     if not (self_width and self_height and other_width and other_height) then
         return
@@ -765,35 +336,35 @@ function OutputHandle:set_loc_adj_to(other, alignment)
 
     if dir == "top" or dir == "bottom" then
         if dir == "top" then
-            y = other_props.y - self_height
+            y = other_loc.y - self_height
         else
-            y = other_props.y + other_height
+            y = other_loc.y + other_height
         end
 
         if align == "left" then
-            x = other_props.x
+            x = other_loc.x
         elseif align == "center" then
-            x = other_props.x + math.floor((other_width - self_width) / 2)
+            x = other_loc.x + math.floor((other_width - self_width) / 2)
         elseif align == "bottom" then
-            x = other_props.x + (other_width - self_width)
+            x = other_loc.x + (other_width - self_width)
         end
     else
         if dir == "left" then
-            x = other_props.x - self_width
+            x = other_loc.x - self_width
         else
-            x = other_props.x + other_width
+            x = other_loc.x + other_width
         end
 
         if align == "top" then
-            y = other_props.y
+            y = other_loc.y
         elseif align == "center" then
-            y = other_props.y + math.floor((other_height - self_height) / 2)
+            y = other_loc.y + math.floor((other_height - self_height) / 2)
         elseif align == "bottom" then
-            y = other_props.y + (other_height - self_height)
+            y = other_loc.y + (other_height - self_height)
         end
     end
 
-    self:set_location({ x = x, y = y })
+    self:set_loc(x, y)
 end
 
 ---Set this output's mode.
@@ -811,15 +382,14 @@ end
 ---Output.get_focused():set_mode(2560, 1440, 144000)
 ---```
 ---
----@param pixel_width integer
----@param pixel_height integer
----@param refresh_rate_millihz integer?
-function OutputHandle:set_mode(pixel_width, pixel_height, refresh_rate_millihz)
+---@param width integer
+---@param height integer
+---@param refresh_rate_mhz integer?
+function OutputHandle:set_mode(width, height, refresh_rate_mhz)
     local _, err = client:unary_request(output_service.SetMode, {
         output_name = self.name,
-        pixel_width = pixel_width,
-        pixel_height = pixel_height,
-        refresh_rate_millihz = refresh_rate_millihz,
+        size = { width = width, height = height },
+        refresh_rate_mhz = refresh_rate_mhz,
     })
 
     if err then
@@ -856,20 +426,22 @@ function OutputHandle:set_modeline(modeline)
         end
     end
 
-    ---@type pinnacle.output.v0alpha1.SetModelineRequest
+    ---@type pinnacle.output.v1.SetModelineRequest
     local request = {
         output_name = self.name,
-        clock = modeline.clock,
-        hdisplay = modeline.hdisplay,
-        hsync_start = modeline.hsync_start,
-        hsync_end = modeline.hsync_end,
-        htotal = modeline.htotal,
-        vdisplay = modeline.vdisplay,
-        vsync_start = modeline.vsync_start,
-        vsync_end = modeline.vsync_end,
-        vtotal = modeline.vtotal,
-        hsync_pos = modeline.hsync,
-        vsync_pos = modeline.vsync,
+        modeline = {
+            clock = modeline.clock,
+            hdisplay = modeline.hdisplay,
+            hsync_start = modeline.hsync_start,
+            hsync_end = modeline.hsync_end,
+            htotal = modeline.htotal,
+            vdisplay = modeline.vdisplay,
+            vsync_start = modeline.vsync_start,
+            vsync_end = modeline.vsync_end,
+            vtotal = modeline.vtotal,
+            hsync = modeline.hsync,
+            vsync = modeline.vsync,
+        },
     }
 
     local _, err = client:unary_request(output_service.SetModeline, request)
@@ -883,8 +455,11 @@ end
 ---
 ---@param scale number
 function OutputHandle:set_scale(scale)
-    local _, err =
-        client:unary_request(output_service.SetScale, { output_name = self.name, absolute = scale })
+    local _, err = client:unary_request(output_service.SetScale, {
+        output_name = self.name,
+        scale = scale,
+        abs_or_rel = require("pinnacle.grpc.defs").pinnacle.util.v1.AbsOrRel.ABS_OR_REL_ABSOLUTE,
+    })
 
     if err then
         log:error(err)
@@ -893,35 +468,29 @@ end
 
 ---Increase this output's scaling factor.
 ---
----@param increase_by number
-function OutputHandle:increase_scale(increase_by)
-    local _, err = client:unary_request(
-        output_service.SetScale,
-        { output_name = self.name, relative = increase_by }
-    )
+---@param change_by number
+function OutputHandle:change_scale(change_by)
+    local _, err = client:unary_request(output_service.SetScale, {
+        output_name = self.name,
+        scale = change_by,
+        abs_or_rel = require("pinnacle.grpc.defs").pinnacle.util.v1.AbsOrRel.ABS_OR_REL_RELATIVE,
+    })
 
     if err then
         log:error(err)
     end
 end
 
----Decrease this output's scaling factor.
----
----@param decrease_by number
-function OutputHandle:decrease_scale(decrease_by)
-    self:increase_scale(-decrease_by)
-end
-
 ---@enum (key) Transform
 local transform_name_to_code = {
-    normal = output_v0alpha1.Transform.TRANSFORM_NORMAL,
-    ["90"] = output_v0alpha1.Transform.TRANSFORM_90,
-    ["180"] = output_v0alpha1.Transform.TRANSFORM_180,
-    ["270"] = output_v0alpha1.Transform.TRANSFORM_270,
-    flipped = output_v0alpha1.Transform.TRANSFORM_FLIPPED,
-    flipped_90 = output_v0alpha1.Transform.TRANSFORM_FLIPPED_90,
-    flipped_180 = output_v0alpha1.Transform.TRANSFORM_FLIPPED_180,
-    flipped_270 = output_v0alpha1.Transform.TRANSFORM_FLIPPED_270,
+    normal = output_v1.Transform.TRANSFORM_NORMAL,
+    ["90"] = output_v1.Transform.TRANSFORM_90,
+    ["180"] = output_v1.Transform.TRANSFORM_180,
+    ["270"] = output_v1.Transform.TRANSFORM_270,
+    flipped = output_v1.Transform.TRANSFORM_FLIPPED,
+    flipped_90 = output_v1.Transform.TRANSFORM_FLIPPED_90,
+    flipped_180 = output_v1.Transform.TRANSFORM_FLIPPED_180,
+    flipped_270 = output_v1.Transform.TRANSFORM_FLIPPED_270,
 }
 require("pinnacle.util").make_bijective(transform_name_to_code)
 
@@ -939,13 +508,32 @@ function OutputHandle:set_transform(transform)
     end
 end
 
+local set_or_toggle = {
+    SET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    [true] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    UNSET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    [false] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    TOGGLE = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
+}
+
 ---Power on or off this output.
 ---
 ---@param powered boolean
 function OutputHandle:set_powered(powered)
     local _, err = client:unary_request(
         output_service.SetPowered,
-        { output_name = self.name, powered = powered }
+        { output_name = self.name, set_or_toggle = set_or_toggle[powered] }
+    )
+
+    if err then
+        log:error(err)
+    end
+end
+
+function OutputHandle:toggle_powered()
+    local _, err = client:unary_request(
+        output_service.SetPowered,
+        { output_name = self.name, set_or_toggle = set_or_toggle.TOGGLE }
     )
 
     if err then
@@ -954,78 +542,9 @@ function OutputHandle:set_powered(powered)
 end
 
 ---@class Mode
----@field pixel_width integer
----@field pixel_height integer
----@field refresh_rate_millihz integer
-
----@class OutputProperties
----@field make string?
----@field model string?
----@field x integer?
----@field y integer?
----@field logical_width integer?
----@field logical_height integer?
----@field current_mode Mode?
----@field preferred_mode Mode?
----@field modes Mode[]
----@field physical_width integer?
----@field physical_height integer?
----@field focused boolean?
----@field tags TagHandle[]
----@field scale number?
----@field transform Transform?
----@field serial string?
----@field keyboard_focus_stack WindowHandle[]
----@field enabled boolean?
----@field powered boolean?
-
----Get all properties of this output.
----
----@return OutputProperties
-function OutputHandle:props()
-    local response, err =
-        client:unary_request(output_service.GetProperties, { output_name = self.name })
-
-    if err then
-        log:error(err)
-        return {}
-    end
-
-    ---@cast response pinnacle.output.v0alpha1.GetPropertiesResponse
-
-    ---@diagnostic disable-next-line: invisible
-    local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
-
-    ---@diagnostic disable-next-line: invisible
-    local keyboard_focus_stack_handles = require("pinnacle.window").handle.new_from_table(
-        response.keyboard_focus_stack_window_ids or {}
-    )
-
-    ---@type OutputProperties
-    local props = {
-        make = response.make,
-        model = response.model,
-        x = response.x,
-        y = response.y,
-        logical_width = response.logical_width,
-        logical_height = response.logical_height,
-        current_mode = response.current_mode --[[@as Mode]], -- TODO: possibly nil fields, fix
-        preferred_mode = response.preferred_mode --[[@as Mode]],
-        modes = response.modes or {},
-        physical_width = response.physical_width,
-        physical_height = response.physical_height,
-        focused = response.focused,
-        tags = tag_handles,
-        scale = response.scale,
-        transform = transform_name_to_code[response.transform] --[[@as Transform?]],
-        serial = response.serial_str,
-        keyboard_focus_stack = keyboard_focus_stack_handles,
-        enabled = response.enabled,
-        powered = response.powered,
-    }
-
-    return props
-end
+---@field width integer
+---@field height integer
+---@field refresh_rate_mhz integer
 
 ---Get this output's make.
 ---
@@ -1033,9 +552,13 @@ end
 ---
 ---Shorthand for `handle:props().make`.
 ---
----@return string?
+---@return string
 function OutputHandle:make()
-    return self:props().make
+    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+
+    return response and response.make or ""
 end
 
 ---Get this output's model.
@@ -1044,27 +567,35 @@ end
 ---
 ---Shorthand for `handle:props().model`.
 ---
----@return string?
+---@return string
 function OutputHandle:model()
-    return self:props().model
+    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+
+    return response and response.model or ""
+end
+
+---@return string
+function OutputHandle:serial()
+    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+
+    return response and response.serial or ""
 end
 
 ---Get this output's x-coordinate in the global space.
 ---
 ---Shorthand for `handle:props().x`.
 ---
----@return integer?
-function OutputHandle:x()
-    return self:props().x
-end
+---@return { x: integer, y: integer }?
+function OutputHandle:loc()
+    local response, err = client:unary_request(output_service.GetLoc, { output_name = self.name })
 
----Get this output's y-coordinate in the global space.
----
----Shorthand for `handle:props().y`.
----
----@return integer?
-function OutputHandle:y()
-    return self:props().y
+    ---@cast response pinnacle.output.v1.GetLocResponse|nil
+
+    return response and response.loc
 end
 
 ---Get this output's logical width in pixels.
@@ -1073,20 +604,28 @@ end
 ---
 ---Shorthand for `handle:props().logical_width`.
 ---
----@return integer?
-function OutputHandle:logical_width()
-    return self:props().logical_width
+---@return { width: integer, height: integer }?
+function OutputHandle:logical_size()
+    local response, err =
+        client:unary_request(output_service.GetLogicalSize, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetLogicalSizeResponse|nil
+
+    return response and response.logical_size
 end
 
----Get this output's logical height in pixels.
+---Get this output's physical width in millimeters.
 ---
----If the output is disabled, this returns nil.
+---Shorthand for `handle:props().physical_width`.
 ---
----Shorthand for `handle:props().y`.
----
----@return integer?
-function OutputHandle:logical_height()
-    return self:props().logical_height
+---@return { width: integer, height: integer }?
+function OutputHandle:physical_size()
+    local response, err =
+        client:unary_request(output_service.GetPhysicalSize, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetPhysicalSizeResponse|nil
+
+    return response and response.physical_size
 end
 
 ---Get this output's current mode.
@@ -1095,7 +634,23 @@ end
 ---
 ---@return Mode?
 function OutputHandle:current_mode()
-    return self:props().current_mode
+    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetModesResponse|nil
+
+    local mode = response and response.current_mode
+    if not mode then
+        return nil
+    end
+
+    ---@type Mode
+    local ret = {
+        width = mode.size.width,
+        height = mode.size.height,
+        refresh_rate_mhz = mode.refresh_rate_mhz,
+    }
+
+    return ret
 end
 
 ---Get this output's preferred mode.
@@ -1104,7 +659,23 @@ end
 ---
 ---@return Mode?
 function OutputHandle:preferred_mode()
-    return self:props().preferred_mode
+    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetModesResponse|nil
+
+    local mode = response and response.preferred_mode
+    if not mode then
+        return nil
+    end
+
+    ---@type Mode
+    local ret = {
+        width = mode.size.width,
+        height = mode.size.height,
+        refresh_rate_mhz = mode.refresh_rate_mhz,
+    }
+
+    return ret
 end
 
 ---Get all of this output's available modes.
@@ -1113,25 +684,29 @@ end
 ---
 ---@return Mode[]
 function OutputHandle:modes()
-    return self:props().modes
-end
+    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
 
----Get this output's physical width in millimeters.
----
----Shorthand for `handle:props().physical_width`.
----
----@return integer?
-function OutputHandle:physical_width()
-    return self:props().physical_width
-end
+    ---@cast response pinnacle.output.v1.GetModesResponse|nil
 
----Get this output's physical height in millimeters.
----
----Shorthand for `handle:props().physical_height`.
----
----@return integer?
-function OutputHandle:physical_height()
-    return self:props().physical_height
+    local modes = response and response.modes
+    if not modes then
+        return {}
+    end
+
+    ---@type Mode[]
+    local ret = {}
+
+    for _, mode in ipairs(modes) do
+        ---@type Mode
+        local md = {
+            width = mode.size.width,
+            height = mode.size.height,
+            refresh_rate_mhz = mode.refresh_rate_mhz,
+        }
+        table.insert(ret, md)
+    end
+
+    return ret
 end
 
 ---Get whether or not this output is focused.
@@ -1140,9 +715,14 @@ end
 ---
 ---Shorthand for `handle:props().focused`.
 ---
----@return boolean?
+---@return boolean
 function OutputHandle:focused()
-    return self:props().focused
+    local response, err =
+        client:unary_request(output_service.GetFocused, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetFocusedResponse|nil
+
+    return response and response.focused or false
 end
 
 ---Get the tags this output has.
@@ -1151,34 +731,79 @@ end
 ---
 ---@return TagHandle[]?
 function OutputHandle:tags()
-    return self:props().tags
+    local response, err =
+        client:unary_request(output_service.GetTagIds, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetTagIdsResponse|nil
+
+    local tag_ids = response and response.tag_ids or {}
+
+    local handles = require("pinnacle.tag").handle.new_from_table(tag_ids)
+
+    return handles
 end
 
 ---Get this output's scaling factor.
 ---
 ---Shorthand for `handle:props().scale`.
 ---
----@return number?
+---@return number
 function OutputHandle:scale()
-    return self:props().scale
+    local response, err =
+        client:unary_request(output_service.GetFocused, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetScaleResponse|nil
+
+    return response and response.scale or 1.0
 end
 
 ---Get this output's transform.
 ---
 ---Shorthand for `handle:props().transform`.
 ---
----@return Transform?
+---@return Transform
 function OutputHandle:transform()
-    return self:props().transform
+    local response, err =
+        client:unary_request(output_service.GetTransform, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetTransformResponse|nil
+
+    local transform = (
+        response and response.transform
+        or require("pinnacle.grpc.defs").pinnacle.output.v1.Transform.TRANSFORM_NORMAL
+    )
+
+    ---@type Transform
+    return transform_name_to_code[transform]
 end
 
----Get this output's EDID serial.
+---Get whether this output is enabled.
 ---
----Shorthand for `handle:props().serial`.
+---Disabled outputs are not mapped to the global space and cannot be used.
 ---
----@return string?
-function OutputHandle:serial()
-    return self:props().serial
+---@return boolean
+function OutputHandle:enabled()
+    local response, err =
+        client:unary_request(output_service.GetEnabled, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetEnabledResponse|nil
+
+    return response and response.enabled or false
+end
+
+---Get whether this output is powered.
+---
+---Unpowered outputs that are enabled will be off, but they will still be
+---mapped to the global space, meaning you can still interact with them.
+---
+---@return boolean
+function OutputHandle:powered()
+    local response, err =
+        client:unary_request(output_service.GetPowered, { output_name = self.name })
+
+    ---@cast response pinnacle.output.v1.GetPoweredResponse|nil
+
+    return response and response.powered or false
 end
 
 ---Get this output's keyboard focus stack.
@@ -1192,26 +817,16 @@ end
 ---
 ---@see OutputHandle.keyboard_focus_stack_visible
 function OutputHandle:keyboard_focus_stack()
-    return self:props().keyboard_focus_stack
-end
+    local response, err =
+        client:unary_request(output_service.GetFocusStackWindowIds, { output_name = self.name })
 
----Get whether this output is enabled.
----
----Disabled outputs are not mapped to the global space and cannot be used.
----
----@return boolean?
-function OutputHandle:enabled()
-    return self:props().enabled
-end
+    ---@cast response pinnacle.output.v1.GetFocusStackWindowIdsResponse|nil
 
----Get whether this output is powered.
----
----Unpowered outputs that are enabled will be off, but they will still be
----mapped to the global space, meaning you can still interact with them.
----
----@return boolean?
-function OutputHandle:powered()
-    return self:props().powered
+    local window_ids = response and response.window_ids or {}
+
+    local handles = require("pinnacle.window").handle.new_from_table(window_ids)
+
+    return handles
 end
 
 ---Get this output's keyboard focus stack.
@@ -1223,7 +838,7 @@ end
 ---
 ---@see OutputHandle.keyboard_focus_stack
 function OutputHandle:keyboard_focus_stack_visible()
-    local stack = self:props().keyboard_focus_stack
+    local stack = self:keyboard_focus_stack()
 
     ---@type (fun(): boolean)[]
     local batch = {}

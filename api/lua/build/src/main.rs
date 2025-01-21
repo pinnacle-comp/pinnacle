@@ -61,19 +61,13 @@ fn parse_enum(enums: &mut EnumMap, prefix: &str, enum_desc: &EnumDescriptorProto
 fn parse_message(msgs: &mut MessageMap, prefix: &str, message: &DescriptorProto) {
     let name = format!("{prefix}.{}", message.name());
 
-    let mut fields: HashMap<Option<i32>, Vec<Field>> = HashMap::new();
+    let mut fields = Vec::new();
 
     for field in message.field.iter() {
-        fields
-            // .entry(field.oneof_index)
-            .entry(None)
-            .or_default()
-            .push(parse_field(field));
+        fields.push(parse_field(field));
     }
 
-    let data = MessageData {
-        fields: fields.remove(&None).unwrap_or_default(),
-    };
+    let data = MessageData { fields };
 
     msgs.insert(name.clone(), data);
 

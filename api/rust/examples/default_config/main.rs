@@ -29,6 +29,17 @@ use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
 
 async fn config() {
+    let _layout_requester = layout::manage({
+        move |args| {
+            let Some(tag) = args.tags.first() else {
+                return LayoutNode::new();
+            };
+            MasterStack::default().layout(args.window_count)
+        }
+    });
+
+    return;
+
     // Change the mod key to `Alt` when running as a nested window.
     let mod_key = match pinnacle::backend() {
         Backend::Tty => Mod::SUPER,

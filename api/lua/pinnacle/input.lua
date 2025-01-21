@@ -5,18 +5,35 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local defs = require("pinnacle.grpc.defs")
-local input_v0alpha1 = defs.pinnacle.input.v0alpha1
-local input_service = defs.pinnacle.input.v0alpha1.InputService
+local input_v1 = defs.pinnacle.input.v1
+local input_service = defs.pinnacle.input.v1.InputService
+
+local modifier_values = {
+    shift = input_v1.Modifier.MODIFIER_SHIFT,
+    ctrl = input_v1.Modifier.MODIFIER_CTRL,
+    alt = input_v1.Modifier.MODIFIER_ALT,
+    super = input_v1.Modifier.MODIFIER_SUPER,
+    iso_level3_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL3_SHIFT,
+    iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
+}
+require("pinnacle.util").make_bijective(modifier_values)
 
 ---@enum (key) Modifier
-local modifier_values = {
-    shift = input_v0alpha1.Modifier.MODIFIER_SHIFT,
-    ctrl = input_v0alpha1.Modifier.MODIFIER_CTRL,
-    alt = input_v0alpha1.Modifier.MODIFIER_ALT,
-    super = input_v0alpha1.Modifier.MODIFIER_SUPER,
-}
+local mods_with_ignore_values = {
+    shift = input_v1.Modifier.MODIFIER_SHIFT,
+    ctrl = input_v1.Modifier.MODIFIER_CTRL,
+    alt = input_v1.Modifier.MODIFIER_ALT,
+    super = input_v1.Modifier.MODIFIER_SUPER,
+    iso_level3_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL3_SHIFT,
+    iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
 
-require("pinnacle.util").make_bijective(modifier_values)
+    ignore_shift = input_v1.Modifier.MODIFIER_SHIFT,
+    ignore_ctrl = input_v1.Modifier.MODIFIER_CTRL,
+    ignore_alt = input_v1.Modifier.MODIFIER_ALT,
+    ignore_super = input_v1.Modifier.MODIFIER_SUPER,
+    ignore_iso_level3_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL3_SHIFT,
+    ignore_iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
+}
 
 ---@enum (key) MouseButton
 local mouse_button_values = {
@@ -43,11 +60,22 @@ local mouse_button_values = {
     btn_back = 0x116,
 }
 
----@enum (key) MouseEdge
-local mouse_edge_values = {
-    press = input_v0alpha1.SetMousebindRequest.MouseEdge.MOUSE_EDGE_PRESS,
-    release = input_v0alpha1.SetMousebindRequest.MouseEdge.MOUSE_EDGE_RELEASE,
+local button_value_to_name = {
+    [0x110] = "btn_left",
+    [0x111] = "btn_right",
+    [0x112] = "btn_middle",
+    [0x113] = "btn_side",
+    [0x114] = "btn_extra",
+    [0x115] = "btn_forward",
+    [0x116] = "btn_back",
 }
+
+---@enum (key) Edge
+local edge_values = {
+    press = input_v1.Edge.EDGE_PRESS,
+    release = input_v1.Edge.EDGE_RELEASE,
+}
+require("pinnacle.util").make_bijective(edge_values)
 
 ---Input management.
 ---
@@ -59,9 +87,97 @@ local input = {
 }
 input.mouse_button_values = mouse_button_values
 
----@class KeybindInfo
+---@class Bind
+---@field mods Modifier[]
+---@field bind_layer string?
 ---@field group string? The group to place this keybind in. Used for the keybind list.
 ---@field description string? The description of this keybind. Used for the keybind list.
+---@field quit boolean?
+---@field reload_config boolean?
+
+---@class Keybind : Bind
+---@field key string|Key
+---@field on_press fun()?
+---@field on_release fun()?
+
+---@param kb Keybind
+local function keybind_inner(kb)
+    local key_code = nil
+    local xkb_name = nil
+
+    if type(kb.key) == "number" then
+        key_code = kb.key
+    elseif type(kb.key) == "string" then
+        xkb_name = kb.key
+    end
+
+    local modifs = {}
+    local ignore_modifs = {}
+    for _, mod in ipairs(kb.mods) do
+        if string.match(mod, "ignore") then
+            table.insert(ignore_modifs, modifier_values[mod])
+        else
+            table.insert(modifs, modifier_values[mod])
+        end
+    end
+
+    local response, err = client:unary_request(input_service.Bind, {
+        bind = {
+            mods = modifs,
+            ignore_mods = ignore_modifs,
+            layer_name = nil,
+            group = kb.group,
+            description = kb.description,
+            key = {
+                key_code = key_code,
+                xkb_name = xkb_name,
+            },
+        },
+    })
+
+    if err then
+        log:error(err)
+        return
+    end
+
+    ---@cast response pinnacle.input.v1.BindResponse
+
+    local bind_id = response.bind_id or 0
+
+    if kb.quit then
+        local _, err = client:unary_request(input_service.SetQuitBind, {
+            bind_id = bind_id,
+        })
+        return
+    end
+
+    if kb.reload_config then
+        local _, err = client:unary_request(input_service.SetReloadConfigBind, {
+            bind_id = bind_id,
+        })
+        return
+    end
+
+    local err = client:server_streaming_request(input_service.KeybindStream, {
+        bind_id = bind_id,
+    }, function(response)
+        ---@cast response pinnacle.input.v1.KeybindStreamResponse
+        if response.edge == edge_values.press then
+            if kb.on_press then
+                kb.on_press()
+            end
+        elseif response.edge == edge_values.release then
+            if kb.on_release then
+                kb.on_release()
+            end
+        end
+    end)
+
+    if err then
+        log:error(err)
+        return
+    end
+end
 
 ---Set a keybind. If called with an already existing keybind, it gets replaced.
 ---
@@ -99,33 +215,95 @@ input.mouse_button_values = mouse_button_values
 ---
 ---@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
 ---@param key Key | string The key used to trigger the bind
----@param action fun() The function to run when the bind is triggered
----@param keybind_info KeybindInfo?
-function input.keybind(mods, key, action, keybind_info)
-    local raw_code = nil
-    local xkb_name = nil
+---@param on_press fun() The function to run when the bind is triggered
+---@param bind_info { group: string?, description: string? }?
+---
+---@overload fun(keybind: Keybind)
+function input.keybind(mods, key, on_press, bind_info)
+    local kb
 
-    if type(key) == "number" then
-        raw_code = key
-    elseif type(key) == "string" then
-        xkb_name = key
+    if mods.key then
+        kb = mods
+    else
+        kb = {
+            mods = mods,
+            key = key,
+            on_press = on_press,
+            group = bind_info and bind_info.group,
+            description = bind_info and bind_info.description,
+        }
     end
 
-    local mod_values = {}
-    for _, mod in ipairs(mods) do
-        table.insert(mod_values, modifier_values[mod])
+    keybind_inner(kb)
+end
+
+---@class Mousebind : Bind
+---@field button MouseButton
+---@field on_press fun()?
+---@field on_release fun()?
+
+---@param mb Mousebind
+local function mousebind_inner(mb)
+    local modifs = {}
+    local ignore_modifs = {}
+    for _, mod in ipairs(mb.mods) do
+        if string.match(mod, "ignore") then
+            table.insert(ignore_modifs, modifier_values[mod])
+        else
+            table.insert(modifs, modifier_values[mod])
+        end
     end
 
-    local err = client:server_streaming_request(input_service.SetKeybind, {
-        modifiers = mod_values,
-        raw_code = raw_code,
-        xkb_name = xkb_name,
-        group = keybind_info and keybind_info.group,
-        description = keybind_info and keybind_info.description,
-    }, action)
+    local response, err = client:unary_request(input_service.Bind, {
+        bind = {
+            mods = modifs,
+            ignore_mods = ignore_modifs,
+            layer_name = nil,
+            group = mb.group,
+            description = mb.description,
+            mouse = {
+                button = mouse_button_values[mb.button],
+            },
+        },
+    })
 
     if err then
         log:error(err)
+        return
+    end
+
+    ---@cast response pinnacle.input.v1.BindResponse
+
+    local bind_id = response.bind_id or 0
+
+    if mb.quit then
+        local _, err = client:unary_request(input_service.SetQuitBind, {
+            bind_id = bind_id,
+        })
+        return
+    end
+
+    if mb.reload_config then
+        local _, err = client:unary_request(input_service.SetReloadConfigBind, {
+            bind_id = bind_id,
+        })
+        return
+    end
+
+    local err = client:server_streaming_request(input_service.MousebindStream, {
+        bind_id = bind_id,
+    }, function(response)
+        ---@cast response pinnacle.input.v1.MousebindStreamResponse
+        if response.edge == edge_values.press then
+            mb.on_press()
+        elseif response.edge == edge_values.release then
+            mb.on_release()
+        end
+    end)
+
+    if err then
+        log:error(err)
+        return
     end
 end
 
@@ -143,66 +321,106 @@ end
 ---
 ---@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
 ---@param button MouseButton The mouse button used to trigger the bind
----@param edge MouseEdge "press" or "release" to trigger on button press or release
----@param action fun() The function to run when the bind is triggered
-function input.mousebind(mods, button, edge, action)
-    ---@diagnostic disable-next-line: redefined-local
-    local edge = mouse_edge_values[edge]
+---@param on_press fun() The function to run when the bind is triggered
+---@param bind_info { group: string?, description: string? }?
+---
+---@overload fun(mousebind: Mousebind)
+function input.mousebind(mods, button, on_press, bind_info)
+    local mb
 
-    local mod_values = {}
-    for _, mod in ipairs(mods) do
-        table.insert(mod_values, modifier_values[mod])
+    if mods.button then
+        mb = mods
+    else
+        mb = {
+            mods = mods,
+            button = button,
+            on_press = on_press,
+            group = bind_info and bind_info.group,
+            description = bind_info and bind_info.description,
+        }
     end
 
-    local err = client:server_streaming_request(input_service.SetMousebind, {
-        modifiers = mod_values,
-        button = mouse_button_values[button],
-        edge = edge,
-    }, action)
-
-    if err then
-        log:error(err)
-    end
+    mousebind_inner(mb)
 end
 
----@class KeybindDescription
----@field modifiers Modifier[]
----@field raw_code integer
----@field xkb_name string
+---@class BindInfo
+---@field mods Modifier[]
+---@field ignore_mods Modifier[]
+---@field bind_layer string?
 ---@field group string?
 ---@field description string?
+---@field kind BindInfoKind
+
+---@class BindInfoKind
+---@field key { key_code: integer, xkb_name: string }?
+---@field mouse { button: MouseButton }?
 
 ---Get all keybinds along with their descriptions
 ---
----@return KeybindDescription[]
-function input.keybind_descriptions()
-    local response, err = client:unary_request(input_service.KeybindDescriptions, {})
+---@return BindInfo[]
+function input.bind_infos()
+    local response, err = client:unary_request(input_service.GetBindInfos, {})
 
     if err then
         log:error(err)
         return {}
     end
 
-    ---@cast response pinnacle.input.v0alpha1.KeybindDescriptionsResponse
+    ---@cast response pinnacle.input.v1.GetBindInfosResponse
 
+    ---@type BindInfo[]
     local ret = {}
 
-    for _, desc in ipairs(response.descriptions or {}) do
-        local mods = {}
-        for _, mod in ipairs(desc.modifiers or {}) do
-            if mod == modifier_values.shift then
-                table.insert(mods, "shift")
-            elseif mod == modifier_values.ctrl then
-                table.insert(mods, "ctrl")
-            elseif mod == modifier_values.alt then
-                table.insert(mods, "alt")
-            elseif mod == modifier_values.super then
-                table.insert(mods, "super")
-            end
+    local infos = response.bind_infos or {}
+
+    for _, desc in ipairs(infos) do
+        local info = desc.bind
+        if not info then
+            goto continue
         end
 
-        desc.modifiers = mods
-        table.insert(ret, desc)
+        ---@type Modifier[]
+        local mods = {}
+        for _, mod in ipairs(info.mods or {}) do
+            table.insert(mods, modifier_values[mod])
+        end
+
+        ---@type Modifier[]
+        local ignore_mods = {}
+        for _, mod in ipairs(info.ignore_mods or {}) do
+            table.insert(ignore_mods, modifier_values[mod])
+        end
+
+        ---@type BindInfoKind
+        local bind_kind = {}
+        if info.key then
+            bind_kind.key = {
+                key_code = info.key.key_code,
+                xkb_name = info.key.xkb_name,
+            }
+        elseif info.mouse then
+            bind_kind.mouse = {
+                button = button_value_to_name[info.mouse.button],
+            }
+        end
+
+        local bind_layer = info.layer_name
+        local group = info.group
+        local description = info.description
+
+        ---@type BindInfo
+        local bind_info = {
+            mods = mods,
+            ignore_mods = ignore_mods,
+            bind_layer = bind_layer,
+            group = group,
+            description = description,
+            kind = bind_kind,
+        }
+
+        table.insert(ret, bind_info)
+
+        ::continue::
     end
 
     return ret
@@ -258,96 +476,6 @@ function input.set_repeat_rate(rate, delay)
     end
 end
 
----@enum (key) AccelProfile
-local accel_profile_values = {
-    ---No pointer acceleration
-    flat = input_v0alpha1.SetLibinputSettingRequest.AccelProfile.ACCEL_PROFILE_FLAT,
-    ---Pointer acceleration
-    adaptive = input_v0alpha1.SetLibinputSettingRequest.AccelProfile.ACCEL_PROFILE_ADAPTIVE,
-}
-
----@enum (key) ClickMethod
-local click_method_values = {
-    ---Button presses are generated according to where on the device the click occurs
-    button_areas = input_v0alpha1.SetLibinputSettingRequest.ClickMethod.CLICK_METHOD_BUTTON_AREAS,
-    ---Button presses are generated according to the number of fingers used
-    click_finger = input_v0alpha1.SetLibinputSettingRequest.ClickMethod.CLICK_METHOD_CLICK_FINGER,
-}
-
----@enum (key) ScrollMethod
-local scroll_method_values = {
-    ---Never send scroll events instead of pointer motion events
-    no_scroll = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_NO_SCROLL,
-    ---Send scroll events when two fingers are logically down on the device
-    two_finger = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_TWO_FINGER,
-    ---Send scroll events when a finger moves along the bottom or right edge of a device
-    edge = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_EDGE,
-    ---Send scroll events when a button is down and the device moves along a scroll-capable axis
-    on_button_down = input_v0alpha1.SetLibinputSettingRequest.ScrollMethod.SCROLL_METHOD_ON_BUTTON_DOWN,
-}
-
----@enum (key) TapButtonMap
-local tap_button_map_values = {
-    ---1/2/3 finger tap maps to left/right/middle
-    left_right_middle = input_v0alpha1.SetLibinputSettingRequest.TapButtonMap.TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE,
-    ---1/2/3 finger tap maps to left/middle/right
-    left_middle_right = input_v0alpha1.SetLibinputSettingRequest.TapButtonMap.TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT,
-}
-
----@class LibinputSettings
----@field accel_profile AccelProfile? Set pointer acceleration
----@field accel_speed number? Set pointer acceleration speed
----@field calibration_matrix integer[]?
----@field click_method ClickMethod?
----@field disable_while_typing boolean? Set whether or not to disable the pointing device while typing
----@field left_handed boolean? Set device left-handedness
----@field middle_emulation boolean?
----@field rotation_angle integer?
----@field scroll_button integer? Set the scroll button
----@field scroll_button_lock boolean? Set whether or not the scroll button is a hold or toggle
----@field scroll_method ScrollMethod?
----@field natural_scroll boolean? Set whether or not natural scroll is enabled, which reverses scroll direction
----@field tap_button_map TapButtonMap?
----@field tap_drag boolean?
----@field tap_drag_lock boolean?
----@field tap boolean?
-
----Set a libinput setting.
----
----This includes settings for pointer devices, like acceleration profiles, natural scroll, and more.
----
----#### Example
----```lua
----Input.set_libinput_settings({
----    accel_profile = "flat",
----    natural_scroll = true,
----})
----```
----
----@param settings LibinputSettings
-function input.set_libinput_settings(settings)
-    for setting, value in pairs(settings) do
-        local data = { [setting] = value }
-
-        if setting == "accel_profile" then
-            data[setting] = accel_profile_values[value]
-        elseif setting == "calibration_matrix" then
-            data[setting] = { matrix = value }
-        elseif setting == "click_method" then
-            data[setting] = click_method_values[value]
-        elseif setting == "scroll_method" then
-            data[setting] = scroll_method_values[value]
-        elseif setting == "tap_button_map" then
-            data[setting] = tap_button_map_values[value]
-        end
-
-        local _, err = client:unary_request(input_service.SetLibinputSetting, data)
-        if err then
-            log:error(err)
-        end
-    end
-end
-
 ---Sets the current xcursor theme.
 ---
 ---Pinnacle reads `$XCURSOR_THEME` on startup to set the theme.
@@ -378,6 +506,33 @@ function input.set_xcursor_size(size)
     if err then
         log:error(err)
     end
+end
+
+---@class InputSignal Signals related to input events.
+---@field device_added fun(device: pinnacle.input.libinput.DeviceHandle)? A new input device was connected.
+
+local signal_name_to_SignalName = {
+    device_added = "InputDeviceAdded",
+}
+
+---@param signals InputSignal The signal you want to connect to
+---
+---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---
+---@see SignalHandles.disconnect_all - To disconnect from these signals
+function input.connect_signal(signals)
+    ---@diagnostic disable-next-line: invisible
+    local handles = require("pinnacle.signal").handles.new({})
+
+    for signal, callback in pairs(signals) do
+        require("pinnacle.signal").add_callback(signal_name_to_SignalName[signal], callback)
+        local handle =
+            ---@diagnostic disable-next-line: invisible
+            require("pinnacle.signal").handle.new(signal_name_to_SignalName[signal], callback)
+        handles[signal] = handle
+    end
+
+    return handles
 end
 
 return input

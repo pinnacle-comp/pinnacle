@@ -14,6 +14,7 @@ dependencies = {
     "lua-protobuf ~> 0.5",
     "compat53 ~> 0.13",
     "lualogging ~> 1.8.2",
+    "luaposix ~> 36.2.1",
 
     -- Run just install
     "lua-grpc-client >= dev-1",
@@ -27,6 +28,7 @@ build = {
         ["pinnacle.grpc.defs"] = "pinnacle/grpc/defs.lua",
         ["pinnacle.input"] = "pinnacle/input.lua",
         ["pinnacle.input.keys"] = "pinnacle/input/keys.lua",
+        ["pinnacle.input.libinput"] = "pinnacle/input/libinput.lua",
         ["pinnacle.output"] = "pinnacle/output.lua",
         ["pinnacle.process"] = "pinnacle/process.lua",
         ["pinnacle.tag"] = "pinnacle/tag.lua",

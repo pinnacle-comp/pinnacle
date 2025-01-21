@@ -4,7 +4,142 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local process_service = require("pinnacle.grpc.defs").pinnacle.process.v0alpha1.ProcessService
+local process_service = require("pinnacle.grpc.defs").pinnacle.process.v1.ProcessService
+local fdopen = require("posix.stdio").fdopen
+local condition = require("cqueues.condition")
+local thread = require("cqueues.thread")
+
+---@class pinnacle.process.Child
+---@field pid integer
+---@field stdin file*?
+---@field stdout file*?
+---@field stderr file*?
+local Child = {}
+
+local child_module = {}
+
+---@param child pinnacle.process.Child
+---
+---@return pinnacle.process.Child
+function child_module.new_child(child)
+    setmetatable(child, { __index = Child })
+    return child
+end
+
+---@class Command
+---@field private cmd string[]
+---@field private shell_cmd string[]?
+---@field private envs table<string, string>?
+---@field private unique boolean?
+---@field private once boolean?
+local Command = {}
+
+---@class CommandOpts
+---@field cmd string[]
+---@field shell_cmd string[]?
+---@field envs table<string, string>?
+---@field unique boolean?
+---@field once boolean?
+
+---@return pinnacle.process.Child?
+function Command:spawn()
+    local response, err = client:unary_request(process_service.Spawn, {
+        cmd = self.cmd,
+        shell_cmd = self.shell_cmd,
+        unique = self.unique,
+        once = self.once,
+        envs = self.envs,
+    })
+
+    if err then
+        log:error(err)
+        return nil
+    end
+
+    ---@cast response pinnacle.process.v1.SpawnResponse
+
+    if not response then
+        return nil
+    end
+
+    local data = response.spawn_data
+    if not data then
+        return nil
+    end
+
+    ---@type pinnacle.process.Child
+    local child = {
+        pid = data.pid,
+        stdin = data.stdin_fd and fdopen(data.stdin_fd, "w"),
+        stdout = data.stdout_fd and fdopen(data.stdout_fd, "r"),
+        stderr = data.stderr_fd and fdopen(data.stderr_fd, "r"),
+    }
+
+    return child_module.new_child(child)
+end
+
+---@return { exit_code: integer?, exit_msg: string? }
+function Child:wait()
+    local condvar = condition.new()
+
+    local ret = {}
+
+    local err = client:server_streaming_request(process_service.WaitOnSpawn, {
+        pid = self.pid,
+    }, function(response)
+        ret.exit_code = response.exit_code
+        ret.exit_msg = response.exit_msg
+        condvar:signal()
+    end)
+
+    if err then
+        return {}
+    end
+
+    condvar:wait()
+
+    return ret
+end
+
+---@param on_line fun(line: string)
+---
+---@return self self This child for chaining
+function Child:on_line_stdout(on_line)
+    local thrd, socket = thread.start(function(socket)
+        for line in self.stdout:lines() do
+            socket:write(line)
+        end
+        self.stdout:close()
+    end)
+
+    client.loop:wrap(function()
+        for line in socket:lines() do
+            on_line(line)
+        end
+    end)
+
+    return self
+end
+
+---@param on_line fun(line: string)
+---
+---@return self self This child for chaining
+function Child:on_line_stderr(on_line)
+    local thrd, socket = thread.start(function(socket)
+        for line in self.stderr:lines() do
+            socket:write(line)
+        end
+        self.stderr:close()
+    end)
+
+    client.loop:wrap(function()
+        for line in socket:lines() do
+            on_line(line)
+        end
+    end)
+
+    return self
+end
 
 ---Process management.
 ---
@@ -12,113 +147,28 @@ local process_service = require("pinnacle.grpc.defs").pinnacle.process.v0alpha1.
 ---@class Process
 local process = {}
 
----@param args string[]
----@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
----@param once boolean
-local function spawn_inner(args, callbacks, once)
-    local callback = function() end
-
-    if callbacks then
-        callback = function(response)
-            if callbacks.stdout and response.stdout then
-                callbacks.stdout(response.stdout)
-            end
-            if callbacks.stderr and response.stderr then
-                callbacks.stderr(response.stderr)
-            end
-            if callbacks.exit and (response.exit_code or response.exit_message) then
-                callbacks.exit(response.exit_code, response.exit_message)
-            end
-        end
+---@param ... string
+---@overload fun(cmd: string[])
+function process.spawn(...)
+    local cmd = { ... }
+    if cmd[0] and type(cmd[0]) == "table" then
+        cmd = cmd[0]
     end
 
-    local err = client:server_streaming_request(process_service.Spawn, {
-        args = args,
-        once = once,
-        has_callback = callbacks ~= nil,
-    }, callback)
-
-    if err then
-        log:error(err)
-    end
+    process
+        .command({
+            cmd = cmd,
+        })
+        :spawn()
 end
 
----Spawn a program with optional callbacks for its stdout, stderr, and exit information.
+---@param cmd CommandOpts
 ---
----`callbacks` is an optional table with the following optional fields:
---- - `stdout`: function(line: string)
---- - `stderr`: function(line: string)
---- - `exit`:   function(code: integer, msg: string)
----
----Note: if `args` is a string then it will be wrapped in a table and sent to the compositor.
----If you need multiple arguments, use a string array instead.
----
----Note 2: If you spawn a window before tags are added it will spawn without any tags and
----won't be displayed in the compositor. TODO: Do what awesome does and display on all tags instead
----
----#### Example
----```lua
----Process.spawn("alacritty")
----
---- -- With a table of arguments
----Process.spawn({ "bash", "-c", "echo hello" })
----
---- -- With callbacks
----Process.spawn("alacritty", {
----    stdout = function(line)
----        print(line)
----    end,
----    -- You can ignore callbacks you don't need
----    exit = function(code, msg)
----        print("exited with code", code)
----        print("exited with msg", msg)
----    end,
----})
----```
----
----@param args string | string[] The program arguments; a string instead of an array should be for only 1 argument
----@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }? Callbacks that will be run whenever the program outputs to stdout, stderr, or exits.
-function process.spawn(args, callbacks)
-    if type(args) == "string" then
-        args = { args }
-    end
-
-    spawn_inner(args, callbacks, false)
-end
-
----Like `Process.spawn` but will only spawn the program if it isn't already running.
----
----@param args string | string[]
----@param callbacks { stdout: fun(line: string)?, stderr: fun(line: string)?, exit: fun(code: integer, msg: string)? }?
----
----@see Process.spawn
-function process.spawn_once(args, callbacks)
-    if type(args) == "string" then
-        args = { args }
-    end
-
-    spawn_inner(args, callbacks, true)
-end
-
----Set an environment variable for the compositor.
----This will cause any future spawned processes to have this environment variable.
----
----#### Example
----```lua
----Process.set_env("ENV_NAME", "the value")
----```
----
----@param key string The environment variable key
----@param value string The environment variable value
-function process.set_env(key, value)
-    local _, err = client:unary_request(process_service.SetEnv, {
-        key = key,
-        value = value,
-    })
-
-    if err then
-        log:error(err)
-    end
+---@return Command
+---@nodiscard
+function process.command(cmd)
+    setmetatable(cmd, { __index = Command })
+    return cmd --[[@as Command]]
 end
 
 return process

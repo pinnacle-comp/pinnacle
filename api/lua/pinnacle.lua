@@ -4,32 +4,13 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v0alpha1.PinnacleService
+local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v1.PinnacleService
 
 ---The entry point to configuration.
 ---
 ---This module contains the `setup` function, which is how you'll access all the ways to configure Pinnacle.
 ---@class Pinnacle
-local pinnacle = {
-    ---@type Input
-    input = require("pinnacle.input"),
-    ---@type Tag
-    tag = require("pinnacle.tag"),
-    ---@type Output
-    output = require("pinnacle.output"),
-    ---@type Window
-    window = require("pinnacle.window"),
-    ---@type Process
-    process = require("pinnacle.process"),
-    ---@type Util
-    util = require("pinnacle.util"),
-    ---@type Layout
-    layout = require("pinnacle.layout"),
-    ---@type Render
-    render = require("pinnacle.render"),
-    ---@type pinnacle.Snowcap
-    snowcap = nil,
-}
+local pinnacle = {}
 
 ---Quit Pinnacle.
 function pinnacle.quit()
@@ -60,11 +41,11 @@ function pinnacle.backend()
         -- TODO: possibly panic here; a nil index error will be thrown after this anyway
     end
 
-    ---@cast response pinnacle.v0alpha1.BackendResponse
+    ---@cast response pinnacle.v1.BackendResponse
 
     local defs = require("pinnacle.grpc.defs")
 
-    if response.backend == defs.pinnacle.v0alpha1.Backend.BACKEND_WINDOW then
+    if response.backend == defs.pinnacle.v1.Backend.BACKEND_WINDOW then
         return "window"
     else
         return "tty"
@@ -100,7 +81,7 @@ end
 ---
 ---If you want to run a function with the config without blocking at the end, see `Pinnacle.run`.
 ---
----@param config_fn fun(pinnacle: Pinnacle)
+---@param config_fn fun()
 ---
 ---@see Pinnacle.run
 function pinnacle.setup(config_fn)
@@ -108,22 +89,22 @@ function pinnacle.setup(config_fn)
 
     -- This function ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
-    client.loop:wrap(function()
-        while true do
-            require("cqueues").sleep(60)
-            local success, err, errno = client.conn:ping(10)
-            if not success then
-                error(
-                    "compositor ping failed: err = "
-                        .. tostring(err)
-                        .. ", errno = "
-                        .. tostring(errno)
-                )
-            end
-        end
-    end)
+    -- client.loop:wrap(function()
+    --     while true do
+    --         require("cqueues").sleep(60)
+    --         local success, err, errno = client.conn:ping(10)
+    --         if not success then
+    --             error(
+    --                 "compositor ping failed: err = "
+    --                     .. tostring(err)
+    --                     .. ", errno = "
+    --                     .. tostring(errno)
+    --             )
+    --         end
+    --     end
+    -- end)
 
-    config_fn(pinnacle)
+    client.loop:wrap(config_fn)
 
     local success, err = client.loop:loop()
     if not success then
@@ -144,11 +125,11 @@ end
 ---call signal callbacks. This is useful for things like querying compositor information for outputs and
 ---windows.
 ---
----@param run_fn fun(pinnacle: Pinnacle)
+---@param run_fn fun()
 function pinnacle.run(run_fn)
     pinnacle.init()
 
-    run_fn(pinnacle)
+    run_fn()
 end
 
 return pinnacle

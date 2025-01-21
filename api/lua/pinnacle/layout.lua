@@ -4,1132 +4,733 @@
 
 local client = require("pinnacle.grpc.client").client
 local protobuf = require("pinnacle.grpc.protobuf")
-local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v0alpha1.LayoutService
-
-local mfloor = math.floor
+local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v1.LayoutService
+local defs = require("pinnacle.grpc.defs")
+local log = require("pinnacle.log")
 
 ---@class LayoutArgs
 ---@field output OutputHandle
----@field windows WindowHandle[]
+---@field window_count integer
 ---@field tags TagHandle[]
----@field output_width integer
----@field output_height integer
+
+---@alias LayoutDir
+---| "row"
+---| "column"
+
+---@alias pinnacle.layout.Gaps
+---| { left: number, right: number, top: number, bottom: number }
+---| number
+
+---@class LayoutNode
+---@field label string?
+---@field traversal_index integer?
+---@field traversal_overrides table<integer, integer[]>?
+---@field layout_dir LayoutDir?
+---@field gaps (number | pinnacle.layout.Gaps)?
+---@field size_proportion number?
+---@field children LayoutNode[]
 
 ---A layout generator.
 ---@class LayoutGenerator
 ---Generate an array of geometries from the given `LayoutArgs`.
----@field layout fun(self: self, args: LayoutArgs): { x: integer, y: integer, width: integer, height: integer }[]
+---@field layout fun(self: self, window_count: integer): LayoutNode
 
 ---Builtin layout generators.
 ---
 ---This contains functions that create various builtin generators.
 ---@class Builtin
-local builtins = {}
+local builtin = {}
 
-----------------------------------------
--- Master Stack                       --
-----------------------------------------
+---@class pinnacle.layout.builtin.Line : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
+---@field direction LayoutDir
+---@field reversed boolean
 
----A `LayoutGenerator` that has one master area to one side
----and a stack of windows next to it.
----@class Builtin.MasterStack: LayoutGenerator
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----@field gaps integer | { inner: integer, outer: integer }
----The proportion of the output taken up by the master window(s).
----
----This is a float that will be clamped between 0.1 and 0.9.
+---@class pinnacle.layout.builtin.LineOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
+---@field direction LayoutDir?
+---@field reversed boolean?
+
+---@param options pinnacle.layout.builtin.LineOpts?
+---@return pinnacle.layout.builtin.Line
+function builtin.line(options)
+    ---@type pinnacle.layout.builtin.Line
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        direction = options and options.direction or "row",
+        reversed = options and options.reversed or false,
+        ---@param self pinnacle.layout.builtin.Line
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                layout_dir = self.direction,
+                label = "builtin.line",
+                children = {},
+            }
+
+            if window_count == 0 then
+                return root
+            end
+
+            ---@type LayoutNode[]
+            local children = {}
+            if not self.reversed then
+                for i = 0, window_count - 1 do
+                    table.insert(children, {
+                        traversal_index = i,
+                        gaps = self.inner_gaps,
+                        children = {},
+                    })
+                end
+            else
+                for i = window_count - 1, 0, -1 do
+                    table.insert(children, {
+                        traversal_index = i,
+                        gaps = self.inner_gaps,
+                        children = {},
+                    })
+                end
+            end
+
+            root.children = children
+
+            return root
+        end,
+    }
+end
+
+---@class pinnacle.layout.builtin.MasterStack : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
 ---@field master_factor number
----The side the master window(s) will be on.
----@field master_side "left"|"right"|"top"|"bottom"
----How many windows the master side will have.
+---@field master_side "left" | "right" | "top" | "bottom"
 ---@field master_count integer
-local MasterStack = {
-    gaps = 8,
-    master_factor = 0.5,
-    master_side = "left",
-    master_count = 1,
-}
+---@field reversed boolean
 
----@class Builtin.MasterStack.Args
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----
----Defaults to 8.
----@field gaps? integer | { inner: integer, outer: integer }
----The proportion of the output taken up by the master window(s).
----
----This is a float that will be clamped between 0.1 and 0.9.
----
----Defaults to 0.5.
----@field master_factor? number
----The side the master window(s) will be on.
----
----Defaults to "left".
----@field master_side? "left"|"right"|"top"|"bottom"
----How many windows the master side will have.
----
----Defaults to 1.
----@field master_count? integer
+---@class pinnacle.layout.builtin.MasterStackOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
+---@field master_factor number?
+---@field master_side ("left" | "right" | "top" | "bottom")?
+---@field master_count integer?
+---@field reversed boolean?
 
----@param args LayoutArgs
----@return { x: integer, y: integer, width: integer, height: integer }[]
-function MasterStack:layout(args)
-    local win_count = #args.windows
+---@param options pinnacle.layout.builtin.MasterStackOpts?
+---@return pinnacle.layout.builtin.MasterStack
+function builtin.master_stack(options)
+    ---@type pinnacle.layout.builtin.MasterStack
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        master_factor = options and options.master_factor or 0.5,
+        master_side = options and options.master_side or "left",
+        master_count = options and options.master_count or 1,
+        reversed = options and options.reversed or false,
+        ---@param self pinnacle.layout.builtin.MasterStack
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                layout_dir = (self.master_side == "left" or self.master_side == "right") and "row"
+                    or "column",
+                label = "builtin.master_stack",
+                children = {},
+            }
 
-    if win_count == 0 then
-        return {}
-    end
+            if window_count == 0 then
+                return root
+            end
 
-    local width = args.output_width
-    local height = args.output_height
+            local master_factor = math.min(math.max(0.1, self.master_factor), 0.9)
 
-    ---@type { x: integer, y: integer, width: integer, height: integer }[]
-    local geos = {}
+            local master_tv_idx, stack_tv_idx = 0, 1
+            if self.reversed then
+                master_tv_idx, stack_tv_idx = 1, 0
+            end
 
-    ---@type integer
-    local outer_gaps
-    ---@type integer?
-    local inner_gaps
+            local master_count = math.min(self.master_count, window_count)
 
-    if type(self.gaps) == "number" then
-        outer_gaps = self.gaps --[[@as integer]]
-    else
-        outer_gaps = self.gaps.outer
-        inner_gaps = self.gaps.inner
-    end
+            local line = builtin.line({
+                outer_gaps = 0.0,
+                inner_gaps = self.inner_gaps,
+                direction = (self.master_side == "left" or self.master_side == "right")
+                        and "column"
+                    or "row",
+                reversed = self.reversed,
+            })
 
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+            local master_side = line:layout(master_count)
 
-    rect = rect:split_at("horizontal", 0, outer_gaps)
-    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-    rect = rect:split_at("vertical", 0, outer_gaps)
-    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+            master_side.traversal_index = master_tv_idx
+            master_side.size_proportion = master_factor * 10.0
 
-    local master_factor = math.max(math.min(self.master_factor, 0.9), 0.1)
-    if win_count <= self.master_count then
-        master_factor = 1
-    end
+            if window_count <= self.master_count then
+                root.children = { master_side }
+                return root
+            end
 
-    local master_rect
-    local stack_rect
+            local stack_count = window_count - master_count
+            local stack_side = line:layout(stack_count)
+            stack_side.traversal_index = stack_tv_idx
+            stack_side.size_proportion = (1.0 - master_factor) * 10.0
 
-    local gaps = ((not inner_gaps and outer_gaps) or 0)
-
-    if self.master_side == "left" then
-        master_rect, stack_rect =
-            rect:split_at("vertical", mfloor(width * master_factor) - mfloor(gaps / 2), gaps)
-    elseif self.master_side == "right" then
-        stack_rect, master_rect =
-            rect:split_at("vertical", mfloor(width * master_factor) - mfloor(gaps / 2), gaps)
-    elseif self.master_side == "top" then
-        master_rect, stack_rect =
-            rect:split_at("horizontal", mfloor(height * master_factor) - mfloor(gaps / 2), gaps)
-    else
-        stack_rect, master_rect =
-            rect:split_at("horizontal", mfloor(height * master_factor) - mfloor(gaps / 2), gaps)
-    end
-
-    if not master_rect then
-        assert(stack_rect)
-        master_rect = stack_rect
-        stack_rect = nil
-    end
-
-    local master_slice_count
-    local stack_slice_count = nil
-
-    if win_count > self.master_count then
-        master_slice_count = self.master_count - 1
-        stack_slice_count = win_count - self.master_count - 1
-    else
-        master_slice_count = win_count - 1
-    end
-
-    -- layout the master side
-    if master_slice_count > 0 then
-        local coord
-        local len
-        local axis
-
-        if self.master_side == "left" or self.master_side == "right" then
-            coord = master_rect.y
-            len = mfloor(master_rect.height / (master_slice_count + 1))
-            axis = "horizontal"
-        else
-            coord = master_rect.x
-            len = mfloor(master_rect.width / (master_slice_count + 1))
-            axis = "vertical"
-        end
-
-        for i = 1, master_slice_count do
-            local slice_point = coord + mfloor(len * i + 0.5)
-            slice_point = slice_point - mfloor(gaps / 2)
-            local to_push, rest = master_rect:split_at(axis, slice_point, gaps)
-            table.insert(geos, to_push)
-            master_rect = rest
-        end
-    end
-
-    table.insert(geos, master_rect)
-
-    if stack_slice_count then
-        assert(stack_rect)
-
-        if stack_slice_count > 0 then
-            local coord
-            local len
-            local axis
-            if self.master_side == "left" or self.master_side == "right" then
-                coord = stack_rect.y
-                len = stack_rect.height / (stack_slice_count + 1)
-                axis = "horizontal"
+            if self.master_side == "left" or self.master_side == "top" then
+                root.children = { master_side, stack_side }
             else
-                coord = stack_rect.x
-                len = stack_rect.width / (stack_slice_count + 1)
-                axis = "vertical"
+                root.children = { stack_side, master_side }
             end
 
-            for i = 1, stack_slice_count do
-                local slice_point = coord + mfloor(len * i + 0.5)
-                slice_point = slice_point - mfloor(gaps / 2)
-                local to_push, rest = stack_rect:split_at(axis, slice_point, gaps)
-                table.insert(geos, to_push)
-                stack_rect = rest
-            end
-        end
-
-        table.insert(geos, stack_rect)
-    end
-
-    if inner_gaps then
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + inner_gaps
-            geos[i].y = geos[i].y + inner_gaps
-            geos[i].width = geos[i].width - inner_gaps * 2
-            geos[i].height = geos[i].height - inner_gaps * 2
-        end
-    end
-
-    return geos
+            return root
+        end,
+    }
 end
 
----Create a master stack layout generator.
----
----Pass in `settings` to override the defaults.
----
----@param settings? Builtin.MasterStack.Args
----
----@return Builtin.MasterStack
-function builtins.master_stack(settings)
-    local master_stack = settings or {}
-    setmetatable(master_stack, { __index = MasterStack })
-    ---@cast master_stack Builtin.MasterStack
-    return master_stack
-end
+---@class pinnacle.layout.builtin.Dwindle : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
 
-----------------------------------------
--- Dwindle                            --
-----------------------------------------
+---@class pinnacle.layout.builtin.DwindleOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
 
----A `LayoutGenerator` that lays out windows in a shrinking fashion
----towards the bottom right corner.
----@class Builtin.Dwindle: LayoutGenerator
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----@field gaps integer | { inner: integer, outer: integer }
----The proportions that each split will split at.
----
----The first split will use the factor at [1],
----the second at [2], and so on.
----@field split_factors table<integer, number>
-local Dwindle = {
-    gaps = 8,
-    split_factors = {},
-}
+---@param options pinnacle.layout.builtin.DwindleOpts?
+---@return pinnacle.layout.builtin.Dwindle
+function builtin.dwindle(options)
+    ---@type pinnacle.layout.builtin.Dwindle
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        ---@param self pinnacle.layout.builtin.Dwindle
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                label = "builtin.dwindle",
+                children = {},
+            }
 
----@class Builtin.Dwindle.Args
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----
----Defaults to 8.
----@field gaps? integer | { inner: integer, outer: integer }
----The proportions that each split will split at.
----
----The first split will use the factor at [1],
----the second at [2], and so on.
----
----Defaults to 0.5 if there is no factor at [n].
----@field split_factors? table<integer, number>
-
----@param args LayoutArgs
----
----@return { x: integer, y: integer, width: integer, height: integer }[]
-function Dwindle:layout(args)
-    local win_count = #args.windows
-
-    if win_count == 0 then
-        return {}
-    end
-
-    local width = args.output_width
-    local height = args.output_height
-
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
-
-    ---@type Rectangle[]
-    local geos = {}
-
-    ---@type integer
-    local outer_gaps
-    ---@type integer?
-    local inner_gaps
-
-    if type(self.gaps) == "number" then
-        outer_gaps = self.gaps --[[@as integer]]
-    else
-        outer_gaps = self.gaps.outer
-        inner_gaps = self.gaps.inner
-    end
-
-    rect = rect:split_at("horizontal", 0, outer_gaps)
-    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-    rect = rect:split_at("vertical", 0, outer_gaps)
-    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
-
-    if win_count == 1 then
-        table.insert(geos, rect)
-    else
-        local gaps = ((not inner_gaps and outer_gaps) or 0)
-
-        ---@type Rectangle
-        local rest = rect
-
-        for i = 1, win_count - 1 do
-            local factor = math.min(math.max(self.split_factors[i] or 0.5, 0.1), 0.9)
-            local axis
-            local split_coord
-            if i % 2 == 1 then
-                axis = "vertical"
-                split_coord = rest.x + mfloor(rest.width * factor + 0.5)
-            else
-                axis = "horizontal"
-                split_coord = rest.y + mfloor(rest.height * factor + 0.5)
-            end
-            split_coord = split_coord - mfloor(gaps / 2)
-
-            local to_push
-
-            ---@diagnostic disable-next-line: cast-local-type
-            to_push, rest = rest:split_at(axis, split_coord, gaps)
-
-            if not rest then
-                break
+            if window_count == 0 then
+                return root
             end
 
-            table.insert(geos, to_push)
-        end
+            if window_count == 1 then
+                ---@type LayoutNode
+                local child = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                root.children = { child }
+                return root
+            end
 
-        table.insert(geos, rest)
-    end
+            local current_node = root
 
-    if inner_gaps then
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + inner_gaps
-            geos[i].y = geos[i].y + inner_gaps
-            geos[i].width = geos[i].width - inner_gaps * 2
-            geos[i].height = geos[i].height - inner_gaps * 2
-        end
-    end
+            for i = 0, window_count - 2 do
+                if current_node ~= root then
+                    current_node.label = "builtin.dwindle.split"
+                    current_node.gaps = 0.0
+                end
 
-    return geos
+                ---@type LayoutNode
+                local child1 = {
+                    traversal_index = 0,
+                    layout_dir = (i % 2 == 0) and "column" or "row",
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+
+                ---@type LayoutNode
+                local child2 = {
+                    traversal_index = 1,
+                    layout_dir = (i % 2 == 0) and "column" or "row",
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+
+                current_node.children = { child1, child2 }
+
+                current_node = child2
+            end
+
+            return root
+        end,
+    }
 end
 
----Create a dwindle layout generator.
----
----Pass in `settings` to override the defaults.
----
----@param settings? Builtin.Dwindle.Args
----
----@return Builtin.Dwindle
-function builtins.dwindle(settings)
-    local dwindle = settings or {}
-    setmetatable(dwindle, { __index = Dwindle })
-    ---@cast dwindle Builtin.Dwindle
-    return dwindle
+---@class pinnacle.layout.builtin.Spiral : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
+
+---@class pinnacle.layout.builtin.SpiralOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
+
+---@param options pinnacle.layout.builtin.SpiralOpts?
+---@return pinnacle.layout.builtin.Spiral
+function builtin.spiral(options)
+    ---@type pinnacle.layout.builtin.Spiral
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        ---@param self pinnacle.layout.builtin.Spiral
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                label = "builtin.spiral",
+                children = {},
+            }
+
+            if window_count == 0 then
+                return root
+            end
+
+            if window_count == 1 then
+                ---@type LayoutNode
+                local child = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                root.children = { child }
+                return root
+            end
+
+            local current_node = root
+
+            for i = 0, window_count - 2 do
+                if current_node ~= root then
+                    current_node.label = "builtin.dwindle.split"
+                    current_node.gaps = 0.0
+                end
+
+                ---@type LayoutNode
+                local child1 = {
+                    traversal_index = 0,
+                    layout_dir = (i % 2 == 0) and "column" or "row",
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+
+                ---@type LayoutNode
+                local child2 = {
+                    traversal_index = 1,
+                    layout_dir = (i % 2 == 0) and "column" or "row",
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+
+                current_node.children = { child1, child2 }
+
+                if i % 4 == 0 or i % 4 == 1 then
+                    current_node = child2
+                else
+                    current_node = child1
+                end
+            end
+
+            return root
+        end,
+    }
 end
 
-----------------------------------------
--- Corner                             --
-----------------------------------------
-
----A `LayoutGenerator` that has one main corner window and a
----horizontal and vertical stack flanking it on the other two sides.
----@class Builtin.Corner: LayoutGenerator
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----@field gaps integer | { inner: integer, outer: integer }
----How much of the output the corner window's width will take up.
+---@class pinnacle.layout.builtin.Corner : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
 ---@field corner_width_factor number
----How much of the output the corner window's height will take up.
 ---@field corner_height_factor number
----Which corner the corner window will be in.
----@field corner_loc "top_left"|"top_right"|"bottom_left"|"bottom_right"
-local Corner = {
-    gaps = 8,
-    corner_width_factor = 0.5,
-    corner_height_factor = 0.5,
-    corner_loc = "top_left",
-}
+---@field corner_loc "top_left" | "top_right" | "bottom_left" | "bottom_right"
 
----@class Builtin.Corner.Args
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----
----Defaults to 8.
----@field gaps? integer | { inner: integer, outer: integer }
----How much of the output the corner window's width will take up.
----
----Defaults to 0.5.
----@field corner_width_factor? number
----How much of the output the corner window's height will take up.
----
----Defaults to 0.5.
----@field corner_height_factor? number
----Which corner the corner window will be in.
----
----Defaults to "top_left".
----@field corner_loc? "top_left"|"top_right"|"bottom_left"|"bottom_right"
+---@class pinnacle.layout.builtin.CornerOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
+---@field corner_width_factor number?
+---@field corner_height_factor number?
+---@field corner_loc ("top_left" | "top_right" | "bottom_left" | "bottom_right")?
 
----@param args LayoutArgs
----
----@return { x: integer, y: integer, width: integer, height: integer }[]
-function Corner:layout(args)
-    local win_count = #args.windows
+---@param options pinnacle.layout.builtin.CornerOpts?
+---@return pinnacle.layout.builtin.Corner
+function builtin.corner(options)
+    ---@type pinnacle.layout.builtin.Corner
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        corner_width_factor = options and options.corner_width_factor or 0.5,
+        corner_height_factor = options and options.corner_height_factor or 0.5,
+        corner_loc = options and options.corner_loc or "top_left",
+        ---@param self pinnacle.layout.builtin.Corner
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                label = "builtin.corner",
+                children = {},
+            }
 
-    if win_count == 0 then
-        return {}
-    end
+            if window_count == 0 then
+                return root
+            end
 
-    local width = args.output_width
-    local height = args.output_height
+            if window_count == 1 then
+                ---@type LayoutNode
+                local child = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                root.children = { child }
+                return root
+            end
 
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
+            local corner_width_factor = math.min(math.max(0.1, self.corner_width_factor), 0.9)
+            local corner_height_factor = math.min(math.max(0.1, self.corner_height_factor), 0.9)
 
-    ---@type Rectangle[]
-    local geos = {}
+            ---@type LayoutNode
+            local corner_and_horiz_stack_node = {
+                traversal_index = 0,
+                label = "builtin.corner.corner_and_stack",
+                layout_dir = "column",
+                size_proportion = corner_width_factor * 10.0,
+                children = {},
+            }
 
-    ---@type integer
-    local outer_gaps
-    ---@type integer?
-    local inner_gaps
+            local vert_count = math.ceil((window_count - 1) / 2)
+            local horiz_count = math.floor((window_count - 1) / 2)
 
-    if type(self.gaps) == "number" then
-        outer_gaps = self.gaps --[[@as integer]]
-    else
-        outer_gaps = self.gaps.outer
-        inner_gaps = self.gaps.inner
-    end
+            local vert_stack = builtin.line({
+                outer_gaps = 0.0,
+                inner_gaps = self.inner_gaps,
+                direction = "column",
+                reversed = false,
+            })
 
-    rect = rect:split_at("horizontal", 0, outer_gaps)
-    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-    rect = rect:split_at("vertical", 0, outer_gaps)
-    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
+            local vert_stack_node = vert_stack:layout(vert_count)
+            vert_stack_node.size_proportion = (1.0 - corner_width_factor) * 10.0
+            vert_stack_node.traversal_index = 1
 
-    if win_count == 1 then
-        table.insert(geos, rect)
-    else
-        local gaps = ((not inner_gaps and outer_gaps) or 0)
+            if self.corner_loc == "top_left" or self.corner_loc == "bottom_left" then
+                root.children = { corner_and_horiz_stack_node, vert_stack_node }
+            else
+                root.children = { vert_stack_node, corner_and_horiz_stack_node }
+            end
 
-        local corner_rect, vert_stack_rect
+            if horiz_count == 0 then
+                corner_and_horiz_stack_node.gaps = self.inner_gaps
+                return root
+            end
 
-        if self.corner_loc == "top_left" or self.corner_loc == "bottom_left" then
-            local x_slice_point = rect.x
-                + mfloor(rect.width * self.corner_width_factor + 0.5)
-                - mfloor(gaps / 2)
-            corner_rect, vert_stack_rect = rect:split_at("vertical", x_slice_point, gaps)
-        else
-            local x_slice_point = rect.x
-                + mfloor(rect.width * (1 - self.corner_width_factor) + 0.5)
-                - mfloor(gaps / 2)
-            vert_stack_rect, corner_rect = rect:split_at("vertical", x_slice_point, gaps)
-        end
+            ---@type LayoutNode
+            local corner_node = {
+                traversal_index = 0,
+                size_proportion = corner_height_factor * 10.0,
+                gaps = self.inner_gaps,
+                children = {},
+            }
 
-        if win_count == 2 then
-            table.insert(geos, corner_rect)
-            table.insert(geos, vert_stack_rect)
-        else
-            assert(corner_rect)
+            local horiz_stack = builtin.line({
+                outer_gaps = 0.0,
+                inner_gaps = self.inner_gaps,
+                direction = "row",
+                reversed = false,
+            })
 
-            local horiz_stack_rect
+            local horiz_stack_node = horiz_stack:layout(horiz_count)
+            horiz_stack_node.size_proportion = (1.0 - corner_height_factor) * 10.0
+            horiz_stack_node.traversal_index = 1
 
             if self.corner_loc == "top_left" or self.corner_loc == "top_right" then
-                local y_slice_point = rect.y
-                    + mfloor(rect.height * self.corner_height_factor + 0.5)
-                    - mfloor(gaps / 2)
-                corner_rect, horiz_stack_rect =
-                    corner_rect:split_at("horizontal", y_slice_point, gaps)
+                corner_and_horiz_stack_node.children = { corner_node, horiz_stack_node }
             else
-                local y_slice_point = rect.y
-                    + mfloor(rect.height * (1 - self.corner_height_factor) + 0.5)
-                    - mfloor(gaps / 2)
-                horiz_stack_rect, corner_rect =
-                    corner_rect:split_at("horizontal", y_slice_point, gaps)
+                corner_and_horiz_stack_node.children = { horiz_stack_node, corner_node }
             end
 
-            assert(horiz_stack_rect)
-            assert(vert_stack_rect)
-            assert(corner_rect)
-
-            table.insert(geos, corner_rect)
-
-            -- win_count >= 3 here
-
-            ---@type Rectangle[]
-            local vert_geos = {}
-            ---@type Rectangle[]
-            local horiz_geos = {}
-
-            local vert_stack_count = math.ceil((win_count - 1) / 2)
-            local horiz_stack_count = mfloor((win_count - 1) / 2)
-
-            local vert_stack_y = vert_stack_rect.y
-            local vert_win_height = vert_stack_rect.height / vert_stack_count
-
-            for i = 1, vert_stack_count - 1 do
-                local slice_point = vert_stack_y + mfloor(vert_win_height * i + 0.5)
-                slice_point = slice_point - mfloor(gaps / 2)
-                local to_push, rest = vert_stack_rect:split_at("horizontal", slice_point, gaps)
-                table.insert(vert_geos, to_push)
-                vert_stack_rect = rest
+            local traversal_overrides = {}
+            for i = 0, window_count - 1 do
+                traversal_overrides[i] = { i % 2 }
             end
 
-            table.insert(vert_geos, vert_stack_rect)
+            root.traversal_overrides = traversal_overrides
 
-            local horiz_stack_x = horiz_stack_rect.x
-            local horiz_win_width = horiz_stack_rect.width / horiz_stack_count
+            return root
+        end,
+    }
+end
 
-            for i = 1, horiz_stack_count - 1 do
-                local slice_point = horiz_stack_x + mfloor(horiz_win_width * i + 0.5)
-                slice_point = slice_point - mfloor(gaps / 2)
-                local to_push, rest = horiz_stack_rect:split_at("vertical", slice_point, gaps)
-                table.insert(horiz_geos, to_push)
-                horiz_stack_rect = rest
+---@class pinnacle.layout.builtin.Fair : LayoutGenerator
+---@field outer_gaps pinnacle.layout.Gaps
+---@field inner_gaps pinnacle.layout.Gaps
+---@field axis "horizontal" | "vertical"
+
+---@class pinnacle.layout.builtin.FairOpts
+---@field outer_gaps pinnacle.layout.Gaps?
+---@field inner_gaps pinnacle.layout.Gaps?
+---@field axis ("horizontal" | "vertical")?
+
+---@param options pinnacle.layout.builtin.FairOpts?
+---@return pinnacle.layout.builtin.Fair
+function builtin.fair(options)
+    ---@type pinnacle.layout.builtin.Fair
+    return {
+        outer_gaps = options and options.outer_gaps or 4.0,
+        inner_gaps = options and options.inner_gaps or 4.0,
+        axis = options and options.axis or "vertical",
+        ---@param self pinnacle.layout.builtin.Fair
+        layout = function(self, window_count)
+            ---@type LayoutNode
+            local root = {
+                gaps = self.outer_gaps,
+                label = "builtin.fair",
+                children = {},
+            }
+
+            if window_count == 0 then
+                return root
             end
 
-            table.insert(horiz_geos, horiz_stack_rect)
+            if window_count == 1 then
+                ---@type LayoutNode
+                local child = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                root.children = { child }
+                return root
+            end
 
-            -- Alternate between the vertical and horizontal stacks
-            for i = 1, #vert_geos + #horiz_geos do
-                if i % 2 == 1 then
-                    table.insert(geos, vert_geos[math.ceil(i / 2)])
-                else
-                    table.insert(geos, horiz_geos[i / 2])
+            if window_count == 2 then
+                ---@type LayoutNode
+                local child1 = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                ---@type LayoutNode
+                local child2 = {
+                    gaps = self.inner_gaps,
+                    children = {},
+                }
+                root.children = { child1, child2 }
+                return root
+            end
+
+            local line_count = math.floor(math.sqrt(window_count) + 0.5)
+            local wins_per_line = {}
+
+            local max_per_line = (window_count > line_count * line_count) and line_count + 1
+                or line_count
+
+            for i = 1, window_count do
+                local index = math.ceil(i / max_per_line)
+                if not wins_per_line[index] then
+                    wins_per_line[index] = 0
                 end
-            end
-        end
-    end
-
-    if inner_gaps then
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + inner_gaps
-            geos[i].y = geos[i].y + inner_gaps
-            geos[i].width = geos[i].width - inner_gaps * 2
-            geos[i].height = geos[i].height - inner_gaps * 2
-        end
-    end
-
-    return geos
-end
-
----Create a corner layout generator.
----
----Pass in `settings` to override the defaults.
----
----@param settings? Builtin.Corner.Args
----
----@return Builtin.Corner
-function builtins.corner(settings)
-    local corner = settings or {}
-    setmetatable(corner, { __index = Corner })
-    ---@cast corner Builtin.Corner
-    return corner
-end
-
-----------------------------------------
--- Spiral                             --
-----------------------------------------
-
----A `LayoutGenerator` that lays out windows in a spiral.
----
----This is similar to the dwindle layout but in a spiral instead of
----towards the borrom right corner.
----@class Builtin.Spiral : LayoutGenerator
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----@field gaps integer | { inner: integer, outer: integer }
----The proportions that each split will split at.
----
----The first split will use the factor at [1],
----the second at [2], and so on.
----@field split_factors table<integer, number>
-local Spiral = {
-    gaps = 8,
-    split_factors = {},
-}
-
----@class Builtin.Spiral.Args
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----
----Defaults to 8.
----@field gaps? integer | { inner: integer, outer: integer }
----The proportions that each split will split at.
----
----The first split will use the factor at [1],
----the second at [2], and so on.
----
----Defaults to 0.5 if there is no factor at [n].
----@field split_factors? table<integer, number>
-
----@param args LayoutArgs
----
----@return { x: integer, y: integer, width: integer, height: integer }[]
-function Spiral:layout(args)
-    local win_count = #args.windows
-
-    if win_count == 0 then
-        return {}
-    end
-
-    local width = args.output_width
-    local height = args.output_height
-
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
-
-    ---@type Rectangle[]
-    local geos = {}
-
-    ---@type integer
-    local outer_gaps
-    ---@type integer?
-    local inner_gaps
-
-    if type(self.gaps) == "number" then
-        outer_gaps = self.gaps --[[@as integer]]
-    else
-        outer_gaps = self.gaps.outer
-        inner_gaps = self.gaps.inner
-    end
-
-    rect = rect:split_at("horizontal", 0, outer_gaps)
-    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-    rect = rect:split_at("vertical", 0, outer_gaps)
-    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
-
-    if win_count == 1 then
-        table.insert(geos, rect)
-    else
-        local gaps = ((not inner_gaps and outer_gaps) or 0)
-
-        ---@type Rectangle
-        local rest = rect
-
-        for i = 1, win_count - 1 do
-            local factor = math.min(math.max(self.split_factors[i] or 0.5, 0.1), 0.9)
-            local axis
-            local split_coord
-            if i % 2 == 1 then
-                axis = "vertical"
-                split_coord = rest.x + mfloor(rest.width * factor + 0.5)
-            else
-                axis = "horizontal"
-                split_coord = rest.y + mfloor(rest.height * factor + 0.5)
-            end
-            split_coord = split_coord - mfloor(gaps / 2)
-
-            local to_push
-
-            -- Minor change from dwindle here
-            if i % 4 == 3 or i % 4 == 0 then
-                rest, to_push = rest:split_at(axis, split_coord, gaps)
-            else
-                ---@diagnostic disable-next-line: cast-local-type
-                to_push, rest = rest:split_at(axis, split_coord, gaps)
+                wins_per_line[index] = wins_per_line[index] + 1
             end
 
-            if not rest then
-                break
+            local line = builtin.line({
+                outer_gaps = 0.0,
+                inner_gaps = self.inner_gaps,
+                direction = self.axis == "horizontal" and "row" or "column",
+                reversed = false,
+            })
+
+            local lines = {}
+            for i = 1, line_count do
+                lines[i] = line:layout(wins_per_line[i])
             end
 
-            table.insert(geos, to_push)
-        end
+            root.children = lines
 
-        table.insert(geos, rest)
-    end
+            root.layout_dir = self.axis == "horizontal" and "column" or "row"
 
-    if inner_gaps then
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + inner_gaps
-            geos[i].y = geos[i].y + inner_gaps
-            geos[i].width = geos[i].width - inner_gaps * 2
-            geos[i].height = geos[i].height - inner_gaps * 2
-        end
-    end
-
-    return geos
+            return root
+        end,
+    }
 end
 
----Create a spiral layout generator.
----
----Pass in `settings` to override the defaults.
----
----@param settings? Builtin.Spiral.Args
----
----@return Builtin.Spiral
-function builtins.spiral(settings)
-    local spiral = settings or {}
-    setmetatable(spiral, { __index = Spiral })
-    ---@cast spiral Builtin.Spiral
-    return spiral
-end
-
-----------------------------------------
--- Fair                               --
-----------------------------------------
-
----A `LayoutGenerator` that attempts to layout windows such that
----they are the same size.
----@class Builtin.Fair : LayoutGenerator
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----@field gaps integer | { inner: integer, outer: integer }
----The direction of the lines of windows.
----@field direction "horizontal"|"vertical"
-local Fair = {
-    gaps = 8,
-    direction = "vertical",
-}
-
----@class Builtin.Fair.Args
----Gaps between windows, in pixels.
----
----This can be an integer or the table { inner: integer, outer: integer }.
----If it is an integer, all gaps will be that amount of pixels wide.
----If it is a table, `outer` denotes the amount of pixels around the
----edge of the output area that will become a gap, and
----`inner` denotes the amount of pixels around each window that
----will become a gap.
----
----This means that, for example, `inner = 2` will cause the gap
----width between windows to be 4; 2 around each window.
----
----Defaults to 8.
----@field gaps? integer | { inner: integer, outer: integer }
----The direction of the lines of windows.
----
----Defaults to "vertical".
----@field direction? "horizontal"|"vertical"
-
----@param args LayoutArgs
----
----@return { x: integer, y: integer, width: integer, height: integer }[]
-function Fair:layout(args)
-    local win_count = #args.windows
-
-    if win_count == 0 then
-        return {}
-    end
-
-    local width = args.output_width
-    local height = args.output_height
-
-    local rect = require("pinnacle.util").rectangle.new(0, 0, width, height)
-
-    ---@type Rectangle[]
-    local geos = {}
-
-    ---@type integer
-    local outer_gaps
-    ---@type integer?
-    local inner_gaps
-
-    if type(self.gaps) == "number" then
-        outer_gaps = self.gaps --[[@as integer]]
-    else
-        outer_gaps = self.gaps.outer
-        inner_gaps = self.gaps.inner
-    end
-
-    rect = rect:split_at("horizontal", 0, outer_gaps)
-    rect = rect:split_at("horizontal", height - outer_gaps, outer_gaps)
-    rect = rect:split_at("vertical", 0, outer_gaps)
-    rect = rect:split_at("vertical", width - outer_gaps, outer_gaps)
-
-    local gaps = ((not inner_gaps and outer_gaps) or 0)
-
-    if win_count == 1 then
-        table.insert(geos, rect)
-    elseif win_count == 2 then
-        local len
-        local coord
-        if self.direction == "vertical" then
-            len = rect.width
-            coord = rect.x
-        else
-            len = rect.height
-            coord = rect.y
-        end
-        -- Two windows is special cased to create a new line rather than increase to 2 in a line
-        local rect1, rect2 =
-            rect:split_at(self.direction, coord + mfloor(len / 2) - mfloor(gaps / 2), gaps)
-        if rect1 and rect2 then
-            table.insert(geos, rect1)
-            table.insert(geos, rect2)
-        end
-    else
-        local line_count = mfloor(math.sqrt(win_count) + 0.5)
-        local wins_per_line = {}
-        local max_per_line = line_count
-        if win_count > line_count * line_count then
-            max_per_line = line_count + 1
-        end
-        for i = 1, win_count do
-            local index = math.ceil(i / max_per_line)
-            if not wins_per_line[index] then
-                wins_per_line[index] = 0
-            end
-            wins_per_line[index] = wins_per_line[index] + 1
-        end
-
-        assert(#wins_per_line == line_count)
-
-        ---@type Rectangle[]
-        local line_rects = {}
-
-        local coord
-        local len
-        local axis
-        if self.direction == "horizontal" then
-            coord = rect.y
-            len = rect.height / line_count
-            axis = "horizontal"
-        else
-            coord = rect.x
-            len = rect.width / line_count
-            axis = "vertical"
-        end
-
-        for i = 1, line_count - 1 do
-            local slice_point = coord + mfloor(len * i + 0.5)
-            slice_point = slice_point - mfloor(gaps / 2)
-            local to_push, rest = rect:split_at(axis, slice_point, gaps)
-            table.insert(line_rects, to_push)
-            if not rest then
-                break
-            end
-            rect = rest
-        end
-
-        table.insert(line_rects, rect)
-
-        for i, line_rect in ipairs(line_rects) do
-            local coord ---@diagnostic disable-line: redefined-local
-            local len ---@diagnostic disable-line: redefined-local
-            local axis ---@diagnostic disable-line: redefined-local
-            if self.direction == "vertical" then
-                coord = line_rect.y
-                len = line_rect.height / wins_per_line[i]
-                axis = "horizontal"
-            else
-                coord = line_rect.x
-                len = line_rect.width / wins_per_line[i]
-                axis = "vertical"
-            end
-
-            for j = 1, wins_per_line[i] - 1 do
-                local slice_point = coord + mfloor(len * j + 0.5)
-                slice_point = slice_point - mfloor(gaps / 2)
-                local to_push, rest = line_rect:split_at(axis, slice_point, gaps)
-                table.insert(geos, to_push)
-                if not rest then
-                    break
-                end
-                line_rect = rest
-            end
-
-            table.insert(geos, line_rect)
-        end
-    end
-
-    if inner_gaps then
-        for i = 1, #geos do
-            geos[i].x = geos[i].x + inner_gaps
-            geos[i].y = geos[i].y + inner_gaps
-            geos[i].width = geos[i].width - inner_gaps * 2
-            geos[i].height = geos[i].height - inner_gaps * 2
-        end
-    end
-
-    return geos
-end
-
----Create a fair layout generator.
----
----Pass in `settings` to override the defaults.
----
----@param settings? Builtin.Fair.Args
----
----@return Builtin.Fair
-function builtins.fair(settings)
-    local fair = settings or {}
-    setmetatable(fair, { __index = Fair })
-    ---@cast fair Builtin.Fair
-    return fair
-end
-
----@class Layout
----@field private stream grpc_client.h2.Stream?
-local layout = {
-    builtins = builtins,
-}
-
----Set the layout manager for this config.
----
----It will manage layout requests from the compositor.
----
----Only one layout manager can manage layouts at a time.
----
----@param manager LayoutManager
-function layout.set_manager(manager)
-    layout.stream = client:bidirectional_streaming_request(layout_service.Layout, {
-        layout = {},
-    }, function(response, stream)
-        local request_id = response.request_id
-
-        ---@diagnostic disable-next-line: invisible
-        local output_handle = require("pinnacle.output").handle.new(response.output_name)
-
-        local window_handles =
-            ---@diagnostic disable-next-line: invisible
-            require("pinnacle.window").handle.new_from_table(response.window_ids or {})
-
-        ---@diagnostic disable-next-line: invisible
-        local tag_handles = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {})
-
-        ---@type LayoutArgs
-        local args = {
-            output = output_handle,
-            windows = window_handles,
-            tags = tag_handles,
-            output_width = response.output_width,
-            output_height = response.output_height,
-        }
-
-        local a = manager:get_active(args)
-        local success, geos = pcall(a.layout, a, args)
-
-        if not success then
-            print(geos)
-            os.exit(1)
-        end
-
-        local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
-            geometries = {
-                request_id = request_id,
-                geometries = geos,
-                output_name = response.output_name,
-            },
-        })
-
-        stream:write_chunk(body, false)
-    end)
-end
-
----Request a layout on the given output, or the focused output if nil.
----
----If no `LayoutManager` was set, this will do nothing.
----
----@param output OutputHandle?
-function layout.request_layout(output)
-    if not layout.stream then
-        return
-    end
-
-    local body = protobuf.encode(".pinnacle.layout.v0alpha1.LayoutRequest", {
-        layout = {
-            output_name = output and output.name,
-        },
-    })
-
-    layout.stream:write_chunk(body, false)
-end
-
----An object that manages layouts.
----@class LayoutManager
+---@class pinnacle.layout.builtin.Cycle : LayoutGenerator
 ---@field layouts LayoutGenerator[]
----Get the active layout generator.
----@field get_active fun(self: self, args: LayoutArgs): LayoutGenerator
+---@field private tag_indices table<integer, integer>
+---@field current_tag TagHandle?
+local Cycle = {}
 
----@classmod
----A `LayoutManager` that keeps track of layouts per tag and provides
----methods to cycle between them.
----@class CyclingLayoutManager : LayoutManager
----@field tag_indices table<integer, integer>
-local CyclingLayoutManager = {}
-
----@param args LayoutArgs
----
----@return LayoutGenerator
-function CyclingLayoutManager:get_active(args)
-    local first_tag = args.tags[1]
-
-    -- Return a no-op generator if there are no active tags
-    if not first_tag then
-        ---@type LayoutGenerator
-        return {
-            layout = function(_, _)
-                return {}
-            end,
-            gaps = 0,
-        }
-    end
-
-    if not self.tag_indices[first_tag.id] then
-        self.tag_indices[first_tag.id] = 1
-    end
-
-    return self.layouts[self.tag_indices[first_tag.id]]
-end
-
----Cycle the layout for the given tag forward.
----
 ---@param tag TagHandle
-function CyclingLayoutManager:cycle_layout_forward(tag)
+function Cycle:cycle_layout_forward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
     end
-
     self.tag_indices[tag.id] = self.tag_indices[tag.id] + 1
-
     if self.tag_indices[tag.id] > #self.layouts then
         self.tag_indices[tag.id] = 1
     end
 end
 
----Cycle the layout for the given tag backward.
----
 ---@param tag TagHandle
-function CyclingLayoutManager:cycle_layout_backward(tag)
+function Cycle:cycle_layout_backward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
     end
-
     self.tag_indices[tag.id] = self.tag_indices[tag.id] - 1
-
     if self.tag_indices[tag.id] < 1 then
         self.tag_indices[tag.id] = #self.layouts
     end
 end
 
----Create a new cycling layout manager.
+---@param tag TagHandle
 ---
+---@return LayoutGenerator?
+function Cycle:current_layout(tag)
+    return self.layouts[self.tag_indices[tag.id] or 1]
+end
+
 ---@param layouts LayoutGenerator[]
 ---
----@return CyclingLayoutManager
----
----@see CyclingLayoutManager
-function layout.new_cycling_manager(layouts)
-    ---@type CyclingLayoutManager
-    local self = {
+---@return pinnacle.layout.builtin.Cycle
+function builtin.cycle(layouts)
+    ---@type pinnacle.layout.builtin.Cycle
+    local cycler = {
         layouts = layouts,
         tag_indices = {},
+        current_tag = nil,
+        ---@param self pinnacle.layout.builtin.Cycle
+        layout = function(self, window_count)
+            if self.current_tag then
+                local curr_layout = self:current_layout(self.current_tag)
+                if curr_layout then
+                    return curr_layout:layout(window_count)
+                end
+            end
+
+            ---@type LayoutNode
+            local node = {
+                children = {},
+            }
+
+            return node
+        end,
     }
 
-    setmetatable(self, { __index = CyclingLayoutManager })
+    setmetatable(cycler, { __index = Cycle })
+    return cycler
+end
 
-    return self
+---@class Layout
+local layout = {
+    builtin = builtin,
+}
+
+---@class pinnacle.layout.LayoutRequester
+---@field private sender grpc_client.h2.Stream
+local LayoutRequester = {}
+
+---@param output OutputHandle?
+function LayoutRequester:request_layout(output)
+    local output = output or require("pinnacle.output").get_focused()
+    if not output then
+        return
+    end
+
+    local chunk = require("pinnacle.grpc.protobuf").encode("pinnacle.layout.v1.LayoutRequest", {
+        force_layout = {
+            output_name = output.name,
+        },
+    })
+
+    local success, err = pcall(self.sender.write_chunk, self.sender, chunk)
+
+    if not success then
+        print("error sending to stream:", err)
+    end
+end
+
+---@param node LayoutNode
+---
+---@return pinnacle.layout.v1.LayoutNode
+local function layout_node_to_api_node(node)
+    local traversal_overrides = {}
+    for idx, overrides in pairs(node.traversal_overrides or {}) do
+        traversal_overrides[idx] = {
+            overrides = overrides,
+        }
+    end
+
+    local gaps = node.gaps or 0.0
+    if type(gaps) == "number" then
+        local gaps_num = gaps
+        gaps = {
+            left = gaps_num,
+            right = gaps_num,
+            top = gaps_num,
+            bottom = gaps_num,
+        }
+    end
+
+    local children = {}
+    for _, child in ipairs(node.children or {}) do
+        table.insert(children, layout_node_to_api_node(child))
+    end
+
+    ---@type pinnacle.layout.v1.LayoutNode
+    return {
+        label = node.label,
+        traversal_overrides = traversal_overrides,
+        traversal_index = node.traversal_index or 0,
+        style = {
+            size_proportion = node.size_proportion or 1.0,
+            flex_dir = ((node.layout_dir or "row") == "row")
+                    and defs.pinnacle.layout.v1.FlexDir.FLEX_DIR_ROW
+                or defs.pinnacle.layout.v1.FlexDir.FLEX_DIR_COLUMN,
+            gaps = gaps,
+        },
+        children = children,
+    }
+end
+
+---@param on_layout fun(args: LayoutArgs): LayoutNode
+---
+---@return pinnacle.layout.LayoutRequester
+---@nodiscard
+function layout.manage(on_layout)
+    local stream, err = client:bidirectional_streaming_request(
+        layout_service.Layout,
+        function(response, stream)
+            ---@type LayoutArgs
+            local args = {
+                output = require("pinnacle.output").handle.new(response.output_name),
+                window_count = response.window_count,
+                tags = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {}),
+            }
+
+            local node = on_layout(args)
+
+            local chunk =
+                require("pinnacle.grpc.protobuf").encode("pinnacle.layout.v1.LayoutRequest", {
+                    tree_response = {
+                        request_id = response.request_id,
+                        tree_id = 0, -- TODO:
+                        output_name = response.output_name,
+                        root_node = layout_node_to_api_node(node),
+                    },
+                })
+
+            local success, err = pcall(stream.write_chunk, stream, chunk)
+
+            if not success then
+                print("error sending to stream:", err)
+            end
+        end
+    )
+
+    if err then
+        log:error("failed to start bidir stream")
+        os.exit(1)
+    end
+
+    local requester = { sender = stream }
+    setmetatable(requester, { __index = LayoutRequester })
+
+    return requester
 end
 
 return layout

@@ -86,7 +86,7 @@ end
 
 ---Show this keybind overlay.
 function KeybindOverlay:show()
-    local descriptions = require("pinnacle.input").keybind_descriptions()
+    local descriptions = require("pinnacle.input").bind_infos()
 
     ---@param mods Modifier[]
     ---@param xkb_name string
