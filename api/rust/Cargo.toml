@@ -22,6 +22,7 @@ bitflags = { workspace = true }
 snowcap-api = { path = "../../snowcap/api/rust", optional = true }
 indexmap = { workspace = true }
 num_enum = "0.7.3"
+passfd = { workspace = true }
 
 [features]
 default = ["snowcap"]

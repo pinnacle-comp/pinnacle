@@ -1,15 +1,22 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    os::fd::{IntoRawFd, RawFd},
+    os::fd::{AsFd, AsRawFd, IntoRawFd, RawFd},
+    path::PathBuf,
     process::Stdio,
 };
 
+use passfd::FdPassingExt;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
 use tokio::process::Child;
 use tracing::warn;
+use xdg::BaseDirectories;
 
 use crate::util::restore_nofile_rlimit;
+
+fn fd_socket_name(pid: u32) -> String {
+    format!("pinnacle-fd-{pid}.sock")
+}
 
 #[derive(Debug)]
 pub struct ProcessState {
@@ -28,12 +35,12 @@ impl ProcessState {
     }
 }
 
-#[derive(Debug)]
-pub struct SpawnOutput {
+pub struct SpawnData {
     pub pid: u32,
-    pub stdin: Option<RawFd>,
-    pub stdout: Option<RawFd>,
-    pub stderr: Option<RawFd>,
+    pub fd_socket_path: String,
+    pub has_stdin: bool,
+    pub has_stdout: bool,
+    pub has_stderr: bool,
 }
 
 #[derive(Debug)]
@@ -50,7 +57,8 @@ impl ProcessState {
         unique: bool,
         once: bool,
         envs: HashMap<String, String>,
-    ) -> Option<SpawnOutput> {
+        base_dirs: &BaseDirectories,
+    ) -> Option<SpawnData> {
         let arg0 = cmd.first()?.to_string();
 
         if once && self.spawned_already.contains(&arg0) {
@@ -104,26 +112,51 @@ impl ProcessState {
 
         let pid = child.id().expect("child has not polled to completion");
 
-        let streams = SpawnOutput {
+        let socket_dir = base_dirs
+            .get_runtime_directory()
+            .expect("XDG_RUNTIME_DIR is not set");
+        let socket_path = socket_dir.join(fd_socket_name(pid));
+        let socket_path_str = socket_path.to_string_lossy().to_string();
+
+        let listener = tokio::net::UnixListener::bind(socket_path).unwrap(); // TODO: unwrap
+        let stdin_fd = child.stdin.as_ref().map(|stdin| stdin.as_fd().as_raw_fd());
+        let stdout_fd = child
+            .stdout
+            .as_ref()
+            .map(|stdout| stdout.as_fd().as_raw_fd());
+        let stderr_fd = child
+            .stderr
+            .as_ref()
+            .map(|stderr| stderr.as_fd().as_raw_fd());
+
+        let data = SpawnData {
             pid,
-            stdin: child
-                .stdin
-                .take()
-                .and_then(|stdin| Some(stdin.into_owned_fd().ok()?.into_raw_fd())),
-            stdout: child
-                .stdout
-                .take()
-                .and_then(|stdout| Some(stdout.into_owned_fd().ok()?.into_raw_fd())),
-            stderr: child
-                .stderr
-                .take()
-                .and_then(|stderr| Some(stderr.into_owned_fd().ok()?.into_raw_fd())),
+            fd_socket_path: socket_path_str,
+            has_stdin: stdin_fd.is_some(),
+            has_stdout: stdout_fd.is_some(),
+            has_stderr: stderr_fd.is_some(),
         };
+
+        tokio::spawn(async move {
+            let Ok((mut stream, _addr)) = listener.accept().await else {
+                return;
+            };
+
+            if let Some(stdin_fd) = stdin_fd {
+                let _ = stream.as_raw_fd().send_fd(stdin_fd);
+            }
+            if let Some(stdout_fd) = stdout_fd {
+                let _ = stream.as_raw_fd().send_fd(stdout_fd);
+            }
+            if let Some(stderr_fd) = stderr_fd {
+                let _ = stream.as_raw_fd().send_fd(stderr_fd);
+            }
+        });
 
         self.spawned.insert(pid, child);
         self.spawned_already.insert(arg0.clone());
 
-        Some(streams)
+        Some(data)
     }
 
     pub fn wait_on_spawn(

@@ -8,9 +8,10 @@
 
 use std::{
     collections::HashMap,
-    os::fd::{FromRawFd, OwnedFd},
+    os::fd::{AsRawFd, FromRawFd, OwnedFd},
 };
 
+use passfd::FdPassingExt;
 use pinnacle_api_defs::pinnacle::process::v1::{SpawnRequest, WaitOnSpawnRequest};
 use tokio_stream::StreamExt;
 
@@ -145,7 +146,7 @@ impl Command {
 
     /// Spawns this command, returning the spawned process's standard io, if any.
     pub fn spawn(&mut self) -> Option<Child> {
-        let child = Client::process()
+        let data = Client::process()
             .spawn(SpawnRequest {
                 cmd: self.cmd.clone(),
                 unique: self.unique,
@@ -156,47 +157,53 @@ impl Command {
             .block_on_tokio()
             .unwrap()
             .into_inner()
-            .spawn_data
-            .map(|data| {
-                let stdin = data
-                    .stdin_fd
-                    .map(|stdin_fd| {
-                        // SAFETY: The fd was obtained from a compositor-side
-                        // `ChildStdin::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
-                        // compositor has given up ownership of the fd.
-                        unsafe { OwnedFd::from_raw_fd(stdin_fd) }
-                    })
-                    .map(std::process::ChildStdin::from)
-                    .and_then(|stdin| tokio::process::ChildStdin::from_std(stdin).ok());
-                let stdout = data
-                    .stdout_fd
-                    .map(|stdout_fd| {
-                        // SAFETY: The fd was obtained from a compositor-side
-                        // `ChildStdout::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
-                        // compositor has given up ownership of the fd.
-                        unsafe { OwnedFd::from_raw_fd(stdout_fd) }
-                    })
-                    .map(std::process::ChildStdout::from)
-                    .and_then(|stdin| tokio::process::ChildStdout::from_std(stdin).ok());
-                let stderr = data
-                    .stderr_fd
-                    .map(|stderr_fd| {
-                        // SAFETY: The fd was obtained from a compositor-side
-                        // `ChildStderr::into_owned_fd -> IntoRawFd::into_raw_fd`, meaning the
-                        // compositor has given up ownership of the fd.
-                        unsafe { OwnedFd::from_raw_fd(stderr_fd) }
-                    })
-                    .map(std::process::ChildStderr::from)
-                    .and_then(|stdin| tokio::process::ChildStderr::from_std(stdin).ok());
+            .spawn_data?;
 
-                Child {
-                    pid: data.pid,
-                    stdin,
-                    stdout,
-                    stderr,
-                }
-            });
+        let pid = data.pid;
+        let fd_socket_path = data.fd_socket_path;
 
-        child
+        let mut stdin = None;
+        let mut stdout = None;
+        let mut stderr = None;
+
+        let stream = std::os::unix::net::UnixStream::connect(fd_socket_path)
+            .expect("this should be set up by the compositor");
+
+        if data.has_stdin {
+            let fd = stream.recv_fd().unwrap();
+            let child_stdin =
+                tokio::process::ChildStdin::from_std(std::process::ChildStdin::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stdin = Some(child_stdin);
+        }
+
+        if data.has_stdout {
+            let fd = stream.recv_fd().unwrap();
+            let child_stdout =
+                tokio::process::ChildStdout::from_std(std::process::ChildStdout::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stdout = Some(child_stdout);
+        }
+
+        if data.has_stderr {
+            let fd = stream.recv_fd().unwrap();
+            let child_stderr =
+                tokio::process::ChildStderr::from_std(std::process::ChildStderr::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stderr = Some(child_stderr);
+        }
+
+        Some(Child {
+            pid,
+            stdin,
+            stdout,
+            stderr,
+        })
     }
 }

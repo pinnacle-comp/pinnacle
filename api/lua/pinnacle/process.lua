@@ -5,15 +5,14 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local process_service = require("pinnacle.grpc.defs").pinnacle.process.v1.ProcessService
-local fdopen = require("posix.stdio").fdopen
 local condition = require("cqueues.condition")
 local thread = require("cqueues.thread")
 
 ---@class pinnacle.process.Child
 ---@field pid integer
----@field stdin file*?
----@field stdout file*?
----@field stderr file*?
+---@field stdin Socket?
+---@field stdout Socket?
+---@field stderr Socket?
 local Child = {}
 
 local child_module = {}
@@ -67,12 +66,33 @@ function Command:spawn()
         return nil
     end
 
+    local fd_socket = require("cqueues.socket").connect({
+        path = data.fd_socket_path,
+    })
+
+    local stdin, stdout, stderr
+
+    if data.has_stdin then
+        local _, sock_stdin, err = fd_socket:recvfd()
+        stdin = sock_stdin
+    end
+    if data.has_stdout then
+        local _, sock_stdout, err = fd_socket:recvfd()
+        stdout = sock_stdout
+    end
+    if data.has_stderr then
+        local _, sock_stderr, err = fd_socket:recvfd()
+        stderr = sock_stderr
+    end
+
+    fd_socket:close()
+
     ---@type pinnacle.process.Child
     local child = {
         pid = data.pid,
-        stdin = data.stdin_fd and fdopen(data.stdin_fd, "w"),
-        stdout = data.stdout_fd and fdopen(data.stdout_fd, "r"),
-        stderr = data.stderr_fd and fdopen(data.stderr_fd, "r"),
+        stdin = stdin,
+        stdout = stdout,
+        stderr = stderr,
     }
 
     return child_module.new_child(child)
@@ -96,7 +116,8 @@ function Child:wait()
         return {}
     end
 
-    condvar:wait()
+    while not condvar:wait() do
+    end
 
     return ret
 end
@@ -105,17 +126,16 @@ end
 ---
 ---@return self self This child for chaining
 function Child:on_line_stdout(on_line)
-    local thrd, socket = thread.start(function(socket)
-        for line in self.stdout:lines() do
-            socket:write(line)
-        end
-        self.stdout:close()
-    end)
+    if not self.stdout then
+        print("no stdout")
+        return self
+    end
 
     client.loop:wrap(function()
-        for line in socket:lines() do
+        for line in self.stdout:lines() do
             on_line(line)
         end
+        self.stdout:close()
     end)
 
     return self
@@ -125,17 +145,15 @@ end
 ---
 ---@return self self This child for chaining
 function Child:on_line_stderr(on_line)
-    local thrd, socket = thread.start(function(socket)
-        for line in self.stderr:lines() do
-            socket:write(line)
-        end
-        self.stderr:close()
-    end)
+    if not self.stderr then
+        return self
+    end
 
     client.loop:wrap(function()
-        for line in socket:lines() do
+        for line in self.stderr:lines() do
             on_line(line)
         end
+        self.stderr:close()
     end)
 
     return self

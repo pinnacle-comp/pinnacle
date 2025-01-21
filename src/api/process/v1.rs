@@ -20,17 +20,22 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
         let envs = request.envs;
 
         run_unary(&self.sender, move |state| {
-            let fds = state
-                .pinnacle
-                .process_state
-                .spawn(&cmd, &shell_cmd, unique, once, envs);
+            let fds = state.pinnacle.process_state.spawn(
+                &cmd,
+                &shell_cmd,
+                unique,
+                once,
+                envs,
+                &state.pinnacle.xdg_base_dirs,
+            );
 
             Ok(SpawnResponse {
-                spawn_data: fds.map(|fds| process::v1::SpawnData {
-                    pid: fds.pid,
-                    stdin_fd: fds.stdin,
-                    stdout_fd: fds.stdout,
-                    stderr_fd: fds.stderr,
+                spawn_data: fds.map(|data| process::v1::SpawnData {
+                    pid: data.pid,
+                    fd_socket_path: data.fd_socket_path,
+                    has_stdin: data.has_stdin,
+                    has_stdout: data.has_stdout,
+                    has_stderr: data.has_stderr,
                 }),
             })
         })

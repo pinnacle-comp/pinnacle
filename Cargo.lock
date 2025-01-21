@@ -3103,6 +3103,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "passfd"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b332c50e4d07c0011fff51ea305374408319908908bc1dbed7a0ffaaf63a8151"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3216,6 +3225,7 @@ dependencies = [
  "indexmap 2.7.0",
  "itertools 0.14.0",
  "libdisplay-info",
+ "passfd",
  "pinnacle",
  "pinnacle-api",
  "pinnacle-api-defs",
@@ -3257,6 +3267,7 @@ dependencies = [
  "hyper-util",
  "indexmap 2.7.0",
  "num_enum",
+ "passfd",
  "pinnacle-api-defs",
  "snowcap-api",
  "tokio",

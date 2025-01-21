@@ -435,9 +435,10 @@ local pinnacle_v1_Backend = {
 
 ---@class pinnacle.process.v1.SpawnData
 ---@field pid integer?
----@field stdin_fd integer?
----@field stdout_fd integer?
----@field stderr_fd integer?
+---@field fd_socket_path string?
+---@field has_stdin boolean?
+---@field has_stdout boolean?
+---@field has_stderr boolean?
 
 ---@class pinnacle.process.v1.SpawnResponse
 ---@field spawn_data pinnacle.process.v1.SpawnData?
