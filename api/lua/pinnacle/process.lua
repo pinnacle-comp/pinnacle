@@ -166,16 +166,54 @@ end
 local process = {}
 
 ---@param ... string
----@overload fun(cmd: string[])
+---@overload fun(cmd: string[]): pinnacle.process.Child?
+---
+---@return pinnacle.process.Child?
 function process.spawn(...)
     local cmd = { ... }
     if cmd[0] and type(cmd[0]) == "table" then
         cmd = cmd[0]
     end
 
-    process
+    return process
         .command({
             cmd = cmd,
+        })
+        :spawn()
+end
+
+---@param ... string
+---@overload fun(cmd: string[]): pinnacle.process.Child?
+---
+---@return pinnacle.process.Child?
+function process.spawn_once(...)
+    local cmd = { ... }
+    if cmd[0] and type(cmd[0]) == "table" then
+        cmd = cmd[0]
+    end
+
+    return process
+        .command({
+            cmd = cmd,
+            once = true,
+        })
+        :spawn()
+end
+
+---@param ... string
+---@overload fun(cmd: string[]): pinnacle.process.Child?
+---
+---@return pinnacle.process.Child?
+function process.spawn_unique(...)
+    local cmd = { ... }
+    if cmd[0] and type(cmd[0]) == "table" then
+        cmd = cmd[0]
+    end
+
+    return process
+        .command({
+            cmd = cmd,
+            unique = true,
         })
         :spawn()
 end

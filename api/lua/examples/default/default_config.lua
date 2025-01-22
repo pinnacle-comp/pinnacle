@@ -359,8 +359,5 @@ Pinnacle.setup(function()
     end)
 
     -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
-    Process.command({
-        cmd = { "alacritty" },
-        unique = true,
-    }):spawn()
+    Process.spawn_once(terminal)
 end)
