@@ -26,7 +26,7 @@ function child_module.new_child(child)
 end
 
 ---@class Command
----@field private cmd string[]
+---@field private cmd string | string[]
 ---@field private shell_cmd string[]?
 ---@field private envs table<string, string>?
 ---@field private unique boolean?
@@ -34,7 +34,7 @@ end
 local Command = {}
 
 ---@class CommandOpts
----@field cmd string[]
+---@field cmd string | string[]
 ---@field shell_cmd string[]?
 ---@field envs table<string, string>?
 ---@field unique boolean?
@@ -43,7 +43,7 @@ local Command = {}
 ---@return pinnacle.process.Child?
 function Command:spawn()
     local response, err = client:unary_request(process_service.Spawn, {
-        cmd = self.cmd,
+        cmd = type(self.cmd) == "string" and { self.cmd } or self.cmd,
         shell_cmd = self.shell_cmd,
         unique = self.unique,
         once = self.once,
@@ -171,8 +171,8 @@ local process = {}
 ---@return pinnacle.process.Child?
 function process.spawn(...)
     local cmd = { ... }
-    if cmd[0] and type(cmd[0]) == "table" then
-        cmd = cmd[0]
+    if cmd[1] and type(cmd[1]) == "table" then
+        cmd = cmd[1]
     end
 
     return process
@@ -188,8 +188,8 @@ end
 ---@return pinnacle.process.Child?
 function process.spawn_once(...)
     local cmd = { ... }
-    if cmd[0] and type(cmd[0]) == "table" then
-        cmd = cmd[0]
+    if cmd[1] and type(cmd[1]) == "table" then
+        cmd = cmd[1]
     end
 
     return process
@@ -206,8 +206,8 @@ end
 ---@return pinnacle.process.Child?
 function process.spawn_unique(...)
     local cmd = { ... }
-    if cmd[0] and type(cmd[0]) == "table" then
-        cmd = cmd[0]
+    if cmd[1] and type(cmd[1]) == "table" then
+        cmd = cmd[1]
     end
 
     return process
