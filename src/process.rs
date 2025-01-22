@@ -1,14 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    os::fd::{AsFd, AsRawFd, IntoRawFd, RawFd},
-    path::PathBuf,
+    os::fd::{AsFd, AsRawFd, IntoRawFd},
     process::Stdio,
 };
 
 use passfd::FdPassingExt;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate};
-use tokio::process::Child;
+use tokio::sync::oneshot;
 use tracing::warn;
 use xdg::BaseDirectories;
 
@@ -18,10 +17,16 @@ fn fd_socket_name(pid: u32) -> String {
     format!("pinnacle-fd-{pid}.sock")
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ExitInfo {
+    pub exit_code: Option<i32>,
+    pub exit_msg: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct ProcessState {
     pub system_processes: sysinfo::System,
-    spawned: HashMap<u32, Child>,
+    spawned: HashMap<u32, tokio::sync::oneshot::Receiver<ExitInfo>>,
     spawned_already: HashSet<String>,
 }
 
@@ -119,15 +124,18 @@ impl ProcessState {
         let socket_path_str = socket_path.to_string_lossy().to_string();
 
         let listener = tokio::net::UnixListener::bind(socket_path).unwrap(); // TODO: unwrap
-        let stdin_fd = child.stdin.as_ref().map(|stdin| stdin.as_fd().as_raw_fd());
+        let stdin_fd = child
+            .stdin
+            .take()
+            .map(|stdin| stdin.into_owned_fd().unwrap().into_raw_fd());
         let stdout_fd = child
             .stdout
-            .as_ref()
-            .map(|stdout| stdout.as_fd().as_raw_fd());
+            .take()
+            .map(|stdout| stdout.into_owned_fd().unwrap().into_raw_fd());
         let stderr_fd = child
             .stderr
-            .as_ref()
-            .map(|stderr| stderr.as_fd().as_raw_fd());
+            .take()
+            .map(|stderr| stderr.into_owned_fd().unwrap().into_raw_fd());
 
         let data = SpawnData {
             pid,
@@ -138,7 +146,7 @@ impl ProcessState {
         };
 
         tokio::spawn(async move {
-            let Ok((mut stream, _addr)) = listener.accept().await else {
+            let Ok((stream, _addr)) = listener.accept().await else {
                 return;
             };
 
@@ -153,7 +161,20 @@ impl ProcessState {
             }
         });
 
-        self.spawned.insert(pid, child);
+        let (oneshot_send, oneshot_recv) = oneshot::channel();
+
+        tokio::spawn(async move {
+            let exit_status = child.wait().await;
+            let exit_info = exit_status
+                .map(|status| ExitInfo {
+                    exit_code: status.code(),
+                    exit_msg: Some(status.to_string()),
+                })
+                .unwrap_or_default();
+            oneshot_send.send(exit_info).unwrap();
+        });
+
+        self.spawned.insert(pid, oneshot_recv);
         self.spawned_already.insert(arg0.clone());
 
         Some(data)
@@ -162,16 +183,12 @@ impl ProcessState {
     pub fn wait_on_spawn(
         &mut self,
         pid: u32,
-    ) -> Option<tokio::sync::oneshot::Receiver<Option<WaitOutput>>> {
-        let mut child = self.spawned.remove(&pid)?;
+    ) -> Option<tokio::sync::oneshot::Receiver<Option<ExitInfo>>> {
+        let recv = self.spawned.remove(&pid)?;
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {
-            let exit_status = child.wait().await.ok().map(|exit| WaitOutput {
-                exit_code: exit.code(),
-                exit_msg: Some(exit.to_string()),
-            });
-
+            let exit_status = recv.await.ok();
             oneshot_tx.send(exit_status).unwrap();
         });
 

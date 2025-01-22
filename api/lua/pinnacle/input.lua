@@ -295,9 +295,13 @@ local function mousebind_inner(mb)
     }, function(response)
         ---@cast response pinnacle.input.v1.MousebindStreamResponse
         if response.edge == edge_values.press then
-            mb.on_press()
+            if mb.on_press then
+                mb.on_press()
+            end
         elseif response.edge == edge_values.release then
-            mb.on_release()
+            if mb.on_release then
+                mb.on_release()
+            end
         end
     end)
 

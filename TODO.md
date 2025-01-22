@@ -1,7 +1,6 @@
 - Provide scale and transform on new window/layer
 
 - Reloading config causes the next spawned process to not layout (off by one error?)
-- Lua API doesn't call wait on processes = defuncts everywhere, change waiting api to not require a call to `wait`
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords
