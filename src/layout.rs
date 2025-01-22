@@ -274,7 +274,13 @@ impl State {
             .context("output has no size")?
             .size;
 
-        let geometries = tree.compute_geos(output_size.w as u32, output_size.h as u32);
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(&output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
+        };
+
+        let geometries = tree.compute_geos(output_width as u32, output_height as u32);
 
         self.pinnacle.layout_state.pending_requests.remove(&output);
         self.pinnacle

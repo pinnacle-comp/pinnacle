@@ -120,8 +120,8 @@ async fn config() {
     }
 
     // `mod_key + ctrl + r` reloads the config
-    input::keybind(mod_key | Mod::SHIFT, 'r')
-        .on_press(pinnacle::reload_config)
+    input::keybind(mod_key | Mod::CTRL, 'r')
+        .set_as_reload_config()
         .group("Compositor")
         .description("Reload the config");
 

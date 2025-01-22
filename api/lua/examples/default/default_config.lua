@@ -258,7 +258,7 @@ Pinnacle.setup(function()
         Layout.builtin.corner({ corner_loc = "bottom_left" }),
         Layout.builtin.corner({ corner_loc = "bottom_right" }),
         Layout.builtin.fair(),
-        Layout.builtin.fair({ direction = "horizontal" }),
+        Layout.builtin.fair({ axis = "horizontal" }),
     })
 
     -- Set the cycling layout manager as the layout manager that will be used.
@@ -338,7 +338,7 @@ Pinnacle.setup(function()
             end
 
             if tag then
-                layout_cycler:cycle_layout_forward(tag)
+                layout_cycler:cycle_layout_backward(tag)
                 layout_requester:request_layout(focused_op)
             end
         end

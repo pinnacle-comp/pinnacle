@@ -365,7 +365,7 @@ function libinput.get_devices()
     ---@cast response pinnacle.input.v1.GetDevicesResponse
 
     local devices = {}
-    for _, sysname in response.device_sysnames or {} do
+    for _, sysname in ipairs(response.device_sysnames or {}) do
         local dev = libinput.new_device(sysname)
         table.insert(devices, dev)
     end

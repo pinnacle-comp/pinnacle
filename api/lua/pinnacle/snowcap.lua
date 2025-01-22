@@ -273,7 +273,7 @@ function BindOverlay:show()
                     })
                 )
 
-                for _, desc in descs do
+                for _, desc in ipairs(descs) do
                     table.insert(
                         children,
                         Widget.text({
@@ -327,7 +327,7 @@ function BindOverlay:show()
                     })
                 )
 
-                for _, desc in descs do
+                for _, desc in ipairs(descs) do
                     table.insert(
                         children,
                         Widget.text({
