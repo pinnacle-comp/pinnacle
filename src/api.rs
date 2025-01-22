@@ -169,3 +169,65 @@ where
     let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
     Ok(Response::new(Box::pin(receiver_stream)))
 }
+
+/// Begins a bidirectional grpc stream, mapping the channel message beforehand.
+///
+/// # Parameters
+/// - `fn_sender`: The function sender
+/// - `in_stream`: The incoming client stream
+/// - `on_client_request`: A callback that will be run with every received request.
+/// - `with_out_stream_and_in_stream_join_handle`:
+///     Do something with the outbound server-to-client stream.
+///     This also receives the join handle for the tokio task listening to
+///     the incoming client-to-server stream.
+/// - `map`: Maps sent messages to protobuf messages
+fn run_bidirectional_streaming_mapped<F1, F2, FM, I, O, M>(
+    fn_sender: StateFnSender,
+    mut in_stream: Streaming<I>,
+    on_client_request: F1,
+    with_out_stream_and_in_stream_join_handle: F2,
+    map: FM,
+) -> Result<Response<ResponseStream<O>>, Status>
+where
+    F1: Fn(&mut State, I) + Clone + Send + 'static,
+    F2: FnOnce(&mut State, UnboundedSender<M>, JoinHandle<()>) + Send + 'static,
+    FM: Fn(M) -> Result<O, Status> + Send + 'static,
+    I: Send + 'static,
+    O: Send + 'static,
+    M: Send + 'static,
+{
+    let (sender, receiver) = unbounded_channel::<M>();
+
+    let fn_sender_clone = fn_sender.clone();
+
+    let with_in_stream = async move {
+        while let Some(request) = in_stream.next().await {
+            match request {
+                Ok(request) => {
+                    let on_client_request = on_client_request.clone();
+                    // TODO: handle error
+                    let _ = fn_sender_clone.send(Box::new(move |state: &mut State| {
+                        on_client_request(state, request);
+                    }));
+                }
+                Err(err) => {
+                    debug!("bidirectional stream error: {err}");
+                    break;
+                }
+            }
+        }
+    };
+
+    let join_handle = tokio::spawn(with_in_stream);
+
+    let with_out_stream_and_in_stream_join_handle = Box::new(|state: &mut State| {
+        with_out_stream_and_in_stream_join_handle(state, sender, join_handle);
+    });
+
+    fn_sender
+        .send(with_out_stream_and_in_stream_join_handle)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    Ok(Response::new(Box::pin(receiver_stream.map(map))))
+}

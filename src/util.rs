@@ -3,6 +3,7 @@ pub mod treediff;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use smithay::reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit};
+use tokio::sync::mpsc::{error::SendError, UnboundedSender};
 use tracing::warn;
 
 static NOFILE_RLIMIT_CURRENT: AtomicU64 = AtomicU64::new(0);

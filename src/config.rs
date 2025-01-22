@@ -8,7 +8,6 @@ use crate::{
     output::OutputName,
     state::Pinnacle,
     tag::Tag,
-    window::rules::{WindowRule, WindowRuleCondition},
 };
 use std::{
     collections::HashMap,
@@ -147,8 +146,6 @@ impl ResolvedStartupConfig {
 /// The current state of configuration.
 #[derive(Debug)]
 pub struct Config {
-    /// Window rules and conditions on when those rules should apply
-    pub window_rules: Vec<(WindowRuleCondition, WindowRule)>,
     /// Saved states when outputs are disconnected
     pub connector_saved_states: HashMap<OutputName, ConnectorSavedState>,
 
@@ -173,7 +170,6 @@ impl Drop for Config {
 impl Config {
     pub fn new(config_dir: PathBuf, cli: Option<Cli>) -> Self {
         Config {
-            window_rules: Vec::new(),
             connector_saved_states: HashMap::new(),
             config_join_handle: None,
             config_reload_on_crash_token: None,
@@ -185,7 +181,6 @@ impl Config {
     }
 
     pub(crate) fn clear(&mut self, loop_handle: &LoopHandle<State>) {
-        self.window_rules.clear();
         self.connector_saved_states.clear();
         if let Some(join_handle) = self.config_join_handle.take() {
             join_handle.abort();

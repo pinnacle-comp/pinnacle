@@ -15,13 +15,14 @@ use pinnacle_api_defs::pinnacle::{
         SetMaximizedRequest, SetTagRequest, WindowRuleRequest, WindowRuleResponse,
     },
 };
-use smithay::wayland::seat::WaylandFocus;
+use smithay::desktop::WindowSurface;
 use tokio::sync::mpsc::unbounded_channel;
 use tonic::{Request, Status, Streaming};
 
 use crate::{
     api::{
-        run_bidirectional_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult,
+        run_bidirectional_streaming, run_bidirectional_streaming_mapped, run_unary,
+        run_unary_no_response, ResponseStream, TonicResult,
     },
     state::WithState,
     tag::TagId,
@@ -445,7 +446,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         let id_ctr = Arc::new(AtomicU32::default());
 
-        run_bidirectional_streaming(
+        run_bidirectional_streaming_mapped(
             self.sender.clone(),
             in_stream,
             {
@@ -474,12 +475,18 @@ impl v1::window_service_server::WindowService for super::WindowService {
                                 }
 
                                 // TODO: don't know if I want this here
-                                if let Some(toplevel) = win.toplevel() {
-                                    assert!(
-                                        !toplevel.is_initial_configure_sent(),
-                                        "toplevel already configured after window rules"
-                                    );
-                                    toplevel.send_configure();
+                                match win.underlying_surface() {
+                                    WindowSurface::Wayland(toplevel) => {
+                                        assert!(
+                                            !toplevel.is_initial_configure_sent(),
+                                            "toplevel already configured after window rules"
+                                        );
+                                        toplevel.send_configure();
+                                    }
+                                    WindowSurface::X11(surface) => {
+                                        assert!(!surface.is_mapped());
+                                        surface.set_mapped(true).unwrap();
+                                    }
                                 }
                             }
                         }
@@ -487,26 +494,17 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
             },
             |state, sender, _join_handle| {
-                let (send, mut recv) =
-                    unbounded_channel::<crate::window::rules::WindowRuleRequest>();
-                tokio::spawn(async move {
-                    while let Some(request) = recv.recv().await {
-                        let sent = sender
-                            .send(Ok(WindowRuleResponse {
-                                response: Some(v1::window_rule_response::Response::NewWindow(
-                                    v1::window_rule_response::NewWindowRequest {
-                                        request_id: request.request_id,
-                                        window_id: request.window_id.0,
-                                    },
-                                )),
-                            }))
-                            .is_ok();
-                        if !sent {
-                            break;
-                        }
-                    }
-                });
-                state.pinnacle.window_rule_state.new_sender(send, id_ctr);
+                state.pinnacle.window_rule_state.new_sender(sender, id_ctr);
+            },
+            |request| {
+                Ok(WindowRuleResponse {
+                    response: Some(v1::window_rule_response::Response::NewWindow(
+                        v1::window_rule_response::NewWindowRequest {
+                            request_id: request.request_id,
+                            window_id: request.window_id.0,
+                        },
+                    )),
+                })
             },
         )
     }

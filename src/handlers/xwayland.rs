@@ -47,14 +47,17 @@ impl XwmHandler for State {
             return;
         }
 
-        surface.set_mapped(true).expect("failed to map x11 window");
+        // surface.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::new(Window::new_x11_window(surface));
 
         if let Some(output) = self.pinnacle.focused_output() {
             self.pinnacle.place_window_on_output(&window, output)
         }
 
-        self.pinnacle.apply_window_rules(&window);
+        let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
+        if !window_rule_request_sent {
+            window.x11_surface().unwrap().set_mapped(true).unwrap();
+        }
 
         let output_size = self
             .pinnacle
