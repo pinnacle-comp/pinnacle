@@ -388,6 +388,12 @@ fn format_mods(mods: Mod) -> Option<String> {
     if mods.contains(Mod::SHIFT) {
         parts.push("Shift");
     }
+    if mods.contains(Mod::ISO_LEVEL3_SHIFT) {
+        parts.push("ISO Level 3 Shift");
+    }
+    if mods.contains(Mod::ISO_LEVEL5_SHIFT) {
+        parts.push("ISO Level 5 Shift");
+    }
 
     if parts.is_empty() {
         None

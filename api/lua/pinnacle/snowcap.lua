@@ -21,7 +21,7 @@ local snowcap = {
 ---@field height integer
 local QuitPrompt = {}
 
----@class pinnacle.snowcap.integration.KeybindOverlay
+---@class pinnacle.snowcap.integration.BindOverlay
 ---@field border_radius number
 ---@field border_thickness number
 ---@field background_color snowcap.Color
@@ -29,7 +29,7 @@ local QuitPrompt = {}
 ---@field font snowcap.Font
 ---@field width integer
 ---@field height integer
-local KeybindOverlay = {}
+local BindOverlay = {}
 
 ---Show this quit prompt.
 function QuitPrompt:show()
@@ -85,33 +85,45 @@ function QuitPrompt:show()
 end
 
 ---Show this keybind overlay.
-function KeybindOverlay:show()
+function BindOverlay:show()
+    ---@param mods Modifier[]
     ---@return string?
     local function mods_to_string(mods)
         local repr = {}
+        local mod_mask = {}
         for _, mod in ipairs(mods) do
             if mod == "super" then
-                table.insert(repr, "Super")
-                break
+                mod_mask.super = true
+            elseif mod == "shift" then
+                mod_mask.shift = true
+            elseif mod == "ctrl" then
+                mod_mask.ctrl = true
+            elseif mod == "alt" then
+                mod_mask.alt = true
+            elseif mod == "iso_level3_shift" then
+                mod_mask.iso_level3_shift = true
+            elseif mod == "iso_level5_shift" then
+                mod_mask.iso_level5_shift = true
             end
         end
-        for _, mod in ipairs(mods) do
-            if mod == "ctrl" then
-                table.insert(repr, "Ctrl")
-                break
-            end
+
+        if mod_mask.super then
+            table.insert(repr, "Super")
         end
-        for _, mod in ipairs(mods) do
-            if mod == "alt" then
-                table.insert(repr, "Alt")
-                break
-            end
+        if mod_mask.ctrl then
+            table.insert(repr, "Ctrl")
         end
-        for _, mod in ipairs(mods) do
-            if mod == "shift" then
-                table.insert(repr, "Shift")
-                break
-            end
+        if mod_mask.alt then
+            table.insert(repr, "Alt")
+        end
+        if mod_mask.shift then
+            table.insert(repr, "Shift")
+        end
+        if mod_mask.iso_level3_shift then
+            table.insert(repr, "ISO Level 3 Shift")
+        end
+        if mod_mask.iso_level5_shift then
+            table.insert(repr, "ISO Level 5 Shift")
         end
 
         if #repr == 0 then
@@ -422,11 +434,11 @@ end
 ---Creates the default keybind overlay.
 ---
 ---Some of its characteristics can be changed by altering its fields.
----@return pinnacle.snowcap.integration.KeybindOverlay
-function integration.keybind_overlay()
+---@return pinnacle.snowcap.integration.BindOverlay
+function integration.bind_overlay()
     local Widget = require("snowcap.widget")
 
-    ---@type pinnacle.snowcap.integration.KeybindOverlay
+    ---@type pinnacle.snowcap.integration.BindOverlay
     local prompt = {
         border_radius = 12.0,
         border_thickness = 6.0,
@@ -439,7 +451,7 @@ function integration.keybind_overlay()
         height = 500,
     }
 
-    setmetatable(prompt, { __index = KeybindOverlay })
+    setmetatable(prompt, { __index = BindOverlay })
 
     return prompt
 end

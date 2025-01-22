@@ -47,7 +47,7 @@ Pinnacle.setup(function()
     -- mod_key + s shows the keybind overlay
     if Snowcap then
         Input.keybind({ mod_key }, "s", function()
-            Snowcap.integration.keybind_overlay():show()
+            Snowcap.integration.bind_overlay():show()
         end, {
             group = "Compositor",
             description = "Show the keybind overlay",
