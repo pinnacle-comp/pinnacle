@@ -282,6 +282,11 @@ impl State {
             .fulfilled_requests
             .insert(output.clone(), current_pending);
 
+        // FIXME: figure out why stale snapshots still exist after the layout system change
+        for window in self.pinnacle.windows.iter() {
+            window.with_state_mut(|state| state.snapshot.take());
+        }
+
         self.capture_snapshots_on_output(&output, []);
 
         let pending_windows = self
