@@ -615,11 +615,11 @@ impl WindowHandle {
     }
 }
 
-/// Runs a closure for every new window.
+/// Adds a window rule.
 ///
-/// This function is how you implement window rules.
-/// Instead of a declarative window rule system with match conditions,
-/// you can use standard `if` statements and apply rules using the same
+/// Instead of using a declarative window rule system with match conditions,
+/// you supply a closure that acts on a newly opened window.
+/// You can use standard `if` statements and apply properties using the same
 /// methods that are used everywhere else in this API.
 ///
 /// Note: this function is special in that if it is called, Pinnacle will wait for
@@ -630,11 +630,10 @@ impl WindowHandle {
 /// # Examples
 ///
 /// ```no_run
-/// use pinnacle_api::window;
-/// use pinnacle_api::window::DecorationMode;
-/// use pinnacle_api::tag;
-///
-/// window::for_each_window(|window| {
+/// # use pinnacle_api::window;
+/// # use pinnacle_api::window::DecorationMode;
+/// # use pinnacle_api::tag;
+/// window::add_window_rule(|window| {
 ///     // Make Alacritty always open on the "Terminal" tag
 ///     if window.app_id() == "Alacritty" {
 ///         window.set_tag(&tag::get("Terminal").unwrap(), true);
@@ -644,7 +643,7 @@ impl WindowHandle {
 ///     window.set_decoration_mode(DecorationMode::ClientSide);
 /// });
 /// ```
-pub fn for_each_window(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
+pub fn add_window_rule(mut for_all: impl FnMut(WindowHandle) + Send + 'static) {
     let (client_outgoing, client_outgoing_to_server) = unbounded_channel();
     let client_outgoing_to_server =
         tokio_stream::wrappers::UnboundedReceiverStream::new(client_outgoing_to_server);

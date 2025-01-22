@@ -201,14 +201,14 @@ function window.connect_signal(signals)
     return handles
 end
 
----@param for_each fun(window: WindowHandle)
-function window.for_each_window(for_each)
+---@param rule fun(window: WindowHandle)
+function window.add_window_rule(rule)
     local _stream, err = client:bidirectional_streaming_request(
         window_service.WindowRule,
         function(response, stream)
             local handle = window_handle.new(response.new_window.window_id)
 
-            for_each(handle)
+            rule(handle)
 
             local chunk =
                 require("pinnacle.grpc.protobuf").encode("pinnacle.window.v1.WindowRuleRequest", {
@@ -458,15 +458,12 @@ end
 
 ---@param mode "client_side" | "server_side"
 function WindowHandle:set_decoration_mode(mode)
-    local _, err = client:unary_request(
-        window_service.SetDecorationMode,
-        {
-            window_id = self.id,
-            decoration_mode = mode == "client_side"
-                    and defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_CLIENT_SIDE
-                or defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_SERVER_SIDE,
-        }
-    )
+    local _, err = client:unary_request(window_service.SetDecorationMode, {
+        window_id = self.id,
+        decoration_mode = mode == "client_side"
+                and defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_CLIENT_SIDE
+            or defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_SERVER_SIDE,
+    })
 
     if err then
         log:error(err)

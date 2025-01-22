@@ -354,7 +354,7 @@ Pinnacle.setup(function()
         end,
     })
 
-    Window.for_each_window(function(window)
+    Window.add_window_rule(function(window)
         window:set_decoration_mode("client_side")
     end)
 

@@ -380,7 +380,7 @@ async fn config() {
     });
 
     // Request all windows use client-side decorations.
-    window::for_each_window(|window| {
+    window::add_window_rule(|window| {
         window.set_decoration_mode(window::DecorationMode::ClientSide);
     });
 
