@@ -86,12 +86,8 @@ end
 
 ---Show this keybind overlay.
 function KeybindOverlay:show()
-    local descriptions = require("pinnacle.input").bind_infos()
-
-    ---@param mods Modifier[]
-    ---@param xkb_name string
-    ---@return string
-    local function keybind_to_string(mods, xkb_name)
+    ---@return string?
+    local function mods_to_string(mods)
         local repr = {}
         for _, mod in ipairs(mods) do
             if mod == "super" then
@@ -117,37 +113,85 @@ function KeybindOverlay:show()
                 break
             end
         end
-        table.insert(repr, xkb_name)
+
+        if #repr == 0 then
+            return nil
+        end
 
         return table.concat(repr, " + ")
     end
 
-    ---@type { group: string?, data: { keybind: string, descs: string[] }[] }[]
+    ---@param mods Modifier[]
+    ---@param key_or_button_name string
+    ---@param layer string?
+    ---@return string
+    local function key_or_mousebind_to_string(mods, key_or_button_name, layer)
+        local repr = {}
+        if layer then
+            table.insert(repr, "[" .. layer .. "] ")
+        end
+        local mods = mods_to_string(mods)
+        if mods then
+            table.insert(repr, mods)
+            table.insert(repr, " + ")
+        end
+        table.insert(repr, key_or_button_name)
+
+        return table.concat(repr)
+    end
+
+    local bind_infos = require("pinnacle.input").bind_infos()
+
+    ---@type { group: string?, keybinds: { keybind: string, descs: string[] }[], mousebinds: { mousebind: string, descs: string[] }[] }[]
     local groups = {}
 
-    for _, desc in ipairs(descriptions) do
-        local repr = keybind_to_string(desc.modifiers, desc.xkb_name)
+    for _, bind_info in ipairs(bind_infos) do
+        local bind_group = nil
 
+        local has_group = false
         for _, group in ipairs(groups) do
-            if group.group == desc.group then
-                for _, keybind in ipairs(group.data) do
-                    if keybind.keybind == repr then
-                        if desc.description then
-                            table.insert(keybind.descs, desc.description)
-                        end
-                        goto continue
-                    end
-                end
-
-                table.insert(group.data, { keybind = repr, descs = { desc.description } })
-                goto continue
+            if group.group == bind_info.group then
+                has_group = true
+                bind_group = group
+                break
             end
         end
 
-        table.insert(
-            groups,
-            { group = desc.group, data = { { keybind = repr, descs = { desc.description } } } }
-        )
+        if not has_group then
+            table.insert(groups, { group = bind_info.group, keybinds = {}, mousebinds = {} })
+            bind_group = groups[#groups]
+        end
+
+        assert(bind_group)
+
+        if bind_info.kind.key then
+            local repr = key_or_mousebind_to_string(bind_info.mods, bind_info.kind.key.xkb_name)
+            for _, keybind in ipairs(bind_group.keybinds) do
+                if keybind.keybind == repr then
+                    if bind_info.description then
+                        table.insert(keybind.descs, bind_info.description)
+                    end
+                    goto continue
+                end
+            end
+
+            table.insert(bind_group.keybinds, { keybind = repr, descs = { bind_info.description } })
+        elseif bind_info.kind.mouse then
+            local repr = key_or_mousebind_to_string(bind_info.mods, bind_info.kind.mouse.button)
+            for _, mousebind in ipairs(bind_group.mousebinds) do
+                if mousebind.mousebind == repr then
+                    if bind_info.description then
+                        table.insert(mousebind.descs, bind_info.description)
+                    end
+                    goto continue
+                end
+            end
+
+            table.insert(
+                bind_group.mousebinds,
+                { mousebind = repr, descs = { bind_info.description } }
+            )
+        end
 
         ::continue::
     end
@@ -182,9 +226,63 @@ function KeybindOverlay:show()
 
         table.insert(sections, Widget.text({ text = group_name, font = bold_font, size = 19.0 }))
 
-        for _, keybind in ipairs(group.data) do
+        for _, keybind in ipairs(group.keybinds) do
             local repr = keybind.keybind
             local descs = keybind.descs
+
+            if #descs == 0 then
+                table.insert(sections, Widget.text({ text = repr, font = self.font }))
+            elseif #descs == 1 then
+                table.insert(
+                    sections,
+                    Widget.row({
+                        children = {
+                            Widget.text({
+                                text = repr,
+                                width = Widget.length.FillPortion(1),
+                                font = self.font,
+                            }),
+                            Widget.text({
+                                text = descs[1],
+                                width = Widget.length.FillPortion(2),
+                                font = self.font,
+                            }),
+                        },
+                    })
+                )
+            else
+                local children = {}
+
+                table.insert(
+                    children,
+                    Widget.text({
+                        text = repr .. ":",
+                        font = self.font,
+                    })
+                )
+
+                for _, desc in descs do
+                    table.insert(
+                        children,
+                        Widget.text({
+                            text = "\t" .. desc,
+                            font = self.font,
+                        })
+                    )
+                end
+
+                table.insert(
+                    sections,
+                    Widget.column({
+                        children = children,
+                    })
+                )
+            end
+        end
+
+        for _, mousebind in ipairs(group.mousebinds) do
+            local repr = mousebind.mousebind
+            local descs = mousebind.descs
 
             if #descs == 0 then
                 table.insert(sections, Widget.text({ text = repr, font = self.font }))

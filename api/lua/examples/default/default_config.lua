@@ -6,7 +6,7 @@ local Tag = require("pinnacle.tag")
 local Window = require("pinnacle.window")
 local Layout = require("pinnacle.layout")
 local Util = require("pinnacle.util")
--- local Snowcap = require("pinnacle.snowcap")
+local Snowcap = require("pinnacle.snowcap")
 
 -- neovim users be like
 Pinnacle.setup(function()
@@ -31,46 +31,56 @@ Pinnacle.setup(function()
 
     Input.mousebind({ mod_key }, "btn_left", function()
         Window.begin_move("btn_left")
-    end)
+    end, {
+        group = "Mouse",
+        description = "Start an interactive window move",
+    })
 
     Input.mousebind({ mod_key }, "btn_right", function()
         Window.begin_resize("btn_right")
-    end)
+    end, { group = "Mouse", description = "Start an interactive window resize" })
 
     --------------------
     -- Keybinds       --
     --------------------
 
     -- mod_key + s shows the keybind overlay
-    -- if Snowcap then
-    --     Input.keybind({ mod_key }, "s", function()
-    --         Snowcap.integration.keybind_overlay():show()
-    --     end, {
-    --         group = "Compositor",
-    --         description = "Show the keybind overlay",
-    --     })
-    -- end
+    if Snowcap then
+        Input.keybind({ mod_key }, "s", function()
+            Snowcap.integration.keybind_overlay():show()
+        end, {
+            group = "Compositor",
+            description = "Show the keybind overlay",
+        })
+    end
 
     -- mod_key + shift + q = Quit Pinnacle
-    Input.keybind({
-        mods = { mod_key, "shift" },
-        key = "q",
-        quit = true,
-        group = "Compositor",
-        description = "Quit Pinnacle",
-    })
-
-    -- Input.keybind({ mod_key, "shift" }, "q", function()
-    --     -- if Snowcap then
-    --     --     Snowcap.integration.quit_prompt():show()
-    --     -- else
-    --     --     Pinnacle.quit()
-    --     -- end
-    --     Pinnacle.quit()
-    -- end, {
-    --     group = "Compositor",
-    --     description = "Quit Pinnacle",
-    -- })
+    if Snowcap then
+        Input.keybind({
+            mods = { mod_key, "shift" },
+            key = "q",
+            on_press = function()
+                Snowcap.integration.quit_prompt():show()
+            end,
+            group = "Compositor",
+            description = "Show the quit prompt",
+        })
+        Input.keybind({
+            mods = { mod_key, "ctrl", "shift" },
+            key = "q",
+            quit = true,
+            group = "Compositor",
+            description = "Quit Pinnacle without prompt",
+        })
+    else
+        Input.keybind({
+            mods = { mod_key, "shift" },
+            key = "q",
+            quit = true,
+            group = "Compositor",
+            description = "Quit Pinnacle",
+        })
+    end
 
     -- mod_key + ctrl + r = Reload config
     Input.keybind({
@@ -97,7 +107,7 @@ Pinnacle.setup(function()
         Process.spawn(terminal)
     end, {
         group = "Process",
-        description = "Spawn `alacritty`",
+        description = "Spawn a terminal",
     })
 
     -- mod_key + ctrl + space = Toggle floating
