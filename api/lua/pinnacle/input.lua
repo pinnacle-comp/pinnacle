@@ -371,6 +371,15 @@ function input.mousebind(mods, button, on_press, bind_info)
     mousebind_inner(mb)
 end
 
+---Enters the bind layer `layer`, or the default layer if `layer` is nil.
+---
+---@param layer string?
+function input.enter_bind_layer(layer)
+    local _, err = client:unary_request(input_service.EnterBindLayer, {
+        layer_name = layer,
+    })
+end
+
 ---@class BindInfo
 ---@field mods Modifier[]
 ---@field ignore_mods Modifier[]
