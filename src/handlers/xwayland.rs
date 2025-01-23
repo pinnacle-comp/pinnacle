@@ -51,12 +51,7 @@ impl XwmHandler for State {
         let window = WindowElement::new(Window::new_x11_window(surface));
 
         if let Some(output) = self.pinnacle.focused_output() {
-            self.pinnacle.place_window_on_output(&window, output)
-        }
-
-        let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
-        if !window_rule_request_sent {
-            window.x11_surface().unwrap().set_mapped(true).unwrap();
+            self.pinnacle.place_window_on_output(&window, output);
         }
 
         let output_size = self
@@ -113,31 +108,11 @@ impl XwmHandler for State {
 
         self.pinnacle.update_window_state(&window);
 
-        let output = window.output(&self.pinnacle);
-
-        if let Some(output) = output.as_ref() {
-            self.capture_snapshots_on_output(output, []);
-        }
-
         self.pinnacle.windows.push(window.clone());
-        self.pinnacle.raise_window(window.clone(), true);
 
-        if window.is_on_active_tag() {
-            if let Some(output) = output {
-                output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-                self.update_keyboard_focus(&output);
-
-                if will_float {
-                    self.pinnacle.space.map_element(window.clone(), loc, true);
-                } else {
-                    self.pinnacle.begin_layout_transaction(&output);
-                    self.pinnacle.request_layout(&output);
-                }
-            }
-        }
-
-        for output in self.pinnacle.space.outputs_for_element(&window) {
-            self.schedule_render(&output);
+        let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
+        if !window_rule_request_sent {
+            window.x11_surface().unwrap().set_mapped(true).unwrap();
         }
     }
 
@@ -165,14 +140,39 @@ impl XwmHandler for State {
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
-        trace!("XwmHandler::map_window_notify");
-        let Some(output) = window
-            .wl_surface()
-            .and_then(|s| self.pinnacle.window_for_surface(&s))
-            .and_then(|win| win.output(&self.pinnacle))
+        let Some((output, window)) = self
+            .pinnacle
+            .windows
+            .iter()
+            .find(|win| win.x11_surface() == Some(&window))
+            .and_then(|win| Some((win.output(&self.pinnacle)?, win.clone())))
         else {
             return;
         };
+
+        self.capture_snapshots_on_output(&output, []);
+
+        if window.is_on_active_tag() {
+            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+            self.update_keyboard_focus(&output);
+            self.pinnacle.raise_window(window.clone(), true);
+
+            if let Some(loc) = window.with_state(|state| {
+                state
+                    .window_state
+                    .is_floating()
+                    .then_some(state.floating_loc)
+                    .flatten()
+            }) {
+                self.pinnacle
+                    .space
+                    .map_element(window.clone(), loc.to_i32_round(), true);
+            } else {
+                self.pinnacle.begin_layout_transaction(&output);
+                self.pinnacle.request_layout(&output);
+            }
+        }
+
         self.schedule_render(&output);
     }
 
