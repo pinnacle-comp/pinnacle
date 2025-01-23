@@ -86,24 +86,22 @@ end
 function pinnacle.setup(config_fn)
     pinnacle.init()
 
-    -- This function ensures a config won't run forever if Pinnacle is killed
+    -- This ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
-    -- client.loop:wrap(function()
-    --     while true do
-    --         require("cqueues").sleep(60)
-    --         local success, err, errno = client.conn:ping(10)
-    --         if not success then
-    --             error(
-    --                 "compositor ping failed: err = "
-    --                     .. tostring(err)
-    --                     .. ", errno = "
-    --                     .. tostring(errno)
-    --             )
-    --         end
-    --     end
-    -- end)
-
-    -- FIXME: keepalive stream
+    client.loop:wrap(function()
+        while true do
+            require("cqueues").sleep(30)
+            local success, err, errno = client.conn:ping(10)
+            if not success then
+                error(
+                    "compositor ping failed: err = "
+                        .. tostring(err)
+                        .. ", errno = "
+                        .. tostring(errno)
+                )
+            end
+        end
+    end)
 
     client.loop:wrap(config_fn)
 
