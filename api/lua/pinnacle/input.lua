@@ -125,7 +125,7 @@ local function keybind_inner(kb)
         bind = {
             mods = modifs,
             ignore_mods = ignore_modifs,
-            layer_name = nil,
+            layer_name = kb.bind_layer,
             group = kb.group,
             description = kb.description,
             key = {
@@ -263,7 +263,7 @@ local function mousebind_inner(mb)
         bind = {
             mods = modifs,
             ignore_mods = ignore_modifs,
-            layer_name = nil,
+            layer_name = mb.bind_layer,
             group = mb.group,
             description = mb.description,
             mouse = {
