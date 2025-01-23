@@ -22,11 +22,15 @@ local log = require("pinnacle.log")
 ---| number
 
 ---@class LayoutNode
+---A label that helps Pinnacle decide how to diff layout trees.
 ---@field label string?
+---An index that determines how Pinnacle traverses a layout tree.
 ---@field traversal_index integer?
+---A set of indices per window index that changes how that window is assigned a geometry.
 ---@field traversal_overrides table<integer, integer[]>?
 ---@field layout_dir LayoutDir?
 ---@field gaps (number | pinnacle.layout.Gaps)?
+---The proportion the node takes up relative to its siblings.
 ---@field size_proportion number?
 ---@field children LayoutNode[]
 
@@ -53,7 +57,10 @@ local builtin = {}
 ---@field direction LayoutDir?
 ---@field reversed boolean?
 
+---Creates a layout generator that lays out windows in a line.
+---
 ---@param options pinnacle.layout.builtin.LineOpts?
+---
 ---@return pinnacle.layout.builtin.Line
 function builtin.line(options)
     ---@type pinnacle.layout.builtin.Line
@@ -119,6 +126,8 @@ end
 ---@field master_count integer?
 ---@field reversed boolean?
 
+---Creates a layout generator that lays windows out in two stacks: a master and side stack.
+---
 ---@param options pinnacle.layout.builtin.MasterStackOpts?
 ---@return pinnacle.layout.builtin.MasterStack
 function builtin.master_stack(options)
@@ -197,7 +206,10 @@ end
 ---@field outer_gaps pinnacle.layout.Gaps?
 ---@field inner_gaps pinnacle.layout.Gaps?
 
+---Creates a layout generator that lays windows out dwindling down to the bottom right.
+---
 ---@param options pinnacle.layout.builtin.DwindleOpts?
+---
 ---@return pinnacle.layout.builtin.Dwindle
 function builtin.dwindle(options)
     ---@type pinnacle.layout.builtin.Dwindle
@@ -269,7 +281,10 @@ end
 ---@field outer_gaps pinnacle.layout.Gaps?
 ---@field inner_gaps pinnacle.layout.Gaps?
 
+---Creates a layout generator that lays windows out in a spiral.
+---
 ---@param options pinnacle.layout.builtin.SpiralOpts?
+---
 ---@return pinnacle.layout.builtin.Spiral
 function builtin.spiral(options)
     ---@type pinnacle.layout.builtin.Spiral
@@ -351,6 +366,9 @@ end
 ---@field corner_height_factor number?
 ---@field corner_loc ("top_left" | "top_right" | "bottom_left" | "bottom_right")?
 
+---Creates a layout generator that lays windows out with one main corner window and
+---a horizontal and vertical stack flanking the other two sides.
+---
 ---@param options pinnacle.layout.builtin.CornerOpts?
 ---@return pinnacle.layout.builtin.Corner
 function builtin.corner(options)
@@ -468,7 +486,10 @@ end
 ---@field inner_gaps pinnacle.layout.Gaps?
 ---@field axis ("horizontal" | "vertical")?
 
+---Creates a layout generator that lays windows out keeping their sizes roughly the same.
+---
 ---@param options pinnacle.layout.builtin.FairOpts?
+---
 ---@return pinnacle.layout.builtin.Fair
 function builtin.fair(options)
     ---@type pinnacle.layout.builtin.Fair
@@ -555,6 +576,8 @@ end
 ---@field current_tag TagHandle?
 local Cycle = {}
 
+---Cycles the layout forward for the given tag.
+---
 ---@param tag TagHandle
 function Cycle:cycle_layout_forward(tag)
     if not self.tag_indices[tag.id] then
@@ -566,6 +589,8 @@ function Cycle:cycle_layout_forward(tag)
     end
 end
 
+---Cycles the layout backward for the given tag.
+---
 ---@param tag TagHandle
 function Cycle:cycle_layout_backward(tag)
     if not self.tag_indices[tag.id] then
@@ -577,6 +602,8 @@ function Cycle:cycle_layout_backward(tag)
     end
 end
 
+---Gets the current layout generator for the given tag.
+---
 ---@param tag TagHandle
 ---
 ---@return LayoutGenerator?
@@ -584,6 +611,9 @@ function Cycle:current_layout(tag)
     return self.layouts[self.tag_indices[tag.id] or 1]
 end
 
+---Creates a layout generator that delegates to other layout generators depending on the tag
+---and allows you to cycle between the generators.
+---
 ---@param layouts LayoutGenerator[]
 ---
 ---@return pinnacle.layout.builtin.Cycle
@@ -615,6 +645,8 @@ function builtin.cycle(layouts)
     return cycler
 end
 
+---Layout management.
+---
 ---@class Layout
 local layout = {
     builtin = builtin,
@@ -624,6 +656,8 @@ local layout = {
 ---@field private sender grpc_client.h2.Stream
 local LayoutRequester = {}
 
+---Causes the compositor to emit a layout request.
+---
 ---@param output OutputHandle?
 function LayoutRequester:request_layout(output)
     local output = output or require("pinnacle.output").get_focused()
@@ -687,9 +721,30 @@ local function layout_node_to_api_node(node)
     }
 end
 
+---Begins managing layout requests from the compositor.
+---
+---You must call this function to get windows to lay out.
+---The provided function will be run with the arguments of the layout request.
+---It must return a `LayoutNode` that represents the root of a layout tree.
+---
+---#### Example
+---
+---```lua
+---local layout_requester = Layout.manage(function(args)
+---    local first_tag = args.tags[1]
+---    if not first_tag then
+---        return {
+---            children = {},
+---        }
+---    end
+---    layout_cycler.current_tag = first_tag
+---    return layout_cycler:layout(args.window_count)
+---end)
+---```
+---
 ---@param on_layout fun(args: LayoutArgs): LayoutNode
 ---
----@return pinnacle.layout.LayoutRequester
+---@return pinnacle.layout.LayoutRequester # A requester that allows you to force the compositor to request a layout.
 ---@nodiscard
 function layout.manage(on_layout)
     local stream, err = client:bidirectional_streaming_request(

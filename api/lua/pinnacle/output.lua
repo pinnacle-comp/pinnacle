@@ -14,10 +14,9 @@ local output_handle = {}
 ---An output handle.
 ---
 ---This is a handle to one of your monitors.
----It serves to make it easier to deal with them, defining methods for getting properties and
----helpers for things like positioning multiple monitors.
 ---
 ---This can be retrieved through the various `get` functions in the `Output` module.
+---
 ---@classmod
 ---@class OutputHandle
 ---@field name string The unique name of this output
@@ -25,21 +24,17 @@ local OutputHandle = {}
 
 ---Output management.
 ---
----An output is what you would call a monitor. It presents windows, your cursor, and other UI elements.
+---An output is the Wayland term for a monitor. It presents windows, your cursor, and other UI elements.
 ---
 ---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
+---
 ---@class Output
 ---@lcat nodoc
 ---@field private handle OutputHandleModule
 local output = {}
 output.handle = output_handle
 
----Get all outputs.
----
----#### Example
----```lua
----local outputs = Output.get_all()
----```
+---Gets all outputs.
 ---
 ---@return OutputHandle[]
 function output.get_all()
@@ -62,12 +57,7 @@ function output.get_all()
     return handles
 end
 
----Get all enabled outputs.
----
----#### Example
----```lua
----local outputs = Output.get_all_enabled()
----```
+---Gets all enabled outputs.
 ---
 ---@return OutputHandle[]
 function output.get_all_enabled()
@@ -83,14 +73,10 @@ function output.get_all_enabled()
     return enabled_handles
 end
 
----Get an output by its name (the connector it's plugged into).
----
----#### Example
----```lua
----local output = Output.get_by_name("eDP-1")
----```
+---Gets an output by its name (the connector it's plugged into).
 ---
 ---@param name string The name of the connector the output is connected to
+---
 ---@return OutputHandle | nil
 function output.get_by_name(name)
     local handles = output.get_all()
@@ -104,14 +90,9 @@ function output.get_by_name(name)
     return nil
 end
 
----Get the currently focused output.
+---Gets the currently focused output.
 ---
 ---This is currently defined as the most recent one that has had pointer motion.
----
----#### Example
----```lua
----local output = Output.get_focused()
----```
 ---
 ---@return OutputHandle | nil
 function output.get_focused()
@@ -126,34 +107,34 @@ function output.get_focused()
     return nil
 end
 
----Connect a function to be run with all current and future outputs.
+--- Runs a closure on all current and future outputs.
 ---
----This method does two things:
----1. Immediately runs `callback` with all currently connected outputs.
----2. Calls `callback` whenever a new output is plugged in.
+--- When called, this will do two things:
+--- 1. Immediately run `for_each` with all currently connected outputs.
+--- 2. Call `for_each` with any newly connected outputs.
 ---
----This will *not* run `callback` with an output that has been unplugged and replugged
----to prevent duplicate setup. Instead, the compositor keeps track of the tags and other
----state associated with that output and restores it when replugged.
+--- Note that `for_each` will *not* run with outputs that have been unplugged and replugged.
+--- This is to prevent duplicate setup. Instead, the compositor keeps track of any tags and
+--- state the output had when unplugged and restores them on replug. This may change in the future.
 ---
 ---#### Example
 ---```lua
 --- -- Add tags "1" through "5" to all outputs
----Output.connect_for_all(function(output)
+---require("pinnacle.output").for_each_output(function(output)
 ---    local tags = Tag.add(output, "1", "2", "3", "4", "5")
 ---    tags[1]:toggle_active()
 ---end)
 ---```
 ---
----@param callback fun(output: OutputHandle)
-function output.for_each_output(callback)
+---@param for_each fun(output: OutputHandle)
+function output.for_each_output(for_each)
     local handles = output.get_all()
     for _, handle in ipairs(handles) do
-        callback(handle)
+        for_each(handle)
     end
 
     output.connect_signal({
-        connect = callback,
+        connect = for_each,
     })
 end
 
@@ -170,10 +151,10 @@ local signal_name_to_SignalName = {
 ---@field resize fun(output: OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
 ---@field move fun(output: OutputHandle, x: integer, y: integer)? An output moved.
 
----Connect to an output signal.
+---Connects to an output signal.
 ---
----The compositor sends signals about various events. Use this function to run a callback when
----some output signal occurs.
+---`signals` is a table containing the signal(s) you want to connect to along with
+---a corresponding callback that will be called when the signal is signalled.
 ---
 ---This function returns a table of signal handles with each handle stored at the same key used
 ---to connect to the signal. See `SignalHandles` for more information.
@@ -209,7 +190,7 @@ end
 
 ---------------------------------------------------------------------
 
----Set the location of this output in the global space.
+---Sets the location of this output in the global space.
 ---
 ---On startup, Pinnacle will lay out all connected outputs starting at (0, 0)
 ---and going to the right, with their top borders aligned.
@@ -229,8 +210,8 @@ end
 --- --              │ 2560x │
 --- --              │ 1440  │
 --- --              └───────┘
----Output.get_by_name("DP-1"):set_location({ x = 0, y = 0 })
----Output.get_by_name("HDMI-1"):set_location({ x = 1920, y = -360 })
+---Output.get_by_name("DP-1"):set_loc(0, 0)
+---Output.get_by_name("HDMI-1"):set_loc(1920, -360)
 --- -- Results in:
 --- --       ┌───────┐
 --- -- ┌─────┤       │
@@ -269,7 +250,7 @@ end
 ---| "right_align_center" Set to right, align centers
 ---| "right_align_bottom" Set to right, align bottom borders
 
----Set the location of this output adjacent to another one.
+---Sets the location of this output adjacent to another one.
 ---
 ---`alignment` is how you want this output to be placed.
 ---For example, "top_align_left" will place this output above `other` and align the left borders.
@@ -367,15 +348,15 @@ function OutputHandle:set_loc_adj_to(other, alignment)
     self:set_loc(x, y)
 end
 
----Set this output's mode.
+---Sets this output's mode.
 ---
----If `refresh_rate_millihz` is provided, Pinnacle will attempt to use the mode with that refresh rate.
+---If `refresh_rate_mhz` is provided, Pinnacle will attempt to use the mode with that refresh rate.
 ---If it isn't, Pinnacle will attempt to use the mode with the highest refresh rate that matches the
 ---given size.
 ---
 ---The refresh rate is in millihertz. For example, to choose a mode with a refresh rate of 60Hz, use 60000.
 ---
----If this output doesn't support the given mode, it will be ignored.
+---If this output doesn't support the given mode, it will be ignored. FIXME: test that
 ---
 ---#### Example
 ---```lua
@@ -410,9 +391,13 @@ end
 ---@field hsync boolean
 ---@field vsync boolean
 
----Set a custom modeline for this output.
+---Sets a custom modeline for this output.
 ---
 ---This accepts a `Modeline` table or a string of the modeline.
+---You can parse a modeline into a `Modeline` table with
+---```lua
+---require("pinnacle.util").output.parse_modeline("your modeline herre")
+---```
 ---
 ---@param modeline string|Modeline
 function OutputHandle:set_modeline(modeline)
@@ -451,7 +436,7 @@ function OutputHandle:set_modeline(modeline)
     end
 end
 
----Set this output's scaling factor.
+---Sets this output's scaling factor.
 ---
 ---@param scale number
 function OutputHandle:set_scale(scale)
@@ -466,7 +451,7 @@ function OutputHandle:set_scale(scale)
     end
 end
 
----Increase this output's scaling factor.
+---Changes this output's scaling factor by the given amount.
 ---
 ---@param change_by number
 function OutputHandle:change_scale(change_by)
@@ -494,7 +479,7 @@ local transform_name_to_code = {
 }
 require("pinnacle.util").make_bijective(transform_name_to_code)
 
----Set this output's transform.
+---Sets this output's transform.
 ---
 ---@param transform Transform
 function OutputHandle:set_transform(transform)
@@ -516,7 +501,7 @@ local set_or_toggle = {
     TOGGLE = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
----Power on or off this output.
+---Powers on or off this output.
 ---
 ---@param powered boolean
 function OutputHandle:set_powered(powered)
@@ -530,6 +515,7 @@ function OutputHandle:set_powered(powered)
     end
 end
 
+---Toggles power for this output.
 function OutputHandle:toggle_powered()
     local _, err = client:unary_request(
         output_service.SetPowered,
@@ -546,11 +532,7 @@ end
 ---@field height integer
 ---@field refresh_rate_mhz integer
 
----Get this output's make.
----
----Note: make and model detection are currently somewhat iffy and may not work.
----
----Shorthand for `handle:props().make`.
+---Gets this output's make.
 ---
 ---@return string
 function OutputHandle:make()
@@ -561,11 +543,7 @@ function OutputHandle:make()
     return response and response.make or ""
 end
 
----Get this output's model.
----
----Note: make and model detection are currently somewhat iffy and may not work.
----
----Shorthand for `handle:props().model`.
+---Gets this output's model.
 ---
 ---@return string
 function OutputHandle:model()
@@ -576,6 +554,8 @@ function OutputHandle:model()
     return response and response.model or ""
 end
 
+---Gets this output's serial.
+---
 ---@return string
 function OutputHandle:serial()
     local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
@@ -585,9 +565,7 @@ function OutputHandle:serial()
     return response and response.serial or ""
 end
 
----Get this output's x-coordinate in the global space.
----
----Shorthand for `handle:props().x`.
+---Gets this output's location in the global space.
 ---
 ---@return { x: integer, y: integer }?
 function OutputHandle:loc()
@@ -598,11 +576,9 @@ function OutputHandle:loc()
     return response and response.loc
 end
 
----Get this output's logical width in pixels.
+---Gets this output's logical size in logical pixels.
 ---
 ---If the output is disabled, this returns nil.
----
----Shorthand for `handle:props().logical_width`.
 ---
 ---@return { width: integer, height: integer }?
 function OutputHandle:logical_size()
@@ -614,9 +590,7 @@ function OutputHandle:logical_size()
     return response and response.logical_size
 end
 
----Get this output's physical width in millimeters.
----
----Shorthand for `handle:props().physical_width`.
+---Gets this output's physical size in millimeters.
 ---
 ---@return { width: integer, height: integer }?
 function OutputHandle:physical_size()
@@ -628,9 +602,7 @@ function OutputHandle:physical_size()
     return response and response.physical_size
 end
 
----Get this output's current mode.
----
----Shorthand for `handle:props().current_mode`.
+---Gets this output's current mode.
 ---
 ---@return Mode?
 function OutputHandle:current_mode()
@@ -653,9 +625,7 @@ function OutputHandle:current_mode()
     return ret
 end
 
----Get this output's preferred mode.
----
----Shorthand for `handle:props().preferred_mode`.
+---Gets this output's preferred mode.
 ---
 ---@return Mode?
 function OutputHandle:preferred_mode()
@@ -678,9 +648,7 @@ function OutputHandle:preferred_mode()
     return ret
 end
 
----Get all of this output's available modes.
----
----Shorthand for `handle:props().modes`.
+---Gets all of this output's available modes.
 ---
 ---@return Mode[]
 function OutputHandle:modes()
@@ -709,11 +677,9 @@ function OutputHandle:modes()
     return ret
 end
 
----Get whether or not this output is focused.
+---Gets whether or not this output is focused.
 ---
 ---The focused output is currently implemented as the one that last had pointer motion.
----
----Shorthand for `handle:props().focused`.
 ---
 ---@return boolean
 function OutputHandle:focused()
@@ -725,11 +691,9 @@ function OutputHandle:focused()
     return response and response.focused or false
 end
 
----Get the tags this output has.
+---Gets the tags this output has.
 ---
----Shorthand for `handle:props().tags`.
----
----@return TagHandle[]?
+---@return TagHandle[]
 function OutputHandle:tags()
     local response, err =
         client:unary_request(output_service.GetTagIds, { output_name = self.name })
@@ -743,9 +707,7 @@ function OutputHandle:tags()
     return handles
 end
 
----Get this output's scaling factor.
----
----Shorthand for `handle:props().scale`.
+---Get this output's scale.
 ---
 ---@return number
 function OutputHandle:scale()
@@ -758,8 +720,6 @@ function OutputHandle:scale()
 end
 
 ---Get this output's transform.
----
----Shorthand for `handle:props().transform`.
 ---
 ---@return Transform
 function OutputHandle:transform()
@@ -777,7 +737,7 @@ function OutputHandle:transform()
     return transform_name_to_code[transform]
 end
 
----Get whether this output is enabled.
+---Gets whether this output is enabled.
 ---
 ---Disabled outputs are not mapped to the global space and cannot be used.
 ---
@@ -791,7 +751,7 @@ function OutputHandle:enabled()
     return response and response.enabled or false
 end
 
----Get whether this output is powered.
+---Gets whether this output is powered.
 ---
 ---Unpowered outputs that are enabled will be off, but they will still be
 ---mapped to the global space, meaning you can still interact with them.
@@ -806,12 +766,10 @@ function OutputHandle:powered()
     return response and response.powered or false
 end
 
----Get this output's keyboard focus stack.
+---Gets this output's keyboard focus stack.
 ---
 ---This includes *all* windows on the output, even those on inactive tags.
 ---If you only want visible windows, use `keyboard_focus_stack_visible` instead.
----
----Shorthand for `handle:props().keyboard_focus_stack`.
 ---
 ---@return WindowHandle[]
 ---
@@ -829,7 +787,7 @@ function OutputHandle:keyboard_focus_stack()
     return handles
 end
 
----Get this output's keyboard focus stack.
+---Gets this output's keyboard focus stack.
 ---
 ---This only includes windows on active tags.
 ---If you want all windows on the output, use `keyboard_focus_stack` instead.
@@ -862,7 +820,7 @@ function OutputHandle:keyboard_focus_stack_visible()
     return keyboard_focus_stack_visible
 end
 
----Create a new `OutputHandle` from its raw name.
+---Creates a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)
     ---@type OutputHandle

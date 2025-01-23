@@ -25,6 +25,7 @@ function child_module.new_child(child)
     return child
 end
 
+---A command representing a to-be-spawned process.
 ---@class Command
 ---@field private cmd string | string[]
 ---@field private shell_cmd string[]?
@@ -33,13 +34,22 @@ end
 ---@field private once boolean?
 local Command = {}
 
+---Options for a command.
 ---@class CommandOpts
----@field cmd string | string[]
+---@field cmd string | string[] The command to be run
+---An optional shell command that will be prefixed with `cmd`.
+---Use this to spawn something with a shell.
 ---@field shell_cmd string[]?
+---Any environment variables that should be set for the spawned process.
 ---@field envs table<string, string>?
+---Causes the spawn to fizzle if the process is already running.
 ---@field unique boolean?
+---Causes the command to only spawn the process if it hasn't been spawned before within the
+---lifetime of the compositor.
 ---@field once boolean?
 
+---Spawns this process, returning a `Child` that contains the process's standard IO if successful.
+---
 ---@return pinnacle.process.Child?
 function Command:spawn()
     local response, err = client:unary_request(process_service.Spawn, {
@@ -98,6 +108,12 @@ function Command:spawn()
     return child_module.new_child(child)
 end
 
+---Waits for this child process to exit.
+---
+---This will block the calling thread.
+---
+---Returns the exit status of the process.
+---
 ---@return { exit_code: integer?, exit_msg: string? }
 function Child:wait()
     local condvar = condition.new()
@@ -122,6 +138,8 @@ function Child:wait()
     return ret
 end
 
+---Runs a function with every line of the child process's standard output.
+---
 ---@param on_line fun(line: string)
 ---
 ---@return self self This child for chaining
@@ -141,6 +159,8 @@ function Child:on_line_stdout(on_line)
     return self
 end
 
+---Runs a function with every line of the child process's standard error.
+---
 ---@param on_line fun(line: string)
 ---
 ---@return self self This child for chaining
@@ -165,10 +185,18 @@ end
 ---@class Process
 local process = {}
 
+---Spawns a process, returning a `Child` with the process's standard IO if successful.
+---
+---Receives the arguments of the command to be spawned, either as varargs or as a table.
+---
+---For more control over the spawn, use `Process.command` instead.
+---
 ---@param ... string
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
 ---@return pinnacle.process.Child?
+---
+---@see Process.command A way to spawn processes with more control.
 function process.spawn(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -182,10 +210,19 @@ function process.spawn(...)
         :spawn()
 end
 
+---Spawns a process if it hasn't been spawned before,
+---returning a `Child` with the process's standard IO if successful.
+---
+---Receives the arguments of the command to be spawned, either as varargs or as a table.
+---
+---For more control over the spawn, use `Process.command` instead.
+---
 ---@param ... string
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
 ---@return pinnacle.process.Child?
+---
+---@see Process.command A way to spawn processes with more control.
 function process.spawn_once(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -200,10 +237,19 @@ function process.spawn_once(...)
         :spawn()
 end
 
+---Spawns a process if it isn't already running,
+---returning a `Child` with the process's standard IO if successful.
+---
+---Receives the arguments of the command to be spawned, either as varargs or as a table.
+---
+---For more control over the spawn, use `Process.command` instead.
+---
 ---@param ... string
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
 ---@return pinnacle.process.Child?
+---
+---@see Process.command A way to spawn processes with more control.
 function process.spawn_unique(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -218,6 +264,10 @@ function process.spawn_unique(...)
         :spawn()
 end
 
+---Creates a `Command` from the given options.
+---
+---A `Command` represents a to-be-spawned process.
+---
 ---@param cmd CommandOpts
 ---
 ---@return Command

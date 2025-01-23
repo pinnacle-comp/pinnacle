@@ -30,6 +30,7 @@ local window_handle = {}
 ---what you want it to.
 ---
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
+---
 ---@class WindowHandle
 ---@field id integer
 local WindowHandle = {}
@@ -44,15 +45,8 @@ local WindowHandle = {}
 local window = {}
 window.handle = window_handle
 
----Get all windows.
+---Gets all windows.
 ---
----#### Example
----```lua
----local windows = Window.get_all()
----for _, window in ipairs(windows) do
----    print(window:props().class)
----end
----```
 ---@return WindowHandle[] windows Handles to all windows
 function window.get_all()
     local response, err = client:unary_request(window_service.Get, {})
@@ -69,15 +63,8 @@ function window.get_all()
     return handles
 end
 
----Get the currently focused window.
+---Gets the currently focused window.
 ---
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    print(focused:props().class)
----end
----```
 ---@return WindowHandle | nil window A handle to the currently focused window
 function window.get_focused()
     local handles = window.get_all()
@@ -102,7 +89,7 @@ function window.get_focused()
     return nil
 end
 
----Begin moving this window using the specified mouse button.
+---Begins moving this window using the specified mouse button.
 ---
 ---The button must be pressed at the time this method is called.
 ---If the button is lifted, the move will end.
@@ -124,7 +111,7 @@ function window.begin_move(button)
     end
 end
 
----Begin resizing this window using the specified mouse button.
+---Begins resizing this window using the specified mouse button.
 ---
 ---The button must be pressed at the time this method is called.
 ---If the button is lifted, the resize will end.
@@ -164,10 +151,10 @@ local signal_name_to_SignalName = {
 ---@field pointer_enter fun(window: WindowHandle)? The pointer entered a window.
 ---@field pointer_leave fun(window: WindowHandle)? The pointer left a window.
 
----Connect to a window signal.
+---Connects to a window signal.
 ---
----The compositor sends signals about various events. Use this function to run a callback when
----some window signal occurs.
+---`signals` is a table containing the signal(s) you want to connect to along with
+---a corresponding callback that will be called when the signal is signalled.
 ---
 ---This function returns a table of signal handles with each handle stored at the same key used
 ---to connect to the signal. See `SignalHandles` for more information.
@@ -176,7 +163,7 @@ local signal_name_to_SignalName = {
 ---```lua
 ---Window.connect_signal({
 ---    pointer_enter = function(window)
----        print("Pointer entered", window:class())
+---        print("Pointer entered", window:app_id())
 ---    end
 ---})
 ---```
@@ -201,6 +188,28 @@ function window.connect_signal(signals)
     return handles
 end
 
+---Adds a window rule.
+---
+---Instead of using a declarative window rule system with match conditions,
+---you supply a closure that acts on a newly opened window.
+---You can use standard `if` statements and apply properties using the same
+---methods that are used everywhere else in this API.
+---
+---Note: this function is special in that if it is called, Pinnacle will wait for
+---the provided closure to finish running before it sends windows an initial configure event.
+---*Do not block here*. At best, short blocks will increase the time it takes for a window to
+---open. At worst, a complete deadlock will prevent windows from opening at all.
+---
+---#### Example
+---
+---```lua
+---Window.add_window_rule(function(window)
+---    if window:app_id() == "Alacritty" then
+---        window:set_tag(Tag.get("Terminal"), true)
+---    end
+---end)
+---```
+---
 ---@param rule fun(window: WindowHandle)
 function window.add_window_rule(rule)
     local _stream, err = client:bidirectional_streaming_request(
@@ -233,13 +242,7 @@ end
 
 ------------------------------------------------------------------------
 
----Send a close request to this window.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then focused:close() end
----```
+---Sends a close request to this window.
 function WindowHandle:close()
     local _, err = client:unary_request(window_service.Close, { window_id = self.id })
 
@@ -248,7 +251,7 @@ function WindowHandle:close()
     end
 end
 
----Set this window's location and/or size.
+---Sets this window's location and/or size.
 ---
 ---The coordinate system has the following axes:
 ---```
@@ -285,16 +288,7 @@ function WindowHandle:set_geometry(geo)
     end
 end
 
----Set this window to fullscreen or not.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:set_fullscreen(true)
----    focused:set_fullscreen(false)
----end
----```
+---Sets this window to fullscreen or not.
 ---
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
@@ -308,15 +302,8 @@ function WindowHandle:set_fullscreen(fullscreen)
     end
 end
 
----Toggle this window to and from fullscreen.
+---Toggles this window to and from fullscreen.
 ---
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:toggle_fullscreen()
----end
----```
 function WindowHandle:toggle_fullscreen()
     local _, err = client:unary_request(
         window_service.SetFullscreen,
@@ -328,16 +315,7 @@ function WindowHandle:toggle_fullscreen()
     end
 end
 
----Set this window to maximized or not.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:set_maximized(true)
----    focused:set_maximized(false)
----end
----```
+---Sets this window to maximized or not.
 ---
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
@@ -351,15 +329,8 @@ function WindowHandle:set_maximized(maximized)
     end
 end
 
----Toggle this window to and from maximized.
+---Toggles this window to and from maximized.
 ---
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:toggle_maximized()
----end
----```
 function WindowHandle:toggle_maximized()
     local _, err = client:unary_request(
         window_service.SetMaximized,
@@ -371,16 +342,7 @@ function WindowHandle:toggle_maximized()
     end
 end
 
----Set this window to floating or not.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:set_floating(true)
----    focused:set_floating(false)
----end
----```
+---Sets this window to floating or not.
 ---
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
@@ -394,15 +356,8 @@ function WindowHandle:set_floating(floating)
     end
 end
 
----Toggle this window to and from floating.
+---Toggles this window to and from floating.
 ---
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:toggle_floating()
----end
----```
 function WindowHandle:toggle_floating()
     local _, err = client:unary_request(
         window_service.SetFloating,
@@ -414,15 +369,7 @@ function WindowHandle:toggle_floating()
     end
 end
 
----Focus or unfocus this window.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:set_focused(false)
----end
----```
+---Focuses or unfocuses this window.
 ---
 ---@param focused boolean
 function WindowHandle:set_focused(focused)
@@ -436,15 +383,8 @@ function WindowHandle:set_focused(focused)
     end
 end
 
----Toggle this window to and from focused.
+---Toggles this window to and from focused.
 ---
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:toggle_focused()
----end
----```
 function WindowHandle:toggle_focused()
     local _, err = client:unary_request(
         window_service.SetFocused,
@@ -456,6 +396,8 @@ function WindowHandle:toggle_focused()
     end
 end
 
+---Sets this window's decoration mode.
+---
 ---@param mode "client_side" | "server_side"
 function WindowHandle:set_decoration_mode(mode)
     local _, err = client:unary_request(window_service.SetDecorationMode, {
@@ -470,18 +412,9 @@ function WindowHandle:set_decoration_mode(mode)
     end
 end
 
----Move this window to the specified tag.
+---Moves this window to the specified tag.
 ---
----This will remove all tags from this window and tag it with `tag`.
----
----#### Example
----```lua
---- -- Assume the focused output has the tag "Tag"
----local focused = Window.get_focused()
----if focused then
----    focused:move_to_tag(Tag.get("Tag"))
----end
----```
+---This will remove all tags from this window and add the tag `tag`.
 ---
 ---@param tag TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
@@ -493,21 +426,7 @@ function WindowHandle:move_to_tag(tag)
     end
 end
 
----Tag or untag the given tag on this window.
----
----#### Example
----```lua
---- -- Assume the focused output has the tag "Tag"
----local focused = Window.get_focused()
----if focused then
----    local tag = Tag.get("Tag")
----
----    focused:set_tag(tag, true)
----    -- `focused` now has tag "Tag"
----    focused:set_tag(tag, false)
----    -- `focused` no longer has tag "Tag"
----end
----```
+---Adds or removes the given tag to or from this window.
 ---
 ---@param tag TagHandle The tag to set or unset
 ---@param set boolean
@@ -522,22 +441,7 @@ function WindowHandle:set_tag(tag, set)
     end
 end
 
----Toggle the given tag on this window.
----
----#### Example
----```lua
---- -- Assume the focused output has the tag "Tag"
----local focused = Window.get_focused()
----if focused then
----    local tag = Tag.get("Tag")
----    focused:set_tag(tag, false)
----
----    focused:toggle_tag(tag)
----    -- `focused` now has tag "Tag"
----    focused:toggle_tag(tag)
----    -- `focused` no longer has tag "Tag"
----end
----```
+---Toggles the given tag on this window.
 ---
 ---@param tag TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
@@ -551,17 +455,9 @@ function WindowHandle:toggle_tag(tag)
     end
 end
 
----Raise a window.
+---Raises a window.
 ---
----This will raise a window all the way to the top of the z-stack.
----
----#### Example
----```lua
----local focused = Window.get_focused()
----if focused then
----    focused:raise()
----end
----```
+---This will bring the window to the front.
 function WindowHandle:raise()
     local _, err = client:unary_request(window_service.Raise, { window_id = self.id })
 
@@ -596,7 +492,7 @@ function WindowHandle:is_on_active_tag()
     return false
 end
 
----Get this window's location and size.
+---Gets this window's location.
 ---
 ---@return { x: integer, y: integer }?
 function WindowHandle:loc()
@@ -607,9 +503,18 @@ function WindowHandle:loc()
     return loc and loc.loc
 end
 
----Get this window's class.
+---Gets this window's location.
 ---
----Shorthand for `handle:props().class`.
+---@return { width: integer, height: integer }?
+function WindowHandle:size()
+    local loc, err = client:unary_request(window_service.GetSize, { window_id = self.id })
+
+    ---@cast loc pinnacle.window.v1.GetSizeResponse|nil
+
+    return loc and loc.size
+end
+
+---Gets this window's class.
 ---
 ---@return string
 function WindowHandle:app_id()
@@ -617,12 +522,10 @@ function WindowHandle:app_id()
 
     ---@cast response pinnacle.window.v1.GetAppIdResponse|nil
 
-    return response and response.app_id
+    return response and response.app_id or ""
 end
 
----Get this window's title.
----
----Shorthand for `handle:props().title`.
+---Gets this window's title.
 ---
 ---@return string
 function WindowHandle:title()
@@ -630,12 +533,10 @@ function WindowHandle:title()
 
     ---@cast response pinnacle.window.v1.GetTitleResponse|nil
 
-    return response and response.title
+    return response and response.title or ""
 end
 
----Get whether or not this window is focused.
----
----Shorthand for `handle:props().focused`.
+---Gets whether or not this window is focused.
 ---
 ---@return boolean
 function WindowHandle:focused()
@@ -643,12 +544,10 @@ function WindowHandle:focused()
 
     ---@cast response pinnacle.window.v1.GetFocusedResponse|nil
 
-    return response and response.focused
+    return response and response.focused or false
 end
 
----Get whether or not this window is floating.
----
----Shorthand for `handle:props().floating`.
+---Gets whether or not this window is floating.
 ---
 ---@return boolean
 function WindowHandle:floating()
@@ -660,7 +559,7 @@ function WindowHandle:floating()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FLOATING or false
 end
 
----Get whether this window is tiled.
+---Gets whether this window is tiled.
 ---
 ---@return boolean
 function WindowHandle:tiled()
@@ -672,7 +571,7 @@ function WindowHandle:tiled()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_TILED or false
 end
 
----Get whether this window is fullscreen.
+---Gets whether this window is fullscreen.
 ---
 ---@return boolean
 function WindowHandle:fullscreen()
@@ -684,7 +583,7 @@ function WindowHandle:fullscreen()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FULLSCREEN or false
 end
 
----Get whether this window is maximized.
+---Gets whether this window is maximized.
 ---
 ---@return boolean
 function WindowHandle:maximized()
@@ -696,9 +595,7 @@ function WindowHandle:maximized()
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_MAXIMIZED or false
 end
 
----Get all tags on this window.
----
----Shorthand for `handle:props().tags`.
+---Gets all tags on this window.
 ---
 ---@return TagHandle[]
 function WindowHandle:tags()
@@ -713,7 +610,7 @@ function WindowHandle:tags()
     return handles
 end
 
----Create a new `WindowHandle` from an id.
+---Creates a new `WindowHandle` from an id.
 ---@param window_id integer
 ---@return WindowHandle
 function window_handle.new(window_id)

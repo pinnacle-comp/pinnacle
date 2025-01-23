@@ -20,7 +20,7 @@ local filter_name_to_filter_value = {
     nearest_neighbor = render_v1.Filter.FILTER_NEAREST_NEIGHBOR,
 }
 
----Set the upscale filter the renderer will use to upscale buffers.
+---Sets the upscale filter the renderer will use to upscale buffers.
 ---
 ---@param filter ScalingFilter
 function render.set_upscale_filter(filter)
@@ -34,7 +34,7 @@ function render.set_upscale_filter(filter)
     end
 end
 
----Set the downscale filter the renderer will use to downscale buffers.
+---Sets the downscale filter the renderer will use to downscale buffers.
 ---
 ---@param filter ScalingFilter
 function render.set_downscale_filter(filter)

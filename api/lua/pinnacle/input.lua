@@ -179,31 +179,36 @@ local function keybind_inner(kb)
     end
 end
 
----Set a keybind. If called with an already existing keybind, it gets replaced.
+---Sets a keybind.
 ---
----You must provide three arguments:
+---This function can be called in two ways:
+---1. As `Input.keybind(mods, key, on_press, bind_info?)`
+---2. As `Input.keybind(<Keybind table>)`
+---
+---Calling this with a `Keybind` table gives you more options, including the ability to assign a bind layer
+---to the keybind or set it to happen on release instead of press.
+---
+---When calling using the first way, you must provide three arguments:
 ---
 --- - `mods`: An array of `Modifier`s. If you don't want any, provide an empty table.
 --- - `key`: The key that will trigger `action`. You can provide three types of key:
 ---     - Something from the `Key` table in `Input.key`, which lists every xkbcommon key. The naming pattern is the xkbcommon key without the `KEY_` prefix, unless that would make it start with a number or the reserved lua keyword `function`, in which case the `KEY_` prefix is included.
 ---     - A single character representing your key. This can be something like "g", "$", "~", "1", and so on.
 ---     - A string of the key's name. This is the name of the xkbcommon key without the `KEY_` prefix.
---- - `action`: The function that will be run when the keybind is pressed.
+--- - `on_press`: The function that will be run when the keybind is pressed.
 ---
 ---It is important to note that `"a"` is different than `"A"`. Similarly, `key.a` is different than `key.A`.
 ---Usually, it's best to use the non-modified key to prevent confusion and unintended behavior.
 ---
----```lua
----Input.keybind({ "shift" }, "a", function() end) -- This is preferred
----Input.keybind({ "shift" }, "A", function() end) -- over this
+---Similar principles apply when calling with a `Keybind` table.
 ---
---- -- This keybind will only work with capslock on.
----Input.keybind({}, "A", function() end)
+---#### Ignoring Modifiers
+---Normally, modifiers that are not specified will require the bind to not have them held down.
+---You can ignore this by adding the corresponding `"ignore_*"` modifier.
 ---
---- -- This keybind won't work at all because to get `@` you need to hold shift,
---- -- which this keybind doesn't accept.
----Input.keybind({ "ctrl" }, "@", function() end)
----```
+---#### Descriptions
+---You can specify a group and description for the bind.
+---This will be used to categorize the bind in the bind overlay and provide a description.
 ---
 ---#### Example
 ---```lua
@@ -311,9 +316,28 @@ local function mousebind_inner(mb)
     end
 end
 
----Set a mousebind. If called with an already existing mousebind, it gets replaced.
+---Sets a mousebind.
 ---
----You must specify whether the keybind happens on button press or button release.
+---This function can be called in two ways:
+---1. As `Input.mousebind(mods, button, on_press, bind_info?)`
+---2. As `Input.mousebind(<Mousebind table>)`
+---
+---Calling this with a `Mousebind` table gives you more options, including the ability to assign a bind layer
+---to the keybind or set it to happen on release instead of press.
+---
+---When calling using the first way, you must provide three arguments:
+---
+--- - `mods`: An array of `Modifier`s. If you don't want any, provide an empty table.
+--- - `button`: The mouse button.
+--- - `on_press`: The function that will be run when the button is pressed.
+---
+---#### Ignoring Modifiers
+---Normally, modifiers that are not specified will require the bind to not have them held down.
+---You can ignore this by adding the corresponding `"ignore_*"` modifier.
+---
+---#### Descriptions
+---You can specify a group and description for the bind.
+---This will be used to categorize the bind in the bind overlay and provide a description.
 ---
 ---#### Example
 ---```lua
@@ -359,7 +383,7 @@ end
 ---@field key { key_code: integer, xkb_name: string }?
 ---@field mouse { button: MouseButton }?
 
----Get all keybinds along with their descriptions
+---Gets all binds and their information.
 ---
 ---@return BindInfo[]
 function input.bind_infos()
@@ -437,9 +461,7 @@ end
 ---@field variant string?
 ---@field options string?
 
----Set the xkbconfig for your keyboard.
----
----Fields not present will be set to their default values.
+---Sets the xkbconfig for your keyboard.
 ---
 ---Read `xkeyboard-config(7)` for more information.
 ---
@@ -460,7 +482,7 @@ function input.set_xkb_config(xkb_config)
     end
 end
 
----Set the keyboard's repeat rate and delay.
+---Sets the keyboard's repeat rate and delay.
 ---
 ---#### Example
 ---```lua
@@ -519,6 +541,22 @@ local signal_name_to_SignalName = {
     device_added = "InputDeviceAdded",
 }
 
+---Connects to an input signal.
+---
+---`signals` is a table containing the signal(s) you want to connect to along with
+---a corresponding callback that will be called when the signal is signalled.
+---
+---This function returns a table of signal handles with each handle stored at the same key used
+---to connect to the signal. See `SignalHandles` for more information.
+---
+---# Example
+---```lua
+---Input.connect_signal({
+---    device_added = function(device)
+---        print("Device connected", device:name())
+---    end
+---})
+---```
 ---@param signals InputSignal The signal you want to connect to
 ---
 ---@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.

@@ -8,11 +8,13 @@ local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v1.PinnacleServi
 
 ---The entry point to configuration.
 ---
----This module contains the `setup` function, which is how you'll access all the ways to configure Pinnacle.
+---This module contains the `setup` function, which is where you'll put all of your config in.
+---It also contains general compositor actions like `quit` and `reload_config`.
+---
 ---@class Pinnacle
 local pinnacle = {}
 
----Quit Pinnacle.
+---Quits Pinnacle.
 function pinnacle.quit()
     local _, err = client:unary_request(pinnacle_service.Quit, {})
 
@@ -21,7 +23,7 @@ function pinnacle.quit()
     end
 end
 
----Reload the active config.
+---Reloads the active config.
 function pinnacle.reload_config()
     local _, err = client:unary_request(pinnacle_service.ReloadConfig, {})
 
@@ -72,14 +74,11 @@ function pinnacle.init()
     end
 end
 
----Setup a Pinnacle config.
+---Sets up a Pinnacle config.
 ---
----You must pass in a function that takes in the `Pinnacle` table. This table is how you'll access the other config modules.
+---This receives a function that contains your config.
 ---
----You can also `require` the other modules. Just be sure not to call any of their functions outside this
----setup function.
----
----If you want to run a function with the config without blocking at the end, see `Pinnacle.run`.
+---If you want to run a function with the config without blocking, see `Pinnacle.run`.
 ---
 ---@param config_fn fun()
 ---
@@ -104,6 +103,8 @@ function pinnacle.setup(config_fn)
     --     end
     -- end)
 
+    -- FIXME: keepalive stream
+
     client.loop:wrap(config_fn)
 
     local success, err = client.loop:loop()
@@ -112,18 +113,12 @@ function pinnacle.setup(config_fn)
     end
 end
 
----Run a function with the Pinnacle API.
+---Runs a function with the Pinnacle API.
 ---
 ---If you are writing a config, use `Pinnacle.setup` instead.
 ---
----Like `Pinnacle.setup`, this function takes in a function that takes in the `Pinnacle` table.
----This allows you to run anything that `setup` can run.
----
----*Unlike* `setup`, this will **not** listen to the compositor for incoming key presses, signals, and the like.
----This means that this function will not block and can be used to integrate with external applications
----like taskbars and widget systems like eww, but it will not allow you to set usable keybinds or
----call signal callbacks. This is useful for things like querying compositor information for outputs and
----windows.
+---This receives a function that runs anything in this API.
+---However, it will not block to receive compositor events.
 ---
 ---@param run_fn fun()
 function pinnacle.run(run_fn)

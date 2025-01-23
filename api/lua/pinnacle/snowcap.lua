@@ -31,7 +31,7 @@ local QuitPrompt = {}
 ---@field height integer
 local BindOverlay = {}
 
----Show this quit prompt.
+---Shows this quit prompt.
 function QuitPrompt:show()
     local Widget = require("snowcap.widget")
     local Layer = require("snowcap.layer")
@@ -84,7 +84,7 @@ function QuitPrompt:show()
     end)
 end
 
----Show this keybind overlay.
+---Shows this bind overlay.
 function BindOverlay:show()
     ---@param mods Modifier[]
     ---@return string?
@@ -409,6 +409,7 @@ end
 ---Creates the default quit prompt.
 ---
 ---Some of its characteristics can be changed by altering its fields.
+---
 ---@return pinnacle.snowcap.integration.QuitPrompt
 function integration.quit_prompt()
     local Widget = require("snowcap.widget")
@@ -431,9 +432,10 @@ function integration.quit_prompt()
     return prompt
 end
 
----Creates the default keybind overlay.
+---Creates the default bind overlay.
 ---
 ---Some of its characteristics can be changed by altering its fields.
+---
 ---@return pinnacle.snowcap.integration.BindOverlay
 function integration.bind_overlay()
     local Widget = require("snowcap.widget")

@@ -96,6 +96,8 @@ local DeviceHandle = {}
 ---| "keyboard"
 ---| "switch"
 
+---Gets this device's libinput capabilities.
+---
 ---@return pinnacle.input.libinput.Capabilities
 function DeviceHandle:capabilities()
     local response, err = client:unary_request(input_service.Bind, {
@@ -131,6 +133,8 @@ function DeviceHandle:capabilities()
     return caps
 end
 
+---Gets the name of this device.
+---
 ---@return string
 function DeviceHandle:name()
     local response, err = client:unary_request(input_service.GetDeviceInfo, {
@@ -147,6 +151,8 @@ function DeviceHandle:name()
     return response.name or ""
 end
 
+---Gets this device;s product id.
+---
 ---@return integer
 function DeviceHandle:product_id()
     local response, err = client:unary_request(input_service.GetDeviceInfo, {
@@ -163,6 +169,7 @@ function DeviceHandle:product_id()
     return response.product_id or 0
 end
 
+---Gets this devices vendor id.
 ---@return integer
 function DeviceHandle:vendor_id()
     local response, err = client:unary_request(input_service.GetDeviceInfo, {
@@ -179,6 +186,12 @@ function DeviceHandle:vendor_id()
     return response.vendor_id or 0
 end
 
+---Gets the type of this device.
+---
+---Note: This uses heuristics to determine the type and may not be correct.
+---For example a device with both pointer and keyboard capabilities will be a "mouse"
+---when it may actually be a keyboard.
+---
 ---@return pinnacle.input.libinput.DeviceType
 function DeviceHandle:device_type()
     local response, err = client:unary_request(input_service.GetDeviceType, {
@@ -353,6 +366,8 @@ function DeviceHandle:set_send_events_mode(send_events_mode)
     })
 end
 
+---Gets all connected input devices.
+---
 ---@return pinnacle.input.libinput.DeviceHandle[]
 function libinput.get_devices()
     local response, err = client:unary_request(input_service.GetDevices, {})
@@ -373,6 +388,9 @@ function libinput.get_devices()
     return devices
 end
 
+---Runs a function for every currently connected device as well as
+---all devices that will be connected in the future.
+---
 ---@param for_each fun(device: pinnacle.input.libinput.DeviceHandle)
 function libinput.for_each_device(for_each)
     for _, device in ipairs(libinput.get_devices()) do

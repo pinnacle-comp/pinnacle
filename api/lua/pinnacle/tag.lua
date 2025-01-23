@@ -48,7 +48,7 @@ local TagHandle = {}
 local tag = {}
 tag.handle = tag_handle
 
----Get all tags across all outputs.
+---Gets all tags across all outputs.
 ---
 ---@return TagHandle[]
 function tag.get_all()
@@ -71,7 +71,7 @@ function tag.get_all()
     return handles
 end
 
----Get the tag with the given name and output.
+---Gets the tag with the given name and output.
 ---
 ---If `output` is not specified, this uses the focused output.
 ---
@@ -83,7 +83,7 @@ end
 ---local tag = Tag.get("Tag")
 ---
 --- -- Get tags on a specific output
----local tag_on_hdmi1 = Tag.get("Tag", Output:get_by_name("HDMI-1"))
+---local tag_on_hdmi1 = Tag.get("Tag", Output.get_by_name("HDMI-1"))
 ---```
 ---
 ---@param name string
@@ -122,7 +122,7 @@ function tag.get(name, output)
     return nil
 end
 
----Add tags with the given names to the specified output.
+---Adds tags with the given names to the specified output.
 ---
 ---Returns handles to the created tags.
 ---
@@ -169,7 +169,7 @@ function tag.add(output, ...)
     return handles
 end
 
----Remove the given tags.
+---Removes the given tags.
 ---
 ---#### Example
 ---```lua
@@ -201,10 +201,10 @@ local signal_name_to_SignalName = {
 ---@class TagSignal Signals related to tag events.
 ---@field active fun(tag: TagHandle, active: boolean)? A tag was set to active or not active.
 
----Connect to a tag signal.
+---Connects to a tag signal.
 ---
----The compositor sends signals about various events. Use this function to run a callback when
----some tag signal occurs.
+---`signals` is a table containing the signal(s) you want to connect to along with
+---a corresponding callback that will be called when the signal is signalled.
 ---
 ---This function returns a table of signal handles with each handle stored at the same key used
 ---to connect to the signal. See `SignalHandles` for more information.
@@ -240,7 +240,7 @@ end
 
 --------------------------------------------------------------
 
----Remove this tag.
+---Removes this tag.
 ---
 ---#### Example
 ---```lua
@@ -254,7 +254,7 @@ function TagHandle:remove()
     tag.remove({ self })
 end
 
----Activate this tag and deactivate all other ones on the same output.
+---Activates this tag and deactivates all other ones on the same output.
 ---
 ---#### Example
 ---```lua
@@ -273,7 +273,7 @@ function TagHandle:switch_to()
     end
 end
 
----Set whether or not this tag is active.
+---Sets whether or not this tag is active.
 ---
 ---#### Example
 ---```lua
@@ -298,7 +298,7 @@ function TagHandle:set_active(active)
     end
 end
 
----Toggle this tag's active state.
+---Toggles this tag's active state.
 ---
 ---#### Example
 ---```lua
@@ -320,9 +320,7 @@ function TagHandle:toggle_active()
     end
 end
 
----Get whether or not this tag is being displayed.
----
----Shorthand for `handle:props().active`.
+---Gets whether or not this tag is active.
 ---
 ---@return boolean
 function TagHandle:active()
@@ -333,9 +331,7 @@ function TagHandle:active()
     return response and response.active or false
 end
 
----Get this tag's name.
----
----Shorthand for `handle:props().name`.
+---Gets this tag's name.
 ---
 ---@return string?
 function TagHandle:name()
@@ -346,9 +342,7 @@ function TagHandle:name()
     return response and response.name or ""
 end
 
----Get the output this tag is on.
----
----Shorthand for `handle:props().output`.
+---Gets the output this tag is on.
 ---
 ---@return OutputHandle
 function TagHandle:output()
@@ -360,9 +354,7 @@ function TagHandle:output()
     return require("pinnacle.output").handle.new(output_name)
 end
 
----Get the windows that have this tag.
----
----Shorthand for `handle:props().windows`.
+---Gets the windows that have this tag.
 ---
 ---@return WindowHandle[]
 function TagHandle:windows()
@@ -390,7 +382,7 @@ function TagHandle:windows()
     return wins_on_tag
 end
 
----Create a new `TagHandle` from an id.
+---Creates a new `TagHandle` from an id.
 ---@param tag_id integer
 ---@return TagHandle
 function tag_handle.new(tag_id)
