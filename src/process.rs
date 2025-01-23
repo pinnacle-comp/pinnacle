@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
-    os::fd::{AsFd, AsRawFd, IntoRawFd},
+    os::fd::{AsRawFd, IntoRawFd},
     process::Stdio,
 };
 

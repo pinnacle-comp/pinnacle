@@ -75,10 +75,7 @@ use smithay::{
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
-            xdg::{
-                PopupSurface, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
-                XdgToplevelSurfaceData,
-            },
+            xdg::{PopupSurface, SurfaceCachedState},
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,

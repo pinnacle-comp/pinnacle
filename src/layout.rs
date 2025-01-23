@@ -5,7 +5,6 @@ pub mod tree;
 
 use std::collections::{hash_map::Entry, HashMap};
 
-use anyhow::Context;
 use indexmap::IndexSet;
 use smithay::{
     desktop::{layer_map_for_output, WindowSurface},
@@ -267,13 +266,6 @@ impl State {
             anyhow::bail!("Attempted to layout but request is newer");
         }
 
-        let output_size = self
-            .pinnacle
-            .space
-            .output_geometry(&output)
-            .context("output has no size")?
-            .size;
-
         let (output_width, output_height) = {
             let map = layer_map_for_output(&output);
             let zone = map.non_exclusive_zone();
@@ -289,6 +281,8 @@ impl State {
             .insert(output.clone(), current_pending);
 
         // FIXME: figure out why stale snapshots still exist after the layout system change
+        // probably because the math is now correct and there aren't minor pixel inconsistencies
+        // --> no new snapshots are being taken
         for window in self.pinnacle.windows.iter() {
             window.with_state_mut(|state| state.snapshot.take());
         }

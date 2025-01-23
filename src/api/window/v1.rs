@@ -16,13 +16,12 @@ use pinnacle_api_defs::pinnacle::{
     },
 };
 use smithay::desktop::WindowSurface;
-use tokio::sync::mpsc::unbounded_channel;
 use tonic::{Request, Status, Streaming};
 
 use crate::{
     api::{
-        run_bidirectional_streaming, run_bidirectional_streaming_mapped, run_unary,
-        run_unary_no_response, ResponseStream, TonicResult,
+        run_bidirectional_streaming_mapped, run_unary, run_unary_no_response, ResponseStream,
+        TonicResult,
     },
     state::WithState,
     tag::TagId,

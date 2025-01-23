@@ -492,7 +492,7 @@ fn should_float(surface: &X11Surface) -> bool {
                 | WmWindowType::Splash
         )
     });
-    let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
+    let is_popup_by_size = surface.size_hints().is_some_and(|size_hints| {
         let Some((min_w, min_h)) = size_hints.min_size else {
             return false;
         };

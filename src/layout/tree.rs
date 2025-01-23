@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 use smithay::utils::{Logical, Rectangle};
 
@@ -28,9 +28,9 @@ impl std::fmt::Debug for LayoutNode {
 
 #[derive(Debug)]
 pub struct LayoutTree {
-    pub(super) taffy_tree: taffy::TaffyTree<NodeContext>,
-    pub(super) root: LayoutNode,
-    pub(super) taffy_root_id: taffy::NodeId,
+    taffy_tree: taffy::TaffyTree<NodeContext>,
+    root: LayoutNode,
+    taffy_root_id: taffy::NodeId,
 }
 
 #[derive(Debug, Clone, Default)]

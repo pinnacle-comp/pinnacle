@@ -8,7 +8,7 @@
 
 use std::{
     collections::HashMap,
-    os::fd::{AsRawFd, FromRawFd, OwnedFd},
+    os::fd::{FromRawFd, OwnedFd},
 };
 
 use passfd::FdPassingExt;

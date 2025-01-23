@@ -1,7 +1,6 @@
 use smithay::reexports::wayland_server::protocol::{wl_output::WlOutput, wl_surface::WlSurface};
 
 use crate::{
-    api::signal::Signal,
     delegate_foreign_toplevel,
     protocol::foreign_toplevel::{ForeignToplevelHandler, ForeignToplevelManagerState},
     state::{State, WithState},
@@ -20,6 +19,9 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
+        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+        self.pinnacle.raise_window(window.clone(), true);
+
         if !window.is_on_active_tag() {
             let new_active_tag = window.with_state(|state| {
                 state
@@ -30,32 +32,12 @@ impl ForeignToplevelHandler for State {
             });
 
             if let Some(tag) = new_active_tag {
-                self.capture_snapshots_on_output(&output, []);
-
-                // FIXME: use `crate::api:tag::switch_to`
-                output.with_state(|state| {
-                    if state.tags.contains(&tag) {
-                        for op_tag in state.tags.iter() {
-                            if op_tag.set_active(false) {
-                                self.pinnacle.signal_state.tag_active.signal(op_tag);
-                            }
-                        }
-                        if tag.set_active(true) {
-                            self.pinnacle.signal_state.tag_active.signal(&tag);
-                        }
-                    }
-                });
-
-                self.pinnacle.begin_layout_transaction(&output);
-                self.pinnacle.request_layout(&output);
+                crate::api::tag::switch_to(self, &tag);
             }
+        } else {
+            self.update_keyboard_focus(&output);
+            self.schedule_render(&output);
         }
-
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        self.pinnacle.raise_window(window, true);
-        self.update_keyboard_focus(&output);
-
-        self.schedule_render(&output);
     }
 
     fn close(&mut self, wl_surface: WlSurface) {

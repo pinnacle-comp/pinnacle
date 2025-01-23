@@ -255,10 +255,12 @@ enum Edge {
     Release,
 }
 
+type KeybindCallback = (Box<dyn FnMut() + Send + 'static>, Edge);
+
 /// A keybind.
 pub struct Keybind {
     bind_id: u32,
-    callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
+    callback_sender: Option<UnboundedSender<KeybindCallback>>,
 }
 
 bind_impl!(Keybind);
@@ -367,10 +369,12 @@ async fn new_keybind_stream(
 
 // Mousebinds
 
+type MousebindCallback = (Box<dyn FnMut() + Send + 'static>, Edge);
+
 /// A mousebind.
 pub struct Mousebind {
     bind_id: u32,
-    callback_sender: Option<UnboundedSender<(Box<dyn FnMut() + Send + 'static>, Edge)>>,
+    callback_sender: Option<UnboundedSender<MousebindCallback>>,
 }
 
 bind_impl!(Mousebind);

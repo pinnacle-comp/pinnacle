@@ -3,11 +3,7 @@
 pub mod bind;
 pub mod libinput;
 
-use std::{
-    collections::{HashMap, HashSet},
-    mem::Discriminant,
-    time::Duration,
-};
+use std::time::Duration;
 
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
@@ -16,8 +12,6 @@ use crate::{
 };
 use bind::BindState;
 use libinput::LibinputState;
-// FIXME: remove
-use pinnacle_api_defs::pinnacle::input::v1::set_device_libinput_setting_request::Setting;
 use smithay::{
     backend::{
         input::{
@@ -37,7 +31,6 @@ use smithay::{
             RelativeMotionEvent,
         },
     },
-    reexports::input,
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
         compositor::{self, RegionAttributes, SurfaceAttributes},
@@ -48,7 +41,6 @@ use smithay::{
     },
 };
 use tracing::{error, info};
-use xkbcommon::xkb::Keysym;
 
 use crate::state::State;
 
