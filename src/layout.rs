@@ -207,13 +207,7 @@ impl Pinnacle {
 
         let window_count = windows_on_foc_tags
             .iter()
-            .filter(|win| {
-                let ret = win.with_state(|state| state.window_state.is_tiled());
-                if ret {
-                    tracing::info!("requesting layout for {:?}", win.class());
-                }
-                ret
-            })
+            .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
             .count();
 
         let tag_ids = output.with_state(|state| state.focused_tags().map(|tag| tag.id()).collect());

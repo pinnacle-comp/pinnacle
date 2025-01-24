@@ -22,8 +22,6 @@ use pinnacle_api::pinnacle;
 use pinnacle_api::pinnacle::Backend;
 use pinnacle_api::process::Command;
 use pinnacle_api::signal::WindowSignal;
-use pinnacle_api::snowcap::BindOverlay;
-use pinnacle_api::snowcap::QuitPrompt;
 use pinnacle_api::tag;
 use pinnacle_api::util::{Axis, Batch};
 use pinnacle_api::window;
@@ -72,7 +70,7 @@ async fn config() {
     #[cfg(feature = "snowcap")]
     input::keybind(mod_key, 's')
         .on_press(|| {
-            BindOverlay::new().show();
+            pinnacle_api::snowcap::BindOverlay::new().show();
         })
         .group("Compositor")
         .description("Show the bindings overlay");
@@ -107,7 +105,7 @@ async fn config() {
         // `mod_key + shift + q` shows the quit prompt
         input::keybind(mod_key | Mod::SHIFT, 'q')
             .on_press(|| {
-                QuitPrompt::new().show();
+                pinnacle_api::snowcap::QuitPrompt::new().show();
             })
             .group("Compositor")
             .description("Show quit prompt");

@@ -496,7 +496,6 @@ impl Pinnacle {
     }
 }
 
-// FIXME: update tests
 #[cfg(test)]
 mod tests {
     use super::*;
