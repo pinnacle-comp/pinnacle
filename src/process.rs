@@ -160,7 +160,7 @@ impl ProcessState {
                 let _ = stream.as_raw_fd().send_fd(stderr_fd);
             }
 
-            std::fs::remove_file(socket_path).unwrap();
+            let _ = std::fs::remove_file(socket_path);
         });
 
         let (oneshot_send, oneshot_recv) = oneshot::channel();

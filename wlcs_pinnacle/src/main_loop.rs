@@ -66,6 +66,16 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
             state.on_event_loop_cycle_completion();
         })
         .expect("failed to run event_loop");
+
+    // INFO: apparently the wayland socket doesn't want to get removed, uncomment the below
+    // to get wlcs to work
+    //
+    // let _ = std::fs::remove_file(
+    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap()),
+    // );
+    // let _ = std::fs::remove_file(
+    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"),
+    // );
 }
 
 fn handle_event(event: WlcsEvent, state: &mut State) {
