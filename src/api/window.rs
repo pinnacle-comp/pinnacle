@@ -16,7 +16,7 @@ use crate::{
     handlers::decoration::KdeDecorationObject,
     state::{State, WithState},
     tag::Tag,
-    window::{rules::DecorationMode, WindowElement},
+    window::{is_window_mapped, rules::DecorationMode, WindowElement},
 };
 
 use super::StateFnSender;
@@ -81,6 +81,10 @@ pub fn set_fullscreen(state: &mut State, window: &WindowElement, set: impl Into<
         }
     }
 
+    if !is_window_mapped(window) {
+        return;
+    }
+
     state.update_window_state_and_layout(window);
 }
 
@@ -98,6 +102,10 @@ pub fn set_maximized(state: &mut State, window: &WindowElement, set: impl Into<O
         }
     }
 
+    if !is_window_mapped(window) {
+        return;
+    }
+
     state.update_window_state_and_layout(window);
 }
 
@@ -113,6 +121,10 @@ pub fn set_floating(state: &mut State, window: &WindowElement, set: impl Into<Op
         None => {
             window.with_state_mut(|state| state.window_state.toggle_floating());
         }
+    }
+
+    if !is_window_mapped(window) {
+        return;
     }
 
     state.update_window_state_and_layout(window);
@@ -220,6 +232,10 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
         state.tags = std::iter::once(tag.clone()).collect();
     });
 
+    if !is_window_mapped(window) {
+        return;
+    }
+
     let Some(output) = tag.output(&state.pinnacle) else {
         return;
     };
@@ -260,6 +276,10 @@ pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl I
                 }
             });
         }
+    }
+
+    if !is_window_mapped(window) {
+        return;
     }
 
     let Some(output) = tag.output(&state.pinnacle) else {

@@ -6,15 +6,21 @@ use std::{cell::RefCell, ops::Deref};
 
 use indexmap::IndexSet;
 use smithay::{
+    backend::renderer::utils::with_renderer_surface_state,
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
-    wayland::{compositor, seat::WaylandFocus, shell::xdg::XdgToplevelSurfaceData},
+    wayland::{
+        compositor,
+        seat::WaylandFocus,
+        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+    },
+    xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
 
-use crate::state::{Pinnacle, WithState};
+use crate::state::{Pinnacle, State, WithState};
 
 use self::window_state::WindowElementState;
 
@@ -330,5 +336,130 @@ impl Pinnacle {
         output.with_state_mut(|state| {
             state.focus_stack.set_focus(window.clone());
         });
+    }
+}
+
+impl State {
+    pub fn map_new_window(&mut self, window: &WindowElement) {
+        self.pinnacle
+            .raise_window(window.clone(), window.is_on_active_tag());
+
+        if should_float(window) {
+            window.with_state_mut(|state| {
+                state.window_state.set_floating(true);
+            });
+        }
+
+        self.pinnacle.update_window_state(window);
+        if let Some(toplevel) = window.toplevel() {
+            toplevel.send_pending_configure();
+        }
+
+        let Some(output) = window
+            .is_on_active_tag()
+            .then(|| window.output(&self.pinnacle))
+            .flatten()
+        else {
+            return;
+        };
+
+        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+        self.update_keyboard_focus(&output);
+
+        if let Some(maybe_loc) = window.with_state(|state| {
+            state
+                .window_state
+                .is_floating()
+                .then_some(state.floating_loc)
+        }) {
+            let output_geo = self
+                .pinnacle
+                .space
+                .output_geometry(&output)
+                .unwrap_or_default();
+
+            let loc = maybe_loc.map(|loc| loc.to_i32_round()).unwrap_or_else(|| {
+                let size = window.geometry().size;
+                let centered_loc = Point::from((
+                    output_geo.loc.x + output_geo.size.w / 2 - size.w / 2,
+                    output_geo.loc.y + output_geo.size.h / 2 - size.h / 2,
+                ));
+                centered_loc
+            });
+
+            window.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
+
+            self.pinnacle.space.map_element(window.clone(), loc, true);
+        } else {
+            self.capture_snapshots_on_output(&output, []);
+            self.pinnacle.begin_layout_transaction(&output);
+            self.pinnacle.request_layout(&output);
+        }
+
+        // It seems wlcs needs immediate frame sends for client tests to work
+        #[cfg(feature = "testing")]
+        window.send_frame(
+            &output,
+            self.pinnacle.clock.now(),
+            Some(std::time::Duration::ZERO),
+            |_, _| None,
+        );
+
+        self.schedule_render(&output);
+    }
+}
+
+fn should_float(window: &WindowElement) -> bool {
+    match window.underlying_surface() {
+        WindowSurface::Wayland(toplevel) => {
+            let has_parent = toplevel.parent().is_some();
+
+            let (min_size, max_size) = compositor::with_states(toplevel.wl_surface(), |states| {
+                let mut guard = states.cached_state.get::<SurfaceCachedState>();
+                let state = guard.current();
+                (state.min_size, state.max_size)
+            });
+            let requests_constrained_size = min_size.w > 0
+                && min_size.h > 0
+                && (min_size.w == max_size.w || min_size.h == max_size.h);
+
+            let should_float = has_parent || requests_constrained_size;
+            should_float
+        }
+        // Logic from `wants_floating` in sway/desktop/xwayland.c
+        WindowSurface::X11(surface) => {
+            let is_popup_by_type = surface.window_type().is_some_and(|typ| {
+                matches!(
+                    typ,
+                    WmWindowType::Dialog
+                        | WmWindowType::Utility
+                        | WmWindowType::Toolbar
+                        | WmWindowType::Splash
+                )
+            });
+
+            let requests_constrained_size = surface.size_hints().is_some_and(|size_hints| {
+                let Some((min_w, min_h)) = size_hints.min_size else {
+                    return false;
+                };
+                let Some((max_w, max_h)) = size_hints.max_size else {
+                    return false;
+                };
+                min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
+            });
+
+            let should_float = surface.is_popup() || is_popup_by_type || requests_constrained_size;
+            should_float
+        }
+    }
+}
+
+pub fn is_window_mapped(window: &WindowElement) -> bool {
+    match window.underlying_surface() {
+        WindowSurface::Wayland(toplevel) => {
+            with_renderer_surface_state(toplevel.wl_surface(), |state| state.buffer().is_some())
+                .unwrap_or_default()
+        }
+        WindowSurface::X11(surface) => surface.is_mapped(),
     }
 }
