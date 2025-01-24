@@ -95,14 +95,14 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| get_config_dir(&base_dirs));
 
-    // Parse the metaconfig once to resolve it with CLI flags.
-    // The metaconfig is parsed a second time when `start_config`
+    // Parse the startup config once to resolve it with CLI flags.
+    // The startup config is parsed a second time when `start_config`
     // is called below which is not ideal but I'm lazy.
     let startup_config = match parse_startup_config(&config_dir) {
-        Ok(metaconfig) => metaconfig,
+        Ok(startup_config) => startup_config,
         Err(err) => {
             warn!(
-                "Could not load `metaconfig.toml` at {}: {err}",
+                "Could not load `pinnacle.toml` at {}: {err}",
                 config_dir.display()
             );
             StartupConfig::default()

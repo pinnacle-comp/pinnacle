@@ -1,24 +1,16 @@
-# This metaconfig.toml file dictates what config Pinnacle will run.
+# This pinnacle.toml file dictates what config Pinnacle will run.
 #
-# When running Pinnacle, the compositor will look in the following directories for a metaconfig.toml file,
+# When running Pinnacle, the compositor will look in the following directories for a pinnacle.toml file,
 # in order from top to bottom:
 #     $PINNACLE_CONFIG_DIR
 #     $XDG_CONFIG_HOME/pinnacle/
 #     ~/.config/pinnacle/
 #
-# When Pinnacle finds a metaconfig.toml file, it will execute the command provided to `command`.
+# When Pinnacle finds a pinnacle.toml file, it will execute the command provided to `run`.
 # To use a Rust config, this should be changed to something like ["cargo", "run"].
-# 
-# Because configuration is done using an external process, if it ever crashes, you lose all of your keybinds.
-# The compositor will load the default config if that happens, but in the event that you don't have
-# the necessary dependencies for it to run, you may get softlocked.
-# In order prevent you from getting stuck in the compositor, you must define keybinds to reload your config
-# and kill Pinnacle.
-# 
-# More details on each setting can be found below.
 
 # The command Pinnacle will run on startup and when you reload your config.
-# Paths are relative to the directory the metaconfig.toml file is in.
+# Paths are relative to the directory this file is in.
 # This must be an array.
 run = ["cargo", "run", "--example", "default_config", "--no-default-features"]
 
@@ -32,3 +24,13 @@ run = ["cargo", "run", "--example", "default_config", "--no-default-features"]
 # If you need to spawn your config with any environment variables, list them here.
 [envs]
 # key = "value"
+
+### No xwayland ###
+# If you want to stop xwayland from starting, uncomment the field below.
+# 
+# no_xwayland = true
+
+### No config ###
+# If you want to stop a config from starting, uncomment the field below.
+# 
+# no_config = true

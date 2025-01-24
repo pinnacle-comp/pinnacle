@@ -423,15 +423,6 @@ impl State {
                     }
                 }
 
-                // FIXME: metaconfig keybinds
-                // if kill_keybind == Some((mod_mask, mod_sym)) {
-                //     return FilterResult::Intercept(KeyAction::Quit);
-                // }
-                //
-                // if reload_keybind == Some((mod_mask, mod_sym)) {
-                //     return FilterResult::Intercept(KeyAction::ReloadConfig);
-                // }
-
                 if shortcuts_inhibited {
                     return FilterResult::Forward;
                 }

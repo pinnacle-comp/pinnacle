@@ -69,7 +69,7 @@ pub struct StartupConfig {
     pub no_xwayland: Option<bool>,
 }
 
-/// A metaconfig with fields resolved.
+/// A startup config with fields resolved.
 ///
 /// The priority is:
 /// 1. CLI options
@@ -98,7 +98,7 @@ impl StartupConfig {
         {
             let socket_dir = shellexpand::path::full(socket_dir)?.to_path_buf();
 
-            // cd into the metaconfig dir and canonicalize to preserve relative paths
+            // cd into the startup config dir and canonicalize to preserve relative paths
             // like ./dir/here
             let current_dir = std::env::current_dir()?;
 
@@ -657,10 +657,7 @@ mod tests {
         "#;
 
         let config_dir = tempfile::tempdir()?;
-        std::fs::write(
-            config_dir.path().join("metaconfig.toml"),
-            startup_config_text,
-        )?;
+        std::fs::write(config_dir.path().join("pinnacle.toml"), startup_config_text)?;
 
         assert!(parse_startup_config(config_dir.path()).is_err());
 
