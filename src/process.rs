@@ -123,7 +123,7 @@ impl ProcessState {
         let socket_path = socket_dir.join(fd_socket_name(pid));
         let socket_path_str = socket_path.to_string_lossy().to_string();
 
-        let listener = tokio::net::UnixListener::bind(socket_path).unwrap(); // TODO: unwrap
+        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap(); // TODO: unwrap
         let stdin_fd = child
             .stdin
             .take()
@@ -159,6 +159,8 @@ impl ProcessState {
             if let Some(stderr_fd) = stderr_fd {
                 let _ = stream.as_raw_fd().send_fd(stderr_fd);
             }
+
+            std::fs::remove_file(socket_path).unwrap();
         });
 
         let (oneshot_send, oneshot_recv) = oneshot::channel();
