@@ -120,7 +120,7 @@ compile-wlcs:
         # checkout a specific revision
         git reset --hard "${WLCS_SHA}"
         cmake -DWLCS_BUILD_ASAN=False -DWLCS_BUILD_TSAN=False -DWLCS_BUILD_UBSAN=False -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .
-        make
+        make -j 8
     fi
 
 wlcs *args: compile-wlcs
