@@ -5,7 +5,7 @@ mod frame;
 mod gamma;
 
 use assert_matches::assert_matches;
-pub use drm::util::drm_mode_from_api_modeline;
+pub use drm::util::drm_mode_from_modeinfo;
 use frame::FrameClock;
 use indexmap::IndexSet;
 
@@ -16,7 +16,6 @@ use drm::{
     set_crtc_active,
     util::{create_drm_mode, refresh_interval},
 };
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::OutputConnectResponse;
 use smithay::{
     backend::{
         allocator::{
@@ -81,6 +80,7 @@ use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
+    api::signal::Signal,
     backend::Backend,
     config::ConnectorSavedState,
     output::{BlankingState, OutputMode, OutputName},
@@ -256,7 +256,30 @@ impl Udev {
                     pinnacle
                         .loop_handle
                         .insert_source(libinput_backend, move |event, _, state| {
-                            state.pinnacle.apply_libinput_settings(&event);
+                            match &event {
+                                smithay::backend::input::InputEvent::DeviceAdded { device } => {
+                                    state
+                                        .pinnacle
+                                        .input_state
+                                        .libinput_state
+                                        .devices
+                                        .insert(device.clone());
+                                    state
+                                        .pinnacle
+                                        .signal_state
+                                        .input_device_added
+                                        .signal(device);
+                                }
+                                smithay::backend::input::InputEvent::DeviceRemoved { device } => {
+                                    state
+                                        .pinnacle
+                                        .input_state
+                                        .libinput_state
+                                        .devices
+                                        .remove(device);
+                                }
+                                _ => (),
+                            }
                             state.process_input_event(event);
                         });
 
@@ -538,6 +561,7 @@ impl State {
     /// Does nothing when called on the winit backend.
     pub fn switch_vt(&mut self, vt: i32) {
         if let Backend::Udev(udev) = &mut self.backend {
+            info!("Switching to vt {vt}");
             if let Err(err) = udev.session.change_vt(vt) {
                 error!("Failed to switch to vt {vt}: {err}");
             }
@@ -1062,11 +1086,7 @@ impl Udev {
             output.with_state_mut(|state| state.tags.clone_from(tags));
             pinnacle.change_output_state(self, &output, None, None, *scale, Some(*loc));
         } else {
-            pinnacle.signal_state.output_connect.signal(|buffer| {
-                buffer.push_back(OutputConnectResponse {
-                    output_name: Some(output.name()),
-                })
-            });
+            pinnacle.signal_state.output_connect.signal(&output);
         }
 
         pinnacle.output_management_manager_state.update::<State>();

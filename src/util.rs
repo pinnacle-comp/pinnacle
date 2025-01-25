@@ -1,3 +1,5 @@
+pub mod treediff;
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use smithay::reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit};

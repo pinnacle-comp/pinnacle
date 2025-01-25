@@ -1,23 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod transaction;
+pub mod tree;
 
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use indexmap::IndexSet;
-use pinnacle_api_defs::pinnacle::layout::v0alpha1::{layout_request::Geometries, LayoutResponse};
 use smithay::{
     desktop::{layer_map_for_output, WindowSurface},
     output::Output,
     utils::{Logical, Rectangle, Serial},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
 use tracing::warn;
+use tree::{LayoutNode, LayoutTree};
 
 use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
+    tag::TagId,
     window::{window_state::WindowState, WindowElement},
 };
 
@@ -69,7 +70,7 @@ impl Pinnacle {
         }));
 
         for (win, geo) in zipped.by_ref() {
-            win.change_geometry(geo.loc.to_f64(), geo.size);
+            win.change_geometry(Some(geo.loc.to_f64()), geo.size);
             self.space.map_element(win, geo.loc, false);
         }
 
@@ -87,13 +88,13 @@ impl Pinnacle {
         for window in windows_on_foc_tags.iter() {
             match window.with_state(|state| state.window_state) {
                 WindowState::Fullscreen { .. } => {
-                    window.change_geometry(output_geo.loc.to_f64(), output_geo.size);
+                    window.change_geometry(Some(output_geo.loc.to_f64()), output_geo.size);
                     self.space
                         .map_element(window.clone(), output_geo.loc, false);
                 }
                 WindowState::Maximized { .. } => {
                     let loc = output_geo.loc + non_exclusive_geo.loc;
-                    window.change_geometry(loc.to_f64(), non_exclusive_geo.size);
+                    window.change_geometry(Some(loc.to_f64()), non_exclusive_geo.size);
                     self.space.map_element(window.clone(), loc, false);
                 }
                 _ => (),
@@ -142,13 +143,23 @@ impl Pinnacle {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct LayoutRequestId(u32);
 
+impl LayoutRequestId {
+    pub fn to_inner(self) -> u32 {
+        self.0
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct LayoutState {
-    pub layout_request_sender: Option<UnboundedSender<Result<LayoutResponse, Status>>>,
+    pub layout_request_sender: Option<UnboundedSender<LayoutInfo>>,
     pub pending_swap: bool,
+    // TODO: make these outputs weak or something
     pending_requests: HashMap<Output, LayoutRequestId>,
     fulfilled_requests: HashMap<Output, LayoutRequestId>,
     current_id: LayoutRequestId,
+
+    // TODO: experimenting
+    pub layout_trees: HashMap<u32, LayoutTree>,
 }
 
 impl LayoutState {
@@ -156,6 +167,14 @@ impl LayoutState {
         self.current_id.0 += 1;
         self.current_id
     }
+}
+
+#[derive(Debug)]
+pub struct LayoutInfo {
+    pub request_id: LayoutRequestId,
+    pub output_name: OutputName,
+    pub window_count: u32,
+    pub tag_ids: Vec<TagId>,
 }
 
 impl Pinnacle {
@@ -186,60 +205,49 @@ impl Pinnacle {
                 .collect::<Vec<_>>()
         });
 
-        let windows = windows_on_foc_tags
+        let window_count = windows_on_foc_tags
             .iter()
             .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
-            .cloned()
-            .collect::<Vec<_>>();
+            .count();
 
-        let (output_width, output_height) = {
-            let map = layer_map_for_output(output);
-            let zone = map.non_exclusive_zone();
-            (zone.size.w, zone.size.h)
-        };
-
-        let window_ids = windows
-            .iter()
-            .map(|win| win.with_state(|state| state.id.0))
-            .collect::<Vec<_>>();
-
-        let tag_ids = output.with_state(|state| {
-            state
-                .focused_tags()
-                .map(|tag| tag.id().to_inner())
-                .collect()
-        });
+        let tag_ids = output.with_state(|state| state.focused_tags().map(|tag| tag.id()).collect());
 
         self.layout_state
             .pending_requests
             .insert(output.clone(), id);
 
-        let _ = sender.send(Ok(LayoutResponse {
-            request_id: Some(id.0),
-            output_name: Some(output.name()),
-            window_ids,
+        let _ = sender.send(LayoutInfo {
+            request_id: id,
+            output_name: OutputName(output.name()),
+            window_count: window_count as u32,
             tag_ids,
-            output_width: Some(output_width as u32),
-            output_height: Some(output_height as u32),
-        }));
+        });
     }
 }
 
 impl State {
-    pub fn apply_layout(&mut self, geometries: Geometries) -> anyhow::Result<()> {
-        let Geometries {
-            request_id: Some(request_id),
-            output_name: Some(output_name),
-            geometries,
-        } = geometries
-        else {
-            anyhow::bail!("One or more `geometries` fields were None");
-        };
-
-        let request_id = LayoutRequestId(request_id);
+    pub fn apply_layout_tree(
+        &mut self,
+        tree_id: u32,
+        root_node: LayoutNode,
+        request_id: u32,
+        output_name: String,
+    ) -> anyhow::Result<()> {
         let Some(output) = OutputName(output_name).output(&self.pinnacle) else {
             anyhow::bail!("Output was invalid");
         };
+
+        let tree_entry = self.pinnacle.layout_state.layout_trees.entry(tree_id);
+        let tree = match tree_entry {
+            Entry::Occupied(occupied_entry) => {
+                let tree = occupied_entry.into_mut();
+                tree.diff(root_node);
+                tree
+            }
+            Entry::Vacant(vacant_entry) => vacant_entry.insert(LayoutTree::new(root_node)),
+        };
+
+        let request_id = LayoutRequestId(request_id);
 
         let Some(current_pending) = self
             .pinnacle
@@ -258,25 +266,26 @@ impl State {
             anyhow::bail!("Attempted to layout but request is newer");
         }
 
-        let geometries = geometries
-            .into_iter()
-            .map(|geo| {
-                Some(Rectangle::<i32, Logical>::from_loc_and_size(
-                    (geo.x?, geo.y?),
-                    (i32::max(geo.width?, 1), i32::max(geo.height?, 1)),
-                ))
-            })
-            .collect::<Option<Vec<_>>>();
-
-        let Some(geometries) = geometries else {
-            anyhow::bail!("Attempted to layout but one or more dimensions were null");
+        let (output_width, output_height) = {
+            let map = layer_map_for_output(&output);
+            let zone = map.non_exclusive_zone();
+            (zone.size.w, zone.size.h)
         };
+
+        let geometries = tree.compute_geos(output_width as u32, output_height as u32);
 
         self.pinnacle.layout_state.pending_requests.remove(&output);
         self.pinnacle
             .layout_state
             .fulfilled_requests
             .insert(output.clone(), current_pending);
+
+        // FIXME: figure out why stale snapshots still exist after the layout system change
+        // probably because the math is now correct and there aren't minor pixel inconsistencies
+        // --> no new snapshots are being taken
+        for window in self.pinnacle.windows.iter() {
+            window.with_state_mut(|state| state.snapshot.take());
+        }
 
         self.capture_snapshots_on_output(&output, []);
 

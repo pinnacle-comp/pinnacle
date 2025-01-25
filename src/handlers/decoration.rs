@@ -43,8 +43,6 @@ impl State {
                 DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
             });
 
-        tracing::debug!(?window_rule_mode, "new_decoration");
-
         toplevel.with_pending_state(|state| {
             state.decoration_mode =
                 Some(window_rule_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide));

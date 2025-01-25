@@ -82,8 +82,6 @@ local snowcap_layer_v0alpha1_Layer = {
 }
 
 
----@class google.protobuf.Empty
-
 ---@class snowcap.input.v0alpha1.Modifiers
 ---@field shift boolean?
 ---@field ctrl boolean?
@@ -104,6 +102,8 @@ local snowcap_layer_v0alpha1_Layer = {
 ---@class snowcap.input.v0alpha1.PointerButtonResponse
 ---@field button integer?
 ---@field pressed boolean?
+
+---@class google.protobuf.Empty
 
 ---@class snowcap.widget.v0alpha1.Padding
 ---@field top number?
@@ -223,9 +223,6 @@ local snowcap_layer_v0alpha1_Layer = {
 ---@class snowcap.v0alpha1.Nothing
 
 
-local google = {}
-google.protobuf = {}
-google.protobuf.Empty = {}
 local snowcap = {}
 snowcap.input = {}
 snowcap.input.v0alpha1 = {}
@@ -234,6 +231,9 @@ snowcap.input.v0alpha1.KeyboardKeyRequest = {}
 snowcap.input.v0alpha1.KeyboardKeyResponse = {}
 snowcap.input.v0alpha1.PointerButtonRequest = {}
 snowcap.input.v0alpha1.PointerButtonResponse = {}
+local google = {}
+google.protobuf = {}
+google.protobuf.Empty = {}
 snowcap.widget = {}
 snowcap.widget.v0alpha1 = {}
 snowcap.widget.v0alpha1.Padding = {}
@@ -290,7 +290,7 @@ snowcap.layer.v0alpha1.LayerService.Close.request = ".snowcap.layer.v0alpha1.Clo
 snowcap.layer.v0alpha1.LayerService.Close.response = ".google.protobuf.Empty"
 
 return {
-    google = google,
     snowcap = snowcap,
+    google = google,
 }
 

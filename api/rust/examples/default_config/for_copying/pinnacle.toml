@@ -1,0 +1,36 @@
+# This pinnacle.toml file dictates what config Pinnacle will run.
+#
+# When running Pinnacle, the compositor will look in the following directories for a pinnacle.toml file,
+# in order from top to bottom:
+#     $PINNACLE_CONFIG_DIR
+#     $XDG_CONFIG_HOME/pinnacle/
+#     ~/.config/pinnacle/
+#
+# When Pinnacle finds a pinnacle.toml file, it will execute the command provided to `run`.
+# To use a Rust config, this should be changed to something like ["cargo", "run"].
+
+# The command Pinnacle will run on startup and when you reload your config.
+# Paths are relative to the directory this file is in.
+# This must be an array.
+run = ["cargo", "run"]
+
+### Socket directory ###
+# Pinnacle will open a Unix socket at `$XDG_RUNTIME_DIR` by default, falling back to `/tmp` if it doesn't exist.
+# If you want/need to change this, use the `socket_dir` setting set to the directory of your choosing.
+#
+# socket_dir = "/your/dir/here/"
+
+### Environment Variables ###
+# If you need to spawn your config with any environment variables, list them here.
+[envs]
+# key = "value"
+
+### No xwayland ###
+# If you want to stop xwayland from starting, uncomment the field below.
+# 
+# no_xwayland = true
+
+### No config ###
+# If you want to stop a config from starting, uncomment the field below.
+# 
+# no_config = true

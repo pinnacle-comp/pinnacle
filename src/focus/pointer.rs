@@ -1,8 +1,5 @@
 use std::borrow::Cow;
 
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{
-    WindowPointerEnterResponse, WindowPointerLeaveResponse,
-};
 use smithay::{
     desktop::{
         layer_map_for_output, utils::with_surfaces_surface_tree, LayerSurface, PopupKind,
@@ -19,10 +16,7 @@ use smithay::{
     xwayland::X11Surface,
 };
 
-use crate::{
-    state::{State, WithState},
-    window::WindowElement,
-};
+use crate::{api::signal::Signal, state::State, window::WindowElement};
 
 use super::keyboard::KeyboardFocusTarget;
 
@@ -109,13 +103,12 @@ impl PointerTarget<State> for PointerFocusTarget {
             PointerFocusTarget::X11Surface(surf) => PointerTarget::enter(surf, seat, data, event),
         }
 
+        // FIXME: fires when pointer moves over a different subsurface of the same window
         if let Some(window) = self.window_for(data) {
-            let window_id = Some(window.with_state(|state| state.id.0));
-
             data.pinnacle
                 .signal_state
                 .window_pointer_enter
-                .signal(|buffer| buffer.push_back(WindowPointerEnterResponse { window_id }));
+                .signal(&window);
         }
     }
 
@@ -302,12 +295,10 @@ impl PointerTarget<State> for PointerFocusTarget {
         }
 
         if let Some(window) = self.window_for(data) {
-            let window_id = Some(window.with_state(|state| state.id.0));
-
             data.pinnacle
                 .signal_state
                 .window_pointer_leave
-                .signal(|buffer| buffer.push_back(WindowPointerLeaveResponse { window_id }));
+                .signal(&window);
         }
     }
 }

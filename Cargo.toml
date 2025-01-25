@@ -2,7 +2,6 @@
 members = [
     "pinnacle-api-defs",
     "api/rust",
-    "api/rust/pinnacle-api-macros",
     "wlcs_pinnacle",
     "api/lua/build",
     # snowcap
@@ -48,6 +47,7 @@ futures = "0.3.31"
 thiserror = "2.0.7"
 walkdir = "2.5.0"
 tower = { version = "0.5.2", features = ["util"] }
+passfd = "0.1.6"
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
@@ -141,6 +141,11 @@ indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }
 assert_matches = "1.5.0"
+taffy = "0.7.2"
+slab_tree = "0.3.2"
+bimap = "0.6.3"
+itertools = "0.14.0"
+passfd = { workspace = true }
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.2", features = ["rustc", "cargo", "si"] }

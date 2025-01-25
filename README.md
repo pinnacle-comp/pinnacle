@@ -22,7 +22,7 @@
     - [Custom configuration](#custom-configuration)
         - [Generating a config](#generating-a-config)
     - [More on configuration](#more-on-configuration)
-        - [The `metaconfig.toml` file](#the-metaconfigtoml-file)
+        - [The `pinnacle.toml` file](#the-pinnacletoml-file)
     - [Lua Language Server completion](#lua-language-server-completion)
     - [API references](#api-references)
 - [Controls](#controls)
@@ -204,9 +204,9 @@ Pinnacle is configured mostly at runtime through IPC using [gRPC](https://grpc.i
 configuration clients that use the [Lua](api/lua) and [Rust](api/rust) APIs.
 
 As the compositor has no direct integration with these clients, it must know what it needs to run
-through a separate file, aptly called the `metaconfig.toml` file.
+through a separate file called `pinnacle.toml`.
 
-To start a config, Pinnacle will search for a `metaconfig.toml` file in the first directory
+To start a config, Pinnacle will search for a `pinnacle.toml` file in the first directory
 that exists from the following:
 
 1. The directory passed in through `--config-dir`/`-c`
@@ -214,7 +214,7 @@ that exists from the following:
 3. `$XDG_CONFIG_HOME/pinnacle`
 4. `~/.config/pinnacle` if `$XDG_CONFIG_HOME` is not defined
 
-If there is no `metaconfig.toml` file in that directory, Pinnacle will start the embedded
+If there is no `pinnacle.toml` file in that directory, Pinnacle will start the embedded
 Rust config.
 
 Additionally, if your config crashes, Pinnacle will also start the embedded Rust config.
@@ -223,19 +223,22 @@ Additionally, if your config crashes, Pinnacle will also start the embedded Rust
 > If you are using a Lua config and have not run `eval $(luarocks path --lua-version <your-lua-version>)`,
 > Pinnacle will fallback to the embedded Rust config.
 
-### The `metaconfig.toml` file
-A `metaconfig.toml` file must contain the following entries:
-- `command`: An array denoting the program and arguments Pinnacle will run to start a config.
-- `reload_keybind`: A table denoting a keybind that Pinnacle will hardcode to restart your config.
-- `kill_keybind`: A table denoting a keybind that Pinnacle will hardcode to quit the compositor.
-    - The two keybinds above prevent you from getting locked in the compositor if the default config fails to start.
+### The `pinnacle.toml` file
+A `pinnacle.toml` file must contain the `run` field with a string array of the command arguments
+that will spawn your config.
+
+```toml
+run = ["lua", "init.lua"] # or ["cargo", "run"], for example
+```
 
 It also has the following optional entries:
 - `socket_dir`: A directory that Pinnacle will place its IPC socket in (this defaults to `$XDG_RUNTIME_DIR`,
   falling back to `/tmp` if that doesn't exist).
 - `[envs]`: A table of environment variables that Pinnacle will start the config with.
+- `no_xwayland`: A boolean value that, if true, prevents xwayland from starting up.
+- `no_config`: A boolean value that, if true, prevents Pinnacle from running `run`.
 
-For the specifics, see the default [`metaconfig.toml`](api/lua/examples/default/metaconfig.toml) file.
+For a little more detail, see the default [`pinnacle.toml`](api/lua/examples/default/pinnacle.toml) file.
 
 ## Lua Language Server completion
 A [`.luarc.json`](api/lua/examples/default/.luarc.json) file is included with the default Lua config

@@ -4,14 +4,14 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local tag_service = require("pinnacle.grpc.defs").pinnacle.tag.v0alpha1.TagService
+local tag_service = require("pinnacle.grpc.defs").pinnacle.tag.v1.TagService
 
 local set_or_toggle = {
-    SET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
-    [true] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_SET,
-    UNSET = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
-    [false] = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_UNSET,
-    TOGGLE = require("pinnacle.grpc.defs").pinnacle.v0alpha1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
+    SET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    [true] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,
+    UNSET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    [false] = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    TOGGLE = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
 }
 
 ---@lcat nodoc
@@ -48,7 +48,7 @@ local TagHandle = {}
 local tag = {}
 tag.handle = tag_handle
 
----Get all tags across all outputs.
+---Gets all tags across all outputs.
 ---
 ---@return TagHandle[]
 function tag.get_all()
@@ -59,7 +59,7 @@ function tag.get_all()
         return {}
     end
 
-    ---@cast response pinnacle.tag.v0alpha1.GetResponse
+    ---@cast response pinnacle.tag.v1.GetResponse
 
     ---@type TagHandle[]
     local handles = {}
@@ -71,7 +71,7 @@ function tag.get_all()
     return handles
 end
 
----Get the tag with the given name and output.
+---Gets the tag with the given name and output.
 ---
 ---If `output` is not specified, this uses the focused output.
 ---
@@ -83,7 +83,7 @@ end
 ---local tag = Tag.get("Tag")
 ---
 --- -- Get tags on a specific output
----local tag_on_hdmi1 = Tag.get("Tag", Output:get_by_name("HDMI-1"))
+---local tag_on_hdmi1 = Tag.get("Tag", Output.get_by_name("HDMI-1"))
 ---```
 ---
 ---@param name string
@@ -99,19 +99,22 @@ function tag.get(name, output)
 
     local handles = tag.get_all()
 
-    ---@type (fun(): TagProperties)[]
+    ---@type (fun(): { output: OutputHandle, name: string })[]
     local requests = {}
 
     for i, handle in ipairs(handles) do
         requests[i] = function()
-            return handle:props()
+            return {
+                output = handle:output(),
+                name = handle:name(),
+            }
         end
     end
 
     local props = require("pinnacle.util").batch(requests)
 
     for i, prop in ipairs(props) do
-        if prop.output and prop.output.name == output.name and prop.name == name then
+        if prop.output.name == output.name and prop.name == name then
             return handles[i]
         end
     end
@@ -119,7 +122,7 @@ function tag.get(name, output)
     return nil
 end
 
----Add tags with the given names to the specified output.
+---Adds tags with the given names to the specified output.
 ---
 ---Returns handles to the created tags.
 ---
@@ -137,7 +140,7 @@ end
 ---
 ---@return TagHandle[] tags Handles to the created tags
 ---
----@overload fun(output: OutputHandle, tag_names: string[])
+---@overload fun(output: OutputHandle, tag_names: string[]): TagHandle[]
 function tag.add(output, ...)
     local tag_names = { ... }
     if type(tag_names[1]) == "table" then
@@ -154,7 +157,7 @@ function tag.add(output, ...)
         return {}
     end
 
-    ---@cast response pinnacle.tag.v0alpha1.AddResponse
+    ---@cast response pinnacle.tag.v1.AddResponse
 
     ---@type TagHandle[]
     local handles = {}
@@ -166,7 +169,7 @@ function tag.add(output, ...)
     return handles
 end
 
----Remove the given tags.
+---Removes the given tags.
 ---
 ---#### Example
 ---```lua
@@ -198,10 +201,10 @@ local signal_name_to_SignalName = {
 ---@class TagSignal Signals related to tag events.
 ---@field active fun(tag: TagHandle, active: boolean)? A tag was set to active or not active.
 
----Connect to a tag signal.
+---Connects to a tag signal.
 ---
----The compositor sends signals about various events. Use this function to run a callback when
----some tag signal occurs.
+---`signals` is a table containing the signal(s) you want to connect to along with
+---a corresponding callback that will be called when the signal is signalled.
 ---
 ---This function returns a table of signal handles with each handle stored at the same key used
 ---to connect to the signal. See `SignalHandles` for more information.
@@ -237,7 +240,7 @@ end
 
 --------------------------------------------------------------
 
----Remove this tag.
+---Removes this tag.
 ---
 ---#### Example
 ---```lua
@@ -251,7 +254,7 @@ function TagHandle:remove()
     tag.remove({ self })
 end
 
----Activate this tag and deactivate all other ones on the same output.
+---Activates this tag and deactivates all other ones on the same output.
 ---
 ---#### Example
 ---```lua
@@ -270,7 +273,7 @@ function TagHandle:switch_to()
     end
 end
 
----Set whether or not this tag is active.
+---Sets whether or not this tag is active.
 ---
 ---#### Example
 ---```lua
@@ -295,7 +298,7 @@ function TagHandle:set_active(active)
     end
 end
 
----Toggle this tag's active state.
+---Toggles this tag's active state.
 ---
 ---#### Example
 ---```lua
@@ -317,73 +320,69 @@ function TagHandle:toggle_active()
     end
 end
 
----@class TagProperties
----@field active boolean? Whether or not the tag is currently being displayed
----@field name string? The name of the tag
----@field output OutputHandle? The output the tag is on
----@field windows WindowHandle[] The windows that have this tag
-
----Get all properties of this tag.
+---Gets whether or not this tag is active.
 ---
----@return TagProperties
-function TagHandle:props()
-    local response, err = client:unary_request(tag_service.GetProperties, { tag_id = self.id })
-
-    if err then
-        log:error(err)
-        return {}
-    end
-
-    ---@cast response pinnacle.tag.v0alpha1.GetPropertiesResponse
-
-    return {
-        active = response.active,
-        name = response.name,
-        output = response.output_name
-            ---@diagnostic disable-next-line: invisible
-            and require("pinnacle.output").handle.new(response.output_name),
-        ---@diagnostic disable-next-line: invisible
-        windows = require("pinnacle.window").handle.new_from_table(response.window_ids or {}),
-    }
-end
-
----Get whether or not this tag is being displayed.
----
----Shorthand for `handle:props().active`.
----
----@return boolean?
+---@return boolean
 function TagHandle:active()
-    return self:props().active
+    local response, err = client:unary_request(tag_service.GetActive, { tag_id = self.id })
+
+    ---@cast response pinnacle.tag.v1.GetActiveResponse|nil
+
+    return response and response.active or false
 end
 
----Get this tag's name.
----
----Shorthand for `handle:props().name`.
+---Gets this tag's name.
 ---
 ---@return string?
 function TagHandle:name()
-    return self:props().name
+    local response, err = client:unary_request(tag_service.GetName, { tag_id = self.id })
+
+    ---@cast response pinnacle.tag.v1.GetNameResponse|nil
+
+    return response and response.name or ""
 end
 
----Get the output this tag is on.
+---Gets the output this tag is on.
 ---
----Shorthand for `handle:props().output`.
----
----@return OutputHandle?
+---@return OutputHandle
 function TagHandle:output()
-    return self:props().output
+    local response, err = client:unary_request(tag_service.GetOutputName, { tag_id = self.id })
+
+    ---@cast response pinnacle.tag.v1.GetOutputNameResponse|nil
+
+    local output_name = response and response.output_name or ""
+    return require("pinnacle.output").handle.new(output_name)
 end
 
----Get the windows that have this tag.
----
----Shorthand for `handle:props().windows`.
+---Gets the windows that have this tag.
 ---
 ---@return WindowHandle[]
 function TagHandle:windows()
-    return self:props().windows
+    local windows = require("pinnacle.window").get_all()
+
+    ---@type (fun(): TagHandle[])[]
+    local win_tags = {}
+    for i, window in ipairs(windows) do
+        win_tags[i] = function()
+            return window:tags()
+        end
+    end
+
+    local tags = require("pinnacle.util").batch(win_tags)
+    local wins_on_tag = {}
+    for i, tags in ipairs(tags) do
+        for _, tag in ipairs(tags) do
+            if tag.id == self.id then
+                table.insert(wins_on_tag, windows[i])
+                break
+            end
+        end
+    end
+
+    return wins_on_tag
 end
 
----Create a new `TagHandle` from an id.
+---Creates a new `TagHandle` from an id.
 ---@param tag_id integer
 ---@return TagHandle
 function tag_handle.new(tag_id)

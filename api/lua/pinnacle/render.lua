@@ -4,8 +4,8 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local render_v0alpha1 = require("pinnacle.grpc.defs").pinnacle.render.v0alpha1
-local render_service = require("pinnacle.grpc.defs").pinnacle.render.v0alpha1.RenderService
+local render_v1 = require("pinnacle.grpc.defs").pinnacle.render.v1
+local render_service = require("pinnacle.grpc.defs").pinnacle.render.v1.RenderService
 
 ---Rendering management.
 ---
@@ -15,12 +15,12 @@ local render = {}
 ---@enum (key) ScalingFilter
 local filter_name_to_filter_value = {
     ---Blend between the four closest pixels. May cause scaling to be blurry.
-    bilinear = render_v0alpha1.Filter.FILTER_BILINEAR,
+    bilinear = render_v1.Filter.FILTER_BILINEAR,
     ---Choose the closest pixel. Causes scaling to look pixelated.
-    nearest_neighbor = render_v0alpha1.Filter.FILTER_NEAREST_NEIGHBOR,
+    nearest_neighbor = render_v1.Filter.FILTER_NEAREST_NEIGHBOR,
 }
 
----Set the upscale filter the renderer will use to upscale buffers.
+---Sets the upscale filter the renderer will use to upscale buffers.
 ---
 ---@param filter ScalingFilter
 function render.set_upscale_filter(filter)
@@ -34,7 +34,7 @@ function render.set_upscale_filter(filter)
     end
 end
 
----Set the downscale filter the renderer will use to downscale buffers.
+---Sets the downscale filter the renderer will use to downscale buffers.
 ---
 ---@param filter ScalingFilter
 function render.set_downscale_filter(filter)

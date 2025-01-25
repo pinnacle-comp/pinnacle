@@ -4,161 +4,206 @@
 
 //! Process management.
 //!
-//! This module provides [`Process`], which allows you to spawn processes and set environment
-//! variables.
+//! This module provides ways to spawn processes and handle their output.
 
-use pinnacle_api_defs::pinnacle::process::v0alpha1::{SetEnvRequest, SpawnRequest};
+use std::{
+    collections::HashMap,
+    os::fd::{FromRawFd, OwnedFd},
+};
+
+use passfd::FdPassingExt;
+use pinnacle_api_defs::pinnacle::process::v1::{SpawnRequest, WaitOnSpawnRequest};
 use tokio_stream::StreamExt;
-use tracing::error;
 
-use crate::{block_on_tokio, process};
+use crate::{client::Client, BlockOnTokio};
 
-/// A struct containing methods to spawn processes with optional callbacks and set environment
-/// variables.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct Process;
-
-/// Optional callbacks to be run when a spawned process prints to stdout or stderr or exits.
-#[derive(Default)]
-pub struct SpawnCallbacks {
-    /// A callback that will be run when a process prints to stdout with a line
-    pub stdout: Option<Box<dyn FnMut(String) + Send>>,
-    /// A callback that will be run when a process prints to stderr with a line
-    pub stderr: Option<Box<dyn FnMut(String) + Send>>,
-    /// A callback that will be run when a process exits with a status code and message
-    #[allow(clippy::type_complexity)]
-    pub exit: Option<Box<dyn FnMut(Option<i32>, String) + Send>>,
+/// A process builder that allows you to spawn programs.
+pub struct Command {
+    cmd: Vec<String>,
+    envs: HashMap<String, String>,
+    shell_cmd: Vec<String>,
+    unique: bool,
+    once: bool,
 }
 
-impl Process {
-    /// Spawn a process.
-    ///
-    /// Note that windows spawned *before* tags are added will not be displayed.
-    /// This will be changed in the future to be more like Awesome, where windows with no tags are
-    /// displayed on every tag instead.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// process.spawn(["alacritty"]);
-    /// process.spawn(["bash", "-c", "swaybg -i /path/to/wallpaper"]);
-    /// ```
-    pub fn spawn(&self, args: impl IntoIterator<Item = impl Into<String>>) {
-        self.spawn_inner(args, false, None);
+/// The result of spawning a [`Command`].
+#[derive(Debug)]
+pub struct Child {
+    pid: u32,
+    /// This process's standard in.
+    pub stdin: Option<tokio::process::ChildStdin>,
+    /// This process's standard out.
+    pub stdout: Option<tokio::process::ChildStdout>,
+    /// This process's standard error.
+    pub stderr: Option<tokio::process::ChildStderr>,
+}
+
+/// Information from an exited process.
+#[derive(Debug, Default)]
+pub struct ExitInfo {
+    /// The process's exit code.
+    pub exit_code: Option<i32>,
+    /// The process's exit message.
+    pub exit_msg: Option<String>,
+}
+
+impl Child {
+    /// Waits for this process to exit, blocking the current thread.
+    pub fn wait(self) -> ExitInfo {
+        self.wait_async().block_on_tokio()
     }
 
-    /// Spawn a process with callbacks for its stdout, stderr, and exit information.
-    ///
-    /// See [`SpawnCallbacks`] for the passed in struct.
-    ///
-    /// Note that windows spawned *before* tags are added will not be displayed.
-    /// This will be changed in the future to be more like Awesome, where windows with no tags are
-    /// displayed on every tag instead.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use pinnacle_api::process::SpawnCallbacks;
-    ///
-    /// process.spawn_with_callbacks(["alacritty"], SpawnCallbacks {
-    ///     stdout: Some(Box::new(|line| println!("stdout: {line}"))),
-    ///     stderr: Some(Box::new(|line| println!("stderr: {line}"))),
-    ///     exit: Some(Box::new(|code, msg| println!("exit code: {code:?}, exit_msg: {msg}"))),
-    /// });
-    /// ```
-    pub fn spawn_with_callbacks(
-        &self,
-        args: impl IntoIterator<Item = impl Into<String>>,
-        callbacks: SpawnCallbacks,
-    ) {
-        self.spawn_inner(args, false, Some(callbacks));
-    }
+    /// Async impl for [`Self::wait`].
+    pub async fn wait_async(self) -> ExitInfo {
+        let mut exit_status = Client::process()
+            .wait_on_spawn(WaitOnSpawnRequest { pid: self.pid })
+            .await
+            .unwrap()
+            .into_inner();
 
-    /// Spawn a process only if it isn't already running.
-    ///
-    /// This is useful for startup programs.
-    ///
-    /// See [`Process::spawn`] for details.
-    pub fn spawn_once(&self, args: impl IntoIterator<Item = impl Into<String>>) {
-        self.spawn_inner(args, true, None);
-    }
+        let thing = exit_status.next().await;
 
-    /// Spawn a process only if it isn't already running with optional callbacks for its stdout,
-    /// stderr, and exit information.
-    ///
-    /// This is useful for startup programs.
-    ///
-    /// See [`Process::spawn_with_callbacks`] for details.
-    pub fn spawn_once_with_callbacks(
-        &self,
-        args: impl IntoIterator<Item = impl Into<String>>,
-        callbacks: SpawnCallbacks,
-    ) {
-        self.spawn_inner(args, true, Some(callbacks));
-    }
-
-    fn spawn_inner(
-        &self,
-        args: impl IntoIterator<Item = impl Into<String>>,
-        once: bool,
-        callbacks: Option<SpawnCallbacks>,
-    ) {
-        let args = args.into_iter().map(Into::into).collect::<Vec<_>>();
-
-        let request = SpawnRequest {
-            args,
-            once: Some(once),
-            has_callback: Some(callbacks.is_some()),
+        let Some(Ok(response)) = thing else {
+            return Default::default();
         };
 
-        let mut stream = match block_on_tokio(process().spawn(request)) {
-            Ok(stream) => stream.into_inner(),
-            Err(err) => {
-                error!("Failed to spawn process: {err}");
-                return;
-            }
-        };
+        ExitInfo {
+            exit_code: response.exit_code,
+            exit_msg: response.exit_msg,
+        }
+    }
+}
 
+impl Drop for Child {
+    fn drop(&mut self) {
+        let pid = self.pid;
+
+        // Wait on the process so it doesn't go zombie
         tokio::spawn(async move {
-            let Some(mut callbacks) = callbacks else { return };
-            while let Some(Ok(response)) = stream.next().await {
-                if let Some(line) = response.stdout {
-                    if let Some(stdout) = callbacks.stdout.as_mut() {
-                        stdout(line);
-                    }
-                }
-                if let Some(line) = response.stderr {
-                    if let Some(stderr) = callbacks.stderr.as_mut() {
-                        stderr(line);
-                    }
-                }
-                if let Some(exit_msg) = response.exit_message {
-                    if let Some(exit) = callbacks.exit.as_mut() {
-                        exit(response.exit_code, exit_msg);
-                    }
-                }
-                tokio::task::yield_now().await;
-            }
+            Client::process()
+                .wait_on_spawn(WaitOnSpawnRequest { pid })
+                .await
+                .unwrap();
         });
     }
+}
 
-    /// Set an environment variable for the compositor.
-    /// This will cause any future spawned processes to have this environment variable.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// process.set_env("ENV", "a value lalala");
-    /// ```
-    pub fn set_env(&self, key: impl Into<String>, value: impl Into<String>) {
-        let key = key.into();
-        let value = value.into();
-
-        if let Err(err) = block_on_tokio(process().set_env(SetEnvRequest {
-            key: Some(key),
-            value: Some(value),
-        })) {
-            error!("Failed to set env: {err}");
+impl Command {
+    /// Creates a new [`Command`] that will spawn the provided `program`.
+    pub fn new(program: impl ToString) -> Self {
+        Self {
+            cmd: vec![program.to_string()],
+            envs: Default::default(),
+            shell_cmd: Vec::new(),
+            unique: false,
+            once: false,
         }
+    }
+
+    /// Adds an argument to the command.
+    pub fn arg(&mut self, arg: impl ToString) -> &mut Self {
+        self.cmd.push(arg.to_string());
+        self
+    }
+
+    /// Adds multiple arguments to the command.
+    pub fn args(&mut self, args: impl IntoIterator<Item = impl ToString>) -> &mut Self {
+        self.cmd.extend(args.into_iter().map(|arg| arg.to_string()));
+        self
+    }
+
+    /// Sets an environment variable that the process will spawn with.
+    pub fn env(&mut self, key: impl ToString, value: impl ToString) -> &mut Self {
+        self.envs.insert(key.to_string(), value.to_string());
+        self
+    }
+
+    /// Sets multiple environment variables that the process will spawn with.
+    pub fn envs<I, K, V>(&mut self, vars: I) -> &mut Self
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: ToString,
+        V: ToString,
+    {
+        self.envs.extend(
+            vars.into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string())),
+        );
+        self
+    }
+
+    /// Causes this command to only spawn the program if it is the only instance currently running.
+    pub fn unique(&mut self) -> &mut Self {
+        self.unique = true;
+        self
+    }
+
+    /// Causes this command to spawn the program exactly once in the compositor's lifespan.
+    pub fn once(&mut self) -> &mut Self {
+        self.once = true;
+        self
+    }
+
+    /// Spawns this command, returning the spawned process's standard io, if any.
+    pub fn spawn(&mut self) -> Option<Child> {
+        let data = Client::process()
+            .spawn(SpawnRequest {
+                cmd: self.cmd.clone(),
+                unique: self.unique,
+                once: self.once,
+                shell_cmd: self.shell_cmd.clone(),
+                envs: self.envs.clone(),
+            })
+            .block_on_tokio()
+            .unwrap()
+            .into_inner()
+            .spawn_data?;
+
+        let pid = data.pid;
+        let fd_socket_path = data.fd_socket_path;
+
+        let mut stdin = None;
+        let mut stdout = None;
+        let mut stderr = None;
+
+        let stream = std::os::unix::net::UnixStream::connect(fd_socket_path)
+            .expect("this should be set up by the compositor");
+
+        if data.has_stdin {
+            let fd = stream.recv_fd().unwrap();
+            let child_stdin =
+                tokio::process::ChildStdin::from_std(std::process::ChildStdin::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stdin = Some(child_stdin);
+        }
+
+        if data.has_stdout {
+            let fd = stream.recv_fd().unwrap();
+            let child_stdout =
+                tokio::process::ChildStdout::from_std(std::process::ChildStdout::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stdout = Some(child_stdout);
+        }
+
+        if data.has_stderr {
+            let fd = stream.recv_fd().unwrap();
+            let child_stderr =
+                tokio::process::ChildStderr::from_std(std::process::ChildStderr::from(unsafe {
+                    OwnedFd::from_raw_fd(fd)
+                }))
+                .unwrap();
+            stderr = Some(child_stderr);
+        }
+
+        Some(Child {
+            pid,
+            stdin,
+            stdout,
+            stderr,
+        })
     }
 }

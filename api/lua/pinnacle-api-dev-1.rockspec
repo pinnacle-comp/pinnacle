@@ -27,6 +27,7 @@ build = {
         ["pinnacle.grpc.defs"] = "pinnacle/grpc/defs.lua",
         ["pinnacle.input"] = "pinnacle/input.lua",
         ["pinnacle.input.keys"] = "pinnacle/input/keys.lua",
+        ["pinnacle.input.libinput"] = "pinnacle/input/libinput.lua",
         ["pinnacle.output"] = "pinnacle/output.lua",
         ["pinnacle.process"] = "pinnacle/process.lua",
         ["pinnacle.tag"] = "pinnacle/tag.lua",

@@ -1,42 +1,42 @@
 pub mod pinnacle {
 
-    pub mod v0alpha1 {
-        tonic::include_proto!("pinnacle.v0alpha1");
+    pub mod v1 {
+        tonic::include_proto!("pinnacle.v1");
     }
 
     pub mod input {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.input.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.input.v1");
         }
     }
 
     pub mod output {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.output.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.output.v1");
         }
     }
 
     pub mod tag {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.tag.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.tag.v1");
         }
     }
 
     pub mod window {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.window.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.window.v1");
         }
     }
 
     pub mod process {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.process.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.process.v1");
         }
     }
 
     pub mod signal {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.signal.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.signal.v1");
 
             pub trait SignalRequest {
                 fn from_control(control: StreamControl) -> Self;
@@ -49,7 +49,7 @@ pub mod pinnacle {
                         impl SignalRequest for $request {
                             fn from_control(control: StreamControl) -> Self {
                                 $request {
-                                    control: Some(control as i32),
+                                    control: control.into(),
                                 }
                             }
 
@@ -68,20 +68,27 @@ pub mod pinnacle {
                 OutputMoveRequest,
                 WindowPointerEnterRequest,
                 WindowPointerLeaveRequest,
-                TagActiveRequest
+                TagActiveRequest,
+                InputDeviceAddedRequest
             );
         }
     }
 
     pub mod layout {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.layout.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.layout.v1");
         }
     }
 
     pub mod render {
-        pub mod v0alpha1 {
-            tonic::include_proto!("pinnacle.render.v0alpha1");
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.render.v1");
+        }
+    }
+
+    pub mod util {
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.util.v1");
         }
     }
 }

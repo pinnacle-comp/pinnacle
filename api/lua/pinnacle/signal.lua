@@ -3,9 +3,9 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client").client
-local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.SignalService
+local signal_service = require("pinnacle.grpc.defs").pinnacle.signal.v1.SignalService
 
-local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v0alpha1.StreamControl
+local stream_control = require("pinnacle.grpc.defs").pinnacle.signal.v1.StreamControl
 
 ---@type table<string, { sender: grpc_client.h2.Stream?, callbacks: function[], on_response: fun(response: table) }>
 local signals = {
@@ -61,6 +61,14 @@ local signals = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
         ---@type (fun(tag: TagHandle, active: boolean))[]
+        callbacks = {},
+        ---@type fun(response: table)
+        on_response = nil,
+    },
+    InputDeviceAdded = {
+        ---@type grpc_client.h2.Stream?
+        sender = nil,
+        ---@type (fun(device: pinnacle.input.libinput.DeviceHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -123,6 +131,15 @@ signals.TagActive.on_response = function(response)
 
     for _, callback in ipairs(signals.TagActive.callbacks) do
         callback(tag_handle, response.active)
+    end
+end
+
+signals.InputDeviceAdded.on_response = function(response)
+    ---@diagnostic disable-next-line: invisible
+    local device_handle = require("pinnacle.input.libinput").new_device(response.device_sysname)
+
+    for _, callback in ipairs(signals.InputDeviceAdded.callbacks) do
+        callback(device_handle)
     end
 end
 
@@ -221,30 +238,42 @@ end
 ---@param callback fun(response: table)
 ---@lcat nodoc
 function signal.connect(request, callback)
-    local stream = client:bidirectional_streaming_request(signal_service[request], {
-        control = stream_control.STREAM_CONTROL_READY,
-    }, function(response)
-        callback(response)
+    local stream = client:bidirectional_streaming_request(
+        signal_service[request],
+        function(response)
+            callback(response)
 
-        if signals[request].sender then
-            local chunk = require("pinnacle.grpc.protobuf").encode(
-                "pinnacle.signal.v0alpha1." .. request .. "Request",
-                {
-                    control = stream_control.STREAM_CONTROL_READY,
-                }
-            )
+            if signals[request].sender then
+                local chunk = require("pinnacle.grpc.protobuf").encode(
+                    "pinnacle.signal.v1." .. request .. "Request",
+                    {
+                        control = stream_control.STREAM_CONTROL_READY,
+                    }
+                )
 
-            local success, err =
-                pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
+                local success, err =
+                    pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
 
-            if not success then
-                print("error sending to stream:", err)
-                os.exit(1)
+                if not success then
+                    print("error sending to stream:", err)
+                    os.exit(1)
+                end
             end
         end
-    end)
+    )
 
     signals[request].sender = stream
+
+    local chunk =
+        require("pinnacle.grpc.protobuf").encode("pinnacle.signal.v1." .. request .. "Request", {
+            control = stream_control.STREAM_CONTROL_READY,
+        })
+
+    local success, err = pcall(signals[request].sender.write_chunk, signals[request].sender, chunk)
+    if not success then
+        print("error sending to stream:", err)
+        os.exit(1)
+    end
 end
 
 ---This should only be called when call callbacks for the signal are removed
@@ -253,7 +282,7 @@ end
 function signal.disconnect(request)
     if signals[request].sender then
         local chunk = require("pinnacle.grpc.protobuf").encode(
-            "pinnacle.signal.v0alpha1." .. request .. "Request",
+            "pinnacle.signal.v1." .. request .. "Request",
             {
                 control = stream_control.STREAM_CONTROL_DISCONNECT,
             }

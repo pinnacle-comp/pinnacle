@@ -13,7 +13,7 @@ local PINNACLE_PROTO_DIR = os.getenv("PINNACLE_PROTO_DIR")
 function protobuf.build_protos()
     require("pinnacle.log"):debug("Building protos")
 
-    local version = "v0alpha1"
+    local version = "v1"
     local proto_file_paths = {
         PINNACLE_PROTO_DIR .. "/pinnacle/tag/" .. version .. "/tag.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/input/" .. version .. "/input.proto",
@@ -24,6 +24,7 @@ function protobuf.build_protos()
         PINNACLE_PROTO_DIR .. "/pinnacle/signal/" .. version .. "/signal.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/layout/" .. version .. "/layout.proto",
         PINNACLE_PROTO_DIR .. "/pinnacle/render/" .. version .. "/render.proto",
+        PINNACLE_PROTO_DIR .. "/pinnacle/util/" .. version .. "/util.proto",
         PINNACLE_PROTO_DIR .. "/google/protobuf/empty.proto",
     }
 

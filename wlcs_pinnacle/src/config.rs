@@ -1,29 +1,23 @@
 mod inner {
-    use pinnacle_api::layout::{CyclingLayoutManager, MasterStackLayout};
-    use pinnacle_api::output::OutputSetup;
-    use pinnacle_api::window::rules::{WindowRule, WindowRuleCondition};
-    use pinnacle_api::ApiModules;
+    use pinnacle_api::layout::{generators::MasterStack, LayoutGenerator};
 
-    #[pinnacle_api::config]
-    async fn main() {
-        let ApiModules {
-            layout,
-            window,
-            output,
-            ..
-        } = ApiModules::new();
+    async fn config() {
+        pinnacle_api::output::for_each_output(|output| {
+            pinnacle_api::tag::add(output, ["1"])
+                .next()
+                .unwrap()
+                .set_active(true);
+        });
 
-        output.setup([OutputSetup::new_with_matcher(|_| true).with_tags(["1"])]);
+        pinnacle_api::window::add_window_rule(|window| {
+            window.set_floating(true);
+        });
 
-        window.add_window_rule(
-            WindowRuleCondition::default().all(vec![]),
-            WindowRule::new().floating(true),
-        );
-
-        let _layout_requester = layout.set_manager(CyclingLayoutManager::new([
-            Box::<MasterStackLayout>::default() as _,
-        ]));
+        let _layout_requester =
+            pinnacle_api::layout::manage(|args| MasterStack::default().layout(args.window_count));
     }
+
+    pinnacle_api::main!(config);
 
     pub(crate) fn start_config() {
         main()

@@ -15,6 +15,7 @@ use crate::{
     grab::resize_grab::ResizeSurfaceState,
     handlers::session_lock::LockState,
     layout::LayoutState,
+    process::ProcessState,
     protocol::{
         foreign_toplevel::{self, ForeignToplevelManagerState},
         gamma_control::GammaControlManagerState,
@@ -22,11 +23,10 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::WindowElement,
+    window::{rules::WindowRuleState, WindowElement},
 };
 use anyhow::Context;
 use indexmap::IndexMap;
-use pinnacle_api_defs::pinnacle::v0alpha1::ShutdownWatchResponse;
 use smithay::{
     backend::renderer::element::{
         default_primary_scanout_output_compare, utils::select_dmabuf_feedback, Id,
@@ -182,7 +182,7 @@ pub struct Pinnacle {
     pub xwm: Option<X11Wm>,
     pub xdisplay: Option<u32>,
 
-    pub system_processes: sysinfo::System,
+    pub process_state: ProcessState,
 
     // Currently only used to keep track of if the server has started
     pub grpc_server_join_handle: Option<tokio::task::JoinHandle<()>>,
@@ -192,6 +192,8 @@ pub struct Pinnacle {
     pub signal_state: SignalState,
 
     pub layout_state: LayoutState,
+
+    pub window_rule_state: WindowRuleState,
 
     /// A cache of surfaces to their root surface.
     pub root_surface_cache: HashMap<WlSurface, WlSurface>,
@@ -422,9 +424,9 @@ impl Pinnacle {
             xwm: None,
             xdisplay: None,
 
-            system_processes: sysinfo::System::new_with_specifics(
+            process_state: ProcessState::new(sysinfo::System::new_with_specifics(
                 RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
-            ),
+            )),
 
             grpc_server_join_handle: None,
 
@@ -434,6 +436,8 @@ impl Pinnacle {
             signal_state: SignalState::default(),
 
             layout_state: LayoutState::default(),
+
+            window_rule_state: WindowRuleState::default(),
 
             root_surface_cache: HashMap::new(),
 
@@ -477,9 +481,9 @@ impl Pinnacle {
         if let Some(join_handle) = self.config.config_join_handle.take() {
             join_handle.abort();
         }
-        if let Some(shutdown_sender) = self.config.shutdown_sender.take() {
-            if let Err(err) = shutdown_sender.send(Ok(ShutdownWatchResponse {})) {
-                warn!("Failed to send shutdown signal to config: {err}");
+        if let Some(shutdown_sender) = self.config.keepalive_sender.take() {
+            if shutdown_sender.send(()).is_err() {
+                warn!("failed to send shutdown signal to config");
             }
         }
 

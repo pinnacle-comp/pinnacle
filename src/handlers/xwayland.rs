@@ -3,7 +3,7 @@
 use std::{process::Stdio, time::Duration};
 
 use smithay::{
-    desktop::{space::SpaceElement, Window},
+    desktop::Window,
     input::pointer::CursorIcon,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
     wayland::selection::{
@@ -18,7 +18,7 @@ use smithay::{
         SelectionTarget,
     },
     xwayland::{
-        xwm::{Reorder, WmWindowType, XwmId},
+        xwm::{Reorder, XwmId},
         X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler,
     },
 };
@@ -47,94 +47,17 @@ impl XwmHandler for State {
             return;
         }
 
-        surface.set_mapped(true).expect("failed to map x11 window");
         let window = WindowElement::new(Window::new_x11_window(surface));
 
         if let Some(output) = self.pinnacle.focused_output() {
-            self.pinnacle.place_window_on_output(&window, output)
-        }
-
-        self.pinnacle.apply_window_rules(&window);
-
-        let output_size = self
-            .pinnacle
-            .focused_output()
-            .and_then(|op| self.pinnacle.space.output_geometry(op))
-            .map(|geo| geo.size)
-            .unwrap_or((2, 2).into());
-
-        let output_loc = self
-            .pinnacle
-            .focused_output()
-            .map(|op| op.current_location())
-            .unwrap_or((0, 0).into());
-
-        let size = window
-            .with_state(|state| state.floating_size)
-            .unwrap_or(window.bbox().size);
-
-        // Center the popup in the middle of the output.
-        // Once I find a way to get an X11Surface's parent it will be centered on the parent if
-        // applicable.
-        // FIXME: loc is i32
-        let loc: Point<i32, Logical> = (
-            output_loc.x + output_size.w / 2 - size.w / 2,
-            output_loc.y + output_size.h / 2 - size.h / 2,
-        )
-            .into();
-
-        let Some(surface) = window.x11_surface() else {
-            unreachable!()
-        };
-
-        let geo = Rectangle::from_loc_and_size(loc, size);
-
-        surface
-            .configure(geo)
-            .expect("failed to configure x11 window");
-
-        let will_float =
-            should_float(surface) || window.with_state(|state| state.window_state.is_floating());
-
-        if will_float {
-            window.with_state_mut(|state| {
-                state.window_state.set_floating(true);
-                if state.floating_loc.is_none() {
-                    state.floating_loc = Some(geo.loc.to_f64());
-                }
-                if state.floating_size.is_none() {
-                    state.floating_size = Some(geo.size);
-                }
-            });
-        }
-
-        self.pinnacle.update_window_state(&window);
-
-        let output = window.output(&self.pinnacle);
-
-        if let Some(output) = output.as_ref() {
-            self.capture_snapshots_on_output(output, []);
+            self.pinnacle.place_window_on_output(&window, output);
         }
 
         self.pinnacle.windows.push(window.clone());
-        self.pinnacle.raise_window(window.clone(), true);
 
-        if window.is_on_active_tag() {
-            if let Some(output) = output {
-                output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-                self.update_keyboard_focus(&output);
-
-                if will_float {
-                    self.pinnacle.space.map_element(window.clone(), loc, true);
-                } else {
-                    self.pinnacle.begin_layout_transaction(&output);
-                    self.pinnacle.request_layout(&output);
-                }
-            }
-        }
-
-        for output in self.pinnacle.space.outputs_for_element(&window) {
-            self.schedule_render(&output);
+        let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
+        if !window_rule_request_sent {
+            window.x11_surface().unwrap().set_mapped(true).unwrap();
         }
     }
 
@@ -162,15 +85,17 @@ impl XwmHandler for State {
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
-        trace!("XwmHandler::map_window_notify");
-        let Some(output) = window
-            .wl_surface()
-            .and_then(|s| self.pinnacle.window_for_surface(&s))
-            .and_then(|win| win.output(&self.pinnacle))
+        let Some(window) = self
+            .pinnacle
+            .windows
+            .iter()
+            .find(|win| win.x11_surface() == Some(&window))
+            .cloned()
         else {
             return;
         };
-        self.schedule_render(&output);
+
+        self.map_new_window(&window);
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -474,31 +399,6 @@ impl Pinnacle {
             warn!("Failed to update xwayland stacking order: {err}");
         }
     }
-}
-
-/// Make assumptions on whether or not the surface should be floating.
-///
-/// This logic is taken from the Sway function `wants_floating` in sway/desktop/xwayland.c.
-fn should_float(surface: &X11Surface) -> bool {
-    let is_popup_by_type = surface.window_type().is_some_and(|typ| {
-        matches!(
-            typ,
-            WmWindowType::Dialog
-                | WmWindowType::Utility
-                | WmWindowType::Toolbar
-                | WmWindowType::Splash
-        )
-    });
-    let is_popup_by_size = surface.size_hints().map_or(false, |size_hints| {
-        let Some((min_w, min_h)) = size_hints.min_size else {
-            return false;
-        };
-        let Some((max_w, max_h)) = size_hints.max_size else {
-            return false;
-        };
-        min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
-    });
-    surface.is_popup() || is_popup_by_type || is_popup_by_size
 }
 
 impl Pinnacle {

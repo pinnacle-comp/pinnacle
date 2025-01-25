@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package pinnacle.process.v1;
+
+import "google/protobuf/empty.proto";
+
+message SpawnRequest {
+  repeated string cmd = 1;
+  bool unique = 2;
+  bool once = 3;
+  repeated string shell_cmd = 4;
+  map<string, string> envs = 5;
+}
+
+message SpawnData {
+  uint32 pid = 1;
+  string fd_socket_path = 2;
+  bool has_stdin = 3;
+  bool has_stdout = 4;
+  bool has_stderr = 5;
+}
+
+message SpawnResponse {
+  optional SpawnData spawn_data = 1;
+}
+
+message WaitOnSpawnRequest {
+  uint32 pid = 1;
+}
+message WaitOnSpawnResponse {
+  optional int32 exit_code = 1;
+  optional string exit_msg = 2;
+}
+
+service ProcessService {
+  rpc Spawn(SpawnRequest) returns (SpawnResponse);
+  rpc WaitOnSpawn(WaitOnSpawnRequest) returns (stream WaitOnSpawnResponse);
+}

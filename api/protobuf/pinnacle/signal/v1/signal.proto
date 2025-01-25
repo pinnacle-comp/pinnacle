@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package pinnacle.signal.v1;
+
+enum StreamControl {
+  STREAM_CONTROL_UNSPECIFIED = 0;
+  // The client is ready to receive the next signal.
+  STREAM_CONTROL_READY = 1;
+  // The client wishes to disconnect a signal connection.
+  STREAM_CONTROL_DISCONNECT = 2;
+}
+
+message OutputConnectRequest {
+    StreamControl control = 1;
+}
+message OutputConnectResponse {
+    string output_name = 1;
+}
+message OutputDisconnectRequest {
+    StreamControl control = 1;
+}
+message OutputDisconnectResponse {
+    string output_name = 1;
+}
+
+message OutputResizeRequest {
+    StreamControl control = 1;
+}
+
+// An output's logical size changed
+message OutputResizeResponse {
+    string output_name = 1;
+    uint32 logical_width = 2;
+    uint32 logical_height = 3;
+}
+
+message OutputMoveRequest {
+    StreamControl control = 1;
+}
+
+// An output's location in the global space changed
+message OutputMoveResponse {
+    string output_name = 1;
+    int32 x = 2;
+    int32 y = 3;
+}
+
+message WindowPointerEnterRequest {
+    StreamControl control = 1;
+}
+message WindowPointerEnterResponse {
+    // The window that the pointer entered.
+    uint32 window_id = 1;
+}
+
+message WindowPointerLeaveRequest {
+    StreamControl control = 1;
+}
+message WindowPointerLeaveResponse {
+    // The window that the pointer left.
+    uint32 window_id = 1;
+}
+
+message TagActiveRequest {
+    StreamControl control = 1;
+}
+message TagActiveResponse {
+    uint32 tag_id = 1;
+    // The tag was set to active or inactive.
+    bool active = 2;
+}
+
+message InputDeviceAddedRequest {
+    StreamControl control = 1;
+}
+message InputDeviceAddedResponse {
+    string device_sysname = 1;
+}
+
+service SignalService {
+    rpc OutputConnect(stream OutputConnectRequest) returns (stream OutputConnectResponse);
+    rpc OutputDisconnect(stream OutputDisconnectRequest) returns (stream OutputDisconnectResponse);
+    rpc OutputResize(stream OutputResizeRequest) returns (stream OutputResizeResponse);
+    rpc OutputMove(stream OutputMoveRequest) returns (stream OutputMoveResponse);
+    
+    rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
+    rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
+    
+    rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
+
+    rpc InputDeviceAdded(stream InputDeviceAddedRequest) returns (stream InputDeviceAddedResponse);
+}

@@ -17,7 +17,7 @@ use std::{
 };
 
 use futures::{pin_mut, FutureExt};
-use pinnacle_api_defs::pinnacle::signal::v0alpha1::{SignalRequest, StreamControl};
+use pinnacle_api_defs::pinnacle::signal::v1::{SignalRequest, StreamControl};
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedSender},
     oneshot,
@@ -26,10 +26,8 @@ use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tonic::Streaming;
 
 use crate::{
-    block_on_tokio,
-    output::{Output, OutputHandle},
-    tag::{Tag, TagHandle},
-    window::{Window, WindowHandle},
+    input::libinput::DeviceHandle, output::OutputHandle, tag::TagHandle, window::WindowHandle,
+    BlockOnTokio,
 };
 
 pub(crate) trait Signal {
@@ -98,7 +96,8 @@ macro_rules! signals {
                     let channels = connect_signal::<_, _, <$name as Signal>::Callback, _, _>(
                         self.callback_count.clone(),
                         |out| {
-                            block_on_tokio($crate::signal().$req(out))
+                            $crate::client::Client::signal().$req(out)
+                                .block_on_tokio()
                                 .expect("failed to request signal connection")
                                 .into_inner()
                         },
@@ -134,12 +133,10 @@ signals! {
             callback_type = SingleOutputFn,
             client_request = output_connect,
             on_response = |response, callbacks| {
-                if let Some(output_name) = response.output_name {
-                    let handle = Output.new_handle(output_name);
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -151,12 +148,10 @@ signals! {
             callback_type = SingleOutputFn,
             client_request = output_disconnect,
             on_response = |response, callbacks| {
-                if let Some(output_name) = response.output_name {
-                    let handle = Output.new_handle(output_name);
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -168,12 +163,10 @@ signals! {
             callback_type = Box<dyn FnMut(&OutputHandle, u32, u32) + Send + 'static>,
             client_request = output_resize,
             on_response = |response, callbacks| {
-                if let Some(output_name) = &response.output_name {
-                    let handle = Output.new_handle(output_name);
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle, response.logical_width(), response.logical_height())
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.logical_width, response.logical_height)
                 }
             },
         }
@@ -185,12 +178,10 @@ signals! {
             callback_type = Box<dyn FnMut(&OutputHandle, i32, i32) + Send + 'static>,
             client_request = output_move,
             on_response = |response, callbacks| {
-                if let Some(output_name) = &response.output_name {
-                    let handle = Output.new_handle(output_name);
+                let handle = OutputHandle { name: response.output_name };
 
-                    for callback in callbacks {
-                        callback(&handle, response.x(), response.y())
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.x, response.y)
                 }
             },
         }
@@ -205,12 +196,10 @@ signals! {
             callback_type = SingleWindowFn,
             client_request = window_pointer_enter,
             on_response = |response, callbacks| {
-                if let Some(window_id) = response.window_id {
-                    let handle = Window.new_handle(window_id);
+                let handle = WindowHandle { id: response.window_id };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -222,12 +211,10 @@ signals! {
             callback_type = SingleWindowFn,
             client_request = window_pointer_leave,
             on_response = |response, callbacks| {
-                if let Some(window_id) = response.window_id {
-                    let handle = Window.new_handle(window_id);
+                let handle = WindowHandle { id: response.window_id };
 
-                    for callback in callbacks {
-                        callback(&handle);
-                    }
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -240,12 +227,26 @@ signals! {
             callback_type = Box<dyn FnMut(&TagHandle, bool) + Send + 'static>,
             client_request = tag_active,
             on_response = |response, callbacks| {
-                if let Some(tag_id) = response.tag_id {
-                    let handle = Tag.new_handle(tag_id);
+                let handle = TagHandle { id: response.tag_id };
 
-                    for callback in callbacks {
-                        callback(&handle, response.active.unwrap());
-                    }
+                for callback in callbacks {
+                    callback(&handle, response.active);
+                }
+            },
+        }
+    }
+    /// Signals relating to input events.
+    InputSignal => {
+        /// A new input device was connected.
+        InputDeviceAdded = {
+            enum_name = DeviceAdded,
+            callback_type = Box<dyn FnMut(&DeviceHandle) + Send + 'static>,
+            client_request = input_device_added,
+            on_response = |response, callbacks| {
+                let handle = DeviceHandle { sysname: response.device_sysname };
+
+                for callback in callbacks {
+                    callback(&handle);
                 }
             },
         }
@@ -265,6 +266,8 @@ pub(crate) struct SignalState {
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
 
     pub(crate) tag_active: SignalData<TagActive>,
+
+    pub(crate) input_device_added: SignalData<InputDeviceAdded>,
 }
 
 impl std::fmt::Debug for SignalState {
@@ -283,6 +286,7 @@ impl SignalState {
             window_pointer_enter: SignalData::new(),
             window_pointer_leave: SignalData::new(),
             tag_active: SignalData::new(),
+            input_device_added: SignalData::new(),
         }
     }
 
@@ -294,6 +298,7 @@ impl SignalState {
         self.window_pointer_enter.reset();
         self.window_pointer_leave.reset();
         self.tag_active.reset();
+        self.input_device_added.reset();
     }
 }
 

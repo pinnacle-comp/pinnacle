@@ -19,6 +19,9 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
+        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+        self.pinnacle.raise_window(window.clone(), true);
+
         if !window.is_on_active_tag() {
             let new_active_tag = window.with_state(|state| {
                 state
@@ -29,45 +32,12 @@ impl ForeignToplevelHandler for State {
             });
 
             if let Some(tag) = new_active_tag {
-                self.capture_snapshots_on_output(&output, []);
-
-                output.with_state(|state| {
-                    if state.tags.contains(&tag) {
-                        for op_tag in state.tags.iter() {
-                            if op_tag.set_active(false) {
-                                self.pinnacle.signal_state.tag_active.signal(|buf| {
-                                    buf.push_back(
-                                        pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                            tag_id: Some(op_tag.id().to_inner()),
-                                            active: Some(false),
-                                        },
-                                    );
-                                });
-                            }
-                        }
-                        if tag.set_active(true) {
-                            self.pinnacle.signal_state.tag_active.signal(|buf| {
-                                buf.push_back(
-                                    pinnacle_api_defs::pinnacle::signal::v0alpha1::TagActiveResponse {
-                                        tag_id: Some(tag.id().to_inner()),
-                                        active: Some(true),
-                                    },
-                                );
-                            });
-                        }
-                    }
-                });
-
-                self.pinnacle.begin_layout_transaction(&output);
-                self.pinnacle.request_layout(&output);
+                crate::api::tag::switch_to(self, &tag);
             }
+        } else {
+            self.update_keyboard_focus(&output);
+            self.schedule_render(&output);
         }
-
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        self.pinnacle.raise_window(window, true);
-        self.update_keyboard_focus(&output);
-
-        self.schedule_render(&output);
     }
 
     fn close(&mut self, wl_surface: WlSurface) {
@@ -83,8 +53,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_fullscreen(true));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_fullscreen(self, &window, true);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
@@ -92,8 +61,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_fullscreen(false));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_fullscreen(self, &window, false);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
@@ -101,8 +69,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_maximized(true));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_maximized(self, &window, true);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
@@ -110,8 +77,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.window_state.set_maximized(false));
-        self.update_window_state_and_layout(&window);
+        crate::api::window::set_maximized(self, &window, false);
     }
 
     // TODO:

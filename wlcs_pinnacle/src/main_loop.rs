@@ -61,22 +61,21 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
         });
     }
 
-    // wait for the config to connect to the layout service
-    //
-    // Ottatop: this probably doesn't do a whole lot because
-    // everything else is in the event loop so this pretty much
-    // just runs everything
-    while state.pinnacle.layout_state.layout_request_sender.is_none() {
-        event_loop
-            .dispatch(Some(Duration::from_millis(10)), &mut state)
-            .expect("event_loop error while waiting for config");
-    }
-
     event_loop
         .run(None, &mut state, |state| {
             state.on_event_loop_cycle_completion();
         })
         .expect("failed to run event_loop");
+
+    // INFO: apparently the wayland socket doesn't want to get removed, uncomment the below
+    // to get wlcs to work
+    //
+    // let _ = std::fs::remove_file(
+    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap()),
+    // );
+    // let _ = std::fs::remove_file(
+    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"),
+    // );
 }
 
 fn handle_event(event: WlcsEvent, state: &mut State) {

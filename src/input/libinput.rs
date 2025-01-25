@@ -1,29 +1,60 @@
-use smithay::backend::{input::InputEvent, libinput::LibinputInputBackend};
+use std::collections::HashSet;
 
-use crate::state::Pinnacle;
+use smithay::reexports::input::Device;
 
-impl Pinnacle {
-    /// Apply current libinput settings to new devices.
-    pub fn apply_libinput_settings(&mut self, event: &InputEvent<LibinputInputBackend>) {
-        let mut device = match event {
-            InputEvent::DeviceAdded { device } => device.clone(),
-            InputEvent::DeviceRemoved { device } => {
-                self.input_state
-                    .libinput_devices
-                    .retain(|dev| dev != device);
-                return;
-            }
-            _ => return,
-        };
+#[derive(Debug, Default)]
+pub struct LibinputState {
+    pub devices: HashSet<Device>,
+}
 
-        if self.input_state.libinput_devices.contains(&device) {
-            return;
-        }
+// This may not be right, idk if a device can be both a trackball and
+// trackpoint for instance. And I know for a fact that there are devices
+// with both the pointer and keyboard capability.
+pub enum DeviceType {
+    Unknown,
+    Touchpad,
+    Trackball,
+    Trackpoint,
+    Mouse,
+    Tablet,
+    Keyboard,
+    Switch,
+}
 
-        for setting in self.input_state.libinput_settings.values() {
-            setting(&mut device);
-        }
+// Logic from https://github.com/YaLTeR/niri/blob/b3c6f0e661878c7ab4f3c84c480ae61a5de5d3b3/src/input/mod.rs#L3013
+pub fn device_type(device: &Device) -> DeviceType {
+    let is_touchpad = device.config_tap_finger_count() > 0;
 
-        self.input_state.libinput_devices.push(device);
+    let mut is_trackball = false;
+    let mut is_trackpoint = false;
+    if let Some(udev_device) = unsafe { device.udev_device() } {
+        is_trackball = udev_device.property_value("ID_INPUT_TRACKBALL").is_some();
+
+        is_trackpoint = udev_device
+            .property_value("ID_INPUT_POINTINGSTICK")
+            .is_some();
+    }
+
+    let is_mouse = device.has_capability(smithay::reexports::input::DeviceCapability::Pointer);
+    let is_tablet = device.has_capability(smithay::reexports::input::DeviceCapability::TabletTool); // yo I should get a dirt cheap drawing tablet to test this
+    let is_switch = device.has_capability(smithay::reexports::input::DeviceCapability::Switch);
+    let is_keyboard = device.has_capability(smithay::reexports::input::DeviceCapability::Keyboard);
+
+    if is_mouse && !is_trackball && !is_trackpoint && !is_touchpad {
+        DeviceType::Mouse
+    } else if is_touchpad {
+        DeviceType::Touchpad
+    } else if is_trackball {
+        DeviceType::Trackball
+    } else if is_trackpoint {
+        DeviceType::Trackpoint
+    } else if is_tablet {
+        DeviceType::Tablet
+    } else if is_switch {
+        DeviceType::Switch
+    } else if is_keyboard {
+        DeviceType::Keyboard
+    } else {
+        DeviceType::Unknown
     }
 }

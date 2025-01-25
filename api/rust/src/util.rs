@@ -8,23 +8,9 @@ use std::pin::Pin;
 
 use futures::{stream::FuturesOrdered, Future, StreamExt};
 
-use crate::block_on_tokio;
-
 pub use crate::batch_boxed;
 pub use crate::batch_boxed_async;
-
-/// The size and location of something.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Geometry {
-    /// The x position
-    pub x: i32,
-    /// The y position
-    pub y: i32,
-    /// The width
-    pub width: u32,
-    /// The height
-    pub height: u32,
-}
+use crate::BlockOnTokio;
 
 /// A horizontal or vertical axis.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
@@ -35,118 +21,20 @@ pub enum Axis {
     Vertical,
 }
 
-impl Geometry {
-    /// Split this geometry along the given [`Axis`] at `at`.
-    ///
-    /// `thickness` denotes how thick the split will be from `at`.
-    ///
-    /// Returns the top/left geometry along with the bottom/right one if it exists.
-    pub fn split_at(mut self, axis: Axis, at: i32, thickness: u32) -> (Geometry, Option<Geometry>) {
-        match axis {
-            Axis::Horizontal => {
-                if at <= self.y {
-                    let diff = at - self.y + thickness as i32;
-                    if diff > 0 {
-                        self.y += diff;
-                        self.height = self.height.saturating_sub(diff as u32);
-                    }
-                    (self, None)
-                } else if at >= self.y + self.height as i32 {
-                    (self, None)
-                } else if at + thickness as i32 >= self.y + self.height as i32 {
-                    let diff = self.y + self.height as i32 - at;
-                    self.height = self.height.saturating_sub(diff as u32);
-                    (self, None)
-                } else {
-                    let x = self.x;
-                    let top_y = self.y;
-                    let width = self.width;
-                    let top_height = at - self.y;
-
-                    let bot_y = at + thickness as i32;
-                    let bot_height = self.y + self.height as i32 - at - thickness as i32;
-
-                    let geo1 = Geometry {
-                        x,
-                        y: top_y,
-                        width,
-                        height: top_height as u32,
-                    };
-                    let geo2 = Geometry {
-                        x,
-                        y: bot_y,
-                        width,
-                        height: bot_height as u32,
-                    };
-
-                    (geo1, Some(geo2))
-                }
-            }
-            Axis::Vertical => {
-                if at <= self.x {
-                    let diff = at - self.x + thickness as i32;
-                    if diff > 0 {
-                        self.x += diff;
-                        self.width = self.width.saturating_sub(diff as u32);
-                    }
-                    (self, None)
-                } else if at >= self.x + self.width as i32 {
-                    (self, None)
-                } else if at + thickness as i32 >= self.x + self.width as i32 {
-                    let diff = self.x + self.width as i32 - at;
-                    self.width = self.width.saturating_sub(diff as u32);
-                    (self, None)
-                } else {
-                    let left_x = self.x;
-                    let y = self.y;
-                    let left_width = at - self.x;
-                    let height = self.height;
-
-                    let right_x = at + thickness as i32;
-                    let right_width = self.x + self.width as i32 - at - thickness as i32;
-
-                    let geo1 = Geometry {
-                        x: left_x,
-                        y,
-                        width: left_width as u32,
-                        height,
-                    };
-                    let geo2 = Geometry {
-                        x: right_x,
-                        y,
-                        width: right_width as u32,
-                        height,
-                    };
-
-                    (geo1, Some(geo2))
-                }
-            }
-        }
-    }
-}
-
-/// Batch a set of requests that will be sent to the compositor all at once.
+/// Batches a set of requests that will be sent to the compositor all at once.
 ///
 /// # Rationale
 ///
-/// Normally, all API calls are blocking. For example, calling [`Window::get_all`][crate::window::Window::get_all]
-/// then calling [`WindowHandle.props`][crate::window::WindowHandle::props]
-/// on each returned window handle will block after each `props` call waiting for the compositor to respond:
-///
-/// ```
-/// // This will block after each call to `window.props()`, meaning this all happens synchronously.
-/// // If the compositor is running slowly for whatever reason, this will take a long time to complete.
-/// let props = window.get_all()
-///     .map(|window| window.props())
-///     .collect::<Vec<_>>();
-/// ```
+/// Normally, all API calls are blocking. For example, calling [`window::get_all`][crate::window::get_all]
+/// then calling [`WindowHandle::app_id`][crate::window::WindowHandle::app_id]
+/// on each returned window handle will block after each `app_id` call waiting for the compositor to respond.
 ///
 /// In order to mitigate this issue, you can batch up a set of API calls using this function.
 /// This will send all requests to the compositor at once without blocking, then wait for the compositor
 /// to respond.
 ///
 /// You'll see that this function takes in an `IntoIterator` of `Future`s. As such,
-/// all API calls that return something have an async variant named `*_async` that returns a future.
+/// most API calls that return something have an async variant named `*_async` that returns a future.
 /// You must pass these futures into the batch function instead of their non-async counterparts.
 ///
 /// # The `batch_boxed` macro
@@ -160,16 +48,15 @@ impl Geometry {
 ///
 /// # Examples
 ///
-/// ```
-/// use pinnacle_api::util::batch;
-/// use pinnacle_api::window::WindowProperties;
-///
-/// let props: Vec<WindowProperties> = batch(window.get_all().map(|window| window.props_async()));
-///                                                         // Don't forget the `async` ^^^^^
+/// ```no_run
+/// # use pinnacle_api::util::batch;
+/// # use pinnacle_api::window;
+/// let windows = window::get_all().collect::<Vec<_>>();
+/// let props: Vec<String> = batch(windows.iter().map(|window| window.app_id_async()));
 /// ```
 ///
 pub fn batch<T>(requests: impl IntoIterator<Item = impl Future<Output = T>>) -> Vec<T> {
-    block_on_tokio(batch_async(requests))
+    batch_async(requests).block_on_tokio()
 }
 
 /// The async version of [`batch`].
@@ -180,41 +67,44 @@ pub async fn batch_async<T>(requests: impl IntoIterator<Item = impl Future<Outpu
     results.await
 }
 
-/// A convenience macro to batch API calls in different concrete futures.
+/// Batches API calls in different concrete futures.
 ///
 /// The [`batch`] function only accepts a collection of the same concrete future e.g.
 /// from a single async function or method.
 ///
-/// To support different futures (that still return the same value), this macro will place provided
+/// To support different futures (that still return the same type), this macro will place provided
 /// futures in a `Pin<Box<_>>` to erase their type and pass them along to `batch`.
 ///
 /// # Examples
-/// ```
-/// use pinnacle_api::util::batch_boxed;
 ///
-/// let mut windows = window.get_all();
+/// ```no_run
+/// # use pinnacle_api::util::batch_boxed;
+/// # use pinnacle_api::window;
+/// # || {
+/// let mut windows = window::get_all();
 /// let first = windows.next()?;
 /// let last = windows.last()?;
 ///
 /// let classes: Vec<String> = batch_boxed![
 ///     async {
-///         let class = first.class_async().await;
-///         class.unwrap_or("no class".to_string())
+///         let class = first.app_id_async().await;
+///         class
 ///     },
 ///     async {
-///         let mut class = last.class_async().await.unwrap_or("alalala");
+///         let mut class = last.app_id_async().await;
 ///         class += "hello";
 ///         class
 ///     },
 /// ];
+/// # Some(())
+/// # };
 /// ```
 #[macro_export]
 macro_rules! batch_boxed {
-    [ $first:expr, $($request:expr),* ] => {
+    [ $($request:expr),* $(,)? ] => {
         $crate::util::batch([
-            ::std::boxed::Box::pin($first) as ::std::pin::Pin<::std::boxed::Box<dyn std::future::Future<Output = _>>>,
             $(
-                ::std::boxed::Box::pin($request),
+                ::std::boxed::Box::pin($request) as ::std::pin::Pin<::std::boxed::Box<dyn std::future::Future<Output = _>>>,
             )*
         ])
     };
@@ -257,7 +147,7 @@ pub trait Batch<I> {
     where
         Self: Sized,
         M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
-        F: FnMut(&FutOp) -> bool;
+        F: FnMut(FutOp) -> bool;
 }
 
 impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
@@ -298,7 +188,7 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
     where
         Self: Sized,
         M: for<'a> FnMut(&'a I) -> Pin<Box<dyn Future<Output = FutOp> + 'a>>,
-        F: FnMut(&FutOp) -> bool,
+        F: FnMut(FutOp) -> bool,
     {
         let items = self.into_iter().collect::<Vec<_>>();
         let futures = items.iter().map(map_to_future);
@@ -309,7 +199,24 @@ impl<T: IntoIterator<Item = I>, I> Batch<I> for T {
         items
             .into_iter()
             .zip(results)
-            .filter(move |(_, fut_op)| predicate(fut_op))
-            .map(|(item, _)| item)
+            .filter_map(move |(item, fut_op)| predicate(fut_op).then_some(item))
     }
+}
+
+/// A point in space.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Point {
+    /// The x-coordinate.
+    pub x: i32,
+    /// The y-coordinate.
+    pub y: i32,
+}
+
+/// A size with a width and height.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Size {
+    /// The width.
+    pub w: u32,
+    /// The height.
+    pub h: u32,
 }

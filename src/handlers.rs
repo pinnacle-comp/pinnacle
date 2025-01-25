@@ -24,7 +24,7 @@ use smithay::{
     delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
-        space::SpaceElement, PopupKind, PopupManager, WindowSurfaceType,
+        LayerSurface, PopupKind, PopupManager, WindowSurfaceType,
     },
     input::{
         keyboard::LedState,
@@ -75,7 +75,7 @@ use smithay::{
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
-            xdg::{PopupSurface, SurfaceCachedState, XdgPopupSurfaceData, XdgToplevelSurfaceData},
+            xdg::PopupSurface,
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,
@@ -156,8 +156,6 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // tracing::info!("commit on surface {surface:?}");
-
         utils::on_commit_buffer_handler::<State>(surface);
 
         self.backend.early_import(surface);
@@ -165,6 +163,8 @@ impl CompositorHandler for State {
         if compositor::is_sync_subsurface(surface) {
             return;
         }
+
+        self.pinnacle.popup_manager.commit(surface);
 
         let mut root = surface.clone();
         while let Some(parent) = compositor::get_parent(&root) {
@@ -205,107 +205,38 @@ impl CompositorHandler for State {
                             .with_state_mut(|state| state.snapshot_hook_id = Some(hook_id));
                     }
 
-                    let output = self.pinnacle.focused_output().cloned();
-
-                    if let Some(output) = output.as_ref() {
-                        output.with_state_mut(|state| {
-                            state.focus_stack.set_focus(unmapped_window.clone())
-                        });
-
-                        self.capture_snapshots_on_output(output, []);
-                    }
-
-                    unmapped_window.with_state_mut(|state| {
-                        if state.floating_size.is_none() {
-                            state.floating_size = Some(unmapped_window.geometry().size);
-                        }
-                    });
-
-                    // Float windows if necessary
-                    if let Some(toplevel) = unmapped_window.toplevel() {
-                        let has_parent = toplevel.parent().is_some();
-                        let (min_size, max_size) =
-                            compositor::with_states(toplevel.wl_surface(), |states| {
-                                let mut guard = states.cached_state.get::<SurfaceCachedState>();
-                                let state = guard.current();
-                                (state.min_size, state.max_size)
-                            });
-
-                        let requests_constrained_size = min_size.w > 0
-                            && min_size.h > 0
-                            && (min_size.w == max_size.w || min_size.h == max_size.h);
-
-                        let should_float = has_parent || requests_constrained_size;
-
-                        if should_float {
-                            unmapped_window.with_state_mut(|state| {
-                                state.window_state.set_floating(true);
-                            });
-                        }
-                    }
-
-                    self.pinnacle.update_window_state(&unmapped_window);
-
                     self.pinnacle
                         .unmapped_windows
                         .retain(|win| win != unmapped_window);
                     self.pinnacle.windows.push(unmapped_window.clone());
 
-                    self.pinnacle.raise_window(unmapped_window.clone(), true);
-
-                    if let Some(focused_output) = output {
-                        if unmapped_window.is_on_active_tag() {
-                            self.update_keyboard_focus(&focused_output);
-
-                            if unmapped_window.with_state(|state| state.window_state.is_floating())
-                            {
-                                // TODO: make this sync with commit
-                                let loc = unmapped_window
-                                    .with_state(|state| state.floating_loc)
-                                    .unwrap();
-                                self.pinnacle.space.map_element(
-                                    unmapped_window.clone(),
-                                    loc.to_i32_round(),
-                                    true,
-                                );
-                                unmapped_window
-                                    .toplevel()
-                                    .expect("unreachable")
-                                    .send_pending_configure();
-                            } else {
-                                self.pinnacle.begin_layout_transaction(&focused_output);
-                                self.pinnacle.request_layout(&focused_output);
-                            }
-
-                            // It seems wlcs needs immediate frame sends for client tests to work
-                            #[cfg(feature = "testing")]
-                            unmapped_window.send_frame(
-                                &focused_output,
-                                self.pinnacle.clock.now(),
-                                Some(std::time::Duration::ZERO),
-                                |_, _| None,
-                            );
-                        }
-                    }
+                    self.map_new_window(&unmapped_window);
                 } else {
+                    // Still unmapped
                     if let Some(output) = self.pinnacle.focused_output().cloned() {
                         self.pinnacle
                             .place_window_on_output(&unmapped_window, &output);
                     }
-                    self.pinnacle.apply_window_rules(&unmapped_window);
 
-                    // TODO: may be able to update_window_state here instead
-                    if unmapped_window.with_state(|state| state.window_state.is_floating()) {
-                        if let Some(size) = unmapped_window.with_state(|state| state.floating_size)
-                        {
-                            if let Some(toplevel) = unmapped_window.toplevel() {
-                                toplevel.with_pending_state(|state| state.size = Some(size));
+                    let window_rule_request_sent = self
+                        .pinnacle
+                        .window_rule_state
+                        .new_request(unmapped_window.clone());
+
+                    // If the above is false, then there are either
+                    //   a. No window rules in place, or
+                    //   b. all clients with window rules are dead
+                    //
+                    // In this case, send the initial configure here instead of waiting.
+                    if !window_rule_request_sent {
+                        if let Some(toplevel) = unmapped_window.toplevel() {
+                            if !toplevel.is_initial_configure_sent() {
+                                toplevel.send_configure();
                             }
                         }
                     }
-                    // Still unmapped
+
                     unmapped_window.on_commit();
-                    self.pinnacle.ensure_initial_configure(surface);
                 }
 
                 return;
@@ -361,11 +292,6 @@ impl CompositorHandler for State {
             }
         }
 
-        // TODO: split this up and don't call every commit
-        self.pinnacle.ensure_initial_configure(surface);
-
-        self.pinnacle.popup_manager.commit(surface);
-
         let outputs = if let Some(window) = self.pinnacle.window_for_surface(surface) {
             self.pinnacle.space.outputs_for_element(&window) // surface is a window
         } else if let Some(window) = self.pinnacle.window_for_surface(&root) {
@@ -373,6 +299,11 @@ impl CompositorHandler for State {
         } else if let Some(ref popup @ PopupKind::Xdg(ref surf)) =
             self.pinnacle.popup_manager.find_popup(surface)
         {
+            if !surf.is_initial_configure_sent() {
+                surf.send_configure().expect("initial configure sent twice");
+                return;
+            }
+
             let size = surf.with_pending_state(|state| state.geometry.size);
             let loc = find_popup_root_surface(popup)
                 .ok()
@@ -405,18 +336,29 @@ impl CompositorHandler for State {
                     .cloned();
                 layer_output.map(|op| vec![op]).unwrap_or_default()
             }
-        } else if let Some(output) = self
-            .pinnacle
-            .space
-            .outputs()
-            .find(|op| {
+        } else if let Some((output, layer)) = {
+            // Holy borrow checker
+            let mut outputs = self.pinnacle.space.outputs();
+            outputs.find_map(|op| {
                 let layer_map = layer_map_for_output(op);
-                layer_map
-                    .layer_for_surface(surface, WindowSurfaceType::ALL)
-                    .is_some()
+                Some((
+                    op.clone(),
+                    layer_map
+                        .layer_for_surface(surface, WindowSurfaceType::ALL)?
+                        .clone(),
+                ))
             })
-            .cloned()
-        {
+        } {
+            if !layer_surface_is_initial_configure_sent(&layer) {
+                layer.layer_surface().send_configure();
+                return;
+            }
+
+            let layer_changed = layer_map_for_output(&output).arrange();
+            if layer_changed {
+                self.pinnacle.request_layout(&output);
+            }
+
             vec![output] // surface is a layer surface
         } else if matches!(self.pinnacle.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
         {
@@ -493,81 +435,18 @@ impl CompositorHandler for State {
 }
 delegate_compositor!(State);
 
-impl Pinnacle {
-    fn ensure_initial_configure(&mut self, surface: &WlSurface) {
-        if let Some(window) = self.unmapped_window_for_surface(surface) {
-            if let Some(toplevel) = window.toplevel() {
-                let initial_configure_sent = compositor::with_states(surface, |states| {
-                    states
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap()
-                        .initial_configure_sent
-                });
+fn layer_surface_is_initial_configure_sent(layer: &LayerSurface) -> bool {
+    let initial_configure_sent = compositor::with_states(layer.wl_surface(), |states| {
+        states
+            .data_map
+            .get::<LayerSurfaceData>()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .initial_configure_sent
+    });
 
-                if !initial_configure_sent {
-                    tracing::debug!("Initial configure on wl_surface {:?}", surface.id());
-                    toplevel.send_configure();
-                }
-            }
-            return;
-        }
-
-        if let Some(popup) = self.popup_manager.find_popup(surface) {
-            let PopupKind::Xdg(popup) = &popup else { return };
-            let initial_configure_sent = compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<XdgPopupSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .initial_configure_sent
-            });
-            if !initial_configure_sent {
-                popup.send_configure().expect(
-                    "sent configure for popup that doesn't allow multiple or is nonreactive",
-                );
-            }
-            return;
-        }
-
-        let output = self
-            .space
-            .outputs()
-            .find(|op| {
-                let map = layer_map_for_output(op);
-                map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-                    .is_some()
-            })
-            .cloned();
-
-        if let Some(output) = output {
-            if layer_map_for_output(&output).arrange() {
-                self.request_layout(&output);
-            }
-
-            let initial_configure_sent = compositor::with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<LayerSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .initial_configure_sent
-            });
-
-            if !initial_configure_sent {
-                layer_map_for_output(&output)
-                    .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
-                    .expect("no layer for surface")
-                    .layer_surface()
-                    .send_configure();
-            }
-        }
-    }
+    initial_configure_sent
 }
 
 impl ClientDndGrabHandler for State {
@@ -667,8 +546,8 @@ impl SeatHandler for State {
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
-        for device in self.pinnacle.input_state.libinput_devices.iter_mut() {
-            device.led_update(led_state.into());
+        for device in self.pinnacle.input_state.libinput_state.devices.iter() {
+            device.clone().led_update(led_state.into());
         }
     }
 }

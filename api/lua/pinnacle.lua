@@ -4,34 +4,17 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v0alpha1.PinnacleService
+local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v1.PinnacleService
 
 ---The entry point to configuration.
 ---
----This module contains the `setup` function, which is how you'll access all the ways to configure Pinnacle.
+---This module contains the `setup` function, which is where you'll put all of your config in.
+---It also contains general compositor actions like `quit` and `reload_config`.
+---
 ---@class Pinnacle
-local pinnacle = {
-    ---@type Input
-    input = require("pinnacle.input"),
-    ---@type Tag
-    tag = require("pinnacle.tag"),
-    ---@type Output
-    output = require("pinnacle.output"),
-    ---@type Window
-    window = require("pinnacle.window"),
-    ---@type Process
-    process = require("pinnacle.process"),
-    ---@type Util
-    util = require("pinnacle.util"),
-    ---@type Layout
-    layout = require("pinnacle.layout"),
-    ---@type Render
-    render = require("pinnacle.render"),
-    ---@type pinnacle.Snowcap
-    snowcap = nil,
-}
+local pinnacle = {}
 
----Quit Pinnacle.
+---Quits Pinnacle.
 function pinnacle.quit()
     local _, err = client:unary_request(pinnacle_service.Quit, {})
 
@@ -40,7 +23,7 @@ function pinnacle.quit()
     end
 end
 
----Reload the active config.
+---Reloads the active config.
 function pinnacle.reload_config()
     local _, err = client:unary_request(pinnacle_service.ReloadConfig, {})
 
@@ -60,11 +43,11 @@ function pinnacle.backend()
         -- TODO: possibly panic here; a nil index error will be thrown after this anyway
     end
 
-    ---@cast response pinnacle.v0alpha1.BackendResponse
+    ---@cast response pinnacle.v1.BackendResponse
 
     local defs = require("pinnacle.grpc.defs")
 
-    if response.backend == defs.pinnacle.v0alpha1.Backend.BACKEND_WINDOW then
+    if response.backend == defs.pinnacle.v1.Backend.BACKEND_WINDOW then
         return "window"
     else
         return "tty"
@@ -91,26 +74,23 @@ function pinnacle.init()
     end
 end
 
----Setup a Pinnacle config.
+---Sets up a Pinnacle config.
 ---
----You must pass in a function that takes in the `Pinnacle` table. This table is how you'll access the other config modules.
+---This receives a function that contains your config.
 ---
----You can also `require` the other modules. Just be sure not to call any of their functions outside this
----setup function.
+---If you want to run a function with the config without blocking, see `Pinnacle.run`.
 ---
----If you want to run a function with the config without blocking at the end, see `Pinnacle.run`.
----
----@param config_fn fun(pinnacle: Pinnacle)
+---@param config_fn fun()
 ---
 ---@see Pinnacle.run
 function pinnacle.setup(config_fn)
     pinnacle.init()
 
-    -- This function ensures a config won't run forever if Pinnacle is killed
+    -- This ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
     client.loop:wrap(function()
         while true do
-            require("cqueues").sleep(60)
+            require("cqueues").sleep(30)
             local success, err, errno = client.conn:ping(10)
             if not success then
                 error(
@@ -123,7 +103,7 @@ function pinnacle.setup(config_fn)
         end
     end)
 
-    config_fn(pinnacle)
+    client.loop:wrap(config_fn)
 
     local success, err = client.loop:loop()
     if not success then
@@ -131,24 +111,18 @@ function pinnacle.setup(config_fn)
     end
 end
 
----Run a function with the Pinnacle API.
+---Runs a function with the Pinnacle API.
 ---
 ---If you are writing a config, use `Pinnacle.setup` instead.
 ---
----Like `Pinnacle.setup`, this function takes in a function that takes in the `Pinnacle` table.
----This allows you to run anything that `setup` can run.
+---This receives a function that runs anything in this API.
+---However, it will not block to receive compositor events.
 ---
----*Unlike* `setup`, this will **not** listen to the compositor for incoming key presses, signals, and the like.
----This means that this function will not block and can be used to integrate with external applications
----like taskbars and widget systems like eww, but it will not allow you to set usable keybinds or
----call signal callbacks. This is useful for things like querying compositor information for outputs and
----windows.
----
----@param run_fn fun(pinnacle: Pinnacle)
+---@param run_fn fun()
 function pinnacle.run(run_fn)
     pinnacle.init()
 
-    run_fn(pinnacle)
+    run_fn()
 end
 
 return pinnacle
