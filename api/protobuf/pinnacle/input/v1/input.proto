@@ -15,36 +15,36 @@ enum Modifier {
 }
 
 enum Edge {
-    EDGE_UNSPECIFIED = 0;
-    EDGE_PRESS = 1;
-    EDGE_RELEASE = 2;
+  EDGE_UNSPECIFIED = 0;
+  EDGE_PRESS = 1;
+  EDGE_RELEASE = 2;
 }
 
 message Bind {
-    repeated Modifier mods = 1;
-    repeated Modifier ignore_mods = 2;
-    optional string layer_name = 3;
-    optional string group = 4;
-    optional string description = 5;
-    oneof bind {
-        Keybind key = 6;
-        Mousebind mouse = 7;
-    }
+  repeated Modifier mods = 1;
+  repeated Modifier ignore_mods = 2;
+  optional string layer_name = 3;
+  optional string group = 4;
+  optional string description = 5;
+  oneof bind {
+    Keybind key = 6;
+    Mousebind mouse = 7;
+  }
 }
 
 message BindRequest {
-    Bind bind = 1;
+  Bind bind = 1;
 }
 message BindResponse {
-    uint32 bind_id = 1;
+  uint32 bind_id = 1;
 }
 
 message SetQuitBindRequest {
-    uint32 bind_id = 1;
+  uint32 bind_id = 1;
 }
 
 message SetReloadConfigBindRequest {
-    uint32 bind_id = 1;
+  uint32 bind_id = 1;
 }
 
 // A key for a keybind.
@@ -52,40 +52,48 @@ message SetReloadConfigBindRequest {
 // If both are specified, the key_code is used.
 // This is not a oneof both fields can be returned as bind info.
 message Keybind {
-    optional uint32 key_code = 1;
-    optional string xkb_name = 2;
+  optional uint32 key_code = 1;
+  optional string xkb_name = 2;
 }
 
 message KeybindStreamRequest {
-    uint32 bind_id = 1;
+  uint32 bind_id = 1;
 }
 message KeybindStreamResponse {
-    Edge edge = 1;
+  Edge edge = 1;
+}
+
+message KeybindOnPressRequest {
+  uint32 bind_id = 1;
 }
 
 // Mousebinds
 
 message Mousebind {
-    uint32 button = 1;
+  uint32 button = 1;
 }
 
 message MousebindStreamRequest {
-    uint32 bind_id = 1;
+  uint32 bind_id = 1;
 }
 message MousebindStreamResponse {
-    Edge edge = 1;
+  Edge edge = 1;
+}
+
+message MousebindOnPressRequest {
+  uint32 bind_id = 1;
 }
 
 ///////
 
 message SetBindGroupRequest {
-    uint32 bind_id = 1;
-    optional string group = 2;
+  uint32 bind_id = 1;
+  optional string group = 2;
 }
 
 message SetBindDescriptionRequest {
-    uint32 bind_id = 1;
-    optional string desc = 2;
+  uint32 bind_id = 1;
+  optional string desc = 2;
 }
 
 message GetBindInfosRequest {}
@@ -95,17 +103,17 @@ message GetBindInfosResponse {
 }
 
 message BindInfo {
-    uint32 bind_id = 1;
-    Bind bind = 2;
+  uint32 bind_id = 1;
+  Bind bind = 2;
 }
 
 message GetBindLayerStackRequest {}
 message GetBindLayerStackResponse {
-    repeated string layer_names = 1;
+  repeated string layer_names = 1;
 }
 
 message EnterBindLayerRequest {
-    optional string layer_name = 1;
+  optional string layer_name = 1;
 }
 
 //////
@@ -126,8 +134,8 @@ message SetRepeatRateRequest {
 }
 
 message SetXcursorRequest {
-    optional string theme = 1;
-    optional uint32 size = 2;
+  optional string theme = 1;
+  optional uint32 size = 2;
 }
 
 // Libinput stuff
@@ -136,133 +144,133 @@ message SetXcursorRequest {
 // buttons, usually on a device that does not have a specific
 // physical button available.
 enum ClickMethod {
-    CLICK_METHOD_UNSPECIFIED = 0;
-    CLICK_METHOD_BUTTON_AREAS = 1;
-    CLICK_METHOD_CLICK_FINGER = 2;
+  CLICK_METHOD_UNSPECIFIED = 0;
+  CLICK_METHOD_BUTTON_AREAS = 1;
+  CLICK_METHOD_CLICK_FINGER = 2;
 }
 
 // Pointer acceleration profile
 enum AccelProfile {
-    ACCEL_PROFILE_UNSPECIFIED = 0;
-    // No acceleration
-    ACCEL_PROFILE_FLAT = 1;
-    // Acceleration
-    ACCEL_PROFILE_ADAPTIVE = 2;
+  ACCEL_PROFILE_UNSPECIFIED = 0;
+  // No acceleration
+  ACCEL_PROFILE_FLAT = 1;
+  // Acceleration
+  ACCEL_PROFILE_ADAPTIVE = 2;
 }
 
 // The scroll method of a device selects when to generate scroll axis
 // events instead of pointer motion events.
 enum ScrollMethod {
-    SCROLL_METHOD_UNSPECIFIED = 0;
-    SCROLL_METHOD_NO_SCROLL = 1;
-    SCROLL_METHOD_TWO_FINGER = 2;
-    SCROLL_METHOD_EDGE = 3;
-    SCROLL_METHOD_ON_BUTTON_DOWN = 4;
+  SCROLL_METHOD_UNSPECIFIED = 0;
+  SCROLL_METHOD_NO_SCROLL = 1;
+  SCROLL_METHOD_TWO_FINGER = 2;
+  SCROLL_METHOD_EDGE = 3;
+  SCROLL_METHOD_ON_BUTTON_DOWN = 4;
 }
 
 // Map 1/2/3 finger taps to buttons
 enum TapButtonMap {
-    TAP_BUTTON_MAP_UNSPECIFIED = 0;
-    // 1 tap = left mouse, 2 = right, 3 = middle
-    TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE = 1;
-    // 1 tap = left mouse, 2 = middle, 3 = right
-    TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT = 2;
+  TAP_BUTTON_MAP_UNSPECIFIED = 0;
+  // 1 tap = left mouse, 2 = right, 3 = middle
+  TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE = 1;
+  // 1 tap = left mouse, 2 = middle, 3 = right
+  TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT = 2;
 }
 
 enum SendEventsMode {
-    SEND_EVENTS_MODE_UNSPECIFIED = 0;
-    SEND_EVENTS_MODE_ENABLED = 1;
-    SEND_EVENTS_MODE_DISABLED = 2;
-    SEND_EVENTS_MODE_DISABLED_ON_EXTERNAL_MOUSE = 3;
+  SEND_EVENTS_MODE_UNSPECIFIED = 0;
+  SEND_EVENTS_MODE_ENABLED = 1;
+  SEND_EVENTS_MODE_DISABLED = 2;
+  SEND_EVENTS_MODE_DISABLED_ON_EXTERNAL_MOUSE = 3;
 }
 
 message CalibrationMatrix {
-    // Exactly 6 floats
-    repeated float matrix = 1;
+  // Exactly 6 floats
+  repeated float matrix = 1;
 }
 
 message GetDevicesRequest {}
 message GetDevicesResponse {
-    repeated string device_sysnames = 1;
+  repeated string device_sysnames = 1;
 }
 
 message GetDeviceCapabilitiesRequest {
-    string device_sysname = 1;
+  string device_sysname = 1;
 }
 message GetDeviceCapabilitiesResponse {
-    bool keyboard = 1;
-    bool pointer = 2;
-    bool touch = 3;
-    bool tablet_tool = 4;
-    bool tablet_pad = 5;
-    bool gesture = 6;
-    bool switch = 7;
+  bool keyboard = 1;
+  bool pointer = 2;
+  bool touch = 3;
+  bool tablet_tool = 4;
+  bool tablet_pad = 5;
+  bool gesture = 6;
+  bool switch = 7;
 }
 
 message GetDeviceInfoRequest {
-    string device_sysname = 1;
+  string device_sysname = 1;
 }
 message GetDeviceInfoResponse {
-    string name = 1;
-    uint32 product_id = 2;
-    uint32 vendor_id = 3;
+  string name = 1;
+  uint32 product_id = 2;
+  uint32 vendor_id = 3;
 }
 
 enum DeviceType {
-    DEVICE_TYPE_UNSPECIFIED = 0;
-    DEVICE_TYPE_TOUCHPAD = 1;
-    DEVICE_TYPE_TRACKBALL = 2;
-    DEVICE_TYPE_TRACKPOINT = 3;
-    DEVICE_TYPE_MOUSE = 4;
-    DEVICE_TYPE_TABLET = 5;
-    DEVICE_TYPE_KEYBOARD = 6;
-    DEVICE_TYPE_SWITCH = 7;
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  DEVICE_TYPE_TOUCHPAD = 1;
+  DEVICE_TYPE_TRACKBALL = 2;
+  DEVICE_TYPE_TRACKPOINT = 3;
+  DEVICE_TYPE_MOUSE = 4;
+  DEVICE_TYPE_TABLET = 5;
+  DEVICE_TYPE_KEYBOARD = 6;
+  DEVICE_TYPE_SWITCH = 7;
 }
 
 message GetDeviceTypeRequest {
-    string device_sysname = 1;
+  string device_sysname = 1;
 }
 message GetDeviceTypeResponse {
-    DeviceType device_type = 1;
+  DeviceType device_type = 1;
 }
 
 message SetDeviceLibinputSettingRequest {
-    string device_sysname = 1;
+  string device_sysname = 1;
 
-    oneof setting {
-        AccelProfile accel_profile = 2;
-        double accel_speed = 3;
-        CalibrationMatrix calibration_matrix = 4;
-        ClickMethod click_method = 5;
-        // When `true`, the device will be disabled while typing
-        // and for a short period after.
-        bool disable_while_typing = 6;
-        bool left_handed = 7;
-        bool middle_emulation = 8;
-        uint32 rotation_angle = 9;
-        // When the scroll method is set to `SCROLL_METHOD_ON_BUTTON_DOWN`,
-        // pointer motion will become scroll motion and
-        // the specified button will also not have any press/release events
-        // generated.
-        uint32 scroll_button = 10;
-        // Only applies when the scroll method is `SCROLL_METHOD_ON_BUTTON_DOWN`.
-        // When `false`, the scroll button must be held down to button scroll.
-        // When `true`, the scroll button toggles scrolling instead.
-        bool scroll_button_lock = 11;
-        ScrollMethod scroll_method = 12;
-        // When `true`, the direction of scrolling will be reversed.
-        // Useful for eg. trackpads.
-        bool natural_scroll = 13;
-        TapButtonMap tap_button_map = 14;
-        // Enable or disable double-tap dragging
-        bool tap_drag = 15;
-        // Enable or disable a timeout that allows tap-drags to continue
-        // when the finger is lifted and placed back during a tap-drag
-        bool tap_drag_lock = 16;
-        // Enable or disable tap-to-click
-        bool tap = 17;
-        SendEventsMode send_events_mode = 18;
-    }
+  oneof setting {
+    AccelProfile accel_profile = 2;
+    double accel_speed = 3;
+    CalibrationMatrix calibration_matrix = 4;
+    ClickMethod click_method = 5;
+    // When `true`, the device will be disabled while typing
+    // and for a short period after.
+    bool disable_while_typing = 6;
+    bool left_handed = 7;
+    bool middle_emulation = 8;
+    uint32 rotation_angle = 9;
+    // When the scroll method is set to `SCROLL_METHOD_ON_BUTTON_DOWN`,
+    // pointer motion will become scroll motion and
+    // the specified button will also not have any press/release events
+    // generated.
+    uint32 scroll_button = 10;
+    // Only applies when the scroll method is `SCROLL_METHOD_ON_BUTTON_DOWN`.
+    // When `false`, the scroll button must be held down to button scroll.
+    // When `true`, the scroll button toggles scrolling instead.
+    bool scroll_button_lock = 11;
+    ScrollMethod scroll_method = 12;
+    // When `true`, the direction of scrolling will be reversed.
+    // Useful for eg. trackpads.
+    bool natural_scroll = 13;
+    TapButtonMap tap_button_map = 14;
+    // Enable or disable double-tap dragging
+    bool tap_drag = 15;
+    // Enable or disable a timeout that allows tap-drags to continue
+    // when the finger is lifted and placed back during a tap-drag
+    bool tap_drag_lock = 16;
+    // Enable or disable tap-to-click
+    bool tap = 17;
+    SendEventsMode send_events_mode = 18;
+  }
 }
 
 service InputService {
@@ -279,6 +287,9 @@ service InputService {
 
   rpc KeybindStream(KeybindStreamRequest) returns (stream KeybindStreamResponse);
   rpc MousebindStream(MousebindStreamRequest) returns (stream MousebindStreamResponse);
+
+  rpc KeybindOnPress(KeybindOnPressRequest) returns (google.protobuf.Empty);
+  rpc MousebindOnPress(MousebindOnPressRequest) returns (google.protobuf.Empty);
 
   rpc SetXkbConfig(SetXkbConfigRequest) returns (google.protobuf.Empty);
   rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);

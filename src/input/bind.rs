@@ -147,8 +147,9 @@ pub enum BindAction {
 pub struct Keybind {
     pub bind_data: BindData,
     pub key: Keysym,
-    pub sender: UnboundedSender<Edge>,
+    sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
+    has_on_press: bool,
 }
 
 #[derive(Debug, Default)]
@@ -177,6 +178,7 @@ impl Keybinds {
         if edge == Edge::Release {
             let last_triggered_binds_on_press = self.last_pressed_triggered_binds.remove(&key);
             let bind_action = if let Some(bind_ids) = last_triggered_binds_on_press {
+                let mut bind_action = BindAction::Forward;
                 for bind_id in bind_ids {
                     let keybind = self.id_map.entry(bind_id);
                     let Entry::Occupied(kb_entry) = keybind else {
@@ -188,12 +190,15 @@ impl Keybinds {
                     if kb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
                     }
+                    if kb_entry.get().borrow().has_on_press {
+                        bind_action = BindAction::Suppress;
+                    }
                     let sent = kb_entry.get().borrow().sender.send(Edge::Release).is_ok();
                     if !sent {
                         kb_entry.shift_remove();
                     }
                 }
-                BindAction::Suppress
+                bind_action
             } else {
                 BindAction::Forward
             };
@@ -202,11 +207,9 @@ impl Keybinds {
 
         let mut bind_action = BindAction::Forward;
 
-        keybinds.retain(|keybind| {
-            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
-                return true;
-            }
+        let mut should_clear_releases = false;
 
+        keybinds.retain(|keybind| {
             let Some(keybind) = keybind.upgrade() else {
                 return false;
             };
@@ -217,7 +220,15 @@ impl Keybinds {
                 return true;
             }
 
+            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
+                return true;
+            }
+
             if keybind.bind_data.mods.matches(mods) {
+                if keybind.has_on_press {
+                    should_clear_releases = true;
+                }
+
                 match edge {
                     Edge::Press => {
                         self.last_pressed_triggered_binds
@@ -226,6 +237,10 @@ impl Keybinds {
                             .push(keybind.bind_data.id);
                     }
                     Edge::Release => unreachable!(),
+                }
+
+                if !keybind.has_on_press {
+                    return true;
                 }
 
                 let mut retain = true;
@@ -244,6 +259,11 @@ impl Keybinds {
                 true
             }
         });
+
+        if should_clear_releases {
+            self.last_pressed_triggered_binds
+                .retain(|keysym, _| *keysym == key);
+        }
 
         bind_action
     }
@@ -273,6 +293,7 @@ impl Keybinds {
             key,
             sender,
             recv: Some(recv),
+            has_on_press: false,
         }));
 
         assert!(
@@ -291,6 +312,13 @@ impl Keybinds {
     pub fn remove_keybind(&mut self, keybind_id: u32) {
         self.id_map.shift_remove(&keybind_id);
     }
+
+    pub fn set_keybind_has_on_press(&self, keybind_id: u32) {
+        let Some(keybind) = self.id_map.get(&keybind_id) else {
+            return;
+        };
+        keybind.borrow_mut().has_on_press = true;
+    }
 }
 
 // Mousebinds
@@ -299,8 +327,9 @@ impl Keybinds {
 pub struct Mousebind {
     pub bind_data: BindData,
     pub button: u32,
-    pub sender: UnboundedSender<Edge>,
+    sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
+    has_on_press: bool,
 }
 
 #[derive(Debug, Default)]
@@ -332,6 +361,7 @@ impl Mousebinds {
         if edge == Edge::Release {
             let last_triggered_binds_on_press = self.last_pressed_triggered_binds.remove(&button);
             let bind_action = if let Some(bind_ids) = last_triggered_binds_on_press {
+                let mut bind_action = BindAction::Forward;
                 for bind_id in bind_ids {
                     let mousebind = self.id_map.entry(bind_id);
                     let Entry::Occupied(mb_entry) = mousebind else {
@@ -343,12 +373,15 @@ impl Mousebinds {
                     if mb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
                     }
+                    if mb_entry.get().borrow().has_on_press {
+                        bind_action = BindAction::Suppress;
+                    }
                     let sent = mb_entry.get().borrow().sender.send(Edge::Release).is_ok();
                     if !sent {
                         mb_entry.shift_remove();
                     }
                 }
-                BindAction::Suppress
+                bind_action
             } else {
                 BindAction::Forward
             };
@@ -357,11 +390,9 @@ impl Mousebinds {
 
         let mut bind_action = BindAction::Forward;
 
-        mousebinds.retain(|mousebind| {
-            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
-                return true;
-            }
+        let mut should_clear_releases = false;
 
+        mousebinds.retain(|mousebind| {
             let Some(mousebind) = mousebind.upgrade() else {
                 return false;
             };
@@ -372,7 +403,15 @@ impl Mousebinds {
                 return true;
             }
 
+            if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
+                return true;
+            }
+
             if mousebind.bind_data.mods.matches(mods) {
+                if mousebind.has_on_press {
+                    should_clear_releases = true;
+                }
+
                 match edge {
                     Edge::Press => {
                         self.last_pressed_triggered_binds
@@ -381,6 +420,10 @@ impl Mousebinds {
                             .push(mousebind.bind_data.id);
                     }
                     Edge::Release => unreachable!(),
+                }
+
+                if !mousebind.has_on_press {
+                    return true;
                 }
 
                 let mut retain = true;
@@ -399,6 +442,11 @@ impl Mousebinds {
                 true
             }
         });
+
+        if should_clear_releases {
+            self.last_pressed_triggered_binds
+                .retain(|btn, _| *btn == button);
+        }
 
         bind_action
     }
@@ -428,6 +476,7 @@ impl Mousebinds {
             button,
             sender,
             recv: Some(recv),
+            has_on_press: false,
         }));
 
         assert!(
@@ -445,5 +494,12 @@ impl Mousebinds {
 
     pub fn remove_mousebind(&mut self, mousebind_id: u32) {
         self.id_map.shift_remove(&mousebind_id);
+    }
+
+    pub fn set_mousebind_has_on_press(&self, mousebind_id: u32) {
+        let Some(mousebind) = self.id_map.get(&mousebind_id) else {
+            return;
+        };
+        mousebind.borrow_mut().has_on_press = true;
     }
 }

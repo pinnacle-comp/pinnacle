@@ -10,8 +10,9 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindStreamRequest,
-        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
+        BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindOnPressRequest,
+        KeybindStreamRequest, MousebindOnPressRequest, MousebindStreamRequest,
+        SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
         SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
     },
 };
@@ -278,6 +279,13 @@ impl Keybind {
             .get_or_insert_with(|| new_keybind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_press), Edge::Press));
 
+        Client::input()
+            .keybind_on_press(KeybindOnPressRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
+
         self
     }
 
@@ -391,6 +399,13 @@ impl Mousebind {
             .callback_sender
             .get_or_insert_with(|| new_mousebind_stream(self.bind_id).block_on_tokio());
         let _ = sender.send((Box::new(on_press), Edge::Press));
+
+        Client::input()
+            .mousebind_on_press(MousebindOnPressRequest {
+                bind_id: self.bind_id,
+            })
+            .block_on_tokio()
+            .unwrap();
 
         self
     }

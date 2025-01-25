@@ -5,11 +5,12 @@ use pinnacle_api_defs::pinnacle::input::{
         GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
         GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
         GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
-        GetDevicesRequest, GetDevicesResponse, KeybindStreamRequest, KeybindStreamResponse,
-        MousebindStreamRequest, MousebindStreamResponse, ScrollMethod, SendEventsMode,
-        SetBindDescriptionRequest, SetBindGroupRequest, SetDeviceLibinputSettingRequest,
-        SetQuitBindRequest, SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest,
-        SetXkbConfigRequest, TapButtonMap,
+        GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
+        KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
+        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindDescriptionRequest,
+        SetBindGroupRequest, SetDeviceLibinputSettingRequest, SetQuitBindRequest,
+        SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        TapButtonMap,
     },
 };
 use smithay::input::keyboard::XkbConfig;
@@ -460,6 +461,37 @@ impl input::v1::input_service_server::InputService for InputService {
             });
 
             Ok(())
+        })
+        .await
+    }
+
+    async fn keybind_on_press(&self, request: Request<KeybindOnPressRequest>) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .keybinds
+                .set_keybind_has_on_press(bind_id);
+        })
+        .await
+    }
+
+    async fn mousebind_on_press(
+        &self,
+        request: Request<MousebindOnPressRequest>,
+    ) -> TonicResult<()> {
+        let bind_id = request.into_inner().bind_id;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .pinnacle
+                .input_state
+                .bind_state
+                .mousebinds
+                .set_mousebind_has_on_press(bind_id);
         })
         .await
     }

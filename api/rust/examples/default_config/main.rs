@@ -54,13 +54,6 @@ async fn config() {
         .group("Mouse")
         .description("Start an interactive window resize");
 
-    input::mousebind(mod_key | Mod::SHIFT, MouseButton::Right)
-        .on_press(|| {
-            pinnacle::reload_config();
-            println!("right click press")
-        })
-        .on_release(|| println!("right click release"));
-
     //------------------------
     // Keybinds              |
     //------------------------

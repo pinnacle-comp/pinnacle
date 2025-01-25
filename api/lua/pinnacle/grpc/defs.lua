@@ -227,6 +227,9 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.input.v1.KeybindStreamResponse
 ---@field edge pinnacle.input.v1.Edge?
 
+---@class pinnacle.input.v1.KeybindOnPressRequest
+---@field bind_id integer?
+
 ---@class pinnacle.input.v1.Mousebind
 ---@field button integer?
 
@@ -235,6 +238,9 @@ local pinnacle_v1_Backend = {
 
 ---@class pinnacle.input.v1.MousebindStreamResponse
 ---@field edge pinnacle.input.v1.Edge?
+
+---@class pinnacle.input.v1.MousebindOnPressRequest
+---@field bind_id integer?
 
 ---@class pinnacle.input.v1.SetBindGroupRequest
 ---@field bind_id integer?
@@ -735,9 +741,11 @@ pinnacle.input.v1.SetReloadConfigBindRequest = {}
 pinnacle.input.v1.Keybind = {}
 pinnacle.input.v1.KeybindStreamRequest = {}
 pinnacle.input.v1.KeybindStreamResponse = {}
+pinnacle.input.v1.KeybindOnPressRequest = {}
 pinnacle.input.v1.Mousebind = {}
 pinnacle.input.v1.MousebindStreamRequest = {}
 pinnacle.input.v1.MousebindStreamResponse = {}
+pinnacle.input.v1.MousebindOnPressRequest = {}
 pinnacle.input.v1.SetBindGroupRequest = {}
 pinnacle.input.v1.SetBindDescriptionRequest = {}
 pinnacle.input.v1.GetBindInfosRequest = {}
@@ -989,6 +997,16 @@ pinnacle.input.v1.InputService.MousebindStream.service = "pinnacle.input.v1.Inpu
 pinnacle.input.v1.InputService.MousebindStream.method = "MousebindStream"
 pinnacle.input.v1.InputService.MousebindStream.request = ".pinnacle.input.v1.MousebindStreamRequest"
 pinnacle.input.v1.InputService.MousebindStream.response = ".pinnacle.input.v1.MousebindStreamResponse"
+pinnacle.input.v1.InputService.KeybindOnPress = {}
+pinnacle.input.v1.InputService.KeybindOnPress.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.KeybindOnPress.method = "KeybindOnPress"
+pinnacle.input.v1.InputService.KeybindOnPress.request = ".pinnacle.input.v1.KeybindOnPressRequest"
+pinnacle.input.v1.InputService.KeybindOnPress.response = ".google.protobuf.Empty"
+pinnacle.input.v1.InputService.MousebindOnPress = {}
+pinnacle.input.v1.InputService.MousebindOnPress.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.MousebindOnPress.method = "MousebindOnPress"
+pinnacle.input.v1.InputService.MousebindOnPress.request = ".pinnacle.input.v1.MousebindOnPressRequest"
+pinnacle.input.v1.InputService.MousebindOnPress.response = ".google.protobuf.Empty"
 pinnacle.input.v1.InputService.SetXkbConfig = {}
 pinnacle.input.v1.InputService.SetXkbConfig.service = "pinnacle.input.v1.InputService"
 pinnacle.input.v1.InputService.SetXkbConfig.method = "SetXkbConfig"

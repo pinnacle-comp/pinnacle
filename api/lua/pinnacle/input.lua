@@ -115,9 +115,9 @@ local function keybind_inner(kb)
     local ignore_modifs = {}
     for _, mod in ipairs(kb.mods) do
         if string.match(mod, "ignore") then
-            table.insert(ignore_modifs, modifier_values[mod])
+            table.insert(ignore_modifs, mods_with_ignore_values[mod])
         else
-            table.insert(modifs, modifier_values[mod])
+            table.insert(modifs, mods_with_ignore_values[mod])
         end
     end
 
@@ -172,6 +172,12 @@ local function keybind_inner(kb)
             end
         end
     end)
+
+    if kb.on_press then
+        local _, err = client:unary_request(input_service.KeybindOnPress, {
+            bind_id = bind_id,
+        })
+    end
 
     if err then
         log:error(err)
@@ -253,9 +259,9 @@ local function mousebind_inner(mb)
     local ignore_modifs = {}
     for _, mod in ipairs(mb.mods) do
         if string.match(mod, "ignore") then
-            table.insert(ignore_modifs, modifier_values[mod])
+            table.insert(ignore_modifs, mods_with_ignore_values[mod])
         else
-            table.insert(modifs, modifier_values[mod])
+            table.insert(modifs, mods_with_ignore_values[mod])
         end
     end
 
@@ -309,6 +315,12 @@ local function mousebind_inner(mb)
             end
         end
     end)
+
+    if mb.on_press then
+        local _, err = client:unary_request(input_service.MousebindOnPress, {
+            bind_id = bind_id,
+        })
+    end
 
     if err then
         log:error(err)
