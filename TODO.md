@@ -1,8 +1,5 @@
 - Provide scale and transform on new window/layer
 
-- Verify bind layers work
-- Verify some other stuff idk
-
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords
   get screwed up pointer events

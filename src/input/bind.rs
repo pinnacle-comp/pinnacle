@@ -161,9 +161,9 @@ pub struct Keybinds {
 }
 
 impl Keybinds {
-    // Notifies configs that a key was pressed.
-    //
-    // Returns whether the key should be suppressed (not sent to the client).
+    /// Notifies configs that a key was pressed.
+    ///
+    /// Returns whether the key should be suppressed (not sent to the client).
     pub fn key(
         &mut self,
         key: Keysym,
@@ -342,11 +342,11 @@ pub struct Mousebinds {
 
 // TODO: may be able to dedup with Keybinds above
 impl Mousebinds {
-    // Notifies configs that a button was pressed.
-    //
-    // Returns whether the button should be suppressed (not sent to the client).
-    //
-    // Named `btn` and not `button` because Rust Analyzer does some weird things in `input.rs`
+    /// Notifies configs that a button was pressed.
+    ///
+    /// Returns whether the button should be suppressed (not sent to the client).
+    ///
+    /// Named `btn` and not `button` because Rust Analyzer does some weird things in `input.rs`
     pub fn btn(
         &mut self,
         button: u32,
