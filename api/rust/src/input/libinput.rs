@@ -589,7 +589,7 @@ pub fn get_devices() -> impl Iterator<Item = DeviceHandle> {
 ///   2. Runs it with all newly connected devices.
 ///
 /// Use this function for input device setup.
-pub fn for_all_devices<F: FnMut(&DeviceHandle) + Send + 'static>(mut for_all: F) {
+pub fn for_each_device<F: FnMut(&DeviceHandle) + Send + 'static>(mut for_all: F) {
     for device in get_devices() {
         for_all(&device);
     }

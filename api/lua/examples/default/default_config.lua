@@ -1,5 +1,6 @@
 local Pinnacle = require("pinnacle")
 local Input = require("pinnacle.input")
+local Libinput = require("pinnacle.input.libinput")
 local Process = require("pinnacle.process")
 local Output = require("pinnacle.output")
 local Tag = require("pinnacle.tag")
@@ -8,7 +9,6 @@ local Layout = require("pinnacle.layout")
 local Util = require("pinnacle.util")
 local Snowcap = require("pinnacle.snowcap")
 
--- neovim users be like
 Pinnacle.setup(function()
     -- `Snowcap` will be nil when the Snowcap API isn't installed or Snowcap isn't running
     -- A normal installation of Pinnacle won't have this issue, so you can remove this cast if desired.
@@ -29,6 +29,7 @@ Pinnacle.setup(function()
     -- Mousebinds     --
     --------------------
 
+    -- mod_key + left click drag = move a window
     Input.mousebind({ mod_key }, "btn_left", function()
         Window.begin_move("btn_left")
     end, {
@@ -36,6 +37,7 @@ Pinnacle.setup(function()
         description = "Start an interactive window move",
     })
 
+    -- mod_key + right click drag = resize a window
     Input.mousebind({ mod_key }, "btn_right", function()
         Window.begin_resize("btn_right")
     end, { group = "Mouse", description = "Start an interactive window resize" })
@@ -54,8 +56,8 @@ Pinnacle.setup(function()
         })
     end
 
-    -- mod_key + shift + q = Quit Pinnacle
     if Snowcap then
+        -- mod_key + shift + q = Quit Prompt
         Input.keybind({
             mods = { mod_key, "shift" },
             key = "q",
@@ -65,6 +67,7 @@ Pinnacle.setup(function()
             group = "Compositor",
             description = "Show the quit prompt",
         })
+        -- mod_key + ctrl + shift + q = Hardcoded quit
         Input.keybind({
             mods = { mod_key, "ctrl", "shift" },
             key = "q",
@@ -73,6 +76,7 @@ Pinnacle.setup(function()
             description = "Quit Pinnacle without prompt",
         })
     else
+        -- mod_key + shift + q = Quit Pinnacle
         Input.keybind({
             mods = { mod_key, "shift" },
             key = "q",
@@ -157,12 +161,6 @@ Pinnacle.setup(function()
         tags[1]:set_active(true)
     end)
 
-    -- If you want to declare output locations as well, you can use `Output.setup_locs`.
-    -- This will additionally allow you to recalculate output locations on signals like
-    -- output connect, disconnect, and resize.
-    --
-    -- Read the admittedly scuffed docs for more.
-
     -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do
         -- nil-safety: tags are guaranteed to be on the outputs due to connect_for_all above
@@ -210,41 +208,24 @@ Pinnacle.setup(function()
     -- Layouts        --
     --------------------
 
-    -- Pinnacle does not manage layouts compositor-side.
-    -- Instead, it delegates computation of layouts to your config,
-    -- which provides an interface to calculate the size and location of
-    -- windows that the compositor will use to position windows.
+    -- Pinnacle supports a tree-based layout system built on layout nodes.
     --
-    -- If you're familiar with River's layout generators, you'll understand the system here
-    -- a bit better.
-    --
-    -- The Lua API provides two layout system abstractions:
-    --     1. Layout managers, and
-    --     2. Layout generators.
-    --
-    -- ### Layout Managers ###
-    -- A layout manager is a table that contains a `get_active` function
-    -- that returns some layout generator.
-    -- A manager is meant to keep track of and choose various layout generators
-    -- across your usage of the compositor.
+    -- To determine the tree used to layout windows, Pinnacle requests your config for a tree data structure
+    -- with nodes containing gaps, directions, etc. There are a few provided utilities for creating
+    -- a layout, known as layout generators.
     --
     -- ### Layout generators ###
     -- A layout generator is a table that holds some state as well as
-    -- the `layout` function, which takes in layout arguments and computes
-    -- an array of geometries that will determine the size and position
-    -- of windows being laid out.
+    -- the `layout` function, which takes in a window count and computes
+    -- a tree of layout nodes that determines how windows are laid out.
     --
-    -- There is one built-in layout manager and five built-in layout generators,
-    -- as shown below.
-    --
-    -- Additionally, this system is designed to be user-extensible;
-    -- you are free to create your own layout managers and generators for
-    -- maximum customizability! Docs for doing so are in the works, so sit tight.
+    -- There are currently six built-in layout generators, one of which delegates to other
+    -- generators as shown below.
 
-    -- Create a cycling layout manager. This provides methods to cycle
-    -- between the given layout generators below.
+    -- Create a cycling layout generator. This provides methods to cycle
+    -- between the provided layout generators below.
     local layout_cycler = Layout.builtin.cycle({
-        -- `Layout.builtins` contains functions that create various layout generators.
+        -- `Layout.builtin` contains functions that create various layout generators.
         -- Each of these has settings that can be overridden by passing in a table with
         -- overriding options.
         Layout.builtin.master_stack(),
@@ -261,8 +242,8 @@ Pinnacle.setup(function()
         Layout.builtin.fair({ axis = "horizontal" }),
     })
 
-    -- Set the cycling layout manager as the layout manager that will be used.
-    -- This then allows you to call `Layout.request_layout` to manually layout windows.
+    -- Use the cycling layout generator to manage layout requests.
+    -- This returns an object that allows you to request layouts manually.
     local layout_requester = Layout.manage(function(args)
         local first_tag = args.tags[1]
         if not first_tag then
@@ -320,7 +301,7 @@ Pinnacle.setup(function()
             local tags = focused_op:tags() or {}
             local tag = nil
 
-            ---@type (fun(): (boolean|nil))[]
+            ---@type (fun(): boolean)[]
             local tag_actives = {}
             for i, t in ipairs(tags) do
                 tag_actives[i] = function()
@@ -347,16 +328,24 @@ Pinnacle.setup(function()
         description = "Cycle the layout backward on the first active tag",
     })
 
+    Libinput.for_each_device(function(device)
+        -- Enable natural scroll for touchpads
+        if device:device_type() == "touchpad" then
+            device:set_natural_scroll(true)
+        end
+    end)
+
+    -- There are no server-side decorations yet, so request all clients use client-side decorations.
+    Window.add_window_rule(function(window)
+        window:set_decoration_mode("client_side")
+    end)
+
     -- Enable sloppy focus
     Window.connect_signal({
         pointer_enter = function(window)
             window:set_focused(true)
         end,
     })
-
-    Window.add_window_rule(function(window)
-        window:set_decoration_mode("client_side")
-    end)
 
     -- Spawning should happen after you add tags, as Pinnacle currently doesn't render windows without tags.
     Process.spawn_once(terminal)

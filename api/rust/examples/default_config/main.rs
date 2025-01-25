@@ -3,7 +3,6 @@ use std::sync::Mutex;
 
 use pinnacle_api::input;
 use pinnacle_api::input::Bind;
-use pinnacle_api::input::BindLayer;
 use pinnacle_api::input::Keysym;
 use pinnacle_api::input::{Mod, MouseButton};
 use pinnacle_api::layout;
@@ -75,25 +74,7 @@ async fn config() {
         .group("Compositor")
         .description("Show the bindings overlay");
 
-    let another_layer = BindLayer::get("another");
-    another_layer
-        .keybind(mod_key, 'f')
-        .on_press(|| println!("pressed f in another"))
-        .on_press(|| println!("pressed f in another again"))
-        .on_release(|| println!("released f in another"));
-    another_layer
-        .keybind(Mod::empty(), Keysym::Escape)
-        .on_press(|| BindLayer::DEFAULT.enter());
-
-    input::keybind(mod_key, 'a').on_press(move || {
-        println!("entering another");
-        another_layer.enter()
-    });
-
-    input::keybind(mod_key, 'o').on_press(move || {
-        println!("mod o");
-    });
-
+    // `mod_key + shift + q` quits Pinnacle
     #[cfg(not(feature = "snowcap"))]
     input::keybind(mod_key | Mod::SHIFT, 'q')
         .set_as_quit()
@@ -178,38 +159,19 @@ async fn config() {
     // Layouts               |
     //------------------------
 
-    // Pinnacle does not manage layouts compositor-side.
-    // Instead, it delegates computation of layouts to your config,
-    // which provides an interface to calculate the size and location of
-    // windows that the compositor will use to position windows.
+    // Pinnacle supports a tree-based layout system built on layout nodes.
     //
-    // If you're familiar with River's layout generators, you'll understand the system here
-    // a bit better.
-    //
-    // The Rust API provides two layout system abstractions:
-    //     1. Layout managers, and
-    //     2. Layout generators.
-    //
-    // ### Layout Managers ###
-    // A layout manager is a struct that implements the `LayoutManager` trait.
-    // A manager is meant to keep track of and choose various layout generators
-    // across your usage of the compositor.
+    // To determine the tree used to layout windows, Pinnacle requests your config for a tree data structure
+    // with nodes containing gaps, directions, etc. There are a few provided utilities for creating
+    // a layout, known as layout generators.
     //
     // ### Layout generators ###
-    // A layout generator is a struct that implements the `LayoutGenerator` trait.
-    // It takes in layout arguments and computes a vector of geometries that will
-    // determine the size and position of windows being laid out.
+    // A layout generator is a table that holds some state as well as
+    // the `layout` function, which takes in a window count and computes
+    // a tree of layout nodes that determines how windows are laid out.
     //
-    // There is one built-in layout manager and five built-in layout generators,
-    // as shown below.
-    //
-    // Additionally, this system is designed to be user-extensible;
-    // you are free to create your own layout managers and generators for
-    // maximum customizability! Docs for doing so are in the works, so sit tight.
-
-    // Create a `CyclingLayoutManager` that can cycle between layouts on different tags.
-    //
-    // It takes in some layout generators that need to be boxed and dyn-coerced.
+    // There are currently six built-in layout generators, one of which delegates to other
+    // generators as shown below.
 
     fn into_box<'a, T: LayoutGenerator + Send + 'a>(
         generator: T,
@@ -217,6 +179,7 @@ async fn config() {
         Box::new(generator) as _
     }
 
+    // Create a cycling layout generator that can cycle between layouts on different tags.
     let cycler = Arc::new(Mutex::new(Cycle::new([
         into_box(MasterStack::default()),
         into_box(MasterStack {
@@ -253,6 +216,8 @@ async fn config() {
         }),
     ])));
 
+    // Use the cycling layout generator to manage layout requests.
+    // This returns a layout requester that allows you to request layouts manually.
     let layout_requester = layout::manage({
         let cycler = cycler.clone();
         move |args| {
@@ -371,13 +336,14 @@ async fn config() {
             .description(format!("Toggle tag {tag_name} on the focused window"));
     }
 
-    input::libinput::for_all_devices(|device| {
+    input::libinput::for_each_device(|device| {
+        // Enable natural scroll for touchpads
         if device.device_type().is_touchpad() {
             device.set_natural_scroll(true);
         }
     });
 
-    // Request all windows use client-side decorations.
+    // There are no server-side decorations yet, so request all clients use client-side decorations.
     window::add_window_rule(|window| {
         window.set_decoration_mode(window::DecorationMode::ClientSide);
     });
