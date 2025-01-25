@@ -100,23 +100,32 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
 
     async fn set_mode(&self, request: Request<SetModeRequest>) -> TonicResult<()> {
         let request = request.into_inner();
-        // FIXME: unnecessary clone due to use of request in closure
         let output_name = OutputName(request.output_name.clone());
 
-        run_unary_no_response(&self.sender, move |state| {
+        run_unary(&self.sender, move |state| {
             let Some(output) = output_name.output(&state.pinnacle) else {
-                return;
+                return Ok(());
             };
 
-            // poor man's try v2
-            let Some(mode) = Some(request).and_then(|request| {
-                Some(smithay::output::Mode {
-                    size: (request.size?.width as i32, request.size?.height as i32).into(),
-                    // FIXME: this is nullable, pick a mode with highest refresh if None
-                    refresh: request.refresh_rate_mhz? as i32,
-                })
-            }) else {
-                return;
+            let Some(size) = request.size else {
+                return Err(Status::invalid_argument("no size specified"));
+            };
+
+            let width = size.width;
+            let height = size.height;
+
+            let mode = match request.custom {
+                true => Some(smithay::output::Mode {
+                    size: (width as i32, height as i32).into(),
+                    refresh: request.refresh_rate_mhz.unwrap_or(60_000) as i32,
+                }),
+                false => {
+                    crate::output::try_pick_mode(&output, width, height, request.refresh_rate_mhz)
+                }
+            };
+
+            let Some(mode) = mode else {
+                return Ok(());
             };
 
             state.pinnacle.change_output_state(
@@ -132,6 +141,8 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 .pinnacle
                 .output_management_manager_state
                 .update::<State>();
+
+            Ok(())
         })
         .await
     }

@@ -356,3 +356,23 @@ impl Pinnacle {
         );
     }
 }
+
+/// Attempts to retrieve a known mode for the given output with the provided width and height.
+///
+/// If no refresh rate is provided, this tries to pick the one with the highest refresh rate.
+pub fn try_pick_mode(
+    output: &Output,
+    width: u32,
+    height: u32,
+    refresh_rate_mhz: Option<u32>,
+) -> Option<smithay::output::Mode> {
+    output.with_state(|state| {
+        state
+            .modes
+            .iter()
+            .filter(|mode| mode.size.w == width as i32 && mode.size.h == height as i32)
+            .filter(|mode| refresh_rate_mhz.is_none_or(|refresh| refresh as i32 == mode.refresh))
+            .max_by_key(|mode| mode.refresh)
+            .copied()
+    })
+}

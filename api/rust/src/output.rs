@@ -423,7 +423,6 @@ impl OutputHandle {
     /// 60Hz, use 60000.
     ///
     /// If this output doesn't support the given mode, it will be ignored.
-    /// // FIXME: check that, i don't remember lol
     ///
     /// # Examples
     ///
@@ -441,6 +440,42 @@ impl OutputHandle {
                 output_name: self.name(),
                 size: Some(pinnacle_api_defs::pinnacle::util::v1::Size { width, height }),
                 refresh_rate_mhz: refresh_rate_mhz.into(),
+                custom: false,
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets this output's mode to a custom one.
+    ///
+    /// If `refresh_rate_mhz` is provided, Pinnacle will create a new mode with that refresh rate.
+    /// If it is not, it will default to 60Hz.
+    ///
+    /// The refresh rate should be given in millihertz. For example, if you want a refresh rate of
+    /// 60Hz, use 60000.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::output;
+    /// # || {
+    /// // Sets the focused output to 2560x1440 at 144Hz
+    /// output::get_focused()?.set_custom_mode(2560, 1440, 75000);
+    /// # Some(())
+    /// # };
+    /// ```
+    pub fn set_custom_mode(
+        &self,
+        width: u32,
+        height: u32,
+        refresh_rate_mhz: impl Into<Option<u32>>,
+    ) {
+        Client::output()
+            .set_mode(SetModeRequest {
+                output_name: self.name(),
+                size: Some(pinnacle_api_defs::pinnacle::util::v1::Size { width, height }),
+                refresh_rate_mhz: refresh_rate_mhz.into(),
+                custom: true,
             })
             .block_on_tokio()
             .unwrap();

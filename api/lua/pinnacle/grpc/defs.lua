@@ -579,6 +579,7 @@ local pinnacle_v1_Backend = {
 ---@field output_name string?
 ---@field size pinnacle.util.v1.Size?
 ---@field refresh_rate_mhz integer?
+---@field custom boolean?
 
 ---@class pinnacle.output.v1.Modeline
 ---@field clock number?

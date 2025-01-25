@@ -356,7 +356,7 @@ end
 ---
 ---The refresh rate is in millihertz. For example, to choose a mode with a refresh rate of 60Hz, use 60000.
 ---
----If this output doesn't support the given mode, it will be ignored. FIXME: test that
+---If this output doesn't support the given mode, it will be ignored.
 ---
 ---#### Example
 ---```lua
@@ -371,6 +371,34 @@ function OutputHandle:set_mode(width, height, refresh_rate_mhz)
         output_name = self.name,
         size = { width = width, height = height },
         refresh_rate_mhz = refresh_rate_mhz,
+    })
+
+    if err then
+        log:error(err)
+    end
+end
+
+---Sets this output's mode to a custom one.
+---
+---If `refresh_rate_mhz` is provided, Pinnacle will create a new mode with that refresh rate.
+---If it isn't, it will default to 60Hz.
+---
+---The refresh rate is in millihertz. For example, to choose a mode with a refresh rate of 60Hz, use 60000.
+---
+---#### Example
+---```lua
+---Output.get_focused():set_custom_mode(2560, 1440, 75000)
+---```
+---
+---@param width integer
+---@param height integer
+---@param refresh_rate_mhz integer?
+function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
+    local _, err = client:unary_request(output_service.SetMode, {
+        output_name = self.name,
+        size = { width = width, height = height },
+        refresh_rate_mhz = refresh_rate_mhz,
+        custom = true,
     })
 
     if err then

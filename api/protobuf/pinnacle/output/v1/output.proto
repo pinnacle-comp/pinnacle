@@ -6,186 +6,187 @@ import "google/protobuf/empty.proto";
 import "pinnacle/util/v1/util.proto";
 
 enum Transform {
-    TRANSFORM_UNSPECIFIED = 0;
-    TRANSFORM_NORMAL = 1;
-    TRANSFORM_90 = 2;
-    TRANSFORM_180 = 3;
-    TRANSFORM_270 = 4;
-    TRANSFORM_FLIPPED = 5;
-    TRANSFORM_FLIPPED_90 = 6;
-    TRANSFORM_FLIPPED_180 = 7;
-    TRANSFORM_FLIPPED_270 = 8;
+  TRANSFORM_UNSPECIFIED = 0;
+  TRANSFORM_NORMAL = 1;
+  TRANSFORM_90 = 2;
+  TRANSFORM_180 = 3;
+  TRANSFORM_270 = 4;
+  TRANSFORM_FLIPPED = 5;
+  TRANSFORM_FLIPPED_90 = 6;
+  TRANSFORM_FLIPPED_180 = 7;
+  TRANSFORM_FLIPPED_270 = 8;
 }
 
 message SetLocRequest {
-    string output_name = 1;
-    int32 x = 2;
-    int32 y = 3;
+  string output_name = 1;
+  int32 x = 2;
+  int32 y = 3;
 }
 
 message SetModeRequest {
-    string output_name = 1;
-    pinnacle.util.v1.Size size = 2;
-    optional uint32 refresh_rate_mhz = 3;
+  string output_name = 1;
+  pinnacle.util.v1.Size size = 2;
+  optional uint32 refresh_rate_mhz = 3;
+  bool custom = 4;
 }
 
 message Modeline {
-    float clock = 2;
-    uint32 hdisplay = 3;
-    uint32 hsync_start = 4;
-    uint32 hsync_end = 5;
-    uint32 htotal = 6;
-    uint32 vdisplay = 7;
-    uint32 vsync_start = 8;
-    uint32 vsync_end = 9;
-    uint32 vtotal = 10;
-    bool hsync = 11;
-    bool vsync = 12;
+  float clock = 2;
+  uint32 hdisplay = 3;
+  uint32 hsync_start = 4;
+  uint32 hsync_end = 5;
+  uint32 htotal = 6;
+  uint32 vdisplay = 7;
+  uint32 vsync_start = 8;
+  uint32 vsync_end = 9;
+  uint32 vtotal = 10;
+  bool hsync = 11;
+  bool vsync = 12;
 }
 
 message SetModelineRequest {
-    string output_name = 1;
-    Modeline modeline = 2;
+  string output_name = 1;
+  Modeline modeline = 2;
 }
 
 message SetScaleRequest {
-    string output_name = 1;
-    float scale = 2;
-    pinnacle.util.v1.AbsOrRel abs_or_rel = 3;
+  string output_name = 1;
+  float scale = 2;
+  pinnacle.util.v1.AbsOrRel abs_or_rel = 3;
 }
 
 message SetTransformRequest {
-    string output_name = 1;
-    Transform transform = 2;
+  string output_name = 1;
+  Transform transform = 2;
 }
 
 message SetPoweredRequest {
-    string output_name = 1;
-    pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
+  string output_name = 1;
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 2;
 }
 
 ////////////////
 
 message GetRequest {}
 message GetResponse {
-    repeated string output_names = 1;
+  repeated string output_names = 1;
 }
 
 ///////////////
 
 message GetInfoRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetInfoResponse {
-    string make = 1;
-    string model = 2;
-    string serial = 3;
+  string make = 1;
+  string model = 2;
+  string serial = 3;
 }
 
 message GetLocRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetLocResponse {
-    optional pinnacle.util.v1.Point loc = 1;
+  optional pinnacle.util.v1.Point loc = 1;
 }
 
 message GetLogicalSizeRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetLogicalSizeResponse {
-    optional pinnacle.util.v1.Size logical_size = 1;
+  optional pinnacle.util.v1.Size logical_size = 1;
 }
 
 message GetPhysicalSizeRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetPhysicalSizeResponse {
-    pinnacle.util.v1.Size physical_size = 1;
+  pinnacle.util.v1.Size physical_size = 1;
 }
 
 message Mode {
-    pinnacle.util.v1.Size size = 1;
-    uint32 refresh_rate_mhz = 2;
+  pinnacle.util.v1.Size size = 1;
+  uint32 refresh_rate_mhz = 2;
 }
 
 message GetModesRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetModesResponse {
-    optional Mode current_mode = 1;
-    optional Mode preferred_mode = 2;
-    repeated Mode modes = 3;
+  optional Mode current_mode = 1;
+  optional Mode preferred_mode = 2;
+  repeated Mode modes = 3;
 }
 
 message GetFocusedRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetFocusedResponse {
-    bool focused = 1;
+  bool focused = 1;
 }
 
 message GetTagIdsRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetTagIdsResponse {
-    repeated uint32 tag_ids = 1;
+  repeated uint32 tag_ids = 1;
 }
 
 message GetScaleRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetScaleResponse {
-    float scale = 1;
+  float scale = 1;
 }
 
 message GetTransformRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetTransformResponse {
-    Transform transform = 1;
+  Transform transform = 1;
 }
 
 message GetEnabledRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetEnabledResponse {
-    bool enabled = 1;
+  bool enabled = 1;
 }
 
 message GetPoweredRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetPoweredResponse {
-    bool powered = 1;
+  bool powered = 1;
 }
 
 message GetFocusStackWindowIdsRequest {
-    string output_name = 1;
+  string output_name = 1;
 }
 message GetFocusStackWindowIdsResponse {
-    repeated uint32 window_ids = 1;
+  repeated uint32 window_ids = 1;
 }
 
 service OutputService {
-    rpc Get(GetRequest) returns (GetResponse);
+  rpc Get(GetRequest) returns (GetResponse);
 
-    rpc SetLoc(SetLocRequest) returns (google.protobuf.Empty);
-    rpc SetMode(SetModeRequest) returns (google.protobuf.Empty);
-    rpc SetModeline(SetModelineRequest) returns (google.protobuf.Empty);
-    rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
-    rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
-    rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);
+  rpc SetLoc(SetLocRequest) returns (google.protobuf.Empty);
+  rpc SetMode(SetModeRequest) returns (google.protobuf.Empty);
+  rpc SetModeline(SetModelineRequest) returns (google.protobuf.Empty);
+  rpc SetScale(SetScaleRequest) returns (google.protobuf.Empty);
+  rpc SetTransform(SetTransformRequest) returns (google.protobuf.Empty);
+  rpc SetPowered(SetPoweredRequest) returns (google.protobuf.Empty);
 
-    rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
-    rpc GetLoc(GetLocRequest) returns (GetLocResponse);
-    rpc GetLogicalSize(GetLogicalSizeRequest) returns (GetLogicalSizeResponse);
-    rpc GetPhysicalSize(GetPhysicalSizeRequest) returns (GetPhysicalSizeResponse);
-    rpc GetModes(GetModesRequest) returns (GetModesResponse);
-    rpc GetFocused(GetFocusedRequest) returns (GetFocusedResponse);
-    rpc GetTagIds(GetTagIdsRequest) returns (GetTagIdsResponse);
-    rpc GetScale(GetScaleRequest) returns (GetScaleResponse);
-    rpc GetTransform(GetTransformRequest) returns (GetTransformResponse);
-    rpc GetEnabled(GetEnabledRequest) returns (GetEnabledResponse);
-    rpc GetPowered(GetPoweredRequest) returns (GetPoweredResponse);
-    rpc GetFocusStackWindowIds(GetFocusStackWindowIdsRequest) returns (GetFocusStackWindowIdsResponse);
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  rpc GetLoc(GetLocRequest) returns (GetLocResponse);
+  rpc GetLogicalSize(GetLogicalSizeRequest) returns (GetLogicalSizeResponse);
+  rpc GetPhysicalSize(GetPhysicalSizeRequest) returns (GetPhysicalSizeResponse);
+  rpc GetModes(GetModesRequest) returns (GetModesResponse);
+  rpc GetFocused(GetFocusedRequest) returns (GetFocusedResponse);
+  rpc GetTagIds(GetTagIdsRequest) returns (GetTagIdsResponse);
+  rpc GetScale(GetScaleRequest) returns (GetScaleResponse);
+  rpc GetTransform(GetTransformRequest) returns (GetTransformResponse);
+  rpc GetEnabled(GetEnabledRequest) returns (GetEnabledResponse);
+  rpc GetPowered(GetPoweredRequest) returns (GetPoweredResponse);
+  rpc GetFocusStackWindowIds(GetFocusStackWindowIdsRequest) returns (GetFocusStackWindowIdsResponse);
 }
