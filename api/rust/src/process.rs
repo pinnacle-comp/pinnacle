@@ -100,6 +100,31 @@ impl Command {
         }
     }
 
+    /// Creates a new [`Command`] that will spawn the provided `command` using the given shell and
+    /// its arguments.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use pinnacle_api::process::Command;
+    /// Command::with_shell(["bash", "-c"], "cat file.txt &> /dev/null").spawn();
+    /// ```
+    pub fn with_shell(
+        shell_args: impl IntoIterator<Item = impl ToString>,
+        command: impl ToString,
+    ) -> Self {
+        Self {
+            cmd: vec![command.to_string()],
+            envs: Default::default(),
+            shell_cmd: shell_args
+                .into_iter()
+                .map(|args| args.to_string())
+                .collect(),
+            unique: false,
+            once: false,
+        }
+    }
+
     /// Adds an argument to the command.
     pub fn arg(&mut self, arg: impl ToString) -> &mut Self {
         self.cmd.push(arg.to_string());
