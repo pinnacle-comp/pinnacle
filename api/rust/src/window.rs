@@ -153,6 +153,7 @@ pub fn connect_signal(signal: WindowSignal) -> SignalHandle {
     match signal {
         WindowSignal::PointerEnter(f) => signal_state.window_pointer_enter.add_callback(f),
         WindowSignal::PointerLeave(f) => signal_state.window_pointer_leave.add_callback(f),
+        WindowSignal::Focused(f) => signal_state.window_focused.add_callback(f),
     }
 }
 

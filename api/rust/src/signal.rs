@@ -218,6 +218,21 @@ signals! {
                 }
             },
         }
+        /// The window got keyboard focus.
+        ///
+        /// Callbacks receive the window gets focus.
+        WindowFocused = {
+            enum_name = Focused,
+            callback_type = SingleWindowFn,
+            client_request = window_focused,
+            on_response = |response, callbacks| {
+                let handle = WindowHandle { id: response.window_id };
+
+                for callback in callbacks {
+                    callback(&handle);
+                }
+            },
+        }
     }
     /// Signals relating to tag events.
     TagSignal => {
@@ -264,6 +279,7 @@ pub(crate) struct SignalState {
 
     pub(crate) window_pointer_enter: SignalData<WindowPointerEnter>,
     pub(crate) window_pointer_leave: SignalData<WindowPointerLeave>,
+    pub(crate) window_focused: SignalData<WindowFocused>,
 
     pub(crate) tag_active: SignalData<TagActive>,
 
@@ -285,6 +301,7 @@ impl SignalState {
             output_move: SignalData::new(),
             window_pointer_enter: SignalData::new(),
             window_pointer_leave: SignalData::new(),
+            window_focused: SignalData::new(),
             tag_active: SignalData::new(),
             input_device_added: SignalData::new(),
         }
@@ -297,6 +314,7 @@ impl SignalState {
         self.output_move.reset();
         self.window_pointer_enter.reset();
         self.window_pointer_leave.reset();
+        self.window_focused.reset();
         self.tag_active.reset();
         self.input_device_added.reset();
     }
