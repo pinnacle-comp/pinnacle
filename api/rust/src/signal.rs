@@ -220,7 +220,7 @@ signals! {
         }
         /// The window got keyboard focus.
         ///
-        /// Callbacks receive the window gets focus.
+        /// Callbacks receive the newly focused window.
         WindowFocused = {
             enum_name = Focused,
             callback_type = SingleWindowFn,
