@@ -258,6 +258,13 @@ impl From<Transform> for output::v1::Transform {
 }
 
 impl OutputHandle {
+    /// Creates an output handle from a name.
+    pub fn from_name(name: impl ToString) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+
     /// Sets the location of this output in the global space.
     ///
     /// On startup, Pinnacle will lay out all connected outputs starting at (0, 0)

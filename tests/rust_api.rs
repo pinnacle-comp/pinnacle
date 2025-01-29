@@ -1,41 +1,11 @@
 mod common;
 
-use std::thread::JoinHandle;
-
-use anyhow::anyhow;
 use test_log::test;
 
-use crate::common::{sleep_secs, test_api, with_state};
-
-#[tokio::main]
-async fn run_rust_inner(run: impl FnOnce() + Send + 'static) {
-    pinnacle_api::connect().await.unwrap();
-
-    run();
-}
-
-fn run_rust(run: impl FnOnce() + Send + 'static) -> anyhow::Result<()> {
-    std::thread::spawn(|| {
-        run_rust_inner(run);
-    })
-    .join()
-    .map_err(|_| anyhow!("rust oneshot api calls failed"))
-}
-
-#[tokio::main]
-async fn setup_rust_inner(run: impl FnOnce() + Send + 'static) {
-    pinnacle_api::connect().await.unwrap();
-
-    run();
-
-    pinnacle_api::block().await;
-}
-
-fn setup_rust(run: impl FnOnce() + Send + 'static) -> JoinHandle<()> {
-    std::thread::spawn(|| {
-        setup_rust_inner(run);
-    })
-}
+use crate::common::{
+    rust::{run_rust, setup_rust},
+    sleep_secs, test_api, with_state,
+};
 
 mod output {
     use pinnacle::state::WithState;

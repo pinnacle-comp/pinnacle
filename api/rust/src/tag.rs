@@ -208,6 +208,11 @@ pub struct TagHandle {
 }
 
 impl TagHandle {
+    /// Creates a tag handle from a numeric id.
+    pub fn from_id(id: u32) -> Self {
+        Self { id }
+    }
+
     /// Activates this tag and deactivates all other ones on the same output.
     ///
     /// This emulates what a traditional workspace is.

@@ -1,3 +1,7 @@
+pub mod grpc;
+pub mod lua;
+pub mod rust;
+
 use std::{panic::UnwindSafe, path::PathBuf, sync::Mutex, time::Duration};
 
 use anyhow::anyhow;
@@ -90,4 +94,13 @@ fn teardown(state: &mut State) {
     for win in state.pinnacle.windows.iter() {
         win.close();
     }
+}
+
+#[macro_export]
+macro_rules! catch {
+    ($f:expr) => {{
+        let _ = std::panic::catch_unwind(|| {
+            let _ = $f;
+        });
+    }};
 }

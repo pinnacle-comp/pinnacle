@@ -21,7 +21,7 @@ use tracing::{debug, warn};
 
 use crate::state::State;
 
-type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
+pub type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
 pub type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
 pub type TonicResult<T> = Result<Response<T>, Status>;
 
