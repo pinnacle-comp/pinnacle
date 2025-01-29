@@ -4,6 +4,7 @@ use keyboard::KeyboardFocusTarget;
 use smithay::{desktop::space::SpaceElement, output::Output, utils::SERIAL_COUNTER};
 
 use crate::{
+    api::signal::Signal,
     state::{Pinnacle, State, WithState},
     window::WindowElement,
 };
@@ -39,6 +40,10 @@ impl State {
                     toplevel.send_pending_configure();
                 }
             }
+            self.pinnacle
+                .signal_state
+                .window_focused
+                .signal(focused_win);
         }
 
         keyboard.set_focus(

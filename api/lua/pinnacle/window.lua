@@ -145,11 +145,13 @@ require("pinnacle.util").make_bijective(layout_mode)
 local signal_name_to_SignalName = {
     pointer_enter = "WindowPointerEnter",
     pointer_leave = "WindowPointerLeave",
+    focused = "WindowFocused",
 }
 
 ---@class WindowSignal Signals related to compositor events.
 ---@field pointer_enter fun(window: WindowHandle)? The pointer entered a window.
 ---@field pointer_leave fun(window: WindowHandle)? The pointer left a window.
+---@field focused fun(window: WindowHandle)? The window got keyboard focus.
 
 ---Connects to a window signal.
 ---

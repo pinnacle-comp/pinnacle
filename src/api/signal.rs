@@ -9,8 +9,8 @@ use pinnacle_api_defs::pinnacle::signal::{
         InputDeviceAddedRequest, InputDeviceAddedResponse, OutputConnectRequest,
         OutputDisconnectRequest, OutputDisconnectResponse, OutputMoveRequest, OutputMoveResponse,
         OutputResizeRequest, OutputResizeResponse, SignalRequest, StreamControl, TagActiveRequest,
-        TagActiveResponse, WindowPointerEnterRequest, WindowPointerEnterResponse,
-        WindowPointerLeaveRequest, WindowPointerLeaveResponse,
+        TagActiveResponse, WindowFocusedRequest, WindowFocusedResponse, WindowPointerEnterRequest,
+        WindowPointerEnterResponse, WindowPointerLeaveRequest, WindowPointerLeaveResponse,
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -36,6 +36,7 @@ pub struct SignalState {
     // Window
     pub window_pointer_enter: WindowPointerEnter,
     pub window_pointer_leave: WindowPointerLeave,
+    pub window_focused: WindowFocused,
 
     // Tag
     pub tag_active: TagActive,
@@ -209,6 +210,27 @@ impl Signal for WindowPointerLeave {
 }
 
 #[derive(Debug, Default)]
+pub struct WindowFocused {
+    v1: SignalData<signal::v1::WindowFocusedResponse>,
+}
+
+impl Signal for WindowFocused {
+    type Args<'a> = &'a WindowElement;
+
+    fn signal(&mut self, window: Self::Args<'_>) {
+        self.v1.signal(|buf| {
+            buf.push_back(signal::v1::WindowFocusedResponse {
+                window_id: window.with_state(|state| state.id.0),
+            });
+        });
+    }
+
+    fn clear(&mut self) {
+        self.v1.instances.clear();
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct TagActive {
     v1: SignalData<signal::v1::TagActiveResponse>,
 }
@@ -363,6 +385,7 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
     type WindowPointerEnterStream = ResponseStream<WindowPointerEnterResponse>;
     type WindowPointerLeaveStream = ResponseStream<WindowPointerLeaveResponse>;
+    type WindowFocusedStream = ResponseStream<WindowFocusedResponse>;
 
     type TagActiveStream = ResponseStream<TagActiveResponse>;
 
@@ -431,6 +454,17 @@ impl signal::v1::signal_service_server::SignalService for SignalService {
 
         start_signal_stream(self.sender.clone(), in_stream, |state| {
             &mut state.pinnacle.signal_state.window_pointer_leave.v1
+        })
+    }
+
+    async fn window_focused(
+        &self,
+        request: Request<Streaming<WindowFocusedRequest>>,
+    ) -> Result<Response<Self::WindowFocusedStream>, Status> {
+        let in_stream = request.into_inner();
+
+        start_signal_stream(self.sender.clone(), in_stream, |state| {
+            &mut state.pinnacle.signal_state.window_focused.v1
         })
     }
 

@@ -61,6 +61,14 @@ message WindowPointerLeaveResponse {
     uint32 window_id = 1;
 }
 
+message WindowFocusedRequest {
+    StreamControl control = 1;
+}
+message WindowFocusedResponse {
+    // The window that got focus.
+    uint32 window_id = 1;
+}
+
 message TagActiveRequest {
     StreamControl control = 1;
 }
@@ -85,6 +93,7 @@ service SignalService {
     
     rpc WindowPointerEnter(stream WindowPointerEnterRequest) returns (stream WindowPointerEnterResponse);
     rpc WindowPointerLeave(stream WindowPointerLeaveRequest) returns (stream WindowPointerLeaveResponse);
+    rpc WindowFocused(stream WindowFocusedRequest) returns (stream WindowFocusedResponse);
     
     rpc TagActive(stream TagActiveRequest) returns (stream TagActiveResponse);
 

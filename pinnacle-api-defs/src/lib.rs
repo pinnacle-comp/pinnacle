@@ -68,6 +68,7 @@ pub mod pinnacle {
                 OutputMoveRequest,
                 WindowPointerEnterRequest,
                 WindowPointerLeaveRequest,
+                WindowFocusedRequest,
                 TagActiveRequest,
                 InputDeviceAddedRequest
             );
