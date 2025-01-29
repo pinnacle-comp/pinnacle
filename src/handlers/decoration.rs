@@ -14,7 +14,7 @@ use smithay::{
         compositor,
         shell::{
             kde::decoration::{KdeDecorationHandler, KdeDecorationState},
-            xdg::{decoration::XdgDecorationHandler, ToplevelSurface, XdgToplevelSurfaceData},
+            xdg::{decoration::XdgDecorationHandler, ToplevelSurface},
         },
     },
 };
@@ -83,16 +83,7 @@ impl State {
             state.decoration_mode = Some(window_rule_mode.unwrap_or(mode));
         });
 
-        let initial_configure_sent = compositor::with_states(toplevel.wl_surface(), |states| {
-            states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .initial_configure_sent
-        });
-        if initial_configure_sent {
+        if toplevel.is_initial_configure_sent() {
             toplevel.send_pending_configure();
         }
 
@@ -122,16 +113,7 @@ impl State {
             state.decoration_mode = window_rule_mode;
         });
 
-        let initial_configure_sent = compositor::with_states(toplevel.wl_surface(), |states| {
-            states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .initial_configure_sent
-        });
-        if initial_configure_sent {
+        if toplevel.is_initial_configure_sent() {
             toplevel.send_pending_configure();
         }
     }

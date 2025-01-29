@@ -183,6 +183,12 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.signal.v1.WindowPointerLeaveResponse
 ---@field window_id integer?
 
+---@class pinnacle.signal.v1.WindowFocusedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowFocusedResponse
+---@field window_id integer?
+
 ---@class pinnacle.signal.v1.TagActiveRequest
 ---@field control pinnacle.signal.v1.StreamControl?
 
@@ -728,6 +734,8 @@ pinnacle.signal.v1.WindowPointerEnterRequest = {}
 pinnacle.signal.v1.WindowPointerEnterResponse = {}
 pinnacle.signal.v1.WindowPointerLeaveRequest = {}
 pinnacle.signal.v1.WindowPointerLeaveResponse = {}
+pinnacle.signal.v1.WindowFocusedRequest = {}
+pinnacle.signal.v1.WindowFocusedResponse = {}
 pinnacle.signal.v1.TagActiveRequest = {}
 pinnacle.signal.v1.TagActiveResponse = {}
 pinnacle.signal.v1.InputDeviceAddedRequest = {}
@@ -937,6 +945,11 @@ pinnacle.signal.v1.SignalService.WindowPointerLeave.service = "pinnacle.signal.v
 pinnacle.signal.v1.SignalService.WindowPointerLeave.method = "WindowPointerLeave"
 pinnacle.signal.v1.SignalService.WindowPointerLeave.request = ".pinnacle.signal.v1.WindowPointerLeaveRequest"
 pinnacle.signal.v1.SignalService.WindowPointerLeave.response = ".pinnacle.signal.v1.WindowPointerLeaveResponse"
+pinnacle.signal.v1.SignalService.WindowFocused = {}
+pinnacle.signal.v1.SignalService.WindowFocused.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowFocused.method = "WindowFocused"
+pinnacle.signal.v1.SignalService.WindowFocused.request = ".pinnacle.signal.v1.WindowFocusedRequest"
+pinnacle.signal.v1.SignalService.WindowFocused.response = ".pinnacle.signal.v1.WindowFocusedResponse"
 pinnacle.signal.v1.SignalService.TagActive = {}
 pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"
 pinnacle.signal.v1.SignalService.TagActive.method = "TagActive"

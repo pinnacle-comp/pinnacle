@@ -28,6 +28,14 @@ pub struct WindowRuleState {
 impl WindowRuleState {
     /// Returns whether the request was sent
     pub fn new_request(&mut self, window: WindowElement) -> bool {
+        if window.with_state(|state| state.window_rule_request_sent) {
+            return true;
+        }
+
+        if self.pending_windows.contains_key(&window) {
+            return true;
+        }
+
         let request_id = self.current_request_id;
         self.current_request_id += 1;
 

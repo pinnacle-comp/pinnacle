@@ -237,6 +237,7 @@ impl CompositorHandler for State {
                     }
 
                     unmapped_window.on_commit();
+                    unmapped_window.with_state_mut(|state| state.window_rule_request_sent = true);
                 }
 
                 return;

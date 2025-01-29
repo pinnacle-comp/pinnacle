@@ -221,18 +221,11 @@ pub struct WindowElementState {
     /// See [`Pinnacle::update_primary_scanout_output`] for more details.
     pub offscreen_elem_id: Option<Id>,
 
-    pub client_state: ClientState,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ClientState {
-    pub loc: Point<i32, Logical>,
-    pub size: Size<i32, Logical>,
-    pub app_id: String,
-    pub title: String,
-    pub focused: bool,
-    pub layout_mode: WindowState,
-    pub tag_ids: Vec<u32>,
+    /// Whether or not this window has had an initial window rule request sent.
+    ///
+    /// If a window commits but stays unmapped, another window rule request is sent.
+    /// This prevents that from happening.
+    pub window_rule_request_sent: bool,
 }
 
 impl WindowElement {
@@ -439,15 +432,7 @@ impl WindowElementState {
             snapshot_hook_id: None,
             decoration_mode: None,
             offscreen_elem_id: None,
-            client_state: ClientState {
-                loc: Default::default(),
-                size: Default::default(),
-                app_id: Default::default(),
-                title: Default::default(),
-                focused: Default::default(),
-                layout_mode: WindowState::Tiled,
-                tag_ids: Default::default(),
-            },
+            window_rule_request_sent: false,
         }
     }
 }
