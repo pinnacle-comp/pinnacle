@@ -368,6 +368,7 @@ impl Pinnacle {
 }
 
 impl State {
+    /// Maps a window it it's floating, or requests a layout otherwise.
     pub fn map_new_window(&mut self, window: &WindowElement) {
         let _span = tracy_client::span!("State::map_new_window");
 
@@ -385,11 +386,8 @@ impl State {
             toplevel.send_pending_configure();
         }
 
-        let Some(output) = window
-            .is_on_active_tag()
-            .then(|| window.output(&self.pinnacle))
-            .flatten()
-        else {
+        let Some(output) = window.output(&self.pinnacle) else {
+            // FIXME: If the floating window has no tags for whatever reason, it will never map
             return;
         };
 
