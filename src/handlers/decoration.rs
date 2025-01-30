@@ -30,6 +30,8 @@ impl State {
         &mut self,
         toplevel: ToplevelSurface,
     ) -> org_kde_kwin_server_decoration::Mode {
+        let _span = tracy_client::span!("State::new_decoration");
+
         let window_rule_mode = self
             .pinnacle
             .window_for_surface(toplevel.wl_surface())
@@ -66,6 +68,8 @@ impl State {
         toplevel: ToplevelSurface,
         mode: zxdg_toplevel_decoration_v1::Mode,
     ) -> org_kde_kwin_server_decoration::Mode {
+        let _span = tracy_client::span!("State::request_mode");
+
         let window_rule_mode = self
             .pinnacle
             .window_for_surface(toplevel.wl_surface())
@@ -96,6 +100,8 @@ impl State {
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        let _span = tracy_client::span!("State::unset_mode");
+
         let window_rule_mode = self
             .pinnacle
             .window_for_surface(toplevel.wl_surface())
@@ -121,14 +127,17 @@ impl State {
 
 impl XdgDecorationHandler for State {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgDecorationHandler::new_decoration");
         self.new_decoration(toplevel);
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: zxdg_toplevel_decoration_v1::Mode) {
+        let _span = tracy_client::span!("XdgDecorationHandler::request_mode");
         self.request_mode(toplevel, mode);
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgDecorationHandler::unset_mode");
         self.unset_mode(toplevel);
     }
 }
@@ -142,6 +151,8 @@ impl KdeDecorationHandler for State {
     }
 
     fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
+        let _span = tracy_client::span!("KdeDecorationHandler::new_decoration");
+
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)
@@ -177,6 +188,8 @@ impl KdeDecorationHandler for State {
         decoration: &OrgKdeKwinServerDecoration,
         mode: WEnum<org_kde_kwin_server_decoration::Mode>,
     ) {
+        let _span = tracy_client::span!("KdeDecorationHandler::request_mode");
+
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)
@@ -202,6 +215,8 @@ impl KdeDecorationHandler for State {
     }
 
     fn release(&mut self, _decoration: &OrgKdeKwinServerDecoration, surface: &WlSurface) {
+        let _span = tracy_client::span!("KdeDecorationHandler::release");
+
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)

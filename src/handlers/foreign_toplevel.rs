@@ -12,6 +12,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn activate(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::activate");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -41,6 +43,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn close(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::close");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -49,6 +53,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn set_fullscreen(&mut self, wl_surface: WlSurface, _wl_output: Option<WlOutput>) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::set_fullscreen");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -57,6 +63,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::unset_fullscreen");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -65,6 +73,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::set_maximized");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -73,6 +83,8 @@ impl ForeignToplevelHandler for State {
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::unset_maximized");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -82,6 +94,8 @@ impl ForeignToplevelHandler for State {
 
     // TODO:
     fn set_minimized(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::set_minimized");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };
@@ -98,6 +112,8 @@ impl ForeignToplevelHandler for State {
 
     // TODO:
     fn unset_minimized(&mut self, wl_surface: WlSurface) {
+        let _span = tracy_client::span!("ForeignToplevelHandler::unset_minimized");
+
         let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
             return;
         };

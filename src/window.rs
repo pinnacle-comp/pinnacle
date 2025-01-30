@@ -65,6 +65,8 @@ impl WindowElement {
         new_loc: Option<Point<f64, Logical>>,
         new_size: Size<i32, Logical>,
     ) {
+        let _span = tracy_client::span!("WindowElement::change_geometry");
+
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 toplevel.with_pending_state(|state| {
@@ -92,6 +94,8 @@ impl WindowElement {
 
     /// Get this window's class (app id in Wayland but hey old habits die hard).
     pub fn class(&self) -> Option<String> {
+        let _span = tracy_client::span!("WindowElement::class");
+
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 compositor::with_states(toplevel.wl_surface(), |states| {
@@ -111,6 +115,8 @@ impl WindowElement {
 
     /// Get this window's title.
     pub fn title(&self) -> Option<String> {
+        let _span = tracy_client::span!("WindowElement::title");
+
         match self.0.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 compositor::with_states(toplevel.wl_surface(), |states| {
@@ -130,6 +136,8 @@ impl WindowElement {
 
     /// Send a close request to this window.
     pub fn close(&self) {
+        let _span = tracy_client::span!("WindowElement::close");
+
         match self.underlying_surface() {
             WindowSurface::Wayland(toplevel) => toplevel.send_close(),
             WindowSurface::X11(surface) => {
@@ -150,6 +158,7 @@ impl WindowElement {
     ///
     /// RefCell Safety: This method uses a [`RefCell`] on this window and every mapped output.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        let _span = tracy_client::span!("WindowElement::output");
         self.with_state(|st| st.tags.first().and_then(|tag| tag.output(pinnacle)))
     }
 
@@ -157,10 +166,13 @@ impl WindowElement {
     ///
     /// RefCell Safety: This calls `with_state` on `self`.
     pub fn is_on_active_tag(&self) -> bool {
+        let _span = tracy_client::span!("WindowElement::is_on_active_tag");
         self.with_state(|state| state.tags.iter().any(|tag| tag.active()))
     }
 
     pub fn is_on_active_tag_on_output(&self, output: &Output) -> bool {
+        let _span = tracy_client::span!("WindowElement::is_on_active_tag_on_output");
+
         let win_tags = self.with_state(|state| state.tags.clone());
         output.with_state(|state| {
             state
@@ -179,6 +191,8 @@ impl WindowElement {
 
     /// Marks the currently acked configure as committed.
     pub fn mark_serial_as_committed(&self) {
+        let _span = tracy_client::span!("WindowElement::mark_serial_as_committed");
+
         let Some(toplevel) = self.toplevel() else { return };
         let serial = compositor::with_states(toplevel.wl_surface(), |states| {
             states
@@ -249,6 +263,8 @@ impl WithState for WindowElement {
     where
         F: FnOnce(&Self::State) -> T,
     {
+        let _span = tracy_client::span!("WindowElement: WithState::with_state");
+
         let state = self
             .user_data()
             .get_or_insert(|| RefCell::new(WindowElementState::new()));
@@ -260,6 +276,8 @@ impl WithState for WindowElement {
     where
         F: FnOnce(&mut Self::State) -> T,
     {
+        let _span = tracy_client::span!("WindowElement: WithState::with_state_mut");
+
         let state = self
             .user_data()
             .get_or_insert(|| RefCell::new(WindowElementState::new()));
@@ -271,6 +289,8 @@ impl WithState for WindowElement {
 impl Pinnacle {
     /// Returns the [Window] associated with a given [WlSurface].
     pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
+        let _span = tracy_client::span!("Pinnacle::window_for_surface");
+
         self.windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
@@ -279,6 +299,8 @@ impl Pinnacle {
 
     /// [`Self::window_for_surface`] but for windows that don't have a buffer.
     pub fn unmapped_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
+        let _span = tracy_client::span!("Pinnacle::unmapped_window_for_surface");
+
         self.unmapped_windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
@@ -289,6 +311,8 @@ impl Pinnacle {
     ///
     /// If `unmap` is true the window has become unmapped and will be pushed to `unmapped_windows`.
     pub fn remove_window(&mut self, window: &WindowElement, unmap: bool) {
+        let _span = tracy_client::span!("Pinnacle::remove_window");
+
         self.windows.retain(|win| win != window);
         self.unmapped_windows.retain(|win| win != window);
         if unmap {
@@ -312,6 +336,8 @@ impl Pinnacle {
     /// Additionally sets the window as the output's current keyboard-focused window as well as removing it
     /// from all other outputs' keyboard focus stack.
     pub fn place_window_on_output(&self, window: &WindowElement, output: &Output) {
+        let _span = tracy_client::span!("Pinnacle::place_window_on_output");
+
         window.with_state_mut(|state| {
             state.tags = output.with_state(|state| {
                 let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
@@ -343,6 +369,8 @@ impl Pinnacle {
 
 impl State {
     pub fn map_new_window(&mut self, window: &WindowElement) {
+        let _span = tracy_client::span!("State::map_new_window");
+
         self.pinnacle
             .raise_window(window.clone(), window.is_on_active_tag());
 

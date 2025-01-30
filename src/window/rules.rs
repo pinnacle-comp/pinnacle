@@ -28,6 +28,8 @@ pub struct WindowRuleState {
 impl WindowRuleState {
     /// Returns whether the request was sent
     pub fn new_request(&mut self, window: WindowElement) -> bool {
+        let _span = tracy_client::span!("WindowRuleState::new_request");
+
         if window.with_state(|state| state.window_rule_request_sent) {
             return true;
         }
@@ -78,6 +80,8 @@ impl WindowRuleState {
     }
 
     pub fn finished_windows(&mut self) -> Vec<WindowElement> {
+        let _span = tracy_client::span!("WindowRuleState::finished_windows");
+
         let mut finished = Vec::new();
         self.pending_windows.retain(|window, pending_request| {
             let still_pending = !pending_request.is_done();
@@ -112,6 +116,8 @@ impl PendingWindowRuleRequest {
     }
 
     pub fn is_done(&self) -> bool {
+        let _span = tracy_client::span!("PendingWindowRuleRequest::is_done");
+
         self.waiting_on
             .iter()
             .all(|id| id.load(Ordering::Acquire) >= self.request_id)

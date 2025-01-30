@@ -34,6 +34,8 @@ pub struct OutputName(pub String);
 impl OutputName {
     /// Get the output with this name.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        let _span = tracy_client::span!("OutputName::output");
+
         pinnacle
             .outputs
             .keys()
@@ -101,6 +103,8 @@ impl WithState for Output {
     where
         F: FnOnce(&Self::State) -> T,
     {
+        let _span = tracy_client::span!("Output: WithState::with_state");
+
         let state = self
             .user_data()
             .get_or_insert(RefCell::<Self::State>::default);
@@ -112,6 +116,8 @@ impl WithState for Output {
     where
         F: FnOnce(&mut Self::State) -> T,
     {
+        let _span = tracy_client::span!("Output: WithState::with_state_mut");
+
         let state = self
             .user_data()
             .get_or_insert(RefCell::<Self::State>::default);
@@ -122,6 +128,8 @@ impl WithState for Output {
 
 impl OutputState {
     pub fn focused_tags(&self) -> impl Iterator<Item = &Tag> {
+        let _span = tracy_client::span!("OutputState::focused_tags");
+
         self.tags.iter().filter(|tag| tag.active())
     }
 
@@ -131,6 +139,8 @@ impl OutputState {
         fullscreen_and_up_snapshots: impl IntoIterator<Item = SnapshotTarget>,
         under_fullscreen_snapshots: impl IntoIterator<Item = SnapshotTarget>,
     ) {
+        let _span = tracy_client::span!("OutputState::new_wait_layout_transaction");
+
         if let Some(ts) = self.layout_transaction.as_mut() {
             ts.wait();
         } else {
@@ -160,6 +170,8 @@ impl OutputState {
 
 impl Pinnacle {
     pub fn begin_layout_transaction(&self, output: &Output) {
+        let _span = tracy_client::span!("Pinnacle::begin_layout_transaction");
+
         output.with_state_mut(|state| {
             let (fullscreen_and_up, under) = (
                 std::mem::take(&mut state.snapshots.under_fullscreen),
@@ -195,6 +207,8 @@ impl Pinnacle {
         scale: Option<Scale>,
         location: Option<Point<i32, Logical>>,
     ) {
+        let _span = tracy_client::span!("Pinnacle::change_output_state");
+
         let old_scale = output.current_scale().fractional_scale();
 
         output.change_current_state(None, transform, scale, location);
@@ -320,6 +334,8 @@ impl Pinnacle {
 
     /// Completely remove an output, for example when a monitor is unplugged
     pub fn remove_output(&mut self, output: &Output) {
+        let _span = tracy_client::span!("Pinnacle::remove_output");
+
         debug!("Removing output {}", output.name());
 
         let global = self.outputs.shift_remove(output);

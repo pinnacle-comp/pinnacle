@@ -2,6 +2,8 @@ use crate::{state::State, window::WindowElement};
 
 impl State {
     pub fn update_window_state_and_layout(&mut self, window: &WindowElement) {
+        let _span = tracy_client::span!("State::update_window_state_and_layout");
+
         let output = window.output(&self.pinnacle);
         if let Some(output) = output.as_ref() {
             self.capture_snapshots_on_output(output, [window.clone()]);

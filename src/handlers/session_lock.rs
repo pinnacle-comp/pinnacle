@@ -59,6 +59,8 @@ impl SessionLockHandler for State {
     }
 
     fn lock(&mut self, confirmation: SessionLocker) {
+        let _span = tracy_client::span!("SessionLockHandler::lock");
+
         debug!("Received session lock request");
         self.pinnacle.lock_state = LockState::Locking(confirmation);
         self.pinnacle.schedule(
@@ -84,6 +86,8 @@ impl SessionLockHandler for State {
     }
 
     fn unlock(&mut self) {
+        let _span = tracy_client::span!("SessionLockHandler::unlock");
+
         debug!("Session lock unlocked");
         for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
@@ -95,6 +99,8 @@ impl SessionLockHandler for State {
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
+        let _span = tracy_client::span!("SessionLockHandler::new_surface");
+
         let Some(output) = Output::from_resource(&output) else {
             warn!(
                 "Session lock surface received but output doesn't exist for wl_output {output:?}"

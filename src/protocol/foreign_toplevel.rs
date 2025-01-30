@@ -87,6 +87,8 @@ impl ForeignToplevelManagerState {
 }
 
 pub fn refresh(state: &mut State) {
+    let _span = tracy_client::span!("foreign_toplevel::refresh");
+
     state
         .pinnacle
         .foreign_toplevel_manager_state

@@ -22,7 +22,7 @@ use smithay::{
         X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler,
     },
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -40,7 +40,7 @@ impl XwmHandler for State {
     fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
-        trace!("XwmHandler::map_window_request");
+        let _span = tracy_client::span!("XwmHandler::map_window_request");
 
         if surface.is_override_redirect() {
             // Steam games that reach this: Ori and the Will of the Wisps, Pizza Tower
@@ -62,7 +62,7 @@ impl XwmHandler for State {
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        trace!("XwmHandler::mapped_override_redirect_window");
+        let _span = tracy_client::span!("XwmHandler::mapped_override_redirect_window");
 
         assert!(surface.is_override_redirect());
 
@@ -85,6 +85,8 @@ impl XwmHandler for State {
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
+        let _span = tracy_client::span!("XwmHandler::map_window_notify");
+
         let Some(window) = self
             .pinnacle
             .windows
@@ -99,7 +101,7 @@ impl XwmHandler for State {
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        trace!("XwmHandler::unmapped_window");
+        let _span = tracy_client::span!("XwmHandler::unmapped_window");
 
         if !surface.is_override_redirect() {
             debug!("set mapped to false");
@@ -110,7 +112,8 @@ impl XwmHandler for State {
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        trace!("XwmHandler::destroyed_window");
+        let _span = tracy_client::span!("XwmHandler::destroyed_window");
+
         self.remove_xwayland_window(surface);
     }
 
@@ -124,7 +127,8 @@ impl XwmHandler for State {
         h: Option<u32>,
         _reorder: Option<Reorder>,
     ) {
-        trace!("XwmHandler::configure_request");
+        let _span = tracy_client::span!("XwmHandler::configure_request");
+
         let should_configure = self
             .pinnacle
             .windows
@@ -167,6 +171,8 @@ impl XwmHandler for State {
         geometry: Rectangle<i32, Logical>,
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
+        let _span = tracy_client::span!("XwmHandler::configure_notify");
+
         let Some(win) = self
             .pinnacle
             .space
@@ -184,6 +190,8 @@ impl XwmHandler for State {
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        let _span = tracy_client::span!("XwmHandler::maximize_request");
+
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -196,6 +204,8 @@ impl XwmHandler for State {
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        let _span = tracy_client::span!("XwmHandler::unmaximize_request");
+
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -208,6 +218,8 @@ impl XwmHandler for State {
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        let _span = tracy_client::span!("XwmHandler::fullscreen_request");
+
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -220,6 +232,8 @@ impl XwmHandler for State {
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        let _span = tracy_client::span!("XwmHandler::unfullscreen_request");
+
         let Some(window) = window
             .wl_surface()
             .and_then(|surf| self.pinnacle.window_for_surface(&surf))
@@ -238,6 +252,8 @@ impl XwmHandler for State {
         button: u32,
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
+        let _span = tracy_client::span!("XwmHandler::resize_request");
+
         let Some(wl_surf) = window.wl_surface() else { return };
         let seat = self.pinnacle.seat.clone();
 
@@ -253,6 +269,8 @@ impl XwmHandler for State {
     }
 
     fn move_request(&mut self, _xwm: XwmId, window: X11Surface, button: u32) {
+        let _span = tracy_client::span!("XwmHandler::move_request");
+
         let Some(wl_surf) = window.wl_surface() else { return };
         let seat = self.pinnacle.seat.clone();
 
@@ -283,6 +301,8 @@ impl XwmHandler for State {
         mime_type: String,
         fd: std::os::fd::OwnedFd,
     ) {
+        let _span = tracy_client::span!("XwmHandler::send_selection");
+
         match selection {
             SelectionTarget::Clipboard => {
                 if let Err(err) =
@@ -308,6 +328,8 @@ impl XwmHandler for State {
     }
 
     fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
+        let _span = tracy_client::span!("XwmHandler::new_selection");
+
         match selection {
             SelectionTarget::Clipboard => {
                 set_data_device_selection(
@@ -329,6 +351,8 @@ impl XwmHandler for State {
     }
 
     fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
+        let _span = tracy_client::span!("XwmHandler::cleared_selection");
+
         match selection {
             SelectionTarget::Clipboard => {
                 if current_data_device_selection_userdata(&self.pinnacle.seat).is_some() {
@@ -346,7 +370,8 @@ impl XwmHandler for State {
 
 impl State {
     fn remove_xwayland_window(&mut self, surface: X11Surface) {
-        tracing::debug!("remove_xwayland_window");
+        let _span = tracy_client::span!("State::remove_xwayland_window");
+
         let win = self
             .pinnacle
             .windows
@@ -354,8 +379,6 @@ impl State {
             .find(|elem| elem.x11_surface() == Some(&surface))
             .cloned();
         if let Some(win) = win {
-            debug!("removing x11 window from windows");
-
             let output = win.output(&self.pinnacle);
 
             if let Some(output) = output.as_ref() {
@@ -378,6 +401,8 @@ impl State {
 
 impl Pinnacle {
     pub fn update_xwayland_stacking_order(&mut self) {
+        let _span = tracy_client::span!("Pinnacle::update_xwayland_stacking_order");
+
         let Some(xwm) = self.xwm.as_mut() else {
             return;
         };
@@ -399,12 +424,12 @@ impl Pinnacle {
             warn!("Failed to update xwayland stacking order: {err}");
         }
     }
-}
 
-impl Pinnacle {
     /// Spawn an [`XWayland`] instance and insert its event source into
     /// the event loop.
     pub fn insert_xwayland_source(&mut self) -> anyhow::Result<()> {
+        let _span = tracy_client::span!("Pinnacle::insert_xwayland_source");
+
         // TODO: xwayland keyboard grab state
 
         let (xwayland, client) = XWayland::spawn(

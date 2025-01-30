@@ -15,6 +15,8 @@ pub mod pointer;
 impl State {
     /// Update the keyboard focus.
     pub fn update_keyboard_focus(&mut self, output: &Output) {
+        let _span = tracy_client::span!("State::update_keyboard_focus");
+
         let Some(keyboard) = self.pinnacle.seat.get_keyboard() else {
             return;
         };
@@ -59,6 +61,8 @@ impl Pinnacle {
     ///
     /// This returns the topmost window on the keyboard focus stack that is on an active tag.
     pub fn focused_window(&self, output: &Output) -> Option<WindowElement> {
+        let _span = tracy_client::span!("Pinnacle::focused_window");
+
         // TODO: see if the below is necessary
         // output.with_state(|state| state.focus_stack.stack.retain(|win| win.alive()));
 
@@ -79,6 +83,8 @@ impl Pinnacle {
     }
 
     pub fn fixup_z_layering(&mut self) {
+        let _span = tracy_client::span!("Pinnacle::fixup_z_layering");
+
         for win in self.z_index_stack.iter() {
             self.space.raise_element(win, false);
         }
@@ -86,6 +92,8 @@ impl Pinnacle {
 
     /// Raise a window to the top of the z-index stack.
     pub fn raise_window(&mut self, window: WindowElement, activate: bool) {
+        let _span = tracy_client::span!("Pinnacle::raise_window");
+
         self.space.raise_element(&window, activate);
 
         self.z_index_stack.retain(|win| win != window);
@@ -96,6 +104,8 @@ impl Pinnacle {
 
     /// Get the currently focused output, or the first mapped output if there is none, or None.
     pub fn focused_output(&self) -> Option<&Output> {
+        let _span = tracy_client::span!("Pinnacle::focused_output");
+
         self.output_focus_stack
             .stack
             .last()

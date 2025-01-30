@@ -18,6 +18,11 @@ use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 use xdg::BaseDirectories;
 
+#[cfg(feature = "tracy-alloc")]
+#[global_allocator]
+static GLOBAL_ALLOC: tracy_client::ProfiledAllocator<std::alloc::System> =
+    tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let base_dirs = BaseDirectories::with_prefix("pinnacle")?;
@@ -64,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
     let Some(cli) = Cli::parse_and_prompt() else {
         return Ok(());
     };
+
+    tracy_client::Client::start();
 
     if geteuid().is_root() {
         if !cli.allow_root {

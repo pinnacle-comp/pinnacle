@@ -104,6 +104,8 @@ impl WindowElement {
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<WaylandSurfaceRenderElement<R>> {
+        let _span = tracy_client::span!("WindowElement::render_elements");
+
         let location = location - self.geometry().loc;
         let phys_loc = location.to_f64().to_physical_precise_round(scale);
         self.deref()
@@ -118,6 +120,8 @@ impl WindowElement {
         scale: Scale<f64>,
         alpha: f32,
     ) -> Vec<WlSurfaceTextureRenderElement> {
+        let _span = tracy_client::span!("WindowElement::texture_render_elements");
+
         let location = location - self.geometry().loc;
         let location = location.to_f64().to_physical_precise_round(scale);
 
@@ -180,6 +184,8 @@ fn layer_render_elements<R: PRenderer>(
     renderer: &mut R,
     scale: Scale<f64>,
 ) -> LayerRenderElements<R> {
+    let _span = tracy_client::span!("layer_render_elements");
+
     let layer_map = layer_map_for_output(output);
     let mut overlay = vec![];
     let mut top = vec![];
@@ -229,6 +235,8 @@ fn window_render_elements<R: PRenderer>(
     renderer: &mut R,
     scale: Scale<f64>,
 ) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>) {
+    let _span = tracy_client::span!("window_render_elements");
+
     let mut last_fullscreen_split_at = 0;
 
     let mut fullscreen_and_up = windows
@@ -265,6 +273,8 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     space: &Space<WindowElement>,
     windows: &[WindowElement],
 ) -> Vec<OutputRenderElement<R>> {
+    let _span = tracy_client::span!("output_render_elements");
+
     let scale = Scale::from(output.current_scale().fractional_scale());
 
     let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
@@ -364,6 +374,8 @@ pub fn take_presentation_feedback(
     space: &Space<WindowElement>,
     render_element_states: &RenderElementStates,
 ) -> OutputPresentationFeedback {
+    let _span = tracy_client::span!("take_presentation_feedback");
+
     let mut output_presentation_feedback = OutputPresentationFeedback::new(output);
 
     space.elements().for_each(|window| {
@@ -395,6 +407,8 @@ pub fn take_presentation_feedback(
 impl State {
     /// Schedule a new render.
     pub fn schedule_render(&mut self, output: &Output) {
+        let _span = tracy_client::span!("State::schedule_render");
+
         match &mut self.backend {
             Backend::Udev(udev) => {
                 udev.schedule_render(output);

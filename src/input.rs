@@ -131,6 +131,8 @@ impl Pinnacle {
     where
         P: Into<Point<f64, Logical>>,
     {
+        let _span = tracy_client::span!("Pinnacle::pointer_focus_target_under");
+
         let point: Point<f64, Logical> = point.into();
 
         let output = self.space.outputs().find(|op| {
@@ -249,6 +251,8 @@ impl Pinnacle {
 
 impl State {
     pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
+        let _span = tracy_client::span!("State::process_input_event");
+
         self.pinnacle
             .idle_notifier_state
             .notify_activity(&self.pinnacle.seat);
@@ -281,6 +285,8 @@ impl State {
 
     /// Update the pointer focus if it's different from the previous one.
     pub fn update_pointer_focus(&mut self) {
+        let _span = tracy_client::span!("State::update_pointer_focus");
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
@@ -307,10 +313,9 @@ impl State {
     }
 
     /// Warp the cursor to the given `loc` in the global space.
-    ///
-    /// This is not handled by [`State::pointer_motion`] because I haven't
-    /// figured out how thread that through yet.
     pub fn warp_cursor_to_global_loc(&mut self, loc: impl Into<Point<f64, Logical>>) {
+        let _span = tracy_client::span!("State::warp_cursor_to_global_loc");
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
@@ -335,6 +340,8 @@ impl State {
     }
 
     fn on_keyboard<I: InputBackend>(&mut self, event: I::KeyboardKeyEvent) {
+        let _span = tracy_client::span!("State::on_keyboard");
+
         let serial = SERIAL_COUNTER.next_serial();
         let time = event.time_msec();
         let press_state = event.state();
@@ -480,6 +487,8 @@ impl State {
     }
 
     fn on_pointer_button<I: InputBackend>(&mut self, event: I::PointerButtonEvent) {
+        let _span = tracy_client::span!("State::on_pointer_button");
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             return;
         };
@@ -575,6 +584,8 @@ impl State {
     }
 
     fn on_pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
+        let _span = tracy_client::span!("State::on_pointer_axis");
+
         let source = event.source();
 
         let horizontal_amount = event
@@ -626,6 +637,8 @@ impl State {
         &mut self,
         event: I::PointerMotionAbsoluteEvent,
     ) {
+        let _span = tracy_client::span!("State::on_pointer_motion_absolute");
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion absolute received with no pointer on seat");
             return;
@@ -674,6 +687,8 @@ impl State {
     }
 
     fn on_pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
+        let _span = tracy_client::span!("State::on_pointer_motion");
+
         let Some(pointer) = self.pinnacle.seat.get_pointer() else {
             error!("Pointer motion received with no pointer on seat");
             return;
@@ -989,6 +1004,8 @@ fn constrain_point_inside_rects(
     pos: Point<f64, Logical>,
     rects: impl IntoIterator<Item = Rectangle<i32, Logical>>,
 ) -> Point<f64, Logical> {
+    let _span = tracy_client::span!("constrain_point_inside_rects");
+
     let (pos_x, pos_y) = pos.into();
 
     let nearest_points = rects.into_iter().map(|rect| {

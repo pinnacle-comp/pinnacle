@@ -31,6 +31,8 @@ impl TagId {
 
     /// Get the tag associated with this id.
     pub fn tag(&self, pinnacle: &Pinnacle) -> Option<Tag> {
+        let _span = tracy_client::span!("TagId::tag");
+
         pinnacle.outputs.keys().find_map(|op| {
             op.with_state(|state| state.tags.iter().find(|tag| &tag.id() == self).cloned())
         })
@@ -61,7 +63,6 @@ struct TagInner {
     /// This tag is defunct as a result of a config reload
     /// and will be replaced by the next added tag.
     defunct: bool,
-    client_state: ClientState,
 }
 
 /// A marker for windows.
@@ -71,13 +72,6 @@ struct TagInner {
 #[derive(Debug, Clone)]
 pub struct Tag {
     inner: Arc<Mutex<TagInner>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ClientState {
-    pub name: String,
-    pub active: bool,
-    pub defunct: bool,
 }
 
 impl PartialEq for Tag {
@@ -104,11 +98,6 @@ impl Tag {
                 name: name.clone(),
                 active: false,
                 defunct: false,
-                client_state: ClientState {
-                    name,
-                    active: false,
-                    defunct: false,
-                },
             })),
         }
     }
@@ -117,6 +106,8 @@ impl Tag {
     ///
     /// RefCell Safety: This uses RefCells on every mapped output.
     pub fn output(&self, pinnacle: &Pinnacle) -> Option<Output> {
+        let _span = tracy_client::span!("Tag::output");
+
         pinnacle
             .outputs
             .keys()
@@ -161,13 +152,5 @@ impl Tag {
     /// Make this tag defunct.
     pub fn make_defunct(&self) {
         self.inner.lock().unwrap().defunct = true;
-    }
-
-    pub fn client_state(&self) -> ClientState {
-        self.inner.lock().unwrap().client_state.clone()
-    }
-
-    pub fn set_client_state(&self, client_state: ClientState) {
-        self.inner.lock().unwrap().client_state = client_state;
     }
 }

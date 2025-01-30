@@ -33,6 +33,8 @@ impl IdleInhibitHandler for State {
 
 impl Pinnacle {
     pub fn refresh_idle_inhibit(&mut self) {
+        let _span = tracy_client::span!("Pinnacle::refresh_idle_inhibit");
+
         self.idle_inhibiting_surfaces.retain(|s| s.alive());
 
         let is_inhibited = self.idle_inhibiting_surfaces.iter().any(|surface| {

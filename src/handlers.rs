@@ -117,6 +117,8 @@ impl CompositorHandler for State {
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
+        let _span = tracy_client::span!("CompositorHandler::new_surface");
+
         compositor::add_pre_commit_hook::<Self, _>(surface, |state, _display_handle, surface| {
             let maybe_dmabuf = compositor::with_states(surface, |surface_data| {
                 surface_data
@@ -156,6 +158,8 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        let _span = tracy_client::span!("CompositorHandler::commit");
+
         utils::on_commit_buffer_handler::<State>(surface);
 
         self.backend.early_import(surface);
@@ -395,6 +399,8 @@ impl CompositorHandler for State {
     }
 
     fn destroyed(&mut self, surface: &WlSurface) {
+        let _span = tracy_client::span!("CompositorHandler::destroyed");
+
         let Some(root_surface) = self.pinnacle.root_surface_cache.get(surface) else {
             return;
         };
@@ -437,6 +443,8 @@ impl CompositorHandler for State {
 delegate_compositor!(State);
 
 fn layer_surface_is_initial_configure_sent(layer: &LayerSurface) -> bool {
+    let _span = tracy_client::span!("layer_surface_is_initial_configure_sent");
+
     let initial_configure_sent = compositor::with_states(layer.wl_surface(), |states| {
         states
             .data_map
@@ -536,6 +544,8 @@ impl SeatHandler for State {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&Self::KeyboardFocus>) {
+        let _span = tracy_client::span!("SeatHandler::focus_changed");
+
         let focus_client = focused.and_then(|foc_target| {
             self.pinnacle
                 .display_handle
@@ -563,6 +573,8 @@ delegate_shm!(State);
 
 impl OutputHandler for State {
     fn output_bound(&mut self, output: Output, wl_output: WlOutput) {
+        let _span = tracy_client::span!("OutputHandler::output_bound");
+
         crate::protocol::foreign_toplevel::on_output_bound(self, &output, &wl_output);
     }
 }
@@ -572,6 +584,8 @@ delegate_viewporter!(State);
 
 impl FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
+        let _span = tracy_client::span!("FractionalScaleHandler::new_fractional_scale");
+
         // comment yanked from anvil
         // Here we can set the initial fractional scale
         //
@@ -644,7 +658,8 @@ impl WlrLayerShellHandler for State {
         _layer: Layer,
         namespace: String,
     ) {
-        tracing::debug!("New layer surface");
+        let _span = tracy_client::span!("WlrLayerShellHandler::new_layer_surface");
+
         let output = output
             .as_ref()
             .and_then(Output::from_resource)
@@ -663,6 +678,8 @@ impl WlrLayerShellHandler for State {
     }
 
     fn layer_destroyed(&mut self, surface: wlr_layer::LayerSurface) {
+        let _span = tracy_client::span!("WlrLayerShellHandler::layer_destroyed");
+
         let mut output: Option<Output> = None;
         if let Some((mut map, layer, op)) = self.pinnacle.space.outputs().find_map(|o| {
             let map = layer_map_for_output(o);
@@ -698,6 +715,8 @@ delegate_layer_shell!(State);
 
 impl ScreencopyHandler for State {
     fn frame(&mut self, frame: Screencopy) {
+        let _span = tracy_client::span!("ScreencopyHandler::frame");
+
         let output = frame.output().clone();
         if !frame.with_damage() {
             self.schedule_render(&output);
@@ -713,6 +732,8 @@ impl GammaControlHandler for State {
     }
 
     fn get_gamma_size(&mut self, output: &Output) -> Option<u32> {
+        let _span = tracy_client::span!("GammaControlHandler::get_gamma_size");
+
         let Backend::Udev(udev) = &self.backend else {
             return None;
         };
@@ -731,6 +752,8 @@ impl GammaControlHandler for State {
     }
 
     fn set_gamma(&mut self, output: &Output, gammas: [&[u16]; 3]) -> bool {
+        let _span = tracy_client::span!("GammaControlHandler::set_gamma");
+
         let Backend::Udev(udev) = &mut self.backend else {
             warn!("Setting gamma is not supported on the winit backend");
             return false;
@@ -746,6 +769,8 @@ impl GammaControlHandler for State {
     }
 
     fn gamma_control_destroyed(&mut self, output: &Output) {
+        let _span = tracy_client::span!("GammaControlHandler::gamma_control_destroyed");
+
         let Backend::Udev(udev) = &mut self.backend else {
             warn!("Resetting gamma is not supported on the winit backend");
             return;
@@ -760,6 +785,8 @@ delegate_gamma_control!(State);
 
 impl SecurityContextHandler for State {
     fn context_created(&mut self, source: SecurityContextListenerSource, context: SecurityContext) {
+        let _span = tracy_client::span!("SecurityContextHandler::context_created");
+
         self.pinnacle
             .loop_handle
             .insert_source(source, move |client, _, state| {
@@ -785,6 +812,8 @@ delegate_security_context!(State);
 
 impl PointerConstraintsHandler for State {
     fn new_constraint(&mut self, _surface: &WlSurface, pointer: &PointerHandle<Self>) {
+        let _span = tracy_client::span!("PointerConstraintsHandler::new_constraint");
+
         self.pinnacle
             .maybe_activate_pointer_constraint(pointer.current_location());
     }
@@ -795,6 +824,8 @@ impl PointerConstraintsHandler for State {
         pointer: &PointerHandle<Self>,
         location: Point<f64, Logical>,
     ) {
+        let _span = tracy_client::span!("PointerConstraintsHandler::cursor_position_hint");
+
         if with_pointer_constraint(surface, pointer, |constraint| {
             constraint.is_some_and(|c| c.is_active())
         }) {
@@ -830,6 +861,8 @@ impl OutputManagementHandler for State {
     }
 
     fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool {
+        let _span = tracy_client::span!("OutputManagementHandler::apply_configuration");
+
         for (output, config) in config {
             match config {
                 OutputConfiguration::Disabled => {
@@ -910,6 +943,8 @@ impl OutputPowerManagementHandler for State {
     }
 
     fn set_mode(&mut self, output: &Output, powered: bool) {
+        let _span = tracy_client::span!("OutputPowerManagementHandler::set_mode");
+
         self.backend
             .set_output_powered(output, &self.pinnacle.loop_handle, powered);
 
@@ -963,6 +998,8 @@ impl XdgActivationHandler for State {
     }
 
     fn token_created(&mut self, token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
+        let _span = tracy_client::span!("XdgActivationHandler::token_created");
+
         let Some((serial, seat)) = data.serial else {
             data.user_data
                 .insert_if_missing(|| ActivationContext::UrgentOnly);
@@ -1006,6 +1043,8 @@ impl XdgActivationHandler for State {
         token_data: XdgActivationTokenData,
         surface: WlSurface,
     ) {
+        let _span = tracy_client::span!("XdgActivationHandler::request_activation");
+
         let Some(context) = token_data.user_data.get::<ActivationContext>() else {
             debug!("xdg-activation: request without context");
             return;
@@ -1052,7 +1091,8 @@ delegate_single_pixel_buffer!(State);
 
 impl Pinnacle {
     fn position_popup(&self, popup: &PopupSurface) {
-        trace!("State::position_popup");
+        let _span = tracy_client::span!("Pinnacle::position_popup");
+
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
         };
@@ -1107,6 +1147,8 @@ impl Pinnacle {
     // From Niri
     /// Attempt to activate any pointer constraint on the pointer focus at `new_pos`.
     pub fn maybe_activate_pointer_constraint(&self, new_pos: Point<f64, Logical>) {
+        let _span = tracy_client::span!("Pinnacle::maybe_activate_pointer_constraint");
+
         let Some((surface, surface_loc)) = self.pointer_focus_target_under(new_pos) else {
             return;
         };

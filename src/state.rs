@@ -223,6 +223,8 @@ impl Drop for Pinnacle {
 
 impl State {
     pub fn on_event_loop_cycle_completion(&mut self) {
+        let _span = tracy_client::span!("State::on_event_loop_cycle_completion");
+
         self.pinnacle.fixup_z_layering();
         self.pinnacle.space.refresh();
         self.pinnacle.cursor_state.cleanup();
@@ -246,15 +248,19 @@ impl State {
             panic!("snowcap has exited");
         }
 
-        // FIXME: Don't poll this every cycle
-        for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
-            if output.with_state_mut(|state| {
-                state
-                    .layout_transaction
-                    .as_ref()
-                    .is_some_and(|ts| ts.ready())
-            }) {
-                self.schedule_render(&output);
+        {
+            let _span = tracy_client::span!("Check for ready layout transactions");
+
+            // FIXME: Don't poll this every cycle
+            for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+                if output.with_state_mut(|state| {
+                    state
+                        .layout_transaction
+                        .as_ref()
+                        .is_some_and(|ts| ts.ready())
+                }) {
+                    self.schedule_render(&output);
+                }
             }
         }
 
@@ -285,6 +291,8 @@ impl Pinnacle {
         config_dir: PathBuf,
         cli: Option<Cli>,
     ) -> anyhow::Result<Self> {
+        let _span = tracy_client::span!("Pinnacle::new");
+
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
 
@@ -494,6 +502,8 @@ impl Pinnacle {
     }
 
     pub fn send_frame_callbacks(&self, output: &Output, sequence: Option<FrameCallbackSequence>) {
+        let _span = tracy_client::span!("Pinnacle::send_frame_callbacks");
+
         let should_send = |surface: &WlSurface, states: &SurfaceData| {
             // Do the standard primary scanout output check. For pointer surfaces it deduplicates
             // the frame callbacks across potentially multiple outputs, and for regular windows and
@@ -612,6 +622,8 @@ impl Pinnacle {
         output: &Output,
         render_element_states: &RenderElementStates,
     ) {
+        let _span = tracy_client::span!("Pinnacle::update_primary_scanout_output");
+
         for window in self.space.elements() {
             let offscreen_id = window.with_state(|state| state.offscreen_elem_id.clone());
 
@@ -726,6 +738,8 @@ impl Pinnacle {
         feedback: &SurfaceDmabufFeedback,
         render_element_states: &RenderElementStates,
     ) {
+        let _span = tracy_client::span!("Pinnacle::send_dmabuf_feedback");
+
         for window in self.space.elements() {
             if self.space.outputs_for_element(window).contains(output) {
                 window.send_dmabuf_feedback(
@@ -831,6 +845,8 @@ impl State {
         config_dir: PathBuf,
         cli: Option<Cli>,
     ) -> anyhow::Result<Self> {
+        let _span = tracy_client::span!("State::new");
+
         let display = Display::<State>::new()?;
 
         let (backend, pinnacle) = match backend {
@@ -929,6 +945,8 @@ impl WithState for WlSurface {
     where
         F: FnOnce(&Self::State) -> T,
     {
+        let _span = tracy_client::span!("WlSurface: WithState::with_state");
+
         compositor::with_states(self, |states| {
             let state = states
                 .data_map
@@ -942,6 +960,8 @@ impl WithState for WlSurface {
     where
         F: FnOnce(&mut Self::State) -> T,
     {
+        let _span = tracy_client::span!("WlSurface: WithState::with_state_mut");
+
         compositor::with_states(self, |states| {
             let state = states
                 .data_map

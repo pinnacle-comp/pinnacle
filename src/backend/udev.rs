@@ -479,19 +479,14 @@ impl Udev {
 
     /// Schedule a new render that will cause the compositor to redraw everything.
     pub fn schedule_render(&mut self, output: &Output) {
+        let _span = tracy_client::span!("Udev::schedule_render");
+
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             debug!("no render surface on output {}", output.name());
             return;
         };
 
         let old_state = mem::take(&mut surface.render_state);
-
-        // tracing::info!(
-        //     ?old_state,
-        //     op = output.name(),
-        //     powered = output.with_state(|state| state.powered),
-        //     "scheduled render"
-        // );
 
         surface.render_state = match old_state {
             RenderState::Idle => RenderState::Scheduled,
@@ -515,6 +510,8 @@ impl Udev {
         loop_handle: &LoopHandle<'static, State>,
         powered: bool,
     ) {
+        let _span = tracy_client::span!("Udev::set_output_powered");
+
         let UdevOutputData { device_id, crtc } =
             output.user_data().get::<UdevOutputData>().unwrap();
 
@@ -575,6 +572,8 @@ impl BackendData for Udev {
     }
 
     fn reset_buffers(&mut self, output: &Output) {
+        let _span = tracy_client::span!("Udev: BackendData::reset_buffers");
+
         if let Some(id) = output.user_data().get::<UdevOutputData>() {
             if let Some(gpu) = self.backends.get_mut(&id.device_id) {
                 if let Some(surface) = gpu.surfaces.get_mut(&id.crtc) {
@@ -585,12 +584,16 @@ impl BackendData for Udev {
     }
 
     fn early_import(&mut self, surface: &WlSurface) {
+        let _span = tracy_client::span!("Udev: BackendData::early_import");
+
         if let Err(err) = self.gpu_manager.early_import(self.primary_gpu, surface) {
             warn!("early buffer import failed: {}", err);
         }
     }
 
     fn set_output_mode(&mut self, output: &Output, mode: OutputMode) {
+        let _span = tracy_client::span!("Udev: BackendData::set_output_mode");
+
         let drm_mode = self
             .backends
             .iter()
@@ -676,6 +679,8 @@ fn get_surface_dmabuf_feedback(
     gpu_manager: &mut GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
     composition: &GbmDrmCompositor,
 ) -> Option<SurfaceDmabufFeedback> {
+    let _span = tracy_client::span!("get_surface_dmabuf_feedback");
+
     let primary_formats = gpu_manager
         .single_renderer(&primary_gpu)
         .ok()?
@@ -815,6 +820,8 @@ impl Udev {
         node: DrmNode,
         path: &Path,
     ) -> Result<(), DeviceAddError> {
+        let _span = tracy_client::span!("Udev::device_added");
+
         // Try to open the device
         let fd = self
             .session
@@ -888,6 +895,8 @@ impl Udev {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
+        let _span = tracy_client::span!("Udev::connector_connected");
+
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
         } else {
@@ -1099,6 +1108,8 @@ impl Udev {
         node: DrmNode,
         crtc: crtc::Handle,
     ) {
+        let _span = tracy_client::span!("Udev::connector_disconnected");
+
         debug!(?crtc, "connector_disconnected");
 
         let device = if let Some(device) = self.backends.get_mut(&node) {
@@ -1126,6 +1137,8 @@ impl Udev {
     }
 
     fn device_changed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
+        let _span = tracy_client::span!("Udev::device_changed");
+
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
         } else {
@@ -1161,6 +1174,8 @@ impl Udev {
 
     /// A GPU was unplugged.
     fn device_removed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
+        let _span = tracy_client::span!("Udev::device_removed");
+
         let Some(device) = self.backends.get(&node) else {
             return;
         };
@@ -1196,6 +1211,8 @@ impl Udev {
         crtc: crtc::Handle,
         metadata: DrmEventMetadata,
     ) {
+        let span = tracy_client::span!("Udev::on_vblank");
+
         let Some(surface) = self
             .backends
             .get_mut(&dev_id)
@@ -1214,6 +1231,8 @@ impl Udev {
             // somehow we got called with an invalid output
             return;
         };
+
+        span.emit_text(&output.name());
 
         let presentation_time = match metadata.time {
             smithay::backend::drm::DrmEventTime::Monotonic(tp) => tp,
@@ -1289,6 +1308,9 @@ impl Udev {
     }
 
     pub(super) fn render_if_scheduled(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let span = tracy_client::span!("Udev::render_if_scheduled");
+        span.emit_text(&output.name());
+
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
@@ -1302,8 +1324,10 @@ impl Udev {
     }
 
     /// Render to the [`RenderSurface`] associated with the given `output`.
-    #[tracing::instrument(level = "debug", skip(self, pinnacle), fields(output = output.name()))]
     fn render_surface(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let span = tracy_client::span!("Udev::render_surface");
+        span.emit_text(&output.name());
+
         let UdevOutputData { device_id, .. } = output.user_data().get().unwrap();
         let is_active = self
             .backends
@@ -1562,6 +1586,9 @@ impl Udev {
         output: &Output,
         mut time_to_next_presentation: Duration,
     ) {
+        let span = tracy_client::span!("Udev::render_surface");
+        span.emit_text(&output.name());
+
         match mem::take(&mut surface.render_state) {
             RenderState::Idle => unreachable!(),
             RenderState::Scheduled => (),
@@ -1602,6 +1629,9 @@ impl Udev {
     }
 
     fn on_estimated_vblank_timer(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
+        let span = tracy_client::span!("Udev::render_surface");
+        span.emit_text(&output.name());
+
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
             return;
         };
@@ -1648,6 +1678,9 @@ fn handle_pending_screencopy<'a>(
     loop_handle: &LoopHandle<'static, State>,
     cursor_ids: Vec<Id>,
 ) {
+    let span = tracy_client::span!("udev::handle_pending_screencopy");
+    span.emit_text(&output.name());
+
     let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
         return;
     };

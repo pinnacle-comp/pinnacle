@@ -21,7 +21,6 @@ use smithay::{
         },
     },
 };
-use tracing::trace;
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -35,6 +34,8 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgShellHandler::new_toplevel");
+
         surface.with_pending_state(|state| {
             // state.size = Some((600, 400).into()); // gets wleird-slow-ack working
             state.states.set(xdg_toplevel::State::TiledTop);
@@ -48,7 +49,7 @@ impl XdgShellHandler for State {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        tracing::debug!("toplevel destroyed");
+        let _span = tracy_client::span!("XdgShellHandler::toplevel_destroyed");
 
         let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
@@ -72,7 +73,7 @@ impl XdgShellHandler for State {
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
-        trace!("XdgShellHandler::new_popup");
+        let _span = tracy_client::span!("XdgShellHandler::new_popup");
 
         self.pinnacle.position_popup(&surface);
 
@@ -86,6 +87,8 @@ impl XdgShellHandler for State {
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {
+        let _span = tracy_client::span!("XdgShellHandler::popup_destroyed");
+
         // TODO: only schedule on the outputs the popup is on
         for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
             self.schedule_render(&output);
@@ -93,7 +96,8 @@ impl XdgShellHandler for State {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, seat: WlSeat, serial: Serial) {
-        tracing::debug!("move_request_client");
+        let _span = tracy_client::span!("XdgShellHandler::move_request");
+
         self.move_request_client(
             surface.wl_surface(),
             &Seat::from_resource(&seat).expect("couldn't get seat from WlSeat"),
@@ -108,6 +112,8 @@ impl XdgShellHandler for State {
         serial: Serial,
         edges: ResizeEdge,
     ) {
+        let _span = tracy_client::span!("XdgShellHandler::resize_request");
+
         const BUTTON_LEFT: u32 = 0x110;
         self.resize_request_client(
             surface.wl_surface(),
@@ -124,7 +130,7 @@ impl XdgShellHandler for State {
         positioner: PositionerState,
         token: u32,
     ) {
-        // TODO: reposition logic
+        let _span = tracy_client::span!("XdgShellHandler::reposition_request");
 
         surface.with_pending_state(|state| {
             state.geometry = positioner.get_geometry();
@@ -135,6 +141,8 @@ impl XdgShellHandler for State {
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
+        let _span = tracy_client::span!("XdgShellHandler::grab");
+
         let seat: Seat<Self> = Seat::from_resource(&seat).expect("couldn't get seat from WlSeat");
         let popup_kind = PopupKind::Xdg(surface);
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
@@ -183,6 +191,8 @@ impl XdgShellHandler for State {
     }
 
     fn fullscreen_request(&mut self, surface: ToplevelSurface, mut wl_output: Option<WlOutput>) {
+        let _span = tracy_client::span!("XdgShellHandler::fullscreen_request");
+
         if !surface
             .current_state()
             .capabilities
@@ -239,6 +249,8 @@ impl XdgShellHandler for State {
     }
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgShellHandler::unfullscreen_request");
+
         surface.with_pending_state(|state| {
             state.fullscreen_output.take();
         });
@@ -252,6 +264,8 @@ impl XdgShellHandler for State {
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgShellHandler::maximize_request");
+
         let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
@@ -261,6 +275,8 @@ impl XdgShellHandler for State {
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        let _span = tracy_client::span!("XdgShellHandler::unmaximize_request");
+
         let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
             return;
         };
@@ -285,6 +301,8 @@ pub fn snapshot_pre_commit_hook(
     _display_handle: &DisplayHandle,
     surface: &WlSurface,
 ) {
+    let _span = tracy_client::span!("snapshot_pre_commit_hook");
+
     let Some(window) = state.pinnacle.window_for_surface(surface) else {
         return;
     };

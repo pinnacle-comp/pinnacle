@@ -33,13 +33,14 @@ impl WindowId {
     }
 
     /// Reset the static window id counter to 0.
-    /// FIXME: remove statics
     pub fn reset() {
         WINDOW_ID_COUNTER.store(0, Ordering::Relaxed);
     }
 
     /// Get the window that has this WindowId.
     pub fn window(&self, pinnacle: &Pinnacle) -> Option<WindowElement> {
+        let _span = tracy_client::span!("WindowId::window");
+
         let find = |win: &&WindowElement| win.with_state(|state| &state.id == self);
         pinnacle
             .windows
@@ -287,6 +288,8 @@ impl WindowElement {
 impl Pinnacle {
     /// Update a window's state from its [`WindowState`] (shocking).
     pub fn update_window_state(&self, window: &WindowElement) {
+        let _span = tracy_client::span!("Pinnacle::update_window_state");
+
         let window_state = window.with_state(|state| state.window_state);
 
         match window_state {

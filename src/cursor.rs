@@ -74,6 +74,8 @@ impl CursorState {
     }
 
     pub fn get_xcursor_images(&mut self, icon: CursorIcon) -> Option<Rc<XCursor>> {
+        let _span = tracy_client::span!("CursorState::get_xcursor_images");
+
         self.loaded_images
             .entry(icon)
             .or_insert_with_key(|icon| {
@@ -87,6 +89,8 @@ impl CursorState {
     }
 
     pub fn buffer_for_image(&mut self, image: Image, scale: i32) -> MemoryRenderBuffer {
+        let _span = tracy_client::span!("CursorState::buffer_for_image");
+
         self.mem_buffer_cache
             .iter()
             .find_map(|(img, buf)| (*img == image).then(|| buf.clone()))
@@ -110,6 +114,8 @@ impl CursorState {
     }
 
     pub fn pointer_element(&mut self) -> PointerElement {
+        let _span = tracy_client::span!("CursorState::pointer_element");
+
         match &self.current_cursor_image {
             CursorImageStatus::Hidden => PointerElement::Hidden,
             CursorImageStatus::Named(icon) => {
@@ -129,6 +135,8 @@ impl CursorState {
     }
 
     pub fn is_current_cursor_animated(&mut self) -> bool {
+        let _span = tracy_client::span!("CursorState::is_current_cursor_animated");
+
         match &self.current_cursor_image {
             CursorImageStatus::Hidden => false,
             CursorImageStatus::Named(icon) => {
@@ -146,6 +154,8 @@ impl CursorState {
 
     /// Cleans up the current cursor if it is a dead WlSurface.
     pub fn cleanup(&mut self) {
+        let _span = tracy_client::span!("CursorState::cleanup");
+
         if let CursorImageStatus::Surface(surface) = &self.current_cursor_image {
             if !surface.alive() {
                 self.current_cursor_image = CursorImageStatus::default_named();
@@ -160,6 +170,8 @@ pub struct XCursor {
 
 impl XCursor {
     pub fn image(&self, time: Duration, size: u32) -> Image {
+        let _span = tracy_client::span!("XCursor::image");
+
         let mut millis = time.as_millis() as u32;
 
         let animation_length_ms =

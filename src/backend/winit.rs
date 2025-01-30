@@ -248,6 +248,8 @@ impl Winit {
     }
 
     fn render_winit_window(&mut self, pinnacle: &mut Pinnacle) {
+        let _span = tracy_client::span!("Winit::render_winit_window");
+
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
@@ -436,6 +438,8 @@ impl Winit {
         render_output_result: &RenderOutputResult,
         loop_handle: &LoopHandle<'static, State>,
     ) {
+        let _span = tracy_client::span!("Winit::handle_pending_screencopy");
+
         let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
             return;
         };
