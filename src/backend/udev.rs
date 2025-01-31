@@ -1428,6 +1428,16 @@ impl Udev {
                 .map(OutputRenderElement::from),
         );
 
+        output.with_state_mut(|state| {
+            if state
+                .layout_transaction
+                .as_ref()
+                .is_some_and(|ts| ts.ready())
+            {
+                state.layout_transaction.take();
+            }
+        });
+
         if should_blank {
             output.with_state_mut(|state| {
                 if let BlankingState::NotBlanked = state.blanking_state {
@@ -1458,22 +1468,6 @@ impl Udev {
                 &windows,
             ));
         }
-
-        // HACK: Taking the transaction before creating render elements
-        // leads to a possibility where the original buffer still gets displayed.
-        // Need to figure that out.
-        // In the meantime we take the transaction afterwards and schedule another render.
-        let mut render_after_transaction_finish = false;
-        output.with_state_mut(|state| {
-            if state
-                .layout_transaction
-                .as_ref()
-                .is_some_and(|ts| ts.ready())
-            {
-                state.layout_transaction.take();
-                render_after_transaction_finish = true;
-            }
-        });
 
         let clear_color = if pinnacle.lock_state.is_unlocked() {
             CLEAR_COLOR
@@ -1554,10 +1548,6 @@ impl Udev {
                                 Some(surface.frame_callback_sequence),
                             );
 
-                            if render_after_transaction_finish {
-                                self.schedule_render(output);
-                            }
-
                             // Return here to not queue the estimated vblank timer on a submitted frame
                             return;
                         }
@@ -1592,10 +1582,6 @@ impl Udev {
         }
 
         pinnacle.send_frame_callbacks(output, Some(surface.frame_callback_sequence));
-
-        if render_after_transaction_finish {
-            self.schedule_render(output);
-        }
     }
 
     fn queue_estimated_vblank_timer(

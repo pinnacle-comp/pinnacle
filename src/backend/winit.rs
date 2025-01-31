@@ -291,6 +291,16 @@ impl Winit {
             );
         }
 
+        self.output.with_state_mut(|state| {
+            if state
+                .layout_transaction
+                .as_ref()
+                .is_some_and(|ts| ts.ready())
+            {
+                state.layout_transaction.take();
+            }
+        });
+
         let should_blank = pinnacle.lock_state.is_locking()
             || (pinnacle.lock_state.is_locked()
                 && self.output.with_state(|state| state.lock_surface.is_none()));
@@ -323,22 +333,6 @@ impl Winit {
                 &windows,
             ));
         }
-
-        // HACK: Taking the transaction before creating render elements
-        // leads to a possibility where the original buffer still gets displayed.
-        // Need to figure that out.
-        // In the meantime we take the transaction afterwards and schedule another render.
-        let mut render_after_transaction_finish = false;
-        self.output.with_state_mut(|state| {
-            if state
-                .layout_transaction
-                .as_ref()
-                .is_some_and(|ts| ts.ready())
-            {
-                state.layout_transaction.take();
-                render_after_transaction_finish = true;
-            }
-        });
 
         let render_res = self.backend.bind().and_then(|_| {
             let age = if *full_redraw > 0 {
@@ -425,7 +419,7 @@ impl Winit {
         pinnacle.send_frame_callbacks(&self.output, None);
 
         // At the end cuz borrow checker
-        if render_after_transaction_finish || pinnacle.cursor_state.is_current_cursor_animated() {
+        if pinnacle.cursor_state.is_current_cursor_animated() {
             self.schedule_render();
         }
     }
