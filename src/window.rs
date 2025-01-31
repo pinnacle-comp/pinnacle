@@ -77,7 +77,7 @@ impl WindowElement {
                 if !surface.is_override_redirect() {
                     // FIXME: rounded loc here
                     surface
-                        .configure(Rectangle::from_loc_and_size(
+                        .configure(Rectangle::new(
                             new_loc.unwrap_or_default().to_i32_round(), // FIXME: unwrap_or_default
                             new_size,
                         ))
@@ -85,11 +85,6 @@ impl WindowElement {
                 }
             }
         }
-
-        // self.with_state_mut(|state| {
-        //     // FIXME: f64 -> i32, also remove target loc
-        //     state.target_loc = Some(new_loc.to_i32_round());
-        // });
     }
 
     /// Get this window's class (app id in Wayland but hey old habits die hard).

@@ -52,7 +52,7 @@ tracy-client = { version = "0.18.0", default-features = false }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "0f32e8d"
+rev = "0c2230f"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -101,7 +101,7 @@ keywords = ["wayland", "compositor", "smithay", "lua"]
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "0f32e8d" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "0c2230f" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -137,7 +137,7 @@ bytemuck = "1.20.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
 drm-sys = "0.8.0"
-libdisplay-info = "0.1.0"
+libdisplay-info = "0.2.2"
 indexmap = { workspace = true }
 snowcap = { path = "./snowcap", optional = true }
 snowcap-api = { path = "./snowcap/api/rust", optional = true }

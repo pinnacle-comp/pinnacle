@@ -568,7 +568,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 2.0.7",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -587,6 +587,16 @@ name = "cesu8"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
+
+[[package]]
+name = "cfg-expr"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d4ba6e40bd1184518716a6e1a781bf9160e286d219ccdb8ab2612e74cfe4789"
+dependencies = [
+ "smallvec",
+ "target-lexicon",
+]
 
 [[package]]
 name = "cfg-if"
@@ -2329,15 +2339,15 @@ checksum = "5aaeb2981e0606ca11d79718f8bb01164f1d6ed75080182d3abf017e6d244b6d"
 
 [[package]]
 name = "libdisplay-info"
-version = "0.1.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb6dd47a677df2378a8bb88d08a593f51e8dddf4b61d2db5f2ceb35e67f9389d"
+checksum = "4210cfe93a0dc37228e08105e3c13171e5af816f7bd39e00e3d3adcf2b487a2b"
 dependencies = [
  "bitflags 2.6.0",
  "libc",
  "libdisplay-info-derive",
  "libdisplay-info-sys",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -2353,9 +2363,13 @@ dependencies = [
 
 [[package]]
 name = "libdisplay-info-sys"
-version = "0.1.0"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8cec1fa7872b621f40c756bc1304b1a975461282e250b0e76737b037c0c236"
+checksum = "7f4f9264ece23c37ffa023ae635f48d588e1786745dad06dff10c9fb99dc646c"
+dependencies = [
+ "semver",
+ "system-deps",
+]
 
 [[package]]
 name = "libloading"
@@ -3269,7 +3283,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "test-log",
- "thiserror 2.0.7",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-stream",
  "toml",
@@ -3926,8 +3940,8 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 
 [[package]]
 name = "smithay"
-version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=0f32e8d#0f32e8d1f9e034c96f7c43a3373f1ce79a76553b"
+version = "0.4.0"
+source = "git+https://github.com/Smithay/smithay?rev=0c2230f#0c2230f858580b52d628087d6dae1795278b8756"
 dependencies = [
  "appendlist",
  "bitflags 2.6.0",
@@ -3948,7 +3962,6 @@ dependencies = [
  "libc",
  "libloading 0.8.6",
  "libseat",
- "once_cell",
  "pkg-config",
  "profiling",
  "rand",
@@ -4040,7 +4053,7 @@ dependencies = [
 [[package]]
 name = "smithay-drm-extras"
 version = "0.1.0"
-source = "git+https://github.com/Smithay/smithay?rev=0f32e8d#0f32e8d1f9e034c96f7c43a3373f1ce79a76553b"
+source = "git+https://github.com/Smithay/smithay?rev=0c2230f#0c2230f858580b52d628087d6dae1795278b8756"
 dependencies = [
  "drm 0.14.1",
  "libdisplay-info",
@@ -4088,7 +4101,7 @@ dependencies = [
  "futures",
  "hyper-util",
  "snowcap-api-defs",
- "thiserror 2.0.7",
+ "thiserror 2.0.11",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -4272,6 +4285,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-deps"
+version = "7.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66d23aaf9f331227789a99e8de4c91bf46703add012bdfd45fdecdfb2975a005"
+dependencies = [
+ "cfg-expr",
+ "heck",
+ "pkg-config",
+ "toml",
+ "version-compare",
+]
+
+[[package]]
 name = "taffy"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4282,6 +4308,12 @@ dependencies = [
  "serde",
  "slotmap",
 ]
+
+[[package]]
+name = "target-lexicon"
+version = "0.12.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "temp-env"
@@ -4357,11 +4389,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.7"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93605438cbd668185516ab499d589afb7ee1859ea3d5fc8f6b0755e1c7443767"
+checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
 dependencies = [
- "thiserror-impl 2.0.7",
+ "thiserror-impl 2.0.11",
 ]
 
 [[package]]
@@ -4377,9 +4409,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.7"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d8749b4531af2117677a5fcd12b1348a3fe2b81e36e61ffeac5c4aa3273e36"
+checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4932,6 +4964,12 @@ dependencies = [
  "derive_builder",
  "rustversion",
 ]
+
+[[package]]
+name = "version-compare"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "852e951cb7832cb45cb1169900d19760cfa39b82bc0ea9c0e5a14ae88411c98b"
 
 [[package]]
 name = "version_check"

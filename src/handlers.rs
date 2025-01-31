@@ -316,7 +316,7 @@ impl CompositorHandler for State {
                 .and_then(|win| self.pinnacle.space.element_location(&win));
 
             if let Some(loc) = loc {
-                let geo = Rectangle::from_loc_and_size(loc, size);
+                let geo = Rectangle::new(loc, size);
                 let outputs = self
                     .pinnacle
                     .space

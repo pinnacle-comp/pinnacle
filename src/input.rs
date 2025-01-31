@@ -801,7 +801,7 @@ impl State {
                     let mut attrs = RegionAttributes::default();
                     attrs.rects.push((
                         compositor::RectangleKind::Add,
-                        Rectangle::from_loc_and_size((0, 0), surface_size),
+                        Rectangle::from_size(surface_size),
                     ));
                     Some(attrs)
                 })
@@ -1039,7 +1039,7 @@ mod tests {
     use super::*;
 
     fn rect(loc: (i32, i32), size: (i32, i32)) -> Rectangle<i32, Logical> {
-        Rectangle::from_loc_and_size(loc, size)
+        Rectangle::new(loc.into(), size.into())
     }
 
     #[test]

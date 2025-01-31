@@ -100,7 +100,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
                     // FIXME: prolly not fixable but xwayland configures with loc i32 not f64
-                    let new_geo = Rectangle::from_loc_and_size(new_loc.to_i32_round(), geo.size);
+                    let new_geo = Rectangle::new(new_loc.to_i32_round(), geo.size);
                     surface
                         .configure(new_geo)
                         .expect("failed to configure x11 win");
@@ -161,9 +161,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     return;
                 }
 
-                if window_under.with_state(|state| {
-                    state.window_state.is_floating() || state.target_loc.is_some()
-                }) {
+                if window_under.with_state(|state| state.window_state.is_floating()) {
                     return;
                 }
 

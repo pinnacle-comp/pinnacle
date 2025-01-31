@@ -23,7 +23,7 @@ use smithay::{
             Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, Resource,
         },
     },
-    utils::{Physical, Point, Rectangle},
+    utils::{Physical, Rectangle},
     wayland::{
         dmabuf::get_dmabuf,
         shm::{self, shm_format_to_fourcc},
@@ -107,8 +107,7 @@ where
             } => {
                 let output = Output::from_resource(&output).expect("no output for resource");
                 let physical_size = output.current_mode().expect("output has no mode").size;
-                let physical_region =
-                    Rectangle::from_loc_and_size(Point::from((0, 0)), physical_size);
+                let physical_region = Rectangle::from_size(physical_size);
 
                 (frame, overlay_cursor, physical_region, output)
             }
@@ -133,10 +132,10 @@ where
                 let output_transformed_physical_size = output_transform
                     .transform_size(output.current_mode().expect("output no mode").size);
                 let output_transformed_rect =
-                    Rectangle::from_loc_and_size((0, 0), output_transformed_physical_size);
+                    Rectangle::from_size(output_transformed_physical_size);
 
                 // This is in the transformed space
-                let screencopy_region = Rectangle::from_loc_and_size((x, y), (width, height));
+                let screencopy_region = Rectangle::new((x, y).into(), (width, height).into());
 
                 let output_scale = output.current_scale().fractional_scale();
                 let physical_rect = screencopy_region.to_physical_precise_round(output_scale);

@@ -5,17 +5,14 @@ mod frame;
 mod gamma;
 
 use assert_matches::assert_matches;
-pub use drm::util::drm_mode_from_modeinfo;
+pub use drm::drm_mode_from_modeinfo;
 use frame::FrameClock;
 use indexmap::IndexSet;
 
 use std::{collections::HashMap, mem, path::Path, time::Duration};
 
 use anyhow::{anyhow, ensure, Context};
-use drm::{
-    set_crtc_active,
-    util::{create_drm_mode, refresh_interval},
-};
+use drm::{create_drm_mode, refresh_interval};
 use smithay::{
     backend::{
         allocator::{
@@ -23,10 +20,11 @@ use smithay::{
             Buffer, Fourcc,
         },
         drm::{
-            compositor::{DrmCompositor, PrimaryPlaneElement, RenderFrameResult},
+            compositor::{FrameFlags, PrimaryPlaneElement, RenderFrameResult},
             gbm::GbmFramebuffer,
+            output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
             CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata,
-            DrmNode, NodeType,
+            DrmNode, DrmSurface, NodeType,
         },
         egl::{self, context::ContextPriority, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
@@ -69,7 +67,7 @@ use smithay::{
             DisplayHandle,
         },
     },
-    utils::{DeviceFd, Point, Rectangle, Transform},
+    utils::{DeviceFd, Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         presentation::Refresh,
@@ -297,7 +295,7 @@ impl Udev {
                                 info!("pausing session");
 
                                 for backend in udev.backends.values_mut() {
-                                    backend.drm.pause();
+                                    backend.drm_output_manager.pause();
                                 }
                             }
                             session::Event::ActivateSession => {
@@ -345,7 +343,8 @@ impl Udev {
                                             unreachable!();
                                         };
 
-                                        if let Err(err) = backend.drm.activate(true) {
+                                        if let Err(err) = backend.drm_output_manager.activate(true)
+                                        {
                                             error!("Error activating DRM device: {err}");
                                         }
                                     }
@@ -365,7 +364,7 @@ impl Udev {
                                             PendingGammaChange::Idle => {
                                                 debug!("Restoring from previous gamma");
                                                 if let Err(err) = Udev::set_gamma_internal(
-                                                    &backend.drm,
+                                                    backend.drm_output_manager.device(),
                                                     crtc,
                                                     surface.previous_gamma.clone(),
                                                 ) {
@@ -376,7 +375,7 @@ impl Udev {
                                             PendingGammaChange::Restore => {
                                                 debug!("Restoring to original gamma");
                                                 if let Err(err) = Udev::set_gamma_internal(
-                                                    &backend.drm,
+                                                    backend.drm_output_manager.device(),
                                                     crtc,
                                                     None::<[&[u16]; 3]>,
                                                 ) {
@@ -387,7 +386,7 @@ impl Udev {
                                             PendingGammaChange::Change(gamma) => {
                                                 debug!("Changing to pending gamma");
                                                 match Udev::set_gamma_internal(
-                                                    &backend.drm,
+                                                    backend.drm_output_manager.device(),
                                                     crtc,
                                                     Some([&gamma[0], &gamma[1], &gamma[2]]),
                                                 ) {
@@ -462,12 +461,14 @@ impl Udev {
                     backend_data.surfaces.values_mut().for_each(|surface_data| {
                         surface_data.dmabuf_feedback =
                             surface_data.dmabuf_feedback.take().or_else(|| {
-                                get_surface_dmabuf_feedback(
-                                    primary_gpu,
-                                    surface_data.render_node,
-                                    gpu_manager,
-                                    &surface_data.compositor,
-                                )
+                                surface_data.drm_output.with_compositor(|compositor| {
+                                    get_surface_dmabuf_feedback(
+                                        primary_gpu,
+                                        surface_data.render_node,
+                                        gpu_manager,
+                                        compositor.surface(),
+                                    )
+                                })
                             });
                     });
                 });
@@ -522,20 +523,17 @@ impl Udev {
         if powered {
             output.with_state_mut(|state| state.powered = true);
         } else {
-            set_crtc_active(&backend_data.drm, *crtc, false);
+            // FIXME: remove once done
+            // set_crtc_active(backend_data.drm_output_manager.device(), *crtc, false);
 
             output.with_state_mut(|state| state.powered = false);
 
-            // Resetting the compositor state will cause a queue frame to change the
-            // crtc state to active
-            //
-            // Used to enable a CRTC within an atomic operation
             if let Err(err) = backend_data
                 .surfaces
                 .get_mut(crtc)
                 .unwrap()
-                .compositor
-                .reset_state()
+                .drm_output
+                .with_compositor(|compositor| compositor.clear())
             {
                 warn!("Failed to reset compositor state on crtc {crtc:?}: {err}");
             }
@@ -577,7 +575,7 @@ impl BackendData for Udev {
         if let Some(id) = output.user_data().get::<UdevOutputData>() {
             if let Some(gpu) = self.backends.get_mut(&id.device_id) {
                 if let Some(surface) = gpu.surfaces.get_mut(&id.crtc) {
-                    surface.compositor.reset_buffers();
+                    surface.drm_output.reset_buffers();
                 }
             }
         }
@@ -625,25 +623,31 @@ impl BackendData for Udev {
             });
 
         if let Some(render_surface) = render_surface_for_output(output, &mut self.backends) {
-            match render_surface.compositor.use_mode(drm_mode) {
-                Ok(()) => {
-                    let mode = smithay::output::Mode::from(mode);
-                    info!(
-                        "Set {}'s mode to {}x{}@{:.3}Hz",
-                        output.name(),
-                        mode.size.w,
-                        mode.size.h,
-                        mode.refresh as f64 / 1000.0
-                    );
-                    output.change_current_state(Some(mode), None, None, None);
-                    output.with_state_mut(|state| {
-                        // TODO: push or no?
-                        if !state.modes.contains(&mode) {
-                            state.modes.push(mode);
-                        }
-                    });
+            if let Ok(mut renderer) = self.gpu_manager.single_renderer(&self.primary_gpu) {
+                match render_surface.drm_output.use_mode(
+                    drm_mode,
+                    &mut renderer,
+                    &DrmOutputRenderElements::<_, OutputRenderElement<_>>::default(),
+                ) {
+                    Ok(()) => {
+                        let mode = smithay::output::Mode::from(mode);
+                        info!(
+                            "Set {}'s mode to {}x{}@{:.3}Hz",
+                            output.name(),
+                            mode.size.w,
+                            mode.size.h,
+                            mode.refresh as f64 / 1000.0
+                        );
+                        output.change_current_state(Some(mode), None, None, None);
+                        output.with_state_mut(|state| {
+                            // TODO: push or no?
+                            if !state.modes.contains(&mode) {
+                                state.modes.push(mode);
+                            }
+                        });
+                    }
+                    Err(err) => warn!("Failed to set output mode for {}: {err}", output.name()),
                 }
-                Err(err) => warn!("Failed to set output mode for {}: {err}", output.name()),
             }
         }
     }
@@ -652,8 +656,12 @@ impl BackendData for Udev {
 // TODO: document desperately
 struct UdevBackendData {
     surfaces: HashMap<crtc::Handle, RenderSurface>,
-    gbm: GbmDevice<DrmDeviceFd>,
-    drm: DrmDevice,
+    drm_output_manager: DrmOutputManager<
+        GbmAllocator<DrmDeviceFd>,
+        GbmDevice<DrmDeviceFd>,
+        Option<OutputPresentationFeedback>,
+        DrmDeviceFd,
+    >,
     drm_scanner: DrmScanner,
     render_node: DrmNode,
     registration_token: RegistrationToken,
@@ -677,7 +685,7 @@ fn get_surface_dmabuf_feedback(
     primary_gpu: DrmNode,
     render_node: DrmNode,
     gpu_manager: &mut GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
-    composition: &GbmDrmCompositor,
+    surface: &DrmSurface,
 ) -> Option<SurfaceDmabufFeedback> {
     let _span = tracy_client::span!("get_surface_dmabuf_feedback");
 
@@ -697,8 +705,8 @@ fn get_surface_dmabuf_feedback(
         .copied()
         .collect::<IndexSet<_>>();
 
-    let surface = composition.surface();
     let planes = surface.planes().clone();
+
     // We limit the scan-out trache to formats we can also render from
     // so that there is always a fallback render path available in case
     // the supplied buffer can not be scanned out directly
@@ -770,8 +778,12 @@ struct RenderSurface {
     /// If this is equal to the primary gpu node then it does the rendering operations.
     /// If it's not it is the node the composited buffer ends up on.
     render_node: DrmNode,
-    /// The thing rendering elements and queueing frames.
-    compositor: GbmDrmCompositor,
+    drm_output: DrmOutput<
+        GbmAllocator<DrmDeviceFd>,
+        GbmDevice<DrmDeviceFd>,
+        Option<OutputPresentationFeedback>,
+        DrmDeviceFd,
+    >,
     dmabuf_feedback: Option<SurfaceDmabufFeedback>,
     render_state: RenderState,
     screencopy_commit_state: ScreencopyCommitState,
@@ -800,13 +812,6 @@ struct ScreencopyCommitState {
     primary_plane_element: CommitCounter,
     cursor: CommitCounter,
 }
-
-type GbmDrmCompositor = DrmCompositor<
-    GbmAllocator<DrmDeviceFd>,
-    GbmDevice<DrmDeviceFd>,
-    Option<OutputPresentationFeedback>,
-    DrmDeviceFd,
->;
 
 impl Udev {
     pub fn renderer(&mut self) -> anyhow::Result<UdevRenderer<'_>> {
@@ -870,12 +875,37 @@ impl Udev {
             .add_node(render_node, gbm.clone())
             .map_err(DeviceAddError::AddNode)?;
 
+        let allocator = GbmAllocator::new(
+            gbm.clone(),
+            GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
+        );
+        let color_formats = if std::env::var("PINNACLE_DISABLE_10BIT").is_ok() {
+            SUPPORTED_FORMATS_8BIT_ONLY
+        } else {
+            SUPPORTED_FORMATS
+        };
+
+        let mut renderer = self.gpu_manager.single_renderer(&render_node).unwrap();
+        let render_formats = renderer
+            .as_mut()
+            .egl_context()
+            .dmabuf_render_formats()
+            .clone();
+
+        let drm_output_manager = DrmOutputManager::new(
+            drm,
+            allocator,
+            gbm.clone(),
+            Some(gbm),
+            color_formats.iter().copied(),
+            render_formats,
+        );
+
         self.backends.insert(
             node,
             UdevBackendData {
                 registration_token,
-                gbm,
-                drm,
+                drm_output_manager,
                 drm_scanner: DrmScanner::new(),
                 render_node,
                 surfaces: HashMap::new(),
@@ -907,11 +937,6 @@ impl Udev {
             .gpu_manager
             .single_renderer(&device.render_node)
             .expect("failed to get primary gpu MultiRenderer");
-        let render_formats = renderer
-            .as_mut()
-            .egl_context()
-            .dmabuf_render_formats()
-            .clone();
 
         info!(
             ?crtc,
@@ -929,10 +954,9 @@ impl Udev {
         let drm_mode = connector.modes()[mode_id];
         let smithay_mode = smithay::output::Mode::from(drm_mode);
 
-        let surface = match device
-            .drm
-            .create_surface(crtc, drm_mode, &[connector.handle()])
-        {
+        let drm_device = device.drm_output_manager.device_mut();
+
+        let surface = match drm_device.create_surface(crtc, drm_mode, &[connector.handle()]) {
             Ok(surface) => surface,
             Err(err) => {
                 warn!("Failed to create drm surface: {}", err);
@@ -947,7 +971,7 @@ impl Udev {
         );
 
         let display_info =
-            smithay_drm_extras::display_info::for_connector(&device.drm, connector.handle());
+            smithay_drm_extras::display_info::for_connector(drm_device, connector.handle());
 
         let (make, model, serial) = display_info
             .map(|info| {
@@ -1008,43 +1032,26 @@ impl Udev {
         });
         let position = (x, 0).into();
 
+        output.change_current_state(Some(smithay_mode), None, None, Some(position));
+
         output.user_data().insert_if_missing(|| UdevOutputData {
             crtc,
             device_id: node,
         });
 
-        let allocator = GbmAllocator::new(
-            device.gbm.clone(),
-            GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
-        );
+        let drm_output = {
+            let planes = surface.planes().clone();
 
-        let color_formats = if std::env::var("PINNACLE_DISABLE_10BIT").is_ok() {
-            SUPPORTED_FORMATS_8BIT_ONLY
-        } else {
-            SUPPORTED_FORMATS
-        };
-
-        let compositor = {
-            let mut planes = surface.planes().clone();
-
-            // INFO: We are disabling overlay planes because it seems that any elements on
-            // overlay planes don't get up/downscaled according to the set filter;
-            // it always defaults to linear. Also alacritty seems to have the wrong alpha
-            // when it's on the overlay plane.
-            planes.overlay.clear();
-
-            match DrmCompositor::new(
+            match device.drm_output_manager.initialize_output(
+                crtc,
+                drm_mode,
+                &[connector.handle()],
                 &output,
-                surface,
                 Some(planes),
-                allocator,
-                device.gbm.clone(),
-                color_formats,
-                render_formats,
-                device.drm.cursor_size(),
-                Some(device.gbm.clone()),
+                &mut renderer,
+                &DrmOutputRenderElements::<_, OutputRenderElement<_>>::default(),
             ) {
-                Ok(compositor) => compositor,
+                Ok(drm_output) => drm_output,
                 Err(err) => {
                     warn!("Failed to create drm compositor: {}", err);
                     return;
@@ -1052,17 +1059,19 @@ impl Udev {
             }
         };
 
-        let dmabuf_feedback = get_surface_dmabuf_feedback(
-            self.primary_gpu,
-            device.render_node,
-            &mut self.gpu_manager,
-            &compositor,
-        );
+        let dmabuf_feedback = drm_output.with_compositor(|compositor| {
+            get_surface_dmabuf_feedback(
+                self.primary_gpu,
+                device.render_node,
+                &mut self.gpu_manager,
+                compositor.surface(),
+            )
+        });
 
         let surface = RenderSurface {
             device_id: node,
             render_node: device.render_node,
-            compositor,
+            drm_output,
             dmabuf_feedback,
             render_state: RenderState::Idle,
             screencopy_commit_state: ScreencopyCommitState::default(),
@@ -1145,8 +1154,11 @@ impl Udev {
             return;
         };
 
-        let drm_scan_result = match device.drm_scanner.scan_connectors(&device.drm) {
-            Ok(event) => event,
+        let drm_scan_result = match device
+            .drm_scanner
+            .scan_connectors(device.drm_output_manager.device())
+        {
+            Ok(scan_result) => scan_result,
             Err(err) => {
                 error!("Failed to scan drm connectors: {err}");
                 return;
@@ -1245,7 +1257,7 @@ impl Udev {
         };
 
         match surface
-            .compositor
+            .drm_output
             .frame_submitted()
             .map_err(SwapBuffersError::from)
         {
@@ -1332,7 +1344,7 @@ impl Udev {
         let is_active = self
             .backends
             .get(device_id)
-            .map(|device| device.drm.is_active())
+            .map(|device| device.drm_output_manager.device().is_active())
             .unwrap_or_default();
 
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
@@ -1380,7 +1392,7 @@ impl Udev {
         let mut renderer = if primary_gpu == render_node {
             self.gpu_manager.single_renderer(&render_node)
         } else {
-            let format = surface.compositor.format();
+            let format = surface.drm_output.format();
             self.gpu_manager
                 .renderer(&primary_gpu, &render_node, format)
         }
@@ -1469,10 +1481,16 @@ impl Udev {
             CLEAR_COLOR_LOCKED
         };
 
-        let render_frame_result =
-            surface
-                .compositor
-                .render_frame(&mut renderer, &output_render_elements, clear_color);
+        // No overlay planes cuz they wonk
+        let frame_flags =
+            FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT;
+
+        let render_frame_result = surface.drm_output.render_frame(
+            &mut renderer,
+            &output_render_elements,
+            clear_color,
+            frame_flags,
+        );
 
         let failed = match render_frame_result {
             Ok(res) => {
@@ -1508,7 +1526,7 @@ impl Udev {
                         take_presentation_feedback(output, &pinnacle.space, &res.states);
 
                     match surface
-                        .compositor
+                        .drm_output
                         .queue_frame(Some(output_presentation_feedback))
                     {
                         Ok(()) => {
@@ -1731,10 +1749,7 @@ fn handle_pending_screencopy<'a>(
         .unwrap_or_else(|| {
             // Returning `None` means the previous CommitCounter is too old or damage
             // was reset, so damage the whole output
-            DamageSet::from_slice(&[Rectangle::from_loc_and_size(
-                Point::from((0, 0)),
-                untransformed_output_size,
-            )])
+            DamageSet::from_slice(&[Rectangle::from_size(untransformed_output_size)])
         });
 
         let cursor_damage = render_frame_result
@@ -1791,9 +1806,7 @@ fn handle_pending_screencopy<'a>(
         }
 
         (|| -> anyhow::Result<Option<SyncPoint>> {
-            if screencopy.physical_region()
-                == Rectangle::from_loc_and_size(Point::from((0, 0)), untransformed_output_size)
-            {
+            if screencopy.physical_region() == Rectangle::from_size(untransformed_output_size) {
                 // Optimization to not have to do an extra blit;
                 // just blit the whole output
                 renderer.bind(dmabuf)?;
@@ -1827,10 +1840,7 @@ fn handle_pending_screencopy<'a>(
                     Transform::Normal,
                     output.current_scale().fractional_scale(),
                     renderer,
-                    [Rectangle::from_loc_and_size(
-                        Point::from((0, 0)),
-                        untransformed_output_size,
-                    )],
+                    [Rectangle::from_size(untransformed_output_size)],
                     if !screencopy.overlay_cursor() {
                         cursor_ids
                     } else {
@@ -1856,10 +1866,7 @@ fn handle_pending_screencopy<'a>(
                 renderer.blit_from(
                     offscreen,
                     screencopy.physical_region(),
-                    Rectangle::from_loc_and_size(
-                        Point::from((0, 0)),
-                        screencopy.physical_region().size,
-                    ),
+                    Rectangle::from_size(screencopy.physical_region().size),
                     TextureFilter::Linear,
                 )?;
 
@@ -1911,10 +1918,7 @@ fn handle_pending_screencopy<'a>(
                     Transform::Normal,
                     output.current_scale().fractional_scale(),
                     renderer,
-                    [Rectangle::from_loc_and_size(
-                        Point::from((0, 0)),
-                        untransformed_output_size,
-                    )],
+                    [Rectangle::from_size(untransformed_output_size)],
                     if !screencopy.overlay_cursor() {
                         cursor_ids
                     } else {

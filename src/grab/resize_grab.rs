@@ -237,7 +237,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
                         .element_location(&self.window)
                         .expect("failed to get x11 win loc");
                     surface
-                        .configure(Rectangle::from_loc_and_size(loc, self.last_window_size))
+                        .configure(Rectangle::new(loc, self.last_window_size))
                         .expect("failed to configure x11 win");
                 }
             }
@@ -464,7 +464,7 @@ impl Pinnacle {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
                     // FIXME: rounding
-                    let new_geo = Rectangle::from_loc_and_size(window_loc.to_i32_round(), geo.size);
+                    let new_geo = Rectangle::new(window_loc.to_i32_round(), geo.size);
                     surface
                         .configure(new_geo)
                         .expect("failed to configure x11 win");

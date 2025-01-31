@@ -201,7 +201,6 @@ pub struct WindowElementState {
     /// What tags the window is currently on.
     pub tags: IndexSet<Tag>,
     pub window_state: WindowState,
-    pub target_loc: Option<Point<i32, Logical>>,
     pub minimized: bool,
     /// The most recent serial that has been committed.
     pub committed_serial: Option<Serial>,
@@ -428,7 +427,6 @@ impl WindowElementState {
             window_state: WindowState::Tiled,
             floating_loc: None,
             floating_size: None,
-            target_loc: None,
             minimized: false,
             committed_serial: None,
             snapshot: None,

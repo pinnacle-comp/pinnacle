@@ -127,7 +127,7 @@ fn render_elements_to_bound_framebuffer(
     transform: Transform,
 ) -> anyhow::Result<SyncPoint> {
     // TODO: see what transform.invert() does here
-    let dst_rect = Rectangle::from_loc_and_size((0, 0), transform.transform_size(size));
+    let dst_rect = Rectangle::from_size(transform.transform_size(size));
 
     let mut frame = renderer
         .render(size, transform)

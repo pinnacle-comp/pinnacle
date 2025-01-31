@@ -29,7 +29,7 @@ use smithay::{
             window::{Icon, WindowAttributes},
         },
     },
-    utils::{Point, Rectangle, Transform},
+    utils::{Rectangle, Transform},
     wayland::{
         dmabuf::{self, DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufState},
         presentation::Refresh,
@@ -464,10 +464,7 @@ impl Winit {
                 .blit_to(
                     dmabuf,
                     screencopy.physical_region(),
-                    Rectangle::from_loc_and_size(
-                        Point::from((0, 0)),
-                        screencopy.physical_region().size,
-                    ),
+                    Rectangle::from_size(screencopy.physical_region().size),
                     TextureFilter::Nearest,
                 )
                 .map(|_| render_output_result.sync.clone())
@@ -518,17 +515,14 @@ impl Winit {
                         renderer.blit_to(
                             offscreen.clone(),
                             screencopy.physical_region(),
-                            Rectangle::from_loc_and_size(
-                                Point::from((0, 0)),
-                                screencopy.physical_region().size,
-                            ),
+                            Rectangle::from_size(screencopy.physical_region().size),
                             TextureFilter::Nearest,
                         )?;
 
                         renderer.bind(offscreen)?;
 
                         let mapping = renderer.copy_framebuffer(
-                            Rectangle::from_loc_and_size(Point::from((0, 0)), buffer_rect.size),
+                            Rectangle::from_size(buffer_rect.size),
                             smithay::backend::allocator::Fourcc::Argb8888,
                         )?;
 

@@ -29,11 +29,12 @@ impl Udev {
             .get()
             .context("no udev output data for output")?;
 
-        let drm_device = &self
+        let drm_device = self
             .backends
             .get(device_id)
             .context("no udev backend data for output")?
-            .drm;
+            .drm_output_manager
+            .device();
 
         let ret = Udev::set_gamma_internal(drm_device, crtc, gamma);
 
@@ -105,11 +106,12 @@ impl Udev {
             .get()
             .context("no udev output data for output")?;
 
-        let drm_device = &self
+        let drm_device = self
             .backends
             .get(device_id)
             .context("no udev backend data for output")?
-            .drm;
+            .drm_output_manager
+            .device();
 
         let crtc_info = drm_device.get_crtc(*crtc)?;
         Ok(crtc_info.gamma_length())
