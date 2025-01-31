@@ -314,8 +314,6 @@ impl Pinnacle {
             self.unmapped_windows.push(window.clone());
         }
 
-        window.with_state_mut(|state| state.window_rule_request_sent = false);
-
         self.z_index_stack.retain(|win| win != window);
 
         for output in self.outputs.keys() {

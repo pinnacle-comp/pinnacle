@@ -220,12 +220,6 @@ pub struct WindowElementState {
     ///
     /// See [`Pinnacle::update_primary_scanout_output`] for more details.
     pub offscreen_elem_id: Option<Id>,
-
-    /// Whether or not this window has had an initial window rule request sent.
-    ///
-    /// If a window commits but stays unmapped, another window rule request is sent.
-    /// This prevents that from happening.
-    pub window_rule_request_sent: bool,
 }
 
 impl WindowElement {
@@ -433,7 +427,6 @@ impl WindowElementState {
             snapshot_hook_id: None,
             decoration_mode: None,
             offscreen_elem_id: None,
-            window_rule_request_sent: false,
         }
     }
 }

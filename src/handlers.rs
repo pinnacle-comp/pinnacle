@@ -217,31 +217,29 @@ impl CompositorHandler for State {
                     self.map_new_window(&unmapped_window);
                 } else {
                     // Still unmapped
+
+                    unmapped_window.on_commit();
+
                     if let Some(output) = self.pinnacle.focused_output().cloned() {
                         self.pinnacle
                             .place_window_on_output(&unmapped_window, &output);
                     }
 
-                    let window_rule_request_sent = self
-                        .pinnacle
-                        .window_rule_state
-                        .new_request(unmapped_window.clone());
+                    if let Some(toplevel) = unmapped_window.toplevel() {
+                        let window_rule_request_sent = self
+                            .pinnacle
+                            .window_rule_state
+                            .new_request(unmapped_window.clone());
 
-                    // If the above is false, then there are either
-                    //   a. No window rules in place, or
-                    //   b. all clients with window rules are dead
-                    //
-                    // In this case, send the initial configure here instead of waiting.
-                    if !window_rule_request_sent {
-                        if let Some(toplevel) = unmapped_window.toplevel() {
-                            if !toplevel.is_initial_configure_sent() {
-                                toplevel.send_configure();
-                            }
+                        // If the above is false, then there are either
+                        //   a. No window rules in place, or
+                        //   b. all clients with window rules are dead
+                        //
+                        // In this case, send the initial configure here instead of waiting.
+                        if !window_rule_request_sent {
+                            toplevel.send_configure();
                         }
                     }
-
-                    unmapped_window.on_commit();
-                    unmapped_window.with_state_mut(|state| state.window_rule_request_sent = true);
                 }
 
                 return;

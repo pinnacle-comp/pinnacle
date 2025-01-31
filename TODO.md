@@ -1,5 +1,7 @@
 - Provide scale and transform on new window/layer
 
+- Xwayland self-scaling
+
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords
   get screwed up pointer events

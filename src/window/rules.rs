@@ -1,3 +1,4 @@
+use smithay::desktop::WindowSurface;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::state::WithState;
@@ -26,11 +27,15 @@ pub struct WindowRuleState {
 }
 
 impl WindowRuleState {
-    /// Returns whether the request was sent
+    /// Returns whether a request was sent
     pub fn new_request(&mut self, window: WindowElement) -> bool {
         let _span = tracy_client::span!("WindowRuleState::new_request");
 
-        if window.with_state(|state| state.window_rule_request_sent) {
+        let window_rule_already_finished = match window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => toplevel.is_initial_configure_sent(),
+            WindowSurface::X11(surface) => surface.is_mapped(),
+        };
+        if window_rule_already_finished {
             return true;
         }
 
