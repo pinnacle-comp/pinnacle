@@ -11,7 +11,7 @@ dependencies = {
     "lua >= 5.2",
     "cqueues ~> 20200726",
     "http ~> 0.4",
-    "lua-protobuf ~> 0.5",
+    "lua-protobuf ~> 0.5.2",
     "compat53 ~> 0.13",
     "lualogging ~> 1.8.2",
 
