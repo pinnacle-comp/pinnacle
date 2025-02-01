@@ -2,7 +2,7 @@ use pinnacle_api_defs::pinnacle::{
     self,
     v1::{
         self, BackendRequest, BackendResponse, KeepaliveRequest, KeepaliveResponse, QuitRequest,
-        ReloadConfigRequest,
+        ReloadConfigRequest, SetXwaylandClientSelfScaleRequest,
     },
 };
 use tonic::{Request, Streaming};
@@ -69,6 +69,21 @@ impl v1::pinnacle_service_server::PinnacleService for super::PinnacleService {
             response.set_backend(backend);
 
             Ok(response)
+        })
+        .await
+    }
+
+    async fn set_xwayland_client_self_scale(
+        &self,
+        request: Request<SetXwaylandClientSelfScaleRequest>,
+    ) -> TonicResult<()> {
+        let should_self_scale = request.into_inner().self_scale;
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(xwayland_state) = state.pinnacle.xwayland_state.as_mut() {
+                xwayland_state.should_clients_self_scale = should_self_scale;
+                state.pinnacle.update_xwayland_scale();
+            }
         })
         .await
     }

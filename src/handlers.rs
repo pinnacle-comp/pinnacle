@@ -6,7 +6,7 @@ pub mod idle;
 pub mod session_lock;
 pub mod window;
 mod xdg_shell;
-mod xwayland;
+pub mod xwayland;
 
 use std::{collections::HashMap, mem, os::fd::OwnedFd, sync::Arc};
 
@@ -482,7 +482,12 @@ impl SelectionHandler for State {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
-        if let Some(xwm) = self.pinnacle.xwm.as_mut() {
+        if let Some(xwm) = self
+            .pinnacle
+            .xwayland_state
+            .as_mut()
+            .and_then(|xwayland| xwayland.xwm.as_mut())
+        {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
                 tracing::warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
@@ -497,7 +502,12 @@ impl SelectionHandler for State {
         _seat: Seat<Self>,
         _user_data: &(),
     ) {
-        if let Some(xwm) = self.pinnacle.xwm.as_mut() {
+        if let Some(xwm) = self
+            .pinnacle
+            .xwayland_state
+            .as_mut()
+            .and_then(|xwayland| xwayland.xwm.as_mut())
+        {
             if let Err(err) =
                 xwm.send_selection(ty, mime_type, fd, self.pinnacle.loop_handle.clone())
             {

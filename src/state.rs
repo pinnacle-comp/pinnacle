@@ -13,7 +13,7 @@ use crate::{
     cursor::CursorState,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
-    handlers::session_lock::LockState,
+    handlers::{session_lock::LockState, xwayland::XwaylandState},
     layout::LayoutState,
     process::ProcessState,
     protocol::{
@@ -84,7 +84,7 @@ use smithay::{
         xwayland_keyboard_grab::XWaylandKeyboardGrabState,
         xwayland_shell::XWaylandShellState,
     },
-    xwayland::{X11Wm, XWaylandClientData},
+    xwayland::XWaylandClientData,
 };
 use std::{
     cell::RefCell,
@@ -178,9 +178,7 @@ pub struct Pinnacle {
 
     pub config: Config,
 
-    // xwayland stuff
-    pub xwm: Option<X11Wm>,
-    pub xdisplay: Option<u32>,
+    pub xwayland_state: Option<XwaylandState>,
 
     pub process_state: ProcessState,
 
@@ -429,8 +427,7 @@ impl Pinnacle {
             windows: Vec::new(),
             unmapped_windows: Vec::new(),
 
-            xwm: None,
-            xdisplay: None,
+            xwayland_state: None,
 
             process_state: ProcessState::new(sysinfo::System::new_with_specifics(
                 RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),

@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{process::Stdio, time::Duration};
+use std::{
+    process::Stdio,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use smithay::{
     desktop::Window,
     input::pointer::CursorIcon,
+    reexports::wayland_server::Client,
     utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER},
     wayland::selection::{
         data_device::{
@@ -19,10 +27,10 @@ use smithay::{
     },
     xwayland::{
         xwm::{Reorder, XwmId},
-        X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler,
+        X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     },
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -30,9 +38,24 @@ use crate::{
     window::WindowElement,
 };
 
+#[derive(Debug)]
+pub struct XwaylandState {
+    pub xwm: Option<X11Wm>,
+    pub display_num: u32,
+    pub client: Client,
+    pub should_clients_self_scale: bool,
+    pub current_scale: Option<i32>,
+}
+
 impl XwmHandler for State {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-        self.pinnacle.xwm.as_mut().expect("xwm not in state")
+        self.pinnacle
+            .xwayland_state
+            .as_mut()
+            .unwrap()
+            .xwm
+            .as_mut()
+            .expect("xwm not in state")
     }
 
     fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
@@ -403,7 +426,11 @@ impl Pinnacle {
     pub fn update_xwayland_stacking_order(&mut self) {
         let _span = tracy_client::span!("Pinnacle::update_xwayland_stacking_order");
 
-        let Some(xwm) = self.xwm.as_mut() else {
+        let Some(xwm) = self
+            .xwayland_state
+            .as_mut()
+            .and_then(|xwayland| xwayland.xwm.as_mut())
+        else {
             return;
         };
 
@@ -425,9 +452,11 @@ impl Pinnacle {
         }
     }
 
-    /// Spawn an [`XWayland`] instance and insert its event source into
+    /// Spawns an [`XWayland`] instance and inserts its event source into
     /// the event loop.
-    pub fn insert_xwayland_source(&mut self) -> anyhow::Result<()> {
+    ///
+    /// Receives a boolean flag that becomes true once this finishes.
+    pub fn insert_xwayland_source(&mut self, flag: Arc<AtomicBool>) -> anyhow::Result<()> {
         let _span = tracy_client::span!("Pinnacle::insert_xwayland_source");
 
         // TODO: xwayland keyboard grab state
@@ -443,44 +472,131 @@ impl Pinnacle {
         )?;
 
         self.loop_handle
-            .insert_source(xwayland, move |event, _, state| match event {
-                XWaylandEvent::Ready {
-                    x11_socket,
-                    display_number,
-                } => {
-                    let mut wm = X11Wm::start_wm(
-                        state.pinnacle.loop_handle.clone(),
+            .insert_source(xwayland, move |event, _, state| {
+                match event {
+                    XWaylandEvent::Ready {
                         x11_socket,
-                        client.clone(),
-                    )
-                    .expect("Failed to attach x11wm");
+                        display_number,
+                    } => {
+                        state.pinnacle.xwayland_state = Some(XwaylandState {
+                            xwm: None,
+                            display_num: display_number,
+                            client: client.clone(),
+                            should_clients_self_scale: false,
+                            current_scale: None,
+                        });
 
-                    let cursor = state
-                        .pinnacle
-                        .cursor_state
-                        .get_xcursor_images(CursorIcon::Default)
-                        .unwrap();
-                    let image =
-                        cursor.image(Duration::ZERO, state.pinnacle.cursor_state.cursor_size(1)); // TODO: scale
-                    wm.set_cursor(
-                        &image.pixels_rgba,
-                        Size::from((image.width as u16, image.height as u16)),
-                        Point::from((image.xhot as u16, image.yhot as u16)),
-                    )
-                    .expect("failed to set xwayland default cursor");
+                        let mut wm = match X11Wm::start_wm(
+                            state.pinnacle.loop_handle.clone(),
+                            x11_socket,
+                            client.clone(),
+                        ) {
+                            Ok(wm) => wm,
+                            Err(err) => {
+                                error!("Failed to start xwayland wm: {err}");
+                                return;
+                            }
+                        };
 
-                    tracing::debug!("setting xwm and xdisplay");
+                        let cursor = state
+                            .pinnacle
+                            .cursor_state
+                            .get_xcursor_images(CursorIcon::Default)
+                            .unwrap();
+                        let image = cursor
+                            .image(Duration::ZERO, state.pinnacle.cursor_state.cursor_size(1));
+                        if let Err(err) = wm.set_cursor(
+                            &image.pixels_rgba,
+                            Size::from((image.width as u16, image.height as u16)),
+                            Point::from((image.xhot as u16, image.yhot as u16)),
+                        ) {
+                            warn!("Failed to set xwayland default cursor: {err}");
+                        }
 
-                    state.pinnacle.xwm = Some(wm);
-                    state.pinnacle.xdisplay = Some(display_number);
+                        state.pinnacle.xwayland_state.as_mut().unwrap().xwm = Some(wm);
 
-                    std::env::set_var("DISPLAY", format!(":{display_number}"));
+                        // FIXME: don't set here, spawn client with the var directly
+                        std::env::set_var("DISPLAY", format!(":{display_number}"));
+
+                        state.pinnacle.update_xwayland_scale();
+
+                        info!("Xwayland started at :{display_number}");
+                    }
+                    XWaylandEvent::Error => {
+                        state.pinnacle.xwayland_state.take();
+                        warn!("XWayland crashed on startup");
+                    }
                 }
-                XWaylandEvent::Error => {
-                    warn!("XWayland crashed on startup");
-                }
+
+                flag.store(true, Ordering::Relaxed);
             })?;
 
         Ok(())
+    }
+
+    // Yoinked from le cosmic:
+    // https://github.com/pop-os/cosmic-comp/pull/779
+    pub fn update_xwayland_scale(&mut self) {
+        let Some(xwayland_state) = self.xwayland_state.as_mut() else {
+            return;
+        };
+
+        let new_scale = if xwayland_state.should_clients_self_scale {
+            self.outputs
+                .keys()
+                .map(|op| op.current_scale().integer_scale())
+                .max()
+                .unwrap_or(1)
+        } else {
+            1
+        };
+
+        if xwayland_state.current_scale == Some(new_scale) {
+            return;
+        }
+
+        let geos = self
+            .windows
+            .iter()
+            .filter_map(|win| {
+                win.x11_surface()
+                    .map(|surf| (surf.clone(), surf.geometry()))
+            })
+            .collect::<Vec<_>>();
+
+        if let Some(xwm) = xwayland_state.xwm.as_mut() {
+            let dpi = new_scale.abs() * 96 * 1024;
+            if let Err(err) = xwm.set_xsettings(
+                [
+                    ("Xft/DPI".into(), dpi.into()),
+                    ("Gdk/UnscaledDPI".into(), (dpi / new_scale).into()),
+                    ("Gdk/WindowScalingFactor".into(), new_scale.into()),
+                ]
+                .into_iter(),
+            ) {
+                warn!("Failed to update XSETTINGS on scale change: {err}");
+            }
+        }
+
+        xwayland_state
+            .client
+            .get_data::<XWaylandClientData>()
+            .unwrap()
+            .compositor_state
+            .set_client_scale(new_scale as u32);
+
+        for output in self.outputs.keys() {
+            output.change_current_state(None, None, None, None);
+        }
+
+        for (surface, geo) in geos {
+            if let Err(err) = surface.configure(geo) {
+                warn!("Failed to update surface geo after scale change: {err}");
+            }
+        }
+
+        xwayland_state.current_scale = Some(new_scale);
+
+        self.update_xwayland_stacking_order();
     }
 }

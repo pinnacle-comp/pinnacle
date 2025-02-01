@@ -54,6 +54,28 @@ function pinnacle.backend()
     end
 end
 
+---Sets whether or not xwayland clients should scale themselves.
+---
+---If `true`, xwayland clients will be told they are on an output with a larger or smaller size than
+---normal then rescaled to replicate being on an output with a scale of 1.
+---
+---Xwayland clients that support DPI scaling will scale properly, leading to crisp and correct scaling
+---with fractional output scales. Those that don't, like `xterm`, will render as if they are on outputs
+---with scale 1, and their scale will be slightly incorrect on outputs with fractional scale.
+---
+---Results may vary if you have multiple outputs with different scales.
+---
+---@param should_self_scale boolean
+function pinnacle.set_xwayland_self_scaling(should_self_scale)
+    local _, err = client:unary_request(pinnacle_service.SetXwaylandClientSelfScale, {
+        self_scale = should_self_scale,
+    })
+
+    if err then
+        log:error(err)
+    end
+end
+
 ---Initializes the protobuf backend and connects to Pinnacle's gRPC socket.
 ---
 ---If the Snowcap Lua API is installed and Snowcap is running, this will also setup Snowcap and

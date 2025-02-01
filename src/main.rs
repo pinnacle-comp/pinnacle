@@ -2,6 +2,10 @@
 
 use std::{
     io::{BufRead, BufReader},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -162,10 +166,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if !startup_config.no_xwayland {
-        match state.pinnacle.insert_xwayland_source() {
+        let finished_flag = Arc::new(AtomicBool::new(false));
+
+        match state.pinnacle.insert_xwayland_source(finished_flag.clone()) {
             Ok(()) => {
                 // Wait for xwayland to start so the config gets DISPLAY
-                while state.pinnacle.xdisplay.is_none() {
+                while !finished_flag.load(Ordering::Relaxed) {
                     event_loop.dispatch(None, &mut state)?;
                     state.on_event_loop_cycle_completion();
                 }

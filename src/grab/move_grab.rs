@@ -57,19 +57,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
         state.pinnacle.raise_window(self.window.clone(), false);
 
-        if let Some(surface) = self.window.x11_surface() {
-            // INFO: can you raise OR windows or no idk
-            if !surface.is_override_redirect() {
-                state
-                    .pinnacle
-                    .xwm
-                    .as_mut()
-                    .expect("no xwm")
-                    .raise_window(surface)
-                    .expect("failed to raise x11 win");
-            }
-        }
-
         let is_floating = self
             .window
             .with_state(|state| state.window_state.is_floating());

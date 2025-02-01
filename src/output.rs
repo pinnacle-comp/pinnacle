@@ -212,6 +212,7 @@ impl Pinnacle {
         let old_scale = output.current_scale().fractional_scale();
 
         output.change_current_state(None, transform, scale, location);
+
         if let Some(location) = location {
             self.space.map_output(output, location);
             self.signal_state.output_move.signal(output);
@@ -233,6 +234,8 @@ impl Pinnacle {
         }
 
         if let Some(scale) = scale {
+            // Move floating windows so they stay in the same place after a scale change
+
             let pos_multiplier = old_scale / scale.fractional_scale();
 
             for win in self
@@ -259,6 +262,10 @@ impl Pinnacle {
                 loc = loc_relative_to_output + output_loc;
                 self.space.map_element(win.clone(), loc, false);
             }
+
+            self.loop_handle.insert_idle(|state| {
+                state.pinnacle.update_xwayland_scale();
+            });
         }
 
         if let Some(lock_surface) = output.with_state(|state| state.lock_surface.clone()) {

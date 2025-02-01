@@ -8,7 +8,10 @@
 
 use pinnacle_api_defs::pinnacle::{
     self,
-    v1::{BackendRequest, KeepaliveRequest, KeepaliveResponse, QuitRequest, ReloadConfigRequest},
+    v1::{
+        BackendRequest, KeepaliveRequest, KeepaliveResponse, QuitRequest, ReloadConfigRequest,
+        SetXwaylandClientSelfScaleRequest,
+    },
 };
 use tonic::Streaming;
 
@@ -52,6 +55,25 @@ pub fn backend() -> Backend {
         pinnacle::v1::Backend::Window => Backend::Window,
         pinnacle::v1::Backend::Tty => Backend::Tty,
     }
+}
+
+/// Sets whether or not xwayland clients should scale themselves.
+///
+/// If `true`, xwayland clients will be told they are on an output with a larger or smaller size than
+/// normal then rescaled to replicate being on an output with a scale of 1.
+///
+/// Xwayland clients that support DPI scaling will scale properly, leading to crisp and correct scaling
+/// with fractional output scales. Those that don't, like `xterm`, will render as if they are on outputs
+/// with scale 1, and their scale will be slightly incorrect on outputs with fractional scale.
+///
+/// Results may vary if you have multiple outputs with different scales.
+pub fn set_xwayland_self_scaling(should_self_scale: bool) {
+    Client::pinnacle()
+        .set_xwayland_client_self_scale(SetXwaylandClientSelfScaleRequest {
+            self_scale: should_self_scale,
+        })
+        .block_on_tokio()
+        .unwrap();
 }
 
 pub(crate) async fn keepalive() -> (
