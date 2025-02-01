@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use indexmap::{IndexMap, IndexSet};
 use prost_types::{
     field_descriptor_proto::{Label, Type},
@@ -185,13 +183,13 @@ fn generate_message_classes(msgs: &MessageMap) -> String {
 }
 
 struct Visited {
-    children: HashMap<String, Visited>,
+    children: IndexMap<String, Visited>,
 }
 
 fn generate_message_tables(msgs: &MessageMap) -> String {
     let mut ret = String::new();
 
-    let mut visited = HashMap::<String, Visited>::new();
+    let mut visited = IndexMap::<String, Visited>::new();
 
     for name in msgs.keys() {
         let segments = name.trim_start_matches('.').split('.');
@@ -217,7 +215,7 @@ fn generate_message_tables(msgs: &MessageMap) -> String {
                         );
                     }
                     Visited {
-                        children: HashMap::new(),
+                        children: IndexMap::new(),
                     }
                 })
                 .children;

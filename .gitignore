@@ -15,5 +15,3 @@ api/lua/doc/doc
 api/rust/Cargo.lock
 # Don't push compiled WLCS
 wlcs
-# Don't push generated definitions
-**/defs.lua
