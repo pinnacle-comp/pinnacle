@@ -169,5 +169,9 @@ tracy = ["profiling/profile-with-tracy", "tracy-client/default"]
 tracy-ondemand = ["tracy", "tracy-client/ondemand", "tracy-client/manual-lifetime"]
 tracy-alloc = ["tracy"]
 
+[profile.release]
+debug = "line-tables-only"
+lto = "thin"
+
 [lints]
 workspace = true
