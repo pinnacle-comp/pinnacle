@@ -30,7 +30,7 @@ use smithay::{
         X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     },
 };
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -65,18 +65,28 @@ impl XwmHandler for State {
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::map_window_request");
 
-        if surface.is_override_redirect() {
-            // Steam games that reach this: Ori and the Will of the Wisps, Pizza Tower
-            return;
-        }
-
-        let window = WindowElement::new(Window::new_x11_window(surface));
+        let window = self
+            .pinnacle
+            .window_for_x11_surface(&surface)
+            .cloned()
+            .unwrap_or_else(|| {
+                let window = WindowElement::new(Window::new_x11_window(surface));
+                self.pinnacle.windows.push(window.clone());
+                window
+            });
 
         if let Some(output) = self.pinnacle.focused_output() {
             self.pinnacle.place_window_on_output(&window, output);
         }
 
-        self.pinnacle.windows.push(window.clone());
+        // bruh
+        //
+        // This gets Plants vs. Zombies to show up.
+        // Ignore the bit where if you set it to fullscreen in game it disappears
+        if window.is_x11_override_redirect() {
+            let _ = window.x11_surface().unwrap().set_mapped(true);
+            return;
+        }
 
         let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
         if !window_rule_request_sent {
@@ -91,9 +101,15 @@ impl XwmHandler for State {
 
         let loc = surface.geometry().loc;
 
-        let window = WindowElement::new(Window::new_x11_window(surface));
-
-        self.pinnacle.windows.push(window.clone());
+        let window = self
+            .pinnacle
+            .window_for_x11_surface(&surface)
+            .cloned()
+            .unwrap_or_else(|| {
+                let window = WindowElement::new(Window::new_x11_window(surface));
+                self.pinnacle.windows.push(window.clone());
+                window
+            });
 
         if let Some(output) = self.pinnacle.focused_output() {
             self.pinnacle.place_window_on_output(&window, output);
@@ -110,13 +126,7 @@ impl XwmHandler for State {
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::map_window_notify");
 
-        let Some(window) = self
-            .pinnacle
-            .windows
-            .iter()
-            .find(|win| win.x11_surface() == Some(&window))
-            .cloned()
-        else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
 
@@ -125,18 +135,11 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unmapped_window");
-
-        if !surface.is_override_redirect() {
-            debug!("set mapped to false");
-            surface.set_mapped(false).expect("failed to unmap x11 win");
-        }
-
         self.remove_xwayland_window(surface);
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::destroyed_window");
-
         self.remove_xwayland_window(surface);
     }
 
@@ -154,13 +157,8 @@ impl XwmHandler for State {
 
         let should_configure = self
             .pinnacle
-            .windows
-            .iter()
-            .find(|win| win.x11_surface() == Some(&window))
-            .map(|win| {
-                win.is_x11_override_redirect()
-                    || win.with_state(|state| state.window_state.is_floating())
-            })
+            .window_for_x11_surface(&window)
+            .map(|win| win.with_state(|state| state.window_state.is_floating()))
             .unwrap_or(true);
         // If we unwrap_or here then the window hasn't requested a map yet.
         // In that case, grant the configure. Xterm wants this to map properly, for example.
@@ -182,7 +180,7 @@ impl XwmHandler for State {
             }
 
             if let Err(err) = window.configure(geo) {
-                error!("Failed to configure x11 win: {err}");
+                warn!(?geo, "Failed to configure x11 win: {err}");
             }
         }
     }
@@ -215,10 +213,7 @@ impl XwmHandler for State {
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::maximize_request");
 
-        let Some(window) = window
-            .wl_surface()
-            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
-        else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
 
@@ -229,10 +224,7 @@ impl XwmHandler for State {
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unmaximize_request");
 
-        let Some(window) = window
-            .wl_surface()
-            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
-        else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
 
@@ -243,10 +235,7 @@ impl XwmHandler for State {
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::fullscreen_request");
 
-        let Some(window) = window
-            .wl_surface()
-            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
-        else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
 
@@ -257,10 +246,7 @@ impl XwmHandler for State {
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unfullscreen_request");
 
-        let Some(window) = window
-            .wl_surface()
-            .and_then(|surf| self.pinnacle.window_for_surface(&surf))
-        else {
+        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
         };
 
@@ -395,12 +381,7 @@ impl State {
     fn remove_xwayland_window(&mut self, surface: X11Surface) {
         let _span = tracy_client::span!("State::remove_xwayland_window");
 
-        let win = self
-            .pinnacle
-            .windows
-            .iter()
-            .find(|elem| elem.x11_surface() == Some(&surface))
-            .cloned();
+        let win = self.pinnacle.window_for_x11_surface(&surface).cloned();
         if let Some(win) = win {
             let output = win.output(&self.pinnacle);
 
@@ -598,5 +579,11 @@ impl Pinnacle {
         xwayland_state.current_scale = Some(new_scale);
 
         self.update_xwayland_stacking_order();
+    }
+
+    fn window_for_x11_surface(&self, surface: &X11Surface) -> Option<&WindowElement> {
+        self.windows
+            .iter()
+            .find(|win| win.x11_surface() == Some(surface))
     }
 }
