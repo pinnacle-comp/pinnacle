@@ -6,7 +6,9 @@ use common::{
     grpc::{pinnacle, tag},
     rust::run_rust,
 };
-use pinnacle_api_defs::pinnacle::v1::{BackendRequest, QuitRequest, ReloadConfigRequest};
+use pinnacle_api_defs::pinnacle::v1::{
+    BackendRequest, QuitRequest, ReloadConfigRequest, SetXwaylandClientSelfScaleRequest,
+};
 use test_log::test;
 use tokio::sync::Mutex;
 
@@ -23,6 +25,8 @@ async fn pinnacle_v1() -> anyhow::Result<()> {
     pinnacle_v1.quit([QuitRequest {}]);
     pinnacle_v1.reload_config([ReloadConfigRequest {}]);
     pinnacle_v1.backend([BackendRequest {}]);
+    pinnacle_v1
+        .set_xwayland_client_self_scale([SetXwaylandClientSelfScaleRequest { self_scale: true }]);
 
     let pinnacle_v1_server =
         pinnacle_api_defs::pinnacle::v1::pinnacle_service_server::PinnacleServiceServer::new(
@@ -36,6 +40,7 @@ async fn pinnacle_v1() -> anyhow::Result<()> {
         catch!(pinnacle_api::pinnacle::quit());
         catch!(pinnacle_api::pinnacle::reload_config());
         catch!(pinnacle_api::pinnacle::backend());
+        catch!(pinnacle_api::pinnacle::set_xwayland_self_scaling(true));
     });
 
     tokio::select! {
