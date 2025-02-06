@@ -222,9 +222,9 @@ pub fn set_decoration_mode(
 }
 
 pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
-    let output = window.output(&state.pinnacle);
+    let source_output = window.output(&state.pinnacle);
 
-    if let Some(output) = output.as_ref() {
+    if let Some(output) = source_output.as_ref() {
         state.capture_snapshots_on_output(output, [window.clone()]);
     }
 
@@ -232,18 +232,29 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
         state.tags = std::iter::once(tag.clone()).collect();
     });
 
+    if let Some(output) = source_output.as_ref() {
+        state.pinnacle.begin_layout_transaction(output);
+        state.pinnacle.request_layout(output);
+
+        state.schedule_render(output);
+    }
+
     if !is_window_mapped(window) {
         return;
     }
 
-    let Some(output) = tag.output(&state.pinnacle) else {
+    let Some(target_output) = tag.output(&state.pinnacle) else {
         return;
     };
 
-    state.pinnacle.begin_layout_transaction(&output);
-    state.pinnacle.request_layout(&output);
+    if let Some(source_output) = source_output {
+        if source_output != target_output {
+            state.pinnacle.begin_layout_transaction(&target_output);
+            state.pinnacle.request_layout(&target_output);
 
-    state.schedule_render(&output);
+            state.schedule_render(&target_output);
+        }
+    }
 
     state.pinnacle.update_xwayland_stacking_order();
 }
