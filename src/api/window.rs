@@ -232,6 +232,10 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
         state.tags = std::iter::once(tag.clone()).collect();
     });
 
+    if !is_window_mapped(window) {
+        return;
+    }
+
     if let Some(output) = source_output.as_ref() {
         state.pinnacle.begin_layout_transaction(output);
         state.pinnacle.request_layout(output);
@@ -239,21 +243,18 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
         state.schedule_render(output);
     }
 
-    if !is_window_mapped(window) {
-        return;
-    }
-
     let Some(target_output) = tag.output(&state.pinnacle) else {
+        state.pinnacle.update_xwayland_stacking_order();
         return;
     };
 
-    if let Some(source_output) = source_output {
-        if source_output != target_output {
-            state.pinnacle.begin_layout_transaction(&target_output);
-            state.pinnacle.request_layout(&target_output);
+    if source_output.as_ref() != Some(&target_output) && tag.active() {
+        state.capture_snapshots_on_output(&target_output, [window.clone()]);
 
-            state.schedule_render(&target_output);
-        }
+        state.pinnacle.begin_layout_transaction(&target_output);
+        state.pinnacle.request_layout(&target_output);
+
+        state.schedule_render(&target_output);
     }
 
     state.pinnacle.update_xwayland_stacking_order();
