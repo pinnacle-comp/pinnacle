@@ -222,9 +222,9 @@ pub fn set_decoration_mode(
 }
 
 pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
-    let output = window.output(&state.pinnacle);
+    let source_output = window.output(&state.pinnacle);
 
-    if let Some(output) = output.as_ref() {
+    if let Some(output) = source_output.as_ref() {
         state.capture_snapshots_on_output(output, [window.clone()]);
     }
 
@@ -236,14 +236,26 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
         return;
     }
 
-    let Some(output) = tag.output(&state.pinnacle) else {
+    if let Some(output) = source_output.as_ref() {
+        state.pinnacle.begin_layout_transaction(output);
+        state.pinnacle.request_layout(output);
+
+        state.schedule_render(output);
+    }
+
+    let Some(target_output) = tag.output(&state.pinnacle) else {
+        state.pinnacle.update_xwayland_stacking_order();
         return;
     };
 
-    state.pinnacle.begin_layout_transaction(&output);
-    state.pinnacle.request_layout(&output);
+    if source_output.as_ref() != Some(&target_output) && tag.active() {
+        state.capture_snapshots_on_output(&target_output, [window.clone()]);
 
-    state.schedule_render(&output);
+        state.pinnacle.begin_layout_transaction(&target_output);
+        state.pinnacle.request_layout(&target_output);
+
+        state.schedule_render(&target_output);
+    }
 
     state.pinnacle.update_xwayland_stacking_order();
 }
