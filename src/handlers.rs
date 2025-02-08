@@ -28,7 +28,7 @@ use smithay::{
     },
     input::{
         keyboard::LedState,
-        pointer::{CursorImageStatus, PointerHandle},
+        pointer::{CursorImageStatus, CursorImageSurfaceData, PointerHandle},
         Seat, SeatHandler, SeatState,
     },
     output::{Mode, Output, Scale},
@@ -366,6 +366,26 @@ impl CompositorHandler for State {
         } else if matches!(self.pinnacle.cursor_state.cursor_image(), CursorImageStatus::Surface(s) if s == surface)
         {
             // This is a cursor surface
+
+            // Update the hotspot if the buffer moved
+            compositor::with_states(surface, |states| {
+                let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
+
+                if let Some(mut cursor_image_attributes) =
+                    cursor_image_attributes.map(|attrs| attrs.lock().unwrap())
+                {
+                    let buffer_delta = states
+                        .cached_state
+                        .get::<SurfaceAttributes>()
+                        .current()
+                        .buffer_delta
+                        .take();
+                    if let Some(buffer_delta) = buffer_delta {
+                        cursor_image_attributes.hotspot -= buffer_delta;
+                    }
+                }
+            });
+
             // TODO: granular
             self.pinnacle.space.outputs().cloned().collect()
         } else if self.pinnacle.dnd_icon.as_ref() == Some(surface) {

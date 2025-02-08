@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{rc::Rc, sync::Mutex};
+use std::rc::Rc;
 
 use smithay::{
     backend::renderer::{
@@ -13,7 +13,7 @@ use smithay::{
         ImportAll, ImportMem,
     },
     desktop::Space,
-    input::pointer::CursorImageAttributes,
+    input::pointer::CursorImageSurfaceData,
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
@@ -92,10 +92,10 @@ pub fn pointer_render_elements<R: PRenderer>(
                 let hotspot = compositor::with_states(surface, |states| {
                     states
                         .data_map
-                        .get::<Mutex<CursorImageAttributes>>()
-                        .expect("surface data map had no CursorImageAttributes")
+                        .get::<CursorImageSurfaceData>()
+                        .unwrap()
                         .lock()
-                        .expect("failed to lock mutex")
+                        .unwrap()
                         .hotspot
                 });
 
