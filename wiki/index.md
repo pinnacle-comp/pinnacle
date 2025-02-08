@@ -4,22 +4,23 @@ layout: home
 
 hero:
   name: "Pinnacle Wiki"
-  text: "Wiki for the Pinnacle Wayland compositor"
-  tagline: My great project tagline
+  tagline: Wiki for the Pinnacle Wayland compositor
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
-    - theme: alt
-      text: API Examples
-      link: /api-examples
+      text: Read the wiki
+      link: ./getting-started/introduction
 
 features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: Configurable
+    icon: 🔧
+    details: A powerful API gives you control over the compositor. In Lua <i>and</i> Rust.
+  - title: Feature rich
+    icon: 💎
+    details: Tags, a powerful layout system, and more.
+  - title: Stable (probably)
+    icon: 🪨
+    details: Well it hasn't panicked in the past few weeks I've been using it, at least.
+  - title: Written in Rust
+    icon: <img src="/assets/wojaks_admire_ferris_the_crab.png">
+    details: literally doesn't matter but the borrow checker is holding me hosta- oh sorry i mean omg guys it's written in rust!!!
 ---
-

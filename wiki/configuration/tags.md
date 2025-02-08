@@ -68,8 +68,9 @@ There are a few methods on windows that manipulate tags on them.
 | `move_to_tag` | Removes all tags from this window and adds the given one. This "moves" the window to the tag. |
 
 > [!NOTE]
-> The behavior when tagging a window with multiple tags from different outputs is currently
-> undefined. Try not to do that.
+> The behavior when tagging a window with multiple tags from different outputs is undefined. Try not to do that.
+> In the future, Pinnacle will prevent you from adding a tag on a window that has a different output than the tags
+> already on the window.
 
 ::: tabs key:langs
 == Lua

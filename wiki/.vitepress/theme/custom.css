@@ -1,3 +1,11 @@
 .vp-doc [class*="compress-lines"] [class*="language-"] code {
     line-height: 1.15 !important;
 }
+
+:root {
+    --vp-code-color: var(--vp-c-text-1);
+}
+
+.layout-horizontal {
+    display: flex;
+}
