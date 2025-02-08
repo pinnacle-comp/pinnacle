@@ -72,5 +72,6 @@ export default defineVersionedConfig({
                 "@nolebase/vitepress-plugin-highlight-targeted-heading",
             ]
         }
-    }
+    },
+    base: "/pinnacle/"
 }, __dirname)
