@@ -417,15 +417,6 @@ impl State {
             self.pinnacle.request_layout(&output);
         }
 
-        // It seems wlcs needs immediate frame sends for client tests to work
-        #[cfg(feature = "testing")]
-        window.send_frame(
-            &output,
-            self.pinnacle.clock.now(),
-            Some(std::time::Duration::ZERO),
-            |_, _| None,
-        );
-
         self.schedule_render(&output);
     }
 }

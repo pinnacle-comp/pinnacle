@@ -37,14 +37,6 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
 
     TagId::reset();
 
-    event_loop
-        .handle()
-        .insert_source(channel, move |event, &mut (), data| match event {
-            Event::Msg(msg) => handle_event(msg, data),
-            Event::Closed => handle_event(WlcsEvent::Stop, data),
-        })
-        .expect("failed to add wlcs event handler");
-
     // FIXME: a better way to deal with tokio here?
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
     let _handle = rt.enter();
@@ -61,21 +53,61 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
         });
     }
 
+    // Pump the loop to start the config. This stops a race between wlcs opening a window before
+    // the config finishes executing.
+    for _ in 0..100 {
+        event_loop
+            .dispatch(Duration::from_millis(1), &mut state)
+            .unwrap();
+    }
+
+    event_loop
+        .handle()
+        .insert_source(channel, move |event, &mut (), data| match event {
+            Event::Msg(msg) => handle_event(msg, data),
+            Event::Closed => handle_event(WlcsEvent::Stop, data),
+        })
+        .expect("failed to add wlcs event handler");
+
     event_loop
         .run(None, &mut state, |state| {
+            // Send frames.
+            //
+            // Because nothing is actually rendering it's hard to use `send_frame_callbacks`
+            // because the surface doesn't have a primary scanout output, because *that* needs
+            // actual rendering to happen. So we just send frames here.
+            let output = state.pinnacle.outputs.keys().next().cloned().unwrap();
+            for window in state.pinnacle.space.elements_for_output(&output) {
+                window.send_frame(
+                    &output,
+                    state.pinnacle.clock.now(),
+                    Some(Duration::ZERO),
+                    |_, _| Some(output.clone()),
+                );
+            }
+            for layer in smithay::desktop::layer_map_for_output(&output).layers() {
+                layer.send_frame(
+                    &output,
+                    state.pinnacle.clock.now(),
+                    Some(Duration::from_millis(995)),
+                    |_, _| Some(output.clone()),
+                );
+            }
+
             state.on_event_loop_cycle_completion();
         })
         .expect("failed to run event_loop");
 
-    // INFO: apparently the wayland socket doesn't want to get removed, uncomment the below
-    // to get wlcs to work
-    //
-    // let _ = std::fs::remove_file(
-    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap()),
-    // );
-    // let _ = std::fs::remove_file(
-    //     PathBuf::from("/run/user/1000").join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"),
-    // );
+    // Apparently the wayland socket doesn't want to get removed
+    let base_dirs = state
+        .pinnacle
+        .xdg_base_dirs
+        .get_runtime_directory()
+        .unwrap();
+
+    let _ = std::fs::remove_file(base_dirs.join(std::env::var("WAYLAND_DISPLAY").unwrap()));
+    let _ =
+        std::fs::remove_file(base_dirs.join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"));
 }
 
 fn handle_event(event: WlcsEvent, state: &mut State) {
