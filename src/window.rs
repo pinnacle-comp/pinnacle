@@ -410,6 +410,17 @@ impl State {
 
             window.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
 
+            // FIXME: copied from move_grab, dedup that
+            if let Some(surface) = window.x11_surface() {
+                if !surface.is_override_redirect() {
+                    let geo = surface.geometry();
+                    let new_geo = Rectangle::new(loc, geo.size);
+                    surface
+                        .configure(new_geo)
+                        .expect("failed to configure x11 win");
+                }
+            }
+
             self.pinnacle.space.map_element(window.clone(), loc, true);
         } else {
             self.capture_snapshots_on_output(&output, []);
