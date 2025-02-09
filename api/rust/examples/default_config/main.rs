@@ -275,7 +275,7 @@ async fn config() {
     // Tags                  |
     //------------------------
 
-    let tag_names = ["1", "2", "3", "4", "5"];
+    let tag_names = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
     // Setup all monitors with tags "1" through "5"
     output::for_each_output(move |output| {
@@ -284,7 +284,7 @@ async fn config() {
     });
 
     for tag_name in tag_names {
-        // `mod_key + 1-5` switches to tag "1" to "5"
+        // `mod_key + 1-9` switches to tag "1" to "9"
         input::keybind(mod_key, tag_name)
             .on_press(move || {
                 if let Some(tag) = tag::get(tag_name) {
@@ -294,7 +294,7 @@ async fn config() {
             .group("Tag")
             .description(format!("Switch to tag {tag_name}"));
 
-        // `mod_key + ctrl + 1-5` toggles tag "1" to "5"
+        // `mod_key + ctrl + 1-9` toggles tag "1" to "9"
         input::keybind(mod_key | Mod::CTRL, tag_name)
             .on_press(move || {
                 if let Some(tag) = tag::get(tag_name) {
@@ -304,7 +304,7 @@ async fn config() {
             .group("Tag")
             .description(format!("Toggle tag {tag_name}"));
 
-        // `mod_key + shift + 1-5` moves the focused window to tag "1" to "5"
+        // `mod_key + shift + 1-9` moves the focused window to tag "1" to "9"
         input::keybind(mod_key | Mod::SHIFT, tag_name)
             .on_press(move || {
                 if let Some(tag) = tag::get(tag_name) {
@@ -316,7 +316,7 @@ async fn config() {
             .group("Tag")
             .description(format!("Move the focused window to tag {tag_name}"));
 
-        // `mod_key + ctrl + shift + 1-5` toggles tag "1" to "5" on the focused window
+        // `mod_key + ctrl + shift + 1-9` toggles tag "1" to "9" on the focused window
         input::keybind(mod_key | Mod::CTRL | Mod::SHIFT, tag_name)
             .on_press(move || {
                 if let Some(tg) = tag::get(tag_name) {

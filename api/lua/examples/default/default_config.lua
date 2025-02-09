@@ -154,7 +154,7 @@ Pinnacle.setup(function()
     -- Tags and Outputs --
     ----------------------
 
-    local tag_names = { "1", "2", "3", "4", "5" }
+    local tag_names = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
 
     Output.for_each_output(function(output)
         local tags = Tag.add(output, tag_names)
@@ -163,9 +163,7 @@ Pinnacle.setup(function()
 
     -- Tag keybinds
     for _, tag_name in ipairs(tag_names) do
-        -- nil-safety: tags are guaranteed to be on the outputs due to connect_for_all above
-
-        -- mod_key + 1-5 = Switch to tags 1-5
+        -- mod_key + 1-9 = Switch to tags 1-9
         Input.keybind({ mod_key }, tag_name, function()
             Tag.get(tag_name):switch_to()
         end, {
@@ -173,7 +171,7 @@ Pinnacle.setup(function()
             description = "Switch to tag " .. tag_name,
         })
 
-        -- mod_key + ctrl + 1-5 = Toggle tags 1-5
+        -- mod_key + ctrl + 1-9 = Toggle tags 1-9
         Input.keybind({ mod_key, "ctrl" }, tag_name, function()
             Tag.get(tag_name):toggle_active()
         end, {
@@ -181,7 +179,7 @@ Pinnacle.setup(function()
             description = "Toggle tag " .. tag_name,
         })
 
-        -- mod_key + shift + 1-5 = Move window to tags 1-5
+        -- mod_key + shift + 1-9 = Move window to tags 1-9
         Input.keybind({ mod_key, "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
@@ -192,7 +190,7 @@ Pinnacle.setup(function()
             description = "Move the focused window to tag " .. tag_name,
         })
 
-        -- mod_key + ctrl + shift + 1-5 = Toggle tags 1-5 on window
+        -- mod_key + ctrl + shift + 1-9 = Toggle tags 1-9 on window
         Input.keybind({ mod_key, "ctrl", "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
