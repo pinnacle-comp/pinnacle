@@ -106,7 +106,6 @@ use crate::backend::dummy::Dummy;
 // second, so with the worst timing the maximum interval between two frame callbacks for a surface
 // should be ~1.995 seconds.
 const FRAME_CALLBACK_THROTTLE: Option<Duration> = Some(Duration::from_millis(995));
-// const FRAME_CALLBACK_THROTTLE: Option<Duration> = Some(Duration::ZERO);
 
 /// The main state of the application.
 pub struct State {
@@ -576,6 +575,8 @@ impl Pinnacle {
     /// output as the primary scanout output. For whatever reason, clones of that now-defunct
     /// output still exist somewhere, causing the default compare function to choose it over the
     /// new output for the monitor. This is a workaround for that.
+    ///
+    /// FIXME: audit every place that an output is stored and possibly convert it to a weakoutput
     fn primary_scanout_output_compare(
         &self,
     ) -> impl for<'a> Fn(

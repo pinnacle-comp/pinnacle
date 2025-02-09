@@ -1,6 +1,7 @@
 - Provide scale and transform on new window/layer
 
 - Don't allow resizing xwayland windows outside of min/max size
+- Properly stack x11 windows relative to each other
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords

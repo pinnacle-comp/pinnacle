@@ -228,22 +228,28 @@ fn layer_render_elements<R: PRenderer>(
 ///
 /// ret.1 contains render elements for the windows at and above the first fullscreen window.
 /// ret.2 contains the rest.
-fn window_render_elements<R: PRenderer>(
+fn window_render_elements<'a, I, R: PRenderer>(
     output: &Output,
-    windows: &[WindowElement],
+    windows: I,
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>) {
+) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>)
+where
+    I: IntoIterator<Item = &'a WindowElement>,
+    I::IntoIter: DoubleEndedIterator,
+{
     let _span = tracy_client::span!("window_render_elements");
 
     let mut last_fullscreen_split_at = 0;
 
     let mut fullscreen_and_up = windows
-        .iter()
+        .into_iter()
         .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
         .enumerate()
         .map(|(i, win)| {
+            win.with_state_mut(|state| state.offscreen_elem_id.take());
+
             if win.with_state(|state| state.window_state.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
@@ -279,16 +285,6 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
 
     let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
 
-    let (windows, override_redirect_windows) = windows
-        .iter()
-        .cloned()
-        .partition::<Vec<_>, _>(|win| !win.is_x11_override_redirect());
-
-    let windows = windows
-        .into_iter()
-        .filter(|win| win.is_on_active_tag())
-        .collect::<Vec<_>>();
-
     // // draw input method surface if any
     // let rectangle = input_method.coordinates();
     // let position = Point::from((
@@ -306,22 +302,6 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     // });
 
     let output_loc = output.current_location();
-
-    let o_r_elements = override_redirect_windows
-        .iter()
-        .filter(|win| win.is_on_active_tag_on_output(output))
-        .flat_map(|surf| {
-            surf.render_elements(
-                renderer,
-                space.element_location(surf).unwrap_or_default() - output_loc,
-                scale,
-                1.0,
-            )
-        });
-
-    // TODO: don't unconditionally render OR windows above fullscreen ones,
-    // |     base it on if it's a descendant or not
-    output_render_elements.extend(o_r_elements.map(OutputRenderElement::from));
 
     let LayerRenderElements {
         background,
@@ -349,11 +329,9 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             .map(OutputRenderElement::from)
             .collect();
     } else {
-        for window in windows.iter() {
-            window.with_state_mut(|state| state.offscreen_elem_id.take());
-        }
+        let windows = windows.iter().filter(|win| win.is_on_active_tag());
         (fullscreen_and_up_elements, rest_of_window_elements) =
-            window_render_elements::<R>(output, &windows, space, renderer, scale);
+            window_render_elements::<_, R>(output, windows, space, renderer, scale);
     }
 
     // Elements render from top to bottom
