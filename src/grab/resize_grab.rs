@@ -220,6 +220,9 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height.clamp(min_height, max_height),
         ));
 
+        self.window
+            .with_state_mut(|state| state.floating_size = Some(self.last_window_size));
+
         match self.window.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 toplevel.with_pending_state(|state| {
