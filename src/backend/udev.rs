@@ -523,9 +523,6 @@ impl Udev {
         if powered {
             output.with_state_mut(|state| state.powered = true);
         } else {
-            // FIXME: remove once done
-            // set_crtc_active(backend_data.drm_output_manager.device(), *crtc, false);
-
             output.with_state_mut(|state| state.powered = false);
 
             if let Err(err) = backend_data
@@ -535,7 +532,7 @@ impl Udev {
                 .drm_output
                 .with_compositor(|compositor| compositor.clear())
             {
-                warn!("Failed to reset compositor state on crtc {crtc:?}: {err}");
+                warn!("Failed to clear compositor state on crtc {crtc:?}: {err}");
             }
 
             if let Some(surface) = render_surface_for_output(output, &mut self.backends) {

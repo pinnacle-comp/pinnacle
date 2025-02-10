@@ -895,9 +895,7 @@ impl OutputManagementHandler for State {
             match config {
                 OutputConfiguration::Disabled => {
                     self.pinnacle.set_output_enabled(&output, false);
-                    // TODO: split
-                    self.backend
-                        .set_output_powered(&output, &self.pinnacle.loop_handle, false);
+                    self.set_output_powered(&output, false);
                 }
                 OutputConfiguration::Enabled {
                     mode,
@@ -907,9 +905,7 @@ impl OutputManagementHandler for State {
                     adaptive_sync: _,
                 } => {
                     self.pinnacle.set_output_enabled(&output, true);
-                    // TODO: split
-                    self.backend
-                        .set_output_powered(&output, &self.pinnacle.loop_handle, true);
+                    self.set_output_powered(&output, true);
 
                     self.capture_snapshots_on_output(&output, []);
 
@@ -973,8 +969,7 @@ impl OutputPowerManagementHandler for State {
     fn set_mode(&mut self, output: &Output, powered: bool) {
         let _span = tracy_client::span!("OutputPowerManagementHandler::set_mode");
 
-        self.backend
-            .set_output_powered(output, &self.pinnacle.loop_handle, powered);
+        self.set_output_powered(output, powered);
 
         if powered {
             self.schedule_render(output);

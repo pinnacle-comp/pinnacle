@@ -316,9 +316,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let mut powered = output.with_state(|state| state.powered);
             powered = set.unwrap_or(!powered);
 
-            state
-                .backend
-                .set_output_powered(&output, &state.pinnacle.loop_handle, powered);
+            state.set_output_powered(&output, powered);
 
             if powered {
                 state.schedule_render(&output);

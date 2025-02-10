@@ -98,7 +98,7 @@ impl Backend {
         }
     }
 
-    pub fn set_output_powered(
+    fn set_output_powered(
         &mut self,
         output: &Output,
         loop_handle: &LoopHandle<'static, State>,
@@ -140,6 +140,16 @@ impl Backend {
     #[must_use]
     pub fn is_udev(&self) -> bool {
         matches!(self, Self::Udev(..))
+    }
+}
+
+impl State {
+    pub fn set_output_powered(&mut self, output: &Output, powered: bool) {
+        self.backend
+            .set_output_powered(output, &self.pinnacle.loop_handle, powered);
+        self.pinnacle
+            .output_power_management_state
+            .mode_set(output, powered);
     }
 }
 

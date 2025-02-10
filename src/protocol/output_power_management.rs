@@ -54,6 +54,19 @@ impl OutputPowerManagementState {
             power.failed();
         }
     }
+
+    pub fn mode_set(&self, output: &Output, powered: bool) {
+        for client in self
+            .clients
+            .iter()
+            .filter_map(|(op, power)| (op == output).then_some(power))
+        {
+            client.mode(match powered {
+                true => zwlr_output_power_v1::Mode::On,
+                false => zwlr_output_power_v1::Mode::Off,
+            });
+        }
+    }
 }
 
 impl<D> GlobalDispatch<ZwlrOutputPowerManagerV1, OutputPowerManagementGlobalData, D>
