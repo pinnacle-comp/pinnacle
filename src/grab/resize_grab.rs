@@ -200,13 +200,18 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
             new_window_height = self.initial_window_size.h + delta.y;
         }
 
-        let (min_size, max_size) = match self.window.wl_surface() {
-            Some(wl_surface) => compositor::with_states(&wl_surface, |states| {
-                let mut guard = states.cached_state.get::<SurfaceCachedState>();
-                let data = guard.current();
-                (data.min_size, data.max_size)
-            }),
-            None => (Size::default(), Size::default()),
+        let (min_size, max_size) = match self.window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                compositor::with_states(toplevel.wl_surface(), |states| {
+                    let mut guard = states.cached_state.get::<SurfaceCachedState>();
+                    let data = guard.current();
+                    (data.min_size, data.max_size)
+                })
+            }
+            WindowSurface::X11(surface) => (
+                surface.min_size().unwrap_or_default(),
+                surface.max_size().unwrap_or_default(),
+            ),
         };
 
         let min_width = i32::max(1, min_size.w);
