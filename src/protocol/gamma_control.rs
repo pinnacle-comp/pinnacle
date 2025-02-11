@@ -1,7 +1,7 @@
-use std::{collections::HashMap, fs::File, io::Read};
+use std::{collections::HashMap, fs::File, io::Read, ops::Deref};
 
 use smithay::{
-    output::Output,
+    output::{Output, WeakOutput},
     reexports::{
         wayland_protocols_wlr::gamma_control::v1::server::{
             zwlr_gamma_control_manager_v1::{self, ZwlrGammaControlManagerV1},
@@ -18,7 +18,28 @@ use tracing::warn;
 const VERSION: u32 = 1;
 
 pub struct GammaControlManagerState {
-    pub gamma_controls: HashMap<Output, ZwlrGammaControlV1>,
+    gamma_controls: HashMap<WeakOutput, GammaControl>,
+}
+
+struct GammaControl {
+    control: ZwlrGammaControlV1,
+    destroyed: bool,
+}
+
+impl Deref for GammaControl {
+    type Target = ZwlrGammaControlV1;
+
+    fn deref(&self) -> &Self::Target {
+        &self.control
+    }
+}
+
+impl Drop for GammaControl {
+    fn drop(&mut self) {
+        if !self.destroyed {
+            self.control.failed();
+        }
+    }
 }
 
 pub struct GammaControlManagerGlobalData {
@@ -45,9 +66,7 @@ impl GammaControlManagerState {
     }
 
     pub fn output_removed(&mut self, output: &Output) {
-        if let Some(gamma_control) = self.gamma_controls.remove(output) {
-            gamma_control.failed();
-        }
+        self.gamma_controls.remove(&output.downgrade());
     }
 }
 
@@ -102,17 +121,21 @@ where
             _ => unreachable!(),
         };
 
-        let output = Output::from_resource(&output).expect("no output for resource");
+        let Some(output) = Output::from_resource(&output) else {
+            warn!("wlr-gamma-control: no output for wl_output {output:?}");
+            let gamma_control = data_init.init(id, GammaControlState { gamma_size: 0 });
+            gamma_control.failed();
+            return;
+        };
 
         match state
             .gamma_control_manager_state()
             .gamma_controls
-            .contains_key(&output)
+            .contains_key(&output.downgrade())
         {
             true => {
                 // This wl_output already has exclusive access by another client
-                let gamma_control_state = GammaControlState { gamma_size: 0 };
-                let gamma_control = data_init.init(id, gamma_control_state);
+                let gamma_control = data_init.init(id, GammaControlState { gamma_size: 0 });
                 gamma_control.failed();
             }
             false => {
@@ -123,12 +146,15 @@ where
                 };
 
                 let gamma_control = data_init.init(id, GammaControlState { gamma_size });
-
                 gamma_control.gamma_size(gamma_size);
-                state
-                    .gamma_control_manager_state()
-                    .gamma_controls
-                    .insert(output, gamma_control);
+
+                state.gamma_control_manager_state().gamma_controls.insert(
+                    output.downgrade(),
+                    GammaControl {
+                        control: gamma_control,
+                        destroyed: false,
+                    },
+                );
             }
         }
     }
@@ -188,11 +214,17 @@ where
             .gamma_control_manager_state()
             .gamma_controls
             .iter()
-            .find(|(_, res)| *res == resource)
-            .map(|(output, _)| output)
-            .cloned()
+            .find_map(|(output, res)| (res.control == *resource).then_some(output.clone()))
         else {
             resource.failed();
+            return;
+        };
+
+        let Some(output) = output.upgrade() else {
+            state
+                .gamma_control_manager_state()
+                .gamma_controls
+                .remove(&output);
             return;
         };
 
@@ -202,8 +234,8 @@ where
 
         let fd = match request {
             zwlr_gamma_control_v1::Request::SetGamma { fd } => fd,
-            zwlr_gamma_control_v1::Request::Destroy => return,
-            _ => unreachable!(),
+            zwlr_gamma_control_v1::Request::Destroy => unreachable!(),
+            _ => return,
         };
 
         let mut gammas = vec![0u16; gamma_size * 3];
@@ -213,8 +245,6 @@ where
 
             let mut file = File::from(fd);
 
-            // Output is hashed by Arc::as_ptr, which is immutable
-            #[allow(clippy::mutable_key_type)]
             let gamma_controls = &mut state.gamma_control_manager_state().gamma_controls;
 
             if let Err(err) = file.read_exact(buf) {
@@ -222,35 +252,27 @@ where
                     "Failed to read {} u16s from client gamma control fd: {err}",
                     gamma_size * 3
                 );
-                resource.failed();
-                gamma_controls.remove(&output);
+                gamma_controls.remove(&output.downgrade());
                 state.gamma_control_destroyed(&output);
                 return;
             }
 
-            #[allow(clippy::unused_io_amount)]
-            {
-                match file.read(&mut [0]) {
-                    Ok(0) => (),
-                    Ok(_) => {
-                        warn!(
-                            "Client gamma control sent more data than expected (expected {} u16s)",
-                            gamma_size * 3,
-                        );
-                        resource.failed();
-                        gamma_controls.remove(&output);
-                        state.gamma_control_destroyed(&output);
-                        return;
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to ensure client gamma control fd was the correct size: {err}"
-                        );
-                        resource.failed();
-                        gamma_controls.remove(&output);
-                        state.gamma_control_destroyed(&output);
-                        return;
-                    }
+            match file.read(&mut [0]) {
+                Ok(0) => (),
+                Ok(_) => {
+                    warn!(
+                        "Client gamma control sent more data than expected (expected {} u16s)",
+                        gamma_size * 3,
+                    );
+                    gamma_controls.remove(&output.downgrade());
+                    state.gamma_control_destroyed(&output);
+                    return;
+                }
+                Err(err) => {
+                    warn!("Failed to ensure client gamma control fd was the correct size: {err}");
+                    gamma_controls.remove(&output.downgrade());
+                    state.gamma_control_destroyed(&output);
+                    return;
                 }
             }
         }
@@ -263,11 +285,10 @@ where
         };
 
         if !state.set_gamma(&output, [red_gamma, green_gamma, blue_gamma]) {
-            resource.failed();
             state
                 .gamma_control_manager_state()
                 .gamma_controls
-                .remove(&output);
+                .remove(&output.downgrade());
             state.gamma_control_destroyed(&output);
         }
     }
@@ -278,21 +299,22 @@ where
         resource: &ZwlrGammaControlV1,
         _data: &GammaControlState,
     ) {
-        // Output is hashed by Arc::as_ptr, which is immutable
-        #[allow(clippy::mutable_key_type)]
         let gamma_controls = &mut state.gamma_control_manager_state().gamma_controls;
 
         let Some(output) = gamma_controls
             .iter()
-            .find(|(_, res)| *res == resource)
-            .map(|(output, _)| output)
-            .cloned()
+            .find_map(|(output, res)| (res.control == *resource).then_some(output.clone()))
         else {
             return;
         };
 
-        gamma_controls.remove(&output);
+        if let Some(mut control) = gamma_controls.remove(&output) {
+            // Inhibit sending failed on drop for destroyed controls
+            control.destroyed = true;
+        }
 
-        state.gamma_control_destroyed(&output);
+        if let Some(output) = output.upgrade() {
+            state.gamma_control_destroyed(&output);
+        }
     }
 }

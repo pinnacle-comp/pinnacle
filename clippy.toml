@@ -1,0 +1,4 @@
+ignore-interior-mutability = [
+    "smithay::output::Output",
+    "smithay::reexports::wayland_protocols_wlr::output_management::v1::server::zwlr_output_head_v1::ZwlrOutputHeadV1"
+]

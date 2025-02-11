@@ -6,7 +6,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use smithay::{
     desktop::WindowSurface,
-    output::Output,
+    output::{Output, WeakOutput},
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_protocols_wlr::foreign_toplevel::v1::server::{
@@ -42,7 +42,7 @@ struct ToplevelData {
     title: Option<String>,
     app_id: Option<String>,
     states: Vec<zwlr_foreign_toplevel_handle_v1::State>,
-    output: Option<Output>,
+    output: Option<WeakOutput>,
     instances: HashMap<ZwlrForeignToplevelHandleV1, Vec<WlOutput>>,
     // TODO:
     // parent: Option<ZwlrForeignToplevelHandleV1>,
@@ -224,11 +224,11 @@ pub fn on_output_bound(state: &mut State, output: &Output, wl_output: &WlOutput)
 
     let protocol_state = &mut state.pinnacle.foreign_toplevel_manager_state;
     for data in protocol_state.toplevels.values_mut() {
-        if data.output.as_ref() != Some(output) {
+        if data.output.as_ref() != Some(&output.downgrade()) {
             continue;
         }
 
-        for (instance, outputs) in &mut data.instances {
+        for (instance, outputs) in data.instances.iter_mut() {
             if instance.client().as_ref() != Some(&client) {
                 continue;
             }
@@ -295,8 +295,9 @@ fn refresh_toplevel(
             }
 
             let mut output_changed = false;
-            if data.output != pending_data.output {
-                data.output.clone_from(&pending_data.output);
+            let pending_output = pending_data.output.as_ref().map(|op| op.downgrade());
+            if data.output != pending_output {
+                data.output.clone_from(&pending_output);
                 output_changed = true;
             }
 
@@ -308,7 +309,7 @@ fn refresh_toplevel(
                 new_title.is_some() || new_app_id.is_some() || states_changed || output_changed;
 
             if something_changed {
-                for (instance, outputs) in &mut data.instances {
+                for (instance, outputs) in data.instances.iter_mut() {
                     if let Some(new_title) = new_title {
                         instance.title(new_title.to_owned());
                     }
@@ -327,7 +328,7 @@ fn refresh_toplevel(
                         for wl_output in outputs.drain(..) {
                             instance.output_leave(&wl_output);
                         }
-                        if let Some(output) = &data.output {
+                        if let Some(output) = data.output.as_ref().and_then(|op| op.upgrade()) {
                             if let Some(client) = instance.client() {
                                 for wl_output in output.client_outputs(&client) {
                                     instance.output_enter(&wl_output);
@@ -350,7 +351,7 @@ fn refresh_toplevel(
                 title: pending_data.title.clone(),
                 app_id: pending_data.app_id.clone(),
                 states,
-                output: pending_data.output.clone(),
+                output: pending_data.output.map(|op| op.downgrade()),
                 instances: HashMap::new(),
                 // parent: TODO:
             };
@@ -377,7 +378,7 @@ impl ToplevelData {
     {
         let toplevel = client
             .create_resource::<ZwlrForeignToplevelHandleV1, _, D>(display, manager.version(), ())
-            .expect("TODO");
+            .unwrap();
         manager.toplevel(&toplevel);
 
         if let Some(title) = self.title.clone() {
@@ -399,7 +400,7 @@ impl ToplevelData {
         );
 
         let mut outputs = Vec::new();
-        if let Some(output) = self.output.as_ref() {
+        if let Some(output) = self.output.as_ref().and_then(|op| op.upgrade()) {
             for wl_output in output.client_outputs(client) {
                 toplevel.output_enter(&wl_output);
                 outputs.push(wl_output);

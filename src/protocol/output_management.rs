@@ -1,6 +1,6 @@
 use anyhow::Context;
 use smithay::{
-    output::Output,
+    output::{Output, WeakOutput},
     reexports::{
         wayland_protocols_wlr::output_management::v1::server::{
             zwlr_output_configuration_head_v1::{self, ZwlrOutputConfigurationHeadV1},
@@ -40,8 +40,8 @@ const VERSION: u32 = 4;
 pub struct OutputManagementManagerState {
     display_handle: DisplayHandle,
     managers: HashMap<ZwlrOutputManagerV1, OutputManagerData>,
-    outputs: HashMap<Output, OutputData>,
-    removed_outputs: HashSet<Output>,
+    outputs: HashMap<WeakOutput, OutputData>,
+    removed_outputs: HashSet<WeakOutput>,
 }
 
 struct OutputManagerData {
@@ -97,11 +97,7 @@ pub enum OutputConfiguration {
 
 pub trait OutputManagementHandler {
     fn output_management_manager_state(&mut self) -> &mut OutputManagementManagerState;
-    // Output is hashed by Arc::as_ptr, which is immutable
-    #[allow(clippy::mutable_key_type)]
     fn apply_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
-    // Output is hashed by Arc::as_ptr, which is immutable
-    #[allow(clippy::mutable_key_type)]
     fn test_configuration(&mut self, config: HashMap<Output, OutputConfiguration>) -> bool;
 }
 
@@ -116,7 +112,7 @@ pub struct OutputData {
 }
 
 impl OutputManagementManagerState {
-    /// Add this head.
+    /// Adds this head.
     ///
     /// [`OutputManagementManagerState::update`] needs to be called afterwards to apply the new state.
     pub fn add_head<D>(&mut self, output: &Output)
@@ -126,7 +122,7 @@ impl OutputManagementManagerState {
             + OutputManagementHandler
             + 'static,
     {
-        if self.outputs.contains_key(output) {
+        if self.outputs.contains_key(&output.downgrade()) {
             return;
         }
 
@@ -150,15 +146,15 @@ impl OutputManagementManagerState {
             _adaptive_sync: false, // TODO:
         };
 
-        self.outputs.insert(output.clone(), output_data);
+        self.outputs.insert(output.downgrade(), output_data);
     }
 
     /// Mark this head as removed.
     ///
     /// [`OutputManagementManagerState::update`] needs to be called afterwards to apply the new state.
     pub fn remove_head(&mut self, output: &Output) {
-        if self.outputs.remove(output).is_some() {
-            self.removed_outputs.insert(output.clone());
+        if self.outputs.remove(&output.downgrade()).is_some() {
+            self.removed_outputs.insert(output.downgrade());
         }
     }
 
@@ -172,7 +168,7 @@ impl OutputManagementManagerState {
             + OutputManagementHandler
             + 'static,
     {
-        let Some(output_data) = self.outputs.get_mut(output) else {
+        let Some(output_data) = self.outputs.get_mut(&output.downgrade()) else {
             return;
         };
 
@@ -235,6 +231,9 @@ impl OutputManagementManagerState {
             + 'static,
     {
         for output in self.removed_outputs.drain() {
+            let Some(output) = output.upgrade() else {
+                continue;
+            };
             for data in self.managers.values_mut() {
                 let heads = data.heads.keys().cloned().collect::<Vec<_>>();
                 for head in heads {
@@ -253,10 +252,14 @@ impl OutputManagementManagerState {
 
         let serial = u32::from(SERIAL_COUNTER.next_serial());
 
-        for (output, output_data) in self.outputs.iter_mut() {
+        self.outputs.retain(|output, output_data| {
+            let Some(output) = output.upgrade() else {
+                return false;
+            };
+
             for (manager, manager_data) in self.managers.iter_mut() {
                 for (head, wlr_modes) in manager_data.heads.iter_mut() {
-                    if head.data::<Output>() != Some(output) {
+                    if head.data::<Output>() != Some(&output) {
                         continue;
                     }
 
@@ -350,7 +353,9 @@ impl OutputManagementManagerState {
                 manager_data.serial = serial;
                 manager.done(serial);
             }
-        }
+
+            true
+        });
     }
 }
 
@@ -525,13 +530,22 @@ where
     ) {
         let manager = data_init.init(resource, ());
 
-        // Output is hashed by Arc::as_ptr, which is immutable
-        #[allow(clippy::mutable_key_type)]
-        let heads = state
+        let mut outputs = Vec::new();
+
+        state
             .output_management_manager_state()
             .outputs
-            .keys()
-            .flat_map(|output| advertise_output::<D>(handle, &manager, output))
+            .retain(|output, _| match output.upgrade() {
+                Some(output) => {
+                    outputs.push(output);
+                    true
+                }
+                None => false,
+            });
+
+        let heads = outputs
+            .into_iter()
+            .flat_map(|output| advertise_output::<D>(handle, &manager, &output))
             .collect();
 
         let serial = u32::from(SERIAL_COUNTER.next_serial());

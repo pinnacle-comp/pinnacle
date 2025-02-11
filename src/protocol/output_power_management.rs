@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    ops::Deref,
+};
 
 use smithay::{
-    output::Output,
+    output::{Output, WeakOutput},
     reexports::{
         wayland_protocols_wlr::output_power_management::v1::server::{
             zwlr_output_power_manager_v1::{self, ZwlrOutputPowerManagerV1},
@@ -20,7 +23,29 @@ use crate::state::WithState;
 const VERSION: u32 = 1;
 
 pub struct OutputPowerManagementState {
-    clients: HashMap<Output, ZwlrOutputPowerV1>,
+    clients: HashMap<WeakOutput, OutputPower>,
+}
+
+/// Newtype that fails the `ZwlrOutputPowerV1` on drop.
+struct OutputPower {
+    power: ZwlrOutputPowerV1,
+    destroyed: bool,
+}
+
+impl Deref for OutputPower {
+    type Target = ZwlrOutputPowerV1;
+
+    fn deref(&self) -> &Self::Target {
+        &self.power
+    }
+}
+
+impl Drop for OutputPower {
+    fn drop(&mut self) {
+        if !self.destroyed {
+            self.power.failed();
+        }
+    }
 }
 
 pub struct OutputPowerManagementGlobalData {
@@ -50,9 +75,7 @@ impl OutputPowerManagementState {
     }
 
     pub fn output_removed(&mut self, output: &Output) {
-        if let Some(power) = self.clients.remove(output) {
-            power.failed();
-        }
+        self.clients.remove(&output.downgrade());
     }
 
     pub fn mode_set(&self, output: &Output, powered: bool) {
@@ -105,38 +128,39 @@ where
     ) {
         match request {
             zwlr_output_power_manager_v1::Request::GetOutputPower { id, output } => {
+                let power = data_init.init(id, ());
+
                 let Some(output) = Output::from_resource(&output) else {
                     warn!("wlr-output-power-management: no output for wl_output {output:?}");
-                    let power = data_init.init(id, ());
                     power.failed();
                     return;
                 };
 
-                if state
+                match state
                     .output_power_management_state()
                     .clients
-                    .contains_key(&output)
+                    .entry(output.downgrade())
                 {
-                    warn!(
-                        "wlr-output-power-management: {} already has an active power manager",
-                        output.name()
-                    );
-                    let power = data_init.init(id, ());
-                    power.failed();
-                    return;
+                    Entry::Occupied(_) => {
+                        warn!(
+                            "wlr-output-power-management: {} already has an active power manager",
+                            output.name()
+                        );
+                        power.failed();
+                    }
+                    Entry::Vacant(entry) => {
+                        let is_powered = output.with_state(|state| state.powered);
+                        power.mode(match is_powered {
+                            true => zwlr_output_power_v1::Mode::On,
+                            false => zwlr_output_power_v1::Mode::Off,
+                        });
+
+                        entry.insert(OutputPower {
+                            power,
+                            destroyed: false,
+                        });
+                    }
                 }
-
-                let power = data_init.init(id, ());
-                let is_powered = output.with_state(|state| state.powered);
-                power.mode(match is_powered {
-                    true => zwlr_output_power_v1::Mode::On,
-                    false => zwlr_output_power_v1::Mode::Off,
-                });
-
-                state
-                    .output_power_management_state()
-                    .clients
-                    .insert(output, power);
             }
             zwlr_output_power_manager_v1::Request::Destroy => (),
             _ => unreachable!(),
@@ -163,8 +187,19 @@ where
                     .output_power_management_state()
                     .clients
                     .iter()
-                    .find_map(|(output, power)| (power == resource).then_some(output.clone()))
+                    .find_map(|(output, power)| {
+                        (power.power == *resource).then_some(output.clone())
+                    })
                 else {
+                    resource.failed();
+                    return;
+                };
+
+                let Some(output) = output.upgrade() else {
+                    state
+                        .output_power_management_state()
+                        .clients
+                        .remove(&output);
                     return;
                 };
 
@@ -187,7 +222,13 @@ where
                 state
                     .output_power_management_state()
                     .clients
-                    .retain(|_, power| power == resource);
+                    .retain(|_, power| {
+                        let should_retain = power.power != *resource;
+                        if !should_retain {
+                            power.destroyed = true;
+                        }
+                        should_retain
+                    });
             }
             _ => todo!(),
         }
@@ -197,7 +238,13 @@ where
         state
             .output_power_management_state()
             .clients
-            .retain(|_, power| power == resource);
+            .retain(|_, power| {
+                let should_retain = power.power != *resource;
+                if !should_retain {
+                    power.destroyed = true;
+                }
+                should_retain
+            });
     }
 }
 

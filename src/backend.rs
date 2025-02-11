@@ -153,6 +153,17 @@ impl State {
     }
 }
 
+impl Drop for State {
+    fn drop(&mut self) {
+        // Reset gamma when exiting
+        if let Backend::Udev(udev) = &mut self.backend {
+            for output in self.pinnacle.outputs.keys() {
+                let _ = udev.set_gamma(output, None);
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum RenderResult {
     Submitted,
