@@ -1,6 +1,5 @@
 - Provide scale and transform on new window/layer
 
-- Don't allow resizing xwayland windows outside of min/max size
 - Properly stack x11 windows relative to each other
 
 Problems:

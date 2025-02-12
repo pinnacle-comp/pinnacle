@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Pinnacle
+Comment=A Wayland compositor inspired by AwesomeWM
+Exec=pinnacle-session
+Type=Application
+DesktopNames=pinnacle
