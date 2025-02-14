@@ -57,6 +57,8 @@ where
         None,
     )?;
 
+    std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+
     let (sender, recv) = calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
     event_loop
