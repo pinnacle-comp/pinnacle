@@ -47,6 +47,7 @@ use crate::{
 };
 
 const DEFAULT_SOCKET_DIR: &str = "/tmp";
+pub const GRPC_SOCKET_ENV: &str = "PINNACLE_GRPC_SOCKET";
 
 mod builtin {
     include!("../api/rust/examples/default_config/main.rs");
@@ -468,7 +469,7 @@ impl Pinnacle {
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
 
-        std::env::set_var("PINNACLE_GRPC_SOCKET", &socket_path);
+        std::env::set_var(GRPC_SOCKET_ENV, &socket_path);
 
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)

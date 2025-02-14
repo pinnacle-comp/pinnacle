@@ -12,6 +12,7 @@ pub mod output;
 pub mod process;
 pub mod protocol;
 pub mod render;
+pub mod session;
 pub mod state;
 pub mod tag;
 pub mod util;

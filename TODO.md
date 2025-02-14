@@ -1,6 +1,7 @@
 - Provide scale and transform on new window/layer
 
 - Properly stack x11 windows relative to each other
+- Use env for snowcap socket dir
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords

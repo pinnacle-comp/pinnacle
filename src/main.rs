@@ -11,8 +11,9 @@ use std::{
 
 use anyhow::Context;
 use pinnacle::{
-    cli::{self, Cli},
+    cli::{self, generate_config, Cli, CliSubcommand, ConfigSubcommand},
     config::{get_config_dir, parse_startup_config, StartupConfig},
+    session::{import_environment, notify_fd},
     state::State,
     util::increase_nofile_rlimit,
 };
@@ -70,9 +71,45 @@ async fn main() -> anyhow::Result<()> {
 
     set_log_panic_hook();
 
-    let Some(cli) = Cli::parse_and_prompt() else {
+    let cli = Cli::parse();
+
+    if let Some(subcommand) = &cli.subcommand {
+        match subcommand {
+            CliSubcommand::Config(ConfigSubcommand::Gen(config_gen)) => {
+                if let Err(err) = generate_config(config_gen.clone()) {
+                    error!("Error generating config: {err}");
+                }
+            }
+            CliSubcommand::Info => {
+                let info = format!(
+                    "Pinnacle, built in {opt} mode with Rust {rust_ver}\n\
+                    \n\
+                    Branch: {branch}{dirty}\n\
+                    Commit: {commit} ({commit_msg})\n\
+                    \n\
+                    OS: {os}",
+                    branch = env!("VERGEN_GIT_BRANCH"),
+                    dirty = if env!("VERGEN_GIT_DIRTY") == "true" {
+                        " (dirty)"
+                    } else {
+                        ""
+                    },
+                    commit = env!("VERGEN_GIT_SHA"),
+                    commit_msg = env!("VERGEN_GIT_COMMIT_MESSAGE"),
+                    opt = if env!("VERGEN_CARGO_DEBUG") == "true" {
+                        "debug"
+                    } else {
+                        "release"
+                    },
+                    rust_ver = env!("VERGEN_RUSTC_SEMVER"),
+                    os = env!("VERGEN_SYSINFO_OS_VERSION"),
+                );
+
+                println!("{info}");
+            }
+        }
         return Ok(());
-    };
+    }
 
     tracy_client::Client::start();
 
@@ -91,9 +128,22 @@ async fn main() -> anyhow::Result<()> {
     let in_graphical_env =
         std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
 
+    let session = cli.session;
+
+    if cli.session {
+        if in_graphical_env {
+            warn!("You are trying to run Pinnacle as a session with WAYLAND_DISPLAY and/or DISPLAY set.");
+            warn!("If you are in a graphical environment, do not continue. This will mess up the global environment.");
+            warn!("If you are not, please unset WAYLAND_DISPLAY and DISPLAY and retry.");
+            return Ok(());
+        }
+
+        std::env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
+        std::env::set_var("XDG_SESSION_TYPE", "wayland");
+    }
+
     if !sysinfo::set_open_files_limit(0) {
-        warn!("Unable to set `sysinfo`'s open files limit to 0.");
-        warn!("You may see LOTS of file descriptors open under Pinnacle.");
+        warn!("Unable to set `sysinfo`'s open files limit to 0");
     }
 
     let backend = match in_graphical_env {
@@ -131,6 +181,12 @@ async fn main() -> anyhow::Result<()> {
         config_dir,
         Some(cli),
     )?;
+
+    info!(
+        "Setting WAYLAND_DISPLAY to {}",
+        state.pinnacle.socket_name.to_string_lossy()
+    );
+    std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
 
     state
         .pinnacle
@@ -178,6 +234,18 @@ async fn main() -> anyhow::Result<()> {
             }
             Err(err) => error!("Failed to start xwayland: {err}"),
         }
+    }
+
+    if session {
+        import_environment();
+    }
+
+    if let Err(err) = sd_notify::notify(true, &[sd_notify::NotifyState::Ready]) {
+        warn!("Error notifying systemd: {err}");
+    }
+
+    if let Err(err) = notify_fd() {
+        warn!("Error norifying fd: {err}");
     }
 
     if !startup_config.no_config {

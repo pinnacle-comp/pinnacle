@@ -149,6 +149,7 @@ itertools = "0.14.0"
 passfd = { workspace = true }
 profiling = "1.0.16" # Only used to enable profiling within smithay
 tracy-client = { workspace = true }
+sd-notify = "0.4.5"
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }

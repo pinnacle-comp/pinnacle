@@ -1,7 +1,7 @@
 use std::{io::IsTerminal, path::PathBuf};
 
 use clap::{Parser, ValueHint};
-use tracing::{error, warn};
+use tracing::warn;
 
 /// Valid backends that Pinnacle can run.
 #[derive(clap::ValueEnum, Debug, Clone, Copy)]
@@ -46,73 +46,37 @@ pub struct Cli {
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
     pub socket_dir: Option<PathBuf>,
 
+    /// Start Pinnacle as a session, importing the environment into systemd and D-Bus.
+    #[arg(long)]
+    pub session: bool,
+
     /// Cli subcommands
     #[command(subcommand)]
-    subcommand: Option<CliSubcommand>,
+    pub subcommand: Option<CliSubcommand>,
 }
 
 impl Cli {
-    pub fn parse_and_prompt() -> Option<Self> {
-        let mut cli = Cli::parse();
-
-        // oh my god rustfmt is starting to piss me off
+    pub fn parse() -> Self {
+        let mut cli: Self = Parser::parse();
 
         cli.config_dir = cli.config_dir.and_then(|dir| {
             let new_dir = shellexpand::path::full(&dir);
             match new_dir {
                 Ok(new_dir) => Some(new_dir.to_path_buf()),
                 Err(err) => {
-                    warn!("Could not shellexpand `--config-dir`'s argument: {err}; unsetting `--config-dir`");
+                    warn!("Could not expand home in `--config-dir`: {err}; unsetting");
                     None
                 }
             }
         });
 
-        if let Some(subcommand) = &cli.subcommand {
-            match subcommand {
-                CliSubcommand::Config(ConfigSubcommand::Gen(config_gen)) => {
-                    if let Err(err) = generate_config(config_gen.clone()) {
-                        error!("Error generating config: {err}");
-                    }
-                }
-                CliSubcommand::Info => {
-                    let info = format!(
-                        "Pinnacle, built in {opt} mode with Rust {rust_ver}\n\
-                        \n\
-                        Branch: {branch}{dirty}\n\
-                        Commit: {commit} ({commit_msg})\n\
-                        \n\
-                        OS: {os}",
-                        branch = env!("VERGEN_GIT_BRANCH"),
-                        dirty = if env!("VERGEN_GIT_DIRTY") == "true" {
-                            " (dirty)"
-                        } else {
-                            ""
-                        },
-                        commit = env!("VERGEN_GIT_SHA"),
-                        commit_msg = env!("VERGEN_GIT_COMMIT_MESSAGE"),
-                        opt = if env!("VERGEN_CARGO_DEBUG") == "true" {
-                            "debug"
-                        } else {
-                            "release"
-                        },
-                        rust_ver = env!("VERGEN_RUSTC_SEMVER"),
-                        os = env!("VERGEN_SYSINFO_OS_VERSION"),
-                    );
-
-                    println!("{info}");
-                }
-            }
-            return None;
-        }
-
-        Some(cli)
+        cli
     }
 }
 
 /// Cli subcommands.
 #[derive(clap::Subcommand, Debug)]
-enum CliSubcommand {
+pub enum CliSubcommand {
     /// Commands dealing with configuration
     #[command(subcommand)]
     Config(ConfigSubcommand),
@@ -123,7 +87,7 @@ enum CliSubcommand {
 
 /// Config subcommands
 #[derive(clap::Subcommand, Debug)]
-enum ConfigSubcommand {
+pub enum ConfigSubcommand {
     /// Generate a config
     ///
     /// If not all flags are provided, this will launch an
@@ -134,7 +98,7 @@ enum ConfigSubcommand {
 
 /// Config arguments.
 #[derive(clap::Args, Debug, Clone, PartialEq)]
-struct ConfigGen {
+pub struct ConfigGen {
     /// Generate a config in a specific language
     #[arg(short, long)]
     pub lang: Option<Lang>,
@@ -158,7 +122,7 @@ struct ConfigGen {
 
 /// Possible languages for configuration.
 #[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-enum Lang {
+pub enum Lang {
     /// Generate a Lua config
     Lua,
     /// Generate a Rust config
@@ -177,7 +141,7 @@ impl std::fmt::Display for Lang {
 ///
 /// If `--non-interactive` is passed or the shell is non-interactive, this will not
 /// output interactive prompts.
-fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
+pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
     let interactive = !args.non_interactive;
 
     if !interactive && (args.lang.is_none() || args.dir.is_none()) {

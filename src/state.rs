@@ -89,6 +89,7 @@ use smithay::{
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    ffi::OsString,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
@@ -121,6 +122,7 @@ pub struct Pinnacle {
     pub loop_handle: LoopHandle<'static, State>,
     pub display_handle: DisplayHandle,
     pub clock: Clock<Monotonic>,
+    pub socket_name: OsString,
 
     pub space: Space<WindowElement>,
 
@@ -293,12 +295,6 @@ impl Pinnacle {
         let socket = ListeningSocketSource::new_auto()?;
         let socket_name = socket.socket_name().to_os_string();
 
-        info!(
-            "Setting WAYLAND_DISPLAY to {}",
-            socket_name.to_string_lossy()
-        );
-        std::env::set_var("WAYLAND_DISPLAY", socket_name);
-
         loop_handle.insert_source(socket, |stream, _metadata, state| {
             state
                 .pinnacle
@@ -343,6 +339,8 @@ impl Pinnacle {
             loop_handle: loop_handle.clone(),
             display_handle: display_handle.clone(),
             clock: Clock::<Monotonic>::new(),
+            socket_name,
+
             compositor_state: CompositorState::new::<State>(&display_handle),
             data_device_state: DataDeviceState::new::<State>(&display_handle),
             seat_state,
