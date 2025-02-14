@@ -6,7 +6,7 @@
 ---
 ---@param modeline string
 ---
----@return Modeline|nil modeline A modeline if successful
+---@return pinnacle.output.Modeline|nil modeline A modeline if successful
 ---@return string|nil error An error message if any
 local function parse_modeline(modeline)
     local args = modeline:gmatch("[^%s]+")
@@ -66,7 +66,7 @@ local function parse_modeline(modeline)
         return nil, "invalid vsync: " .. vsync
     end
 
-    ---@type Modeline
+    ---@type pinnacle.output.Modeline
     return {
         clock = clock,
         hdisplay = hdisplay,
@@ -83,7 +83,7 @@ local function parse_modeline(modeline)
 end
 
 ---Utility functions.
----@class Util
+---@class pinnacle.util.Util
 local util = {
     output = {
         parse_modeline = parse_modeline,

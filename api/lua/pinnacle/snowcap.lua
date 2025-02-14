@@ -1,7 +1,9 @@
+---Builtins and integrations with Snowcap.
+---@class pinnacle.snowcap.integration.Integration
 local integration = {}
 
 ---The Snowcap widget system, integrated into Pinnacle.
----@class pinnacle.Snowcap
+---@class pinnacle.snowcap.Snowcap
 local snowcap = {
     layer = require("snowcap.layer"),
     widget = require("snowcap.widget"),
@@ -86,7 +88,7 @@ end
 
 ---Shows this bind overlay.
 function BindOverlay:show()
-    ---@param mods Modifier[]
+    ---@param mods pinnacle.input.Mod[]
     ---@return string?
     local function mods_to_string(mods)
         local repr = {}
@@ -133,7 +135,7 @@ function BindOverlay:show()
         return table.concat(repr, " + ")
     end
 
-    ---@param mods Modifier[]
+    ---@param mods pinnacle.input.Mod[]
     ---@param key_or_button_name string
     ---@param layer string?
     ---@return string

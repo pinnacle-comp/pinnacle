@@ -18,7 +18,7 @@ local modifier_values = {
 }
 require("pinnacle.util").make_bijective(modifier_values)
 
----@enum (key) Modifier
+---@enum (key) pinnacle.input.Mod
 local mods_with_ignore_values = {
     shift = input_v1.Modifier.MODIFIER_SHIFT,
     ctrl = input_v1.Modifier.MODIFIER_CTRL,
@@ -35,7 +35,7 @@ local mods_with_ignore_values = {
     ignore_iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
 }
 
----@enum (key) MouseButton
+---@enum (key) pinnacle.input.MouseButton
 local mouse_button_values = {
     --- Left
     [1] = 0x110,
@@ -70,7 +70,7 @@ local button_value_to_name = {
     [0x116] = "btn_back",
 }
 
----@enum (key) Edge
+---@enum (key) pinnacle.input.Edge
 local edge_values = {
     press = input_v1.Edge.EDGE_PRESS,
     release = input_v1.Edge.EDGE_RELEASE,
@@ -80,27 +80,27 @@ require("pinnacle.util").make_bijective(edge_values)
 ---Input management.
 ---
 ---This module provides utilities to set key- and mousebinds as well as change keyboard settings.
----@class Input
+---@class pinnacle.input.Input
 ---@field private mouse_button_values table
 local input = {
     key = require("pinnacle.input.keys"),
 }
 input.mouse_button_values = mouse_button_values
 
----@class Bind
----@field mods Modifier[]
+---@class pinnacle.input.Bind
+---@field mods pinnacle.input.Mod[]
 ---@field bind_layer string?
 ---@field group string? The group to place this keybind in. Used for the keybind list.
 ---@field description string? The description of this keybind. Used for the keybind list.
 ---@field quit boolean?
 ---@field reload_config boolean?
 
----@class Keybind : Bind
----@field key string|Key
+---@class pinnacle.input.Keybind : pinnacle.input.Bind
+---@field key string|pinnacle.input.Key
 ---@field on_press fun()?
 ---@field on_release fun()?
 
----@param kb Keybind
+---@param kb pinnacle.input.Keybind
 local function keybind_inner(kb)
     local key_code = nil
     local xkb_name = nil
@@ -224,12 +224,12 @@ end
 ---end)
 ---```
 ---
----@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
----@param key Key | string The key used to trigger the bind
+---@param mods pinnacle.input.Mod[] The modifiers that need to be held down for the bind to trigger
+---@param key pinnacle.input.Key | string The key used to trigger the bind
 ---@param on_press fun() The function to run when the bind is triggered
 ---@param bind_info { group: string?, description: string? }?
 ---
----@overload fun(keybind: Keybind)
+---@overload fun(keybind: pinnacle.input.Keybind)
 function input.keybind(mods, key, on_press, bind_info)
     local kb
 
@@ -248,12 +248,12 @@ function input.keybind(mods, key, on_press, bind_info)
     keybind_inner(kb)
 end
 
----@class Mousebind : Bind
----@field button MouseButton
+---@class pinnacle.input.Mousebind : pinnacle.input.Bind
+---@field button pinnacle.input.MouseButton
 ---@field on_press fun()?
 ---@field on_release fun()?
 
----@param mb Mousebind
+---@param mb pinnacle.input.Mousebind
 local function mousebind_inner(mb)
     local modifs = {}
     local ignore_modifs = {}
@@ -359,12 +359,12 @@ end
 ---end)
 ---```
 ---
----@param mods Modifier[] The modifiers that need to be held down for the bind to trigger
----@param button MouseButton The mouse button used to trigger the bind
+---@param mods pinnacle.input.Mod[] The modifiers that need to be held down for the bind to trigger
+---@param button pinnacle.input.MouseButton The mouse button used to trigger the bind
 ---@param on_press fun() The function to run when the bind is triggered
 ---@param bind_info { group: string?, description: string? }?
 ---
----@overload fun(mousebind: Mousebind)
+---@overload fun(mousebind: pinnacle.input.Mousebind)
 function input.mousebind(mods, button, on_press, bind_info)
     local mb
 
@@ -392,21 +392,21 @@ function input.enter_bind_layer(layer)
     })
 end
 
----@class BindInfo
----@field mods Modifier[]
----@field ignore_mods Modifier[]
+---@class pinnacle.input.BindInfo
+---@field mods pinnacle.input.Mod[]
+---@field ignore_mods pinnacle.input.Mod[]
 ---@field bind_layer string?
 ---@field group string?
 ---@field description string?
----@field kind BindInfoKind
+---@field kind pinnacle.input.BindInfoKind
 
----@class BindInfoKind
+---@class pinnacle.input.BindInfoKind
 ---@field key { key_code: integer, xkb_name: string }?
----@field mouse { button: MouseButton }?
+---@field mouse { button: pinnacle.input.MouseButton }?
 
 ---Gets all binds and their information.
 ---
----@return BindInfo[]
+---@return pinnacle.input.BindInfo[]
 function input.bind_infos()
     local response, err = client:unary_request(input_service.GetBindInfos, {})
 
@@ -417,7 +417,7 @@ function input.bind_infos()
 
     ---@cast response pinnacle.input.v1.GetBindInfosResponse
 
-    ---@type BindInfo[]
+    ---@type pinnacle.input.BindInfo[]
     local ret = {}
 
     local infos = response.bind_infos or {}
@@ -428,19 +428,19 @@ function input.bind_infos()
             goto continue
         end
 
-        ---@type Modifier[]
+        ---@type pinnacle.input.Mod[]
         local mods = {}
         for _, mod in ipairs(info.mods or {}) do
             table.insert(mods, modifier_values[mod])
         end
 
-        ---@type Modifier[]
+        ---@type pinnacle.input.Mod[]
         local ignore_mods = {}
         for _, mod in ipairs(info.ignore_mods or {}) do
             table.insert(ignore_mods, modifier_values[mod])
         end
 
-        ---@type BindInfoKind
+        ---@type pinnacle.input.BindInfoKind
         local bind_kind = {}
         if info.key then
             bind_kind.key = {
@@ -457,7 +457,7 @@ function input.bind_infos()
         local group = info.group
         local description = info.description
 
-        ---@type BindInfo
+        ---@type pinnacle.input.BindInfo
         local bind_info = {
             mods = mods,
             ignore_mods = ignore_mods,
@@ -475,7 +475,7 @@ function input.bind_infos()
     return ret
 end
 
----@class XkbConfig
+---@class pinnacle.input.XkbConfig
 ---@field rules string?
 ---@field model string?
 ---@field layout string?
@@ -494,7 +494,7 @@ end
 ---})
 ---```
 ---
----@param xkb_config XkbConfig The new xkbconfig
+---@param xkb_config pinnacle.input.XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
     local _, err = client:unary_request(input_service.SetXkbConfig, xkb_config)
 
@@ -555,7 +555,7 @@ function input.set_xcursor_size(size)
     end
 end
 
----@class InputSignal Signals related to input events.
+---@class pinnacle.input.InputSignal Signals related to input events.
 ---@field device_added fun(device: pinnacle.input.libinput.DeviceHandle)? A new input device was connected.
 
 local signal_name_to_SignalName = {
@@ -578,11 +578,11 @@ local signal_name_to_SignalName = {
 ---    end
 ---})
 ---```
----@param signals InputSignal The signal you want to connect to
+---@param signals pinnacle.input.InputSignal The signal you want to connect to
 ---
----@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---@return pinnacle.signal.SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
 ---
----@see SignalHandles.disconnect_all - To disconnect from these signals
+---@see pinnacle.signal.SignalHandles.disconnect_all - To disconnect from these signals
 function input.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})

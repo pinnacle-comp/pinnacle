@@ -16,7 +16,7 @@ Pinnacle.setup(function()
 
     local key = Input.key
 
-    ---@type Modifier
+    ---@type pinnacle.input.Mod
     local mod_key = "super"
     -- Change the mod key to "alt" when running as a nested window
     if Pinnacle.backend() == "window" then
@@ -183,7 +183,7 @@ Pinnacle.setup(function()
         Input.keybind({ mod_key, "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
-                focused:move_to_tag(Tag.get(tag_name) --[[@as TagHandle]])
+                focused:move_to_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
             end
         end, {
             group = "Tag",
@@ -194,7 +194,7 @@ Pinnacle.setup(function()
         Input.keybind({ mod_key, "ctrl", "shift" }, tag_name, function()
             local focused = Window.get_focused()
             if focused then
-                focused:toggle_tag(Tag.get(tag_name) --[[@as TagHandle]])
+                focused:toggle_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
             end
         end, {
             group = "Tag",

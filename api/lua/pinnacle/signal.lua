@@ -12,7 +12,7 @@ local signals = {
     OutputConnect = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle))[]
+        ---@type (fun(output: pinnacle.output.OutputHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -20,7 +20,7 @@ local signals = {
     OutputDisconnect = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle))[]
+        ---@type (fun(output: pinnacle.output.OutputHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -28,7 +28,7 @@ local signals = {
     OutputResize = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle, logical_width: integer, logical_height: integer))[]
+        ---@type (fun(output: pinnacle.output.OutputHandle, logical_width: integer, logical_height: integer))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -36,7 +36,7 @@ local signals = {
     OutputMove = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(output: OutputHandle, x: integer, y: integer))[]
+        ---@type (fun(output: pinnacle.output.OutputHandle, x: integer, y: integer))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -44,7 +44,7 @@ local signals = {
     WindowPointerEnter = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(window: WindowHandle))[]
+        ---@type (fun(window: pinnacle.window.WindowHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -52,7 +52,7 @@ local signals = {
     WindowPointerLeave = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(window: WindowHandle))[]
+        ---@type (fun(window: pinnacle.window.WindowHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -60,7 +60,7 @@ local signals = {
     WindowFocused = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(window: WindowHandle))[]
+        ---@type (fun(window: pinnacle.window.WindowHandle))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -68,7 +68,7 @@ local signals = {
     TagActive = {
         ---@type grpc_client.h2.Stream?
         sender = nil,
-        ---@type (fun(tag: TagHandle, active: boolean))[]
+        ---@type (fun(tag: pinnacle.tag.TagHandle, active: boolean))[]
         callbacks = {},
         ---@type fun(response: table)
         on_response = nil,
@@ -162,31 +162,30 @@ end
 
 -----------------------------------------------------------------------------
 
----@class SignalHandleModule
+---@class pinnacle.signal.SignalHandleModule
 ---@lcat nodoc
 local signal_handle = {}
 
 ---A handle to a connected signal that can be used to disconnect the provided callback.
 ---
----@class SignalHandle
+---@class pinnacle.signal.SignalHandle
 ---@lcat nodoc
 ---@field private signal string
 ---@lcat nodoc
 ---@field private callback function The callback you connected
 local SignalHandle = {}
 
----@class SignalHandlesModule
+---@class pinnacle.signal.SignalHandlesModule
 ---@lcat nodoc
 local signal_handles = {}
 
 ---A collection of `SignalHandle`s retreived through a `connect_signal` function.
----@classmod
----@class SignalHandles
+---@class pinnacle.signal.SignalHandles
 local SignalHandles = {}
 
----@class Signal
----@field private handle SignalHandleModule
----@field private handles SignalHandlesModule
+---@class pinnacle.signal.Signal
+---@field private handle pinnacle.signal.SignalHandleModule
+---@field private handles pinnacle.signal.SignalHandlesModule
 ---@lcat nodoc
 local signal = {}
 signal.handle = signal_handle
@@ -211,9 +210,9 @@ function SignalHandle:disconnect()
     end
 end
 
----@return SignalHandle
+---@return pinnacle.signal.SignalHandle
 function signal_handle.new(request, callback)
-    ---@type SignalHandle
+    ---@type pinnacle.signal.SignalHandle
     local self = {
         signal = request,
         callback = callback,
@@ -222,19 +221,19 @@ function signal_handle.new(request, callback)
     return self
 end
 
----Disconnect the callbacks from all the signal connections that are stored in this handle collection.
+---Disconnects the callbacks from all the signal connections that are stored in this handle collection.
 ---
----@param self table<string, SignalHandle>
+---@param self table<string, pinnacle.signal.SignalHandle>
 function SignalHandles:disconnect_all()
     for _, sig in pairs(self) do
         sig:disconnect()
     end
 end
 
----@param signal_hdls table<string, SignalHandle>
----@return SignalHandles
+---@param signal_hdls table<string, pinnacle.signal.SignalHandle>
+---@return pinnacle.signal.SignalHandles
 function signal_handles.new(signal_hdls)
-    ---@type SignalHandles
+    ---@type pinnacle.signal.SignalHandles
     local self = signal_hdls
     setmetatable(self, { __index = SignalHandles })
     return self

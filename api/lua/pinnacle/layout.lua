@@ -8,10 +8,10 @@ local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v1.LayoutSe
 local defs = require("pinnacle.grpc.defs")
 local log = require("pinnacle.log")
 
----@class LayoutArgs
----@field output OutputHandle
+---@class pinnacle.layout.LayoutArgs
+---@field output pinnacle.output.OutputHandle
 ---@field window_count integer
----@field tags TagHandle[]
+---@field tags pinnacle.tag.TagHandle[]
 
 ---@alias LayoutDir
 ---| "row"
@@ -21,7 +21,7 @@ local log = require("pinnacle.log")
 ---| { left: number, right: number, top: number, bottom: number }
 ---| number
 
----@class LayoutNode
+---@class pinnacle.layout.LayoutNode
 ---A label that helps Pinnacle decide how to diff layout trees.
 ---@field label string?
 ---An index that determines how Pinnacle traverses a layout tree.
@@ -32,20 +32,20 @@ local log = require("pinnacle.log")
 ---@field gaps (number | pinnacle.layout.Gaps)?
 ---The proportion the node takes up relative to its siblings.
 ---@field size_proportion number?
----@field children LayoutNode[]
+---@field children pinnacle.layout.LayoutNode[]
 
 ---A layout generator.
----@class LayoutGenerator
+---@class pinnacle.layout.LayoutGenerator
 ---Generate an array of geometries from the given `LayoutArgs`.
----@field layout fun(self: self, window_count: integer): LayoutNode
+---@field layout fun(self: self, window_count: integer): pinnacle.layout.LayoutNode
 
 ---Builtin layout generators.
 ---
 ---This contains functions that create various builtin generators.
----@class Builtin
+---@class pinnacle.layout.builtin.Builtin
 local builtin = {}
 
----@class pinnacle.layout.builtin.Line : LayoutGenerator
+---@class pinnacle.layout.builtin.Line : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 ---@field direction LayoutDir
@@ -71,7 +71,7 @@ function builtin.line(options)
         reversed = options and options.reversed or false,
         ---@param self pinnacle.layout.builtin.Line
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 layout_dir = self.direction,
@@ -83,7 +83,7 @@ function builtin.line(options)
                 return root
             end
 
-            ---@type LayoutNode[]
+            ---@type pinnacle.layout.LayoutNode[]
             local children = {}
             if not self.reversed then
                 for i = 0, window_count - 1 do
@@ -110,7 +110,7 @@ function builtin.line(options)
     }
 end
 
----@class pinnacle.layout.builtin.MasterStack : LayoutGenerator
+---@class pinnacle.layout.builtin.MasterStack : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 ---@field master_factor number
@@ -141,7 +141,7 @@ function builtin.master_stack(options)
         reversed = options and options.reversed or false,
         ---@param self pinnacle.layout.builtin.MasterStack
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 layout_dir = (self.master_side == "left" or self.master_side == "right") and "row"
@@ -198,7 +198,7 @@ function builtin.master_stack(options)
     }
 end
 
----@class pinnacle.layout.builtin.Dwindle : LayoutGenerator
+---@class pinnacle.layout.builtin.Dwindle : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 
@@ -218,7 +218,7 @@ function builtin.dwindle(options)
         inner_gaps = options and options.inner_gaps or 4.0,
         ---@param self pinnacle.layout.builtin.Dwindle
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 label = "builtin.dwindle",
@@ -230,7 +230,7 @@ function builtin.dwindle(options)
             end
 
             if window_count == 1 then
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child = {
                     gaps = self.inner_gaps,
                     children = {},
@@ -247,7 +247,7 @@ function builtin.dwindle(options)
                     current_node.gaps = 0.0
                 end
 
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child1 = {
                     traversal_index = 0,
                     layout_dir = (i % 2 == 0) and "column" or "row",
@@ -255,7 +255,7 @@ function builtin.dwindle(options)
                     children = {},
                 }
 
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child2 = {
                     traversal_index = 1,
                     layout_dir = (i % 2 == 0) and "column" or "row",
@@ -273,7 +273,7 @@ function builtin.dwindle(options)
     }
 end
 
----@class pinnacle.layout.builtin.Spiral : LayoutGenerator
+---@class pinnacle.layout.builtin.Spiral : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 
@@ -293,7 +293,7 @@ function builtin.spiral(options)
         inner_gaps = options and options.inner_gaps or 4.0,
         ---@param self pinnacle.layout.builtin.Spiral
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 label = "builtin.spiral",
@@ -305,7 +305,7 @@ function builtin.spiral(options)
             end
 
             if window_count == 1 then
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child = {
                     gaps = self.inner_gaps,
                     children = {},
@@ -322,7 +322,7 @@ function builtin.spiral(options)
                     current_node.gaps = 0.0
                 end
 
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child1 = {
                     traversal_index = 0,
                     layout_dir = (i % 2 == 0) and "column" or "row",
@@ -330,7 +330,7 @@ function builtin.spiral(options)
                     children = {},
                 }
 
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child2 = {
                     traversal_index = 1,
                     layout_dir = (i % 2 == 0) and "column" or "row",
@@ -352,7 +352,7 @@ function builtin.spiral(options)
     }
 end
 
----@class pinnacle.layout.builtin.Corner : LayoutGenerator
+---@class pinnacle.layout.builtin.Corner : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 ---@field corner_width_factor number
@@ -381,7 +381,7 @@ function builtin.corner(options)
         corner_loc = options and options.corner_loc or "top_left",
         ---@param self pinnacle.layout.builtin.Corner
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 label = "builtin.corner",
@@ -393,7 +393,7 @@ function builtin.corner(options)
             end
 
             if window_count == 1 then
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child = {
                     gaps = self.inner_gaps,
                     children = {},
@@ -405,7 +405,7 @@ function builtin.corner(options)
             local corner_width_factor = math.min(math.max(0.1, self.corner_width_factor), 0.9)
             local corner_height_factor = math.min(math.max(0.1, self.corner_height_factor), 0.9)
 
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local corner_and_horiz_stack_node = {
                 traversal_index = 0,
                 label = "builtin.corner.corner_and_stack",
@@ -439,7 +439,7 @@ function builtin.corner(options)
                 return root
             end
 
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local corner_node = {
                 traversal_index = 0,
                 size_proportion = corner_height_factor * 10.0,
@@ -476,7 +476,7 @@ function builtin.corner(options)
     }
 end
 
----@class pinnacle.layout.builtin.Fair : LayoutGenerator
+---@class pinnacle.layout.builtin.Fair : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
 ---@field axis "horizontal" | "vertical"
@@ -499,7 +499,7 @@ function builtin.fair(options)
         axis = options and options.axis or "vertical",
         ---@param self pinnacle.layout.builtin.Fair
         layout = function(self, window_count)
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local root = {
                 gaps = self.outer_gaps,
                 label = "builtin.fair",
@@ -511,7 +511,7 @@ function builtin.fair(options)
             end
 
             if window_count == 1 then
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child = {
                     gaps = self.inner_gaps,
                     children = {},
@@ -521,12 +521,12 @@ function builtin.fair(options)
             end
 
             if window_count == 2 then
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child1 = {
                     gaps = self.inner_gaps,
                     children = {},
                 }
-                ---@type LayoutNode
+                ---@type pinnacle.layout.LayoutNode
                 local child2 = {
                     gaps = self.inner_gaps,
                     children = {},
@@ -570,15 +570,15 @@ function builtin.fair(options)
     }
 end
 
----@class pinnacle.layout.builtin.Cycle : LayoutGenerator
----@field layouts LayoutGenerator[]
+---@class pinnacle.layout.builtin.Cycle : pinnacle.layout.LayoutGenerator
+---@field layouts pinnacle.layout.LayoutGenerator[]
 ---@field private tag_indices table<integer, integer>
----@field current_tag TagHandle?
+---@field current_tag pinnacle.tag.TagHandle?
 local Cycle = {}
 
 ---Cycles the layout forward for the given tag.
 ---
----@param tag TagHandle
+---@param tag pinnacle.tag.TagHandle
 function Cycle:cycle_layout_forward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
@@ -591,7 +591,7 @@ end
 
 ---Cycles the layout backward for the given tag.
 ---
----@param tag TagHandle
+---@param tag pinnacle.tag.TagHandle
 function Cycle:cycle_layout_backward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
@@ -604,9 +604,9 @@ end
 
 ---Gets the current layout generator for the given tag.
 ---
----@param tag TagHandle
+---@param tag pinnacle.tag.TagHandle
 ---
----@return LayoutGenerator?
+---@return pinnacle.layout.LayoutGenerator?
 function Cycle:current_layout(tag)
     return self.layouts[self.tag_indices[tag.id] or 1]
 end
@@ -614,7 +614,7 @@ end
 ---Creates a layout generator that delegates to other layout generators depending on the tag
 ---and allows you to cycle between the generators.
 ---
----@param layouts LayoutGenerator[]
+---@param layouts pinnacle.layout.LayoutGenerator[]
 ---
 ---@return pinnacle.layout.builtin.Cycle
 function builtin.cycle(layouts)
@@ -632,7 +632,7 @@ function builtin.cycle(layouts)
                 end
             end
 
-            ---@type LayoutNode
+            ---@type pinnacle.layout.LayoutNode
             local node = {
                 children = {},
             }
@@ -647,7 +647,7 @@ end
 
 ---Layout management.
 ---
----@class Layout
+---@class pinnacle.layout.Layout
 local layout = {
     builtin = builtin,
 }
@@ -658,7 +658,7 @@ local LayoutRequester = {}
 
 ---Causes the compositor to emit a layout request.
 ---
----@param output OutputHandle?
+---@param output pinnacle.output.OutputHandle?
 function LayoutRequester:request_layout(output)
     local output = output or require("pinnacle.output").get_focused()
     if not output then
@@ -678,7 +678,7 @@ function LayoutRequester:request_layout(output)
     end
 end
 
----@param node LayoutNode
+---@param node pinnacle.layout.LayoutNode
 ---
 ---@return pinnacle.layout.v1.LayoutNode
 local function layout_node_to_api_node(node)
@@ -742,7 +742,7 @@ end
 ---end)
 ---```
 ---
----@param on_layout fun(args: LayoutArgs): LayoutNode
+---@param on_layout fun(args: pinnacle.layout.LayoutArgs): pinnacle.layout.LayoutNode
 ---
 ---@return pinnacle.layout.LayoutRequester # A requester that allows you to force the compositor to request a layout.
 ---@nodiscard
@@ -750,7 +750,7 @@ function layout.manage(on_layout)
     local stream, err = client:bidirectional_streaming_request(
         layout_service.Layout,
         function(response, stream)
-            ---@type LayoutArgs
+            ---@type pinnacle.layout.LayoutArgs
             local args = {
                 output = require("pinnacle.output").handle.new(response.output_name),
                 window_count = response.window_count,

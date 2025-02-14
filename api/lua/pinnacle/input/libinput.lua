@@ -8,10 +8,10 @@ local defs = require("pinnacle.grpc.defs")
 local input_v1 = defs.pinnacle.input.v1
 local input_service = defs.pinnacle.input.v1.InputService
 
----@class Libinput
+---@class pinnacle.input.libinput.Libinput
 local libinput = {}
 
----@enum (key) AccelProfile
+---@enum (key) pinnacle.input.libinput.AccelProfile
 local accel_profile_values = {
     ---No pointer acceleration
     flat = input_v1.AccelProfile.ACCEL_PROFILE_FLAT,
@@ -19,7 +19,7 @@ local accel_profile_values = {
     adaptive = input_v1.AccelProfile.ACCEL_PROFILE_ADAPTIVE,
 }
 
----@enum (key) ClickMethod
+---@enum (key) pinnacle.input.libinput.ClickMethod
 local click_method_values = {
     ---Button presses are generated according to where on the device the click occurs
     button_areas = input_v1.ClickMethod.CLICK_METHOD_BUTTON_AREAS,
@@ -27,7 +27,7 @@ local click_method_values = {
     click_finger = input_v1.ClickMethod.CLICK_METHOD_CLICK_FINGER,
 }
 
----@enum (key) ScrollMethod
+---@enum (key) pinnacle.input.libinput.ScrollMethod
 local scroll_method_values = {
     ---Never send scroll events instead of pointer motion events
     no_scroll = input_v1.ScrollMethod.SCROLL_METHOD_NO_SCROLL,
@@ -39,7 +39,7 @@ local scroll_method_values = {
     on_button_down = input_v1.ScrollMethod.SCROLL_METHOD_ON_BUTTON_DOWN,
 }
 
----@enum (key) TapButtonMap
+---@enum (key) pinnacle.input.libinput.TapButtonMap
 local tap_button_map_values = {
     ---1/2/3 finger tap maps to left/right/middle
     left_right_middle = input_v1.TapButtonMap.TAP_BUTTON_MAP_LEFT_RIGHT_MIDDLE,
@@ -47,31 +47,31 @@ local tap_button_map_values = {
     left_middle_right = input_v1.TapButtonMap.TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT,
 }
 
----@enum (key) SendEventsMode
+---@enum (key) pinnacle.input.libinput.SendEventsMode
 local send_events_mode_values = {
     enabled = input_v1.SendEventsMode.SEND_EVENTS_MODE_ENABLED,
     disabled = input_v1.SendEventsMode.SEND_EVENTS_MODE_DISABLED,
     disabled_on_external_mouse = input_v1.SendEventsMode.SEND_EVENTS_MODE_DISABLED_ON_EXTERNAL_MOUSE,
 }
 
----@class LibinputSetting
----@field accel_profile AccelProfile? Set pointer acceleration
+---@class pinnacle.input.libinput.LibinputSetting
+---@field accel_profile pinnacle.input.libinput.AccelProfile? Set pointer acceleration
 ---@field accel_speed number? Set pointer acceleration speed
 ---@field calibration_matrix integer[]?
----@field click_method ClickMethod?
+---@field click_method pinnacle.input.libinput.ClickMethod?
 ---@field disable_while_typing boolean? Set whether or not to disable the pointing device while typing
 ---@field left_handed boolean? Set device left-handedness
 ---@field middle_emulation boolean?
 ---@field rotation_angle integer?
 ---@field scroll_button integer? Set the scroll button
 ---@field scroll_button_lock boolean? Set whether or not the scroll button is a hold or toggle
----@field scroll_method ScrollMethod?
+---@field scroll_method pinnacle.input.libinput.ScrollMethod?
 ---@field natural_scroll boolean? Set whether or not natural scroll is enabled, which reverses scroll direction
----@field tap_button_map TapButtonMap?
+---@field tap_button_map pinnacle.input.libinput.TapButtonMap?
 ---@field tap_drag boolean?
 ---@field tap_drag_lock boolean?
 ---@field tap boolean?
----@field send_events_mode SendEventsMode?
+---@field send_events_mode pinnacle.input.libinput.SendEventsMode?
 
 ---@class pinnacle.input.libinput.DeviceHandle
 ---@field sysname string
@@ -228,7 +228,7 @@ function DeviceHandle:device_type()
     return type
 end
 
----@param accel_profile AccelProfile
+---@param accel_profile pinnacle.input.libinput.AccelProfile
 function DeviceHandle:set_accel_profile(accel_profile)
     local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
         device_sysname = self.sysname,
@@ -254,7 +254,7 @@ function DeviceHandle:set_calibration_matrix(calibration_matrix)
     })
 end
 
----@param click_method ClickMethod
+---@param click_method pinnacle.input.libinput.ClickMethod
 function DeviceHandle:set_click_method(click_method)
     local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
         device_sysname = self.sysname,
@@ -310,7 +310,7 @@ function DeviceHandle:set_scroll_button_lock(scroll_button_lock)
     })
 end
 
----@param scroll_method ScrollMethod
+---@param scroll_method pinnacle.input.libinput.ScrollMethod
 function DeviceHandle:set_scroll_method(scroll_method)
     local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
         device_sysname = self.sysname,
@@ -326,7 +326,7 @@ function DeviceHandle:set_natural_scroll(natural_scroll)
     })
 end
 
----@param tap_button_map TapButtonMap
+---@param tap_button_map pinnacle.input.libinput.TapButtonMap
 function DeviceHandle:set_tap_button_map(tap_button_map)
     local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
         device_sysname = self.sysname,
@@ -358,7 +358,7 @@ function DeviceHandle:set_tap(tap)
     })
 end
 
----@param send_events_mode SendEventsMode
+---@param send_events_mode pinnacle.input.libinput.SendEventsMode
 function DeviceHandle:set_send_events_mode(send_events_mode)
     local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
         device_sysname = self.sysname,

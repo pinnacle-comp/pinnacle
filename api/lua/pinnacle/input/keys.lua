@@ -3,7 +3,7 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 ---Every key under the sun.
----@enum Key
+---@enum pinnacle.input.Key
 local keys = {
     NoSymbol = 0x00000000,
 

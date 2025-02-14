@@ -8,7 +8,7 @@ local output_v1 = require("pinnacle.grpc.defs").pinnacle.output.v1
 local output_service = require("pinnacle.grpc.defs").pinnacle.output.v1.OutputService
 
 ---@lcat nodoc
----@class OutputHandleModule
+---@class pinnacle.output.OutputHandleModule
 local output_handle = {}
 
 ---An output handle.
@@ -18,7 +18,7 @@ local output_handle = {}
 ---This can be retrieved through the various `get` functions in the `Output` module.
 ---
 ---@classmod
----@class OutputHandle
+---@class pinnacle.output.OutputHandle
 ---@field name string The unique name of this output
 local OutputHandle = {}
 
@@ -28,15 +28,15 @@ local OutputHandle = {}
 ---
 ---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---
----@class Output
+---@class pinnacle.output.Output
 ---@lcat nodoc
----@field private handle OutputHandleModule
+---@field private handle pinnacle.output.OutputHandleModule
 local output = {}
 output.handle = output_handle
 
 ---Gets all outputs.
 ---
----@return OutputHandle[]
+---@return pinnacle.output.OutputHandle[]
 function output.get_all()
     local response, err = client:unary_request(output_service.Get, {})
 
@@ -47,7 +47,7 @@ function output.get_all()
 
     ---@cast response pinnacle.output.v1.GetResponse
 
-    ---@type OutputHandle[]
+    ---@type pinnacle.output.OutputHandle[]
     local handles = {}
 
     for _, output_name in ipairs(response.output_names or {}) do
@@ -59,7 +59,7 @@ end
 
 ---Gets all enabled outputs.
 ---
----@return OutputHandle[]
+---@return pinnacle.output.OutputHandle[]
 function output.get_all_enabled()
     local outputs = output.get_all()
 
@@ -77,7 +77,7 @@ end
 ---
 ---@param name string The name of the connector the output is connected to
 ---
----@return OutputHandle | nil
+---@return pinnacle.output.OutputHandle | nil
 function output.get_by_name(name)
     local handles = output.get_all()
 
@@ -94,7 +94,7 @@ end
 ---
 ---This is currently defined as the most recent one that has had pointer motion.
 ---
----@return OutputHandle | nil
+---@return pinnacle.output.OutputHandle | nil
 function output.get_focused()
     local handles = output.get_all()
 
@@ -126,7 +126,7 @@ end
 ---end)
 ---```
 ---
----@param for_each fun(output: OutputHandle)
+---@param for_each fun(output: pinnacle.output.OutputHandle)
 function output.for_each_output(for_each)
     local handles = output.get_all()
     for _, handle in ipairs(handles) do
@@ -145,11 +145,11 @@ local signal_name_to_SignalName = {
     move = "OutputMove",
 }
 
----@class OutputSignal Signals related to output events.
----@field connect fun(output: OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
----@field disconnect fun(output: OutputHandle)? An output was disconnected.
----@field resize fun(output: OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
----@field move fun(output: OutputHandle, x: integer, y: integer)? An output moved.
+---@class pinnacle.output.OutputSignal Signals related to output events.
+---@field connect fun(output: pinnacle.output.OutputHandle)? An output was connected. FIXME: This currently does not fire for outputs that have been previously connected and disconnected.
+---@field disconnect fun(output: pinnacle.output.OutputHandle)? An output was disconnected.
+---@field resize fun(output: pinnacle.output.OutputHandle, logical_width: integer, logical_height: integer)? An output's logical size changed.
+---@field move fun(output: pinnacle.output.OutputHandle, x: integer, y: integer)? An output moved.
 
 ---Connects to an output signal.
 ---
@@ -168,11 +168,11 @@ local signal_name_to_SignalName = {
 ---})
 ---```
 ---
----@param signals OutputSignal The signal you want to connect to
+---@param signals pinnacle.output.OutputSignal The signal you want to connect to
 ---
----@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---@return pinnacle.signal.SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
 ---
----@see SignalHandles.disconnect_all - To disconnect from these signals
+---@see pinnacle.signal.SignalHandles.disconnect_all - To disconnect from these signals
 function output.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})
@@ -223,7 +223,7 @@ end
 ---@param x integer
 ---@param y integer
 ---
----@see OutputHandle.set_loc_adj_to
+---@see pinnacle.output.OutputHandle.set_loc_adj_to
 function OutputHandle:set_loc(x, y)
     local _, err = client:unary_request(output_service.SetLoc, {
         output_name = self.name,
@@ -236,7 +236,7 @@ function OutputHandle:set_loc(x, y)
     end
 end
 
----@alias Alignment
+---@alias pinnacle.output.Alignment
 ---| "top_align_left" Set above, align left borders
 ---| "top_align_center" Set above, align centers
 ---| "top_align_right" Set above, align right borders
@@ -278,8 +278,8 @@ end
 --- -- "HDMI-1" was placed at (1920, 0) during the compositor's initial output layout.
 ---```
 ---
----@param other OutputHandle
----@param alignment Alignment
+---@param other pinnacle.output.OutputHandle
+---@param alignment pinnacle.output.Alignment
 function OutputHandle:set_loc_adj_to(other, alignment)
     local self_logical_size = self:logical_size()
     local other_logical_size = other:logical_size()
@@ -406,7 +406,7 @@ function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
     end
 end
 
----@class Modeline
+---@class pinnacle.output.Modeline
 ---@field clock number
 ---@field hdisplay integer
 ---@field hsync_start integer
@@ -427,7 +427,7 @@ end
 ---require("pinnacle.util").output.parse_modeline("your modeline herre")
 ---```
 ---
----@param modeline string|Modeline
+---@param modeline string|pinnacle.output.Modeline
 function OutputHandle:set_modeline(modeline)
     if type(modeline) == "string" then
         local ml, err = require("pinnacle.util").output.parse_modeline(modeline)
@@ -494,7 +494,7 @@ function OutputHandle:change_scale(change_by)
     end
 end
 
----@enum (key) Transform
+---@enum (key) pinnacle.output.Transform
 local transform_name_to_code = {
     normal = output_v1.Transform.TRANSFORM_NORMAL,
     ["90"] = output_v1.Transform.TRANSFORM_90,
@@ -509,7 +509,7 @@ require("pinnacle.util").make_bijective(transform_name_to_code)
 
 ---Sets this output's transform.
 ---
----@param transform Transform
+---@param transform pinnacle.output.Transform
 function OutputHandle:set_transform(transform)
     local _, err = client:unary_request(
         output_service.SetTransform,
@@ -555,7 +555,7 @@ function OutputHandle:toggle_powered()
     end
 end
 
----@class Mode
+---@class pinnacle.output.Mode
 ---@field width integer
 ---@field height integer
 ---@field refresh_rate_mhz integer
@@ -632,7 +632,7 @@ end
 
 ---Gets this output's current mode.
 ---
----@return Mode?
+---@return pinnacle.output.Mode?
 function OutputHandle:current_mode()
     local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
 
@@ -643,7 +643,7 @@ function OutputHandle:current_mode()
         return nil
     end
 
-    ---@type Mode
+    ---@type pinnacle.output.Mode
     local ret = {
         width = mode.size.width,
         height = mode.size.height,
@@ -655,7 +655,7 @@ end
 
 ---Gets this output's preferred mode.
 ---
----@return Mode?
+---@return pinnacle.output.Mode?
 function OutputHandle:preferred_mode()
     local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
 
@@ -666,7 +666,7 @@ function OutputHandle:preferred_mode()
         return nil
     end
 
-    ---@type Mode
+    ---@type pinnacle.output.Mode
     local ret = {
         width = mode.size.width,
         height = mode.size.height,
@@ -678,7 +678,7 @@ end
 
 ---Gets all of this output's available modes.
 ---
----@return Mode[]
+---@return pinnacle.output.Mode[]
 function OutputHandle:modes()
     local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
 
@@ -689,11 +689,11 @@ function OutputHandle:modes()
         return {}
     end
 
-    ---@type Mode[]
+    ---@type pinnacle.output.Mode[]
     local ret = {}
 
     for _, mode in ipairs(modes) do
-        ---@type Mode
+        ---@type pinnacle.output.Mode
         local md = {
             width = mode.size.width,
             height = mode.size.height,
@@ -721,7 +721,7 @@ end
 
 ---Gets the tags this output has.
 ---
----@return TagHandle[]
+---@return pinnacle.tag.TagHandle[]
 function OutputHandle:tags()
     local response, err =
         client:unary_request(output_service.GetTagIds, { output_name = self.name })
@@ -749,7 +749,7 @@ end
 
 ---Get this output's transform.
 ---
----@return Transform
+---@return pinnacle.output.Transform
 function OutputHandle:transform()
     local response, err =
         client:unary_request(output_service.GetTransform, { output_name = self.name })
@@ -761,7 +761,7 @@ function OutputHandle:transform()
         or require("pinnacle.grpc.defs").pinnacle.output.v1.Transform.TRANSFORM_NORMAL
     )
 
-    ---@type Transform
+    ---@type pinnacle.output.Transform
     return transform_name_to_code[transform]
 end
 
@@ -799,9 +799,9 @@ end
 ---This includes *all* windows on the output, even those on inactive tags.
 ---If you only want visible windows, use `keyboard_focus_stack_visible` instead.
 ---
----@return WindowHandle[]
+---@return pinnacle.window.WindowHandle[]
 ---
----@see OutputHandle.keyboard_focus_stack_visible
+---@see pinnacle.output.OutputHandle.keyboard_focus_stack_visible
 function OutputHandle:keyboard_focus_stack()
     local response, err =
         client:unary_request(output_service.GetFocusStackWindowIds, { output_name = self.name })
@@ -820,9 +820,9 @@ end
 ---This only includes windows on active tags.
 ---If you want all windows on the output, use `keyboard_focus_stack` instead.
 ---
----@return WindowHandle[]
+---@return pinnacle.window.WindowHandle[]
 ---
----@see OutputHandle.keyboard_focus_stack
+---@see pinnacle.output.OutputHandle.keyboard_focus_stack
 function OutputHandle:keyboard_focus_stack_visible()
     local stack = self:keyboard_focus_stack()
 
@@ -836,7 +836,7 @@ function OutputHandle:keyboard_focus_stack_visible()
 
     local on_active_tags = require("pinnacle.util").batch(batch)
 
-    ---@type WindowHandle[]
+    ---@type pinnacle.window.WindowHandle[]
     local keyboard_focus_stack_visible = {}
 
     for i, is_active in ipairs(on_active_tags) do
@@ -851,7 +851,7 @@ end
 ---Creates a new `OutputHandle` from its raw name.
 ---@param output_name string
 function output_handle.new(output_name)
-    ---@type OutputHandle
+    ---@type pinnacle.output.OutputHandle
     local self = {
         name = output_name,
     }

@@ -15,7 +15,7 @@ local set_or_toggle = {
 }
 
 ---@lcat nodoc
----@class TagHandleModule
+---@class pinnacle.tag.TagHandleModule
 local tag_handle = {}
 
 ---A tag handle.
@@ -23,8 +23,7 @@ local tag_handle = {}
 ---This is a handle that allows manipulation of a tag.
 ---
 ---This can be retrieved through the various `get` functions in the `Tag` module.
----@classmod
----@class TagHandle
+---@class pinnacle.tag.TagHandle
 ---@field id integer
 local TagHandle = {}
 
@@ -43,14 +42,14 @@ local TagHandle = {}
 ---   - This allows you to toggle a tag and have windows on both tags display at once. This is helpful if you, say, want to reference a browser window while coding; you toggle your browser's tag and temporarily reference it while you work without having to change screens.
 ---
 ---If you need to get tags beyond the first with the same name, use the `get` method and find what you need.
----@class Tag
----@field private handle TagHandleModule
+---@class pinnacle.tag.Tag
+---@field private handle pinnacle.tag.TagHandleModule
 local tag = {}
 tag.handle = tag_handle
 
 ---Gets all tags across all outputs.
 ---
----@return TagHandle[]
+---@return pinnacle.tag.TagHandle[]
 function tag.get_all()
     local response, err = client:unary_request(tag_service.Get, {})
 
@@ -61,7 +60,7 @@ function tag.get_all()
 
     ---@cast response pinnacle.tag.v1.GetResponse
 
-    ---@type TagHandle[]
+    ---@type pinnacle.tag.TagHandle[]
     local handles = {}
 
     for _, id in ipairs(response.tag_ids or {}) do
@@ -87,9 +86,9 @@ end
 ---```
 ---
 ---@param name string
----@param output OutputHandle?
+---@param output pinnacle.output.OutputHandle?
 ---
----@return TagHandle | nil
+---@return pinnacle.tag.TagHandle | nil
 function tag.get(name, output)
     output = output or require("pinnacle.output").get_focused()
 
@@ -99,7 +98,7 @@ function tag.get(name, output)
 
     local handles = tag.get_all()
 
-    ---@type (fun(): { output: OutputHandle, name: string })[]
+    ---@type (fun(): { output: pinnacle.output.OutputHandle, name: string })[]
     local requests = {}
 
     for i, handle in ipairs(handles) do
@@ -135,12 +134,12 @@ end
 ---local tags = Tag.add(Output.get_by_name("HDMI-1"), tag_names)
 ---```
 ---
----@param output OutputHandle
+---@param output pinnacle.output.OutputHandle
 ---@param ... string
 ---
----@return TagHandle[] tags Handles to the created tags
+---@return pinnacle.tag.TagHandle[] tags Handles to the created tags
 ---
----@overload fun(output: OutputHandle, tag_names: string[]): TagHandle[]
+---@overload fun(output: pinnacle.output.OutputHandle, tag_names: string[]): pinnacle.tag.TagHandle[]
 function tag.add(output, ...)
     local tag_names = { ... }
     if type(tag_names[1]) == "table" then
@@ -159,7 +158,7 @@ function tag.add(output, ...)
 
     ---@cast response pinnacle.tag.v1.AddResponse
 
-    ---@type TagHandle[]
+    ---@type pinnacle.tag.TagHandle[]
     local handles = {}
 
     for _, id in ipairs(response.tag_ids or {}) do
@@ -178,7 +177,7 @@ end
 ---Tag.remove(tags) -- "HDMI-1" no longer has those tags
 ---```
 ---
----@param tags TagHandle[]
+---@param tags pinnacle.tag.TagHandle[]
 function tag.remove(tags)
     ---@type integer[]
     local ids = {}
@@ -198,8 +197,8 @@ local signal_name_to_SignalName = {
     active = "TagActive",
 }
 
----@class TagSignal Signals related to tag events.
----@field active fun(tag: TagHandle, active: boolean)? A tag was set to active or not active.
+---@class pinnacle.tag.TagSignal Signals related to tag events.
+---@field active fun(tag: pinnacle.tag.TagHandle, active: boolean)? A tag was set to active or not active.
 
 ---Connects to a tag signal.
 ---
@@ -218,11 +217,11 @@ local signal_name_to_SignalName = {
 ---})
 ---```
 ---
----@param signals TagSignal The signal you want to connect to
+---@param signals pinnacle.tag.TagSignal The signal you want to connect to
 ---
----@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---@return pinnacle.signal.SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
 ---
----@see SignalHandles.disconnect_all - To disconnect from these signals
+---@see pinnacle.signal.SignalHandles.disconnect_all - To disconnect from these signals
 function tag.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})
@@ -344,7 +343,7 @@ end
 
 ---Gets the output this tag is on.
 ---
----@return OutputHandle
+---@return pinnacle.output.OutputHandle
 function TagHandle:output()
     local response, err = client:unary_request(tag_service.GetOutputName, { tag_id = self.id })
 
@@ -356,11 +355,11 @@ end
 
 ---Gets the windows that have this tag.
 ---
----@return WindowHandle[]
+---@return pinnacle.window.WindowHandle[]
 function TagHandle:windows()
     local windows = require("pinnacle.window").get_all()
 
-    ---@type (fun(): TagHandle[])[]
+    ---@type (fun(): pinnacle.tag.TagHandle[])[]
     local win_tags = {}
     for i, window in ipairs(windows) do
         win_tags[i] = function()
@@ -384,9 +383,9 @@ end
 
 ---Creates a new `TagHandle` from an id.
 ---@param tag_id integer
----@return TagHandle
+---@return pinnacle.tag.TagHandle
 function tag_handle.new(tag_id)
-    ---@type TagHandle
+    ---@type pinnacle.tag.TagHandle
     local self = {
         id = tag_id,
     }
@@ -395,9 +394,9 @@ function tag_handle.new(tag_id)
 end
 
 ---@param tag_ids integer[]
----@return TagHandle[]
+---@return pinnacle.tag.TagHandle[]
 function tag_handle.new_from_table(tag_ids)
-    ---@type TagHandle[]
+    ---@type pinnacle.tag.TagHandle[]
     local handles = {}
 
     for _, id in ipairs(tag_ids) do

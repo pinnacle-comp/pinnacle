@@ -6,13 +6,23 @@ local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local process_service = require("pinnacle.grpc.defs").pinnacle.process.v1.ProcessService
 local condition = require("cqueues.condition")
-local thread = require("cqueues.thread")
+
+---@class pinnacle.process.ChildStdin
+---@field write fun(...) Same as `file:write(...)`
+
+---@class pinnacle.process.ChildStdout
+---@field lines fun(...) Same as `file:lines(...)`
+---@field read fun(...) Same as `file:read(...)`
+
+---@class pinnacle.process.ChildStderr
+---@field lines fun(...) Same as `file:lines(...)`
+---@field read fun(...) Same as `file:read(...)`
 
 ---@class pinnacle.process.Child
 ---@field pid integer
----@field stdin Socket?
----@field stdout Socket?
----@field stderr Socket?
+---@field stdin pinnacle.process.ChildStdin?
+---@field stdout pinnacle.process.ChildStdout?
+---@field stderr pinnacle.process.ChildStderr?
 local Child = {}
 
 local child_module = {}
@@ -26,7 +36,7 @@ function child_module.new_child(child)
 end
 
 ---A command representing a to-be-spawned process.
----@class Command
+---@class pinnacle.process.Command
 ---@field private cmd string | string[]
 ---@field private shell_cmd string[]?
 ---@field private envs table<string, string>?
@@ -35,7 +45,7 @@ end
 local Command = {}
 
 ---Options for a command.
----@class CommandOpts
+---@class pinnacle.process.CommandOpts
 ---@field cmd string | string[] The command to be run
 ---An optional shell command that will be prefixed with `cmd`.
 ---Use this to spawn something with a shell.
@@ -182,7 +192,7 @@ end
 ---Process management.
 ---
 ---This module provides utilities to spawn processes and capture their output.
----@class Process
+---@class pinnacle.process.Process
 local process = {}
 
 ---Spawns a process, returning a `Child` with the process's standard IO if successful.
@@ -196,7 +206,7 @@ local process = {}
 ---
 ---@return pinnacle.process.Child?
 ---
----@see Process.command A way to spawn processes with more control.
+---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -222,7 +232,7 @@ end
 ---
 ---@return pinnacle.process.Child?
 ---
----@see Process.command A way to spawn processes with more control.
+---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn_once(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -249,7 +259,7 @@ end
 ---
 ---@return pinnacle.process.Child?
 ---
----@see Process.command A way to spawn processes with more control.
+---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn_unique(...)
     local cmd = { ... }
     if cmd[1] and type(cmd[1]) == "table" then
@@ -268,13 +278,13 @@ end
 ---
 ---A `Command` represents a to-be-spawned process.
 ---
----@param cmd CommandOpts
+---@param cmd pinnacle.process.CommandOpts
 ---
----@return Command
+---@return pinnacle.process.Command
 ---@nodiscard
 function process.command(cmd)
     setmetatable(cmd, { __index = Command })
-    return cmd --[[@as Command]]
+    return cmd --[[@as pinnacle.process.Command]]
 end
 
 return process

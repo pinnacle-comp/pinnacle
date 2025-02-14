@@ -9,10 +9,10 @@ local render_service = require("pinnacle.grpc.defs").pinnacle.render.v1.RenderSe
 
 ---Rendering management.
 ---
----@class Render
+---@class pinnacle.render.Render
 local render = {}
 
----@enum (key) ScalingFilter
+---@enum (key) pinnacle.render.ScalingFilter
 local filter_name_to_filter_value = {
     ---Blend between the four closest pixels. May cause scaling to be blurry.
     bilinear = render_v1.Filter.FILTER_BILINEAR,
@@ -22,7 +22,7 @@ local filter_name_to_filter_value = {
 
 ---Sets the upscale filter the renderer will use to upscale buffers.
 ---
----@param filter ScalingFilter
+---@param filter pinnacle.render.ScalingFilter
 function render.set_upscale_filter(filter)
     local _, err = client:unary_request(
         render_service.SetUpscaleFilter,
@@ -36,7 +36,7 @@ end
 
 ---Sets the downscale filter the renderer will use to downscale buffers.
 ---
----@param filter ScalingFilter
+---@param filter pinnacle.render.ScalingFilter
 function render.set_downscale_filter(filter)
     local _, err = client:unary_request(
         render_service.SetDownscaleFilter,

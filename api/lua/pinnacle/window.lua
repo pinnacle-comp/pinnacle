@@ -19,7 +19,7 @@ local set_or_toggle = {
 local layout_mode_def = require("pinnacle.grpc.defs").pinnacle.window.v1.LayoutMode
 
 ---@lcat nodoc
----@class WindowHandleModule
+---@class pinnacle.window.WindowHandleModule
 local window_handle = {}
 
 ---A window handle.
@@ -31,7 +31,7 @@ local window_handle = {}
 ---
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---
----@class WindowHandle
+---@class pinnacle.window.WindowHandle
 ---@field id integer
 local WindowHandle = {}
 
@@ -41,13 +41,13 @@ local WindowHandle = {}
 ---moving them between tags, and various other actions.
 ---@class Window
 ---@lcat nodoc
----@field private handle WindowHandleModule
+---@field private handle pinnacle.window.WindowHandleModule
 local window = {}
 window.handle = window_handle
 
 ---Gets all windows.
 ---
----@return WindowHandle[] windows Handles to all windows
+---@return pinnacle.window.WindowHandle[] windows Handles to all windows
 function window.get_all()
     local response, err = client:unary_request(window_service.Get, {})
 
@@ -65,11 +65,11 @@ end
 
 ---Gets the currently focused window.
 ---
----@return WindowHandle | nil window A handle to the currently focused window
+---@return pinnacle.window.WindowHandle | nil window A handle to the currently focused window
 function window.get_focused()
     local handles = window.get_all()
 
-    ---@type (fun(): bool)[]
+    ---@type (fun(): boolean)[]
     local requests = {}
 
     for i, handle in ipairs(handles) do
@@ -100,7 +100,7 @@ end
 ---    Window.begin_move("btn_left")
 ---end)
 ---```
----@param button MouseButton The button that will initiate the move
+---@param button pinnacle.input.MouseButton The button that will initiate the move
 function window.begin_move(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
@@ -122,7 +122,7 @@ end
 ---    Window.begin_resize("btn_right")
 ---end)
 ---```
----@param button MouseButton The button that will initiate the resize
+---@param button pinnacle.input.MouseButton The button that will initiate the resize
 function window.begin_resize(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
@@ -148,10 +148,10 @@ local signal_name_to_SignalName = {
     focused = "WindowFocused",
 }
 
----@class WindowSignal Signals related to compositor events.
----@field pointer_enter fun(window: WindowHandle)? The pointer entered a window.
----@field pointer_leave fun(window: WindowHandle)? The pointer left a window.
----@field focused fun(window: WindowHandle)? The window got keyboard focus.
+---@class pinnacle.window.WindowSignal Signals related to compositor events.
+---@field pointer_enter fun(window: pinnacle.window.WindowHandle)? The pointer entered a window.
+---@field pointer_leave fun(window: pinnacle.window.WindowHandle)? The pointer left a window.
+---@field focused fun(window: pinnacle.window.WindowHandle)? The window got keyboard focus.
 
 ---Connects to a window signal.
 ---
@@ -170,11 +170,11 @@ local signal_name_to_SignalName = {
 ---})
 ---```
 ---
----@param signals WindowSignal The signal you want to connect to
+---@param signals pinnacle.window.WindowSignal The signal you want to connect to
 ---
----@return SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
+---@return pinnacle.signal.SignalHandles signal_handles Handles to every signal you connected to wrapped in a table, with keys being the same as the connected signal.
 ---
----@see SignalHandles.disconnect_all - To disconnect from these signals
+---@see pinnacle.signal.SignalHandles.disconnect_all - To disconnect from these signals
 function window.connect_signal(signals)
     ---@diagnostic disable-next-line: invisible
     local handles = require("pinnacle.signal").handles.new({})
@@ -212,7 +212,7 @@ end
 ---end)
 ---```
 ---
----@param rule fun(window: WindowHandle)
+---@param rule fun(window: pinnacle.window.WindowHandle)
 function window.add_window_rule(rule)
     local _stream, err = client:bidirectional_streaming_request(
         window_service.WindowRule,
@@ -418,7 +418,7 @@ end
 ---
 ---This will remove all tags from this window and add the tag `tag`.
 ---
----@param tag TagHandle The tag to move this window to
+---@param tag pinnacle.tag.TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
     local _, err =
         client:unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
@@ -430,7 +430,7 @@ end
 
 ---Adds or removes the given tag to or from this window.
 ---
----@param tag TagHandle The tag to set or unset
+---@param tag pinnacle.tag.TagHandle The tag to set or unset
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
     local _, err = client:unary_request(
@@ -445,7 +445,7 @@ end
 
 ---Toggles the given tag on this window.
 ---
----@param tag TagHandle The tag to toggle
+---@param tag pinnacle.tag.TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
     local _, err = client:unary_request(
         window_service.SetTag,
@@ -599,7 +599,7 @@ end
 
 ---Gets all tags on this window.
 ---
----@return TagHandle[]
+---@return pinnacle.tag.TagHandle[]
 function WindowHandle:tags()
     local response, err = client:unary_request(window_service.GetTagIds, { window_id = self.id })
 
@@ -614,9 +614,9 @@ end
 
 ---Creates a new `WindowHandle` from an id.
 ---@param window_id integer
----@return WindowHandle
+---@return pinnacle.window.WindowHandle
 function window_handle.new(window_id)
-    ---@type WindowHandle
+    ---@type pinnacle.window.WindowHandle
     local self = {
         id = window_id,
     }
@@ -626,9 +626,9 @@ end
 
 ---@param window_ids integer[]
 ---
----@return WindowHandle[]
+---@return pinnacle.window.WindowHandle[]
 function window_handle.new_from_table(window_ids)
-    ---@type WindowHandle[]
+    ---@type pinnacle.window.WindowHandle[]
     local handles = {}
 
     for _, id in ipairs(window_ids) do
