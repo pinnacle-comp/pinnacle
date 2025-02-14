@@ -1,11 +1,29 @@
 mod common;
 
+use std::process::Command;
+
 use test_log::test;
 
 use crate::common::{
     rust::{run_rust, setup_rust},
     sleep_secs, test_api, with_state,
 };
+
+#[self::test]
+fn default_config_compiles() -> anyhow::Result<()> {
+    let config_dir = tempfile::tempdir()?;
+
+    pinnacle::config::generate_config(config_dir.path(), pinnacle::config::Lang::Rust)?;
+
+    let status = Command::new("cargo")
+        .arg("build")
+        .current_dir(config_dir.path())
+        .spawn()?
+        .wait()?;
+    assert!(status.success());
+
+    Ok(())
+}
 
 mod output {
     use pinnacle::state::WithState;
