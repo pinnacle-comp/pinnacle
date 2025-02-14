@@ -175,12 +175,14 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         }
     };
 
-    let exit_message = |msg: &str| {
+    let exit_message = |msg: &str| -> anyhow::Result<()> {
         if interactive {
-            cliclack::outro_cancel(msg).expect("failed to display outro_cancel");
+            cliclack::outro_cancel(msg)?;
         } else {
             eprintln!("{msg}, exiting");
         }
+
+        Ok(())
     };
 
     let lang = match args.lang {
@@ -269,7 +271,7 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
             message(&msg, Level::Success)?;
 
             if lang == Lang::Rust && matches!(dir.try_exists(), Ok(true)) {
-                exit_message("Directory must be empty to create a Rust config in it");
+                exit_message("Directory must be empty to create a Rust config in it")?;
                 anyhow::bail!("{msg}");
             }
 
@@ -313,7 +315,7 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
         .interact()?;
 
         if !confirm_creation {
-            exit_message("Config generation cancelled.");
+            exit_message("Config generation cancelled.")?;
             return Ok(());
         }
     }
@@ -322,72 +324,19 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
 
     // Generate the config
 
-    let xdg_base_dirs = xdg::BaseDirectories::with_prefix("pinnacle")?;
-    let mut default_config_dir = xdg_base_dirs.get_data_file("default_config");
-    std::fs::create_dir_all(&default_config_dir)?;
+    let res = crate::config::generate_config(
+        &target_dir,
+        match lang {
+            Lang::Lua => crate::config::Lang::Lua,
+            Lang::Rust => crate::config::Lang::Rust,
+        },
+    );
 
-    // %F = %Y-%m-%d or year-month-day in ISO 8601
-    // %T = %H:%M:%S
-    let now = format!("{}", chrono::Local::now().format("%F.%T"));
-
-    match lang {
-        Lang::Lua => {
-            default_config_dir.push("lua");
-
-            let mut files_to_backup: Vec<(String, String)> = Vec::new();
-
-            for file in std::fs::read_dir(&default_config_dir)? {
-                let file = file?;
-                let name = file.file_name();
-                let target_file = target_dir.join(&name);
-                if let Ok(true) = target_file.try_exists() {
-                    let backup_name = format!("{}.{now}.bak", name.to_string_lossy());
-                    files_to_backup.push((name.to_string_lossy().to_string(), backup_name));
-                }
-            }
-
-            if !files_to_backup.is_empty() {
-                let msg = files_to_backup
-                    .iter()
-                    .map(|(src, dst)| format!("{src} -> {dst}"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                if interactive {
-                    cliclack::note("The following files will be renamed:", msg)?;
-                    let r#continue = cliclack::confirm("Continue?").interact()?;
-
-                    if !r#continue {
-                        exit_message("Config generation cancelled.");
-                        return Ok(());
-                    }
-                } else {
-                    println!("The following files will be renamed:");
-                    println!("{msg}");
-                }
-
-                for (src, dst) in files_to_backup.iter() {
-                    std::fs::rename(target_dir.join(src), target_dir.join(dst))?;
-                }
-
-                message("Renamed old files", Level::Info)?;
-            }
-
-            dircpy::copy_dir(&default_config_dir, &target_dir)?;
-        }
-        Lang::Rust => {
-            default_config_dir.push("rust");
-
-            assert!(
-                std::fs::read_dir(&target_dir)?.next().is_none(),
-                "target directory was not empty"
-            );
-
-            dircpy::copy_dir(&default_config_dir, &target_dir)?;
-        }
+    if let Err(err) = res {
+        let msg = format!("Error creating config: {err}");
+        exit_message(&msg)?;
+        anyhow::bail!("{err}");
     }
-
-    message("Copied new config over", Level::Info)?;
 
     let mut outro_msg = format!("{lang} config created in {}!", target_dir.display());
     if lang == Lang::Rust {
@@ -498,32 +447,6 @@ mod tests {
         assert_matches!(temp_dir.join("src/main.rs").try_exists(), Ok(true));
         assert_matches!(temp_dir.join("pinnacle.toml").try_exists(), Ok(true));
         assert_matches!(temp_dir.join("Cargo.toml").try_exists(), Ok(true));
-
-        Ok(())
-    }
-
-    #[test]
-    fn non_interactive_config_gen_lua_backup_works() -> anyhow::Result<()> {
-        let temp_dir = tempfile::tempdir()?;
-        let temp_dir = temp_dir
-            .path()
-            .join("non_interactive_config_gen_lua_backup_works");
-
-        let config_gen = ConfigGen {
-            lang: Some(Lang::Lua),
-            dir: Some(temp_dir.clone()),
-            non_interactive: true,
-        };
-
-        generate_config(config_gen.clone())?;
-        generate_config(config_gen)?;
-
-        let generated_file_count = std::fs::read_dir(&temp_dir)?
-            .collect::<Result<Vec<_>, _>>()?
-            .len();
-
-        // 3 for original, 3 for backups
-        assert_eq!(generated_file_count, 6);
 
         Ok(())
     }

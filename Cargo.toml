@@ -132,7 +132,6 @@ xdg = { workspace = true }
 sysinfo = "0.33.1"
 pinnacle-api-defs = { workspace = true }
 dircpy = { workspace = true }
-chrono = "0.4.39"
 bytemuck = "1.21.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"

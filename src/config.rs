@@ -11,6 +11,8 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    fs::File,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::Stdio,
 };
@@ -58,6 +60,71 @@ mod builtin {
 }
 
 const STARTUP_CONFIG_TOML_NAME: &str = "pinnacle.toml";
+const LUA_STARTUP_CONFIG: &str = include_str!("../api/lua/examples/default/pinnacle.toml");
+const LUA_CONFIG: &str = include_str!("../api/lua/examples/default/default_config.lua");
+const LUA_RC_JSON: &str = include_str!("../api/lua/examples/default/.luarc.json");
+const RUST_STARTUP_CONFIG: &str =
+    include_str!("../api/rust/examples/default_config/for_copying/pinnacle.toml");
+const RUST_CONFIG: &str =
+    include_str!("../api/rust/examples/default_config/for_copying/src/main.rs");
+const RUST_CARGO_TOML: &str =
+    include_str!("../api/rust/examples/default_config/for_copying/Cargo.toml");
+
+#[derive(PartialEq, Eq)]
+pub enum Lang {
+    Lua,
+    Rust,
+}
+
+pub fn generate_config(dir: &Path, lang: Lang) -> Result<(), io::Error> {
+    std::fs::create_dir_all(dir)?;
+
+    let startup_config_path = dir.join("pinnacle.toml");
+    let mut startup_config_file = File::options()
+        .write(true)
+        .create_new(true)
+        .open(startup_config_path)?;
+
+    if lang == Lang::Lua {
+        startup_config_file.write_all(LUA_STARTUP_CONFIG.as_bytes())?;
+
+        let config_path = dir.join("default_config.lua");
+        let rc_json_path = dir.join(".luarc.json");
+
+        let mut config_file = File::options()
+            .write(true)
+            .create_new(true)
+            .open(config_path)?;
+        config_file.write_all(LUA_CONFIG.as_bytes())?;
+        let mut rc_json_file = File::options()
+            .write(true)
+            .create_new(true)
+            .open(rc_json_path)?;
+        rc_json_file.write_all(LUA_RC_JSON.as_bytes())?;
+    } else {
+        startup_config_file.write_all(RUST_STARTUP_CONFIG.as_bytes())?;
+
+        let cargo_path = dir.join("Cargo.toml");
+        let src_dir = dir.join("src");
+        let config_path = src_dir.join("main.rs");
+
+        std::fs::create_dir_all(src_dir)?;
+
+        let mut cargo_file = File::options()
+            .write(true)
+            .create_new(true)
+            .open(cargo_path)?;
+        cargo_file.write_all(RUST_CARGO_TOML.as_bytes())?;
+
+        let mut config_file = File::options()
+            .write(true)
+            .create_new(true)
+            .open(config_path)?;
+        config_file.write_all(RUST_CONFIG.as_bytes())?;
+    }
+
+    Ok(())
+}
 
 /// The startup config struct containing what to run, what envs to run it with, various keybinds, and
 /// the target socket directory.
