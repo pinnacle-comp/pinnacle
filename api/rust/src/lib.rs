@@ -168,7 +168,7 @@ impl<F: Future> BlockOnTokio for F {
 #[macro_export]
 macro_rules! main {
     ($func:ident) => {
-        #[$crate::tokio::main]
+        #[$crate::tokio::main(crate = "pinnacle_api::tokio")]
         async fn main() {
             $crate::config!($func);
         }
