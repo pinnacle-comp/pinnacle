@@ -49,3 +49,12 @@ This passes through arguments to Cargo.
 just install build [--release]
 ```
 
+> [!IMPORTANT]
+> When compiling with Snowcap integration (on by default), if you do not have Vulkan set up properly,
+> Pinnacle will crash on startup.
+>
+> For those using Nix outside of NixOS, you will need to run the built binary
+> with [nixGL](https://github.com/nix-community/nixGL) using *both* GL and Vulkan wrappers, nested inside one another:
+> ```
+> nix run --impure github:nix-community/nixGL -- nix run --impure github:nix-community/nixGL#nixVulkanIntel -- ./target/debug/pinnacle
+> ```
