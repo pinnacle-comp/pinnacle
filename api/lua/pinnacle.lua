@@ -11,7 +11,7 @@ local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v1.PinnacleServi
 ---This module contains the `setup` function, which is where you'll put all of your config in.
 ---It also contains general compositor actions like `quit` and `reload_config`.
 ---
----@class pinnacle.Pinnacle
+---@class pinnacle
 local pinnacle = {}
 
 ---Quits Pinnacle.

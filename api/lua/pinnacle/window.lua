@@ -39,7 +39,7 @@ local WindowHandle = {}
 ---
 ---This module helps you deal with setting windows to fullscreen and maximized, setting their size,
 ---moving them between tags, and various other actions.
----@class Window
+---@class pinnacle.window
 ---@lcat nodoc
 ---@field private handle pinnacle.window.WindowHandleModule
 local window = {}
@@ -133,7 +133,7 @@ function window.begin_resize(button)
     end
 end
 
----@enum (key) LayoutMode
+---@enum (key) pinnacle.layout.LayoutMode
 local layout_mode = {
     tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
     floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,

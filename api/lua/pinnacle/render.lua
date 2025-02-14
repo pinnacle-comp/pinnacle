@@ -9,7 +9,7 @@ local render_service = require("pinnacle.grpc.defs").pinnacle.render.v1.RenderSe
 
 ---Rendering management.
 ---
----@class pinnacle.render.Render
+---@class pinnacle.render
 local render = {}
 
 ---@enum (key) pinnacle.render.ScalingFilter

@@ -13,7 +13,7 @@ local log = require("pinnacle.log")
 ---@field window_count integer
 ---@field tags pinnacle.tag.TagHandle[]
 
----@alias LayoutDir
+---@alias pinnacle.layout.LayoutDir
 ---| "row"
 ---| "column"
 
@@ -28,7 +28,7 @@ local log = require("pinnacle.log")
 ---@field traversal_index integer?
 ---A set of indices per window index that changes how that window is assigned a geometry.
 ---@field traversal_overrides table<integer, integer[]>?
----@field layout_dir LayoutDir?
+---@field layout_dir pinnacle.layout.LayoutDir?
 ---@field gaps (number | pinnacle.layout.Gaps)?
 ---The proportion the node takes up relative to its siblings.
 ---@field size_proportion number?
@@ -42,19 +42,19 @@ local log = require("pinnacle.log")
 ---Builtin layout generators.
 ---
 ---This contains functions that create various builtin generators.
----@class pinnacle.layout.builtin.Builtin
+---@class pinnacle.layout.builtin
 local builtin = {}
 
 ---@class pinnacle.layout.builtin.Line : pinnacle.layout.LayoutGenerator
 ---@field outer_gaps pinnacle.layout.Gaps
 ---@field inner_gaps pinnacle.layout.Gaps
----@field direction LayoutDir
+---@field direction pinnacle.layout.LayoutDir
 ---@field reversed boolean
 
 ---@class pinnacle.layout.builtin.LineOpts
 ---@field outer_gaps pinnacle.layout.Gaps?
 ---@field inner_gaps pinnacle.layout.Gaps?
----@field direction LayoutDir?
+---@field direction pinnacle.layout.LayoutDir?
 ---@field reversed boolean?
 
 ---Creates a layout generator that lays out windows in a line.
@@ -647,7 +647,7 @@ end
 
 ---Layout management.
 ---
----@class pinnacle.layout.Layout
+---@class pinnacle.layout
 local layout = {
     builtin = builtin,
 }

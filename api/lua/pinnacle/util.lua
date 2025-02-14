@@ -2,13 +2,17 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+---Output utilities.
+---@class pinnacle.util.output
+local output = {}
+
 ---Parses a modeline string.
 ---
 ---@param modeline string
 ---
 ---@return pinnacle.output.Modeline|nil modeline A modeline if successful
 ---@return string|nil error An error message if any
-local function parse_modeline(modeline)
+function output.parse_modeline(modeline)
     local args = modeline:gmatch("[^%s]+")
 
     local targs = {}
@@ -83,11 +87,11 @@ local function parse_modeline(modeline)
 end
 
 ---Utility functions.
----@class pinnacle.util.Util
+---@class pinnacle.util
+---Output utilities.
+---@field output pinnacle.util.output
 local util = {
-    output = {
-        parse_modeline = parse_modeline,
-    },
+    output = output,
 }
 
 ---Batches a set of requests that will be sent to the compositor all at once.

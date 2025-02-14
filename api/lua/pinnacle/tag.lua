@@ -42,7 +42,7 @@ local TagHandle = {}
 ---   - This allows you to toggle a tag and have windows on both tags display at once. This is helpful if you, say, want to reference a browser window while coding; you toggle your browser's tag and temporarily reference it while you work without having to change screens.
 ---
 ---If you need to get tags beyond the first with the same name, use the `get` method and find what you need.
----@class pinnacle.tag.Tag
+---@class pinnacle.tag
 ---@field private handle pinnacle.tag.TagHandleModule
 local tag = {}
 tag.handle = tag_handle

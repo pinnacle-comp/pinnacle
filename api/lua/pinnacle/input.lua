@@ -80,7 +80,7 @@ require("pinnacle.util").make_bijective(edge_values)
 ---Input management.
 ---
 ---This module provides utilities to set key- and mousebinds as well as change keyboard settings.
----@class pinnacle.input.Input
+---@class pinnacle.input
 ---@field private mouse_button_values table
 local input = {
     key = require("pinnacle.input.keys"),

@@ -1,9 +1,9 @@
 ---Builtins and integrations with Snowcap.
----@class pinnacle.snowcap.integration.Integration
+---@class pinnacle.snowcap.integration
 local integration = {}
 
 ---The Snowcap widget system, integrated into Pinnacle.
----@class pinnacle.snowcap.Snowcap
+---@class pinnacle.snowcap
 local snowcap = {
     layer = require("snowcap.layer"),
     widget = require("snowcap.widget"),

@@ -192,7 +192,7 @@ end
 ---Process management.
 ---
 ---This module provides utilities to spawn processes and capture their output.
----@class pinnacle.process.Process
+---@class pinnacle.process
 local process = {}
 
 ---Spawns a process, returning a `Child` with the process's standard IO if successful.

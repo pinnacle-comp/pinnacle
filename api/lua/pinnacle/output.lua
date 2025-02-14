@@ -28,7 +28,7 @@ local OutputHandle = {}
 ---
 ---Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 ---
----@class pinnacle.output.Output
+---@class pinnacle.output
 ---@lcat nodoc
 ---@field private handle pinnacle.output.OutputHandleModule
 local output = {}
