@@ -21,6 +21,6 @@ features:
     icon: 🪨
     details: Well it hasn't panicked in the past few weeks I've been using it, at least.
   - title: Written in Rust
-    icon: <img src="/assets/wojaks_admire_ferris_the_crab.png">
+    icon: <img src="/pinnacle/assets/wojaks_admire_ferris_the_crab.png">
     details: literally doesn't matter but the borrow checker is holding me hosta- oh sorry i mean omg guys it's written in rust!!!
 ---

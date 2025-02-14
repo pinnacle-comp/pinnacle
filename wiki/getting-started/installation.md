@@ -49,11 +49,3 @@ This passes through arguments to Cargo.
 just install build [--release]
 ```
 
-### Running
-
-Run Pinnacle with `just`.
-```sh
-just run [--release]
-```
-
-You can press `Super`+`S` to bring up the bind overlay.

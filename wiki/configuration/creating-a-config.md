@@ -8,5 +8,9 @@ Run the config generator with the following command:
 pinnacle config gen
 ```
 
-This will start an interactive TUI where you can specify where to copy a new config to, as well as what
+This will start an interactive TUI where you can specify where to create a new config at, as well as what
 language you want to use.
+
+> [!NOTE]
+> If you are rerunning the config generator, delete or rename any already existing files.
+> Otherwise, the config generator will fail (it does not overwrite files).

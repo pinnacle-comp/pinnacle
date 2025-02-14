@@ -1,7 +1,7 @@
 # Config Basics
 
 While some compositors expose configuration through a declarative file or shell commands, Pinnacle instead provides
-configuration libraries used by config clients. Because I'm insane, there are both Lua and Rust libraries for you to pick from.
+configuration libraries used by config clients. There are both Lua and Rust libraries for you to pick from.
 
 I say config *client* because that is exactly what a Pinnacle config is. All configuration,
 from keybinds to output management, is exposed as a gRPC interface over a Unix domain socket.

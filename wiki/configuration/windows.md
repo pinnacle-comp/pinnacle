@@ -18,7 +18,7 @@ Documentation for methods on window handles can be found at the corresponding AP
 Unlike AwesomeWM and most Wayland compositors out there, Pinnacle does not have a declarative window rule system.
 That is, you don't specify a list of conditions and applied rules directly. We do this because it introduces a split
 between window rules and the rest of the window API. Instead, window rules give you a window handle when
-a window opens that you can do whatever you want on.
+a window opens that you can do whatever you want with.
 
 To add a window rule, call `add_window_rule`.
 

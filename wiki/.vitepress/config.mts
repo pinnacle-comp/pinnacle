@@ -28,7 +28,8 @@ export default defineVersionedConfig({
                     text: "Getting Started",
                     items: [
                         { text: "Introduction", link: "/getting-started/introduction" },
-                        { text: "Installation", link: "/getting-started/installation" }
+                        { text: "Installation", link: "/getting-started/installation" },
+                        { text: "Running", link: "/getting-started/running" },
                     ]
                 },
                 {
@@ -43,6 +44,7 @@ export default defineVersionedConfig({
                         { text: "Windows", link: "/configuration/windows" },
                         { text: "Layouts", link: "/configuration/layout" },
                         { text: "Processes", link: "/configuration/processes" },
+                        { text: "Snowcap", link: "/configuration/snowcap" },
                         { text: "Integration with external applications", link: "/configuration/integration" },
                         { text: "Xwayland", link: "/configuration/xwayland" },
                     ]
