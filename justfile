@@ -2,8 +2,6 @@ set shell := ["bash", "-c"]
 
 rootdir := justfile_directory()
 xdg_data_dir := `echo "${XDG_DATA_HOME:-$HOME/.local/share}/pinnacle"`
-root_xdg_data_dir := "/usr/share/pinnacle"
-root_xdg_config_dir := "/etc/xdg/pinnacle"
 
 lua_version := "5.4"
 
@@ -34,12 +32,6 @@ clean: clean-snowcap
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local pinnacle-api
     -luarocks remove --local lua-grpc-client
-
-# [root] Remove installed configs and the Lua API (requires Luarocks)
-clean-root:
-    rm -rf "{{root_xdg_data_dir}}"
-    rm -rf "{{root_xdg_config_dir}}"
-    -luarocks remove pinnacle-api
 
 # Run `cargo build`
 build *args: gen-lua-pb-defs
