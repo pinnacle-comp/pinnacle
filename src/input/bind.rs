@@ -239,16 +239,14 @@ impl Keybinds {
                     Edge::Release => unreachable!(),
                 }
 
-                if !keybind.has_on_press {
-                    return true;
-                }
-
                 let mut retain = true;
 
                 bind_action = if keybind.bind_data.is_quit_bind {
                     BindAction::Quit
                 } else if keybind.bind_data.is_reload_config_bind {
                     BindAction::ReloadConfig
+                } else if !keybind.has_on_press {
+                    return true;
                 } else {
                     retain = keybind.sender.send(edge).is_ok();
                     BindAction::Suppress
