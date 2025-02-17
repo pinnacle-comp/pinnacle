@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::Context;
+use clap::CommandFactory;
 use pinnacle::{
     cli::{self, generate_config, Cli, CliSubcommand, ConfigSubcommand},
     config::{get_config_dir, parse_startup_config, StartupConfig},
@@ -65,8 +66,6 @@ async fn main() -> anyhow::Result<()> {
         .with(stdout_layer)
         .init();
 
-    info!("Starting Pinnacle (commit {})", env!("VERGEN_GIT_SHA"));
-
     increase_nofile_rlimit();
 
     set_log_panic_hook();
@@ -107,9 +106,19 @@ async fn main() -> anyhow::Result<()> {
 
                 println!("{info}");
             }
+            CliSubcommand::GenCompletions { shell } => {
+                clap_complete::generate(
+                    *shell,
+                    &mut Cli::command(),
+                    "pinnacle",
+                    &mut std::io::stdout(),
+                );
+            }
         }
         return Ok(());
     }
+
+    info!("Starting Pinnacle (commit {})", env!("VERGEN_GIT_SHA"));
 
     tracy_client::Client::start();
 

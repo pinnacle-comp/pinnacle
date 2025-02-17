@@ -2,6 +2,8 @@
 
 - Properly stack x11 windows relative to each other
 - Use env for snowcap socket dir
+- Find protobuf dir with find_data_file, use in env
+    - Alternatively just have the config search and not use an env
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords

@@ -21,7 +21,7 @@ pub enum Backend {
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None, args_conflicts_with_subcommands = true)]
 pub struct Cli {
-    /// Start Pinnacle with the config at this directory
+    /// Use the config at the given directory
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
     pub config_dir: Option<PathBuf>,
 
@@ -46,7 +46,9 @@ pub struct Cli {
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
     pub socket_dir: Option<PathBuf>,
 
-    /// Start Pinnacle as a session, importing the environment into systemd and D-Bus.
+    /// Start Pinnacle as a session
+    ///
+    /// This will import the environment into systemd and D-Bus.
     #[arg(long)]
     pub session: bool,
 
@@ -83,6 +85,12 @@ pub enum CliSubcommand {
 
     /// Print build and system information
     Info,
+
+    /// Generate shell completions and print them to stdout
+    GenCompletions {
+        #[arg(short, long)]
+        shell: clap_complete::Shell,
+    },
 }
 
 /// Config subcommands
@@ -103,7 +111,7 @@ pub struct ConfigGen {
     #[arg(short, long)]
     pub lang: Option<Lang>,
 
-    /// Generate a config at this directory
+    /// Generate a config at the given directory
     #[arg(short, long, value_hint(ValueHint::DirPath))]
     pub dir: Option<PathBuf>,
 
