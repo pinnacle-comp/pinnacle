@@ -4,33 +4,56 @@
 
 require("compat53")
 
+local stat = require("posix.sys.stat").stat
 local pb = require("pb")
 
 local protobuf = {}
-
-local PINNACLE_PROTO_DIR = os.getenv("PINNACLE_PROTO_DIR")
 
 function protobuf.build_protos()
     require("pinnacle.log"):debug("Building protos")
 
     local version = "v1"
     local proto_file_paths = {
-        PINNACLE_PROTO_DIR .. "/pinnacle/tag/" .. version .. "/tag.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/input/" .. version .. "/input.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/" .. version .. "/pinnacle.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/output/" .. version .. "/output.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/process/" .. version .. "/process.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/window/" .. version .. "/window.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/signal/" .. version .. "/signal.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/layout/" .. version .. "/layout.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/render/" .. version .. "/render.proto",
-        PINNACLE_PROTO_DIR .. "/pinnacle/util/" .. version .. "/util.proto",
-        PINNACLE_PROTO_DIR .. "/google/protobuf/empty.proto",
+        "pinnacle/tag/" .. version .. "/tag.proto",
+        "pinnacle/input/" .. version .. "/input.proto",
+        "pinnacle/" .. version .. "/pinnacle.proto",
+        "pinnacle/output/" .. version .. "/output.proto",
+        "pinnacle/process/" .. version .. "/process.proto",
+        "pinnacle/window/" .. version .. "/window.proto",
+        "pinnacle/signal/" .. version .. "/signal.proto",
+        "pinnacle/layout/" .. version .. "/layout.proto",
+        "pinnacle/render/" .. version .. "/render.proto",
+        "pinnacle/util/" .. version .. "/util.proto",
+        "google/protobuf/empty.proto",
     }
 
-    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path="
-        .. PINNACLE_PROTO_DIR
-        .. " "
+    local xdg_data_home = os.getenv("XDG_DATA_HOME")
+    local xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
+
+    ---@type string[]
+    local search_dirs = {}
+
+    if xdg_data_home then
+        table.insert(search_dirs, xdg_data_home)
+    end
+
+    if xdg_data_dirs then
+        for data_dir in xdg_data_dirs:gmatch("[^:]+") do
+            table.insert(search_dirs, data_dir)
+        end
+    end
+
+    local proto_dir = nil
+
+    for _, dir in ipairs(search_dirs) do
+        if stat(dir .. "/pinnacle/protobuf") then
+            proto_dir = dir .. "/pinnacle/protobuf"
+        end
+    end
+
+    assert(proto_dir, "could not find protobuf definitions directory")
+
+    local cmd = "protoc --descriptor_set_out=/tmp/pinnacle.pb --proto_path=" .. proto_dir .. " "
 
     for _, file_path in ipairs(proto_file_paths) do
         cmd = cmd .. file_path .. " "

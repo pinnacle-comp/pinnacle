@@ -504,11 +504,6 @@ impl Pinnacle {
                 .context(format!("Failed to remove old socket at {socket_path:?}"))?;
         }
 
-        std::env::set_var(
-            "PINNACLE_PROTO_DIR",
-            self.xdg_base_dirs.get_data_file("protobuf"),
-        );
-
         let (grpc_sender, grpc_receiver) =
             calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 

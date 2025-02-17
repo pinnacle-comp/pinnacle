@@ -14,6 +14,7 @@ dependencies = {
     "lua-protobuf ~> 0.5.2",
     "compat53 ~> 0.13",
     "lualogging ~> 1.8.2",
+    "luaposix ~> 36.3",
 
     -- Run just install
     "lua-grpc-client >= dev-1",
