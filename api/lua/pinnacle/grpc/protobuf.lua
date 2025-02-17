@@ -30,6 +30,9 @@ function protobuf.build_protos()
     local xdg_data_home = os.getenv("XDG_DATA_HOME")
     local xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
 
+    print(xdg_data_home)
+    print(xdg_data_dirs)
+
     ---@type string[]
     local search_dirs = {}
 
@@ -50,6 +53,8 @@ function protobuf.build_protos()
             proto_dir = dir .. "/pinnacle/protobuf"
         end
     end
+
+    print(proto_dir)
 
     assert(proto_dir, "could not find protobuf definitions directory")
 
