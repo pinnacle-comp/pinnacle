@@ -62,7 +62,7 @@ jobs:
         run: just install test
       - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 XDG_DATA_HOME=~/.local/share just install test -- --nocapture
+        run: RUST_LOG=debug RUST_BACKTRACE=1 XDG_DATA_HOME=$HOME/.local/share just install test -- --nocapture
   check-format:
     runs-on: ubuntu-24.04
     name: Check formatting
