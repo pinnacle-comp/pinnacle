@@ -241,15 +241,13 @@ impl Keybinds {
 
                 let mut retain = true;
 
-                bind_action = if keybind.bind_data.is_quit_bind {
-                    BindAction::Quit
+                if keybind.bind_data.is_quit_bind {
+                    bind_action = BindAction::Quit;
                 } else if keybind.bind_data.is_reload_config_bind {
-                    BindAction::ReloadConfig
-                } else if !keybind.has_on_press {
-                    return true;
-                } else {
+                    bind_action = BindAction::ReloadConfig;
+                } else if keybind.has_on_press {
                     retain = keybind.sender.send(edge).is_ok();
-                    BindAction::Suppress
+                    bind_action = BindAction::Suppress;
                 };
 
                 retain
@@ -420,19 +418,15 @@ impl Mousebinds {
                     Edge::Release => unreachable!(),
                 }
 
-                if !mousebind.has_on_press {
-                    return true;
-                }
-
                 let mut retain = true;
 
-                bind_action = if mousebind.bind_data.is_quit_bind {
-                    BindAction::Quit
+                if mousebind.bind_data.is_quit_bind {
+                    bind_action = BindAction::Quit;
                 } else if mousebind.bind_data.is_reload_config_bind {
-                    BindAction::ReloadConfig
-                } else {
+                    bind_action = BindAction::ReloadConfig;
+                } else if mousebind.has_on_press {
                     retain = mousebind.sender.send(edge).is_ok();
-                    BindAction::Suppress
+                    bind_action = BindAction::Suppress;
                 };
 
                 retain
