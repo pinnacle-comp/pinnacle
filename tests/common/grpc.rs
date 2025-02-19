@@ -1,6 +1,7 @@
 pub mod output;
 pub mod pinnacle;
 pub mod tag;
+pub mod window;
 
 use ::pinnacle::api::TonicResult;
 use tonic::Status;

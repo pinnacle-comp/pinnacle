@@ -19,7 +19,8 @@ use pinnacle_api_defs::pinnacle::{
             GetAppIdRequest, GetFocusedRequest, GetLayoutModeRequest, GetLocRequest,
             GetSizeRequest, GetTagIdsRequest, GetTitleRequest, MoveGrabRequest, MoveToTagRequest,
             RaiseRequest, ResizeGrabRequest, SetDecorationModeRequest, SetFloatingRequest,
-            SetFocusedRequest, SetFullscreenRequest, SetMaximizedRequest, SetTagRequest,
+            SetFocusedRequest, SetFullscreenRequest, SetGeometryRequest, SetMaximizedRequest,
+            SetTagRequest,
         },
     },
 };
@@ -211,6 +212,29 @@ impl WindowHandle {
         let window_id = self.id;
         Client::window()
             .close(pinnacle_api_defs::pinnacle::window::v1::CloseRequest { window_id })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Sets this window's location and/or size.
+    ///
+    /// Only affects the floating geometry of windows. Tiled geometries are calculated
+    /// using the current layout.
+    pub fn set_geometry(
+        &self,
+        x: impl Into<Option<i32>>,
+        y: impl Into<Option<i32>>,
+        w: impl Into<Option<u32>>,
+        h: impl Into<Option<u32>>,
+    ) {
+        Client::window()
+            .set_geometry(SetGeometryRequest {
+                window_id: self.id,
+                x: x.into(),
+                y: y.into(),
+                w: w.into(),
+                h: h.into(),
+            })
             .block_on_tokio()
             .unwrap();
     }
@@ -613,6 +637,14 @@ impl WindowHandle {
     /// Gets this window's raw compositor id.
     pub fn id(&self) -> u32 {
         self.id
+    }
+
+    /// Creates a window handle from an ID.
+    ///
+    /// Note: This is mostly for testing and if you want to serialize and deserialize window
+    /// handles.
+    pub fn from_id(id: u32) -> Self {
+        Self { id }
     }
 }
 

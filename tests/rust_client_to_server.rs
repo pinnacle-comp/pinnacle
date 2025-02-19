@@ -3,7 +3,7 @@ mod common;
 use std::time::Duration;
 
 use common::{
-    grpc::{pinnacle, tag},
+    grpc::{pinnacle, tag, window},
     rust::run_rust,
 };
 use pinnacle_api_defs::pinnacle::v1::{
@@ -308,4 +308,190 @@ async fn output_v1() -> anyhow::Result<()> {
     };
 
     output_v1.is_finished()
+}
+
+#[tokio::main]
+#[self::test]
+async fn window_v1() -> anyhow::Result<()> {
+    use pinnacle_api_defs::pinnacle::util::v1 as util;
+    use pinnacle_api_defs::pinnacle::window::v1;
+
+    let _guard = MUTEX.lock().await;
+
+    let temp_file = tempfile::tempdir()?;
+
+    let (window_v1, mut recv) = window::v1::WindowService::new();
+    window_v1.get([v1::GetRequest {}]);
+    window_v1.get_app_id([v1::GetAppIdRequest { window_id: 5 }]);
+    window_v1.get_title([v1::GetTitleRequest { window_id: 5 }]);
+    window_v1.get_loc([v1::GetLocRequest { window_id: 5 }]);
+    window_v1.get_size([v1::GetSizeRequest { window_id: 5 }]);
+    window_v1.get_focused([v1::GetFocusedRequest { window_id: 5 }]);
+    window_v1.get_layout_mode([v1::GetLayoutModeRequest { window_id: 5 }]);
+    window_v1.get_tag_ids([v1::GetTagIdsRequest { window_id: 5 }]);
+    window_v1.close([v1::CloseRequest { window_id: 5 }]);
+    window_v1.set_geometry([
+        v1::SetGeometryRequest {
+            window_id: 5,
+            x: Some(500),
+            y: None,
+            w: None,
+            h: None,
+        },
+        v1::SetGeometryRequest {
+            window_id: 5,
+            x: None,
+            y: None,
+            w: Some(640),
+            h: Some(480),
+        },
+    ]);
+    window_v1.set_fullscreen([
+        v1::SetFullscreenRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Set.into(),
+        },
+        v1::SetFullscreenRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Unset.into(),
+        },
+        v1::SetFullscreenRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Toggle.into(),
+        },
+    ]);
+    window_v1.set_maximized([
+        v1::SetMaximizedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Set.into(),
+        },
+        v1::SetMaximizedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Unset.into(),
+        },
+        v1::SetMaximizedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Toggle.into(),
+        },
+    ]);
+    window_v1.set_floating([
+        v1::SetFloatingRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Set.into(),
+        },
+        v1::SetFloatingRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Unset.into(),
+        },
+        v1::SetFloatingRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Toggle.into(),
+        },
+    ]);
+    window_v1.set_focused([
+        v1::SetFocusedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Set.into(),
+        },
+        v1::SetFocusedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Unset.into(),
+        },
+        v1::SetFocusedRequest {
+            window_id: 5,
+            set_or_toggle: util::SetOrToggle::Toggle.into(),
+        },
+    ]);
+    window_v1.set_decoration_mode([
+        v1::SetDecorationModeRequest {
+            window_id: 5,
+            decoration_mode: v1::DecorationMode::ClientSide.into(),
+        },
+        v1::SetDecorationModeRequest {
+            window_id: 5,
+            decoration_mode: v1::DecorationMode::ServerSide.into(),
+        },
+    ]);
+    window_v1.move_to_tag([v1::MoveToTagRequest {
+        window_id: 5,
+        tag_id: 1,
+    }]);
+    window_v1.set_tag([
+        v1::SetTagRequest {
+            window_id: 5,
+            tag_id: 1,
+            set_or_toggle: util::SetOrToggle::Set.into(),
+        },
+        v1::SetTagRequest {
+            window_id: 5,
+            tag_id: 1,
+            set_or_toggle: util::SetOrToggle::Unset.into(),
+        },
+        v1::SetTagRequest {
+            window_id: 5,
+            tag_id: 1,
+            set_or_toggle: util::SetOrToggle::Toggle.into(),
+        },
+    ]);
+    window_v1.raise([v1::RaiseRequest { window_id: 5 }]);
+    const LMB: u32 = 272;
+    window_v1.move_grab([v1::MoveGrabRequest { button: LMB }]);
+    window_v1.resize_grab([v1::ResizeGrabRequest { button: LMB }]);
+
+    let window_v1_server =
+        pinnacle_api_defs::pinnacle::window::v1::window_service_server::WindowServiceServer::new(
+            window_v1.clone(),
+        );
+
+    let _grpc_server_join =
+        start_test_grpc_server!(temp_file.path().join("grpc.sock"), window_v1_server);
+
+    let _ = run_rust(|| {
+        use pinnacle_api::window;
+
+        let win = window::WindowHandle::from_id(5);
+        let tag = pinnacle_api::tag::TagHandle::from_id(1);
+
+        catch!(window::get_all());
+        catch!(win.app_id());
+        catch!(win.title());
+        catch!(win.loc());
+        catch!(win.size());
+        catch!(win.focused());
+        catch!(win.layout_mode());
+        catch!(win.tags());
+        catch!(win.close());
+        catch!(win.set_geometry(500, None, None, None));
+        catch!(win.set_geometry(None, None, 640, 480));
+        catch!(win.set_fullscreen(true));
+        catch!(win.set_fullscreen(false));
+        catch!(win.toggle_fullscreen());
+        catch!(win.set_maximized(true));
+        catch!(win.set_maximized(false));
+        catch!(win.toggle_maximized());
+        catch!(win.set_floating(true));
+        catch!(win.set_floating(false));
+        catch!(win.toggle_floating());
+        catch!(win.set_focused(true));
+        catch!(win.set_focused(false));
+        catch!(win.toggle_focused());
+        catch!(win.set_decoration_mode(window::DecorationMode::ClientSide));
+        catch!(win.set_decoration_mode(window::DecorationMode::ServerSide));
+        catch!(win.move_to_tag(&tag));
+        catch!(win.set_tag(&tag, true));
+        catch!(win.set_tag(&tag, false));
+        catch!(win.toggle_tag(&tag));
+        catch!(win.raise());
+        catch!(window::begin_move(pinnacle_api::input::MouseButton::Left));
+        catch!(window::begin_resize(pinnacle_api::input::MouseButton::Left));
+    });
+
+    tokio::select! {
+        _ = tokio::time::sleep(Duration::from_secs(1)) => (),
+        err = recv.recv() => {
+            anyhow::bail!(err.unwrap());
+        }
+    };
+
+    window_v1.is_finished()
 }
