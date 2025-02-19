@@ -1030,8 +1030,6 @@ impl State {
                 time: event.time_msec(),
             },
         );
-
-        self.warp_cursor_to_global_loc(touch_loc);
     }
 
     fn on_touch_up<I: InputBackend>(&mut self, event: I::TouchUpEvent) {
