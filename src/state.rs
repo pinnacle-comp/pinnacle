@@ -66,8 +66,8 @@ use smithay::{
         relative_pointer::RelativePointerManagerState,
         security_context::SecurityContextState,
         selection::{
-            data_device::DataDeviceState, primary_selection::PrimarySelectionState,
-            wlr_data_control::DataControlState,
+            data_device::DataDeviceState, ext_data_control,
+            primary_selection::PrimarySelectionState, wlr_data_control,
         },
         session_lock::SessionLockManagerState,
         shell::{
@@ -138,7 +138,8 @@ pub struct Pinnacle {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub primary_selection_state: PrimarySelectionState,
     pub layer_shell_state: WlrLayerShellState,
-    pub data_control_state: DataControlState,
+    pub wlr_data_control_state: wlr_data_control::DataControlState,
+    pub ext_data_control_state: ext_data_control::DataControlState,
     pub screencopy_manager_state: ScreencopyManagerState,
     pub gamma_control_manager_state: GammaControlManagerState,
     pub security_context_state: SecurityContextState,
@@ -328,7 +329,12 @@ impl Pinnacle {
 
         let primary_selection_state = PrimarySelectionState::new::<State>(&display_handle);
 
-        let data_control_state = DataControlState::new::<State, _>(
+        let wlr_data_control_state = wlr_data_control::DataControlState::new::<State, _>(
+            &display_handle,
+            Some(&primary_selection_state),
+            filter_restricted_client,
+        );
+        let ext_data_control_state = ext_data_control::DataControlState::new::<State, _>(
             &display_handle,
             Some(&primary_selection_state),
             filter_restricted_client,
@@ -357,7 +363,8 @@ impl Pinnacle {
                 &display_handle,
                 filter_restricted_client,
             ),
-            data_control_state,
+            wlr_data_control_state,
+            ext_data_control_state,
             screencopy_manager_state: ScreencopyManagerState::new::<State, _>(
                 &display_handle,
                 filter_restricted_client,

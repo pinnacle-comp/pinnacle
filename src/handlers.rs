@@ -16,8 +16,8 @@ use smithay::{
         renderer::utils::{self, with_renderer_surface_state},
     },
     delegate_compositor, delegate_cursor_shape, delegate_data_control, delegate_data_device,
-    delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit, delegate_layer_shell,
-    delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
+    delegate_ext_data_control, delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit,
+    delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
     delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_single_pixel_buffer, delegate_tablet_manager,
     delegate_viewporter, delegate_xdg_activation, delegate_xwayland_keyboard_grab,
@@ -67,11 +67,11 @@ use smithay::{
                 set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
                 ServerDndGrabHandler,
             },
+            ext_data_control,
             primary_selection::{
                 set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
             },
-            wlr_data_control::{DataControlHandler, DataControlState},
-            SelectionHandler, SelectionSource, SelectionTarget,
+            wlr_data_control, SelectionHandler, SelectionSource, SelectionTarget,
         },
         shell::{
             wlr_layer::{self, Layer, LayerSurfaceData, WlrLayerShellHandler, WlrLayerShellState},
@@ -551,12 +551,19 @@ impl PrimarySelectionHandler for State {
 }
 delegate_primary_selection!(State);
 
-impl DataControlHandler for State {
-    fn data_control_state(&self) -> &DataControlState {
-        &self.pinnacle.data_control_state
+impl wlr_data_control::DataControlHandler for State {
+    fn data_control_state(&self) -> &wlr_data_control::DataControlState {
+        &self.pinnacle.wlr_data_control_state
     }
 }
 delegate_data_control!(State);
+
+impl ext_data_control::DataControlHandler for State {
+    fn data_control_state(&self) -> &ext_data_control::DataControlState {
+        &self.pinnacle.ext_data_control_state
+    }
+}
+delegate_ext_data_control!(State);
 
 impl SeatHandler for State {
     type KeyboardFocus = KeyboardFocusTarget;
