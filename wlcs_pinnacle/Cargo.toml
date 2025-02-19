@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 smithay = { workspace = true }
 pinnacle = { path = "..", features = ["wlcs"], default-features = false }
 pinnacle-api = { path = "../api/rust", default-features = false }
-wayland-sys = { version = "0.31.1", features = ["client", "server"] }
+wayland-sys = { version = "0.31.6", features = ["client", "server"] }
 wlcs = "0.1"
 
 tracing = { workspace = true }
