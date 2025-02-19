@@ -79,15 +79,6 @@ impl XwmHandler for State {
             self.pinnacle.place_window_on_output(&window, output);
         }
 
-        // bruh
-        //
-        // This gets Plants vs. Zombies to show up.
-        // Ignore the bit where if you set it to fullscreen in game it disappears
-        if window.is_x11_override_redirect() {
-            let _ = window.x11_surface().unwrap().set_mapped(true);
-            return;
-        }
-
         let window_rule_request_sent = self.pinnacle.window_rule_state.new_request(window.clone());
         if !window_rule_request_sent {
             window.x11_surface().unwrap().set_mapped(true).unwrap();
