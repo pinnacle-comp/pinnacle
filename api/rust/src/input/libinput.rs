@@ -7,13 +7,13 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_device_libinput_setting_request::Setting, GetDeviceCapabilitiesRequest,
-        GetDeviceInfoRequest, GetDeviceTypeRequest, GetDevicesRequest,
-        SetDeviceLibinputSettingRequest,
+        set_device_libinput_setting_request::Setting, set_device_map_target_request::Target,
+        GetDeviceCapabilitiesRequest, GetDeviceInfoRequest, GetDeviceTypeRequest,
+        GetDevicesRequest, SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest,
     },
 };
 
-use crate::{client::Client, signal::InputSignal, BlockOnTokio};
+use crate::{client::Client, output::OutputHandle, signal::InputSignal, util::Rect, BlockOnTokio};
 
 /// A pointer acceleration profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -368,6 +368,46 @@ impl DeviceHandle {
             .into_inner()
             .device_type()
             .into()
+    }
+
+    /// Maps the absolute input from this device to the corresponding output.
+    ///
+    /// This will cause touch input from this device to map proportionally
+    /// to the area of an output. For example, tapping in the middle of the device
+    /// will generate a tap event at the middle of the output.
+    ///
+    /// This only affects devices with touch capability.
+    ///
+    /// If you want to map the device to an arbitrary region, see [`Self::map_to_region`].
+    pub fn map_to_output(&self, output: &OutputHandle) {
+        Client::input()
+            .set_device_map_target(SetDeviceMapTargetRequest {
+                device_sysname: self.sysname.clone(),
+                target: Some(Target::OutputName(output.name())),
+            })
+            .block_on_tokio()
+            .unwrap();
+    }
+
+    /// Maps the absolute input from this device to the corresponding region
+    /// in the global space.
+    ///
+    /// This will cause touch input from this device to map proportionally
+    /// to the given region within the global space. For example, tapping in the middle of the device
+    /// will generate a tap event at the middle of the region. This can be used
+    /// to map a touch device to more than one output, for example.
+    ///
+    /// This only affects devices with touch capability.
+    ///
+    /// If you want to map the device to a single output, see [`Self::map_to_output`].
+    pub fn map_to_region(&self, region: Rect) {
+        Client::input()
+            .set_device_map_target(SetDeviceMapTargetRequest {
+                device_sysname: self.sysname.clone(),
+                target: Some(Target::Region(region.into())),
+            })
+            .block_on_tokio()
+            .unwrap();
     }
 
     /// Sets this device's acceleration profile.

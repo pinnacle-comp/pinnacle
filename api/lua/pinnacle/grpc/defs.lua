@@ -7,6 +7,21 @@ local pinnacle_signal_v1_StreamControl = {
     STREAM_CONTROL_DISCONNECT = 2,
 }
 
+---@enum pinnacle.util.v1.SetOrToggle
+local pinnacle_util_v1_SetOrToggle = {
+    SET_OR_TOGGLE_UNSPECIFIED = 0,
+    SET_OR_TOGGLE_SET = 1,
+    SET_OR_TOGGLE_UNSET = 2,
+    SET_OR_TOGGLE_TOGGLE = 3,
+}
+
+---@enum pinnacle.util.v1.AbsOrRel
+local pinnacle_util_v1_AbsOrRel = {
+    ABS_OR_REL_UNSPECIFIED = 0,
+    ABS_OR_REL_ABSOLUTE = 1,
+    ABS_OR_REL_RELATIVE = 2,
+}
+
 ---@enum pinnacle.input.v1.Modifier
 local pinnacle_input_v1_Modifier = {
     MODIFIER_UNSPECIFIED = 0,
@@ -73,21 +88,6 @@ local pinnacle_input_v1_DeviceType = {
     DEVICE_TYPE_TABLET = 5,
     DEVICE_TYPE_KEYBOARD = 6,
     DEVICE_TYPE_SWITCH = 7,
-}
-
----@enum pinnacle.util.v1.SetOrToggle
-local pinnacle_util_v1_SetOrToggle = {
-    SET_OR_TOGGLE_UNSPECIFIED = 0,
-    SET_OR_TOGGLE_SET = 1,
-    SET_OR_TOGGLE_UNSET = 2,
-    SET_OR_TOGGLE_TOGGLE = 3,
-}
-
----@enum pinnacle.util.v1.AbsOrRel
-local pinnacle_util_v1_AbsOrRel = {
-    ABS_OR_REL_UNSPECIFIED = 0,
-    ABS_OR_REL_ABSOLUTE = 1,
-    ABS_OR_REL_RELATIVE = 2,
 }
 
 ---@enum pinnacle.layout.v1.FlexDir
@@ -201,6 +201,18 @@ local pinnacle_v1_Backend = {
 
 ---@class pinnacle.signal.v1.InputDeviceAddedResponse
 ---@field device_sysname string?
+
+---@class pinnacle.util.v1.Point
+---@field x integer?
+---@field y integer?
+
+---@class pinnacle.util.v1.Size
+---@field width integer?
+---@field height integer?
+
+---@class pinnacle.util.v1.Rect
+---@field loc pinnacle.util.v1.Point?
+---@field size pinnacle.util.v1.Size?
 
 ---@class pinnacle.input.v1.Bind
 ---@field mods pinnacle.input.v1.Modifier[]?
@@ -342,13 +354,10 @@ local pinnacle_v1_Backend = {
 ---@field tap boolean?
 ---@field send_events_mode pinnacle.input.v1.SendEventsMode?
 
----@class pinnacle.util.v1.Point
----@field x integer?
----@field y integer?
-
----@class pinnacle.util.v1.Size
----@field width integer?
----@field height integer?
+---@class pinnacle.input.v1.SetDeviceMapTargetRequest
+---@field device_sysname string?
+---@field region pinnacle.util.v1.Rect?
+---@field output_name string?
 
 ---@class pinnacle.layout.v1.Gaps
 ---@field left number?
@@ -743,6 +752,11 @@ pinnacle.signal.v1.TagActiveRequest = {}
 pinnacle.signal.v1.TagActiveResponse = {}
 pinnacle.signal.v1.InputDeviceAddedRequest = {}
 pinnacle.signal.v1.InputDeviceAddedResponse = {}
+pinnacle.util = {}
+pinnacle.util.v1 = {}
+pinnacle.util.v1.Point = {}
+pinnacle.util.v1.Size = {}
+pinnacle.util.v1.Rect = {}
 pinnacle.input = {}
 pinnacle.input.v1 = {}
 pinnacle.input.v1.Bind = {}
@@ -779,10 +793,7 @@ pinnacle.input.v1.GetDeviceInfoResponse = {}
 pinnacle.input.v1.GetDeviceTypeRequest = {}
 pinnacle.input.v1.GetDeviceTypeResponse = {}
 pinnacle.input.v1.SetDeviceLibinputSettingRequest = {}
-pinnacle.util = {}
-pinnacle.util.v1 = {}
-pinnacle.util.v1.Point = {}
-pinnacle.util.v1.Size = {}
+pinnacle.input.v1.SetDeviceMapTargetRequest = {}
 pinnacle.layout = {}
 pinnacle.layout.v1 = {}
 pinnacle.layout.v1.Gaps = {}
@@ -901,6 +912,8 @@ pinnacle.v1.BackendResponse = {}
 pinnacle.v1.SetXwaylandClientSelfScaleRequest = {}
 
 pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
+pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
+pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
 pinnacle.input.v1.Modifier = pinnacle_input_v1_Modifier
 pinnacle.input.v1.Edge = pinnacle_input_v1_Edge
 pinnacle.input.v1.ClickMethod = pinnacle_input_v1_ClickMethod
@@ -909,8 +922,6 @@ pinnacle.input.v1.ScrollMethod = pinnacle_input_v1_ScrollMethod
 pinnacle.input.v1.TapButtonMap = pinnacle_input_v1_TapButtonMap
 pinnacle.input.v1.SendEventsMode = pinnacle_input_v1_SendEventsMode
 pinnacle.input.v1.DeviceType = pinnacle_input_v1_DeviceType
-pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
-pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
 pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
 pinnacle.window.v1.LayoutMode = pinnacle_window_v1_LayoutMode
 pinnacle.window.v1.DecorationMode = pinnacle_window_v1_DecorationMode
@@ -1065,6 +1076,11 @@ pinnacle.input.v1.InputService.SetDeviceLibinputSetting.service = "pinnacle.inpu
 pinnacle.input.v1.InputService.SetDeviceLibinputSetting.method = "SetDeviceLibinputSetting"
 pinnacle.input.v1.InputService.SetDeviceLibinputSetting.request = ".pinnacle.input.v1.SetDeviceLibinputSettingRequest"
 pinnacle.input.v1.InputService.SetDeviceLibinputSetting.response = ".google.protobuf.Empty"
+pinnacle.input.v1.InputService.SetDeviceMapTarget = {}
+pinnacle.input.v1.InputService.SetDeviceMapTarget.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.SetDeviceMapTarget.method = "SetDeviceMapTarget"
+pinnacle.input.v1.InputService.SetDeviceMapTarget.request = ".pinnacle.input.v1.SetDeviceMapTargetRequest"
+pinnacle.input.v1.InputService.SetDeviceMapTarget.response = ".google.protobuf.Empty"
 pinnacle.layout.v1.LayoutService = {}
 pinnacle.layout.v1.LayoutService.Layout = {}
 pinnacle.layout.v1.LayoutService.Layout.service = "pinnacle.layout.v1.LayoutService"

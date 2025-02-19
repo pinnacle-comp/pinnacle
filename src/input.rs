@@ -3,7 +3,7 @@
 pub mod bind;
 pub mod libinput;
 
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 use crate::{
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
@@ -15,21 +15,23 @@ use libinput::LibinputState;
 use smithay::{
     backend::{
         input::{
-            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent,
-            GestureEndEvent, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
-            PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+            AbsolutePositionEvent, Axis, AxisSource, ButtonState, Device, DeviceCapability, Event,
+            GestureBeginEvent, GestureEndEvent, InputBackend, InputEvent, KeyState,
+            KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, TouchEvent,
         },
         renderer::utils::with_renderer_surface_state,
+        winit::WinitVirtualDevice,
     },
     desktop::{layer_map_for_output, space::SpaceElement, WindowSurfaceType},
     input::{
-        keyboard::{keysyms, FilterResult, ModifiersState},
+        keyboard::{keysyms, FilterResult},
         pointer::{
             AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
             GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
             GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent, MotionEvent,
             RelativeMotionEvent,
         },
+        touch,
     },
     utils::{Logical, Point, Rectangle, SERIAL_COUNTER},
     wayland::{
@@ -43,54 +45,6 @@ use smithay::{
 use tracing::{error, info};
 
 use crate::state::State;
-
-bitflags::bitflags! {
-    #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq)]
-    pub struct ModifierMask: u8 {
-        const SHIFT = 1;
-        const CTRL  = 1 << 1;
-        const ALT   = 1 << 2;
-        const SUPER = 1 << 3;
-    }
-}
-
-impl From<ModifiersState> for ModifierMask {
-    fn from(modifiers: ModifiersState) -> Self {
-        let mut mask = ModifierMask::empty();
-        if modifiers.alt {
-            mask |= ModifierMask::ALT;
-        }
-        if modifiers.shift {
-            mask |= ModifierMask::SHIFT;
-        }
-        if modifiers.ctrl {
-            mask |= ModifierMask::CTRL;
-        }
-        if modifiers.logo {
-            mask |= ModifierMask::SUPER;
-        }
-        mask
-    }
-}
-
-impl From<&ModifiersState> for ModifierMask {
-    fn from(modifiers: &ModifiersState) -> Self {
-        let mut mask = ModifierMask::empty();
-        if modifiers.alt {
-            mask |= ModifierMask::ALT;
-        }
-        if modifiers.shift {
-            mask |= ModifierMask::SHIFT;
-        }
-        if modifiers.ctrl {
-            mask |= ModifierMask::CTRL;
-        }
-        if modifiers.logo {
-            mask |= ModifierMask::SUPER;
-        }
-        mask
-    }
-}
 
 #[derive(Default, Debug)]
 pub struct InputState {
@@ -250,7 +204,10 @@ impl Pinnacle {
 }
 
 impl State {
-    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>) {
+    pub fn process_input_event<B: InputBackend>(&mut self, event: InputEvent<B>)
+    where
+        B::Device: 'static,
+    {
         let _span = tracy_client::span!("State::process_input_event");
 
         self.pinnacle
@@ -258,8 +215,8 @@ impl State {
             .notify_activity(&self.pinnacle.seat);
 
         match event {
-            // InputEvent::DeviceAdded { device } => todo!(),
-            // InputEvent::DeviceRemoved { device } => todo!(),
+            InputEvent::DeviceAdded { device } => self.on_device_added(device),
+            InputEvent::DeviceRemoved { device } => self.on_device_removed(device),
             InputEvent::Keyboard { event } => self.on_keyboard::<B>(event),
 
             InputEvent::PointerMotion { event } => self.on_pointer_motion::<B>(event),
@@ -277,6 +234,12 @@ impl State {
             InputEvent::GesturePinchEnd { event } => self.on_gesture_pinch_end::<B>(event),
             InputEvent::GestureHoldBegin { event } => self.on_gesture_hold_begin::<B>(event),
             InputEvent::GestureHoldEnd { event } => self.on_gesture_hold_end::<B>(event),
+
+            InputEvent::TouchDown { event } => self.on_touch_down::<B>(event),
+            InputEvent::TouchMotion { event } => self.on_touch_motion::<B>(event),
+            InputEvent::TouchUp { event } => self.on_touch_up::<B>(event),
+            InputEvent::TouchFrame { event } => self.on_touch_frame::<B>(event),
+            InputEvent::TouchCancel { event } => self.on_touch_cancel::<B>(event),
 
             // TODO: rest of input events
             _ => (),
@@ -336,6 +299,28 @@ impl State {
         // TODO: only on outputs that the ptr left and entered
         for output in self.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
             self.schedule_render(&output);
+        }
+    }
+
+    fn on_device_added(&mut self, device: impl Device) {
+        if device.has_capability(DeviceCapability::Touch)
+            && self.pinnacle.seat.get_touch().is_none()
+        {
+            self.pinnacle.seat.add_touch();
+        }
+    }
+
+    fn on_device_removed(&mut self, device: impl Device) {
+        if device.has_capability(DeviceCapability::Touch)
+            && self
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .keys()
+                .all(|device| !device.has_capability(DeviceCapability::Touch.into()))
+        {
+            self.pinnacle.seat.remove_touch();
         }
     }
 
@@ -994,6 +979,136 @@ impl State {
                 cancelled: event.cancelled(),
             },
         );
+    }
+
+    fn on_touch_down<I: InputBackend>(&mut self, event: I::TouchDownEvent)
+    where
+        I::Device: 'static,
+    {
+        let Some(touch) = self.pinnacle.seat.get_touch() else {
+            return;
+        };
+
+        let Some(touch_loc) = self.transform_touch_coords(&event) else {
+            return;
+        };
+
+        let focus = self.pinnacle.pointer_focus_target_under(touch_loc);
+
+        touch.down(
+            self,
+            focus,
+            &touch::DownEvent {
+                slot: event.slot(),
+                location: touch_loc,
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+            },
+        );
+    }
+
+    fn on_touch_motion<I: InputBackend>(&mut self, event: I::TouchMotionEvent)
+    where
+        I::Device: 'static,
+    {
+        let Some(touch) = self.pinnacle.seat.get_touch() else {
+            return;
+        };
+
+        let Some(touch_loc) = self.transform_touch_coords(&event) else {
+            return;
+        };
+
+        let focus = self.pinnacle.pointer_focus_target_under(touch_loc);
+
+        touch.motion(
+            self,
+            focus,
+            &touch::MotionEvent {
+                slot: event.slot(),
+                location: touch_loc,
+                time: event.time_msec(),
+            },
+        );
+
+        self.warp_cursor_to_global_loc(touch_loc);
+    }
+
+    fn on_touch_up<I: InputBackend>(&mut self, event: I::TouchUpEvent) {
+        let Some(touch) = self.pinnacle.seat.get_touch() else {
+            return;
+        };
+
+        touch.up(
+            self,
+            &touch::UpEvent {
+                slot: event.slot(),
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+            },
+        );
+    }
+
+    fn on_touch_frame<I: InputBackend>(&mut self, _event: I::TouchFrameEvent) {
+        let Some(touch) = self.pinnacle.seat.get_touch() else {
+            return;
+        };
+
+        touch.frame(self);
+    }
+
+    fn on_touch_cancel<I: InputBackend>(&mut self, _event: I::TouchCancelEvent) {
+        let Some(touch) = self.pinnacle.seat.get_touch() else {
+            return;
+        };
+
+        touch.cancel(self);
+    }
+
+    fn map_region_for_device<D: Device + 'static>(
+        &self,
+        device: &D,
+    ) -> Option<Rectangle<f64, Logical>> {
+        // Instead of doing the smart thing like Niri and introducing a custom InputBackend trait
+        // to abstract this we're gonna be lazy and downcast everything
+        if let Some(udev_device) =
+            <dyn Any>::downcast_ref::<smithay::reexports::input::Device>(device)
+        {
+            self.pinnacle
+                .input_state
+                .libinput_state
+                .map_region_for_device(udev_device, &self.pinnacle.space)
+        } else if let Some(_winit_device) = <dyn Any>::downcast_ref::<WinitVirtualDevice>(device) {
+            // TODO:
+            None
+        } else {
+            None
+        }
+    }
+
+    fn transform_touch_coords<I: InputBackend>(
+        &self,
+        event: &impl AbsolutePositionEvent<I>,
+    ) -> Option<Point<f64, Logical>>
+    where
+        I::Device: 'static,
+    {
+        let device = event.device();
+
+        let map_region = self.map_region_for_device(&device).or_else(|| {
+            // FIXME: this might get an unmapped output when it's disabled
+            // Split outputs into outputs and unmapped_outputs like windows are or something
+            let next_output = self.pinnacle.outputs.keys().next()?;
+            self.pinnacle
+                .space
+                .output_geometry(next_output)
+                .map(|geo| geo.to_f64())
+        })?;
+
+        let x = event.x_transformed(map_region.size.w as i32) + map_region.loc.x;
+        let y = event.y_transformed(map_region.size.h as i32) + map_region.loc.y;
+
+        Some(Point::from((x, y)))
     }
 }
 

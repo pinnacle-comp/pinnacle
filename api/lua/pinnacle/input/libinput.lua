@@ -100,7 +100,7 @@ local DeviceHandle = {}
 ---
 ---@return pinnacle.input.libinput.Capabilities
 function DeviceHandle:capabilities()
-    local response, err = client:unary_request(input_service.Bind, {
+    local response, err = client:unary_request(input_service.GetDeviceCapabilities, {
         device_sysname = self.sysname,
     })
 
@@ -226,6 +226,53 @@ function DeviceHandle:device_type()
     end
 
     return type
+end
+
+---Maps the absolute input from this device to the corresponding output.
+---
+---This will cause touch input from this device to map proportionally
+---to the area of an output. For example, tapping in the middle of the device
+---will generate a tap event at the middle of the output.
+---
+---This only affects devices with touch capability.
+---
+---@param output pinnacle.output.OutputHandle The output to map the device's input to
+---
+---@see pinnacle.input.libinput.DeviceHandle.map_to_region To map device input to an arbitrary region instead
+function DeviceHandle:map_to_output(output)
+    local _, err = client:unary_request(input_service.SetDeviceMapTarget, {
+        device_sysname = self.sysname,
+        output_name = output.name,
+    })
+end
+
+---Maps the absolute input from this device to the corresponding region
+---in the global space.
+---
+---This will cause touch input from this device to map proportionally
+---to the given region within the global space. For example, tapping in the middle of the device
+---will generate a tap event at the middle of the region. This can be used
+---to map a touch device to more than one output, for example.
+---
+---This only affects devices with touch capability.
+---
+---@param region { x: integer, y: integer, width: integer, height: integer } The region in the global space to map input to
+---
+---@see pinnacle.input.libinput.DeviceHandle.map_to_output To map device input to a specific output instead
+function DeviceHandle:map_to_region(region)
+    local _, err = client:unary_request(input_service.SetDeviceMapTarget, {
+        device_sysname = self.sysname,
+        region = {
+            loc = {
+                x = region.x,
+                y = region.y,
+            },
+            size = {
+                width = region.width,
+                height = region.height,
+            },
+        },
+    })
 end
 
 ---@param accel_profile pinnacle.input.libinput.AccelProfile

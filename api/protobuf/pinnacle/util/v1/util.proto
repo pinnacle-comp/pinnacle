@@ -3,13 +3,18 @@ syntax = "proto3";
 package pinnacle.util.v1;
 
 message Point {
-    int32 x = 1;
-    int32 y = 2;
+  int32 x = 1;
+  int32 y = 2;
 }
 
 message Size {
-    uint32 width = 1;
-    uint32 height = 2;
+  uint32 width = 1;
+  uint32 height = 2;
+}
+
+message Rect {
+  Point loc = 1;
+  Size size = 2;
 }
 
 enum SetOrToggle {
@@ -20,7 +25,7 @@ enum SetOrToggle {
 }
 
 enum AbsOrRel {
-    ABS_OR_REL_UNSPECIFIED = 0;
-    ABS_OR_REL_ABSOLUTE = 1;
-    ABS_OR_REL_RELATIVE = 2;
+  ABS_OR_REL_UNSPECIFIED = 0;
+  ABS_OR_REL_ABSOLUTE = 1;
+  ABS_OR_REL_RELATIVE = 2;
 }

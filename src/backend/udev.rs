@@ -81,6 +81,7 @@ use crate::{
     api::signal::Signal,
     backend::Backend,
     config::ConnectorSavedState,
+    input::libinput::DeviceState,
     output::{BlankingState, OutputMode, OutputName},
     render::{
         pointer::pointer_render_elements, take_presentation_feedback, OutputRenderElement,
@@ -261,7 +262,7 @@ impl Udev {
                                         .input_state
                                         .libinput_state
                                         .devices
-                                        .insert(device.clone());
+                                        .insert(device.clone(), DeviceState::default());
                                     state
                                         .pinnacle
                                         .signal_state
@@ -274,7 +275,7 @@ impl Udev {
                                         .input_state
                                         .libinput_state
                                         .devices
-                                        .remove(device);
+                                        .shift_remove(device);
                                 }
                                 _ => (),
                             }

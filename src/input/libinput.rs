@@ -1,10 +1,55 @@
-use std::collections::HashSet;
+use indexmap::IndexMap;
+use smithay::{
+    desktop::Space,
+    output::{Output, WeakOutput},
+    reexports::input::Device,
+    utils::{Logical, Rectangle},
+};
 
-use smithay::reexports::input::Device;
+use crate::window::WindowElement;
 
 #[derive(Debug, Default)]
 pub struct LibinputState {
-    pub devices: HashSet<Device>,
+    pub devices: IndexMap<Device, DeviceState>,
+}
+
+#[derive(Debug)]
+enum MapTarget {
+    /// This device is mapped to an output
+    Output(WeakOutput),
+    /// This device is mapped to a region in the global space
+    Region(Rectangle<f64, Logical>),
+}
+
+#[derive(Debug, Default)]
+pub struct DeviceState {
+    map_target: Option<MapTarget>,
+}
+
+impl DeviceState {
+    pub fn map_to_output(&mut self, output: &Output) {
+        self.map_target = Some(MapTarget::Output(output.downgrade()));
+    }
+
+    pub fn map_to_region(&mut self, region: Rectangle<f64, Logical>) {
+        self.map_target = Some(MapTarget::Region(region));
+    }
+}
+
+impl LibinputState {
+    pub fn map_region_for_device(
+        &self,
+        device: &Device,
+        space: &Space<WindowElement>,
+    ) -> Option<Rectangle<f64, Logical>> {
+        match self.devices.get(device)?.map_target.as_ref()? {
+            MapTarget::Output(output) => output
+                .upgrade()
+                .and_then(|output| space.output_geometry(&output))
+                .map(|geo| geo.to_f64()),
+            MapTarget::Region(rect) => Some(*rect),
+        }
+    }
 }
 
 // This may not be right, idk if a device can be both a trackball and

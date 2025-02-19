@@ -1,20 +1,25 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        AccelProfile, BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
-        GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
-        GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
-        GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
-        GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
-        KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
-        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindDescriptionRequest,
-        SetBindGroupRequest, SetDeviceLibinputSettingRequest, SetQuitBindRequest,
+        set_device_map_target_request::Target, AccelProfile, BindInfo, BindRequest, BindResponse,
+        ClickMethod, EnterBindLayerRequest, GetBindInfosRequest, GetBindInfosResponse,
+        GetBindLayerStackRequest, GetBindLayerStackResponse, GetDeviceCapabilitiesRequest,
+        GetDeviceCapabilitiesResponse, GetDeviceInfoRequest, GetDeviceInfoResponse,
+        GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest, GetDevicesResponse,
+        KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
+        MousebindOnPressRequest, MousebindStreamRequest, MousebindStreamResponse, ScrollMethod,
+        SendEventsMode, SetBindDescriptionRequest, SetBindGroupRequest,
+        SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetQuitBindRequest,
         SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
         TapButtonMap,
     },
 };
-use smithay::input::keyboard::XkbConfig;
 use smithay::reexports::input as libinput;
+use smithay::{
+    input::keyboard::XkbConfig,
+    output::Output,
+    utils::{Logical, Rectangle},
+};
 use tonic::{Request, Status};
 use tracing::error;
 
@@ -24,6 +29,7 @@ use crate::{
         bind::{Edge, ModMask},
         libinput::device_type,
     },
+    output::OutputName,
 };
 
 use super::InputService;
@@ -696,7 +702,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .libinput_state
                 .devices
-                .iter()
+                .keys()
                 .find(|device| device.sysname() == device_sysname);
 
             if let Some(device) = device {
@@ -738,7 +744,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .libinput_state
                 .devices
-                .iter()
+                .keys()
                 .map(|device| device.sysname().to_string())
                 .collect();
 
@@ -759,7 +765,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .libinput_state
                 .devices
-                .iter()
+                .keys()
                 .find(|device| device.sysname() == device_sysname)
                 .map(|device| GetDeviceInfoResponse {
                     name: device.name().to_string(),
@@ -785,7 +791,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .libinput_state
                 .devices
-                .iter()
+                .keys()
                 .find(|device| device.sysname() == device_sysname)
                 .map(|device| GetDeviceCapabilitiesResponse {
                     keyboard: device.has_capability(libinput::DeviceCapability::Keyboard),
@@ -815,7 +821,7 @@ impl input::v1::input_service_server::InputService for InputService {
                 .input_state
                 .libinput_state
                 .devices
-                .iter()
+                .keys()
                 .find(|device| device.sysname() == device_sysname)
                 .map(|device| match device_type(device) {
                     crate::input::libinput::DeviceType::Unknown => {
@@ -838,6 +844,63 @@ impl input::v1::input_service_server::InputService for InputService {
             Ok(GetDeviceTypeResponse {
                 device_type: device_type.into(),
             })
+        })
+        .await
+    }
+
+    async fn set_device_map_target(
+        &self,
+        request: Request<SetDeviceMapTargetRequest>,
+    ) -> TonicResult<()> {
+        let request = request.into_inner();
+        let device_sysname = request.device_sysname;
+        let Some(map_target) = request.target else {
+            return Err(Status::invalid_argument("no map target specified"));
+        };
+
+        // FIXME:
+        // See I should not have OutputName::output take the entire Pinnacle struct but here we
+        // are making a whole enum just to satisfy the borrow checker
+        enum MapTarget {
+            Region(Rectangle<f64, Logical>),
+            Output(Output),
+        }
+
+        run_unary_no_response(&self.sender, move |state| {
+            let map_target = match map_target {
+                Target::Region(rect) => {
+                    let loc = rect.loc.unwrap_or_default();
+                    let size = rect.size.unwrap_or_default();
+                    Some(MapTarget::Region(Rectangle::new(
+                        (loc.x as f64, loc.y as f64).into(),
+                        (size.width as f64, size.height as f64).into(),
+                    )))
+                }
+                Target::OutputName(output_name) => OutputName(output_name)
+                    .output(&state.pinnacle)
+                    .map(MapTarget::Output),
+            };
+
+            let device = state
+                .pinnacle
+                .input_state
+                .libinput_state
+                .devices
+                .iter_mut()
+                .find(|(device, _)| device.sysname() == device_sysname);
+
+            let Some((_device, device_state)) = device else {
+                return;
+            };
+
+            let Some(map_target) = map_target else {
+                return;
+            };
+
+            match map_target {
+                MapTarget::Region(region) => device_state.map_to_region(region),
+                MapTarget::Output(output) => device_state.map_to_output(&output),
+            }
         })
         .await
     }

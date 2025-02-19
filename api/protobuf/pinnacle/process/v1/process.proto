@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package pinnacle.process.v1;
 
-import "google/protobuf/empty.proto";
-
 message SpawnRequest {
   repeated string cmd = 1;
   bool unique = 2;

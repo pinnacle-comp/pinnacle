@@ -212,6 +212,15 @@ pub struct Point {
     pub y: i32,
 }
 
+impl From<Point> for pinnacle_api_defs::pinnacle::util::v1::Point {
+    fn from(value: Point) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+        }
+    }
+}
+
 /// A size with a width and height.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
 pub struct Size {
@@ -219,4 +228,31 @@ pub struct Size {
     pub w: u32,
     /// The height.
     pub h: u32,
+}
+
+impl From<Size> for pinnacle_api_defs::pinnacle::util::v1::Size {
+    fn from(value: Size) -> Self {
+        Self {
+            width: value.w,
+            height: value.h,
+        }
+    }
+}
+
+/// A rectangle with a location and size.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
+pub struct Rect {
+    /// The location.
+    pub loc: Point,
+    /// The size.
+    pub size: Size,
+}
+
+impl From<Rect> for pinnacle_api_defs::pinnacle::util::v1::Rect {
+    fn from(value: Rect) -> Self {
+        Self {
+            loc: Some(value.loc.into()),
+            size: Some(value.size.into()),
+        }
+    }
 }

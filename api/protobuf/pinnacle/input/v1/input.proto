@@ -3,6 +3,7 @@ syntax = "proto3";
 package pinnacle.input.v1;
 
 import "google/protobuf/empty.proto";
+import "pinnacle/util/v1/util.proto";
 
 enum Modifier {
   MODIFIER_UNSPECIFIED = 0;
@@ -273,6 +274,15 @@ message SetDeviceLibinputSettingRequest {
   }
 }
 
+message SetDeviceMapTargetRequest {
+  string device_sysname = 1;
+
+  oneof target {
+    pinnacle.util.v1.Rect region = 2;
+    string output_name = 3;
+  }
+}
+
 service InputService {
   rpc Bind(BindRequest) returns (BindResponse);
   rpc GetBindInfos(GetBindInfosRequest) returns (GetBindInfosResponse);
@@ -302,4 +312,5 @@ service InputService {
   rpc GetDeviceInfo(GetDeviceInfoRequest) returns (GetDeviceInfoResponse);
   rpc GetDeviceType(GetDeviceTypeRequest) returns (GetDeviceTypeResponse);
   rpc SetDeviceLibinputSetting(SetDeviceLibinputSettingRequest) returns (google.protobuf.Empty);
+  rpc SetDeviceMapTarget(SetDeviceMapTargetRequest) returns (google.protobuf.Empty);
 }
