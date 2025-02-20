@@ -1801,7 +1801,11 @@ fn handle_pending_screencopy<'a>(
                     output.current_scale().fractional_scale(),
                     renderer,
                     [screencopy.physical_region()],
-                    cursor_ids,
+                    if !screencopy.overlay_cursor() {
+                        cursor_ids
+                    } else {
+                        Vec::new()
+                    },
                 )?))
             } else {
                 // `RenderFrameResult::blit_frame_result` doesn't expose a way to
