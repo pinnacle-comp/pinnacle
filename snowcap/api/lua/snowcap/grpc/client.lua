@@ -23,7 +23,7 @@ local function socket_path()
 end
 
 function client.connect()
-    local c = require("grpc_client").new({
+    local c = require("snowcap.grpc.defs").grpc_client.new({
         path = socket_path(),
     })
 

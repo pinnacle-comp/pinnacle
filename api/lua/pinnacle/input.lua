@@ -121,7 +121,7 @@ local function keybind_inner(kb)
         end
     end
 
-    local response, err = client:unary_request(input_service.Bind, {
+    local response, err = client:pinnacle_input_v1_InputService_Bind({
         bind = {
             mods = modifs,
             ignore_mods = ignore_modifs,
@@ -140,28 +140,27 @@ local function keybind_inner(kb)
         return
     end
 
-    ---@cast response pinnacle.input.v1.BindResponse
+    assert(response)
 
     local bind_id = response.bind_id or 0
 
     if kb.quit then
-        local _, err = client:unary_request(input_service.SetQuitBind, {
+        local _, err = client:pinnacle_input_v1_InputService_SetQuitBind({
             bind_id = bind_id,
         })
         return
     end
 
     if kb.reload_config then
-        local _, err = client:unary_request(input_service.SetReloadConfigBind, {
+        local _, err = client:pinnacle_input_v1_InputService_SetReloadConfigBind({
             bind_id = bind_id,
         })
         return
     end
 
-    local err = client:server_streaming_request(input_service.KeybindStream, {
+    local err = client:pinnacle_input_v1_InputService_KeybindStream({
         bind_id = bind_id,
     }, function(response)
-        ---@cast response pinnacle.input.v1.KeybindStreamResponse
         if response.edge == edge_values.press then
             if kb.on_press then
                 kb.on_press()
@@ -174,7 +173,7 @@ local function keybind_inner(kb)
     end)
 
     if kb.on_press then
-        local _, err = client:unary_request(input_service.KeybindOnPress, {
+        local _, err = client:pinnacle_input_v1_InputService_KeybindOnPress({
             bind_id = bind_id,
         })
     end
@@ -265,7 +264,7 @@ local function mousebind_inner(mb)
         end
     end
 
-    local response, err = client:unary_request(input_service.Bind, {
+    local response, err = client:pinnacle_input_v1_InputService_Bind({
         bind = {
             mods = modifs,
             ignore_mods = ignore_modifs,
@@ -283,28 +282,27 @@ local function mousebind_inner(mb)
         return
     end
 
-    ---@cast response pinnacle.input.v1.BindResponse
+    assert(response)
 
     local bind_id = response.bind_id or 0
 
     if mb.quit then
-        local _, err = client:unary_request(input_service.SetQuitBind, {
+        local _, err = client:pinnacle_input_v1_InputService_SetQuitBind({
             bind_id = bind_id,
         })
         return
     end
 
     if mb.reload_config then
-        local _, err = client:unary_request(input_service.SetReloadConfigBind, {
+        local _, err = client:pinnacle_input_v1_InputService_SetReloadConfigBind({
             bind_id = bind_id,
         })
         return
     end
 
-    local err = client:server_streaming_request(input_service.MousebindStream, {
+    local err = client:pinnacle_input_v1_InputService_MousebindStream({
         bind_id = bind_id,
     }, function(response)
-        ---@cast response pinnacle.input.v1.MousebindStreamResponse
         if response.edge == edge_values.press then
             if mb.on_press then
                 mb.on_press()
@@ -317,7 +315,7 @@ local function mousebind_inner(mb)
     end)
 
     if mb.on_press then
-        local _, err = client:unary_request(input_service.MousebindOnPress, {
+        local _, err = client:pinnacle_input_v1_InputService_MousebindOnPress({
             bind_id = bind_id,
         })
     end
@@ -387,7 +385,7 @@ end
 ---
 ---@param layer string?
 function input.enter_bind_layer(layer)
-    local _, err = client:unary_request(input_service.EnterBindLayer, {
+    local _, err = client:pinnacle_input_v1_InputService_EnterBindLayer({
         layer_name = layer,
     })
 end
@@ -408,14 +406,14 @@ end
 ---
 ---@return pinnacle.input.BindInfo[]
 function input.bind_infos()
-    local response, err = client:unary_request(input_service.GetBindInfos, {})
+    local response, err = client:pinnacle_input_v1_InputService_GetBindInfos({})
 
     if err then
         log.error(err)
         return {}
     end
 
-    ---@cast response pinnacle.input.v1.GetBindInfosResponse
+    assert(response)
 
     ---@type pinnacle.input.BindInfo[]
     local ret = {}
@@ -496,7 +494,13 @@ end
 ---
 ---@param xkb_config pinnacle.input.XkbConfig The new xkbconfig
 function input.set_xkb_config(xkb_config)
-    local _, err = client:unary_request(input_service.SetXkbConfig, xkb_config)
+    local _, err = client:pinnacle_input_v1_InputService_SetXkbConfig({
+        rules = xkb_config.rules,
+        model = xkb_config.model,
+        layout = xkb_config.layout,
+        variant = xkb_config.variant,
+        options = xkb_config.options,
+    })
 
     if err then
         log.error(err)
@@ -513,7 +517,7 @@ end
 ---@param rate integer The time between repeats in milliseconds
 ---@param delay integer The duration a key needs to be held down before repeating starts in milliseconds
 function input.set_repeat_rate(rate, delay)
-    local _, err = client:unary_request(input_service.SetRepeatRate, {
+    local _, err = client:pinnacle_input_v1_InputService_SetRepeatRate({
         rate = rate,
         delay = delay,
     })
@@ -530,7 +534,7 @@ end
 ---
 ---@param theme string
 function input.set_xcursor_theme(theme)
-    local _, err = client:unary_request(input_service.SetXcursor, {
+    local _, err = client:pinnacle_input_v1_InputService_SetXcursor({
         theme = theme,
     })
 
@@ -546,7 +550,7 @@ end
 ---
 ---@param size integer
 function input.set_xcursor_size(size)
-    local _, err = client:unary_request(input_service.SetXcursor, {
+    local _, err = client:pinnacle_input_v1_InputService_SetXcursor({
         size = size,
     })
 

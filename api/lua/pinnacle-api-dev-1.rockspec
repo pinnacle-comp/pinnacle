@@ -14,9 +14,6 @@ dependencies = {
     "lua-protobuf ~> 0.5.2",
     "compat53 ~> 0.13",
     "luaposix ~> 36.3",
-
-    -- Run just install
-    "lua-grpc-client >= dev-1",
 }
 build = {
     type = "builtin",

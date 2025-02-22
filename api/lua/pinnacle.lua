@@ -16,7 +16,7 @@ local pinnacle = {}
 
 ---Quits Pinnacle.
 function pinnacle.quit()
-    local _, err = client:unary_request(pinnacle_service.Quit, {})
+    local _, err = client:pinnacle_v1_PinnacleService_Quit({})
 
     if err then
         log.error(err)
@@ -25,7 +25,7 @@ end
 
 ---Reloads the active config.
 function pinnacle.reload_config()
-    local _, err = client:unary_request(pinnacle_service.ReloadConfig, {})
+    local _, err = client:pinnacle_v1_PinnacleService_ReloadConfig({})
 
     if err then
         log.error(err)
@@ -36,14 +36,14 @@ end
 ---
 ---@return "tty" | "window" `"tty"` if Pinnacle is running in a tty, or `"window"` if it's running in a nested window
 function pinnacle.backend()
-    local response, err = client:unary_request(pinnacle_service.Backend, {})
+    local response, err = client:pinnacle_v1_PinnacleService_Backend({})
 
     if err then
         log.error(err)
         -- TODO: possibly panic here; a nil index error will be thrown after this anyway
     end
 
-    ---@cast response pinnacle.v1.BackendResponse
+    assert(response)
 
     local defs = require("pinnacle.grpc.defs")
 
@@ -67,7 +67,7 @@ end
 ---
 ---@param should_self_scale boolean
 function pinnacle.set_xwayland_self_scaling(should_self_scale)
-    local _, err = client:unary_request(pinnacle_service.SetXwaylandClientSelfScale, {
+    local _, err = client:pinnacle_v1_PinnacleService_SetXwaylandClientSelfScale({
         self_scale = should_self_scale,
     })
 

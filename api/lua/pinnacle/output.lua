@@ -38,7 +38,7 @@ output.handle = output_handle
 ---
 ---@return pinnacle.output.OutputHandle[]
 function output.get_all()
-    local response, err = client:unary_request(output_service.Get, {})
+    local response, err = client:pinnacle_output_v1_OutputService_Get({})
 
     if err then
         log.error(err)
@@ -225,7 +225,7 @@ end
 ---
 ---@see pinnacle.output.OutputHandle.set_loc_adj_to
 function OutputHandle:set_loc(x, y)
-    local _, err = client:unary_request(output_service.SetLoc, {
+    local _, err = client:pinnacle_output_v1_OutputService_SetLoc({
         output_name = self.name,
         x = x,
         y = y,
@@ -367,10 +367,11 @@ end
 ---@param height integer
 ---@param refresh_rate_mhz integer?
 function OutputHandle:set_mode(width, height, refresh_rate_mhz)
-    local _, err = client:unary_request(output_service.SetMode, {
+    local _, err = client:pinnacle_output_v1_OutputService_SetMode({
         output_name = self.name,
         size = { width = width, height = height },
         refresh_rate_mhz = refresh_rate_mhz,
+        custom = false,
     })
 
     if err then
@@ -394,7 +395,7 @@ end
 ---@param height integer
 ---@param refresh_rate_mhz integer?
 function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
-    local _, err = client:unary_request(output_service.SetMode, {
+    local _, err = client:pinnacle_output_v1_OutputService_SetMode({
         output_name = self.name,
         size = { width = width, height = height },
         refresh_rate_mhz = refresh_rate_mhz,
@@ -457,7 +458,7 @@ function OutputHandle:set_modeline(modeline)
         },
     }
 
-    local _, err = client:unary_request(output_service.SetModeline, request)
+    local _, err = client:pinnacle_output_v1_OutputService_SetModeline(request)
 
     if err then
         log.error(err)
@@ -468,7 +469,7 @@ end
 ---
 ---@param scale number
 function OutputHandle:set_scale(scale)
-    local _, err = client:unary_request(output_service.SetScale, {
+    local _, err = client:pinnacle_output_v1_OutputService_SetScale({
         output_name = self.name,
         scale = scale,
         abs_or_rel = require("pinnacle.grpc.defs").pinnacle.util.v1.AbsOrRel.ABS_OR_REL_ABSOLUTE,
@@ -483,7 +484,7 @@ end
 ---
 ---@param change_by number
 function OutputHandle:change_scale(change_by)
-    local _, err = client:unary_request(output_service.SetScale, {
+    local _, err = client:pinnacle_output_v1_OutputService_SetScale({
         output_name = self.name,
         scale = change_by,
         abs_or_rel = require("pinnacle.grpc.defs").pinnacle.util.v1.AbsOrRel.ABS_OR_REL_RELATIVE,
@@ -511,10 +512,10 @@ require("pinnacle.util").make_bijective(transform_name_to_code)
 ---
 ---@param transform pinnacle.output.Transform
 function OutputHandle:set_transform(transform)
-    local _, err = client:unary_request(
-        output_service.SetTransform,
-        { output_name = self.name, transform = transform_name_to_code[transform] }
-    )
+    local _, err = client:pinnacle_output_v1_OutputService_SetTransform({
+        output_name = self.name,
+        transform = transform_name_to_code[transform],
+    })
 
     if err then
         log.error(err)
@@ -533,10 +534,10 @@ local set_or_toggle = {
 ---
 ---@param powered boolean
 function OutputHandle:set_powered(powered)
-    local _, err = client:unary_request(
-        output_service.SetPowered,
-        { output_name = self.name, set_or_toggle = set_or_toggle[powered] }
-    )
+    local _, err = client:pinnacle_output_v1_OutputService_SetPowered({
+        output_name = self.name,
+        set_or_toggle = set_or_toggle[powered],
+    })
 
     if err then
         log.error(err)
@@ -545,10 +546,10 @@ end
 
 ---Toggles power for this output.
 function OutputHandle:toggle_powered()
-    local _, err = client:unary_request(
-        output_service.SetPowered,
-        { output_name = self.name, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_output_v1_OutputService_SetPowered({
+        output_name = self.name,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -564,9 +565,8 @@ end
 ---
 ---@return string
 function OutputHandle:make()
-    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
 
     return response and response.make or ""
 end
@@ -575,9 +575,8 @@ end
 ---
 ---@return string
 function OutputHandle:model()
-    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
 
     return response and response.model or ""
 end
@@ -586,9 +585,8 @@ end
 ---
 ---@return string
 function OutputHandle:serial()
-    local response, err = client:unary_request(output_service.GetInfo, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetInfoResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
 
     return response and response.serial or ""
 end
@@ -597,9 +595,8 @@ end
 ---
 ---@return { x: integer, y: integer }?
 function OutputHandle:loc()
-    local response, err = client:unary_request(output_service.GetLoc, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetLocResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetLoc({ output_name = self.name })
 
     return response and response.loc
 end
@@ -611,9 +608,7 @@ end
 ---@return { width: integer, height: integer }?
 function OutputHandle:logical_size()
     local response, err =
-        client:unary_request(output_service.GetLogicalSize, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetLogicalSizeResponse|nil
+        client:pinnacle_output_v1_OutputService_GetLogicalSize({ output_name = self.name })
 
     return response and response.logical_size
 end
@@ -623,9 +618,7 @@ end
 ---@return { width: integer, height: integer }?
 function OutputHandle:physical_size()
     local response, err =
-        client:unary_request(output_service.GetPhysicalSize, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetPhysicalSizeResponse|nil
+        client:pinnacle_output_v1_OutputService_GetPhysicalSize({ output_name = self.name })
 
     return response and response.physical_size
 end
@@ -634,9 +627,8 @@ end
 ---
 ---@return pinnacle.output.Mode?
 function OutputHandle:current_mode()
-    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetModesResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetModes({ output_name = self.name })
 
     local mode = response and response.current_mode
     if not mode then
@@ -657,9 +649,8 @@ end
 ---
 ---@return pinnacle.output.Mode?
 function OutputHandle:preferred_mode()
-    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetModesResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetModes({ output_name = self.name })
 
     local mode = response and response.preferred_mode
     if not mode then
@@ -680,9 +671,8 @@ end
 ---
 ---@return pinnacle.output.Mode[]
 function OutputHandle:modes()
-    local response, err = client:unary_request(output_service.GetModes, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetModesResponse|nil
+    local response, err =
+        client:pinnacle_output_v1_OutputService_GetModes({ output_name = self.name })
 
     local modes = response and response.modes
     if not modes then
@@ -712,9 +702,7 @@ end
 ---@return boolean
 function OutputHandle:focused()
     local response, err =
-        client:unary_request(output_service.GetFocused, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetFocusedResponse|nil
+        client:pinnacle_output_v1_OutputService_GetFocused({ output_name = self.name })
 
     return response and response.focused or false
 end
@@ -724,9 +712,7 @@ end
 ---@return pinnacle.tag.TagHandle[]
 function OutputHandle:tags()
     local response, err =
-        client:unary_request(output_service.GetTagIds, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetTagIdsResponse|nil
+        client:pinnacle_output_v1_OutputService_GetTagIds({ output_name = self.name })
 
     local tag_ids = response and response.tag_ids or {}
 
@@ -740,9 +726,7 @@ end
 ---@return number
 function OutputHandle:scale()
     local response, err =
-        client:unary_request(output_service.GetFocused, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetScaleResponse|nil
+        client:pinnacle_output_v1_OutputService_GetScale({ output_name = self.name })
 
     return response and response.scale or 1.0
 end
@@ -752,9 +736,7 @@ end
 ---@return pinnacle.output.Transform
 function OutputHandle:transform()
     local response, err =
-        client:unary_request(output_service.GetTransform, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetTransformResponse|nil
+        client:pinnacle_output_v1_OutputService_GetTransform({ output_name = self.name })
 
     local transform = (
         response and response.transform
@@ -772,9 +754,7 @@ end
 ---@return boolean
 function OutputHandle:enabled()
     local response, err =
-        client:unary_request(output_service.GetEnabled, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetEnabledResponse|nil
+        client:pinnacle_output_v1_OutputService_GetEnabled({ output_name = self.name })
 
     return response and response.enabled or false
 end
@@ -787,9 +767,7 @@ end
 ---@return boolean
 function OutputHandle:powered()
     local response, err =
-        client:unary_request(output_service.GetPowered, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetPoweredResponse|nil
+        client:pinnacle_output_v1_OutputService_GetPowered({ output_name = self.name })
 
     return response and response.powered or false
 end
@@ -804,9 +782,7 @@ end
 ---@see pinnacle.output.OutputHandle.keyboard_focus_stack_visible
 function OutputHandle:keyboard_focus_stack()
     local response, err =
-        client:unary_request(output_service.GetFocusStackWindowIds, { output_name = self.name })
-
-    ---@cast response pinnacle.output.v1.GetFocusStackWindowIdsResponse|nil
+        client:pinnacle_output_v1_OutputService_GetFocusStackWindowIds({ output_name = self.name })
 
     local window_ids = response and response.window_ids or {}
 

@@ -747,35 +747,31 @@ end
 ---@return pinnacle.layout.LayoutRequester # A requester that allows you to force the compositor to request a layout.
 ---@nodiscard
 function layout.manage(on_layout)
-    local stream, err = client:bidirectional_streaming_request(
-        layout_service.Layout,
-        function(response, stream)
-            ---@type pinnacle.layout.LayoutArgs
-            local args = {
-                output = require("pinnacle.output").handle.new(response.output_name),
-                window_count = response.window_count,
-                tags = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {}),
-            }
+    local stream, err = client:pinnacle_layout_v1_LayoutService_Layout(function(response, stream)
+        ---@type pinnacle.layout.LayoutArgs
+        local args = {
+            output = require("pinnacle.output").handle.new(response.output_name),
+            window_count = response.window_count,
+            tags = require("pinnacle.tag").handle.new_from_table(response.tag_ids or {}),
+        }
 
-            local node = on_layout(args)
+        local node = on_layout(args)
 
-            local chunk =
-                require("pinnacle.grpc.protobuf").encode("pinnacle.layout.v1.LayoutRequest", {
-                    tree_response = {
-                        request_id = response.request_id,
-                        tree_id = 0, -- TODO:
-                        output_name = response.output_name,
-                        root_node = layout_node_to_api_node(node),
-                    },
-                })
+        local chunk = require("pinnacle.grpc.protobuf").encode("pinnacle.layout.v1.LayoutRequest", {
+            tree_response = {
+                request_id = response.request_id,
+                tree_id = 0, -- TODO:
+                output_name = response.output_name,
+                root_node = layout_node_to_api_node(node),
+            },
+        })
 
-            local success, err = pcall(stream.write_chunk, stream, chunk)
+        local success, err = pcall(stream.write_chunk, stream, chunk)
 
-            if not success then
-                print("error sending to stream:", err)
-            end
+        if not success then
+            print("error sending to stream:", err)
         end
-    )
+    end)
 
     if err then
         log.error("failed to start bidir stream")

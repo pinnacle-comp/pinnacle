@@ -24,7 +24,6 @@ install-protos:
 install-lua-lib: gen-lua-pb-defs
     #!/usr/bin/env bash
     cd "{{rootdir}}/api/lua"
-    luarocks build --local --force https://raw.githubusercontent.com/pinnacle-comp/lua-grpc-client/main/lua-grpc-client-dev-1.rockspec
     luarocks build --local --lua-version "{{lua_version}}"
 
 # Remove installed configs and the Lua API (requires Luarocks)

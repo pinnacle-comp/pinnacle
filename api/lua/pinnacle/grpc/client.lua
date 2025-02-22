@@ -17,7 +17,7 @@ function client.connect()
         error("`PINNACLE_GRPC_SOCKET` was not set; is Pinnacle running?")
     end
 
-    local c = require("grpc_client").new({
+    local c = require("pinnacle.grpc.defs").grpc_client.new({
         path = socket_path,
     })
 

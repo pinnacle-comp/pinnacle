@@ -24,10 +24,9 @@ local filter_name_to_filter_value = {
 ---
 ---@param filter pinnacle.render.ScalingFilter
 function render.set_upscale_filter(filter)
-    local _, err = client:unary_request(
-        render_service.SetUpscaleFilter,
-        { filter = filter_name_to_filter_value[filter] }
-    )
+    local _, err = client:pinnacle_render_v1_RenderService_SetUpscaleFilter({
+        filter = filter_name_to_filter_value[filter],
+    })
 
     if err then
         log.error(err)
@@ -38,10 +37,9 @@ end
 ---
 ---@param filter pinnacle.render.ScalingFilter
 function render.set_downscale_filter(filter)
-    local _, err = client:unary_request(
-        render_service.SetDownscaleFilter,
-        { filter = filter_name_to_filter_value[filter] }
-    )
+    local _, err = client:pinnacle_render_v1_RenderService_SetDownscaleFilter({
+        filter = filter_name_to_filter_value[filter],
+    })
 
     if err then
         log.error(err)

@@ -97,14 +97,14 @@ function layer.new_widget(args)
         widget_def = widget.widget_def_into_api(args.widget),
     }
 
-    local response, err = client:unary_request(layer_service.NewLayer, request)
+    local response, err = client:snowcap_layer_v0alpha1_LayerService_NewLayer(request)
 
     if err then
         log.error(err)
         return nil
     end
 
-    ---@cast response snowcap.layer.v0alpha1.NewLayerResponse
+    assert(response)
 
     if not response.layer_id then
         log.error("no layer_id received")
@@ -116,8 +116,7 @@ end
 
 ---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
 function LayerHandle:on_key_press(on_press)
-    local err = client:server_streaming_request(
-        input_service.KeyboardKey,
+    local err = client:snowcap_input_v0alpha1_InputService_KeyboardKey(
         { id = self.id },
         function(response)
             ---@cast response snowcap.input.v0alpha1.KeyboardKeyResponse
@@ -144,7 +143,7 @@ function LayerHandle:on_key_press(on_press)
 end
 
 function LayerHandle:close()
-    local _, err = client:unary_request(layer_service.Close, { layer_id = self.id })
+    local _, err = client:snowcap_layer_v0alpha1_LayerService_Close({ layer_id = self.id })
 
     if err then
         log.error(err)

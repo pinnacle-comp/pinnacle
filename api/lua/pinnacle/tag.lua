@@ -51,14 +51,14 @@ tag.handle = tag_handle
 ---
 ---@return pinnacle.tag.TagHandle[]
 function tag.get_all()
-    local response, err = client:unary_request(tag_service.Get, {})
+    local response, err = client:pinnacle_tag_v1_TagService_Get({})
 
     if err then
         log.error(err)
         return {}
     end
 
-    ---@cast response pinnacle.tag.v1.GetResponse
+    assert(response)
 
     ---@type pinnacle.tag.TagHandle[]
     local handles = {}
@@ -146,7 +146,7 @@ function tag.add(output, ...)
         tag_names = tag_names[1] --[=[@as string[]]=]
     end
 
-    local response, err = client:unary_request(tag_service.Add, {
+    local response, err = client:pinnacle_tag_v1_TagService_Add({
         output_name = output.name,
         tag_names = tag_names,
     })
@@ -156,7 +156,7 @@ function tag.add(output, ...)
         return {}
     end
 
-    ---@cast response pinnacle.tag.v1.AddResponse
+    assert(response)
 
     ---@type pinnacle.tag.TagHandle[]
     local handles = {}
@@ -186,7 +186,7 @@ function tag.remove(tags)
         table.insert(ids, tg.id)
     end
 
-    local _, err = client:unary_request(tag_service.Remove, { tag_ids = ids })
+    local _, err = client:pinnacle_tag_v1_TagService_Remove({ tag_ids = ids })
 
     if err then
         log.error(err)
@@ -265,7 +265,7 @@ end
 ---Tag.get("3"):switch_to() -- Displays Steam
 ---```
 function TagHandle:switch_to()
-    local _, err = client:unary_request(tag_service.SwitchTo, { tag_id = self.id })
+    local _, err = client:pinnacle_tag_v1_TagService_SwitchTo({ tag_id = self.id })
 
     if err then
         log.error(err)
@@ -287,10 +287,10 @@ end
 ---
 ---@param active boolean
 function TagHandle:set_active(active)
-    local _, err = client:unary_request(
-        tag_service.SetActive,
-        { tag_id = self.id, set_or_toggle = set_or_toggle[active] }
-    )
+    local _, err = client:pinnacle_tag_v1_TagService_SetActive({
+        tag_id = self.id,
+        set_or_toggle = set_or_toggle[active],
+    })
 
     if err then
         log.error(err)
@@ -309,10 +309,10 @@ end
 ---Tag.get("2"):toggle_active() -- Displays nothing
 ---```
 function TagHandle:toggle_active()
-    local _, err = client:unary_request(
-        tag_service.SetActive,
-        { tag_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_tag_v1_TagService_SetActive({
+        tag_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -323,9 +323,7 @@ end
 ---
 ---@return boolean
 function TagHandle:active()
-    local response, err = client:unary_request(tag_service.GetActive, { tag_id = self.id })
-
-    ---@cast response pinnacle.tag.v1.GetActiveResponse|nil
+    local response, err = client:pinnacle_tag_v1_TagService_GetActive({ tag_id = self.id })
 
     return response and response.active or false
 end
@@ -334,9 +332,7 @@ end
 ---
 ---@return string?
 function TagHandle:name()
-    local response, err = client:unary_request(tag_service.GetName, { tag_id = self.id })
-
-    ---@cast response pinnacle.tag.v1.GetNameResponse|nil
+    local response, err = client:pinnacle_tag_v1_TagService_GetName({ tag_id = self.id })
 
     return response and response.name or ""
 end
@@ -345,9 +341,7 @@ end
 ---
 ---@return pinnacle.output.OutputHandle
 function TagHandle:output()
-    local response, err = client:unary_request(tag_service.GetOutputName, { tag_id = self.id })
-
-    ---@cast response pinnacle.tag.v1.GetOutputNameResponse|nil
+    local response, err = client:pinnacle_tag_v1_TagService_GetOutputName({ tag_id = self.id })
 
     local output_name = response and response.output_name or ""
     return require("pinnacle.output").handle.new(output_name)

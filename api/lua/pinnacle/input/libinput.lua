@@ -100,7 +100,7 @@ local DeviceHandle = {}
 ---
 ---@return pinnacle.input.libinput.Capabilities
 function DeviceHandle:capabilities()
-    local response, err = client:unary_request(input_service.GetDeviceCapabilities, {
+    local response, err = client:pinnacle_input_v1_InputService_GetDeviceCapabilities({
         device_sysname = self.sysname,
     })
 
@@ -120,7 +120,7 @@ function DeviceHandle:capabilities()
         return caps
     end
 
-    ---@cast response pinnacle.input.v1.GetDeviceCapabilitiesResponse
+    assert(response)
 
     caps.keyboard = response.keyboard or false
     caps.pointer = response.pointer or false
@@ -137,7 +137,7 @@ end
 ---
 ---@return string
 function DeviceHandle:name()
-    local response, err = client:unary_request(input_service.GetDeviceInfo, {
+    local response, err = client:pinnacle_input_v1_InputService_GetDeviceInfo({
         device_sysname = self.sysname,
     })
 
@@ -146,7 +146,7 @@ function DeviceHandle:name()
         return ""
     end
 
-    ---@cast response pinnacle.input.v1.GetDeviceInfoResponse
+    assert(response)
 
     return response.name or ""
 end
@@ -155,7 +155,7 @@ end
 ---
 ---@return integer
 function DeviceHandle:product_id()
-    local response, err = client:unary_request(input_service.GetDeviceInfo, {
+    local response, err = client:pinnacle_input_v1_InputService_GetDeviceInfo({
         device_sysname = self.sysname,
     })
 
@@ -164,7 +164,7 @@ function DeviceHandle:product_id()
         return 0
     end
 
-    ---@cast response pinnacle.input.v1.GetDeviceInfoResponse
+    assert(response)
 
     return response.product_id or 0
 end
@@ -172,7 +172,7 @@ end
 ---Gets this devices vendor id.
 ---@return integer
 function DeviceHandle:vendor_id()
-    local response, err = client:unary_request(input_service.GetDeviceInfo, {
+    local response, err = client:pinnacle_input_v1_InputService_GetDeviceInfo({
         device_sysname = self.sysname,
     })
 
@@ -181,7 +181,7 @@ function DeviceHandle:vendor_id()
         return 0
     end
 
-    ---@cast response pinnacle.input.v1.GetDeviceInfoResponse
+    assert(response)
 
     return response.vendor_id or 0
 end
@@ -194,7 +194,7 @@ end
 ---
 ---@return pinnacle.input.libinput.DeviceType
 function DeviceHandle:device_type()
-    local response, err = client:unary_request(input_service.GetDeviceType, {
+    local response, err = client:pinnacle_input_v1_InputService_GetDeviceType({
         device_sysname = self.sysname,
     })
 
@@ -203,7 +203,7 @@ function DeviceHandle:device_type()
         return "unknown"
     end
 
-    ---@cast response pinnacle.input.v1.GetDeviceTypeResponse
+    assert(response)
 
     ---@type pinnacle.input.libinput.DeviceType
     local type = "unknown"
@@ -240,7 +240,7 @@ end
 ---
 ---@see pinnacle.input.libinput.DeviceHandle.map_to_region To map device input to an arbitrary region instead
 function DeviceHandle:map_to_output(output)
-    local _, err = client:unary_request(input_service.SetDeviceMapTarget, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceMapTarget({
         device_sysname = self.sysname,
         output_name = output.name,
     })
@@ -260,7 +260,7 @@ end
 ---
 ---@see pinnacle.input.libinput.DeviceHandle.map_to_output To map device input to a specific output instead
 function DeviceHandle:map_to_region(region)
-    local _, err = client:unary_request(input_service.SetDeviceMapTarget, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceMapTarget({
         device_sysname = self.sysname,
         region = {
             loc = {
@@ -277,7 +277,7 @@ end
 
 ---@param accel_profile pinnacle.input.libinput.AccelProfile
 function DeviceHandle:set_accel_profile(accel_profile)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         accel_profile = accel_profile_values[accel_profile],
     })
@@ -285,7 +285,7 @@ end
 
 ---@param accel_speed number
 function DeviceHandle:set_accel_speed(accel_speed)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         accel_speed = accel_speed,
     })
@@ -293,7 +293,7 @@ end
 
 ---@param calibration_matrix number[] 6 floats
 function DeviceHandle:set_calibration_matrix(calibration_matrix)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         calibration_matrix = {
             matrix = calibration_matrix,
@@ -303,7 +303,7 @@ end
 
 ---@param click_method pinnacle.input.libinput.ClickMethod
 function DeviceHandle:set_click_method(click_method)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         click_method = click_method_values[click_method],
     })
@@ -311,7 +311,7 @@ end
 
 ---@param disable_while_typing boolean
 function DeviceHandle:set_disable_while_typing(disable_while_typing)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         disable_while_typing = disable_while_typing,
     })
@@ -319,7 +319,7 @@ end
 
 ---@param left_handed boolean
 function DeviceHandle:set_left_handed(left_handed)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         left_handed = left_handed,
     })
@@ -327,7 +327,7 @@ end
 
 ---@param middle_emulation boolean
 function DeviceHandle:set_middle_emulation(middle_emulation)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         middle_emulation = middle_emulation,
     })
@@ -335,7 +335,7 @@ end
 
 ---@param rotation_angle integer
 function DeviceHandle:set_rotation_angle(rotation_angle)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         rotation_angle = rotation_angle,
     })
@@ -343,7 +343,7 @@ end
 
 ---@param scroll_button integer
 function DeviceHandle:set_scroll_button(scroll_button)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         scroll_button = scroll_button,
     })
@@ -351,7 +351,7 @@ end
 
 ---@param scroll_button_lock boolean
 function DeviceHandle:set_scroll_button_lock(scroll_button_lock)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         scroll_button_lock = scroll_button_lock,
     })
@@ -359,7 +359,7 @@ end
 
 ---@param scroll_method pinnacle.input.libinput.ScrollMethod
 function DeviceHandle:set_scroll_method(scroll_method)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         scroll_method = scroll_method_values[scroll_method],
     })
@@ -367,7 +367,7 @@ end
 
 ---@param natural_scroll boolean
 function DeviceHandle:set_natural_scroll(natural_scroll)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         natural_scroll = natural_scroll,
     })
@@ -375,7 +375,7 @@ end
 
 ---@param tap_button_map pinnacle.input.libinput.TapButtonMap
 function DeviceHandle:set_tap_button_map(tap_button_map)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         tap_button_map = tap_button_map_values[tap_button_map],
     })
@@ -383,7 +383,7 @@ end
 
 ---@param tap_drag boolean
 function DeviceHandle:set_tap_drag(tap_drag)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         tap_drag = tap_drag,
     })
@@ -391,7 +391,7 @@ end
 
 ---@param tap_drag_lock boolean
 function DeviceHandle:set_tap_drag_lock(tap_drag_lock)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         tap_drag_lock = tap_drag_lock,
     })
@@ -399,7 +399,7 @@ end
 
 ---@param tap boolean
 function DeviceHandle:set_tap(tap)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         tap = tap,
     })
@@ -407,7 +407,7 @@ end
 
 ---@param send_events_mode pinnacle.input.libinput.SendEventsMode
 function DeviceHandle:set_send_events_mode(send_events_mode)
-    local _, err = client:unary_request(input_service.SetDeviceLibinputSetting, {
+    local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
         send_events_mode = send_events_mode_values[send_events_mode],
     })
@@ -417,14 +417,14 @@ end
 ---
 ---@return pinnacle.input.libinput.DeviceHandle[]
 function libinput.get_devices()
-    local response, err = client:unary_request(input_service.GetDevices, {})
+    local response, err = client:pinnacle_input_v1_InputService_GetDevices({})
 
     if err then
         log.error(err)
         return {}
     end
 
-    ---@cast response pinnacle.input.v1.GetDevicesResponse
+    assert(response)
 
     local devices = {}
     for _, sysname in ipairs(response.device_sysnames or {}) do

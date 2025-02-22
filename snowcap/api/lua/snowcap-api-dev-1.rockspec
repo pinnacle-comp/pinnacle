@@ -13,9 +13,6 @@ dependencies = {
     "http ~> 0.4",
     "lua-protobuf ~> 0.5.2",
     "compat53 ~> 0.13",
-
-    -- Run just install
-    "lua-grpc-client >= dev-1",
 }
 build = {
     type = "builtin",

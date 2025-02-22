@@ -62,7 +62,7 @@ local Command = {}
 ---
 ---@return pinnacle.process.Child?
 function Command:spawn()
-    local response, err = client:unary_request(process_service.Spawn, {
+    local response, err = client:pinnacle_process_v1_ProcessService_Spawn({
         cmd = type(self.cmd) == "string" and { self.cmd } or self.cmd,
         shell_cmd = self.shell_cmd,
         unique = self.unique,
@@ -130,7 +130,7 @@ function Child:wait()
 
     local ret = {}
 
-    local err = client:server_streaming_request(process_service.WaitOnSpawn, {
+    local err = client:pinnacle_process_v1_ProcessService_WaitOnSpawn({
         pid = self.pid,
     }, function(response)
         ret.exit_code = response.exit_code

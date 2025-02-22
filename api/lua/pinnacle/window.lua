@@ -49,14 +49,14 @@ window.handle = window_handle
 ---
 ---@return pinnacle.window.WindowHandle[] windows Handles to all windows
 function window.get_all()
-    local response, err = client:unary_request(window_service.Get, {})
+    local response, err = client:pinnacle_window_v1_WindowService_Get({})
 
     if err then
         log.error(err)
         return {}
     end
 
-    ---@cast response pinnacle.window.v1.GetResponse
+    assert(response)
 
     local handles = window_handle.new_from_table(response.window_ids or {})
 
@@ -104,7 +104,7 @@ end
 function window.begin_move(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    local _, err = client:unary_request(window_service.MoveGrab, { button = button })
+    local _, err = client:pinnacle_window_v1_WindowService_MoveGrab({ button = button })
 
     if err then
         log.error(err)
@@ -126,7 +126,7 @@ end
 function window.begin_resize(button)
     ---@diagnostic disable-next-line: redefined-local, invisible
     local button = require("pinnacle.input").mouse_button_values[button]
-    local _, err = client:unary_request(window_service.ResizeGrab, { button = button })
+    local _, err = client:pinnacle_window_v1_WindowService_ResizeGrab({ button = button })
 
     if err then
         log.error(err)
@@ -214,8 +214,7 @@ end
 ---
 ---@param rule fun(window: pinnacle.window.WindowHandle)
 function window.add_window_rule(rule)
-    local _stream, err = client:bidirectional_streaming_request(
-        window_service.WindowRule,
+    local _stream, err = client:pinnacle_window_v1_WindowService_WindowRule(
         function(response, stream)
             local handle = window_handle.new(response.new_window.window_id)
 
@@ -246,7 +245,7 @@ end
 
 ---Sends a close request to this window.
 function WindowHandle:close()
-    local _, err = client:unary_request(window_service.Close, { window_id = self.id })
+    local _, err = client:pinnacle_window_v1_WindowService_Close({ window_id = self.id })
 
     if err then
         log.error(err)
@@ -280,10 +279,13 @@ end
 ---```
 ---@param geo { x: integer?, y: integer?, width: integer?, height: integer? } The new location and/or size
 function WindowHandle:set_geometry(geo)
-    local _, err = client:unary_request(
-        window_service.SetGeometry,
-        { window_id = self.id, x = geo.x, y = geo.y, w = geo.width, h = geo.height }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetGeometry({
+        window_id = self.id,
+        x = geo.x,
+        y = geo.y,
+        w = geo.width,
+        h = geo.height,
+    })
 
     if err then
         log.error(err)
@@ -294,10 +296,10 @@ end
 ---
 ---@param fullscreen boolean
 function WindowHandle:set_fullscreen(fullscreen)
-    local _, err = client:unary_request(
-        window_service.SetFullscreen,
-        { window_id = self.id, set_or_toggle = set_or_toggle[fullscreen] }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFullscreen({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[fullscreen],
+    })
 
     if err then
         log.error(err)
@@ -307,10 +309,10 @@ end
 ---Toggles this window to and from fullscreen.
 ---
 function WindowHandle:toggle_fullscreen()
-    local _, err = client:unary_request(
-        window_service.SetFullscreen,
-        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFullscreen({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -321,10 +323,10 @@ end
 ---
 ---@param maximized boolean
 function WindowHandle:set_maximized(maximized)
-    local _, err = client:unary_request(
-        window_service.SetMaximized,
-        { window_id = self.id, set_or_toggle = set_or_toggle[maximized] }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetMaximized({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[maximized],
+    })
 
     if err then
         log.error(err)
@@ -334,10 +336,10 @@ end
 ---Toggles this window to and from maximized.
 ---
 function WindowHandle:toggle_maximized()
-    local _, err = client:unary_request(
-        window_service.SetMaximized,
-        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetMaximized({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -348,10 +350,10 @@ end
 ---
 ---@param floating boolean
 function WindowHandle:set_floating(floating)
-    local _, err = client:unary_request(
-        window_service.SetFloating,
-        { window_id = self.id, set_or_toggle = set_or_toggle[floating] }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFloating({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[floating],
+    })
 
     if err then
         log.error(err)
@@ -361,10 +363,10 @@ end
 ---Toggles this window to and from floating.
 ---
 function WindowHandle:toggle_floating()
-    local _, err = client:unary_request(
-        window_service.SetFloating,
-        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFloating({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -375,10 +377,10 @@ end
 ---
 ---@param focused boolean
 function WindowHandle:set_focused(focused)
-    local _, err = client:unary_request(
-        window_service.SetFocused,
-        { window_id = self.id, set_or_toggle = set_or_toggle[focused] }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFocused({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle[focused],
+    })
 
     if err then
         log.error(err)
@@ -388,10 +390,10 @@ end
 ---Toggles this window to and from focused.
 ---
 function WindowHandle:toggle_focused()
-    local _, err = client:unary_request(
-        window_service.SetFocused,
-        { window_id = self.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetFocused({
+        window_id = self.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -402,7 +404,7 @@ end
 ---
 ---@param mode "client_side" | "server_side"
 function WindowHandle:set_decoration_mode(mode)
-    local _, err = client:unary_request(window_service.SetDecorationMode, {
+    local _, err = client:pinnacle_window_v1_WindowService_SetDecorationMode({
         window_id = self.id,
         decoration_mode = mode == "client_side"
                 and defs.pinnacle.window.v1.DecorationMode.DECORATION_MODE_CLIENT_SIDE
@@ -421,7 +423,7 @@ end
 ---@param tag pinnacle.tag.TagHandle The tag to move this window to
 function WindowHandle:move_to_tag(tag)
     local _, err =
-        client:unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
+        client:pinnacle_window_v1_WindowService_MoveToTag({ window_id = self.id, tag_id = tag.id })
 
     if err then
         log.error(err)
@@ -433,10 +435,11 @@ end
 ---@param tag pinnacle.tag.TagHandle The tag to set or unset
 ---@param set boolean
 function WindowHandle:set_tag(tag, set)
-    local _, err = client:unary_request(
-        window_service.SetTag,
-        { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle[set] }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetTag({
+        window_id = self.id,
+        tag_id = tag.id,
+        set_or_toggle = set_or_toggle[set],
+    })
 
     if err then
         log.error(err)
@@ -447,10 +450,11 @@ end
 ---
 ---@param tag pinnacle.tag.TagHandle The tag to toggle
 function WindowHandle:toggle_tag(tag)
-    local _, err = client:unary_request(
-        window_service.SetTag,
-        { window_id = self.id, tag_id = tag.id, set_or_toggle = set_or_toggle.TOGGLE }
-    )
+    local _, err = client:pinnacle_window_v1_WindowService_SetTag({
+        window_id = self.id,
+        tag_id = tag.id,
+        set_or_toggle = set_or_toggle.TOGGLE,
+    })
 
     if err then
         log.error(err)
@@ -461,7 +465,7 @@ end
 ---
 ---This will bring the window to the front.
 function WindowHandle:raise()
-    local _, err = client:unary_request(window_service.Raise, { window_id = self.id })
+    local _, err = client:pinnacle_window_v1_WindowService_Raise({ window_id = self.id })
 
     if err then
         log.error(err)
@@ -498,9 +502,7 @@ end
 ---
 ---@return { x: integer, y: integer }?
 function WindowHandle:loc()
-    local loc, err = client:unary_request(window_service.GetLoc, { window_id = self.id })
-
-    ---@cast loc pinnacle.window.v1.GetLocResponse|nil
+    local loc, err = client:pinnacle_window_v1_WindowService_GetLoc({ window_id = self.id })
 
     return loc and loc.loc
 end
@@ -509,9 +511,7 @@ end
 ---
 ---@return { width: integer, height: integer }?
 function WindowHandle:size()
-    local loc, err = client:unary_request(window_service.GetSize, { window_id = self.id })
-
-    ---@cast loc pinnacle.window.v1.GetSizeResponse|nil
+    local loc, err = client:pinnacle_window_v1_WindowService_GetSize({ window_id = self.id })
 
     return loc and loc.size
 end
@@ -520,9 +520,7 @@ end
 ---
 ---@return string
 function WindowHandle:app_id()
-    local response, err = client:unary_request(window_service.GetAppId, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetAppIdResponse|nil
+    local response, err = client:pinnacle_window_v1_WindowService_GetAppId({ window_id = self.id })
 
     return response and response.app_id or ""
 end
@@ -531,9 +529,7 @@ end
 ---
 ---@return string
 function WindowHandle:title()
-    local response, err = client:unary_request(window_service.GetTitle, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetTitleResponse|nil
+    local response, err = client:pinnacle_window_v1_WindowService_GetTitle({ window_id = self.id })
 
     return response and response.title or ""
 end
@@ -542,9 +538,8 @@ end
 ---
 ---@return boolean
 function WindowHandle:focused()
-    local response, err = client:unary_request(window_service.GetFocused, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetFocusedResponse|nil
+    local response, err =
+        client:pinnacle_window_v1_WindowService_GetFocused({ window_id = self.id })
 
     return response and response.focused or false
 end
@@ -554,9 +549,7 @@ end
 ---@return boolean
 function WindowHandle:floating()
     local response, err =
-        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FLOATING or false
 end
@@ -566,9 +559,7 @@ end
 ---@return boolean
 function WindowHandle:tiled()
     local response, err =
-        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_TILED or false
 end
@@ -578,9 +569,7 @@ end
 ---@return boolean
 function WindowHandle:fullscreen()
     local response, err =
-        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_FULLSCREEN or false
 end
@@ -590,9 +579,7 @@ end
 ---@return boolean
 function WindowHandle:maximized()
     local response, err =
-        client:unary_request(window_service.GetLayoutMode, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetLayoutModeResponse|nil
+        client:pinnacle_window_v1_WindowService_GetLayoutMode({ window_id = self.id })
 
     return response and response.layout_mode == layout_mode_def.LAYOUT_MODE_MAXIMIZED or false
 end
@@ -601,9 +588,7 @@ end
 ---
 ---@return pinnacle.tag.TagHandle[]
 function WindowHandle:tags()
-    local response, err = client:unary_request(window_service.GetTagIds, { window_id = self.id })
-
-    ---@cast response pinnacle.window.v1.GetTagIdsResponse|nil
+    local response, err = client:pinnacle_window_v1_WindowService_GetTagIds({ window_id = self.id })
 
     local tag_ids = response and response.tag_ids or {}
 
