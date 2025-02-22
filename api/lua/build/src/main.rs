@@ -713,7 +713,7 @@ fn main() {
     }
 
     println!(
-        "{}",
+        "---@lcat nodoc\n\n{}",
         generate_client_code()
             // + "\n\n---@lcat nodoc\n\n{}"
             + &generate_enum_definitions(&enums)
