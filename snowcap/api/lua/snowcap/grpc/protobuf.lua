@@ -4,25 +4,44 @@
 
 pcall(require, "compat53")
 
+local stat = require("posix.sys.stat").stat
 local pb = require("pb")
 
 local protobuf = {}
 
-local SNOWCAP_PROTO_DIR = (os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share"))
-    .. "/snowcap/protobuf"
-
 function protobuf.build_protos()
     local version = "v0alpha1"
     local proto_file_paths = {
-        SNOWCAP_PROTO_DIR .. "/snowcap/input/" .. version .. "/input.proto",
-        SNOWCAP_PROTO_DIR .. "/snowcap/layer/" .. version .. "/layer.proto",
-        SNOWCAP_PROTO_DIR .. "/snowcap/widget/" .. version .. "/widget.proto",
-        SNOWCAP_PROTO_DIR .. "/google/protobuf/empty.proto",
+        "snowcap/input/" .. version .. "/input.proto",
+        "snowcap/layer/" .. version .. "/layer.proto",
+        "snowcap/widget/" .. version .. "/widget.proto",
+        "google/protobuf/empty.proto",
     }
 
-    local cmd = "protoc --descriptor_set_out=/tmp/snowcap.pb --proto_path="
-        .. SNOWCAP_PROTO_DIR
-        .. " "
+    local xdg_data_home = os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")
+    local xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
+
+    ---@type string[]
+    local search_dirs = { xdg_data_home }
+
+    if xdg_data_dirs then
+        for data_dir in xdg_data_dirs:gmatch("[^:]+") do
+            table.insert(search_dirs, data_dir)
+        end
+    end
+
+    local proto_dir = nil
+
+    for _, dir in ipairs(search_dirs) do
+        if stat(dir .. "/snowcap/protobuf") then
+            proto_dir = dir .. "/snowcap/protobuf"
+            break
+        end
+    end
+
+    assert(proto_dir, "could not find protobuf definitions directory")
+
+    local cmd = "protoc --descriptor_set_out=/tmp/snowcap.pb --proto_path=" .. proto_dir .. " "
 
     for _, file_path in ipairs(proto_file_paths) do
         cmd = cmd .. file_path .. " "

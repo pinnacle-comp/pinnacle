@@ -27,15 +27,11 @@ function protobuf.build_protos()
         "google/protobuf/empty.proto",
     }
 
-    local xdg_data_home = os.getenv("XDG_DATA_HOME")
+    local xdg_data_home = os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")
     local xdg_data_dirs = os.getenv("XDG_DATA_DIRS")
 
     ---@type string[]
-    local search_dirs = {}
-
-    if xdg_data_home then
-        table.insert(search_dirs, xdg_data_home)
-    end
+    local search_dirs = { xdg_data_home }
 
     if xdg_data_dirs then
         for data_dir in xdg_data_dirs:gmatch("[^:]+") do
@@ -48,6 +44,7 @@ function protobuf.build_protos()
     for _, dir in ipairs(search_dirs) do
         if stat(dir .. "/pinnacle/protobuf") then
             proto_dir = dir .. "/pinnacle/protobuf"
+            break
         end
     end
 
