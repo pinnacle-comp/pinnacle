@@ -2,34 +2,42 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local logging = require("logging")
-
 ---@class snowcap.Log
----@field debug function
----@field info function
----@field warn function
----@field error function
----@field fatal function
 local log = {}
 
-local log_patterns = logging.buildLogPatterns({
-    [logging.ERROR] = "%level %message (at %source)",
-}, "%level %message")
+---@param level "DEBUG" | "INFO" | "WARN" | "ERROR"
+---@param msg string
+local function print_log(level, msg)
+    local source = ""
+    if level == "ERROR" then
+        local debuginfo_callsite_parent_func = debug.getinfo(3)
+        local debuginfo_callsite_log = debug.getinfo(2)
+        local callsite_func = "main"
+        if debuginfo_callsite_parent_func then
+            callsite_func = debuginfo_callsite_parent_func.name or "main"
+        end
+        assert(debuginfo_callsite_log)
+        local callsite_line = debug.getinfo(3, "l").currentline
+        source = " (in function `" .. callsite_func .. "`, line " .. tostring(callsite_line) .. ")"
+    end
 
-local console_logger = logging.new(function(self, level, message)
-    print(
-        logging.prepareLogMsg(
-            log_patterns[level],
-            logging.date(logging.defaultTimestampPattern()),
-            level,
-            message
-        )
-    )
-    return true
-end, logging.defaultLevel())
+    print(level .. " " .. msg .. source)
+end
 
-setmetatable(log, {
-    __index = console_logger,
-})
+function log.info(msg)
+    print_log("INFO", msg)
+end
+
+function log.debug(msg)
+    print_log("DEBUG", msg)
+end
+
+function log.warn(msg)
+    print_log("WARN", msg)
+end
+
+function log.error(msg)
+    print_log("ERROR", msg)
+end
 
 return log

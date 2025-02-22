@@ -54,7 +54,7 @@ function tag.get_all()
     local response, err = client:unary_request(tag_service.Get, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 
@@ -152,7 +152,7 @@ function tag.add(output, ...)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 
@@ -189,7 +189,7 @@ function tag.remove(tags)
     local _, err = client:unary_request(tag_service.Remove, { tag_ids = ids })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -268,7 +268,7 @@ function TagHandle:switch_to()
     local _, err = client:unary_request(tag_service.SwitchTo, { tag_id = self.id })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -293,7 +293,7 @@ function TagHandle:set_active(active)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -315,7 +315,7 @@ function TagHandle:toggle_active()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

@@ -52,7 +52,7 @@ function window.get_all()
     local response, err = client:unary_request(window_service.Get, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 
@@ -107,7 +107,7 @@ function window.begin_move(button)
     local _, err = client:unary_request(window_service.MoveGrab, { button = button })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -129,7 +129,7 @@ function window.begin_resize(button)
     local _, err = client:unary_request(window_service.ResizeGrab, { button = button })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -237,7 +237,7 @@ function window.add_window_rule(rule)
     )
 
     if err then
-        log:error("failed to start bidir stream")
+        log.error("failed to start bidir stream")
         os.exit(1)
     end
 end
@@ -249,7 +249,7 @@ function WindowHandle:close()
     local _, err = client:unary_request(window_service.Close, { window_id = self.id })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -286,7 +286,7 @@ function WindowHandle:set_geometry(geo)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -300,7 +300,7 @@ function WindowHandle:set_fullscreen(fullscreen)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -313,7 +313,7 @@ function WindowHandle:toggle_fullscreen()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -327,7 +327,7 @@ function WindowHandle:set_maximized(maximized)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -340,7 +340,7 @@ function WindowHandle:toggle_maximized()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -354,7 +354,7 @@ function WindowHandle:set_floating(floating)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -367,7 +367,7 @@ function WindowHandle:toggle_floating()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -381,7 +381,7 @@ function WindowHandle:set_focused(focused)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -394,7 +394,7 @@ function WindowHandle:toggle_focused()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -410,7 +410,7 @@ function WindowHandle:set_decoration_mode(mode)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -424,7 +424,7 @@ function WindowHandle:move_to_tag(tag)
         client:unary_request(window_service.MoveToTag, { window_id = self.id, tag_id = tag.id })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -439,7 +439,7 @@ function WindowHandle:set_tag(tag, set)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -453,7 +453,7 @@ function WindowHandle:toggle_tag(tag)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -464,7 +464,7 @@ function WindowHandle:raise()
     local _, err = client:unary_request(window_service.Raise, { window_id = self.id })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

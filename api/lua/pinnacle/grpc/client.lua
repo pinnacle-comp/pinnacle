@@ -21,7 +21,7 @@ function client.connect()
         path = socket_path,
     })
 
-    log:info("Connected to socket at " .. socket_path)
+    log.info("Connected to socket at " .. socket_path)
 
     setmetatable(client.client, { __index = c })
 end

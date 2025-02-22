@@ -136,7 +136,7 @@ local function keybind_inner(kb)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
         return
     end
 
@@ -180,7 +180,7 @@ local function keybind_inner(kb)
     end
 
     if err then
-        log:error(err)
+        log.error(err)
         return
     end
 end
@@ -279,7 +279,7 @@ local function mousebind_inner(mb)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
         return
     end
 
@@ -323,7 +323,7 @@ local function mousebind_inner(mb)
     end
 
     if err then
-        log:error(err)
+        log.error(err)
         return
     end
 end
@@ -411,7 +411,7 @@ function input.bind_infos()
     local response, err = client:unary_request(input_service.GetBindInfos, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 
@@ -499,7 +499,7 @@ function input.set_xkb_config(xkb_config)
     local _, err = client:unary_request(input_service.SetXkbConfig, xkb_config)
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -519,7 +519,7 @@ function input.set_repeat_rate(rate, delay)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -535,7 +535,7 @@ function input.set_xcursor_theme(theme)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -551,7 +551,7 @@ function input.set_xcursor_size(size)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

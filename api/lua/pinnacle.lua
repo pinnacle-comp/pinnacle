@@ -19,7 +19,7 @@ function pinnacle.quit()
     local _, err = client:unary_request(pinnacle_service.Quit, {})
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -28,7 +28,7 @@ function pinnacle.reload_config()
     local _, err = client:unary_request(pinnacle_service.ReloadConfig, {})
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -39,7 +39,7 @@ function pinnacle.backend()
     local response, err = client:unary_request(pinnacle_service.Backend, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         -- TODO: possibly panic here; a nil index error will be thrown after this anyway
     end
 
@@ -72,7 +72,7 @@ function pinnacle.set_xwayland_self_scaling(should_self_scale)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

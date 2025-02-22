@@ -116,7 +116,7 @@ function DeviceHandle:capabilities()
     }
 
     if err then
-        log:warn(err)
+        log.warn(err)
         return caps
     end
 
@@ -142,7 +142,7 @@ function DeviceHandle:name()
     })
 
     if err then
-        log:warn(err)
+        log.warn(err)
         return ""
     end
 
@@ -160,7 +160,7 @@ function DeviceHandle:product_id()
     })
 
     if err then
-        log:warn(err)
+        log.warn(err)
         return 0
     end
 
@@ -177,7 +177,7 @@ function DeviceHandle:vendor_id()
     })
 
     if err then
-        log:warn(err)
+        log.warn(err)
         return 0
     end
 
@@ -199,7 +199,7 @@ function DeviceHandle:device_type()
     })
 
     if err then
-        log:warn(err)
+        log.warn(err)
         return "unknown"
     end
 
@@ -420,7 +420,7 @@ function libinput.get_devices()
     local response, err = client:unary_request(input_service.GetDevices, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 

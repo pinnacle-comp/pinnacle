@@ -778,7 +778,7 @@ function layout.manage(on_layout)
     )
 
     if err then
-        log:error("failed to start bidir stream")
+        log.error("failed to start bidir stream")
         os.exit(1)
     end
 

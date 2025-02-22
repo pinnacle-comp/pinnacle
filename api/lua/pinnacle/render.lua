@@ -30,7 +30,7 @@ function render.set_upscale_filter(filter)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -44,7 +44,7 @@ function render.set_downscale_filter(filter)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

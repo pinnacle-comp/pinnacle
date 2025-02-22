@@ -41,7 +41,7 @@ function output.get_all()
     local response, err = client:unary_request(output_service.Get, {})
 
     if err then
-        log:error(err)
+        log.error(err)
         return {}
     end
 
@@ -232,7 +232,7 @@ function OutputHandle:set_loc(x, y)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -374,7 +374,7 @@ function OutputHandle:set_mode(width, height, refresh_rate_mhz)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -402,7 +402,7 @@ function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -460,7 +460,7 @@ function OutputHandle:set_modeline(modeline)
     local _, err = client:unary_request(output_service.SetModeline, request)
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -475,7 +475,7 @@ function OutputHandle:set_scale(scale)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -490,7 +490,7 @@ function OutputHandle:change_scale(change_by)
     })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -517,7 +517,7 @@ function OutputHandle:set_transform(transform)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -539,7 +539,7 @@ function OutputHandle:set_powered(powered)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -551,7 +551,7 @@ function OutputHandle:toggle_powered()
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

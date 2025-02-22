@@ -100,14 +100,14 @@ function layer.new_widget(args)
     local response, err = client:unary_request(layer_service.NewLayer, request)
 
     if err then
-        log:error(err)
+        log.error(err)
         return nil
     end
 
     ---@cast response snowcap.layer.v0alpha1.NewLayerResponse
 
     if not response.layer_id then
-        log:error("no layer_id received")
+        log.error("no layer_id received")
         return nil
     end
 
@@ -139,7 +139,7 @@ function LayerHandle:on_key_press(on_press)
     )
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 
@@ -147,7 +147,7 @@ function LayerHandle:close()
     local _, err = client:unary_request(layer_service.Close, { layer_id = self.id })
 
     if err then
-        log:error(err)
+        log.error(err)
     end
 end
 

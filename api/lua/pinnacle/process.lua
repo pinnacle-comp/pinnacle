@@ -71,7 +71,7 @@ function Command:spawn()
     })
 
     if err then
-        log:error(err)
+        log.error(err)
         return nil
     end
 
