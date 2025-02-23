@@ -5,13 +5,13 @@ do
         return false
     end
 
-    if not pcall(snowcap.init) then
+    local success, err = pcall(snowcap.init)
+
+    if not success then
+        print("failed to init snowcap: " .. err)
         return false
     end
 end
-
--- Make Snowcap use Pinnacle's cqueues loop
-require("snowcap.grpc.client").client.loop = require("pinnacle.grpc.client").client.loop
 
 ---Builtins and integrations with Snowcap.
 ---@class pinnacle.snowcap.integration

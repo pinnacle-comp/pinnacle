@@ -112,6 +112,8 @@ end
 function pinnacle.setup(config_fn)
     pinnacle.init()
 
+    require("snowcap.grpc.client").client.loop = client.loop
+
     -- This ensures a config won't run forever if Pinnacle is killed
     -- and doesn't kill configs on drop.
     client.loop:wrap(function()

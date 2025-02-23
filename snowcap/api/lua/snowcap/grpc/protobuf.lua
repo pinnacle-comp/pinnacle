@@ -12,13 +12,10 @@ local protobuf = {}
 function protobuf.build_protos()
     local version = "v0alpha1"
     local proto_file_paths = {
-        -- Currently nesting protobufs in the pinnacle files until I spin this off into its own project
-        "snowcap/snowcap/input/"
-            .. version
-            .. "/input.proto",
-        "snowcap/snowcap/layer/" .. version .. "/layer.proto",
-        "snowcap/snowcap/widget/" .. version .. "/widget.proto",
-        "snowcap/google/protobuf/empty.proto",
+        "snowcap/input/" .. version .. "/input.proto",
+        "snowcap/layer/" .. version .. "/layer.proto",
+        "snowcap/widget/" .. version .. "/widget.proto",
+        "google/protobuf/empty.proto",
     }
 
     local xdg_data_home = os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")
@@ -36,6 +33,8 @@ function protobuf.build_protos()
     local proto_dir = nil
 
     for _, dir in ipairs(search_dirs) do
+        -- Currently nesting protobufs in the pinnacle files until I spin this off into its own project
+        dir = dir .. "/pinnacle"
         if stat(dir .. "/snowcap/protobuf") then
             proto_dir = dir .. "/snowcap/protobuf"
             break
