@@ -1,3 +1,18 @@
+-- I love side effects
+do
+    local success, snowcap = pcall(require, "snowcap")
+    if not success then
+        return false
+    end
+
+    if not pcall(snowcap.init) then
+        return false
+    end
+end
+
+-- Make Snowcap use Pinnacle's cqueues loop
+require("snowcap.grpc.client").client.loop = require("pinnacle.grpc.client").client.loop
+
 ---Builtins and integrations with Snowcap.
 ---@class pinnacle.snowcap.integration
 local integration = {}

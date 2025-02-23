@@ -97,18 +97,7 @@ end
 ---connect to its socket as well.
 function pinnacle.init()
     require("pinnacle.grpc.protobuf").build_protos()
-
     require("pinnacle.grpc.client").connect()
-
-    local success, snowcap = pcall(require, "snowcap")
-    if success then
-        if pcall(snowcap.init) then
-            pinnacle.snowcap = require("pinnacle.snowcap")
-
-            -- Make Snowcap use Pinnacle's cqueues loop
-            require("snowcap.grpc.client").client.loop = client.loop
-        end
-    end
 end
 
 ---Sets up a Pinnacle config.

@@ -7,13 +7,10 @@ local Tag = require("pinnacle.tag")
 local Window = require("pinnacle.window")
 local Layout = require("pinnacle.layout")
 local Util = require("pinnacle.util")
+-- `Snowcap` will be false when the Snowcap API isn't installed or Snowcap isn't running
 local Snowcap = require("pinnacle.snowcap")
 
 Pinnacle.setup(function()
-    -- `Snowcap` will be nil when the Snowcap API isn't installed or Snowcap isn't running
-    -- A normal installation of Pinnacle won't have this issue, so you can remove this cast if desired.
-    ---@cast Snowcap +?
-
     local key = Input.key
 
     ---@type pinnacle.input.Mod
