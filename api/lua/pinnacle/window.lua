@@ -5,7 +5,6 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local window_v1 = require("pinnacle.grpc.defs").pinnacle.window.v1
-local window_service = require("pinnacle.grpc.defs").pinnacle.window.v1.WindowService
 local defs = require("pinnacle.grpc.defs")
 
 local set_or_toggle = {

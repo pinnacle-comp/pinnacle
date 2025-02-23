@@ -3,8 +3,6 @@
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 local client = require("pinnacle.grpc.client").client
-local protobuf = require("pinnacle.grpc.protobuf")
-local layout_service = require("pinnacle.grpc.defs").pinnacle.layout.v1.LayoutService
 local defs = require("pinnacle.grpc.defs")
 local log = require("pinnacle.log")
 

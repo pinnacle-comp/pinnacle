@@ -4,7 +4,6 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local tag_service = require("pinnacle.grpc.defs").pinnacle.tag.v1.TagService
 
 local set_or_toggle = {
     SET = require("pinnacle.grpc.defs").pinnacle.util.v1.SetOrToggle.SET_OR_TOGGLE_SET,

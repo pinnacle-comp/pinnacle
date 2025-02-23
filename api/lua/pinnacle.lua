@@ -2,9 +2,24 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+-- INFO: In order to not have to package the snowcap API separately and avoid
+-- packaging issues down the road, we're symlinking the API under the `pinnacle`
+-- directory. We add a searcher here that checks for requires of the snowcap API
+-- and points them to the symlinked directory.
+--
+-- TODO: Remove this when snowcap is stable enough to become its own project
+local path_searcher = package.searchers[2]
+-- Insert before the actual package.path searcher so it takes priority
+table.insert(package.searchers, 2, function(libname)
+    if libname:match("snowcap") then
+        return path_searcher("pinnacle.snowcap." .. libname)
+    else
+        return path_searcher(libname)
+    end
+end)
+
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local pinnacle_service = require("pinnacle.grpc.defs").pinnacle.v1.PinnacleService
 
 ---The entry point to configuration.
 ---

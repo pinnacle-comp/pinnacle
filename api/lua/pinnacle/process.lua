@@ -4,7 +4,6 @@
 
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
-local process_service = require("pinnacle.grpc.defs").pinnacle.process.v1.ProcessService
 local condition = require("cqueues.condition")
 
 ---@class pinnacle.process.ChildStdin

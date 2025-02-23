@@ -6,7 +6,6 @@ local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local defs = require("pinnacle.grpc.defs")
 local input_v1 = defs.pinnacle.input.v1
-local input_service = defs.pinnacle.input.v1.InputService
 
 ---@class pinnacle.input.libinput.Libinput
 local libinput = {}

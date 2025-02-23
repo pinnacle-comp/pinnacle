@@ -5,7 +5,6 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local render_v1 = require("pinnacle.grpc.defs").pinnacle.render.v1
-local render_service = require("pinnacle.grpc.defs").pinnacle.render.v1.RenderService
 
 ---Rendering management.
 ---

@@ -5,7 +5,6 @@
 local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local output_v1 = require("pinnacle.grpc.defs").pinnacle.output.v1
-local output_service = require("pinnacle.grpc.defs").pinnacle.output.v1.OutputService
 
 ---@lcat nodoc
 ---@class pinnacle.output.OutputHandleModule
