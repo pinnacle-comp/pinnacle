@@ -480,7 +480,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                                         // This should be an assert, but currently Smithay does not
                                         // raise a protocol error when a client commits a buffer
                                         // before the initial configure
-                                        if !toplevel.is_initial_configure_sent() {
+                                        if toplevel.is_initial_configure_sent() {
                                             error!(
                                                 app_id = ?win.class(),
                                                 "toplevel already configured after window rules; \
