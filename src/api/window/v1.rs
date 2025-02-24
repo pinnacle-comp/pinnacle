@@ -17,6 +17,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use smithay::desktop::WindowSurface;
 use tonic::{Request, Status, Streaming};
+use tracing::error;
 
 use crate::{
     api::{
@@ -476,10 +477,18 @@ impl v1::window_service_server::WindowService for super::WindowService {
                                 // TODO: don't know if I want this here
                                 match win.underlying_surface() {
                                     WindowSurface::Wayland(toplevel) => {
-                                        assert!(
-                                            !toplevel.is_initial_configure_sent(),
-                                            "toplevel already configured after window rules"
-                                        );
+                                        // This should be an assert, but currently Smithay does not
+                                        // raise a protocol error when a client commits a buffer
+                                        // before the initial configure
+                                        if !toplevel.is_initial_configure_sent() {
+                                            error!(
+                                                app_id = ?win.class(),
+                                                "toplevel already configured after window rules; \
+                                                this is either a bug with Pinnacle or the client application \
+                                                committed a buffer before receiving an initial configure, \
+                                                which is a protocol error"
+                                            );
+                                        }
                                         toplevel.send_configure();
                                     }
                                     WindowSurface::X11(surface) => {
