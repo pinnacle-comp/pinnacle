@@ -3,6 +3,7 @@ use std::{
     ffi::OsString,
     os::fd::{AsRawFd, IntoRawFd},
     process::Stdio,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use passfd::FdPassingExt;
@@ -12,6 +13,9 @@ use tracing::warn;
 use xdg::BaseDirectories;
 
 use crate::util::restore_nofile_rlimit;
+
+pub static REMOVE_RUST_BACKTRACE: AtomicBool = AtomicBool::new(false);
+pub static REMOVE_RUST_LIB_BACKTRACE: AtomicBool = AtomicBool::new(false);
 
 fn fd_socket_name(pid: u32) -> String {
     format!("pinnacle-fd-{pid}.sock")
@@ -102,6 +106,13 @@ impl ProcessState {
             .stderr(Stdio::piped())
             .envs(envs)
             .args(cmd);
+
+        if REMOVE_RUST_BACKTRACE.load(Ordering::Relaxed) {
+            tokio_cmd.env_remove("RUST_BACKTRACE");
+        }
+        if REMOVE_RUST_LIB_BACKTRACE.load(Ordering::Relaxed) {
+            tokio_cmd.env_remove("RUST_LIB_BACKTRACE");
+        }
 
         unsafe {
             tokio_cmd.pre_exec(|| {

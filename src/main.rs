@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
+    env,
     io::{BufRead, BufReader},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -12,8 +13,9 @@ use std::{
 use anyhow::Context;
 use clap::CommandFactory;
 use pinnacle::{
-    cli::{self, generate_config, Cli, CliSubcommand, ConfigSubcommand},
+    cli::{self, generate_config, Cli, CliSubcommand, ConfigSubcommand, DebugSubcommand},
     config::{get_config_dir, parse_startup_config, StartupConfig},
+    process::{REMOVE_RUST_BACKTRACE, REMOVE_RUST_LIB_BACKTRACE},
     session::{import_environment, notify_fd},
     state::State,
     util::increase_nofile_rlimit,
@@ -31,6 +33,15 @@ static GLOBAL_ALLOC: tracy_client::ProfiledAllocator<std::alloc::System> =
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if env::var_os("RUST_BACKTRACE").is_none() {
+        env::set_var("RUST_BACKTRACE", "1");
+        REMOVE_RUST_BACKTRACE.store(true, Ordering::Relaxed);
+    }
+    if env::var_os("RUST_LIB_BACKTRACE").is_none() {
+        env::set_var("RUST_LIB_BACKTRACE", "0");
+        REMOVE_RUST_LIB_BACKTRACE.store(true, Ordering::Relaxed);
+    }
+
     let base_dirs = BaseDirectories::with_prefix("pinnacle")?;
     let xdg_state_dir = base_dirs.get_state_home();
 
@@ -78,6 +89,9 @@ async fn main() -> anyhow::Result<()> {
                 if let Err(err) = generate_config(config_gen.clone()) {
                     error!("Error generating config: {err}");
                 }
+            }
+            CliSubcommand::Debug(DebugSubcommand::Panic) => {
+                pinnacle::util::cause_panic();
             }
             CliSubcommand::Info => {
                 let info = format!(
@@ -134,8 +148,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let in_graphical_env =
-        std::env::var("WAYLAND_DISPLAY").is_ok() || std::env::var("DISPLAY").is_ok();
+    let in_graphical_env = env::var("WAYLAND_DISPLAY").is_ok() || env::var("DISPLAY").is_ok();
 
     let session = cli.session;
 
@@ -147,8 +160,8 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        std::env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
-        std::env::set_var("XDG_SESSION_TYPE", "wayland");
+        env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
+        env::set_var("XDG_SESSION_TYPE", "wayland");
     }
 
     if !sysinfo::set_open_files_limit(0) {
@@ -195,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
         "Setting WAYLAND_DISPLAY to {}",
         state.pinnacle.socket_name.to_string_lossy()
     );
-    std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
+    env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
 
     state
         .pinnacle

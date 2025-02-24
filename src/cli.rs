@@ -83,6 +83,10 @@ pub enum CliSubcommand {
     #[command(subcommand)]
     Config(ConfigSubcommand),
 
+    /// Commands for debugging
+    #[command(subcommand)]
+    Debug(DebugSubcommand),
+
     /// Print build and system information
     Info,
 
@@ -361,6 +365,13 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Config subcommands
+#[derive(clap::Subcommand, Debug)]
+pub enum DebugSubcommand {
+    // Panic to check backtraces
+    Panic,
 }
 
 #[cfg(test)]

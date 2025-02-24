@@ -1,6 +1,9 @@
 pub mod treediff;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 use smithay::reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit};
 use tracing::warn;
@@ -33,4 +36,11 @@ pub fn restore_nofile_rlimit() {
     if let Err(err) = setrlimit(Resource::Nofile, limits) {
         warn!("Failed to restore nofile limit: {err}");
     }
+}
+
+#[inline(never)]
+pub fn cause_panic() {
+    let a = Duration::from_secs(1);
+    let b = Duration::from_secs(2);
+    let _ = a - b;
 }
