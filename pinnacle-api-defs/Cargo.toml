@@ -5,6 +5,7 @@ description = "Tonic protobuf codegen for Pinnacle and its Rust API"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 tonic = { workspace = true }

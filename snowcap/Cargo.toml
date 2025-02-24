@@ -2,6 +2,7 @@
 name = "snowcap"
 version = "0.0.1"
 edition = "2021"
+rust-version.workspace = true
 
 [dependencies]
 smithay-client-toolkit = "0.19.2"

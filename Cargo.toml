@@ -17,6 +17,7 @@ exclude = [
 authors = ["Ottatop <ottatop1227@gmail.com>"]
 edition = "2021"
 repository = "https://github.com/pinnacle-comp/pinnacle/"
+rust-version = "1.82"
 
 [workspace.dependencies]
 # Tokio
@@ -97,6 +98,7 @@ description = "A WIP Smithay-based Wayland compositor"
 readme = "README.md"
 repository.workspace = true
 keywords = ["wayland", "compositor", "smithay", "lua"]
+rust-version.workspace = true
 
 [dependencies]
 # Smithay
