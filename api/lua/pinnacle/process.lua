@@ -30,7 +30,14 @@ local child_module = {}
 ---
 ---@return pinnacle.process.Child
 function child_module.new_child(child)
-    setmetatable(child, { __index = Child })
+    setmetatable(child, {
+        __index = Child,
+        __gc = function(self)
+            client.loop:wrap(function()
+                self:wait()
+            end)
+        end,
+    })
     return child
 end
 
