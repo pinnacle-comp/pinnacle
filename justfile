@@ -34,11 +34,6 @@ clean: clean-snowcap
 
 # Run `cargo build`
 build *args: gen-lua-pb-defs
-    #!/usr/bin/env bash
-    set -exo pipefail
-    if hash mold 2>/dev/null; then
-        export RUSTFLAGS="$RUSTFLAGS -C link-arg=-fuse-ld=mold"
-    fi
     cargo build {{args}}
 
 # Generate the protobuf definitions Lua file
@@ -50,20 +45,10 @@ gen-lua-pb-defs:
 
 # Run `cargo run`
 run *args: gen-lua-pb-defs
-    #!/usr/bin/env bash
-    set -exo pipefail
-    if hash mold 2>/dev/null; then
-        export RUSTFLAGS="$RUSTFLAGS -C link-arg=-fuse-ld=mold"
-    fi
     cargo run {{args}}
 
 # Run `cargo test`
 test *args: gen-lua-pb-defs
-    #!/usr/bin/env bash
-    set -exo pipefail
-    if hash mold 2>/dev/null; then
-        export RUSTFLAGS="$RUSTFLAGS -C link-arg=-fuse-ld=mold"
-    fi
     cargo test --no-default-features {{args}}
 
 compile-wlcs:
