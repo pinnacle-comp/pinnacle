@@ -9,7 +9,10 @@ impl State {
             self.capture_snapshots_on_output(output, [window.clone()]);
         }
 
-        self.pinnacle.update_window_state(window);
+        self.pinnacle.configure_window_if_nontiled(window);
+        if let Some(toplevel) = window.toplevel() {
+            toplevel.send_configure();
+        }
 
         if let Some(output) = window.output(&self.pinnacle) {
             self.pinnacle.begin_layout_transaction(&output);

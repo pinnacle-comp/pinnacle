@@ -250,7 +250,7 @@ where
         .map(|(i, win)| {
             win.with_state_mut(|state| state.offscreen_elem_id.take());
 
-            if win.with_state(|state| state.window_state.is_fullscreen()) {
+            if win.with_state(|state| state.layout_mode.is_fullscreen()) {
                 last_fullscreen_split_at = i + 1;
             }
 

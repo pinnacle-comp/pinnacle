@@ -38,6 +38,7 @@ impl State {
             .or_else(|| {
                 self.pinnacle
                     .unmapped_window_for_surface(toplevel.wl_surface())
+                    .map(|unmapped| &unmapped.window)
             })
             .and_then(|window| window.with_state(|state| state.decoration_mode))
             .map(|mode| match mode {
@@ -76,6 +77,7 @@ impl State {
             .or_else(|| {
                 self.pinnacle
                     .unmapped_window_for_surface(toplevel.wl_surface())
+                    .map(|unmapped| &unmapped.window)
             })
             .and_then(|window| window.with_state(|state| state.decoration_mode))
             .map(|mode| match mode {
@@ -108,6 +110,7 @@ impl State {
             .or_else(|| {
                 self.pinnacle
                     .unmapped_window_for_surface(toplevel.wl_surface())
+                    .map(|unmapped| &unmapped.window)
             })
             .and_then(|window| window.with_state(|state| state.decoration_mode))
             .map(|mode| match mode {
@@ -156,7 +159,11 @@ impl KdeDecorationHandler for State {
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)
-            .or_else(|| self.pinnacle.unmapped_window_for_surface(surface))
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_surface(surface)
+                    .map(|unmapped| &unmapped.window)
+            })
             .and_then(|win| win.toplevel().cloned())
         else {
             debug!("kde-decoration: New decoration but no toplevel");
@@ -193,7 +200,11 @@ impl KdeDecorationHandler for State {
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)
-            .or_else(|| self.pinnacle.unmapped_window_for_surface(surface))
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_surface(surface)
+                    .map(|unmapped| &unmapped.window)
+            })
             .and_then(|win| win.toplevel().cloned())
         else {
             debug!("kde-decoration: Request mode but no toplevel");
@@ -220,7 +231,11 @@ impl KdeDecorationHandler for State {
         let Some(toplevel) = self
             .pinnacle
             .window_for_surface(surface)
-            .or_else(|| self.pinnacle.unmapped_window_for_surface(surface))
+            .or_else(|| {
+                self.pinnacle
+                    .unmapped_window_for_surface(surface)
+                    .map(|unmapped| &unmapped.window)
+            })
             .and_then(|win| win.toplevel().cloned())
         else {
             debug!("kde-decoration: Release mode but no toplevel");

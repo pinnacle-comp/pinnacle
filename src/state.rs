@@ -13,7 +13,10 @@ use crate::{
     cursor::CursorState,
     focus::OutputFocusStack,
     grab::resize_grab::ResizeSurfaceState,
-    handlers::{session_lock::LockState, xwayland::XwaylandState},
+    handlers::{
+        session_lock::LockState, xdg_activation::XDG_ACTIVATION_TOKEN_TIMEOUT,
+        xwayland::XwaylandState,
+    },
     layout::LayoutState,
     process::ProcessState,
     protocol::{
@@ -23,7 +26,7 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::{rules::WindowRuleState, WindowElement},
+    window::{rules::WindowRuleState, Unmapped, WindowElement},
 };
 use anyhow::Context;
 use indexmap::IndexMap;
@@ -43,7 +46,12 @@ use smithay::{
     input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
     output::Output,
     reexports::{
-        calloop::{generic::Generic, Interest, LoopHandle, LoopSignal, Mode, PostAction},
+        calloop::{
+            generic::Generic,
+            timer::{TimeoutAction, Timer},
+            Interest, LoopHandle, LoopSignal, Mode, PostAction,
+        },
+        wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities,
         wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager,
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason, GlobalId},
@@ -175,8 +183,8 @@ pub struct Pinnacle {
 
     /// The main window vec
     pub windows: Vec<WindowElement>,
-    /// Windows with no buffer.
-    pub unmapped_windows: Vec<WindowElement>,
+    /// Windows with no buffer attached
+    pub unmapped_windows: Vec<Unmapped>,
 
     pub config: Config,
 
@@ -234,19 +242,6 @@ impl State {
         self.pinnacle.refresh_idle_inhibit();
 
         self.backend.render_scheduled_outputs(&mut self.pinnacle);
-
-        #[cfg(feature = "snowcap")]
-        if self
-            .pinnacle
-            .snowcap_join_handle
-            .as_ref()
-            .is_some_and(|handle| handle.is_finished())
-        {
-            // If Snowcap is dead, the config has most likely crashed or will crash if it's used.
-            // The embedded config will also fail to start.
-            // We'll panic here just so people aren't stuck in the compositor.
-            panic!("snowcap has exited");
-        }
 
         {
             let _span = tracy_client::span!("Check for ready layout transactions");
@@ -340,6 +335,20 @@ impl Pinnacle {
             filter_restricted_client,
         );
 
+        loop_handle
+            .insert_source(Timer::immediate(), |_, _, state| {
+                state
+                    .pinnacle
+                    .xdg_activation_state
+                    .retain_tokens(|_, data| {
+                        data.timestamp.elapsed() < XDG_ACTIVATION_TOKEN_TIMEOUT
+                    });
+                TimeoutAction::ToDuration(XDG_ACTIVATION_TOKEN_TIMEOUT)
+            })
+            .map_err(|err| {
+                anyhow::anyhow!("failed to insert xdg activation token cleanup source: {err}")
+            })?;
+
         let pinnacle = Pinnacle {
             loop_signal,
             loop_handle: loop_handle.clone(),
@@ -353,7 +362,10 @@ impl Pinnacle {
             shm_state: ShmState::new::<State>(&display_handle, vec![]),
             space: Space::<WindowElement>::default(),
             output_manager_state: OutputManagerState::new_with_xdg_output::<State>(&display_handle),
-            xdg_shell_state: XdgShellState::new::<State>(&display_handle),
+            xdg_shell_state: XdgShellState::new_with_capabilities::<State>(
+                &display_handle,
+                [WmCapabilities::Fullscreen, WmCapabilities::Maximize],
+            ),
             viewporter_state: ViewporterState::new::<State>(&display_handle),
             fractional_scale_manager_state: FractionalScaleManagerState::new::<State>(
                 &display_handle,
@@ -429,7 +441,7 @@ impl Pinnacle {
             popup_manager: PopupManager::default(),
 
             windows: Vec::new(),
-            unmapped_windows: Vec::new(),
+            unmapped_windows: Default::default(),
 
             xwayland_state: None,
 

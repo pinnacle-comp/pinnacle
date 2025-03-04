@@ -1,9 +1,17 @@
-use smithay::desktop::WindowSurface;
+use indexmap::IndexSet;
+use smithay::{
+    desktop::WindowSurface,
+    output::Output,
+    utils::{Logical, Point, Size},
+};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::state::WithState;
+use crate::{state::WithState, tag::Tag};
 
-use super::{window_state::WindowId, WindowElement};
+use super::{
+    window_state::{LayoutMode, WindowId},
+    WindowElement,
+};
 
 use std::{
     collections::HashMap,
@@ -26,9 +34,25 @@ pub struct WindowRuleState {
     current_request_id: u32,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct WindowRules {
+    pub layout_mode: Option<LayoutMode>,
+    pub focused: Option<bool>,
+    pub floating_loc: Option<Point<f64, Logical>>,
+    pub floating_size: Option<Size<i32, Logical>>,
+    pub decoration_mode: Option<DecorationMode>,
+    pub tags: IndexSet<Tag>,
+}
+
+impl WindowRules {
+    pub fn set_tags_to_output(&mut self, output: &Output) {
+        super::set_tags_to_output(&mut self.tags, output);
+    }
+}
+
 impl WindowRuleState {
     /// Returns whether a request was sent
-    pub fn new_request(&mut self, window: WindowElement) -> bool {
+    pub fn new_request(&mut self, window: &WindowElement) -> bool {
         let _span = tracy_client::span!("WindowRuleState::new_request");
 
         let window_rule_already_finished = match window.underlying_surface() {
@@ -39,7 +63,7 @@ impl WindowRuleState {
             return true;
         }
 
-        if self.pending_windows.contains_key(&window) {
+        if self.pending_windows.contains_key(window) {
             return true;
         }
 
@@ -71,7 +95,7 @@ impl WindowRuleState {
             waiting_on,
         };
 
-        self.pending_windows.insert(window, pending_request);
+        self.pending_windows.insert(window.clone(), pending_request);
 
         true
     }

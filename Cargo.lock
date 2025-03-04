@@ -3243,6 +3243,7 @@ dependencies = [
  "pinnacle-api-defs",
  "profiling",
  "prost",
+ "scopeguard",
  "sd-notify",
  "serde",
  "shellexpand",

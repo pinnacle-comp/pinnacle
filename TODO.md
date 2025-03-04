@@ -5,7 +5,6 @@
 - Use env for snowcap socket dir
 - Don't log to local/state
 
-- Streamline handling of unmapped windows
 - Use xdg activation to activate new compositor-spawned windows
 - Work on `ConnectorSavedState`
 

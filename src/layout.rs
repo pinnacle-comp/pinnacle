@@ -19,7 +19,7 @@ use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
     tag::TagId,
-    window::{window_state::WindowState, WindowElement},
+    window::{window_state::LayoutModeKind, WindowElement},
 };
 
 use self::transaction::LayoutTransaction;
@@ -43,7 +43,7 @@ impl Pinnacle {
         });
 
         for win in to_unmap {
-            if win.with_state(|state| state.window_state.is_floating()) {
+            if win.with_state(|state| state.layout_mode.is_floating()) {
                 if let Some(loc) = self.space.element_location(&win) {
                     win.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
                 }
@@ -54,7 +54,7 @@ impl Pinnacle {
         let tiled_windows = windows_on_foc_tags
             .iter()
             .filter(|win| !win.is_x11_override_redirect())
-            .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
+            .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
             .cloned();
 
         let output_geo = self.space.output_geometry(output).expect("no output geo");
@@ -70,35 +70,24 @@ impl Pinnacle {
         }));
 
         for (win, geo) in zipped.by_ref() {
-            win.change_geometry(Some(geo.loc.to_f64()), geo.size);
+            win.set_tiled_states();
+            match win.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    toplevel.with_pending_state(|state| {
+                        state.size = Some(geo.size);
+                    });
+                }
+                WindowSurface::X11(surface) => {
+                    let _ = surface.configure(geo);
+                }
+            }
             self.space.map_element(win, geo.loc, false);
         }
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
         for win in remaining_wins {
-            win.with_state_mut(|state| state.window_state.set_floating(true));
-            self.update_window_state(&win);
-            if let Some(toplevel) = win.toplevel() {
-                toplevel.send_pending_configure();
-            }
-            // TODO: will prolly need to map here
-        }
-
-        for window in windows_on_foc_tags.iter() {
-            match window.with_state(|state| state.window_state) {
-                WindowState::Fullscreen { .. } => {
-                    window.change_geometry(Some(output_geo.loc.to_f64()), output_geo.size);
-                    self.space
-                        .map_element(window.clone(), output_geo.loc, false);
-                }
-                WindowState::Maximized { .. } => {
-                    let loc = output_geo.loc + non_exclusive_geo.loc;
-                    window.change_geometry(Some(loc.to_f64()), non_exclusive_geo.size);
-                    self.space.map_element(window.clone(), loc, false);
-                }
-                _ => (),
-            }
+            self.space.unmap_elem(&win);
         }
 
         let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
@@ -110,17 +99,22 @@ impl Pinnacle {
                 }
             }
 
-            let floating_loc = win
-                .with_state(|state| {
-                    state
-                        .window_state
-                        .is_floating()
-                        .then_some(state.floating_loc)
-                })
-                .flatten();
-            if let Some(loc) = floating_loc {
-                self.space
-                    .map_element(win.clone(), loc.to_i32_round(), false);
+            match win.with_state(|state| state.layout_mode.current()) {
+                LayoutModeKind::Tiled => (),
+                LayoutModeKind::Floating => {
+                    let floating_loc = win.with_state(|state| state.floating_loc);
+                    if let Some(loc) = floating_loc {
+                        self.space
+                            .map_element(win.clone(), loc.to_i32_round(), false);
+                    }
+                }
+                LayoutModeKind::Maximized => {
+                    let loc = output_geo.loc + non_exclusive_geo.loc;
+                    self.space.map_element(win.clone(), loc, false);
+                }
+                LayoutModeKind::Fullscreen => {
+                    self.space.map_element(win.clone(), output_geo.loc, false);
+                }
             }
         }
 
@@ -207,7 +201,7 @@ impl Pinnacle {
 
         let window_count = windows_on_foc_tags
             .iter()
-            .filter(|win| win.with_state(|state| state.window_state.is_tiled()))
+            .filter(|win| win.with_state(|state| state.layout_mode.is_tiled()))
             .count();
 
         let tag_ids = output.with_state(|state| state.focused_tags().map(|tag| tag.id()).collect());

@@ -226,7 +226,7 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         ));
 
         self.window
-            .with_state_mut(|state| state.floating_size = Some(self.last_window_size));
+            .with_state_mut(|state| state.floating_size = self.last_window_size);
 
         match self.window.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
@@ -408,11 +408,11 @@ impl ResizeSurfaceState {
 
 impl Pinnacle {
     pub fn move_surface_if_resized(&mut self, surface: &WlSurface) {
-        let Some(window) = self.window_for_surface(surface) else {
+        let Some(window) = self.window_for_surface(surface).cloned() else {
             return;
         };
 
-        if window.with_state(|state| !state.window_state.is_floating()) {
+        if window.with_state(|state| !state.layout_mode.is_floating()) {
             return;
         }
 
@@ -464,10 +464,6 @@ impl Pinnacle {
         });
 
         if new_loc.0.is_some() || new_loc.1.is_some() {
-            // FIXME: space maps with i32 not f64
-            self.space
-                .map_element(window.clone(), window_loc.to_i32_round(), false);
-
             if let Some(surface) = window.x11_surface() {
                 if !surface.is_override_redirect() {
                     let geo = surface.geometry();
@@ -478,6 +474,10 @@ impl Pinnacle {
                         .expect("failed to configure x11 win");
                 }
             }
+
+            // FIXME: space maps with i32 not f64
+            self.space
+                .map_element(window, window_loc.to_i32_round(), false);
         }
     }
 }
@@ -495,22 +495,24 @@ impl State {
         let pointer = seat.get_pointer().expect("seat had no pointer");
 
         if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
-            let Some(window) = self.pinnacle.window_for_surface(surface) else {
+            let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
                 tracing::error!("Surface had no window, cancelling resize request");
                 return;
             };
 
-            if window.with_state(|state| !state.window_state.is_floating()) {
+            if window.with_state(|state| !state.layout_mode.is_floating()) {
                 return;
             }
 
             // FIXME: space stores loc as i32
-            let initial_window_loc = self
+            let Some(initial_window_loc) = self
                 .pinnacle
                 .space
                 .element_location(&window)
-                .expect("resize request called on unmapped window")
-                .to_f64();
+                .map(|loc| loc.to_f64())
+            else {
+                return;
+            };
             let initial_window_size = window.geometry().size;
 
             if let Some(window) = self.pinnacle.window_for_surface(surface) {
@@ -549,12 +551,12 @@ impl State {
     ) {
         let pointer = seat.get_pointer().expect("seat had no pointer");
 
-        let Some(window) = self.pinnacle.window_for_surface(surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
             tracing::error!("Surface had no window, cancelling resize request");
             return;
         };
 
-        if window.with_state(|state| !state.window_state.is_floating()) {
+        if window.with_state(|state| !state.layout_mode.is_floating()) {
             return;
         }
 

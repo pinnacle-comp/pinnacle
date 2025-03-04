@@ -46,6 +46,13 @@ impl State {
                 .signal_state
                 .window_focused
                 .signal(focused_win);
+        } else {
+            for win in self.pinnacle.windows.iter() {
+                win.set_activate(false);
+                if let Some(toplevel) = win.toplevel() {
+                    toplevel.send_pending_configure();
+                }
+            }
         }
 
         keyboard.set_focus(

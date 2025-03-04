@@ -5,12 +5,11 @@ use smithay::{
         PopupPointerGrab, PopupUngrabStrategy, Window, WindowSurfaceType,
     },
     input::{pointer::Focus, Seat},
-    output::Output,
     reexports::{
-        wayland_protocols::xdg::shell::server::xdg_toplevel::{self, ResizeEdge},
+        wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
         wayland_server::{
             protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
-            DisplayHandle, Resource,
+            DisplayHandle,
         },
     },
     utils::Serial,
@@ -25,7 +24,7 @@ use smithay::{
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
-    window::WindowElement,
+    window::{window_state::LayoutMode, Unmapped, WindowElement},
 };
 
 impl XdgShellHandler for State {
@@ -36,22 +35,28 @@ impl XdgShellHandler for State {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::new_toplevel");
 
-        surface.with_pending_state(|state| {
-            // state.size = Some((600, 400).into()); // gets wleird-slow-ack working
-            state.states.set(xdg_toplevel::State::TiledTop);
-            state.states.set(xdg_toplevel::State::TiledBottom);
-            state.states.set(xdg_toplevel::State::TiledLeft);
-            state.states.set(xdg_toplevel::State::TiledRight);
-        });
-
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
-        self.pinnacle.unmapped_windows.push(window);
+
+        self.pinnacle.unmapped_windows.push(Unmapped {
+            window,
+            activation_token_data: None,
+            window_rules: Default::default(),
+        });
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::toplevel_destroyed");
 
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
+        // FIXME: `remove_window` also does a retain on unmapped_windows
+        self.pinnacle
+            .unmapped_windows
+            .retain(|unmapped| unmapped.window.toplevel() != Some(&surface));
+
+        let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        else {
             return;
         };
 
@@ -148,6 +153,7 @@ impl XdgShellHandler for State {
         if let Some(root) = find_popup_root_surface(&popup_kind).ok().and_then(|root| {
             self.pinnacle
                 .window_for_surface(&root)
+                .cloned()
                 .map(KeyboardFocusTarget::Window)
                 .or_else(|| {
                     self.pinnacle.space.outputs().find_map(|op| {
@@ -190,99 +196,72 @@ impl XdgShellHandler for State {
         }
     }
 
-    fn fullscreen_request(&mut self, surface: ToplevelSurface, mut wl_output: Option<WlOutput>) {
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _wl_output: Option<WlOutput>) {
         let _span = tracy_client::span!("XdgShellHandler::fullscreen_request");
 
-        if !surface
-            .current_state()
-            .capabilities
-            .contains(xdg_toplevel::WmCapabilities::Fullscreen)
+        // TODO: Respect client output preference
+
+        if let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
         {
-            return;
-        }
-
-        let wl_surface = surface.wl_surface();
-        let output = wl_output
-            .as_ref()
-            .and_then(Output::from_resource)
-            .or_else(|| {
-                self.pinnacle
-                    .window_for_surface(wl_surface)
-                    .and_then(|window| {
-                        self.pinnacle
-                            .space
-                            .outputs_for_element(&window)
-                            .first()
-                            .cloned()
-                    })
-            });
-
-        if let Some(output) = output {
-            let Some(geometry) = self.pinnacle.space.output_geometry(&output) else {
-                surface.send_configure();
-                return;
-            };
-
-            let client = self
-                .pinnacle
-                .display_handle
-                .get_client(wl_surface.id())
-                .expect("wl_surface had no client");
-            for output in output.client_outputs(&client) {
-                wl_output = Some(output);
-            }
-
-            surface.with_pending_state(|state| {
-                state.size = Some(geometry.size);
-                state.fullscreen_output = wl_output;
-            });
-
-            let Some(window) = self.pinnacle.window_for_surface(wl_surface) else {
-                return;
-            };
-
-            window.with_state_mut(|state| state.window_state.set_fullscreen(true));
+            window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
             self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(surface.wl_surface())
+        {
+            if unmapped.window_rules.layout_mode.is_none() {
+                unmapped.window_rules.layout_mode = Some(LayoutMode::fullscreen());
+            }
         }
-
-        surface.send_configure();
     }
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::unfullscreen_request");
 
-        surface.with_pending_state(|state| {
-            state.fullscreen_output.take();
-        });
-
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.window_state.set_fullscreen(false));
-        self.update_window_state_and_layout(&window);
+        if let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        {
+            window.with_state_mut(|state| state.layout_mode.set_fullscreen(false));
+            self.update_window_state_and_layout(&window);
+        }
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::maximize_request");
 
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.window_state.set_maximized(true));
-        self.update_window_state_and_layout(&window);
+        if let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        {
+            window.with_state_mut(|state| state.layout_mode.set_maximized(true));
+            self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(surface.wl_surface())
+        {
+            if unmapped.window_rules.layout_mode.is_none() {
+                unmapped.window_rules.layout_mode = Some(LayoutMode::maximized());
+            }
+        }
     }
 
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::unmaximize_request");
 
-        let Some(window) = self.pinnacle.window_for_surface(surface.wl_surface()) else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.window_state.set_maximized(false));
-        self.update_window_state_and_layout(&window);
+        if let Some(window) = self
+            .pinnacle
+            .window_for_surface(surface.wl_surface())
+            .cloned()
+        {
+            window.with_state_mut(|state| state.layout_mode.set_maximized(false));
+            self.update_window_state_and_layout(&window);
+        }
     }
 
     fn minimize_request(&mut self, _surface: ToplevelSurface) {
@@ -291,8 +270,6 @@ impl XdgShellHandler for State {
         //     self.space.unmap_elem(&window);
         // }
     }
-
-    // TODO: impl the rest of the fns in XdgShellHandler
 }
 delegate_xdg_shell!(State);
 
@@ -317,7 +294,7 @@ pub fn snapshot_pre_commit_hook(
         let Some(output) = window.output(&state.pinnacle) else {
             return;
         };
-        let Some(loc) = state.pinnacle.space.element_location(&window) else {
+        let Some(loc) = state.pinnacle.space.element_location(window) else {
             return;
         };
 

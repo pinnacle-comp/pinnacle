@@ -59,15 +59,13 @@ impl PointerGrab<State> for MoveSurfaceGrab {
 
         let is_floating = self
             .window
-            .with_state(|state| state.window_state.is_floating());
+            .with_state(|state| state.layout_mode.is_floating());
 
         if is_floating {
             let tag_output = self.window.output(&state.pinnacle);
             if let Some(focused_output) = state.pinnacle.focused_output() {
                 if Some(focused_output) != tag_output.as_ref() {
-                    state
-                        .pinnacle
-                        .place_window_on_output(&self.window, focused_output);
+                    self.window.set_tags_to_output(focused_output);
                 }
             }
 
@@ -107,9 +105,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                         state.capture_snapshots_on_output(tag_output, []);
                     }
 
-                    state
-                        .pinnacle
-                        .place_window_on_output(&self.window, &focused_output);
+                    self.window.set_tags_to_output(&focused_output);
 
                     state.pinnacle.begin_layout_transaction(&focused_output);
                     state.pinnacle.request_layout(&focused_output);
@@ -148,7 +144,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                     return;
                 }
 
-                if window_under.with_state(|state| state.window_state.is_floating()) {
+                if window_under.with_state(|state| state.layout_mode.is_floating()) {
                     return;
                 }
 
@@ -300,17 +296,20 @@ impl State {
     pub fn move_request_client(&mut self, surface: &WlSurface, seat: &Seat<State>, serial: Serial) {
         let pointer = seat.get_pointer().expect("seat had no pointer");
         if let Some(start_data) = crate::grab::pointer_grab_start_data(&pointer, surface, serial) {
-            let Some(window) = self.pinnacle.window_for_surface(surface) else {
+            let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
                 warn!("Surface had no window, cancelling move request");
                 return;
             };
 
-            let initial_window_loc = self
+            let Some(initial_window_loc) = self
                 .pinnacle
                 .space
                 .element_location(&window)
-                .expect("move request was called on an unmapped window")
-                .to_f64();
+                .map(|loc| loc.to_f64())
+            else {
+                warn!("Window was not mapped, cancelling move request");
+                return;
+            };
 
             let grab = MoveSurfaceGrab {
                 start_data,
@@ -333,7 +332,7 @@ impl State {
         button_used: u32,
     ) {
         let pointer = seat.get_pointer().expect("seat had no pointer");
-        let Some(window) = self.pinnacle.window_for_surface(surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(surface).cloned() else {
             warn!("Surface had no window, cancelling move request");
             return;
         };

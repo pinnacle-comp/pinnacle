@@ -5,22 +5,30 @@ pub mod rules;
 use std::{cell::RefCell, ops::Deref};
 
 use indexmap::IndexSet;
+use rules::{DecorationMode, WindowRules};
 use smithay::{
-    backend::renderer::utils::with_renderer_surface_state,
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{IsAlive, Logical, Point, Rectangle, Serial, Size},
+    reexports::{
+        wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
+        wayland_server::protocol::wl_surface::WlSurface,
+    },
+    utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor,
         seat::WaylandFocus,
         shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+        xdg_activation::XdgActivationTokenData,
     },
     xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
+use window_state::LayoutMode;
 
-use crate::state::{Pinnacle, State, WithState};
+use crate::{
+    state::{Pinnacle, State, WithState},
+    tag::Tag,
+};
 
 use self::window_state::WindowElementState;
 
@@ -52,39 +60,6 @@ impl PartialEq<WindowElement> for &WindowElement {
 impl WindowElement {
     pub fn new(window: Window) -> Self {
         Self(window)
-    }
-
-    /// Send a geometry change without mapping windows or sending
-    /// configures to Wayland windows.
-    ///
-    /// Xwayland windows will still receive a configure.
-    ///
-    /// RefCell Safety: This method uses a [`RefCell`] on this window.
-    pub fn change_geometry(
-        &self,
-        new_loc: Option<Point<f64, Logical>>,
-        new_size: Size<i32, Logical>,
-    ) {
-        let _span = tracy_client::span!("WindowElement::change_geometry");
-
-        match self.0.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => {
-                toplevel.with_pending_state(|state| {
-                    state.size = Some(new_size);
-                });
-            }
-            WindowSurface::X11(surface) => {
-                if !surface.is_override_redirect() {
-                    // FIXME: rounded loc here
-                    surface
-                        .configure(Rectangle::new(
-                            new_loc.unwrap_or_default().to_i32_round(), // FIXME: unwrap_or_default
-                            new_size,
-                        ))
-                        .expect("failed to configure x11 win");
-                }
-            }
-        }
     }
 
     /// Get this window's class (app id in Wayland but hey old habits die hard).
@@ -209,6 +184,12 @@ impl WindowElement {
             None => false,
         }
     }
+
+    pub fn set_tags_to_output(&self, output: &Output) {
+        self.with_state_mut(|state| {
+            set_tags_to_output(&mut state.tags, output);
+        });
+    }
 }
 
 impl SpaceElement for WindowElement {
@@ -283,23 +264,31 @@ impl WithState for WindowElement {
 
 impl Pinnacle {
     /// Returns the [Window] associated with a given [WlSurface].
-    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
+    pub fn window_for_surface(&self, surface: &WlSurface) -> Option<&WindowElement> {
         let _span = tracy_client::span!("Pinnacle::window_for_surface");
 
         self.windows
             .iter()
             .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
-            .cloned()
     }
 
-    /// [`Self::window_for_surface`] but for windows that don't have a buffer.
-    pub fn unmapped_window_for_surface(&self, surface: &WlSurface) -> Option<WindowElement> {
-        let _span = tracy_client::span!("Pinnacle::unmapped_window_for_surface");
+    pub fn unmapped_window_for_surface(&self, surface: &WlSurface) -> Option<&Unmapped> {
+        self.unmapped_windows.iter().find(|win| {
+            win.window
+                .wl_surface()
+                .is_some_and(|surf| &*surf == surface)
+        })
+    }
 
-        self.unmapped_windows
-            .iter()
-            .find(|&win| win.wl_surface().is_some_and(|surf| &*surf == surface))
-            .cloned()
+    pub fn unmapped_window_for_surface_mut(
+        &mut self,
+        surface: &WlSurface,
+    ) -> Option<&mut Unmapped> {
+        self.unmapped_windows.iter_mut().find(|win| {
+            win.window
+                .wl_surface()
+                .is_some_and(|surf| &*surf == surface)
+        })
     }
 
     /// Removes a window from the main window vec, z_index stack, and focus stacks.
@@ -309,9 +298,13 @@ impl Pinnacle {
         let _span = tracy_client::span!("Pinnacle::remove_window");
 
         self.windows.retain(|win| win != window);
-        self.unmapped_windows.retain(|win| win != window);
+        self.unmapped_windows.retain(|win| win.window != window);
         if unmap {
-            self.unmapped_windows.push(window.clone());
+            self.unmapped_windows.push(Unmapped {
+                window: window.clone(),
+                activation_token_data: None,
+                window_rules: WindowRules::default(),
+            });
         }
 
         self.z_index_stack.retain(|win| win != window);
@@ -322,107 +315,96 @@ impl Pinnacle {
 
         self.space.unmap_elem(window);
     }
+}
 
-    /// Places a window on an output by setting the window's tags to the output's
-    /// currently active tags.
-    ///
-    /// Additionally sets the window as the output's current keyboard-focused window as well as removing it
-    /// from all other outputs' keyboard focus stack.
-    pub fn place_window_on_output(&self, window: &WindowElement, output: &Output) {
-        let _span = tracy_client::span!("Pinnacle::place_window_on_output");
-
-        window.with_state_mut(|state| {
-            state.tags = output.with_state(|state| {
-                let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
-                if !output_tags.is_empty() {
-                    output_tags
-                } else if let Some(first_tag) = state.tags.first() {
-                    std::iter::once(first_tag.clone()).collect()
-                } else {
-                    IndexSet::new()
-                }
-            });
-
-            tracing::debug!(
-                "Placed window on {} with tags {:?}",
-                output.name(),
-                state.tags
-            );
-        });
-
-        for op in self.outputs.keys() {
-            op.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
+fn set_tags_to_output(tags: &mut IndexSet<Tag>, output: &Output) {
+    *tags = output.with_state(|state| {
+        let output_tags = state.focused_tags().cloned().collect::<IndexSet<_>>();
+        if !output_tags.is_empty() {
+            output_tags
+        } else if let Some(first_tag) = state.tags.first() {
+            std::iter::once(first_tag.clone()).collect()
+        } else {
+            IndexSet::new()
         }
-
-        output.with_state_mut(|state| {
-            state.focus_stack.set_focus(window.clone());
-        });
-    }
+    });
 }
 
 impl State {
-    /// Maps a window it it's floating, or requests a layout otherwise.
-    pub fn map_new_window(&mut self, window: &WindowElement) {
+    /// Maps an unmapped window, inserting it into the main window vec.
+    ///
+    /// If it's floating, this will map the window onto the space.
+    /// Otherwise, it requests a layout.
+    pub fn map_new_window(&mut self, unmapped: Unmapped) {
         let _span = tracy_client::span!("State::map_new_window");
+
+        let Unmapped {
+            window,
+            activation_token_data: _, // TODO:
+            window_rules,
+        } = unmapped;
+
+        self.pinnacle.windows.push(window.clone());
 
         self.pinnacle
             .raise_window(window.clone(), window.is_on_active_tag());
 
-        if should_float(window) {
+        if window_rules.layout_mode.is_none() && should_float(&window) {
             window.with_state_mut(|state| {
-                state.window_state.set_floating(true);
+                state.layout_mode.set_floating(true);
             });
-        }
-
-        self.pinnacle.update_window_state(window);
-        if let Some(toplevel) = window.toplevel() {
-            toplevel.send_pending_configure();
         }
 
         let Some(output) = window.output(&self.pinnacle) else {
-            // FIXME: If the floating window has no tags for whatever reason, it will never map
+            // FIXME: If the window has no tags for whatever reason, it will never map
             return;
         };
 
-        output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
-        self.update_keyboard_focus(&output);
+        let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
+            return;
+        };
 
-        if let Some(maybe_loc) = window.with_state(|state| {
-            state
-                .window_state
-                .is_floating()
-                .then_some(state.floating_loc)
-        }) {
-            let output_geo = self
-                .pinnacle
-                .space
-                .output_geometry(&output)
-                .unwrap_or_default();
+        if window.with_state(|state| state.layout_mode.is_floating()) {
+            let size = window.geometry().size;
+            let loc = window
+                .with_state(|state| state.floating_loc)
+                .or_else(|| {
+                    self.pinnacle
+                        .space
+                        .element_location(&window)
+                        .map(|loc| loc.to_f64())
+                })
+                .unwrap_or_else(|| {
+                    let centered_loc = Point::from((
+                        output_geo.loc.x + output_geo.size.w / 2 - size.w / 2,
+                        output_geo.loc.y + output_geo.size.h / 2 - size.h / 2,
+                    ));
+                    centered_loc.to_f64()
+                });
 
-            let loc = maybe_loc.map(|loc| loc.to_i32_round()).unwrap_or_else(|| {
-                let size = window.geometry().size;
-                let centered_loc = Point::from((
-                    output_geo.loc.x + output_geo.size.w / 2 - size.w / 2,
-                    output_geo.loc.y + output_geo.size.h / 2 - size.h / 2,
-                ));
-                centered_loc
+            window.with_state_mut(|state| {
+                state.floating_loc = Some(loc);
             });
 
-            window.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
+            self.pinnacle
+                .space
+                .map_element(window.clone(), loc.to_i32_round(), true);
 
-            // FIXME: copied from move_grab, dedup that
             if let Some(surface) = window.x11_surface() {
-                if !surface.is_override_redirect() {
-                    let geo = surface.geometry();
-                    let new_geo = Rectangle::new(loc, geo.size);
-                    surface
-                        .configure(new_geo)
-                        .expect("failed to configure x11 win");
-                }
+                let _ = surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)));
             }
+        }
 
-            self.pinnacle.space.map_element(window.clone(), loc, true);
-        } else {
+        // TODO: xdg activation
+
+        if window_rules.focused != Some(false) {
+            // INFO: Not pushing the window to the focus stack if we get Some(false)
+            // might mess things up idk
+            output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
+            self.update_keyboard_focus(&output);
+        }
+
+        if window.with_state(|state| state.layout_mode.is_tiled()) {
             self.capture_snapshots_on_output(&output, []);
             self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
@@ -477,12 +459,44 @@ fn should_float(window: &WindowElement) -> bool {
     }
 }
 
-pub fn is_window_mapped(window: &WindowElement) -> bool {
-    match window.underlying_surface() {
-        WindowSurface::Wayland(toplevel) => {
-            with_renderer_surface_state(toplevel.wl_surface(), |state| state.buffer().is_some())
-                .unwrap_or_default()
+#[derive(Debug, Clone)]
+pub struct Unmapped {
+    pub window: WindowElement,
+    pub activation_token_data: Option<XdgActivationTokenData>,
+    pub window_rules: WindowRules,
+}
+
+impl Pinnacle {
+    pub fn apply_window_rules(&self, unmapped: &Unmapped) {
+        let WindowRules {
+            layout_mode,
+            focused: _,
+            floating_loc,
+            floating_size,
+            decoration_mode,
+            tags,
+        } = &unmapped.window_rules;
+
+        let layout_mode = layout_mode.unwrap_or(LayoutMode::tiled());
+
+        unmapped.window.with_state_mut(|state| {
+            state.layout_mode = layout_mode;
+            state.floating_loc = *floating_loc;
+            state.floating_size = floating_size.unwrap_or(state.floating_size);
+            state.decoration_mode = *decoration_mode;
+            state.tags = tags.clone();
+        });
+
+        self.configure_window_if_nontiled(&unmapped.window);
+
+        if let WindowSurface::Wayland(toplevel) = unmapped.window.underlying_surface() {
+            toplevel.with_pending_state(|state| {
+                let mode = decoration_mode.as_ref().map(|mode| match mode {
+                    DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
+                    DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
+                });
+                state.decoration_mode = mode;
+            });
         }
-        WindowSurface::X11(surface) => surface.is_mapped(),
     }
 }

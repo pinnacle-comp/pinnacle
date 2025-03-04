@@ -5,6 +5,7 @@ mod foreign_toplevel;
 pub mod idle;
 pub mod session_lock;
 pub mod window;
+pub mod xdg_activation;
 mod xdg_shell;
 pub mod xwayland;
 
@@ -20,8 +21,7 @@ use smithay::{
     delegate_layer_shell, delegate_output, delegate_pointer_constraints, delegate_pointer_gestures,
     delegate_presentation, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
     delegate_security_context, delegate_shm, delegate_single_pixel_buffer, delegate_tablet_manager,
-    delegate_viewporter, delegate_xdg_activation, delegate_xwayland_keyboard_grab,
-    delegate_xwayland_shell,
+    delegate_viewporter, delegate_xwayland_keyboard_grab, delegate_xwayland_shell,
     desktop::{
         self, find_popup_root_surface, get_popup_toplevel_coords, layer_map_for_output,
         LayerSurface, PopupKind, PopupManager, WindowSurfaceType,
@@ -79,9 +79,6 @@ use smithay::{
         },
         shm::{ShmHandler, ShmState},
         tablet_manager::TabletSeatHandler,
-        xdg_activation::{
-            XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
-        },
         xwayland_keyboard_grab::XWaylandKeyboardGrabHandler,
         xwayland_shell::{XWaylandShellHandler, XWaylandShellState},
     },
@@ -181,7 +178,6 @@ impl CompositorHandler for State {
 
         if let Some(window) = self.pinnacle.window_for_surface(&root) {
             window.mark_serial_as_committed();
-            window.on_commit();
         }
 
         // TODO: maps here, is that good?
@@ -190,7 +186,12 @@ impl CompositorHandler for State {
         // Root surface commit
         if surface == &root {
             // Unmapped window commit
-            if let Some(unmapped_window) = self.pinnacle.unmapped_window_for_surface(surface) {
+            if let Some(idx) = self
+                .pinnacle
+                .unmapped_windows
+                .iter()
+                .position(|win| win.window.wl_surface().as_deref() == Some(surface))
+            {
                 let Some(is_mapped) =
                     with_renderer_surface_state(surface, |state| state.buffer().is_some())
                 else {
@@ -199,37 +200,37 @@ impl CompositorHandler for State {
 
                 // Unmapped window has become mapped
                 if is_mapped {
-                    unmapped_window.on_commit();
+                    let unmapped = self.pinnacle.unmapped_windows.remove(idx);
 
-                    if let Some(toplevel) = unmapped_window.toplevel() {
+                    unmapped.window.on_commit();
+
+                    if let Some(toplevel) = unmapped.window.toplevel() {
                         let hook_id =
                             add_pre_commit_hook(toplevel.wl_surface(), snapshot_pre_commit_hook);
 
-                        unmapped_window
+                        unmapped
+                            .window
                             .with_state_mut(|state| state.snapshot_hook_id = Some(hook_id));
                     }
 
-                    self.pinnacle
-                        .unmapped_windows
-                        .retain(|win| win != unmapped_window);
-                    self.pinnacle.windows.push(unmapped_window.clone());
-
-                    self.map_new_window(&unmapped_window);
+                    self.map_new_window(unmapped);
                 } else {
                     // Still unmapped
 
-                    unmapped_window.on_commit();
-
                     if let Some(output) = self.pinnacle.focused_output().cloned() {
-                        self.pinnacle
-                            .place_window_on_output(&unmapped_window, &output);
+                        // My borrows have been checked
+                        let unmapped = &mut self.pinnacle.unmapped_windows[idx];
+                        unmapped.window_rules.set_tags_to_output(&output);
                     }
 
-                    if let Some(toplevel) = unmapped_window.toplevel() {
+                    let unmapped = &self.pinnacle.unmapped_windows[idx];
+                    unmapped.window.on_commit();
+
+                    if let Some(toplevel) = unmapped.window.toplevel() {
                         let window_rule_request_sent = self
                             .pinnacle
                             .window_rule_state
-                            .new_request(unmapped_window.clone());
+                            .new_request(&unmapped.window);
 
                         // If the above is false, then there are either
                         //   a. No window rules in place, or
@@ -237,6 +238,7 @@ impl CompositorHandler for State {
                         //
                         // In this case, send the initial configure here instead of waiting.
                         if !window_rule_request_sent {
+                            self.pinnacle.apply_window_rules(unmapped);
                             toplevel.send_configure();
                         }
                     }
@@ -246,7 +248,7 @@ impl CompositorHandler for State {
             }
 
             // Window surface commit
-            if let Some(window) = self.pinnacle.window_for_surface(surface) {
+            if let Some(window) = self.pinnacle.window_for_surface(surface).cloned() {
                 if window.is_wayland() {
                     let Some(is_mapped) =
                         with_renderer_surface_state(surface, |state| state.buffer().is_some())
@@ -296,9 +298,9 @@ impl CompositorHandler for State {
         }
 
         let outputs = if let Some(window) = self.pinnacle.window_for_surface(surface) {
-            self.pinnacle.space.outputs_for_element(&window) // surface is a window
+            self.pinnacle.space.outputs_for_element(window) // surface is a window
         } else if let Some(window) = self.pinnacle.window_for_surface(&root) {
-            self.pinnacle.space.outputs_for_element(&window) // surface's root is a window
+            self.pinnacle.space.outputs_for_element(window) // surface's root is a window
         } else if let Some(ref popup @ PopupKind::Xdg(ref surf)) =
             self.pinnacle.popup_manager.find_popup(surface)
         {
@@ -311,7 +313,7 @@ impl CompositorHandler for State {
             let loc = find_popup_root_surface(popup)
                 .ok()
                 .and_then(|surf| self.pinnacle.window_for_surface(&surf))
-                .and_then(|win| self.pinnacle.space.element_location(&win));
+                .and_then(|win| self.pinnacle.space.element_location(win));
 
             if let Some(loc) = loc {
                 let geo = Rectangle::new(loc, size);
@@ -428,7 +430,7 @@ impl CompositorHandler for State {
         let Some(output) = window.output(&self.pinnacle) else {
             return;
         };
-        let Some(loc) = self.pinnacle.space.element_location(&window) else {
+        let Some(loc) = self.pinnacle.space.element_location(window) else {
             return;
         };
 
@@ -649,7 +651,7 @@ impl FractionalScaleHandler for State {
                                         self.pinnacle.window_for_surface(&root).and_then(|window| {
                                             self.pinnacle
                                                 .space
-                                                .outputs_for_element(&window)
+                                                .outputs_for_element(window)
                                                 .first()
                                                 .cloned()
                                         })
@@ -659,7 +661,7 @@ impl FractionalScaleHandler for State {
                             self.pinnacle.window_for_surface(&root).and_then(|window| {
                                 self.pinnacle
                                     .space
-                                    .outputs_for_element(&window)
+                                    .outputs_for_element(window)
                                     .first()
                                     .cloned()
                             })
@@ -1012,108 +1014,11 @@ impl XWaylandKeyboardGrabHandler for State {
     fn keyboard_focus_for_xsurface(&self, surface: &WlSurface) -> Option<Self::KeyboardFocus> {
         self.pinnacle
             .window_for_surface(surface)
+            .cloned()
             .map(KeyboardFocusTarget::from)
     }
 }
 delegate_xwayland_keyboard_grab!(State);
-
-enum ActivationContext {
-    FocusIfPossible,
-    UrgentOnly,
-}
-
-impl XdgActivationHandler for State {
-    fn activation_state(&mut self) -> &mut XdgActivationState {
-        &mut self.pinnacle.xdg_activation_state
-    }
-
-    fn token_created(&mut self, token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
-        let _span = tracy_client::span!("XdgActivationHandler::token_created");
-
-        let Some((serial, seat)) = data.serial else {
-            data.user_data
-                .insert_if_missing(|| ActivationContext::UrgentOnly);
-            debug!(
-                ?token,
-                "xdg-activation: created urgent-only token for missing seat/serial"
-            );
-            return true;
-        };
-
-        let Some(seat) = Seat::<State>::from_resource(&seat) else {
-            data.user_data
-                .insert_if_missing(|| ActivationContext::UrgentOnly);
-            debug!(
-                ?token,
-                "xdg-activation: created urgent-only token for unknown seat"
-            );
-            return true;
-        };
-
-        let keyboard = seat.get_keyboard().unwrap();
-
-        let valid = keyboard
-            .last_enter()
-            .is_some_and(|last_enter| serial.is_no_older_than(&last_enter));
-
-        if valid {
-            data.user_data
-                .insert_if_missing(|| ActivationContext::FocusIfPossible);
-            debug!(?token, "xdg-activation: created focus-if-possible token");
-        } else {
-            debug!(?token, "xdg-activation: invalid token");
-        }
-
-        valid
-    }
-
-    fn request_activation(
-        &mut self,
-        _token: XdgActivationToken,
-        token_data: XdgActivationTokenData,
-        surface: WlSurface,
-    ) {
-        let _span = tracy_client::span!("XdgActivationHandler::request_activation");
-
-        let Some(context) = token_data.user_data.get::<ActivationContext>() else {
-            debug!("xdg-activation: request without context");
-            return;
-        };
-
-        let Some(window) = self.pinnacle.window_for_surface(&surface) else {
-            debug!("xdg-activation: no window for request");
-            return;
-        };
-
-        match context {
-            ActivationContext::FocusIfPossible => {
-                if window.is_on_active_tag() {
-                    // TODO: add a holder for pending activations like cosmic-comp
-
-                    let Some(output) = window.output(&self.pinnacle) else {
-                        // TODO: make "no tags" be all tags on an output
-                        debug!("xdg-activation: focus-if-possible request on window but it had no tags");
-                        return;
-                    };
-
-                    self.pinnacle.raise_window(window.clone(), true);
-
-                    output.with_state_mut(|state| {
-                        state.focus_stack.set_focus(window);
-                    });
-
-                    self.update_keyboard_focus(&output);
-
-                    self.schedule_render(&output);
-                }
-            }
-            ActivationContext::UrgentOnly => {
-                // TODO: add urgent state to windows, use in a focus border/taskbar flash
-            }
-        }
-    }
-}
-delegate_xdg_activation!(State);
 
 delegate_pointer_gestures!(State);
 
@@ -1140,7 +1045,7 @@ impl Pinnacle {
             }
 
             let (root_global_loc, output) = if let Some(win) = self.window_for_surface(&root) {
-                let win_geo = self.space.element_geometry(&win)?;
+                let win_geo = self.space.element_geometry(win)?;
                 (win_geo.loc, self.focused_output()?.clone())
             } else {
                 self.space.outputs().find_map(|op| {

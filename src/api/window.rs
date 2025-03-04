@@ -16,7 +16,7 @@ use crate::{
     handlers::decoration::KdeDecorationObject,
     state::{State, WithState},
     tag::Tag,
-    window::{is_window_mapped, rules::DecorationMode, WindowElement},
+    window::{rules::DecorationMode, WindowElement},
 };
 
 use super::StateFnSender;
@@ -54,80 +54,19 @@ pub fn set_geometry(
     window_loc.x = x.unwrap_or(window_loc.x);
     window_loc.y = y.unwrap_or(window_loc.y);
 
-    // TODO: window.geometry.size or space.elem_geo
     let mut window_size = window.geometry().size;
     window_size.w = w.map(|w| w as i32).unwrap_or(window_size.w);
     window_size.h = h.map(|h| h as i32).unwrap_or(window_size.h);
 
     window.with_state_mut(|state| {
         state.floating_loc = Some(window_loc.to_f64());
-        state.floating_size = Some(window_size);
+        state.floating_size = window_size;
     });
 
-    state.pinnacle.update_window_state(window);
-}
-
-/// Sets a window's fullscreen state.
-///
-/// If `set` is `None`, this toggles instead.
-pub fn set_fullscreen(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
-    let set = set.into();
-    match set {
-        Some(set) => {
-            window.with_state_mut(|state| state.window_state.set_fullscreen(set));
-        }
-        None => {
-            window.with_state_mut(|state| state.window_state.toggle_fullscreen());
-        }
+    state.pinnacle.configure_window_if_nontiled(window);
+    if let Some(toplevel) = window.toplevel() {
+        toplevel.send_pending_configure();
     }
-
-    if !is_window_mapped(window) {
-        return;
-    }
-
-    state.update_window_state_and_layout(window);
-}
-
-/// Sets a window's maximized state.
-///
-/// If `set` is `None`, this toggles instead.
-pub fn set_maximized(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
-    let set = set.into();
-    match set {
-        Some(set) => {
-            window.with_state_mut(|state| state.window_state.set_maximized(set));
-        }
-        None => {
-            window.with_state_mut(|state| state.window_state.toggle_maximized());
-        }
-    }
-
-    if !is_window_mapped(window) {
-        return;
-    }
-
-    state.update_window_state_and_layout(window);
-}
-
-/// Sets a window's floating state.
-///
-/// If `set` is `None`, this toggles instead.
-pub fn set_floating(state: &mut State, window: &WindowElement, set: impl Into<Option<bool>>) {
-    let set = set.into();
-    match set {
-        Some(set) => {
-            window.with_state_mut(|state| state.window_state.set_floating(set));
-        }
-        None => {
-            window.with_state_mut(|state| state.window_state.toggle_floating());
-        }
-    }
-
-    if !is_window_mapped(window) {
-        return;
-    }
-
-    state.update_window_state_and_layout(window);
 }
 
 // TODO: minimized
@@ -168,14 +107,9 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
 
     for window in state.pinnacle.space.elements() {
         if let Some(toplevel) = window.toplevel() {
-            if toplevel.is_initial_configure_sent() {
-                toplevel.send_pending_configure();
-            }
+            toplevel.send_pending_configure();
         }
     }
-
-    // TODO: check if the below is needed
-    // state.schedule_render(&output);
 }
 
 pub fn set_decoration_mode(
@@ -212,13 +146,8 @@ pub fn set_decoration_mode(
             }
         });
 
-        if toplevel.is_initial_configure_sent() {
-            toplevel.send_pending_configure();
-        }
+        toplevel.send_pending_configure();
     }
-
-    // TODO: check if the below is needed
-    // state.schedule_render(&output);
 }
 
 pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
@@ -231,10 +160,6 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
     window.with_state_mut(|state| {
         state.tags = std::iter::once(tag.clone()).collect();
     });
-
-    if !is_window_mapped(window) {
-        return;
-    }
 
     if let Some(output) = source_output.as_ref() {
         state.pinnacle.begin_layout_transaction(output);
@@ -288,10 +213,6 @@ pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl I
                 }
             });
         }
-    }
-
-    if !is_window_mapped(window) {
-        return;
     }
 
     let Some(output) = tag.output(&state.pinnacle) else {

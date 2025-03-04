@@ -14,7 +14,7 @@ impl ForeignToplevelHandler for State {
     fn activate(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::activate");
 
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface).cloned() else {
             return;
         };
         let Some(output) = window.output(&self.pinnacle) else {
@@ -55,41 +55,45 @@ impl ForeignToplevelHandler for State {
     fn set_fullscreen(&mut self, wl_surface: WlSurface, _wl_output: Option<WlOutput>) {
         let _span = tracy_client::span!("ForeignToplevelHandler::set_fullscreen");
 
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface).cloned() else {
             return;
         };
 
-        crate::api::window::set_fullscreen(self, &window, true);
+        window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unset_fullscreen(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::unset_fullscreen");
 
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface).cloned() else {
             return;
         };
 
-        crate::api::window::set_fullscreen(self, &window, false);
+        window.with_state_mut(|state| state.layout_mode.set_fullscreen(false));
+        self.update_window_state_and_layout(&window);
     }
 
     fn set_maximized(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::set_maximized");
 
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface).cloned() else {
             return;
         };
 
-        crate::api::window::set_maximized(self, &window, true);
+        window.with_state_mut(|state| state.layout_mode.set_maximized(true));
+        self.update_window_state_and_layout(&window);
     }
 
     fn unset_maximized(&mut self, wl_surface: WlSurface) {
         let _span = tracy_client::span!("ForeignToplevelHandler::unset_maximized");
 
-        let Some(window) = self.pinnacle.window_for_surface(&wl_surface) else {
+        let Some(window) = self.pinnacle.window_for_surface(&wl_surface).cloned() else {
             return;
         };
 
-        crate::api::window::set_maximized(self, &window, false);
+        window.with_state_mut(|state| state.layout_mode.set_maximized(false));
+        self.update_window_state_and_layout(&window);
     }
 
     // TODO:
