@@ -310,7 +310,7 @@ impl Pinnacle {
         self.z_index_stack.retain(|win| win != window);
 
         for output in self.outputs.keys() {
-            output.with_state_mut(|state| state.focus_stack.stack.retain(|win| win != window));
+            output.with_state_mut(|state| state.focus_stack.remove(window));
         }
 
         self.space.unmap_elem(window);
@@ -386,12 +386,14 @@ impl State {
                 state.floating_loc = Some(loc);
             });
 
-            self.pinnacle
-                .space
-                .map_element(window.clone(), loc.to_i32_round(), true);
-
             if let Some(surface) = window.x11_surface() {
                 let _ = surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)));
+            }
+
+            if window.is_on_active_tag() {
+                self.pinnacle
+                    .space
+                    .map_element(window.clone(), loc.to_i32_round(), true);
             }
         }
 
@@ -402,6 +404,12 @@ impl State {
             // might mess things up idk
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
             self.update_keyboard_focus(&output);
+        } else {
+            output.with_state_mut(|state| state.focus_stack.add_focus(window.clone()));
+        }
+
+        if !window.is_on_active_tag() {
+            return;
         }
 
         if window.with_state(|state| state.layout_mode.is_tiled()) {

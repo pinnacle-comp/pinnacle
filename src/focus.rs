@@ -140,12 +140,12 @@ impl OutputFocusStack {
 /// A stack of windows, with the top one being the one in focus.
 #[derive(Debug, Default)]
 pub struct WindowKeyboardFocusStack {
-    pub stack: Vec<WindowElement>,
+    stack: Vec<WindowElement>,
     focused: bool,
 }
 
 impl WindowKeyboardFocusStack {
-    /// Set `window` to be focused.
+    /// Sets `window` to be focused.
     ///
     /// If it's already in the stack, it will be removed then pushed.
     /// If it isn't, it will just be pushed.
@@ -155,10 +155,29 @@ impl WindowKeyboardFocusStack {
         self.focused = true;
     }
 
-    /// Unset the focus by marking this stack as unfocused.
+    /// Adds a window to the focus stack while keeping the currently focused window
+    /// still focused.
+    ///
+    /// This will insert the window one below the top of the stack.
+    pub fn add_focus(&mut self, window: WindowElement) {
+        self.stack.retain(|win| win != window);
+        let insert_idx = self.stack.len().saturating_sub(1);
+        self.stack.insert(insert_idx, window);
+    }
+
+    /// Unsets the focus by marking this stack as unfocused.
     ///
     /// This will cause [`Self::current_focus`] to return `None`.
     pub fn unset_focus(&mut self) {
         self.focused = false;
+    }
+
+    /// Removes a window from the focus stack.
+    pub fn remove(&mut self, window: &WindowElement) {
+        self.stack.retain(|win| win != window);
+    }
+
+    pub fn windows(&self) -> impl Iterator<Item = &WindowElement> {
+        self.stack.iter()
     }
 }

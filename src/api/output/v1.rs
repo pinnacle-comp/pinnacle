@@ -609,8 +609,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                     output.with_state(|state| {
                         state
                             .focus_stack
-                            .stack
-                            .iter()
+                            .windows()
                             .map(|win| win.with_state(|state| state.id.0))
                             .collect::<Vec<_>>()
                     })
