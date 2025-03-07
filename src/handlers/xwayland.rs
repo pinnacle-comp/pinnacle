@@ -75,8 +75,6 @@ impl XwmHandler for State {
             return;
         }
 
-        tracing::info!(class = surface.class());
-
         let mut unmapped = Unmapped {
             window: WindowElement::new(Window::new_x11_window(surface)),
             activation_token_data: None,
