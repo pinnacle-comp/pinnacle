@@ -2,21 +2,17 @@ mod v1;
 
 use smithay::{
     desktop::space::SpaceElement,
-    reexports::{
-        wayland_protocols::xdg::{
-            decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
-        },
-        wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration,
+    reexports::wayland_protocols::xdg::{
+        decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server,
     },
     utils::{Point, SERIAL_COUNTER},
-    wayland::{compositor, seat::WaylandFocus},
+    wayland::seat::WaylandFocus,
 };
 
 use crate::{
-    handlers::decoration::KdeDecorationObject,
     state::{State, WithState},
     tag::Tag,
-    window::{rules::DecorationMode, WindowElement},
+    window::WindowElement,
 };
 
 use super::StateFnSender;
@@ -115,36 +111,21 @@ pub fn set_focused(state: &mut State, window: &WindowElement, set: impl Into<Opt
 pub fn set_decoration_mode(
     _state: &mut State,
     window: &WindowElement,
-    decoration_mode: DecorationMode,
+    decoration_mode: zxdg_toplevel_decoration_v1::Mode,
 ) {
     window.with_state_mut(|state| {
         state.decoration_mode = Some(decoration_mode);
     });
+
     if let Some(toplevel) = window.toplevel() {
         toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(match decoration_mode {
-                DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
-                DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
-            })
+            state.decoration_mode = Some(decoration_mode);
         });
 
-        compositor::with_states(toplevel.wl_surface(), |states| {
-            let kde_decoration = states.data_map.get::<KdeDecorationObject>();
-            if let Some(kde_decoration) = kde_decoration {
-                if let Some(object) = kde_decoration
-                    .borrow()
-                    .as_ref()
-                    .and_then(|obj| obj.upgrade().ok())
-                {
-                    let mode = match decoration_mode {
-                        DecorationMode::ClientSide => org_kde_kwin_server_decoration::Mode::Client,
-                        DecorationMode::ServerSide => org_kde_kwin_server_decoration::Mode::Server,
-                    };
-                    tracing::debug!(?mode, "Window rule set KDE decoration mode");
-                    object.mode(mode);
-                }
-            }
-        });
+        crate::handlers::decoration::update_kde_decoration_mode(
+            toplevel.wl_surface(),
+            decoration_mode,
+        );
 
         toplevel.send_pending_configure();
     }

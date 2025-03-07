@@ -2,6 +2,7 @@ use indexmap::IndexSet;
 use smithay::{
     desktop::WindowSurface,
     output::Output,
+    reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Logical, Point, Size},
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -21,12 +22,6 @@ use std::{
     },
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DecorationMode {
-    ClientSide,
-    ServerSide,
-}
-
 #[derive(Debug, Default)]
 pub struct WindowRuleState {
     pub pending_windows: HashMap<WindowElement, PendingWindowRuleRequest>,
@@ -40,7 +35,7 @@ pub struct WindowRules {
     pub focused: Option<bool>,
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Option<Size<i32, Logical>>,
-    pub decoration_mode: Option<DecorationMode>,
+    pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub tags: IndexSet<Tag>,
 }
 

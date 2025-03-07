@@ -21,6 +21,7 @@ use pinnacle_api_defs::pinnacle::{
 };
 use smithay::{
     desktop::WindowSurface,
+    reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Point, Size},
 };
 use tonic::{Request, Status, Streaming};
@@ -471,8 +472,8 @@ impl v1::window_service_server::WindowService for super::WindowService {
             v1::DecorationMode::Unspecified => {
                 return Err(Status::invalid_argument("decoration mode was unspecified"))
             }
-            v1::DecorationMode::ClientSide => crate::window::rules::DecorationMode::ClientSide,
-            v1::DecorationMode::ServerSide => crate::window::rules::DecorationMode::ServerSide,
+            v1::DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
+            v1::DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
         };
 
         run_unary_no_response(&self.sender, move |state| {

@@ -20,10 +20,7 @@ use smithay::{
 };
 use tracing::debug;
 
-use crate::{
-    state::{State, WithState},
-    window::rules::DecorationMode,
-};
+use crate::state::{State, WithState};
 
 impl State {
     fn new_decoration(
@@ -40,15 +37,10 @@ impl State {
                     .unmapped_window_for_surface(toplevel.wl_surface())
                     .map(|unmapped| &unmapped.window)
             })
-            .and_then(|window| window.with_state(|state| state.decoration_mode))
-            .map(|mode| match mode {
-                DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
-                DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
-            });
+            .and_then(|window| window.with_state(|state| state.decoration_mode));
 
         toplevel.with_pending_state(|state| {
-            state.decoration_mode =
-                Some(window_rule_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide));
+            state.decoration_mode = window_rule_mode;
         });
 
         window_rule_mode
@@ -71,60 +63,56 @@ impl State {
     ) -> org_kde_kwin_server_decoration::Mode {
         let _span = tracy_client::span!("State::request_mode");
 
-        let window_rule_mode = self
-            .pinnacle
-            .window_for_surface(toplevel.wl_surface())
-            .or_else(|| {
-                self.pinnacle
-                    .unmapped_window_for_surface(toplevel.wl_surface())
-                    .map(|unmapped| &unmapped.window)
-            })
-            .and_then(|window| window.with_state(|state| state.decoration_mode))
-            .map(|mode| match mode {
-                DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
-                DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
+        if let Some(window) = self.pinnacle.window_for_surface(toplevel.wl_surface()) {
+            let window_rule_mode = window.with_state(|state| state.decoration_mode);
+
+            toplevel.with_pending_state(|state| {
+                state.decoration_mode = Some(window_rule_mode.unwrap_or(mode));
             });
 
-        toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(window_rule_mode.unwrap_or(mode));
-        });
+            toplevel.send_configure();
 
-        if toplevel.is_initial_configure_sent() {
-            toplevel.send_pending_configure();
-        }
-
-        match window_rule_mode.unwrap_or(mode) {
-            zxdg_toplevel_decoration_v1::Mode::ServerSide => {
-                org_kde_kwin_server_decoration::Mode::Server
+            match window_rule_mode.unwrap_or(mode) {
+                zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                    org_kde_kwin_server_decoration::Mode::Server
+                }
+                _ => org_kde_kwin_server_decoration::Mode::Client,
             }
-            _ => org_kde_kwin_server_decoration::Mode::Client,
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(toplevel.wl_surface())
+        {
+            if unmapped.window_rules.decoration_mode.is_none() {
+                unmapped.window_rules.decoration_mode = Some(mode);
+            }
+
+            match unmapped.window_rules.decoration_mode.unwrap_or(mode) {
+                zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                    org_kde_kwin_server_decoration::Mode::Server
+                }
+                _ => org_kde_kwin_server_decoration::Mode::Client,
+            }
+        } else {
+            org_kde_kwin_server_decoration::Mode::Client
         }
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
         let _span = tracy_client::span!("State::unset_mode");
 
-        let window_rule_mode = self
-            .pinnacle
-            .window_for_surface(toplevel.wl_surface())
-            .or_else(|| {
-                self.pinnacle
-                    .unmapped_window_for_surface(toplevel.wl_surface())
-                    .map(|unmapped| &unmapped.window)
-            })
-            .and_then(|window| window.with_state(|state| state.decoration_mode))
-            .map(|mode| match mode {
-                DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
-                DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
+        if let Some(window) = self.pinnacle.window_for_surface(toplevel.wl_surface()) {
+            let window_rule_mode = window.with_state(|state| state.decoration_mode);
+
+            toplevel.with_pending_state(|state| {
+                state.decoration_mode = window_rule_mode;
             });
 
-        toplevel.with_pending_state(|state| {
-            state.decoration_mode = window_rule_mode;
-        });
-
-        if toplevel.is_initial_configure_sent() {
             toplevel.send_pending_configure();
         }
+        // FIXME: for unmapped windows:
+        // An unset cannot tell whether the decoration mode in a window rule
+        // was set by the config or by a decoration protocol.
+        // We are ignoring unsets here until this is fixed.
     }
 }
 
@@ -146,7 +134,7 @@ impl XdgDecorationHandler for State {
 }
 delegate_xdg_decoration!(State);
 
-pub type KdeDecorationObject = RefCell<Option<Weak<OrgKdeKwinServerDecoration>>>;
+type KdeDecorationObject = RefCell<Option<Weak<OrgKdeKwinServerDecoration>>>;
 
 impl KdeDecorationHandler for State {
     fn kde_decoration_state(&self) -> &KdeDecorationState {
@@ -253,3 +241,27 @@ impl KdeDecorationHandler for State {
     }
 }
 delegate_kde_decoration!(State);
+
+/// Updates the KDE decoration mode of a surface (if it has one) from an XDG decoration mode.
+pub fn update_kde_decoration_mode(surface: &WlSurface, mode: zxdg_toplevel_decoration_v1::Mode) {
+    compositor::with_states(surface, |states| {
+        let kde_decoration = states.data_map.get::<KdeDecorationObject>();
+        if let Some(kde_decoration) = kde_decoration {
+            if let Some(decoration) = kde_decoration
+                .borrow()
+                .as_ref()
+                .and_then(|obj| obj.upgrade().ok())
+            {
+                let mode = match mode {
+                    zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                        org_kde_kwin_server_decoration::Mode::Server
+                    }
+                    zxdg_toplevel_decoration_v1::Mode::ClientSide | _ => {
+                        org_kde_kwin_server_decoration::Mode::Client
+                    }
+                };
+                decoration.mode(mode);
+            }
+        }
+    });
+}

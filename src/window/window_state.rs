@@ -9,7 +9,9 @@ use indexmap::IndexSet;
 use smithay::{
     backend::renderer::element::Id,
     desktop::{layer_map_for_output, WindowSurface},
-    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
+    reexports::wayland_protocols::xdg::{
+        decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
+    },
     utils::{Logical, Point, Rectangle, Serial, Size},
     wayland::compositor::HookId,
 };
@@ -21,7 +23,7 @@ use crate::{
     tag::Tag,
 };
 
-use super::{rules::DecorationMode, Unmapped, WindowElement};
+use super::{Unmapped, WindowElement};
 
 /// A unique identifier for each window.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -238,7 +240,7 @@ pub struct WindowElementState {
     pub committed_serial: Option<Serial>,
     pub snapshot: Option<LayoutSnapshot>,
     pub snapshot_hook_id: Option<HookId>,
-    pub decoration_mode: Option<DecorationMode>,
+    pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Size<i32, Logical>,
 

@@ -5,7 +5,7 @@ pub mod rules;
 use std::{cell::RefCell, ops::Deref};
 
 use indexmap::IndexSet;
-use rules::{DecorationMode, WindowRules};
+use rules::WindowRules;
 use smithay::{
     desktop::{space::SpaceElement, Window, WindowSurface},
     output::Output,
@@ -491,12 +491,12 @@ impl Pinnacle {
 
         if let WindowSurface::Wayland(toplevel) = unmapped.window.underlying_surface() {
             toplevel.with_pending_state(|state| {
-                let mode = decoration_mode.as_ref().map(|mode| match mode {
-                    DecorationMode::ClientSide => zxdg_toplevel_decoration_v1::Mode::ClientSide,
-                    DecorationMode::ServerSide => zxdg_toplevel_decoration_v1::Mode::ServerSide,
-                });
-                state.decoration_mode = mode;
+                state.decoration_mode = *decoration_mode;
             });
+            crate::handlers::decoration::update_kde_decoration_mode(
+                toplevel.wl_surface(),
+                decoration_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide),
+            );
         }
     }
 }
