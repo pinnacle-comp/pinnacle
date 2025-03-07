@@ -65,10 +65,7 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
     }
 
     /// Get the texture, rendering it to a new one if it doesn't exist.
-    pub fn texture(
-        &self,
-        renderer: &mut GlesRenderer,
-    ) -> Option<(GlesTexture, Point<i32, Physical>)> {
+    fn texture(&self, renderer: &mut GlesRenderer) -> Option<(GlesTexture, Point<i32, Physical>)> {
         // Not `get_or_init` because that would require the cell be an option/result
         // and I didn't want that
         if self.texture.get().is_none() {
@@ -139,13 +136,10 @@ impl WindowElement {
         alpha: f32,
     ) -> Option<LayoutSnapshot> {
         self.with_state_mut(|state| {
-            if state.snapshot.is_none() || self.is_x11() {
-                let elements = self.texture_render_elements(renderer, location, scale, alpha);
-                if !elements.is_empty() {
-                    state.snapshot = Some(RenderSnapshot::new(elements, scale));
-                }
+            let elements = self.texture_render_elements(renderer, location, scale, alpha);
+            if !elements.is_empty() {
+                state.snapshot = Some(RenderSnapshot::new(elements, scale));
             }
-
             state.snapshot.clone()
         })
     }
@@ -172,7 +166,7 @@ pub struct OutputSnapshots {
     pub under_fullscreen: Vec<SnapshotTarget>,
 }
 
-pub fn capture_snapshots_on_output(
+fn capture_snapshots_on_output(
     pinnacle: &mut Pinnacle,
     renderer: &mut GlesRenderer,
     output: &Output,
@@ -215,8 +209,8 @@ pub fn capture_snapshots_on_output(
                 1.0,
             );
 
-            snapshot.map(|ss| SnapshotTarget::Snapshot {
-                snapshot: ss,
+            snapshot.map(|snapshot| SnapshotTarget::Snapshot {
+                snapshot,
                 window: win.clone(),
             })
         } else {

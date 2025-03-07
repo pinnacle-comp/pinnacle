@@ -361,6 +361,7 @@ impl CompositorHandler for State {
 
             let layer_changed = layer_map_for_output(&output).arrange();
             if layer_changed {
+                self.capture_snapshots_on_output(&output, []);
                 self.pinnacle.request_layout(&output);
             }
 
@@ -737,9 +738,8 @@ impl WlrLayerShellHandler for State {
         }
 
         if let Some(output) = output {
-            self.pinnacle.loop_handle.insert_idle(move |state| {
-                state.pinnacle.request_layout(&output);
-            });
+            self.capture_snapshots_on_output(&output, []);
+            self.pinnacle.request_layout(&output);
         }
     }
 

@@ -151,8 +151,6 @@ pub struct LayoutState {
     pending_requests: HashMap<Output, LayoutRequestId>,
     fulfilled_requests: HashMap<Output, LayoutRequestId>,
     current_id: LayoutRequestId,
-
-    // TODO: experimenting
     pub layout_trees: HashMap<u32, LayoutTree>,
 }
 
@@ -273,15 +271,6 @@ impl State {
             .layout_state
             .fulfilled_requests
             .insert(output.clone(), current_pending);
-
-        // FIXME: figure out why stale snapshots still exist after the layout system change
-        // probably because the math is now correct and there aren't minor pixel inconsistencies
-        // --> no new snapshots are being taken
-        for window in self.pinnacle.windows.iter() {
-            window.with_state_mut(|state| state.snapshot.take());
-        }
-
-        self.capture_snapshots_on_output(&output, []);
 
         let pending_windows = self
             .pinnacle
