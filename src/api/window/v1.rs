@@ -158,6 +158,11 @@ impl v1::window_service_server::WindowService for super::WindowService {
             let layout_mode = window_id
                 .window(&state.pinnacle)
                 .map(|win| win.with_state(|state| state.layout_mode))
+                .or_else(|| {
+                    window_id
+                        .unmapped_window(&state.pinnacle)
+                        .and_then(|unmapped| unmapped.window_rules.layout_mode)
+                })
                 .unwrap_or(LayoutMode::tiled());
 
             Ok(GetLayoutModeResponse {
@@ -182,6 +187,11 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary(&self.sender, move |state| {
             let tag_ids = window_id
                 .window(&state.pinnacle)
+                .or_else(|| {
+                    window_id
+                        .unmapped_window(&state.pinnacle)
+                        .map(|unmapped| unmapped.window.clone())
+                })
                 .map(|win| {
                     win.with_state(|state| {
                         state
