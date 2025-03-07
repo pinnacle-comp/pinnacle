@@ -31,9 +31,9 @@ pub struct QuitPrompt {
     pub border_color: Color,
     /// The font of the prompt.
     pub font: Font,
-    /// The height of the prompt.
-    pub width: u32,
     /// The width of the prompt.
+    pub width: u32,
+    /// The height of the prompt.
     pub height: u32,
 }
 
@@ -97,19 +97,19 @@ impl QuitPrompt {
 /// A bindings overlay.
 #[derive(Default, Clone, Debug)]
 pub struct BindOverlay {
-    /// The radius of the prompt's corners.
+    /// The radius of the overlay's corners.
     pub border_radius: f32,
-    /// The thickness of the prompt border.
+    /// The thickness of the overlay border.
     pub border_thickness: f32,
-    /// The color of the prompt background.
+    /// The color of the overlay background.
     pub background_color: Color,
-    /// The color of the prompt border.
+    /// The color of the overlay border.
     pub border_color: Color,
-    /// The font of the prompt.
+    /// The font of the overlay.
     pub font: Font,
-    /// The height of the prompt.
+    /// The width of the overlay.
     pub width: u32,
-    /// The width of the prompt.
+    /// The height of the overlay.
     pub height: u32,
 }
 

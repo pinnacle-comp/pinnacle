@@ -7,9 +7,11 @@ local client = require("pinnacle.grpc.client").client
 local defs = require("pinnacle.grpc.defs")
 local input_v1 = defs.pinnacle.input.v1
 
----@class pinnacle.input.libinput.Libinput
+---Libinput device management.
+---@class pinnacle.input.libinput
 local libinput = {}
 
+---A pointer acceleration profile.
 ---@enum (key) pinnacle.input.libinput.AccelProfile
 local accel_profile_values = {
     ---No pointer acceleration
@@ -18,6 +20,8 @@ local accel_profile_values = {
     adaptive = input_v1.AccelProfile.ACCEL_PROFILE_ADAPTIVE,
 }
 
+---The click method defines when to generate software-emulated buttons, usually on a device
+---that does not have a specific physical button available.
 ---@enum (key) pinnacle.input.libinput.ClickMethod
 local click_method_values = {
     ---Button presses are generated according to where on the device the click occurs
@@ -26,6 +30,7 @@ local click_method_values = {
     click_finger = input_v1.ClickMethod.CLICK_METHOD_CLICK_FINGER,
 }
 
+---The scroll method of a device selects when to generate scroll axis events instead of pointer motion events.
 ---@enum (key) pinnacle.input.libinput.ScrollMethod
 local scroll_method_values = {
     ---Never send scroll events instead of pointer motion events
@@ -38,6 +43,7 @@ local scroll_method_values = {
     on_button_down = input_v1.ScrollMethod.SCROLL_METHOD_ON_BUTTON_DOWN,
 }
 
+---Map 1/2/3 finger taps to buttons.
 ---@enum (key) pinnacle.input.libinput.TapButtonMap
 local tap_button_map_values = {
     ---1/2/3 finger tap maps to left/right/middle
@@ -46,54 +52,55 @@ local tap_button_map_values = {
     left_middle_right = input_v1.TapButtonMap.TAP_BUTTON_MAP_LEFT_MIDDLE_RIGHT,
 }
 
+---A libinput send events mode.
 ---@enum (key) pinnacle.input.libinput.SendEventsMode
 local send_events_mode_values = {
+    ---Enables this device.
     enabled = input_v1.SendEventsMode.SEND_EVENTS_MODE_ENABLED,
+    ---Disables this device.
     disabled = input_v1.SendEventsMode.SEND_EVENTS_MODE_DISABLED,
+    ---Disables this device only when an external mouse is connected.
     disabled_on_external_mouse = input_v1.SendEventsMode.SEND_EVENTS_MODE_DISABLED_ON_EXTERNAL_MOUSE,
 }
 
----@class pinnacle.input.libinput.LibinputSetting
----@field accel_profile pinnacle.input.libinput.AccelProfile? Set pointer acceleration
----@field accel_speed number? Set pointer acceleration speed
----@field calibration_matrix integer[]?
----@field click_method pinnacle.input.libinput.ClickMethod?
----@field disable_while_typing boolean? Set whether or not to disable the pointing device while typing
----@field left_handed boolean? Set device left-handedness
----@field middle_emulation boolean?
----@field rotation_angle integer?
----@field scroll_button integer? Set the scroll button
----@field scroll_button_lock boolean? Set whether or not the scroll button is a hold or toggle
----@field scroll_method pinnacle.input.libinput.ScrollMethod?
----@field natural_scroll boolean? Set whether or not natural scroll is enabled, which reverses scroll direction
----@field tap_button_map pinnacle.input.libinput.TapButtonMap?
----@field tap_drag boolean?
----@field tap_drag_lock boolean?
----@field tap boolean?
----@field send_events_mode pinnacle.input.libinput.SendEventsMode?
-
+---A handle to an input device.
 ---@class pinnacle.input.libinput.DeviceHandle
+---The name of the device's system path.
 ---@field sysname string
 local DeviceHandle = {}
 
+---A device's libinput capabilities.
 ---@class pinnacle.input.libinput.Capabilities
+---This device has keyboard capabilities.
 ---@field keyboard boolean
+---This device has pointer capabilities.
 ---@field pointer boolean
+---This device has touch capabilities.
 ---@field touch boolean
+---This device has tablet tool capabilities.
 ---@field tablet_tool boolean
+---This device has tablet pad capabilities.
 ---@field tablet_pad boolean
+---This device has gesture capabilities.
 ---@field gesture boolean
+---This device has switch capabilities.
 ---@field switch boolean
 
+---A device's type.
+---
+---Note: this uses heuristics to determine device type.
+---*This may be incorrect*. For example, a device with both pointer
+---and keyboard capabilities will be labeled as a `"mouse"` when it might actually be
+---a keyboard.
 ---@alias pinnacle.input.libinput.DeviceType
----| "unknown"
----| "touchpad"
----| "trackball"
----| "trackpoint"
----| "mouse"
----| "tablet"
----| "keyboard"
----| "switch"
+---| "unknown" The device type is unknown.
+---| "touchpad" This device is a touchpad.
+---| "trackball" This device is a trackball.
+---| "trackpoint" This device is a trackpoint.
+---| "mouse" This device is a mouse.
+---| "tablet" This device is a tablet.
+---| "keyboard" This device is a keyboard.
+---| "switch" This device is a switch.
 
 ---Gets this device's libinput capabilities.
 ---
@@ -150,7 +157,7 @@ function DeviceHandle:name()
     return response.name or ""
 end
 
----Gets this device;s product id.
+---Gets this device's product id.
 ---
 ---@return integer
 function DeviceHandle:product_id()
@@ -168,7 +175,7 @@ function DeviceHandle:product_id()
     return response.product_id or 0
 end
 
----Gets this devices vendor id.
+---Gets this device's vendor id.
 ---@return integer
 function DeviceHandle:vendor_id()
     local response, err = client:pinnacle_input_v1_InputService_GetDeviceInfo({
@@ -274,6 +281,8 @@ function DeviceHandle:map_to_region(region)
     })
 end
 
+---Sets this device's acceleration profile.
+---
 ---@param accel_profile pinnacle.input.libinput.AccelProfile
 function DeviceHandle:set_accel_profile(accel_profile)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -282,6 +291,8 @@ function DeviceHandle:set_accel_profile(accel_profile)
     })
 end
 
+---Sets this device's acceleration speed.
+---
 ---@param accel_speed number
 function DeviceHandle:set_accel_speed(accel_speed)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -290,7 +301,9 @@ function DeviceHandle:set_accel_speed(accel_speed)
     })
 end
 
----@param calibration_matrix number[] 6 floats
+---Sets this device's calibration matrix.
+---
+---@param calibration_matrix number[] The calibration matrix as an array of 6 floats.
 function DeviceHandle:set_calibration_matrix(calibration_matrix)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
         device_sysname = self.sysname,
@@ -300,6 +313,8 @@ function DeviceHandle:set_calibration_matrix(calibration_matrix)
     })
 end
 
+---Sets this device's click method.
+---
 ---@param click_method pinnacle.input.libinput.ClickMethod
 function DeviceHandle:set_click_method(click_method)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -308,6 +323,8 @@ function DeviceHandle:set_click_method(click_method)
     })
 end
 
+---Sets whether or not this device is disabled while typing.
+---
 ---@param disable_while_typing boolean
 function DeviceHandle:set_disable_while_typing(disable_while_typing)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -316,6 +333,8 @@ function DeviceHandle:set_disable_while_typing(disable_while_typing)
     })
 end
 
+---Sets this device to left-handed or not.
+---
 ---@param left_handed boolean
 function DeviceHandle:set_left_handed(left_handed)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -324,6 +343,8 @@ function DeviceHandle:set_left_handed(left_handed)
     })
 end
 
+---Sets whether or not middle emulation is enabled.
+---
 ---@param middle_emulation boolean
 function DeviceHandle:set_middle_emulation(middle_emulation)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -332,6 +353,8 @@ function DeviceHandle:set_middle_emulation(middle_emulation)
     })
 end
 
+---Sets this device's rotation angle.
+---
 ---@param rotation_angle integer
 function DeviceHandle:set_rotation_angle(rotation_angle)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -340,6 +363,8 @@ function DeviceHandle:set_rotation_angle(rotation_angle)
     })
 end
 
+---Sets this device's scroll button.
+---
 ---@param scroll_button integer
 function DeviceHandle:set_scroll_button(scroll_button)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -348,6 +373,8 @@ function DeviceHandle:set_scroll_button(scroll_button)
     })
 end
 
+---Sets whether or not the scroll button locks on this device.
+---
 ---@param scroll_button_lock boolean
 function DeviceHandle:set_scroll_button_lock(scroll_button_lock)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -356,6 +383,8 @@ function DeviceHandle:set_scroll_button_lock(scroll_button_lock)
     })
 end
 
+---Sets this device's scroll method.
+---
 ---@param scroll_method pinnacle.input.libinput.ScrollMethod
 function DeviceHandle:set_scroll_method(scroll_method)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -364,6 +393,8 @@ function DeviceHandle:set_scroll_method(scroll_method)
     })
 end
 
+---Enables or disables natural scroll on this device.
+---
 ---@param natural_scroll boolean
 function DeviceHandle:set_natural_scroll(natural_scroll)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -372,6 +403,8 @@ function DeviceHandle:set_natural_scroll(natural_scroll)
     })
 end
 
+---Sets this device's tap button map.
+---
 ---@param tap_button_map pinnacle.input.libinput.TapButtonMap
 function DeviceHandle:set_tap_button_map(tap_button_map)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -380,6 +413,8 @@ function DeviceHandle:set_tap_button_map(tap_button_map)
     })
 end
 
+---Enables or disables tap dragging on this device.
+---
 ---@param tap_drag boolean
 function DeviceHandle:set_tap_drag(tap_drag)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -388,6 +423,8 @@ function DeviceHandle:set_tap_drag(tap_drag)
     })
 end
 
+---Sets whether or not tap dragging locks on this device.
+---
 ---@param tap_drag_lock boolean
 function DeviceHandle:set_tap_drag_lock(tap_drag_lock)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -396,6 +433,8 @@ function DeviceHandle:set_tap_drag_lock(tap_drag_lock)
     })
 end
 
+---Enables or disables tap-to-click on this device.
+---
 ---@param tap boolean
 function DeviceHandle:set_tap(tap)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -404,6 +443,8 @@ function DeviceHandle:set_tap(tap)
     })
 end
 
+---Sets this device's send events mode.
+---
 ---@param send_events_mode pinnacle.input.libinput.SendEventsMode
 function DeviceHandle:set_send_events_mode(send_events_mode)
     local _, err = client:pinnacle_input_v1_InputService_SetDeviceLibinputSetting({
@@ -452,6 +493,7 @@ end
 
 ---@return pinnacle.input.libinput.DeviceHandle
 ---@private
+---@lcat nodoc
 function libinput.new_device(sysname)
     local device = { sysname = sysname }
     setmetatable(device, { __index = DeviceHandle })

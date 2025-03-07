@@ -31,6 +31,7 @@ local window_handle = {}
 ---You can retrieve window handles through the various `get` functions in the `Window` module.
 ---
 ---@class pinnacle.window.WindowHandle
+---The unique id of this window.
 ---@field id integer
 local WindowHandle = {}
 
@@ -132,11 +133,16 @@ function window.begin_resize(button)
     end
 end
 
+---A window's current layout mode.
 ---@enum (key) pinnacle.layout.LayoutMode
 local layout_mode = {
+    ---The window is tiled.
     tiled = window_v1.LayoutMode.LAYOUT_MODE_TILED,
+    ---The window is floating.
     floating = window_v1.LayoutMode.LAYOUT_MODE_FLOATING,
+    ---The window is fullscreen.
     fullscreen = window_v1.LayoutMode.LAYOUT_MODE_FULLSCREEN,
+    ---The window is maximized.
     maximized = window_v1.LayoutMode.LAYOUT_MODE_MAXIMIZED,
 }
 require("pinnacle.util").make_bijective(layout_mode)
@@ -211,7 +217,7 @@ end
 ---end)
 ---```
 ---
----@param rule fun(window: pinnacle.window.WindowHandle)
+---@param rule fun(window: pinnacle.window.WindowHandle) A function that will run with all new, unmapped windows.
 function window.add_window_rule(rule)
     local _stream, err = client:pinnacle_window_v1_WindowService_WindowRule(
         function(response, stream)
@@ -401,7 +407,9 @@ end
 
 ---Sets this window's decoration mode.
 ---
----@param mode "client_side" | "server_side"
+---If not set, the client is allowed to choose its decoration mode, defaulting to client-side if it doesn't.
+---
+---@param mode "client_side" | "server_side" `"client_side"` to enable CSD, or `"server_side"` to enable CSD.
 function WindowHandle:set_decoration_mode(mode)
     local _, err = client:pinnacle_window_v1_WindowService_SetDecorationMode({
         window_id = self.id,

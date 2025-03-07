@@ -82,7 +82,7 @@ impl From<ScrollMethod> for input::v1::ScrollMethod {
     }
 }
 
-/// Map 1/2/3 finger tips to buttons.
+/// Map 1/2/3 finger taps to buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TapButtonMap {
     /// 1/2/3 finger tap maps to left/right/middle

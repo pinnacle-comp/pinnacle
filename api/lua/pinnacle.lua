@@ -108,7 +108,7 @@ end
 ---
 ---@param config_fn fun()
 ---
----@see pinnacle.Pinnacle.run
+---@see pinnacle.run
 function pinnacle.setup(config_fn)
     pinnacle.init()
 
@@ -147,6 +147,8 @@ end
 ---However, it will not block to receive compositor events.
 ---
 ---@param run_fn fun()
+---
+---@see pinnacle.setup
 function pinnacle.run(run_fn)
     pinnacle.init()
 

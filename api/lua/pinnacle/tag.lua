@@ -23,6 +23,7 @@ local tag_handle = {}
 ---
 ---This can be retrieved through the various `get` functions in the `Tag` module.
 ---@class pinnacle.tag.TagHandle
+---The unique id of this tag.
 ---@field id integer
 local TagHandle = {}
 
@@ -84,8 +85,8 @@ end
 ---local tag_on_hdmi1 = Tag.get("Tag", Output.get_by_name("HDMI-1"))
 ---```
 ---
----@param name string
----@param output pinnacle.output.OutputHandle?
+---@param name string The name of the tag
+---@param output pinnacle.output.OutputHandle? The output to get the tag on, or `nil` for the focused output.
 ---
 ---@return pinnacle.tag.TagHandle | nil
 function tag.get(name, output)
@@ -133,10 +134,10 @@ end
 ---local tags = Tag.add(Output.get_by_name("HDMI-1"), tag_names)
 ---```
 ---
----@param output pinnacle.output.OutputHandle
----@param ... string
+---@param output pinnacle.output.OutputHandle The output to add tags to.
+---@param ... string The names of the new tags.
 ---
----@return pinnacle.tag.TagHandle[] tags Handles to the created tags
+---@return pinnacle.tag.TagHandle[] tags Handles to the created tags.
 ---
 ---@overload fun(output: pinnacle.output.OutputHandle, tag_names: string[]): pinnacle.tag.TagHandle[]
 function tag.add(output, ...)
@@ -176,7 +177,7 @@ end
 ---Tag.remove(tags) -- "HDMI-1" no longer has those tags
 ---```
 ---
----@param tags pinnacle.tag.TagHandle[]
+---@param tags pinnacle.tag.TagHandle[] The tags to remove.
 function tag.remove(tags)
     ---@type integer[]
     local ids = {}

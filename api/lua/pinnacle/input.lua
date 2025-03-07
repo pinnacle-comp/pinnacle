@@ -17,45 +17,76 @@ local modifier_values = {
 }
 require("pinnacle.util").make_bijective(modifier_values)
 
+---A keyboard modifier for use in binds.
+---
+---Binds can be configured to require certain keyboard modifiers to be held down to trigger.
+---For example, a bind with `{ "super", "ctrl" }` requires both the super and control keys
+---to be held down.
+---
+---Normally, modifiers must be in the exact same state as passed in to trigger a bind.
+---This means if you use `"super"` in a bind, *only* super must be held down; holding
+---down any other modifier will invalidate the bind.
+---
+---To circumvent this, you can ignore certain modifiers by adding the respective `"ignore_*"` modifier.
 ---@enum (key) pinnacle.input.Mod
 local mods_with_ignore_values = {
+    ---The shift key.
     shift = input_v1.Modifier.MODIFIER_SHIFT,
+    ---The control key.
     ctrl = input_v1.Modifier.MODIFIER_CTRL,
+    ---The alt key.
     alt = input_v1.Modifier.MODIFIER_ALT,
+    ---The super key.
     super = input_v1.Modifier.MODIFIER_SUPER,
+    ---The IsoLevel3Shift modifier.
     iso_level3_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL3_SHIFT,
+    ---The IsoLevel5Shift modifier.
     iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
 
+    ---Ignore the shift key.
     ignore_shift = input_v1.Modifier.MODIFIER_SHIFT,
+    ---Ignore the control key.
     ignore_ctrl = input_v1.Modifier.MODIFIER_CTRL,
+    ---Ignore the alt key.
     ignore_alt = input_v1.Modifier.MODIFIER_ALT,
+    ---Ignore the super key.
     ignore_super = input_v1.Modifier.MODIFIER_SUPER,
+    ---Ignore the IsoLevel3Shift modifier.
     ignore_iso_level3_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL3_SHIFT,
+    ---Ignore the IsoLevel5Shift modifier.
     ignore_iso_level5_shift = input_v1.Modifier.MODIFIER_ISO_LEVEL5_SHIFT,
 }
 
+---A mouse button.
 ---@enum (key) pinnacle.input.MouseButton
 local mouse_button_values = {
-    --- Left
+    ---The left mouse button.
     [1] = 0x110,
-    --- Right
+    ---The right mouse button.
     [2] = 0x111,
-    --- Middle
+    ---The middle mouse button.
     [3] = 0x112,
-    --- Side
+    ---The side mouse button.
     [4] = 0x113,
-    --- Extra
+    ---The extra mouse button.
     [5] = 0x114,
-    --- Forward
+    ---The forward mouse button.
     [6] = 0x115,
-    --- Back
+    ---The back mouse button.
     [7] = 0x116,
+    ---The left mouse button.
     btn_left = 0x110,
+    ---The right mouse button.
     btn_right = 0x111,
+    ---The middle mouse button.
     btn_middle = 0x112,
+    ---The side mouse button.
     btn_side = 0x113,
+    ---The extra mouse button.
     btn_extra = 0x114,
+    ---The forward mouse button.
     btn_forward = 0x115,
+    ---The back mouse button.
     btn_back = 0x116,
 }
 
@@ -69,7 +100,6 @@ local button_value_to_name = {
     [0x116] = "btn_back",
 }
 
----@enum (key) pinnacle.input.Edge
 local edge_values = {
     press = input_v1.Edge.EDGE_PRESS,
     release = input_v1.Edge.EDGE_RELEASE,
@@ -82,21 +112,33 @@ require("pinnacle.util").make_bijective(edge_values)
 ---@class pinnacle.input
 ---@field private mouse_button_values table
 local input = {
+    ---Keycodes for every key.
     key = require("pinnacle.input.keys"),
 }
 input.mouse_button_values = mouse_button_values
 
+---An input bind.
 ---@class pinnacle.input.Bind
+---The modifiers that need to be pressed for this bind to trigger.
 ---@field mods pinnacle.input.Mod[]
+---The layer that this bind is assigned.
 ---@field bind_layer string?
----@field group string? The group to place this keybind in. Used for the keybind list.
----@field description string? The description of this keybind. Used for the keybind list.
+---The group to place this keybind in. Used for the keybind list.
+---@field group string?
+---The description of this keybind. Used for the keybind list.
+---@field description string?
+---Sets this bind as a quit bind.
 ---@field quit boolean?
+---Sets this bind as a reload config bind.
 ---@field reload_config boolean?
 
+---A keybind.
 ---@class pinnacle.input.Keybind : pinnacle.input.Bind
+---The key that will trigger this bind.
 ---@field key string|pinnacle.input.Key
+---An action that is run when the keybind is pressed.
 ---@field on_press fun()?
+---An action that is run when the keybind is released.
 ---@field on_release fun()?
 
 ---@param kb pinnacle.input.Keybind
@@ -225,7 +267,7 @@ end
 ---@param mods pinnacle.input.Mod[] The modifiers that need to be held down for the bind to trigger
 ---@param key pinnacle.input.Key | string The key used to trigger the bind
 ---@param on_press fun() The function to run when the bind is triggered
----@param bind_info { group: string?, description: string? }?
+---@param bind_info { group: string?, description: string? }? An optional group and description that is displayed in the bind overlay.
 ---
 ---@overload fun(keybind: pinnacle.input.Keybind)
 function input.keybind(mods, key, on_press, bind_info)
@@ -246,9 +288,13 @@ function input.keybind(mods, key, on_press, bind_info)
     keybind_inner(kb)
 end
 
+---A mousebind.
 ---@class pinnacle.input.Mousebind : pinnacle.input.Bind
+---The mouse button that will trigger this bind.
 ---@field button pinnacle.input.MouseButton
+---An action that will be run when the mousebind is pressed.
 ---@field on_press fun()?
+---An action that will be run when the mousebind is released.
 ---@field on_release fun()?
 
 ---@param mb pinnacle.input.Mousebind
@@ -359,7 +405,7 @@ end
 ---@param mods pinnacle.input.Mod[] The modifiers that need to be held down for the bind to trigger
 ---@param button pinnacle.input.MouseButton The mouse button used to trigger the bind
 ---@param on_press fun() The function to run when the bind is triggered
----@param bind_info { group: string?, description: string? }?
+---@param bind_info { group: string?, description: string? }? An optional group and description that will be displayed in the bind overlay.
 ---
 ---@overload fun(mousebind: pinnacle.input.Mousebind)
 function input.mousebind(mods, button, on_press, bind_info)
@@ -382,23 +428,35 @@ end
 
 ---Enters the bind layer `layer`, or the default layer if `layer` is nil.
 ---
----@param layer string?
+---@param layer string? The bind layer.
 function input.enter_bind_layer(layer)
     local _, err = client:pinnacle_input_v1_InputService_EnterBindLayer({
         layer_name = layer,
     })
 end
 
+---Bind information.
+---
+---Mainly used for the bind overlay.
 ---@class pinnacle.input.BindInfo
+---The bind's modifiers.
 ---@field mods pinnacle.input.Mod[]
+---The bind's ignored modifiers.
 ---@field ignore_mods pinnacle.input.Mod[]
+---The bind's layer.
 ---@field bind_layer string?
+---The bind's group.
 ---@field group string?
+---The bind's description.
 ---@field description string?
+---What kind of bind this is.
 ---@field kind pinnacle.input.BindInfoKind
 
+---The kind of a bind.
 ---@class pinnacle.input.BindInfoKind
+---This is a keybind.
 ---@field key { key_code: integer, xkb_name: string }?
+---This is a mousebind.
 ---@field mouse { button: pinnacle.input.MouseButton }?
 
 ---Gets all binds and their information.
@@ -472,11 +530,19 @@ function input.bind_infos()
     return ret
 end
 
+---Xkeyboard config options.
+---
+---See `xkeyboard-config(7)` for more information.
 ---@class pinnacle.input.XkbConfig
+---Files of rules to be used for keyboard mapping composition.
 ---@field rules string?
+---Name of the model of your keyboard type.
 ---@field model string?
+---Layout(s) you intend to use.
 ---@field layout string?
+---Variant(s) of the layout you intend to use.
 ---@field variant string?
+---Extra xkb configuration options.
 ---@field options string?
 
 ---Sets the xkbconfig for your keyboard.
@@ -531,7 +597,7 @@ end
 ---Pinnacle reads `$XCURSOR_THEME` on startup to set the theme.
 ---This allows you to set it at runtime.
 ---
----@param theme string
+---@param theme string The name of the xcursor theme.
 function input.set_xcursor_theme(theme)
     local _, err = client:pinnacle_input_v1_InputService_SetXcursor({
         theme = theme,
@@ -547,7 +613,7 @@ end
 ---Pinnacle reads `$XCURSOR_SIZE` on startup to set the cursor size.
 ---This allows you to set it at runtime.
 ---
----@param size integer
+---@param size integer The new size of the cursor.
 function input.set_xcursor_size(size)
     local _, err = client:pinnacle_input_v1_InputService_SetXcursor({
         size = size,

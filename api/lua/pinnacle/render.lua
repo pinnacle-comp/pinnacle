@@ -11,6 +11,7 @@ local render_v1 = require("pinnacle.grpc.defs").pinnacle.render.v1
 ---@class pinnacle.render
 local render = {}
 
+---What filter to use when scaling.
 ---@enum (key) pinnacle.render.ScalingFilter
 local filter_name_to_filter_value = {
     ---Blend between the four closest pixels. May cause scaling to be blurry.

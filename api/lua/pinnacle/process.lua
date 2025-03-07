@@ -6,21 +6,29 @@ local log = require("pinnacle.log")
 local client = require("pinnacle.grpc.client").client
 local condition = require("cqueues.condition")
 
+---The standard input of a spawned process.
 ---@class pinnacle.process.ChildStdin
----@field write fun(...) Same as `file:write(...)`
+---@field write fun(self: self, ...) Same as `file:write(...)`
 
+---The standard output of a spawned process.
 ---@class pinnacle.process.ChildStdout
----@field lines fun(...) Same as `file:lines(...)`
----@field read fun(...) Same as `file:read(...)`
+---@field lines fun(self: self, ...) Same as `file:lines(...)`
+---@field read fun(self: self, ...) Same as `file:read(...)`
 
+---The standard error of a spawned process.
 ---@class pinnacle.process.ChildStderr
----@field lines fun(...) Same as `file:lines(...)`
----@field read fun(...) Same as `file:read(...)`
+---@field lines fun(self: self, ...) Same as `file:lines(...)`
+---@field read fun(self: self, ...) Same as `file:read(...)`
 
+---The result of spawning a command.
 ---@class pinnacle.process.Child
+---The pid of the spawned command.
 ---@field pid integer
+---This process's standard input, if any.
 ---@field stdin pinnacle.process.ChildStdin?
+---This process's standard output, if any.
 ---@field stdout pinnacle.process.ChildStdout?
+---This process's standard error, if any.
 ---@field stderr pinnacle.process.ChildStderr?
 local Child = {}
 
@@ -58,7 +66,7 @@ local Command = {}
 ---@field shell_cmd string[]?
 ---Any environment variables that should be set for the spawned process.
 ---@field envs table<string, string>?
----Causes the spawn to fizzle if the process is already running.
+---Prevents the spawn from occurring if the process is already running.
 ---@field unique boolean?
 ---Causes the command to only spawn the process if it hasn't been spawned before within the
 ---lifetime of the compositor.
@@ -66,7 +74,7 @@ local Command = {}
 
 ---Spawns this process, returning a `Child` that contains the process's standard IO if successful.
 ---
----@return pinnacle.process.Child?
+---@return pinnacle.process.Child? # A child with the process's standard IO, or `nil` if the process failed to spawn or doesn't exist.
 function Command:spawn()
     local response, err = client:pinnacle_process_v1_ProcessService_Spawn({
         cmd = type(self.cmd) == "string" and { self.cmd } or self.cmd,
@@ -128,9 +136,7 @@ end
 ---
 ---This will block the calling thread.
 ---
----Returns the exit status of the process.
----
----@return { exit_code: integer?, exit_msg: string? }
+---@return { exit_code: integer?, exit_msg: string? } # The exit status of the process.
 function Child:wait()
     local condvar = condition.new()
 
@@ -207,10 +213,11 @@ local process = {}
 ---
 ---For more control over the spawn, use `Process.command` instead.
 ---
----@param ... string
+---@param ... string The arguments of the command.
+---
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
----@return pinnacle.process.Child?
+---@return pinnacle.process.Child? # A child with the process's standard IO, or `nil` if the process failed to spawn or doesn't exist.
 ---
 ---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn(...)
@@ -233,10 +240,11 @@ end
 ---
 ---For more control over the spawn, use `Process.command` instead.
 ---
----@param ... string
+---@param ... string The arguments of the command.
+---
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
----@return pinnacle.process.Child?
+---@return pinnacle.process.Child? # A child with the process's standard IO, or `nil` if the process failed to spawn or doesn't exist.
 ---
 ---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn_once(...)
@@ -260,10 +268,11 @@ end
 ---
 ---For more control over the spawn, use `Process.command` instead.
 ---
----@param ... string
+---@param ... string The arguments of the command.
+---
 ---@overload fun(cmd: string[]): pinnacle.process.Child?
 ---
----@return pinnacle.process.Child?
+---@return pinnacle.process.Child? # A child with the process's standard IO, or `nil` if the process failed to spawn or doesn't exist.
 ---
 ---@see pinnacle.process.Process.command A way to spawn processes with more control.
 function process.spawn_unique(...)
@@ -284,9 +293,9 @@ end
 ---
 ---A `Command` represents a to-be-spawned process.
 ---
----@param cmd pinnacle.process.CommandOpts
+---@param cmd pinnacle.process.CommandOpts Options for the command.
 ---
----@return pinnacle.process.Command
+---@return pinnacle.process.Command # An object that allows you to spawn this command.
 ---@nodiscard
 function process.command(cmd)
     setmetatable(cmd, { __index = Command })

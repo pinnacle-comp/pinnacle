@@ -20,31 +20,45 @@ local integration = {}
 ---The Snowcap widget system, integrated into Pinnacle.
 ---@class pinnacle.snowcap
 local snowcap = {
-    layer = require("snowcap.layer"),
-    widget = require("snowcap.widget"),
-    input = {
-        key = require("snowcap.input.keys"),
-    },
+    ---Builtins and integrations with Snowcap.
     integration = integration,
 }
 
+---A quit prompt.
+---
+---When opened, pressing ENTER will quit the compositor.
 ---@class pinnacle.snowcap.integration.QuitPrompt
+---The radius of the prompt's corners.
 ---@field border_radius number
+---THe thickness of the prompt border.
 ---@field border_thickness number
+---The color of the prompt background.
 ---@field background_color snowcap.Color
+---The color of the prompt border.
 ---@field border_color snowcap.Color
+---The font of the prompt.
 ---@field font snowcap.Font
+---The width of the prompt.
 ---@field width integer
+---The height of the prompt.
 ---@field height integer
 local QuitPrompt = {}
 
+---An overlay that shows various input binds.
 ---@class pinnacle.snowcap.integration.BindOverlay
+---The radius of the overlay's corners.
 ---@field border_radius number
+---The thickness of the overlay border.
 ---@field border_thickness number
+---The color of the overlay background.
 ---@field background_color snowcap.Color
+---The color of the overlay border.
 ---@field border_color snowcap.Color
+---The font of the overlay.
 ---@field font snowcap.Font
+---The width of the overlay.
 ---@field width integer
+---The height of the overlay.
 ---@field height integer
 local BindOverlay = {}
 

@@ -16,7 +16,6 @@ local output_handle = {}
 ---
 ---This can be retrieved through the various `get` functions in the `Output` module.
 ---
----@classmod
 ---@class pinnacle.output.OutputHandle
 ---@field name string The unique name of this output
 local OutputHandle = {}
@@ -74,7 +73,7 @@ end
 
 ---Gets an output by its name (the connector it's plugged into).
 ---
----@param name string The name of the connector the output is connected to
+---@param name string The output's name.
 ---
 ---@return pinnacle.output.OutputHandle | nil
 function output.get_by_name(name)
@@ -106,7 +105,7 @@ function output.get_focused()
     return nil
 end
 
---- Runs a closure on all current and future outputs.
+--- Runs a function on all current and future outputs.
 ---
 --- When called, this will do two things:
 --- 1. Immediately run `for_each` with all currently connected outputs.
@@ -125,7 +124,7 @@ end
 ---end)
 ---```
 ---
----@param for_each fun(output: pinnacle.output.OutputHandle)
+---@param for_each fun(output: pinnacle.output.OutputHandle) The function that will be run for each output.
 function output.for_each_output(for_each)
     local handles = output.get_all()
     for _, handle in ipairs(handles) do
@@ -219,10 +218,10 @@ end
 --- -- Notice that y = 0 aligns with the top of "DP-1", and the top of "HDMI-1" is at y = -360.
 ---```
 ---
----@param x integer
----@param y integer
+---@param x integer The x-coordinate.
+---@param y integer The y-coordinate.
 ---
----@see pinnacle.output.OutputHandle.set_loc_adj_to
+---@see pinnacle.output.OutputHandle.set_loc_adj_to A helper function to move outputs relative to other outputs.
 function OutputHandle:set_loc(x, y)
     local _, err = client:pinnacle_output_v1_OutputService_SetLoc({
         output_name = self.name,
@@ -235,6 +234,7 @@ function OutputHandle:set_loc(x, y)
     end
 end
 
+---An alignment relative to another output.
 ---@alias pinnacle.output.Alignment
 ---| "top_align_left" Set above, align left borders
 ---| "top_align_center" Set above, align centers
@@ -277,8 +277,8 @@ end
 --- -- "HDMI-1" was placed at (1920, 0) during the compositor's initial output layout.
 ---```
 ---
----@param other pinnacle.output.OutputHandle
----@param alignment pinnacle.output.Alignment
+---@param other pinnacle.output.OutputHandle The output to move this output relative to.
+---@param alignment pinnacle.output.Alignment How to align this output with the other output.
 function OutputHandle:set_loc_adj_to(other, alignment)
     local self_logical_size = self:logical_size()
     local other_logical_size = other:logical_size()
@@ -362,9 +362,9 @@ end
 ---Output.get_focused():set_mode(2560, 1440, 144000)
 ---```
 ---
----@param width integer
----@param height integer
----@param refresh_rate_mhz integer?
+---@param width integer The mode's width.
+---@param height integer The mode's height.
+---@param refresh_rate_mhz integer? The mode's refresh rate in millihertz, or `nil` to auto-select.
 function OutputHandle:set_mode(width, height, refresh_rate_mhz)
     local _, err = client:pinnacle_output_v1_OutputService_SetMode({
         output_name = self.name,
@@ -390,9 +390,9 @@ end
 ---Output.get_focused():set_custom_mode(2560, 1440, 75000)
 ---```
 ---
----@param width integer
----@param height integer
----@param refresh_rate_mhz integer?
+---@param width integer A custom width.
+---@param height integer A custom height.
+---@param refresh_rate_mhz integer? A custom refresh rate in millihertz, or `nil` to default to 60Hz.
 function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
     local _, err = client:pinnacle_output_v1_OutputService_SetMode({
         output_name = self.name,
@@ -406,6 +406,7 @@ function OutputHandle:set_custom_mode(width, height, refresh_rate_mhz)
     end
 end
 
+---A custom modeline.
 ---@class pinnacle.output.Modeline
 ---@field clock number
 ---@field hdisplay integer
@@ -424,10 +425,14 @@ end
 ---This accepts a `Modeline` table or a string of the modeline.
 ---You can parse a modeline into a `Modeline` table with
 ---```lua
----require("pinnacle.util").output.parse_modeline("your modeline herre")
+---require("pinnacle.util").output.parse_modeline(
+---    "173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync"
+---)
 ---```
 ---
----@param modeline string|pinnacle.output.Modeline
+---@param modeline string|pinnacle.output.Modeline A modeline table, or a modeline string to feed it into `parse_modeline`.
+---
+---@see pinnacle.util.output.parse_modeline
 function OutputHandle:set_modeline(modeline)
     if type(modeline) == "string" then
         local ml, err = require("pinnacle.util").output.parse_modeline(modeline)
@@ -466,7 +471,7 @@ end
 
 ---Sets this output's scaling factor.
 ---
----@param scale number
+---@param scale number The new scale.
 function OutputHandle:set_scale(scale)
     local _, err = client:pinnacle_output_v1_OutputService_SetScale({
         output_name = self.name,
@@ -481,7 +486,7 @@ end
 
 ---Changes this output's scaling factor by the given amount.
 ---
----@param change_by number
+---@param change_by number How much to change the current scale by.
 function OutputHandle:change_scale(change_by)
     local _, err = client:pinnacle_output_v1_OutputService_SetScale({
         output_name = self.name,
@@ -494,22 +499,33 @@ function OutputHandle:change_scale(change_by)
     end
 end
 
+---An output transform.
+---
+---This determines what orientation outputs will render with.
 ---@enum (key) pinnacle.output.Transform
 local transform_name_to_code = {
+    ---No transform.
     normal = output_v1.Transform.TRANSFORM_NORMAL,
+    ---90 degrees counter-clockwise.
     ["90"] = output_v1.Transform.TRANSFORM_90,
+    ---180 degrees counter-clockwise.
     ["180"] = output_v1.Transform.TRANSFORM_180,
+    ---270 degrees counter-clockwise.
     ["270"] = output_v1.Transform.TRANSFORM_270,
+    ---Flipped vertically (across the horizontal axis).
     flipped = output_v1.Transform.TRANSFORM_FLIPPED,
+    ---Flipped vertically and rotated 90 degrees counter-clockwise.
     flipped_90 = output_v1.Transform.TRANSFORM_FLIPPED_90,
+    ---Flipped vertically and rotated 180 degrees counter-clockwise.
     flipped_180 = output_v1.Transform.TRANSFORM_FLIPPED_180,
+    ---Flipped vertically and rotated 270 degrees counter-clockwise.
     flipped_270 = output_v1.Transform.TRANSFORM_FLIPPED_270,
 }
 require("pinnacle.util").make_bijective(transform_name_to_code)
 
 ---Sets this output's transform.
 ---
----@param transform pinnacle.output.Transform
+---@param transform pinnacle.output.Transform The new transform.
 function OutputHandle:set_transform(transform)
     local _, err = client:pinnacle_output_v1_OutputService_SetTransform({
         output_name = self.name,
@@ -555,14 +571,18 @@ function OutputHandle:toggle_powered()
     end
 end
 
+---An output pixel dimension and refresh rate configuration.
 ---@class pinnacle.output.Mode
+---The width of the mode, in pixels.
 ---@field width integer
+---The height of the mode, in pixels.
 ---@field height integer
+---The output's refresh rate, in millihertz.
 ---@field refresh_rate_mhz integer
 
 ---Gets this output's make.
 ---
----@return string
+---@return string # The make, or an empty string if it doesn't have one.
 function OutputHandle:make()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
@@ -572,7 +592,7 @@ end
 
 ---Gets this output's model.
 ---
----@return string
+---@return string # The model, or an empty string if it doesn't have one.
 function OutputHandle:model()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
@@ -582,7 +602,7 @@ end
 
 ---Gets this output's serial.
 ---
----@return string
+---@return string # The serial, or an empty string if it doesn't have one.
 function OutputHandle:serial()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetInfo({ output_name = self.name })
@@ -592,7 +612,7 @@ end
 
 ---Gets this output's location in the global space.
 ---
----@return { x: integer, y: integer }?
+---@return { x: integer, y: integer }? # The output's location, or `nil` if it is not enabled or doesn't exist.
 function OutputHandle:loc()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetLoc({ output_name = self.name })
@@ -602,9 +622,7 @@ end
 
 ---Gets this output's logical size in logical pixels.
 ---
----If the output is disabled, this returns nil.
----
----@return { width: integer, height: integer }?
+---@return { width: integer, height: integer }? # The output's logical size, or `nil` if it is disabled or doesn't exist.
 function OutputHandle:logical_size()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetLogicalSize({ output_name = self.name })
@@ -614,7 +632,7 @@ end
 
 ---Gets this output's physical size in millimeters.
 ---
----@return { width: integer, height: integer }?
+---@return { width: integer, height: integer }? # The output's physical size, or `nil` if it doesn't advertise one or doesn't exist.
 function OutputHandle:physical_size()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetPhysicalSize({ output_name = self.name })
@@ -624,7 +642,7 @@ end
 
 ---Gets this output's current mode.
 ---
----@return pinnacle.output.Mode?
+---@return pinnacle.output.Mode? # The current mode, or `nil` if the output is disabled or doesn't exist.
 function OutputHandle:current_mode()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetModes({ output_name = self.name })
@@ -646,7 +664,7 @@ end
 
 ---Gets this output's preferred mode.
 ---
----@return pinnacle.output.Mode?
+---@return pinnacle.output.Mode? # The preferred mode, or `nil` if the output doesn't exist.
 function OutputHandle:preferred_mode()
     local response, err =
         client:pinnacle_output_v1_OutputService_GetModes({ output_name = self.name })

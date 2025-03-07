@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+---Logging utilities.
 ---@class pinnacle.Log
 local log = {}
 
@@ -24,18 +25,22 @@ local function print_log(level, msg)
     print(level .. " " .. msg .. source)
 end
 
+---Prints an INFO message.
 function log.info(msg)
     print_log("INFO", msg)
 end
 
+---Prints a DEBUG message.
 function log.debug(msg)
     print_log("DEBUG", msg)
 end
 
+---Prints a WARN message.
 function log.warn(msg)
     print_log("WARN", msg)
 end
 
+---Prints an ERROR message along with file, line, and column information.
 function log.error(msg)
     print_log("ERROR", msg)
 end

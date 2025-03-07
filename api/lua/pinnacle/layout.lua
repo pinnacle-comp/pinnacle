@@ -12,11 +12,13 @@ local log = require("pinnacle.log")
 ---@field tags pinnacle.tag.TagHandle[]
 
 ---@alias pinnacle.layout.LayoutDir
----| "row"
----| "column"
+---| "row" Lays out windows in a row horizontally.
+---| "column" Lays out windows in a column vertically.
 
 ---@alias pinnacle.layout.Gaps
+---A separate number of gaps per side.
 ---| { left: number, right: number, top: number, bottom: number }
+---Gaps for all sides.
 ---| number
 
 ---@class pinnacle.layout.LayoutNode
@@ -26,10 +28,13 @@ local log = require("pinnacle.log")
 ---@field traversal_index integer?
 ---A set of indices per window index that changes how that window is assigned a geometry.
 ---@field traversal_overrides table<integer, integer[]>?
+---The direction that child nodes are laid out.
 ---@field layout_dir pinnacle.layout.LayoutDir?
+---The gaps the node applies around its children nodes.
 ---@field gaps (number | pinnacle.layout.Gaps)?
 ---The proportion the node takes up relative to its siblings.
 ---@field size_proportion number?
+---Child layout nodes.
 ---@field children pinnacle.layout.LayoutNode[]
 
 ---A layout generator.
@@ -43,21 +48,31 @@ local log = require("pinnacle.log")
 ---@class pinnacle.layout.builtin
 local builtin = {}
 
+---A layout generator that lays out windows in a line.
 ---@class pinnacle.layout.builtin.Line : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
+---The direction that windows should be laid out in.
 ---@field direction pinnacle.layout.LayoutDir
+---Whether or not windows are inserted backwards.
 ---@field reversed boolean
 
+---Options for the line generator.
 ---@class pinnacle.layout.builtin.LineOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
+---The direction that windows should be laid out in.
 ---@field direction pinnacle.layout.LayoutDir?
+---Whether or not windows are inserted backwards.
 ---@field reversed boolean?
 
 ---Creates a layout generator that lays out windows in a line.
 ---
----@param options pinnacle.layout.builtin.LineOpts?
+---@param options pinnacle.layout.builtin.LineOpts? Options for the generator.
 ---
 ---@return pinnacle.layout.builtin.Line
 function builtin.line(options)
@@ -108,25 +123,41 @@ function builtin.line(options)
     }
 end
 
+---A layout generator that has one master area to one side and a stack of windows next to it.
 ---@class pinnacle.layout.builtin.MasterStack : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
+---The proportion of the output the master area will take up.
 ---@field master_factor number
+---Which side the master area will be.
 ---@field master_side "left" | "right" | "top" | "bottom"
+---How many windows will be in the master area.
 ---@field master_count integer
+---Reverses the direction of window insertion i.e. new windows are inserted at the top
+---of the master stack instead of at the bottom of the side stack.
 ---@field reversed boolean
 
+---Options for the master stack generator.
 ---@class pinnacle.layout.builtin.MasterStackOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
+---The proportion of the output the master area will take up.
 ---@field master_factor number?
+---Which side the master area will be.
 ---@field master_side ("left" | "right" | "top" | "bottom")?
+---How many windows will be in the master area.
 ---@field master_count integer?
+---Reverses the direction of window insertion i.e. new windows are inserted at the top
+---of the master stack instead of at the bottom of the side stack.
 ---@field reversed boolean?
 
 ---Creates a layout generator that lays windows out in two stacks: a master and side stack.
 ---
----@param options pinnacle.layout.builtin.MasterStackOpts?
+---@param options pinnacle.layout.builtin.MasterStackOpts? Options for the generator.
 ---@return pinnacle.layout.builtin.MasterStack
 function builtin.master_stack(options)
     ---@type pinnacle.layout.builtin.MasterStack
@@ -196,17 +227,23 @@ function builtin.master_stack(options)
     }
 end
 
+---A layout generator that lays out windows in a shrinking fashion towards the bottom right corner.
 ---@class pinnacle.layout.builtin.Dwindle : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
 
+---Options for the dwindle generator.
 ---@class pinnacle.layout.builtin.DwindleOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
 
 ---Creates a layout generator that lays windows out dwindling down to the bottom right.
 ---
----@param options pinnacle.layout.builtin.DwindleOpts?
+---@param options pinnacle.layout.builtin.DwindleOpts? Options for the generator.
 ---
 ---@return pinnacle.layout.builtin.Dwindle
 function builtin.dwindle(options)
@@ -271,17 +308,23 @@ function builtin.dwindle(options)
     }
 end
 
+---A layout generator that lays out windows in a spiral.
 ---@class pinnacle.layout.builtin.Spiral : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
 
+---Options for the spiral generator.
 ---@class pinnacle.layout.builtin.SpiralOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
 
 ---Creates a layout generator that lays windows out in a spiral.
 ---
----@param options pinnacle.layout.builtin.SpiralOpts?
+---@param options pinnacle.layout.builtin.SpiralOpts? Options for the generator.
 ---
 ---@return pinnacle.layout.builtin.Spiral
 function builtin.spiral(options)
@@ -350,24 +393,38 @@ function builtin.spiral(options)
     }
 end
 
+---A layout generator that has one main corner window and a horizontal and vertical stack flanking
+---it on the other two sides.
 ---@class pinnacle.layout.builtin.Corner : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
+---The proportion of the layout that the width of the corner window takes up.
 ---@field corner_width_factor number
+---The proportion of the layout that the height of the corner window takes up.
 ---@field corner_height_factor number
+---The location of the corner window.
 ---@field corner_loc "top_left" | "top_right" | "bottom_left" | "bottom_right"
 
+---Options for the corner generator.
 ---@class pinnacle.layout.builtin.CornerOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
+---The proportion of the layout that the width of the corner window takes up.
 ---@field corner_width_factor number?
+---The proportion of the layout that the height of the corner window takes up.
 ---@field corner_height_factor number?
+---The location of the corner window.
 ---@field corner_loc ("top_left" | "top_right" | "bottom_left" | "bottom_right")?
 
 ---Creates a layout generator that lays windows out with one main corner window and
 ---a horizontal and vertical stack flanking the other two sides.
 ---
----@param options pinnacle.layout.builtin.CornerOpts?
+---@param options pinnacle.layout.builtin.CornerOpts? Options for the generator.
+---
 ---@return pinnacle.layout.builtin.Corner
 function builtin.corner(options)
     ---@type pinnacle.layout.builtin.Corner
@@ -474,19 +531,27 @@ function builtin.corner(options)
     }
 end
 
+---A layout generator that attempts to lay out windows such that they are the same size.
 ---@class pinnacle.layout.builtin.Fair : pinnacle.layout.LayoutGenerator
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps
+---Which axis the lines of windows will run.
 ---@field axis "horizontal" | "vertical"
 
+---Options for the fair generator.
 ---@class pinnacle.layout.builtin.FairOpts
+---The gaps between the outer container and this layout.
 ---@field outer_gaps pinnacle.layout.Gaps?
+---The gaps between windows within this layout.
 ---@field inner_gaps pinnacle.layout.Gaps?
+---Which axis the lines of windows will run.
 ---@field axis ("horizontal" | "vertical")?
 
 ---Creates a layout generator that lays windows out keeping their sizes roughly the same.
 ---
----@param options pinnacle.layout.builtin.FairOpts?
+---@param options pinnacle.layout.builtin.FairOpts? Options for the generator.
 ---
 ---@return pinnacle.layout.builtin.Fair
 function builtin.fair(options)
@@ -568,15 +633,19 @@ function builtin.fair(options)
     }
 end
 
+---A layout generator that keeps track of layouts per tag
+---and provides methods to cycle between them.
 ---@class pinnacle.layout.builtin.Cycle : pinnacle.layout.LayoutGenerator
+---The layouts this generator will cycle between.
 ---@field layouts pinnacle.layout.LayoutGenerator[]
 ---@field private tag_indices table<integer, integer>
+---The current tag that will determine the chosen layout.
 ---@field current_tag pinnacle.tag.TagHandle?
 local Cycle = {}
 
 ---Cycles the layout forward for the given tag.
 ---
----@param tag pinnacle.tag.TagHandle
+---@param tag pinnacle.tag.TagHandle The tag to cycle the layout for.
 function Cycle:cycle_layout_forward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
@@ -589,7 +658,7 @@ end
 
 ---Cycles the layout backward for the given tag.
 ---
----@param tag pinnacle.tag.TagHandle
+---@param tag pinnacle.tag.TagHandle The tag to cycle the layout for.
 function Cycle:cycle_layout_backward(tag)
     if not self.tag_indices[tag.id] then
         self.tag_indices[tag.id] = 1
@@ -602,7 +671,7 @@ end
 
 ---Gets the current layout generator for the given tag.
 ---
----@param tag pinnacle.tag.TagHandle
+---@param tag pinnacle.tag.TagHandle The tag to get a layout for.
 ---
 ---@return pinnacle.layout.LayoutGenerator?
 function Cycle:current_layout(tag)
@@ -612,7 +681,7 @@ end
 ---Creates a layout generator that delegates to other layout generators depending on the tag
 ---and allows you to cycle between the generators.
 ---
----@param layouts pinnacle.layout.LayoutGenerator[]
+---@param layouts pinnacle.layout.LayoutGenerator[] The layouts that this generator will cycle between.
 ---
 ---@return pinnacle.layout.builtin.Cycle
 function builtin.cycle(layouts)
@@ -647,16 +716,18 @@ end
 ---
 ---@class pinnacle.layout
 local layout = {
+    ---Builtin layout generators.
     builtin = builtin,
 }
 
+---An object that allows you to forcibly request layouts.
 ---@class pinnacle.layout.LayoutRequester
 ---@field private sender grpc_client.h2.Stream
 local LayoutRequester = {}
 
 ---Causes the compositor to emit a layout request.
 ---
----@param output pinnacle.output.OutputHandle?
+---@param output pinnacle.output.OutputHandle? The output to layout, or `nil` for the focused output.
 function LayoutRequester:request_layout(output)
     local output = output or require("pinnacle.output").get_focused()
     if not output then
@@ -740,7 +811,7 @@ end
 ---end)
 ---```
 ---
----@param on_layout fun(args: pinnacle.layout.LayoutArgs): pinnacle.layout.LayoutNode
+---@param on_layout fun(args: pinnacle.layout.LayoutArgs): pinnacle.layout.LayoutNode A function that receives layout arguments and builds and returns a layout tree.
 ---
 ---@return pinnacle.layout.LayoutRequester # A requester that allows you to force the compositor to request a layout.
 ---@nodiscard

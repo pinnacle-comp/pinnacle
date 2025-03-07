@@ -8,7 +8,10 @@ local output = {}
 
 ---Parses a modeline string.
 ---
----@param modeline string
+---The string must have the form
+---`"clock hdisplay hsync_start hsync_end htotal vdisplay vsync_start vsync_end hsync vsync"`.
+---
+---@param modeline string The modeline string.
 ---
 ---@return pinnacle.output.Modeline|nil modeline A modeline if successful
 ---@return string|nil error An error message if any
