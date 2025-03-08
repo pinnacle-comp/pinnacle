@@ -1,5 +1,7 @@
 ---@lcat nodoc
 
+---@lcat nodoc
+
 pcall(require, "compat53")
 
 local socket = require("cqueues.socket")

@@ -13,7 +13,10 @@ use std::{
 use anyhow::Context;
 use clap::CommandFactory;
 use pinnacle::{
-    cli::{self, generate_config, Cli, CliSubcommand, ConfigSubcommand, DebugSubcommand},
+    cli::{
+        self, generate_config, start_lua_repl, Cli, CliSubcommand, ConfigSubcommand,
+        DebugSubcommand,
+    },
     config::{get_config_dir, parse_startup_config, StartupConfig},
     process::{REMOVE_RUST_BACKTRACE, REMOVE_RUST_LIB_BACKTRACE},
     session::{import_environment, notify_fd},
@@ -81,12 +84,12 @@ async fn main() -> anyhow::Result<()> {
 
     set_log_panic_hook();
 
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
 
-    if let Some(subcommand) = &cli.subcommand {
+    if let Some(subcommand) = cli.subcommand.take() {
         match subcommand {
             CliSubcommand::Config(ConfigSubcommand::Gen(config_gen)) => {
-                if let Err(err) = generate_config(config_gen.clone()) {
+                if let Err(err) = generate_config(config_gen) {
                     error!("Error generating config: {err}");
                 }
             }
@@ -122,11 +125,14 @@ async fn main() -> anyhow::Result<()> {
             }
             CliSubcommand::GenCompletions { shell } => {
                 clap_complete::generate(
-                    *shell,
+                    shell,
                     &mut Cli::command(),
                     "pinnacle",
                     &mut std::io::stdout(),
                 );
+            }
+            CliSubcommand::Client { execute } => {
+                start_lua_repl(execute);
             }
         }
         return Ok(());

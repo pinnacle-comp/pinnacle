@@ -1,4 +1,7 @@
-use std::{io::IsTerminal, path::PathBuf};
+use std::{
+    io::{IsTerminal, Read},
+    path::PathBuf,
+};
 
 use clap::{Parser, ValueHint};
 use tracing::warn;
@@ -94,6 +97,13 @@ pub enum CliSubcommand {
     GenCompletions {
         #[arg(short, long)]
         shell: clap_complete::Shell,
+    },
+
+    /// Start an interactive Lua REPL with the Pinnacle API loaded
+    Client {
+        /// Execute the provided Lua string
+        #[arg(short, long)]
+        execute: Option<String>,
     },
 }
 
@@ -372,6 +382,57 @@ pub fn generate_config(args: ConfigGen) -> anyhow::Result<()> {
 pub enum DebugSubcommand {
     // Panic to check backtraces
     Panic,
+}
+
+pub fn start_lua_repl(execute: Option<String>) {
+    let libraries = [
+        "-l",
+        "Pinnacle=pinnacle",
+        "-l",
+        "Input=pinnacle.input",
+        "-l",
+        "Libinput=pinnacle.input.libinput",
+        "-l",
+        "Process=pinnacle.process",
+        "-l",
+        "Output=pinnacle.output",
+        "-l",
+        "Tag=pinnacle.tag",
+        "-l",
+        "Window=pinnacle.window",
+        "-l",
+        "Layout=pinnacle.layout",
+        "-l",
+        "Util=pinnacle.util",
+        "-l",
+        "Snowcap=pinnacle.snowcap",
+    ];
+
+    let execute = execute.or_else(|| {
+        (!std::io::stdin().is_terminal()).then(|| {
+            let mut input = String::new();
+            std::io::stdin().read_to_string(&mut input).unwrap();
+            input
+        })
+    });
+
+    let mut lua = std::process::Command::new("lua");
+    lua.args(libraries);
+
+    if execute.is_none() {
+        lua.arg("-i");
+    }
+
+    let mut exec = "_PROMPT = 'pinnacle> '; Pinnacle.init(); \
+        print('Available globals: Pinnacle, Input, Libinput, \
+        Process, Output, Tag, Window, Layout, Util, Snowcap')"
+        .to_string();
+    exec.extend(execute);
+
+    lua.args(["-e", &exec]);
+
+    let mut child = lua.spawn().unwrap();
+    child.wait().unwrap();
 }
 
 #[cfg(test)]
