@@ -1,6 +1,15 @@
 # Xwayland
 
-Pinnacle integrates Xwayland into the compositor to allow legacy X11 windows to work.
+Xwayland is an X11 server that allows legacy X11 applications to run under Wayland.
+
+## Disabling
+
+You can start Pinnacle without xwayland by passing in the `--no-xwayland` flag.
+
+You can disable xwayland permanently by adding the following to your `pinnacle.toml`:
+```toml
+no_xwayland = true
+```
 
 ## Scaling
 

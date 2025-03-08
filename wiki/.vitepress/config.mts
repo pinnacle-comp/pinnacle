@@ -33,6 +33,13 @@ export default defineVersionedConfig({
                     ]
                 },
                 {
+                    text: "Usage",
+                    items: [
+                        { text: "Window management", link: "/usage/window_management" },
+                        { text: "IPC", link: "/usage/ipc" },
+                    ]
+                },
+                {
                     text: "Configuration",
                     items: [
                         { text: "Creating a config", link: "/configuration/creating-a-config" },
@@ -47,6 +54,12 @@ export default defineVersionedConfig({
                         { text: "Snowcap", link: "/configuration/snowcap" },
                         { text: "Integration with external applications", link: "/configuration/integration" },
                         { text: "Xwayland", link: "/configuration/xwayland" },
+                    ]
+                },
+                {
+                    text: "Development",
+                    items: [
+                        { text: "Packaging", link: "/development/packaging" },
                     ]
                 },
             ],

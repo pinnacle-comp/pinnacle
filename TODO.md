@@ -1,12 +1,11 @@
 - Provide scale and transform on new window/layer
     - AKA xdg-shell v6
-
 - Properly stack x11 windows relative to each other
 - Use env for snowcap socket dir
 - Don't log to local/state
-
 - Use xdg activation to activate new compositor-spawned windows
 - Work on `ConnectorSavedState`
+- Remove startup logs and globals print for CLI client
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords
