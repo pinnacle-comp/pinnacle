@@ -47,11 +47,6 @@ impl XdgShellHandler for State {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let _span = tracy_client::span!("XdgShellHandler::toplevel_destroyed");
 
-        // FIXME: `remove_window` also does a retain on unmapped_windows
-        self.pinnacle
-            .unmapped_windows
-            .retain(|unmapped| unmapped.window.toplevel() != Some(&surface));
-
         let Some(window) = self
             .pinnacle
             .window_for_surface(surface.wl_surface())
@@ -60,17 +55,23 @@ impl XdgShellHandler for State {
             return;
         };
 
+        let is_tiled = window.with_state(|state| state.layout_mode.is_tiled());
+
         let output = window.output(&self.pinnacle);
 
-        if let Some(output) = output.as_ref() {
-            self.capture_snapshots_on_output(output, []);
+        if is_tiled {
+            if let Some(output) = output.as_ref() {
+                self.capture_snapshots_on_output(output, []);
+            }
         }
 
         self.pinnacle.remove_window(&window, false);
 
         if let Some(output) = output {
-            self.pinnacle.begin_layout_transaction(&output);
-            self.pinnacle.request_layout(&output);
+            if is_tiled {
+                self.pinnacle.begin_layout_transaction(&output);
+                self.pinnacle.request_layout(&output);
+            }
 
             self.update_keyboard_focus(&output);
             self.schedule_render(&output);

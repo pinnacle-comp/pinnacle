@@ -389,17 +389,24 @@ impl State {
 
         let win = self.pinnacle.window_for_x11_surface(&surface).cloned();
         if let Some(win) = win {
+            let should_layout = !win.is_x11_override_redirect()
+                && win.with_state(|state| state.layout_mode.is_tiled());
+
             let output = win.output(&self.pinnacle);
 
-            if let Some(output) = output.as_ref() {
-                self.capture_snapshots_on_output(output, []);
+            if should_layout {
+                if let Some(output) = output.as_ref() {
+                    self.capture_snapshots_on_output(output, []);
+                }
             }
 
             self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
-                self.pinnacle.begin_layout_transaction(&output);
-                self.pinnacle.request_layout(&output);
+                if should_layout {
+                    self.pinnacle.begin_layout_transaction(&output);
+                    self.pinnacle.request_layout(&output);
+                }
 
                 self.update_keyboard_focus(&output);
                 // FIXME: schedule renders on all the outputs this window intersected
