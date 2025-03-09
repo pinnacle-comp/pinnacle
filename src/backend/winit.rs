@@ -244,6 +244,7 @@ impl Winit {
 
     /// Schedule a render on the winit window.
     pub fn schedule_render(&mut self) {
+        let _span = tracy_client::span!("Winit::schedule_render");
         self.backend.window().request_redraw();
     }
 

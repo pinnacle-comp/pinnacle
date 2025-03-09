@@ -145,7 +145,9 @@ impl CursorState {
                     .or_else(|| self.get_xcursor_images(CursorIcon::Default))
                     .unwrap();
 
-                let is_animated = cursor.images.len() > 1;
+                let img_count = nearest_size_images(self.size, &cursor.images).count();
+
+                let is_animated = img_count > 1;
                 is_animated
             }
             CursorImageStatus::Surface(_) => false,
@@ -191,6 +193,8 @@ impl XCursor {
 }
 
 fn nearest_size_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
+    let _span = tracy_client::span!("crate::cursor::nearest_size_images");
+
     // Follow the nominal size of the cursor to choose the nearest
     let nearest_image = images
         .iter()
