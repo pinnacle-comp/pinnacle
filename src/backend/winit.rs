@@ -370,9 +370,13 @@ impl Winit {
                 }
 
                 let has_rendered = render_output_result.damage.is_some();
-                if let Some(damage) = render_output_result.damage {
-                    match self.backend.submit(Some(damage)) {
-                        Ok(()) => {
+
+                match self
+                    .backend
+                    .submit(render_output_result.damage.map(|damage| damage.as_slice()))
+                {
+                    Ok(()) => {
+                        if has_rendered {
                             self.output.with_state_mut(|state| {
                                 if matches!(state.blanking_state, BlankingState::Blanking) {
                                     // TODO: this is probably wrong
@@ -381,9 +385,9 @@ impl Winit {
                                 }
                             });
                         }
-                        Err(err) => {
-                            error!("Failed to submit buffer: {}", err);
-                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to submit buffer: {}", err);
                     }
                 }
 
