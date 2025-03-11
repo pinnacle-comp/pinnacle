@@ -2,7 +2,7 @@ use vergen_gitcl::{CargoBuilder, Emitter, GitclBuilder, RustcBuilder, SysinfoBui
 
 fn main() {
     let cargo = CargoBuilder::default()
-        .debug(true)
+        .opt_level(true)
         .target_triple(true)
         .build()
         .unwrap();

@@ -37,7 +37,7 @@ pinnacle-api-defs = { path = "./pinnacle-api-defs" }
 xkbcommon = "0.8.0"
 xdg = "2.5.2"
 bitflags = "2.8.0"
-clap = { version = "4.5.28", features = ["derive"] }
+clap = { version = "4.5.28", features = ["derive", "string"] }
 dircpy = "0.3.19"
 tempfile = "3.16.0"
 indexmap = "2.7.1"

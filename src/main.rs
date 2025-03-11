@@ -96,33 +96,6 @@ async fn main() -> anyhow::Result<()> {
             CliSubcommand::Debug(DebugSubcommand::Panic) => {
                 pinnacle::util::cause_panic();
             }
-            CliSubcommand::Info => {
-                let info = format!(
-                    "Pinnacle, built in {opt} mode with Rust {rust_ver}\n\
-                    \n\
-                    Branch: {branch}{dirty}\n\
-                    Commit: {commit} ({commit_msg})\n\
-                    \n\
-                    OS: {os}",
-                    branch = env!("VERGEN_GIT_BRANCH"),
-                    dirty = if env!("VERGEN_GIT_DIRTY") == "true" {
-                        " (dirty)"
-                    } else {
-                        ""
-                    },
-                    commit = env!("VERGEN_GIT_SHA"),
-                    commit_msg = env!("VERGEN_GIT_COMMIT_MESSAGE"),
-                    opt = if env!("VERGEN_CARGO_DEBUG") == "true" {
-                        "debug"
-                    } else {
-                        "release"
-                    },
-                    rust_ver = env!("VERGEN_RUSTC_SEMVER"),
-                    os = env!("VERGEN_SYSINFO_OS_VERSION"),
-                );
-
-                println!("{info}");
-            }
             CliSubcommand::GenCompletions { shell } => {
                 clap_complete::generate(
                     shell,

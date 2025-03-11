@@ -22,7 +22,7 @@ pub enum Backend {
 
 /// The main CLI struct.
 #[derive(clap::Parser, Debug)]
-#[command(author, version, about, long_about = None, args_conflicts_with_subcommands = true)]
+#[command(author, version = version(), about, long_about = None, args_conflicts_with_subcommands = true)]
 pub struct Cli {
     /// Use the config at the given directory
     #[arg(short, long, value_name("DIR"), value_hint(ValueHint::DirPath))]
@@ -60,6 +60,34 @@ pub struct Cli {
     pub subcommand: Option<CliSubcommand>,
 }
 
+fn version() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    let profile = if env!("VERGEN_CARGO_OPT_LEVEL") == "0" {
+        "debug"
+    } else {
+        "release"
+    };
+    let rustc_version = env!("VERGEN_RUSTC_SEMVER");
+    let branch = env!("VERGEN_GIT_BRANCH");
+    let dirty = if env!("VERGEN_GIT_DIRTY") == "true" {
+        " (dirty)"
+    } else {
+        ""
+    };
+    let commit = env!("VERGEN_GIT_SHA");
+    let commit_msg = env!("VERGEN_GIT_COMMIT_MESSAGE");
+
+    format!(
+        r#"{version}
+
+Build Info:
+    Build profile: {profile}
+    rustc version: {rustc_version}
+    Branch: {branch}{dirty}
+    Commit: {commit} ({commit_msg})"#,
+    )
+}
+
 impl Cli {
     pub fn parse() -> Self {
         let mut cli: Self = Parser::parse();
@@ -89,9 +117,6 @@ pub enum CliSubcommand {
     /// Commands for debugging
     #[command(subcommand)]
     Debug(DebugSubcommand),
-
-    /// Print build and system information
-    Info,
 
     /// Generate shell completions and print them to stdout
     GenCompletions {
