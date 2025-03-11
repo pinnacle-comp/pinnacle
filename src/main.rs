@@ -127,16 +127,20 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let in_graphical_env = env::var("WAYLAND_DISPLAY").is_ok() || env::var("DISPLAY").is_ok();
-
     let session = cli.session;
 
     if cli.session {
-        if in_graphical_env {
-            warn!("You are trying to run Pinnacle as a session with WAYLAND_DISPLAY and/or DISPLAY set.");
-            warn!("If you are in a graphical environment, do not continue. This will mess up the global environment.");
-            warn!("If you are not, please unset WAYLAND_DISPLAY and DISPLAY and retry.");
-            return Ok(());
+        if env::var_os("DISPLAY").is_some() {
+            warn!("Running as a session but DISPLAY is set, removing it");
+            env::remove_var("DISPLAY");
+        }
+        if env::var_os("WAYLAND_DISPLAY").is_some() {
+            warn!("Running as a session but WAYLAND_DISPLAY is set, removing it");
+            env::remove_var("WAYLAND_DISPLAY");
+        }
+        if env::var_os("WAYLAND_SOCKET").is_some() {
+            warn!("Running as a session but WAYLAND_SOCKET is set, removing it");
+            env::remove_var("WAYLAND_SOCKET");
         }
 
         env::set_var("XDG_CURRENT_DESKTOP", "pinnacle");
@@ -146,6 +150,9 @@ async fn main() -> anyhow::Result<()> {
     if !sysinfo::set_open_files_limit(0) {
         warn!("Unable to set `sysinfo`'s open files limit to 0");
     }
+
+    let in_graphical_env =
+        env::var_os("WAYLAND_DISPLAY").is_some() || env::var_os("DISPLAY").is_some();
 
     let backend = match in_graphical_env {
         true => cli::Backend::Winit,
