@@ -804,6 +804,12 @@ local pinnacle_v1_Backend = {
 ---@field window_count integer?
 ---@field tag_ids integer[]?
 
+---@class pinnacle.debug.v1.SetDamageVisualizationRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
 ---@class pinnacle.tag.v1.GetRequest
 
 ---@class pinnacle.tag.v1.GetResponse
@@ -1205,6 +1211,10 @@ pinnacle.layout.v1.LayoutRequest = {}
 pinnacle.layout.v1.LayoutRequest.TreeResponse = {}
 pinnacle.layout.v1.LayoutRequest.ForceLayout = {}
 pinnacle.layout.v1.LayoutResponse = {}
+pinnacle.debug = {}
+pinnacle.debug.v1 = {}
+pinnacle.debug.v1.SetDamageVisualizationRequest = {}
+pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest = {}
 pinnacle.tag = {}
 pinnacle.tag.v1 = {}
 pinnacle.tag.v1.GetRequest = {}
@@ -1901,6 +1911,41 @@ pinnacle.layout.v1.LayoutService.Layout.response = ".pinnacle.layout.v1.LayoutRe
 ---@return string | nil An error string, if any
 function Client:pinnacle_layout_v1_LayoutService_Layout(callback)
     return self:bidirectional_streaming_request(pinnacle.layout.v1.LayoutService.Layout, callback)
+end
+pinnacle.debug.v1.DebugService = {}
+pinnacle.debug.v1.DebugService.SetDamageVisualization = {}
+pinnacle.debug.v1.DebugService.SetDamageVisualization.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.method = "SetDamageVisualization"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.request = ".pinnacle.debug.v1.SetDamageVisualizationRequest"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.debug.v1.SetDamageVisualizationRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetDamageVisualization(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetDamageVisualization, data)
+end
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization = {}
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.method = "SetOpaqueRegionVisualization"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.request = ".pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetOpaqueRegionVisualization(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization, data)
 end
 pinnacle.tag.v1.TagService = {}
 pinnacle.tag.v1.TagService.Get = {}

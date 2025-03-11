@@ -13,6 +13,7 @@ function protobuf.build_protos()
     require("pinnacle.log").debug("Building protos")
 
     local version = "v1"
+    -- FIXME: walk the directory instead of hardcoding
     local proto_file_paths = {
         "pinnacle/tag/" .. version .. "/tag.proto",
         "pinnacle/input/" .. version .. "/input.proto",
@@ -24,6 +25,7 @@ function protobuf.build_protos()
         "pinnacle/layout/" .. version .. "/layout.proto",
         "pinnacle/render/" .. version .. "/render.proto",
         "pinnacle/util/" .. version .. "/util.proto",
+        "pinnacle/debug/" .. version .. "/debug.proto",
         "google/protobuf/empty.proto",
     }
 

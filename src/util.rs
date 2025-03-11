@@ -44,3 +44,35 @@ pub fn cause_panic() {
     let b = Duration::from_secs(2);
     let _ = a - b;
 }
+
+/// Runs a closure every time the given duration passes with the amount of times
+/// this has been called since the last time the closure has run.
+///
+/// # Usage
+/// ```
+/// # use pinnacle::executions_per_duration;
+/// # use std::time::Duration;
+///
+/// fn count_me() {
+///     executions_per_duration!(Duration::from_secs(1), |amt| {
+///         println!("count_me has been called {amt} times in the last second.")
+///     });
+/// }
+/// ```
+#[macro_export]
+macro_rules! executions_per_duration {
+    ($duration:expr, $closure:expr) => {{
+        static COUNTER: ::std::sync::atomic::AtomicUsize = ::std::sync::atomic::AtomicUsize::new(0);
+        static TIME: ::std::sync::Mutex<::std::option::Option<::std::time::Instant>> =
+            ::std::sync::Mutex::new(None);
+        let mut then = TIME.lock().unwrap();
+        let then = then.get_or_insert(::std::time::Instant::now());
+        if then.elapsed() > $duration {
+            let counter = COUNTER.load(std::sync::atomic::Ordering::Relaxed);
+            ($closure)(counter);
+            *then = ::std::time::Instant::now();
+            COUNTER.store(0, ::std::sync::atomic::Ordering::Relaxed);
+        }
+        COUNTER.fetch_add(1, ::std::sync::atomic::Ordering::Relaxed);
+    }};
+}

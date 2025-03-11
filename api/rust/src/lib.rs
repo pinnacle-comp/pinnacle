@@ -73,6 +73,7 @@ use hyper_util::rt::TokioIo;
 use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 
+pub mod debug;
 pub mod input;
 pub mod layout;
 pub mod output;

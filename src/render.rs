@@ -9,7 +9,10 @@ use std::ops::Deref;
 
 use smithay::{
     backend::renderer::{
-        element::{surface::WaylandSurfaceRenderElement, AsRenderElements, RenderElementStates},
+        element::{
+            solid::SolidColorRenderElement, surface::WaylandSurfaceRenderElement, AsRenderElements,
+            RenderElementStates,
+        },
         gles::GlesRenderer,
         ImportAll, ImportMem, Renderer, Texture,
     },
@@ -49,6 +52,7 @@ pinnacle_render_elements! {
         Surface = WaylandSurfaceRenderElement<R>,
         Pointer = PointerRenderElement<R>,
         Snapshot = SnapshotRenderElement<R>,
+        SolidColor = SolidColorRenderElement,
     }
 }
 

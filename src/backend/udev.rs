@@ -30,6 +30,7 @@ use smithay::{
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self,
+            damage::OutputDamageTracker,
             element::{self, surface::render_elements_from_surface_tree, Element, Id},
             gles::{GlesRenderbuffer, GlesRenderer},
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
@@ -1006,6 +1007,7 @@ impl Udev {
 
         output.with_state_mut(|state| {
             state.serial = serial;
+            state.debug_damage_tracker = OutputDamageTracker::from_output(&output);
         });
 
         output.set_preferred(smithay_mode);
@@ -1465,6 +1467,23 @@ impl Udev {
                 &pinnacle.space,
                 &windows,
             ));
+        }
+
+        if pinnacle.config.visualize_opaque_regions {
+            crate::render::util::render_opaque_regions(
+                &mut output_render_elements,
+                smithay::utils::Scale::from(output.current_scale().fractional_scale()),
+            );
+        }
+
+        if pinnacle.config.visualize_damage {
+            output.with_state_mut(|state| {
+                crate::render::util::render_damage(
+                    &mut state.debug_damage_tracker,
+                    &mut output_render_elements,
+                    [0.3, 0.0, 0.0, 0.3].into(),
+                )
+            });
         }
 
         let clear_color = if pinnacle.lock_state.is_unlocked() {

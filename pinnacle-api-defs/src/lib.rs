@@ -92,6 +92,12 @@ pub mod pinnacle {
             tonic::include_proto!("pinnacle.util.v1");
         }
     }
+
+    pub mod debug {
+        pub mod v1 {
+            tonic::include_proto!("pinnacle.debug.v1");
+        }
+    }
 }
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("pinnacle");

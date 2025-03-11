@@ -108,6 +108,10 @@ impl Winit {
 
         let output = Output::new("Pinnacle Window".to_string(), physical_properties);
 
+        output.with_state_mut(|state| {
+            state.debug_damage_tracker = OutputDamageTracker::from_output(&output);
+        });
+
         output.change_current_state(
             Some(mode),
             Some(Transform::Flipped180),
@@ -333,6 +337,23 @@ impl Winit {
                 &pinnacle.space,
                 &windows,
             ));
+        }
+
+        if pinnacle.config.visualize_opaque_regions {
+            crate::render::util::render_opaque_regions(
+                &mut output_render_elements,
+                smithay::utils::Scale::from(self.output.current_scale().fractional_scale()),
+            );
+        }
+
+        if pinnacle.config.visualize_damage {
+            self.output.with_state_mut(|state| {
+                crate::render::util::render_damage(
+                    &mut state.debug_damage_tracker,
+                    &mut output_render_elements,
+                    [0.3, 0.0, 0.0, 0.3].into(),
+                )
+            });
         }
 
         let render_res = self.backend.bind().and_then(|_| {

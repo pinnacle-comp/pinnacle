@@ -1,4 +1,5 @@
 use pinnacle_api_defs::pinnacle::{
+    debug::v1::debug_service_client::DebugServiceClient,
     input::v1::input_service_client::InputServiceClient,
     layout::v1::layout_service_client::LayoutServiceClient,
     output::v1::output_service_client::OutputServiceClient,
@@ -27,6 +28,7 @@ pub struct Client {
     layout: LayoutServiceClient<Channel>,
     render: RenderServiceClient<Channel>,
     signal: SignalServiceClient<Channel>,
+    debug: DebugServiceClient<Channel>,
 }
 
 impl Client {
@@ -90,6 +92,10 @@ impl Client {
         })
     }
 
+    pub fn debug() -> DebugServiceClient<Channel> {
+        Self::get().debug.clone()
+    }
+
     fn new(channel: Channel) -> Self {
         Self {
             pinnacle: PinnacleServiceClient::new(channel.clone()),
@@ -101,6 +107,7 @@ impl Client {
             layout: LayoutServiceClient::new(channel.clone()),
             render: RenderServiceClient::new(channel.clone()),
             signal: SignalServiceClient::new(channel.clone()),
+            debug: DebugServiceClient::new(channel.clone()),
         }
     }
 }

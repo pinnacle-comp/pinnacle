@@ -5,8 +5,12 @@ pub mod surface;
 
 use anyhow::{bail, Context};
 use smithay::backend::allocator::Fourcc;
+use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
-use smithay::backend::renderer::{Bind, Frame, Offscreen, Renderer};
+use smithay::backend::renderer::element::{self, Element, Id};
+use smithay::backend::renderer::utils::CommitCounter;
+use smithay::backend::renderer::{Bind, Color32F, Frame, Offscreen, Renderer};
 use smithay::utils::{Point, Rectangle};
 use smithay::{
     backend::renderer::{
@@ -16,6 +20,8 @@ use smithay::{
     },
     utils::{Physical, Scale, Size, Transform},
 };
+
+use super::{OutputRenderElement, PRenderer};
 
 /// A texture from [`render_to_encompassing_texture`].
 ///
@@ -149,4 +155,79 @@ fn render_elements_to_bound_framebuffer(
     }
 
     frame.finish().context("failed to finish frame")
+}
+
+/// Renders damage rectangles for the given elements.
+///
+/// https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L61
+pub fn render_damage<R: PRenderer>(
+    damage_tracker: &mut OutputDamageTracker,
+    elements: &mut Vec<OutputRenderElement<R>>,
+    color: Color32F,
+) {
+    let _span = tracy_client::span!("render_damage");
+
+    let Ok((Some(damage), _)) = damage_tracker.damage_output(1, elements) else {
+        return;
+    };
+
+    for rect in damage {
+        let solid_color = SolidColorRenderElement::new(
+            Id::new(),
+            *rect,
+            CommitCounter::default(),
+            color,
+            element::Kind::Unspecified,
+        );
+        elements.insert(0, solid_color.into());
+    }
+}
+
+/// Renders opaque region rectangles on top of each element.
+///
+/// https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L10
+pub fn render_opaque_regions<R: PRenderer>(
+    elements: &mut Vec<OutputRenderElement<R>>,
+    scale: Scale<f64>,
+) {
+    let _span = tracy_client::span!("render_opaque_regions");
+
+    let mut i = 0;
+    while i < elements.len() {
+        let elem = &elements[i];
+        i += 1;
+
+        let geo = elem.geometry(scale);
+        let mut opaque = elem.opaque_regions(scale).to_vec();
+
+        for rect in &mut opaque {
+            rect.loc += geo.loc;
+        }
+
+        let semitransparent = geo.subtract_rects(opaque.iter().copied());
+
+        for rect in opaque {
+            let color = SolidColorRenderElement::new(
+                Id::new(),
+                rect,
+                CommitCounter::default(),
+                [0., 0., 0.2, 0.2],
+                element::Kind::Unspecified,
+            );
+            elements.insert(i - 1, OutputRenderElement::SolidColor(color));
+            i += 1;
+        }
+
+        for rect in semitransparent {
+            let color = SolidColorRenderElement::new(
+                Id::new(),
+                rect,
+                CommitCounter::default(),
+                [0.3, 0., 0., 0.3],
+                element::Kind::Unspecified,
+            );
+            elements.insert(i - 1, OutputRenderElement::SolidColor(color));
+            i += 1;
+        }
+    }
 }

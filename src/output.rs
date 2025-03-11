@@ -4,10 +4,11 @@ use std::cell::RefCell;
 
 use indexmap::IndexSet;
 use smithay::{
+    backend::renderer::damage::OutputDamageTracker,
     desktop::layer_map_for_output,
     output::{Mode, Output, Scale},
     reexports::{calloop::LoopHandle, drm},
-    utils::{Logical, Point, Transform},
+    utils::{Logical, Point, Size, Transform},
     wayland::session_lock::LockSurface,
 };
 use tracing::debug;
@@ -77,6 +78,8 @@ pub struct OutputState {
     /// still exist and can be interacted with.
     pub powered: bool,
     pub snapshots: OutputSnapshots,
+    /// Damage tracker for debugging damage.
+    pub debug_damage_tracker: OutputDamageTracker,
 }
 
 impl Default for OutputState {
@@ -92,6 +95,11 @@ impl Default for OutputState {
             layout_transaction: Default::default(),
             powered: true,
             snapshots: OutputSnapshots::default(),
+            debug_damage_tracker: OutputDamageTracker::new(
+                Size::default(),
+                1.0,
+                Default::default(),
+            ),
         }
     }
 }

@@ -1,3 +1,4 @@
+pub mod debug;
 pub mod input;
 pub mod layout;
 pub mod output;

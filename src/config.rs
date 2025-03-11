@@ -1,6 +1,6 @@
 use crate::{
     api::{
-        input::InputService, layout::LayoutService, output::OutputService,
+        debug::DebugService, input::InputService, layout::LayoutService, output::OutputService,
         pinnacle::PinnacleService, process::ProcessService, render::RenderService,
         signal::SignalService, tag::TagService, window::WindowService,
     },
@@ -20,6 +20,7 @@ use std::{
 use anyhow::Context;
 use indexmap::IndexSet;
 use pinnacle_api_defs::pinnacle::{
+    debug::v1::debug_service_server::DebugServiceServer,
     input::v1::input_service_server::InputServiceServer,
     layout::v1::layout_service_server::LayoutServiceServer,
     output::v1::output_service_server::OutputServiceServer,
@@ -225,6 +226,9 @@ pub struct Config {
     pub config_dir: PathBuf,
     pub cli: Option<Cli>,
     socket_path: Option<PathBuf>,
+
+    pub visualize_damage: bool,
+    pub visualize_opaque_regions: bool,
 }
 
 impl Drop for Config {
@@ -245,6 +249,8 @@ impl Config {
             config_dir,
             cli,
             socket_path: None,
+            visualize_damage: false,
+            visualize_opaque_regions: false,
         }
     }
 
@@ -261,6 +267,9 @@ impl Config {
         if let Some(token) = self.config_reload_on_crash_token.take() {
             loop_handle.remove(token);
         }
+
+        self.visualize_damage = false;
+        self.visualize_opaque_regions = false;
     }
 }
 
@@ -523,6 +532,7 @@ impl Pinnacle {
         let signal_service = SignalService::new(grpc_sender.clone());
         let layout_service = LayoutService::new(grpc_sender.clone());
         let render_service = RenderService::new(grpc_sender.clone());
+        let debug_service = DebugService::new(grpc_sender.clone());
 
         let refl_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(pinnacle_api_defs::FILE_DESCRIPTOR_SET)
@@ -543,7 +553,8 @@ impl Pinnacle {
             .add_service(ProcessServiceServer::new(process_service))
             .add_service(SignalServiceServer::new(signal_service))
             .add_service(LayoutServiceServer::new(layout_service))
-            .add_service(RenderServiceServer::new(render_service));
+            .add_service(RenderServiceServer::new(render_service))
+            .add_service(DebugServiceServer::new(debug_service));
 
         self.grpc_server_join_handle = Some(tokio::spawn(async move {
             if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
