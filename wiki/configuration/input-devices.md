@@ -53,3 +53,47 @@ input::libinput::for_each_device(|device| {
 :::
 
 Read the corresponding API reference to see all possible settings.
+
+## Keyboard settings
+
+Keyboards have some extra settings separate from libinput.
+
+### xkeyboard-config
+
+You can set a custom xkb-config by doing the following:
+
+::: tabs key:langs
+== Lua
+```lua
+require("pinnacle.input").set_xkb_config({
+    layout = "us,fr,ge",
+    options = "ctrl:swapcaps,caps:shift"
+})
+```
+== Rust
+```rust
+input::set_xkb_config(XkbConfig::new()
+    .with_layout("us,fr,ge")
+    .with_options("ctrl:swapcaps,caps:shift"));
+```
+:::
+
+This currently only supports setting the xkb-config globally.
+
+### Repeat rate and delay
+
+Setting the repeat rate and delay changes how long it takes a held down
+key to start repeating as well as how often it repeats once it does.
+
+::: tabs key:langs
+== Lua
+```lua
+require("pinnacle.input").set_repeat_rate(25, 500)
+```
+== Rust
+```rust
+input::set_repeat_rate(25, 500);
+```
+:::
+
+This currently only supports setting the repeat rate and delay globally.
