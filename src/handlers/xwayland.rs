@@ -30,7 +30,7 @@ use smithay::{
         X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     },
 };
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -58,12 +58,20 @@ impl XwmHandler for State {
             .expect("xwm not in state")
     }
 
-    fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
+    fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {
+        trace!(class = _window.class(), "XwmHandler::new_window");
+    }
 
-    fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {}
+    fn new_override_redirect_window(&mut self, _xwm: XwmId, _window: X11Surface) {
+        trace!(
+            class = _window.class(),
+            "XwmHandler::new_override_redirect_window"
+        );
+    }
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::map_window_request");
+        trace!(class = surface.class(), "XwmHandler::map_window_request");
 
         let exists = self
             .pinnacle
@@ -99,6 +107,10 @@ impl XwmHandler for State {
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::mapped_override_redirect_window");
+        trace!(
+            class = surface.class(),
+            "XwmHandler::mapped_override_redirect_window"
+        );
 
         let loc = surface.geometry().loc;
 
@@ -126,6 +138,7 @@ impl XwmHandler for State {
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::map_window_notify");
+        trace!(class = window.class(), "XwmHandler::map_window_notify");
 
         let Some(idx) = self
             .pinnacle
@@ -143,11 +156,13 @@ impl XwmHandler for State {
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unmapped_window");
+        trace!(class = surface.class(), "XwmHandler::unmapped_window");
         self.remove_xwayland_window(surface);
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::destroyed_window");
+        trace!(class = surface.class(), "XwmHandler::destroyed_window");
         self.remove_xwayland_window(surface);
     }
 
@@ -162,6 +177,14 @@ impl XwmHandler for State {
         _reorder: Option<Reorder>,
     ) {
         let _span = tracy_client::span!("XwmHandler::configure_request");
+        trace!(
+            class = window.class(),
+            ?x,
+            ?y,
+            ?w,
+            ?h,
+            "XwmHandler::configure_request"
+        );
 
         let should_configure = self
             .pinnacle
@@ -199,6 +222,11 @@ impl XwmHandler for State {
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
         let _span = tracy_client::span!("XwmHandler::configure_notify");
+        trace!(
+            class = surface.class(),
+            ?geometry,
+            "XwmHandler::configure_notify"
+        );
 
         let Some(win) = self
             .pinnacle
@@ -218,6 +246,7 @@ impl XwmHandler for State {
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::maximize_request");
+        trace!(class = window.class(), "XwmHandler::maximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
             window.with_state_mut(|state| state.layout_mode.set_maximized(true));
@@ -231,6 +260,7 @@ impl XwmHandler for State {
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unmaximize_request");
+        trace!(class = window.class(), "XwmHandler::unmaximize_request");
 
         let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
@@ -242,6 +272,7 @@ impl XwmHandler for State {
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::fullscreen_request");
+        trace!(class = window.class(), "XwmHandler::fullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
             window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
@@ -255,6 +286,7 @@ impl XwmHandler for State {
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
         let _span = tracy_client::span!("XwmHandler::unfullscreen_request");
+        trace!(class = window.class(), "XwmHandler::unfullscreen_request");
 
         let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
             return;
@@ -272,6 +304,7 @@ impl XwmHandler for State {
         resize_edge: smithay::xwayland::xwm::ResizeEdge,
     ) {
         let _span = tracy_client::span!("XwmHandler::resize_request");
+        trace!(class = window.class(), "XwmHandler::resize_request");
 
         let Some(wl_surf) = window.wl_surface() else { return };
         let seat = self.pinnacle.seat.clone();
@@ -287,6 +320,7 @@ impl XwmHandler for State {
 
     fn move_request(&mut self, _xwm: XwmId, window: X11Surface, button: u32) {
         let _span = tracy_client::span!("XwmHandler::move_request");
+        trace!(class = window.class(), "XwmHandler::move_request");
 
         let Some(wl_surf) = window.wl_surface() else { return };
         let seat = self.pinnacle.seat.clone();
