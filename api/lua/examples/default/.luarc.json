@@ -4,7 +4,9 @@
         "~/.luarocks/share/lua/5.4/pinnacle.lua",
         "~/.luarocks/share/lua/5.4/pinnacle",
         "~/.luarocks/share/lua/5.4/snowcap.lua",
-        "~/.luarocks/share/lua/5.4/snowcap"
+        "~/.luarocks/share/lua/5.4/snowcap",
+        "/usr/share/lua/5.4/pinnacle.lua",
+        "/usr/share/lua/5.4/pinnacle",
     ],
     "runtime.version": "Lua 5.4",
 }
