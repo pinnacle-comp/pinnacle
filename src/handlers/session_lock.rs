@@ -119,12 +119,19 @@ impl SessionLockHandler for State {
         });
         surface.send_configure();
 
+        // Only auto-focus the first received lock surface.
+        // Removes the need to click on the lock surface for gtklock to get keyboard input.
         if let Some(keyboard) = self.pinnacle.seat.get_keyboard() {
-            keyboard.set_focus(
-                self,
-                Some(KeyboardFocusTarget::LockSurface(surface.clone())),
-                SERIAL_COUNTER.next_serial(),
-            );
+            if !matches!(
+                keyboard.current_focus(),
+                Some(KeyboardFocusTarget::LockSurface(_))
+            ) {
+                keyboard.set_focus(
+                    self,
+                    Some(KeyboardFocusTarget::LockSurface(surface.clone())),
+                    SERIAL_COUNTER.next_serial(),
+                );
+            }
         }
 
         output.with_state_mut(|state| state.lock_surface.replace(surface));

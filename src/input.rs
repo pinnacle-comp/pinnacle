@@ -369,17 +369,27 @@ impl State {
                 }
             }
         } else {
-            // We don't want anything but lock surfaces getting keyboard input when locked
-            let lock_surface = self
-                .pinnacle
-                .space
-                .outputs()
-                .find_map(|op| op.with_state(|state| state.lock_surface.clone()));
+            // We don't want anything but lock surfaces getting keyboard input when locked.
 
             if !matches!(
                 keyboard.current_focus(),
                 Some(KeyboardFocusTarget::LockSurface(_))
             ) {
+                let pointer_focus = self.pinnacle.pointer_focus_target_under(
+                    self.pinnacle.seat.get_pointer().unwrap().current_location(),
+                );
+
+                let lock_surface = pointer_focus
+                    .and_then(|(focus, _loc)| focus.lock_surface_for(self))
+                    .or_else(|| {
+                        let lock_surface = self
+                            .pinnacle
+                            .space
+                            .outputs()
+                            .find_map(|op| op.with_state(|state| state.lock_surface.clone()));
+                        lock_surface
+                    });
+
                 keyboard.set_focus(
                     self,
                     lock_surface.map(KeyboardFocusTarget::LockSurface),
@@ -415,10 +425,6 @@ impl State {
                     }
                 }
 
-                if shortcuts_inhibited {
-                    return FilterResult::Forward;
-                }
-
                 let Some(raw_sym) = keysym.raw_latin_sym_or_raw_current_sym() else {
                     return FilterResult::Forward;
                 };
@@ -433,6 +439,8 @@ impl State {
                     *modifiers,
                     edge,
                     state.pinnacle.input_state.bind_state.current_layer(),
+                    shortcuts_inhibited,
+                    !state.pinnacle.lock_state.is_unlocked(),
                 );
 
                 match bind_action {
@@ -497,12 +505,13 @@ impl State {
         };
 
         let current_layer = self.pinnacle.input_state.bind_state.current_layer();
-        let bind_action =
-            self.pinnacle
-                .input_state
-                .bind_state
-                .mousebinds
-                .btn(button, mods, edge, current_layer);
+        let bind_action = self.pinnacle.input_state.bind_state.mousebinds.btn(
+            button,
+            mods,
+            edge,
+            current_layer,
+            !self.pinnacle.lock_state.is_unlocked(),
+        );
 
         match bind_action {
             bind::BindAction::Forward => (),
@@ -544,6 +553,14 @@ impl State {
                         keyboard.set_focus(
                             self,
                             Some(KeyboardFocusTarget::LayerSurface(layer)),
+                            serial,
+                        );
+                    }
+                } else if !self.pinnacle.lock_state.is_unlocked() {
+                    if let Some(lock_surface) = focus.lock_surface_for(self) {
+                        keyboard.set_focus(
+                            self,
+                            Some(KeyboardFocusTarget::LockSurface(lock_surface)),
                             serial,
                         );
                     }
