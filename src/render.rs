@@ -14,7 +14,7 @@ use smithay::{
             RenderElementStates,
         },
         gles::GlesRenderer,
-        ImportAll, ImportMem, Renderer, Texture,
+        ImportAll, ImportMem, Renderer, RendererSuper, Texture,
     },
     desktop::{
         layer_map_for_output,
@@ -60,7 +60,7 @@ pinnacle_render_elements! {
 pub trait PRenderer
 where
     Self: Renderer<TextureId = Self::PTextureId, Error = Self::PError> + ImportAll + ImportMem,
-    <Self as Renderer>::TextureId: Texture + Clone + 'static,
+    <Self as RendererSuper>::TextureId: Texture + Clone + 'static,
 {
     // Self::TextureId: Texture + Clone + 'static doesn't work in the where clause,
     // which is why these associated types exist.

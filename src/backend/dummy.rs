@@ -82,10 +82,8 @@ impl Dummy {
         output.set_preferred(mode);
         output.with_state_mut(|state| state.modes = vec![mode]);
 
-        let renderer = DummyRenderer::new();
-
         let dummy = Dummy {
-            renderer,
+            renderer: DummyRenderer,
             // dmabuf_state,
             #[cfg(feature = "wlcs")]
             wlcs_state: Wlcs::default(),
