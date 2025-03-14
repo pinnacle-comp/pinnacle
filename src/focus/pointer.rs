@@ -12,11 +12,15 @@ use smithay::{
     },
     reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},
     utils::{IsAlive, Serial},
-    wayland::seat::WaylandFocus,
+    wayland::{seat::WaylandFocus, session_lock::LockSurface},
     xwayland::X11Surface,
 };
 
-use crate::{api::signal::Signal, state::State, window::WindowElement};
+use crate::{
+    api::signal::Signal,
+    state::{State, WithState},
+    window::WindowElement,
+};
 
 use super::keyboard::KeyboardFocusTarget;
 
@@ -73,6 +77,20 @@ impl PointerFocusTarget {
         }
     }
 
+    pub fn lock_surface_for(&self, state: &State) -> Option<LockSurface> {
+        match self {
+            PointerFocusTarget::WlSurface(surf) => state.pinnacle.space.outputs().find_map(|op| {
+                op.with_state(|state| match state.lock_surface.as_ref() {
+                    Some(lock_surface) if lock_surface.wl_surface() == surf => {
+                        Some(lock_surface.clone())
+                    }
+                    _ => None,
+                })
+            }),
+            PointerFocusTarget::X11Surface(_) => None,
+        }
+    }
+
     pub fn to_keyboard_focus_target(&self, state: &State) -> Option<KeyboardFocusTarget> {
         #[allow(clippy::manual_map)] // screw off clippy
         if let Some(window) = self.window_for(state) {
@@ -81,6 +99,8 @@ impl PointerFocusTarget {
             Some(KeyboardFocusTarget::LayerSurface(layer))
         } else if let Some(popup) = self.popup_for(state) {
             Some(KeyboardFocusTarget::Popup(popup))
+        } else if let Some(lock_surface) = self.lock_surface_for(state) {
+            Some(KeyboardFocusTarget::LockSurface(lock_surface))
         } else {
             None
         }

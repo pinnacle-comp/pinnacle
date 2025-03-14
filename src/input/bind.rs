@@ -170,6 +170,8 @@ impl Keybinds {
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
+        shortcuts_inhibited: bool,
+        is_locked: bool,
     ) -> BindAction {
         let Some(keybinds) = self.keysym_map.get_mut(&key) else {
             return BindAction::Forward;
@@ -189,6 +191,9 @@ impl Keybinds {
                     }
                     if kb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
+                    }
+                    if shortcuts_inhibited || is_locked {
+                        return BindAction::Forward;
                     }
                     if kb_entry.get().borrow().has_on_press {
                         bind_action = BindAction::Suppress;
@@ -216,9 +221,7 @@ impl Keybinds {
 
             let keybind = keybind.borrow();
 
-            if current_layer != keybind.bind_data.layer {
-                return true;
-            }
+            let same_layer = current_layer == keybind.bind_data.layer;
 
             if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
                 return true;
@@ -245,7 +248,8 @@ impl Keybinds {
                     bind_action = BindAction::Quit;
                 } else if keybind.bind_data.is_reload_config_bind {
                     bind_action = BindAction::ReloadConfig;
-                } else if keybind.has_on_press {
+                } else if keybind.has_on_press && same_layer && (!shortcuts_inhibited && !is_locked)
+                {
                     retain = keybind.sender.send(edge).is_ok();
                     bind_action = BindAction::Suppress;
                 };
@@ -349,6 +353,7 @@ impl Mousebinds {
         mods: ModifiersState,
         edge: Edge,
         current_layer: Option<String>,
+        is_locked: bool,
     ) -> BindAction {
         let Some(mousebinds) = self.button_map.get_mut(&button) else {
             return BindAction::Forward;
@@ -368,6 +373,9 @@ impl Mousebinds {
                     }
                     if mb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
+                    }
+                    if is_locked {
+                        return BindAction::Forward;
                     }
                     if mb_entry.get().borrow().has_on_press {
                         bind_action = BindAction::Suppress;
@@ -395,9 +403,7 @@ impl Mousebinds {
 
             let mousebind = mousebind.borrow();
 
-            if current_layer != mousebind.bind_data.layer {
-                return true;
-            }
+            let same_layer = current_layer == mousebind.bind_data.layer;
 
             if let BindAction::Quit | BindAction::ReloadConfig = bind_action {
                 return true;
@@ -424,7 +430,7 @@ impl Mousebinds {
                     bind_action = BindAction::Quit;
                 } else if mousebind.bind_data.is_reload_config_bind {
                     bind_action = BindAction::ReloadConfig;
-                } else if mousebind.has_on_press {
+                } else if mousebind.has_on_press && same_layer && !is_locked {
                     retain = mousebind.sender.send(edge).is_ok();
                     bind_action = BindAction::Suppress;
                 };
