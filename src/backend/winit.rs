@@ -10,9 +10,8 @@ use smithay::{
             self, buffer_type,
             damage::{self, OutputDamageTracker, RenderOutputResult},
             element::{self, surface::render_elements_from_surface_tree},
-            gles::{GlesRenderbuffer, GlesRenderer},
-            Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
-            TextureFilter,
+            gles::GlesRenderer,
+            Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, TextureFilter,
         },
         winit::{self, WinitEvent, WinitGraphicsBackend},
     },
@@ -340,24 +339,28 @@ impl Winit {
         }
 
         if pinnacle.config.debug.visualize_damage {
-            self.output.with_state_mut(|state| {
-                crate::render::util::render_damage(
+            let damage_elements = self.output.with_state_mut(|state| {
+                crate::render::util::render_damage_from_elements(
                     &mut state.debug_damage_tracker,
-                    &mut output_render_elements,
+                    &output_render_elements,
                     [0.3, 0.0, 0.0, 0.3].into(),
                 )
             });
+            output_render_elements = damage_elements
+                .into_iter()
+                .map(From::from)
+                .chain(output_render_elements)
+                .collect();
         }
 
-        let render_res = self.backend.bind().and_then(|_| {
-            let age = if *full_redraw > 0 {
-                0
-            } else {
-                self.backend.buffer_age().unwrap_or(0)
-            };
+        let age = if *full_redraw > 0 {
+            0
+        } else {
+            // FIXME: always errors and returns none, https://github.com/Smithay/smithay/issues/1672
+            self.backend.buffer_age().unwrap_or(0)
+        };
 
-            let renderer = self.backend.renderer();
-
+        let render_res = self.backend.bind().and_then(|(renderer, mut framebuffer)| {
             let clear_color = if pinnacle.lock_state.is_unlocked() {
                 CLEAR_COLOR
             } else {
@@ -365,7 +368,13 @@ impl Winit {
             };
 
             self.damage_tracker
-                .render_output(renderer, age, &output_render_elements, clear_color)
+                .render_output(
+                    renderer,
+                    &mut framebuffer,
+                    age,
+                    &output_render_elements,
+                    clear_color,
+                )
                 .map_err(|err| match err {
                     damage::Error::Rendering(err) => err.into(),
                     damage::Error::OutputNoMode(_) => panic!("winit output has no mode set"),
@@ -374,15 +383,6 @@ impl Winit {
 
         match render_res {
             Ok(render_output_result) => {
-                if pinnacle.lock_state.is_unlocked() {
-                    Winit::handle_pending_screencopy(
-                        &mut self.backend,
-                        &self.output,
-                        &render_output_result,
-                        &pinnacle.loop_handle,
-                    );
-                }
-
                 let has_rendered = render_output_result.damage.is_some();
 
                 match self
@@ -401,8 +401,17 @@ impl Winit {
                         }
                     }
                     Err(err) => {
-                        error!("Failed to submit buffer: {}", err);
+                        error!("Failed to submit buffer: {:?}", err);
                     }
+                }
+
+                if pinnacle.lock_state.is_unlocked() {
+                    Winit::handle_pending_screencopy(
+                        &mut self.backend,
+                        &self.output,
+                        &render_output_result,
+                        &pinnacle.loop_handle,
+                    );
                 }
 
                 let now = pinnacle.clock.now();
@@ -468,17 +477,25 @@ impl Winit {
                 }
             }
 
-            let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
+            let sync_point = if let Ok(mut dmabuf) =
+                dmabuf::get_dmabuf(screencopy.buffer()).cloned()
+            {
                 trace!("Dmabuf screencopy");
 
-                backend
-                    .renderer()
-                    .blit_to(
-                        dmabuf,
-                        screencopy.physical_region(),
-                        Rectangle::from_size(screencopy.physical_region().size),
-                        TextureFilter::Nearest,
-                    )
+                let current = backend.bind();
+
+                current
+                    .and_then(|(renderer, current_fb)| {
+                        let mut dmabuf_fb = renderer.bind(&mut dmabuf)?;
+
+                        Ok(renderer.blit(
+                            &current_fb,
+                            &mut dmabuf_fb,
+                            screencopy.physical_region(),
+                            Rectangle::from_size(screencopy.physical_region().size),
+                            TextureFilter::Nearest,
+                        )?)
+                    })
                     .map(|_| render_output_result.sync.clone())
                     .map_err(|err| anyhow!("{err}"))
             } else if !matches!(
@@ -490,7 +507,6 @@ impl Winit {
                 trace!("Shm screencopy");
 
                 let sync_point = {
-                    let renderer = backend.renderer();
                     let screencopy = &screencopy;
                     if !matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)) {
                         warn!("screencopy does not have a shm buffer");
@@ -517,24 +533,10 @@ impl Winit {
                                 &screencopy.physical_region().size.to_logical(1),
                             );
 
-                            // On winit, we cannot just copy the EGL framebuffer because I get an
-                            // `UnsupportedPixelFormat` error. Therefore we'll blit
-                            // to this buffer and then copy it.
-                            let offscreen: GlesRenderbuffer = renderer.create_buffer(
-                                smithay::backend::allocator::Fourcc::Argb8888,
-                                buffer_rect.size,
-                            )?;
-
-                            renderer.blit_to(
-                                offscreen.clone(),
-                                screencopy.physical_region(),
-                                Rectangle::from_size(screencopy.physical_region().size),
-                                TextureFilter::Nearest,
-                            )?;
-
-                            renderer.bind(offscreen)?;
+                            let (renderer, current_fb) = backend.bind()?;
 
                             let mapping = renderer.copy_framebuffer(
+                                &current_fb,
                                 Rectangle::from_size(buffer_rect.size),
                                 smithay::backend::allocator::Fourcc::Argb8888,
                             )?;
@@ -567,12 +569,6 @@ impl Winit {
                     res
                 }
                 .map(|_| render_output_result.sync.clone());
-
-                // We must rebind to the underlying EGL surface for buffer swapping
-                // as it is bound to a `GlesRenderbuffer` above.
-                if let Err(err) = backend.bind() {
-                    error!("Failed to rebind EGL surface after screencopy: {err}");
-                }
 
                 sync_point
             };

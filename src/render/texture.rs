@@ -5,7 +5,7 @@ use smithay::{
         element::{self, texture::TextureRenderElement, Element, RenderElement},
         gles::{GlesRenderer, GlesTexture},
         utils::{CommitCounter, DamageSet, OpaqueRegions},
-        Renderer,
+        RendererSuper,
     },
     utils::{Buffer, Physical, Rectangle, Scale},
 };
@@ -71,12 +71,12 @@ impl Element for CommonTextureRenderElement {
 impl RenderElement<GlesRenderer> for CommonTextureRenderElement {
     fn draw(
         &self,
-        frame: &mut <GlesRenderer as Renderer>::Frame<'_>,
+        frame: &mut <GlesRenderer as RendererSuper>::Frame<'_, '_>,
         src: Rectangle<f64, Buffer>,
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
-    ) -> Result<(), <GlesRenderer as Renderer>::Error> {
+    ) -> Result<(), <GlesRenderer as RendererSuper>::Error> {
         RenderElement::<GlesRenderer>::draw(&self.0, frame, src, dst, damage, opaque_regions)
     }
 
@@ -92,12 +92,12 @@ impl RenderElement<GlesRenderer> for CommonTextureRenderElement {
 impl<'a> RenderElement<UdevRenderer<'a>> for CommonTextureRenderElement {
     fn draw(
         &self,
-        frame: &mut <UdevRenderer<'a> as Renderer>::Frame<'_>,
+        frame: &mut <UdevRenderer<'a> as RendererSuper>::Frame<'_, '_>,
         src: Rectangle<f64, Buffer>,
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
-    ) -> Result<(), <UdevRenderer<'a> as Renderer>::Error> {
+    ) -> Result<(), <UdevRenderer<'a> as RendererSuper>::Error> {
         RenderElement::<GlesRenderer>::draw(
             &self.0,
             frame.as_mut(),
@@ -122,12 +122,12 @@ impl<'a> RenderElement<UdevRenderer<'a>> for CommonTextureRenderElement {
 impl RenderElement<DummyRenderer> for CommonTextureRenderElement {
     fn draw(
         &self,
-        _frame: &mut <DummyRenderer as Renderer>::Frame<'_>,
+        _frame: &mut <DummyRenderer as RendererSuper>::Frame<'static, 'static>,
         _src: Rectangle<f64, Buffer>,
         _dst: Rectangle<i32, Physical>,
         _damage: &[Rectangle<i32, Physical>],
         _opaque_regions: &[Rectangle<i32, Physical>],
-    ) -> Result<(), <DummyRenderer as Renderer>::Error> {
+    ) -> Result<(), <DummyRenderer as RendererSuper>::Error> {
         Ok(())
     }
 }

@@ -56,10 +56,8 @@ impl BackendData for Dummy {
 
 impl Dummy {
     pub(crate) fn try_new() -> UninitBackend<Dummy> {
-        let renderer = DummyRenderer::new();
-
         let dummy = Dummy {
-            renderer,
+            renderer: DummyRenderer,
             // dmabuf_state,
             #[cfg(feature = "wlcs")]
             wlcs_state: Wlcs::default(),

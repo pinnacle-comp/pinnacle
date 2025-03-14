@@ -10,7 +10,7 @@ use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
 use smithay::backend::renderer::element::{self, Element, Id};
 use smithay::backend::renderer::utils::CommitCounter;
-use smithay::backend::renderer::{Bind, Color32F, Frame, Offscreen, Renderer};
+use smithay::backend::renderer::{Bind, Color32F, Frame, Offscreen, Renderer, RendererSuper};
 use smithay::utils::{Point, Rectangle};
 use smithay::{
     backend::renderer::{
@@ -106,27 +106,37 @@ pub fn render_to_texture(
     }
 
     let buffer_size = size.to_logical(1).to_buffer(1, Transform::Normal);
-    let texture: GlesTexture = renderer
+    let mut texture: GlesTexture = renderer
         .create_buffer(fourcc, buffer_size)
         .context("failed to create texture")?;
-    renderer
-        .bind(texture.clone())
-        .context("failed to bind texture")?;
 
-    let sync_point =
-        render_elements_to_bound_framebuffer(renderer, elements, size, scale, transform)?;
+    let sync_point = {
+        let mut framebuffer = renderer
+            .bind(&mut texture)
+            .context("failed to bind texture")?;
+
+        render_elements_to_framebuffer(
+            renderer,
+            &mut framebuffer,
+            elements,
+            size,
+            scale,
+            transform,
+        )?
+    };
 
     Ok((texture, sync_point))
 }
 
-/// Renders the given elements into the currently bound framebuffer.
+/// Renders the given elements into the provided bound framebuffer.
 ///
 /// `elements` should have their locations relative to (0, 0), as they will be rendered
 /// to a texture with a rectangle of loc (0, 0) and size `size`.
 ///
 /// From https://github.com/YaLTeR/niri/blob/efb39e466b5248eb894745e899de33661493511d/src/render_helpers/mod.rs#L295
-fn render_elements_to_bound_framebuffer(
+fn render_elements_to_framebuffer(
     renderer: &mut GlesRenderer,
+    framebuffer: &mut <GlesRenderer as RendererSuper>::Framebuffer<'_>,
     elements: impl IntoIterator<Item = impl RenderElement<GlesRenderer>>,
     size: Size<i32, Physical>,
     scale: Scale<f64>,
@@ -136,7 +146,7 @@ fn render_elements_to_bound_framebuffer(
     let dst_rect = Rectangle::from_size(transform.transform_size(size));
 
     let mut frame = renderer
-        .render(size, transform)
+        .render(framebuffer, size, transform)
         .context("failed to start render")?;
 
     frame
@@ -160,27 +170,37 @@ fn render_elements_to_bound_framebuffer(
 /// Renders damage rectangles for the given elements.
 ///
 /// https://github.com/YaLTeR/niri/blob/b351f6ff220560d96a260d8dd3ad794000923481/src/render_helpers/debug.rs#L61
-pub fn render_damage<R: PRenderer>(
+pub fn render_damage_from_elements<E: Element>(
     damage_tracker: &mut OutputDamageTracker,
-    elements: &mut Vec<OutputRenderElement<R>>,
+    elements: &[E],
     color: Color32F,
-) {
+) -> Vec<SolidColorRenderElement> {
     let _span = tracy_client::span!("render_damage");
 
     let Ok((Some(damage), _)) = damage_tracker.damage_output(1, elements) else {
-        return;
+        return Vec::new();
     };
 
-    for rect in damage {
-        let solid_color = SolidColorRenderElement::new(
-            Id::new(),
-            *rect,
-            CommitCounter::default(),
-            color,
-            element::Kind::Unspecified,
-        );
-        elements.insert(0, solid_color.into());
-    }
+    render_damage(damage, color)
+}
+
+/// Renders damage rectangles.
+pub fn render_damage(
+    damage: &[Rectangle<i32, Physical>],
+    color: Color32F,
+) -> Vec<SolidColorRenderElement> {
+    damage
+        .iter()
+        .map(|rect| {
+            SolidColorRenderElement::new(
+                Id::new(),
+                *rect,
+                CommitCounter::default(),
+                color,
+                element::Kind::Unspecified,
+            )
+        })
+        .collect()
 }
 
 /// Renders opaque region rectangles on top of each element.

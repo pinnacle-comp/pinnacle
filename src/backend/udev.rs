@@ -1470,13 +1470,18 @@ impl Udev {
         }
 
         if pinnacle.config.debug.visualize_damage {
-            output.with_state_mut(|state| {
-                crate::render::util::render_damage(
+            let damage_elements = output.with_state_mut(|state| {
+                crate::render::util::render_damage_from_elements(
                     &mut state.debug_damage_tracker,
-                    &mut output_render_elements,
+                    &output_render_elements,
                     [0.3, 0.0, 0.0, 0.3].into(),
                 )
             });
+            output_render_elements = damage_elements
+                .into_iter()
+                .map(From::from)
+                .chain(output_render_elements)
+                .collect();
         }
 
         let clear_color = if pinnacle.lock_state.is_unlocked() {
@@ -1703,6 +1708,7 @@ fn handle_pending_screencopy<'a>(
 
     let screencopies =
         output.with_state_mut(|state| state.screencopies.drain(..).collect::<Vec<_>>());
+
     for mut screencopy in screencopies {
         assert_eq!(screencopy.output(), output);
 
@@ -1796,7 +1802,7 @@ fn handle_pending_screencopy<'a>(
             screencopy.damage(&damage);
         }
 
-        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
+        let sync_point = if let Ok(mut dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
             trace!("Dmabuf screencopy");
 
             let format_correct =
@@ -1812,13 +1818,14 @@ fn handle_pending_screencopy<'a>(
                 if screencopy.physical_region() == Rectangle::from_size(untransformed_output_size) {
                     // Optimization to not have to do an extra blit;
                     // just blit the whole output
-                    renderer.bind(dmabuf)?;
+                    let mut framebuffer = renderer.bind(&mut dmabuf)?;
 
                     Ok(Some(render_frame_result.blit_frame_result(
                         screencopy.physical_region().size,
                         Transform::Normal,
                         output.current_scale().fractional_scale(),
                         renderer,
+                        &mut framebuffer,
                         [screencopy.physical_region()],
                         if !screencopy.overlay_cursor() {
                             cursor_ids.clone()
@@ -1835,18 +1842,19 @@ fn handle_pending_screencopy<'a>(
                         .to_logical(1)
                         .to_buffer(1, Transform::Normal);
 
-                    let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                    let mut offscreen: GlesRenderbuffer = renderer.create_buffer(
                         smithay::backend::allocator::Fourcc::Abgr8888,
                         output_buffer_size,
                     )?;
 
-                    renderer.bind(offscreen.clone())?;
+                    let mut offscreen_fb = renderer.bind(&mut offscreen)?;
 
                     let sync_point = render_frame_result.blit_frame_result(
                         untransformed_output_size,
                         Transform::Normal,
                         output.current_scale().fractional_scale(),
                         renderer,
+                        &mut offscreen_fb,
                         [Rectangle::from_size(untransformed_output_size)],
                         if !screencopy.overlay_cursor() {
                             cursor_ids.clone()
@@ -1860,18 +1868,11 @@ fn handle_pending_screencopy<'a>(
                     //
                     // renderer.wait(&sync_point)?; // no-op
 
-                    // INFO: I have literally no idea why but doing
-                    // a blit_to offscreen -> dmabuf leads to some weird
-                    // artifacting within the first few frames of a wf-recorder
-                    // recording, but doing it with the targets reversed
-                    // is completely fine???? Bruh that essentially runs the same internal
-                    // code and I don't understand why there's different behavior.
-                    // I can see in the code that `blit_to` is missing a `self.unbind()?`
-                    // call, but adding that back in doesn't fix anything. So strange
-                    renderer.bind(dmabuf)?;
+                    let mut dmabuf_fb = renderer.bind(&mut dmabuf)?;
 
-                    renderer.blit_from(
-                        offscreen,
+                    renderer.blit(
+                        &offscreen_fb,
+                        &mut dmabuf_fb,
                         screencopy.physical_region(),
                         Rectangle::from_size(screencopy.physical_region().size),
                         TextureFilter::Linear,
@@ -1911,12 +1912,12 @@ fn handle_pending_screencopy<'a>(
                         .to_logical(1)
                         .to_buffer(1, Transform::Normal);
 
-                    let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                    let mut offscreen: GlesRenderbuffer = renderer.create_buffer(
                         smithay::backend::allocator::Fourcc::Abgr8888,
                         output_buffer_size,
                     )?;
 
-                    renderer.bind(offscreen)?;
+                    let mut framebuffer = renderer.bind(&mut offscreen)?;
 
                     // Blit the entire output to `offscreen`.
                     // Only the needed region will be copied below
@@ -1925,6 +1926,7 @@ fn handle_pending_screencopy<'a>(
                         Transform::Normal,
                         output.current_scale().fractional_scale(),
                         renderer,
+                        &mut framebuffer,
                         [Rectangle::from_size(untransformed_output_size)],
                         if !screencopy.overlay_cursor() {
                             cursor_ids.clone()
@@ -1936,6 +1938,7 @@ fn handle_pending_screencopy<'a>(
                     // Can someone explain to me why it feels like some things are
                     // arbitrarily `Physical` or `Buffer`
                     let mapping = renderer.copy_framebuffer(
+                        &framebuffer,
                         src_buffer_rect,
                         smithay::backend::allocator::Fourcc::Argb8888,
                     )?;
@@ -1954,9 +1957,7 @@ fn handle_pending_screencopy<'a>(
             );
 
             let Ok(res) = res else {
-                unreachable!(
-                "buffer is guaranteed to be shm from above and should be managed by the shm global"
-            );
+                unreachable!();
             };
 
             res
