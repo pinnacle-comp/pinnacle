@@ -44,7 +44,7 @@ pub fn toggle_damage_visualization() {
 /// When on, parts of the screen that are opaque will have a transparent blue rectangle
 /// drawn over it, while parts that are not opaque will have a transparent red rectangle
 /// drawn.
-pub fn set_opaque_region_visualization_visualization(set: bool) {
+pub fn set_opaque_region_visualization(set: bool) {
     Client::debug()
         .set_opaque_region_visualization(SetOpaqueRegionVisualizationRequest {
             set_or_toggle: match set {

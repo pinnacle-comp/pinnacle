@@ -4,9 +4,9 @@
 
 //! Output management.
 //!
-//! An output is the general Wayland term for a monitor.
+//! An output is the Wayland term for a monitor. It presents windows, your cursor, and other UI elements.
 //!
-//! TODO: expand
+//! Outputs are uniquely identified by their name, a.k.a. the name of the connector they're plugged in to.
 
 use std::str::FromStr;
 
@@ -466,7 +466,7 @@ impl OutputHandle {
     /// ```no_run
     /// # use pinnacle_api::output;
     /// # || {
-    /// // Sets the focused output to 2560x1440 at 144Hz
+    /// // Sets the focused output to 2560x1440 at 75Hz
     /// output::get_focused()?.set_custom_mode(2560, 1440, 75000);
     /// # Some(())
     /// # };
@@ -679,7 +679,7 @@ impl OutputHandle {
     /// Gets this output's logical size in logical pixels.
     ///
     /// If this output has a scale of 1, this will equal the output's
-    /// actual pixel size. If it has an output of 2, it will have half the
+    /// actual pixel size. If it has a scale of 2, it will have half the
     /// logical pixel width and height. Similarly, if it has a scale of 0.5,
     /// it will have double the logical pixel width and height.
     ///
@@ -730,7 +730,7 @@ impl OutputHandle {
             })
     }
 
-    /// Gets this output's current mode.
+    /// Gets this output's preferred mode.
     ///
     /// May return `None` if it is disabled.
     pub fn preferred_mode(&self) -> Option<Mode> {
@@ -783,7 +783,7 @@ impl OutputHandle {
 
     /// Gets this output's physical size in millimeters.
     ///
-    /// Returns a size of 0, 0 if unknown.
+    /// Returns a size of (0, 0) if unknown.
     pub fn physical_size(&self) -> Size {
         self.physical_size_async().block_on_tokio()
     }
@@ -883,7 +883,7 @@ impl OutputHandle {
     ///
     /// Pinnacle keeps a stack of the windows that get keyboard focus.
     /// This can be used, for example, for an `Alt + Tab`-style keybind
-    /// that focused the previously focused window.
+    /// that focuses the previously focused window.
     ///
     /// This will return the focus stack containing *all* windows on this output.
     /// If you only want windows on active tags, see
@@ -910,7 +910,7 @@ impl OutputHandle {
     ///
     /// Pinnacle keeps a stack of the windows that get keyboard focus.
     /// This can be used, for example, for an `Alt + Tab`-style keybind
-    /// that focused the previously focused window.
+    /// that focuses the previously focused window.
     ///
     /// This will return the focus stack containing only windows on active tags on this output.
     /// If you want *all* windows on this output, see [`OutputHandle::keyboard_focus_stack`].
@@ -961,7 +961,7 @@ impl OutputHandle {
             .powered
     }
 
-    /// Gets this output's unique name (the name of its connector).
+    /// Returns this output's unique name (the name of its connector).
     pub fn name(&self) -> String {
         self.name.to_string()
     }
