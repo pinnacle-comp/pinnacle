@@ -378,7 +378,7 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             let output = output_name.output(&state.pinnacle);
 
             let size = output
-                .and_then(|op| op.current_mode())
+                .and_then(|op| state.pinnacle.space.output_geometry(&op))
                 .map(|mode| mode.size);
 
             Ok(GetLogicalSizeResponse {
