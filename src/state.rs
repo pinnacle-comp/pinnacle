@@ -66,6 +66,7 @@ use smithay::{
         },
         cursor_shape::CursorShapeManagerState,
         fractional_scale::{with_fractional_scale, FractionalScaleManagerState},
+        idle_inhibit::IdleInhibitManagerState,
         idle_notify::IdleNotifierState,
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
         output::OutputManagerState,
@@ -157,6 +158,7 @@ pub struct Pinnacle {
     pub session_lock_manager_state: SessionLockManagerState,
     pub xwayland_shell_state: XWaylandShellState,
     pub idle_notifier_state: IdleNotifierState<State>,
+    pub idle_inhibit_manager_state: IdleInhibitManagerState,
     pub output_management_manager_state: OutputManagementManagerState,
     pub output_power_management_state: OutputPowerManagementState,
     pub tablet_manager_state: TabletManagerState,
@@ -403,6 +405,7 @@ impl Pinnacle {
             ),
             xwayland_shell_state: XWaylandShellState::new::<State>(&display_handle),
             idle_notifier_state: IdleNotifierState::new(&display_handle, loop_handle),
+            idle_inhibit_manager_state: IdleInhibitManagerState::new::<State>(&display_handle),
             output_management_manager_state: OutputManagementManagerState::new::<State, _>(
                 &display_handle,
                 filter_restricted_client,
