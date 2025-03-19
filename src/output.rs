@@ -332,6 +332,8 @@ impl Pinnacle {
 
             self.gamma_control_manager_state.output_removed(output);
 
+            self.output_focus_stack.remove(output);
+
             self.config.connector_saved_states.insert(
                 OutputName(output.name()),
                 ConnectorSavedState {

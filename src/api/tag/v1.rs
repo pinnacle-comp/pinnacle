@@ -20,7 +20,14 @@ impl v1::tag_service_server::TagService for super::TagService {
     async fn get(&self, _request: Request<GetRequest>) -> TonicResult<GetResponse> {
         run_unary(&self.sender, move |state| {
             let tags = state.pinnacle.outputs.keys().flat_map(|op| {
-                op.with_state(|state| state.tags.iter().cloned().collect::<Vec<_>>())
+                op.with_state(|state| {
+                    state
+                        .tags
+                        .iter()
+                        .filter(|tag| !tag.defunct())
+                        .cloned()
+                        .collect::<Vec<_>>()
+                })
             });
 
             let tag_ids = tags.map(|tag| tag.id().to_inner()).collect();

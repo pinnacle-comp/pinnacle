@@ -35,6 +35,17 @@ pub(crate) fn run(channel: Channel<WlcsEvent>) {
     )
     .unwrap();
 
+    state.pinnacle.new_output(
+        "pinnacle-1",
+        "Pinnacle",
+        "Dummy Output",
+        (0, 0).into(),
+        (1920, 1080).into(),
+        60000,
+        1.0,
+        smithay::utils::Transform::Normal,
+    );
+
     TagId::reset();
 
     // FIXME: a better way to deal with tokio here?

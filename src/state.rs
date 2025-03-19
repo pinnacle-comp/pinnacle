@@ -885,7 +885,7 @@ impl State {
             }
             #[cfg(feature = "testing")]
             cli::Backend::Dummy => {
-                let uninit_dummy = Dummy::try_new(display.handle());
+                let uninit_dummy = Dummy::try_new();
                 let mut pinnacle = Pinnacle::new(
                     display,
                     loop_signal,

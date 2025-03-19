@@ -48,7 +48,13 @@ jobs:
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
       - name: Get dependencies
-        run: sudo apt remove needrestart && sudo apt update && sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev foot liblua5.4-dev libdisplay-info-dev
+        run: |
+          sudo apt remove needrestart
+          sudo add-apt-repository ppa:aslatter/ppa
+          sudo apt update
+          sudo apt install libwayland-dev libxkbcommon-dev libudev-dev libinput-dev \
+            libgbm-dev libseat-dev libsystemd-dev protobuf-compiler xwayland libegl-dev \
+            liblua5.4-dev libdisplay-info-dev alacritty
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v10
         with:
@@ -61,10 +67,10 @@ jobs:
         run: echo "XDG_DATA_HOME=$HOME/.local/share" >> $GITHUB_ENV
       - name: Test
         if: ${{ runner.debug != '1' }}
-        run: just install test
+        run: just install test -- --ignored
       - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture
+        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --ignored
   check-format:
     runs-on: ubuntu-24.04
     name: Check formatting
