@@ -21,18 +21,25 @@ use smithay_client_toolkit::{
 use state::State;
 use tracing::info;
 
-/// A signal for Rust integrations to stop Snowcap.
+/// A handle to the running Snowcap instance.
 #[derive(Debug, Clone)]
-pub struct StopSignal(calloop::ping::Ping);
+pub struct SnowcapHandle {
+    stop_signal: calloop::ping::Ping,
+    close_all_widgets: calloop::ping::Ping,
+}
 
-impl StopSignal {
+impl SnowcapHandle {
     /// Send the stop signal to Snowcap.
     pub fn stop(&self) {
-        self.0.ping();
+        self.stop_signal.ping();
+    }
+
+    pub fn close_all_widgets(&self) {
+        self.close_all_widgets.ping();
     }
 }
 
-pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<StopSignal>>) {
+pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<SnowcapHandle>>) {
     info!("Snowcap starting up");
 
     let mut event_loop = EventLoop::<State>::try_new().unwrap();
@@ -42,18 +49,32 @@ pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<StopSignal>
     state.start_grpc_server(socket_dir()).unwrap();
 
     if let Some(sender) = stop_signal_sender {
-        let (ping, ping_source) = calloop::ping::make_ping().unwrap();
+        let (stop_ping, stop_ping_source) = calloop::ping::make_ping().unwrap();
         let loop_signal = event_loop.get_signal();
 
         event_loop
             .handle()
-            .insert_source(ping_source, move |_, _, _| {
+            .insert_source(stop_ping_source, move |_, _, _| {
                 loop_signal.stop();
                 loop_signal.wakeup();
             })
             .unwrap();
 
-        sender.send(StopSignal(ping)).unwrap();
+        let (close_ping, close_ping_source) = calloop::ping::make_ping().unwrap();
+
+        event_loop
+            .handle()
+            .insert_source(close_ping_source, move |_, _, state| {
+                state.layers.clear();
+            })
+            .unwrap();
+
+        sender
+            .send(SnowcapHandle {
+                stop_signal: stop_ping,
+                close_all_widgets: close_ping,
+            })
+            .unwrap();
     }
 
     event_loop

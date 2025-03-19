@@ -23,27 +23,29 @@ use snowcap_api_defs::snowcap::{
 };
 pub use xkbcommon;
 
-use std::{path::PathBuf, sync::OnceLock, time::Duration};
+use std::{path::PathBuf, sync::RwLock, time::Duration};
 
 use futures::Future;
 use layer::Layer;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
 
-static LAYER: OnceLock<LayerServiceClient<Channel>> = OnceLock::new();
-static INPUT: OnceLock<InputServiceClient<Channel>> = OnceLock::new();
+static LAYER: RwLock<Option<LayerServiceClient<Channel>>> = RwLock::new(None);
+static INPUT: RwLock<Option<InputServiceClient<Channel>>> = RwLock::new(None);
 
 pub(crate) fn layer() -> LayerServiceClient<Channel> {
     LAYER
-        .get()
+        .read()
         .expect("grpc connection was not initialized")
         .clone()
+        .unwrap()
 }
 pub(crate) fn input() -> InputServiceClient<Channel> {
     INPUT
-        .get()
+        .read()
         .expect("grpc connection was not initialized")
         .clone()
+        .unwrap()
 }
 
 fn socket_dir() -> PathBuf {
@@ -71,8 +73,14 @@ pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
         }))
         .await?;
 
-    let _ = LAYER.set(LayerServiceClient::new(channel.clone()));
-    let _ = INPUT.set(InputServiceClient::new(channel.clone()));
+    let _ = LAYER
+        .write()
+        .unwrap()
+        .replace(LayerServiceClient::new(channel.clone()));
+    let _ = INPUT
+        .write()
+        .unwrap()
+        .replace(InputServiceClient::new(channel.clone()));
 
     Ok(Layer)
 }

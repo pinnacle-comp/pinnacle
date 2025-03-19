@@ -1134,6 +1134,14 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.v1.SetXwaylandClientSelfScaleRequest
 ---@field self_scale boolean?
 
+---@class pinnacle.v1.SetLastErrorRequest
+---@field error string?
+
+---@class pinnacle.v1.TakeLastErrorRequest
+
+---@class pinnacle.v1.TakeLastErrorResponse
+---@field error string?
+
 local pinnacle = {}
 pinnacle.layout = {}
 pinnacle.layout.v1 = {}
@@ -1320,6 +1328,9 @@ pinnacle.v1.KeepaliveResponse = {}
 pinnacle.v1.BackendRequest = {}
 pinnacle.v1.BackendResponse = {}
 pinnacle.v1.SetXwaylandClientSelfScaleRequest = {}
+pinnacle.v1.SetLastErrorRequest = {}
+pinnacle.v1.TakeLastErrorRequest = {}
+pinnacle.v1.TakeLastErrorResponse = {}
 pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
 pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
 pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
@@ -2931,6 +2942,40 @@ pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.response = ".google.proto
 ---@return string | nil error An error string, if any
 function Client:pinnacle_v1_PinnacleService_SetXwaylandClientSelfScale(data)
     return self:unary_request(pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale, data)
+end
+pinnacle.v1.PinnacleService.SetLastError = {}
+pinnacle.v1.PinnacleService.SetLastError.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.SetLastError.method = "SetLastError"
+pinnacle.v1.PinnacleService.SetLastError.request = ".pinnacle.v1.SetLastErrorRequest"
+pinnacle.v1.PinnacleService.SetLastError.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.SetLastErrorRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_SetLastError(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.SetLastError, data)
+end
+pinnacle.v1.PinnacleService.TakeLastError = {}
+pinnacle.v1.PinnacleService.TakeLastError.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.TakeLastError.method = "TakeLastError"
+pinnacle.v1.PinnacleService.TakeLastError.request = ".pinnacle.v1.TakeLastErrorRequest"
+pinnacle.v1.PinnacleService.TakeLastError.response = ".pinnacle.v1.TakeLastErrorResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.TakeLastErrorRequest
+---
+---@return pinnacle.v1.TakeLastErrorResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_TakeLastError(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.TakeLastError, data)
 end
 return {
     pinnacle = pinnacle,

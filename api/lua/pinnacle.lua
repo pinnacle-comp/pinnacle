@@ -91,6 +91,33 @@ function pinnacle.set_xwayland_self_scaling(should_self_scale)
     end
 end
 
+---Sets an error message that is held by the compositor until it is retrieved.
+---
+---@param error string
+function pinnacle.set_last_error(error)
+    local _, err = client:pinnacle_v1_PinnacleService_SetLastError({
+        error = error,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Gets and consumes the last error message set, possibly by a previously running config.
+---
+---@return string | nil error An error string, or `nil` if none was set.
+function pinnacle.take_last_error()
+    local error, err = client:pinnacle_v1_PinnacleService_TakeLastError({})
+
+    if err then
+        log.error(err)
+        return nil
+    end
+
+    return error and error.error
+end
+
 ---Initializes the protobuf backend and connects to Pinnacle's gRPC socket.
 ---
 ---If the Snowcap Lua API is installed and Snowcap is running, this will also setup Snowcap and
@@ -135,6 +162,8 @@ function pinnacle.setup(config_fn)
 
     local success, err = client.loop:loop()
     if not success then
+        local backtrace = debug.traceback()
+        pinnacle.set_last_error(tostring(err) .. "\n" .. backtrace)
         error("loop errored: " .. tostring(err))
     end
 end

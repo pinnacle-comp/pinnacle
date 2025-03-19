@@ -214,7 +214,7 @@ pub struct Pinnacle {
     pub outputs: IndexMap<Output, Option<GlobalId>>,
 
     #[cfg(feature = "snowcap")]
-    pub snowcap_stop_signal: Option<snowcap::StopSignal>,
+    pub snowcap_handle: Option<snowcap::SnowcapHandle>,
     #[cfg(feature = "snowcap")]
     pub snowcap_join_handle: Option<tokio::task::JoinHandle<()>>,
 
@@ -225,7 +225,7 @@ pub struct Pinnacle {
 #[cfg(feature = "snowcap")]
 impl Drop for Pinnacle {
     fn drop(&mut self) {
-        if let Some(signal) = self.snowcap_stop_signal.take() {
+        if let Some(signal) = self.snowcap_handle.take() {
             signal.stop();
         }
     }
@@ -470,7 +470,7 @@ impl Pinnacle {
             outputs: IndexMap::new(),
 
             #[cfg(feature = "snowcap")]
-            snowcap_stop_signal: None,
+            snowcap_handle: None,
             #[cfg(feature = "snowcap")]
             snowcap_join_handle: None,
 
@@ -512,7 +512,7 @@ impl Pinnacle {
         }
 
         #[cfg(feature = "snowcap")]
-        if let Some(stop_signal) = self.snowcap_stop_signal.take() {
+        if let Some(stop_signal) = self.snowcap_handle.take() {
             stop_signal.stop();
         }
     }

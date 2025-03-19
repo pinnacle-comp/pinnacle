@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
             snowcap::start(Some(sender));
         });
 
-        let stop_signal = loop {
+        let snowcap_handle = loop {
             if join_handle.is_finished() {
                 panic!("snowcap failed to start");
             }
@@ -225,7 +225,7 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
-        state.pinnacle.snowcap_stop_signal = Some(stop_signal);
+        state.pinnacle.snowcap_handle = Some(snowcap_handle);
         state.pinnacle.snowcap_join_handle = Some(join_handle);
     }
 

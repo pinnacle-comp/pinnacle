@@ -194,9 +194,24 @@ macro_rules! main {
 /// ```
 #[macro_export]
 macro_rules! config {
-    ($func:ident) => {
+    ($func:ident) => {{
+        let (send, mut recv) = $crate::tokio::sync::mpsc::unbounded_channel();
+
+        let hook = ::std::panic::take_hook();
+        ::std::panic::set_hook(::std::boxed::Box::new(move |info| {
+            hook(info);
+            let backtrace = ::std::backtrace::Backtrace::force_capture();
+            let error_msg = format!("{info}\n{backtrace}");
+            let _ = send.send(error_msg);
+        }));
+
         $crate::connect().await.unwrap();
         $func().await;
-        $crate::block().await;
-    };
+        $crate::tokio::select! {
+            Some(error) = recv.recv() => {
+                $crate::pinnacle::set_last_error(error);
+            }
+            _ = $crate::block() => (),
+        }
+    }};
 }

@@ -41,7 +41,7 @@ use tokio::{
 };
 use toml::Table;
 
-use tracing::{debug, error, info, info_span, warn, Instrument};
+use tracing::{debug, debug_span, error, info, warn, Instrument};
 use xdg::BaseDirectories;
 
 use crate::{
@@ -229,6 +229,8 @@ pub struct Config {
 
     pub visualize_damage: bool,
     pub visualize_opaque_regions: bool,
+
+    pub last_error: Option<String>,
 }
 
 impl Drop for Config {
@@ -251,6 +253,7 @@ impl Config {
             socket_path: None,
             visualize_damage: false,
             visualize_opaque_regions: false,
+            last_error: None,
         }
     }
 
@@ -334,6 +337,11 @@ impl Pinnacle {
         self.config.clear(&self.loop_handle);
 
         self.signal_state.clear();
+
+        #[cfg(feature = "snowcap")]
+        if let Some(snowcap) = self.snowcap_handle.as_ref() {
+            snowcap.close_all_widgets();
+        }
 
         let load_default_config = |pinnacle: &mut Pinnacle, reason: &str| {
             if builtin {
@@ -455,7 +463,7 @@ impl Pinnacle {
                             }
                         }
                     }
-                    .instrument(info_span!("config_stdout")),
+                    .instrument(debug_span!("config_stdout")),
                 );
             }
 
@@ -472,7 +480,7 @@ impl Pinnacle {
                             }
                         }
                     }
-                    .instrument(info_span!("config_stderr")),
+                    .instrument(debug_span!("config_stderr")),
                 );
             }
 

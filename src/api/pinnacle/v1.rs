@@ -2,7 +2,8 @@ use pinnacle_api_defs::pinnacle::{
     self,
     v1::{
         self, BackendRequest, BackendResponse, KeepaliveRequest, KeepaliveResponse, QuitRequest,
-        ReloadConfigRequest, SetXwaylandClientSelfScaleRequest,
+        ReloadConfigRequest, SetLastErrorRequest, SetXwaylandClientSelfScaleRequest,
+        TakeLastErrorRequest, TakeLastErrorResponse,
     },
 };
 use tonic::{Request, Streaming};
@@ -84,6 +85,26 @@ impl v1::pinnacle_service_server::PinnacleService for super::PinnacleService {
                 xwayland_state.should_clients_self_scale = should_self_scale;
                 state.pinnacle.update_xwayland_scale();
             }
+        })
+        .await
+    }
+
+    async fn set_last_error(&self, request: Request<SetLastErrorRequest>) -> TonicResult<()> {
+        let error = request.into_inner().error;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.pinnacle.config.last_error.replace(error);
+        })
+        .await
+    }
+
+    async fn take_last_error(
+        &self,
+        _request: Request<TakeLastErrorRequest>,
+    ) -> TonicResult<TakeLastErrorResponse> {
+        run_unary(&self.sender, move |state| {
+            let error = state.pinnacle.config.last_error.take();
+            Ok(TakeLastErrorResponse { error })
         })
         .await
     }

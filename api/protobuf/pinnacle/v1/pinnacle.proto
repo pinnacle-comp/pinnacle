@@ -28,6 +28,15 @@ message SetXwaylandClientSelfScaleRequest {
   bool self_scale = 1;
 }
 
+message SetLastErrorRequest {
+  string error = 1;
+}
+
+message TakeLastErrorRequest {}
+message TakeLastErrorResponse {
+  optional string error = 1;
+}
+
 service PinnacleService {
   // Quits the compositor.
   rpc Quit(QuitRequest) returns (google.protobuf.Empty);
@@ -40,4 +49,8 @@ service PinnacleService {
   rpc Backend(BackendRequest) returns (BackendResponse);
   // Sets whether or not xwayland clients self scale themselves.
   rpc SetXwaylandClientSelfScale(SetXwaylandClientSelfScaleRequest) returns (google.protobuf.Empty);
+  // Sets an error message that can be retrieved later.
+  rpc SetLastError(SetLastErrorRequest) returns (google.protobuf.Empty);
+  // Gets and consumes a previously set error message.
+  rpc TakeLastError(TakeLastErrorRequest) returns (TakeLastErrorResponse);
 }

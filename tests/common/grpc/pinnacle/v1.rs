@@ -3,7 +3,8 @@ use tonic::Streaming;
 use pinnacle::api::ResponseStream;
 use pinnacle_api_defs::pinnacle::v1::{
     BackendRequest, BackendResponse, KeepaliveRequest, KeepaliveResponse, QuitRequest,
-    ReloadConfigRequest, SetXwaylandClientSelfScaleRequest,
+    ReloadConfigRequest, SetLastErrorRequest, SetXwaylandClientSelfScaleRequest,
+    TakeLastErrorRequest, TakeLastErrorResponse,
 };
 
 use crate::gen_test_infra;
@@ -19,6 +20,8 @@ gen_test_infra! {
         reload_config(ReloadConfigRequest) -> (),
         backend(BackendRequest) -> BackendResponse,
         set_xwayland_client_self_scale(SetXwaylandClientSelfScaleRequest) -> (),
+        set_last_error(SetLastErrorRequest) -> (),
+        take_last_error(TakeLastErrorRequest) -> TakeLastErrorResponse,
     },
     other = {
         keepalive(Streaming<KeepaliveRequest>) -> Self::KeepaliveStream,

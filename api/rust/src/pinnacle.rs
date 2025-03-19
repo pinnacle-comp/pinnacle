@@ -10,7 +10,7 @@ use pinnacle_api_defs::pinnacle::{
     self,
     v1::{
         BackendRequest, KeepaliveRequest, KeepaliveResponse, QuitRequest, ReloadConfigRequest,
-        SetXwaylandClientSelfScaleRequest,
+        SetLastErrorRequest, SetXwaylandClientSelfScaleRequest, TakeLastErrorRequest,
     },
 };
 use tonic::Streaming;
@@ -74,6 +74,27 @@ pub fn set_xwayland_self_scaling(should_self_scale: bool) {
         })
         .block_on_tokio()
         .unwrap();
+}
+
+/// Sets an error message that is held by the compositor until it is retrieved.
+pub fn set_last_error(error: impl std::fmt::Display) {
+    Client::pinnacle()
+        .set_last_error(SetLastErrorRequest {
+            error: error.to_string(),
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Gets and consumes the last error message set, possibly by a previously
+/// running config.
+pub fn take_last_error() -> Option<String> {
+    Client::pinnacle()
+        .take_last_error(TakeLastErrorRequest {})
+        .block_on_tokio()
+        .unwrap()
+        .into_inner()
+        .error
 }
 
 pub(crate) async fn keepalive() -> (

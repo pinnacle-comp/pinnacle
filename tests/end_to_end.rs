@@ -18,7 +18,64 @@ use test_log::test;
 
 const SLEEP_DURATION: Duration = Duration::from_millis(1000);
 
-// OUTPUTS
+// PINNACLE //////////////////////////////////////
+
+#[test]
+fn pinnacle_set_last_error() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Pinnacle.set_last_error("wibbly wobbly timey wimey")
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::pinnacle::set_last_error("wibbly wobbly timey wimey");
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            assert_eq!(
+                state.pinnacle.config.last_error.as_deref(),
+                Some("wibbly wobbly timey wimey")
+            )
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn pinnacle_take_last_error() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        sender.with_state(|state| {
+            state.pinnacle.config.last_error = Some("i've never watched doctor who".into());
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    local error = Pinnacle.take_last_error()
+                    assert(error == "i've never watched doctor who")
+
+                    local error = Pinnacle.take_last_error()
+                    assert(error == nil)
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                let error = pinnacle_api::pinnacle::take_last_error();
+                assert_eq!(error.as_deref(), Some("i've never watched doctor who"));
+
+                let error = pinnacle_api::pinnacle::take_last_error();
+                assert_eq!(error.as_deref(), None);
+            }),
+        }?;
+
+        Ok(())
+    })
+}
+
+// OUTPUTS ///////////////////////////////////////
 
 #[test]
 fn output_get_all() -> anyhow::Result<()> {
@@ -3020,6 +3077,9 @@ fn process_spawn() -> anyhow::Result<()> {
 #[test]
 fn process_spawn_unique() -> anyhow::Result<()> {
     test_api(|sender, lang| {
+        // Sleep so any windows from previous tests close
+        sleep(SLEEP_DURATION);
+
         match lang {
             Lang::Lua => {
                 run_lua! {
