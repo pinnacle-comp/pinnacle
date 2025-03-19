@@ -1,105 +1,80 @@
 use std::{
     io::Write,
     process::{Command, Stdio},
+    sync::LazyLock,
 };
 
 use anyhow::anyhow;
+use mlua::{AsChunk, Lua};
 
-pub fn run_lua(code: &str) -> anyhow::Result<()> {
-    #[rustfmt::skip]
-    let code = format!(r#"
-        local Pinnacle = require("pinnacle")
-        local Input = require("pinnacle.input")
-        local Process = require("pinnacle.process")
-        local Output = require("pinnacle.output")
-        local Tag = require("pinnacle.tag")
-        local Window = require("pinnacle.window")
-        local Render = require("pinnacle.render")
-        local Layout = require("pinnacle.layout")
+pub static LUA: LazyLock<Lua> = LazyLock::new(new_lua);
 
-        require("pinnacle").run(function()
-            local run = function()
-                {code}
-            end
+pub fn new_lua() -> Lua {
+    let lua = unsafe { Lua::unsafe_new() };
+    lua.load("Pinnacle = require('pinnacle')").exec().unwrap();
+    lua.load("Input = require('pinnacle.input')")
+        .exec()
+        .unwrap();
+    lua.load("Libinput = require('pinnacle.input.libinput')")
+        .exec()
+        .unwrap();
+    lua.load("Process = require('pinnacle.process')")
+        .exec()
+        .unwrap();
+    lua.load("Output = require('pinnacle.output')")
+        .exec()
+        .unwrap();
+    lua.load("Tag = require('pinnacle.tag')").exec().unwrap();
+    lua.load("Window = require('pinnacle.window')")
+        .exec()
+        .unwrap();
+    lua.load("Layout = require('pinnacle.layout')")
+        .exec()
+        .unwrap();
+    lua.load("Util = require('pinnacle.util')").exec().unwrap();
 
-            local success, err = pcall(run)
-
-            if not success then
-                print(err)
-                print("exiting")
-                os.exit(1)
-            end
-        end)
-    "#);
-
-    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn()?;
-
-    let mut stdin = child.stdin.take().ok_or(anyhow!("child had no stdin"))?;
-
-    stdin.write_all(code.as_bytes())?;
-
-    drop(stdin);
-
-    let exit_status = child.wait()?;
-
-    if exit_status.code().is_some_and(|code| code != 0) {
-        return Err(anyhow!("lua code panicked"));
-    }
-
-    Ok(())
-}
-
-#[allow(dead_code)] // TODO:
-pub struct SetupLuaGuard {
-    child: std::process::Child,
-}
-
-impl Drop for SetupLuaGuard {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-    }
-}
-
-#[allow(dead_code)] // TODO:
-pub fn setup_lua(code: &str) -> anyhow::Result<SetupLuaGuard> {
-    #[rustfmt::skip]
-    let code = format!(r#"
-        require("pinnacle").setup(function()
-            local run = function()
-                {code}
-            end
-
-            local success, err = pcall(run)
-
-            if not success then
-                print(err)
-                print("exiting")
-                os.exit(1)
-            end
-        end)
-    "#);
-
-    let mut child = Command::new("lua").stdin(Stdio::piped()).spawn()?;
-
-    let mut stdin = child.stdin.take().ok_or(anyhow!("child had no stdin"))?;
-
-    stdin.write_all(code.as_bytes())?;
-
-    drop(stdin);
-
-    Ok(SetupLuaGuard { child })
+    lua
 }
 
 #[macro_export]
 macro_rules! run_lua {
-    { $($body:tt)* } => {
-        $crate::common::lua::run_lua(stringify!($($body)*))?;
-    };
+    { $($body:tt)* } => {{
+        $crate::common::lua::LUA.load(::mlua::chunk! {
+            Pinnacle.run(function()
+                local run = function()
+                    $($body)*
+                end
+
+                local success, err = pcall(run)
+
+                if not success then
+                    error(err)
+                end
+            end)
+        }).exec().map_err(|err| ::anyhow::anyhow!("{err}"))
+    }};
 }
 
-#[allow(unused_macros)] // TODO:
+#[macro_export]
 macro_rules! setup_lua {
-    { $($body:tt)* } => {
-        let _guard = $crate::common::lua::setup_lua(stringify!($($body)*))?;
-    };
+    { $($body:tt)* } => {{
+        ::std::thread::spawn(move || {
+            let lua = $crate::common::lua::new_lua();
+            let task = lua.load(::mlua::chunk! {
+                Pinnacle.setup(function()
+                    local run = function()
+                        $($body)*
+                    end
+
+                    local success, err = pcall(run)
+
+                    if not success then
+                        error(err)
+                    end
+                end)
+            });
+
+            task.exec().unwrap();
+        });
+    }};
 }

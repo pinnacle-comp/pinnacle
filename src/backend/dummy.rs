@@ -1,8 +1,7 @@
 use smithay::backend::renderer::test::DummyRenderer;
 use smithay::backend::renderer::ImportMemWl;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{Physical, Size};
+use smithay::utils::{Logical, Physical, Point, Size};
 
 use smithay::{
     output::{Output, Subpixel},
@@ -29,7 +28,6 @@ pub struct Dummy {
     // pub dmabuf_state: (DmabufState, DmabufGlobal, Option<DmabufFeedback>),
     #[cfg(feature = "wlcs")]
     pub wlcs_state: Wlcs,
-    pub output: Output,
 }
 
 impl Backend {
@@ -57,31 +55,7 @@ impl BackendData for Dummy {
 }
 
 impl Dummy {
-    pub(crate) fn try_new(display_handle: DisplayHandle) -> UninitBackend<Dummy> {
-        let mode = smithay::output::Mode {
-            size: (1920, 1080).into(),
-            refresh: 60_000,
-        };
-
-        let physical_properties = smithay::output::PhysicalProperties {
-            size: (0, 0).into(),
-            subpixel: Subpixel::Unknown,
-            make: "Pinnacle".to_string(),
-            model: "Dummy Window".to_string(),
-        };
-
-        let output = Output::new(DUMMY_OUTPUT_NAME.to_string(), physical_properties);
-
-        output.change_current_state(
-            Some(mode),
-            Some(Transform::Flipped180),
-            None,
-            Some((0, 0).into()),
-        );
-
-        output.set_preferred(mode);
-        output.with_state_mut(|state| state.modes = vec![mode]);
-
+    pub(crate) fn try_new() -> UninitBackend<Dummy> {
         let renderer = DummyRenderer::new();
 
         let dummy = Dummy {
@@ -89,23 +63,14 @@ impl Dummy {
             // dmabuf_state,
             #[cfg(feature = "wlcs")]
             wlcs_state: Wlcs::default(),
-            output: output.clone(),
         };
 
         UninitBackend {
             seat_name: dummy.seat_name(),
             init: Box::new(move |pinnacle| {
-                let global = output.create_global::<State>(&display_handle);
-
-                pinnacle.output_focus_stack.set_focus(output.clone());
-
-                pinnacle.outputs.insert(output.clone(), Some(global));
-
                 pinnacle
                     .shm_state
                     .update_formats(dummy.renderer.shm_formats());
-
-                pinnacle.space.map_output(&output, (0, 0));
 
                 Ok(dummy)
             }),
@@ -118,22 +83,34 @@ impl Dummy {
 }
 
 impl Pinnacle {
-    pub fn new_output(&mut self, name: impl std::fmt::Display, size: Size<i32, Physical>) {
-        let mode = smithay::output::Mode {
-            size,
-            refresh: 144_000,
-        };
+    pub fn new_output(
+        &mut self,
+        name: impl std::fmt::Display,
+        make: impl std::fmt::Display,
+        model: impl std::fmt::Display,
+        loc: Point<i32, Logical>,
+        size: Size<i32, Physical>,
+        refresh: i32,
+        scale: f64,
+        transform: Transform,
+    ) -> Output {
+        let mode = smithay::output::Mode { size, refresh };
 
         let physical_properties = smithay::output::PhysicalProperties {
             size: (0, 0).into(),
             subpixel: Subpixel::Unknown,
-            make: "Pinnacle".to_string(),
-            model: "Dummy Output".to_string(),
+            make: make.to_string(),
+            model: model.to_string(),
         };
 
         let output = Output::new(name.to_string(), physical_properties);
 
-        output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+        output.change_current_state(
+            Some(mode),
+            Some(transform),
+            Some(smithay::output::Scale::Fractional(scale)),
+            Some(loc),
+        );
 
         output.set_preferred(mode);
         output.with_state_mut(|state| state.modes = vec![mode]);
@@ -145,5 +122,9 @@ impl Pinnacle {
         self.space.map_output(&output, (0, 0));
 
         self.signal_state.output_connect.signal(&output);
+
+        self.output_focus_stack.set_focus(output.clone());
+
+        output
     }
 }

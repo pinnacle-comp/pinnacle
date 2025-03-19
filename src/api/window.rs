@@ -8,6 +8,7 @@ use smithay::{
     utils::{Point, SERIAL_COUNTER},
     wayland::seat::WaylandFocus,
 };
+use tracing::warn;
 
 use crate::{
     state::{State, WithState},
@@ -40,19 +41,32 @@ pub fn set_geometry(
     let w: Option<u32> = w.into();
     let h: Option<u32> = h.into();
 
-    // TODO: with no x or y, defaults unmapped windows to 0, 0
-    // FIXME: space stores loc in i32 not f64
-    let mut window_loc = state
-        .pinnacle
-        .space
-        .element_location(window)
-        .unwrap_or_default();
-    window_loc.x = x.unwrap_or(window_loc.x);
-    window_loc.y = y.unwrap_or(window_loc.y);
-
     let mut window_size = window.geometry().size;
     window_size.w = w.map(|w| w as i32).unwrap_or(window_size.w);
     window_size.h = h.map(|h| h as i32).unwrap_or(window_size.h);
+
+    let window_loc = state
+        .pinnacle
+        .space
+        .element_location(window)
+        .or_else(|| window.with_state(|state| state.floating_loc.map(|loc| loc.to_i32_round())))
+        .or_else(|| {
+            let output = window.output(&state.pinnacle)?;
+            let output_geo = state.pinnacle.space.output_geometry(&output)?;
+            let centered_loc = Point::from((
+                output_geo.loc.x + output_geo.size.w / 2 - window_size.w / 2,
+                output_geo.loc.y + output_geo.size.h / 2 - window_size.h / 2,
+            ));
+            Some(centered_loc)
+        });
+
+    let Some(mut window_loc) = window_loc else {
+        warn!("Tried to `set_geometry` but window had no tags");
+        return;
+    };
+
+    window_loc.x = x.unwrap_or(window_loc.x);
+    window_loc.y = y.unwrap_or(window_loc.y);
 
     window.with_state_mut(|state| {
         state.floating_loc = Some(window_loc.to_f64());
@@ -62,6 +76,13 @@ pub fn set_geometry(
     state.pinnacle.configure_window_if_nontiled(window);
     if let Some(toplevel) = window.toplevel() {
         toplevel.send_pending_configure();
+    }
+
+    if window.with_state(|state| state.layout_mode.is_floating()) && window.is_on_active_tag() {
+        state
+            .pinnacle
+            .space
+            .map_element(window.clone(), window_loc, false);
     }
 }
 
