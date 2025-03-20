@@ -216,7 +216,12 @@ impl PointerGrab<State> for MoveSurfaceGrab {
         &self.start_data
     }
 
-    fn unset(&mut self, _data: &mut State) {}
+    fn unset(&mut self, state: &mut State) {
+        // FIXME: granular
+        for output in state.pinnacle.space.outputs().cloned().collect::<Vec<_>>() {
+            state.schedule_render(&output);
+        }
+    }
 
     fn gesture_swipe_begin(
         &mut self,
