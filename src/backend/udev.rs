@@ -1459,13 +1459,10 @@ impl Udev {
                 output_render_elements.extend(elems);
             }
         } else {
-            let windows = pinnacle.space.elements().cloned().collect::<Vec<_>>();
-
             output_render_elements.extend(crate::render::output_render_elements(
                 output,
                 &mut renderer,
                 &pinnacle.space,
-                &windows,
             ));
         }
 

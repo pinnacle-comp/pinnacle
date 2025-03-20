@@ -117,7 +117,7 @@ impl Pinnacle {
 
         for (i, win) in self
             .space
-            .elements()
+            .elements_for_output(output)
             .rev()
             .filter(|win| win.is_on_active_tag())
             .enumerate()

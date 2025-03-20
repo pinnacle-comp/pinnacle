@@ -232,24 +232,21 @@ fn layer_render_elements<R: PRenderer>(
 ///
 /// ret.1 contains render elements for the windows at and above the first fullscreen window.
 /// ret.2 contains the rest.
-fn window_render_elements<'a, I, R: PRenderer>(
+fn window_render_elements<R: PRenderer>(
     output: &Output,
-    windows: I,
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>)
-where
-    I: IntoIterator<Item = &'a WindowElement>,
-    I::IntoIter: DoubleEndedIterator,
-{
+) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>) {
     let _span = tracy_client::span!("window_render_elements");
+
+    let windows = space.elements_for_output(output);
 
     let mut last_fullscreen_split_at = 0;
 
     let mut fullscreen_and_up = windows
-        .into_iter()
-        .rev() // rev because I treat the focus stack backwards vs how the renderer orders it
+        .rev()
+        .filter(|win| win.is_on_active_tag())
         .enumerate()
         .map(|(i, win)| {
             win.with_state_mut(|state| state.offscreen_elem_id.take());
@@ -263,7 +260,8 @@ where
             win.render_elements(renderer, loc, scale, 1.0)
                 .into_iter()
                 .map(OutputRenderElement::from)
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     let rest = fullscreen_and_up.split_off(last_fullscreen_split_at);
 
@@ -281,7 +279,6 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     output: &Output,
     renderer: &mut R,
     space: &Space<WindowElement>,
-    windows: &[WindowElement],
 ) -> Vec<OutputRenderElement<R>> {
     let _span = tracy_client::span!("output_render_elements");
 
@@ -333,9 +330,8 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             .map(OutputRenderElement::from)
             .collect();
     } else {
-        let windows = windows.iter().filter(|win| win.is_on_active_tag());
         (fullscreen_and_up_elements, rest_of_window_elements) =
-            window_render_elements::<_, R>(output, windows, space, renderer, scale);
+            window_render_elements::<R>(output, space, renderer, scale);
     }
 
     // Elements render from top to bottom

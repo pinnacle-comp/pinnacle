@@ -258,15 +258,12 @@ impl Winit {
         let full_redraw = &mut self.full_redraw;
         *full_redraw = full_redraw.saturating_sub(1);
 
-        // The z-index of these is determined by `state.fixup_z_layering()`, which is called at the end
-        // of every event loop cycle
-        let windows = pinnacle.space.elements().cloned().collect::<Vec<_>>();
-
         let mut output_render_elements = Vec::new();
 
         let should_draw_cursor = !pinnacle.lock_state.is_unlocked()
             || self.output.with_state(|state| {
                 // Don't draw cursor when screencopy without cursor is pending
+                //  FIXME: This causes the cursor to disappear (duh)
                 state
                     .screencopy
                     .as_ref()
@@ -335,7 +332,6 @@ impl Winit {
                 &self.output,
                 self.backend.renderer(),
                 &pinnacle.space,
-                &windows,
             ));
         }
 
