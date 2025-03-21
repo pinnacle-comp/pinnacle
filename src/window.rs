@@ -7,7 +7,7 @@ use std::{cell::RefCell, ops::Deref};
 use indexmap::IndexSet;
 use rules::WindowRules;
 use smithay::{
-    desktop::{space::SpaceElement, Window, WindowSurface},
+    desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
@@ -23,7 +23,7 @@ use smithay::{
     xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
-use window_state::LayoutMode;
+use window_state::{LayoutMode, LayoutModeKind};
 
 use crate::{
     state::{Pinnacle, State, WithState},
@@ -389,19 +389,11 @@ impl State {
             if let Some(surface) = window.x11_surface() {
                 let _ = surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)));
             }
-
-            if window.is_on_active_tag() {
-                self.pinnacle
-                    .space
-                    .map_element(window.clone(), loc.to_i32_round(), true);
-            }
         }
 
         // TODO: xdg activation
 
         if window_rules.focused != Some(false) {
-            // INFO: Not pushing the window to the focus stack if we get Some(false)
-            // might mess things up idk
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
             self.update_keyboard_focus(&output);
         } else {
@@ -412,10 +404,31 @@ impl State {
             return;
         }
 
-        if window.with_state(|state| state.layout_mode.is_tiled()) {
-            self.capture_snapshots_on_output(&output, []);
-            self.pinnacle.begin_layout_transaction(&output);
-            self.pinnacle.request_layout(&output);
+        match window.with_state(|state| state.layout_mode.current()) {
+            LayoutModeKind::Tiled => {
+                self.capture_snapshots_on_output(&output, []);
+                self.pinnacle.begin_layout_transaction(&output);
+                self.pinnacle.request_layout(&output);
+            }
+            LayoutModeKind::Floating => {
+                let loc = window.with_state(|state| state.floating_loc.expect("initialized above"));
+                self.pinnacle
+                    .space
+                    .map_element(window.clone(), loc.to_i32_round(), true);
+            }
+            LayoutModeKind::Maximized => {
+                let non_exclusive_geo = {
+                    let map = layer_map_for_output(&output);
+                    map.non_exclusive_zone()
+                };
+                let loc = output_geo.loc + non_exclusive_geo.loc;
+                self.pinnacle.space.map_element(window, loc, true);
+            }
+            LayoutModeKind::Fullscreen => {
+                self.pinnacle
+                    .space
+                    .map_element(window, output_geo.loc, true);
+            }
         }
 
         self.schedule_render(&output);
