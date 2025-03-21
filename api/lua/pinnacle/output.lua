@@ -265,7 +265,7 @@ end
 --- --              │ 2560x │
 --- --              │ 1440  │
 --- --              └───────┘
----Output.get_by_name("DP-1"):set_loc_adj_to(Output:get_by_name("HDMI-1"), "bottom_align_right")
+---Output.get_by_name("DP-1"):set_loc_adj_to(Output.get_by_name("HDMI-1"), "bottom_align_right")
 --- -- Results in:
 --- -- ┌───────┐
 --- -- │       │
