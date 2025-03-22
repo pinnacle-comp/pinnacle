@@ -34,7 +34,15 @@ impl TagId {
         let _span = tracy_client::span!("TagId::tag");
 
         pinnacle.outputs.keys().find_map(|op| {
-            op.with_state(|state| state.tags.iter().find(|tag| &tag.id() == self).cloned())
+            op.with_state(|state| {
+                state
+                    .tags
+                    .iter()
+                    // FIXME: a better tag tracking system
+                    .filter(|tag| !tag.defunct())
+                    .find(|tag| &tag.id() == self)
+                    .cloned()
+            })
         })
     }
 
