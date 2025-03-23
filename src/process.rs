@@ -161,6 +161,8 @@ impl ProcessState {
                 return;
             };
 
+            // We only close our copy of the stdin fd so it can get EOF when the config closes
+            // its copy. If we do that for stdout and stderr we get SIGPIPEs everywhere.
             if let Some(stdin_fd) = stdin_fd {
                 let _ = stream.as_raw_fd().send_fd(stdin_fd);
                 // SAFETY: The `send_fd` above dups the fd into the config process,
@@ -169,15 +171,9 @@ impl ProcessState {
             }
             if let Some(stdout_fd) = stdout_fd {
                 let _ = stream.as_raw_fd().send_fd(stdout_fd);
-                // SAFETY: The `send_fd` above dups the fd into the config process,
-                // so we are good to reclaim this fd to close it
-                unsafe { drop(OwnedFd::from_raw_fd(stdout_fd)) }
             }
             if let Some(stderr_fd) = stderr_fd {
                 let _ = stream.as_raw_fd().send_fd(stderr_fd);
-                // SAFETY: The `send_fd` above dups the fd into the config process,
-                // so we are good to reclaim this fd to close it
-                unsafe { drop(OwnedFd::from_raw_fd(stderr_fd)) }
             }
 
             let _ = std::fs::remove_file(socket_path);
