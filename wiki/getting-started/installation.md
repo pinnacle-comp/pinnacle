@@ -4,7 +4,16 @@
 
 It is recommended that you install Pinnacle using your distro's package manager.
 
-TODO: lmao we don't have any packages yet
+::: tabs
+== Arch (AUR)
+```sh
+yay -S pinnacle-comp-git
+```
+> [!NOTE]
+> This package currently contains *only* the compositor i.e. no Lua API, session, or portal support.
+> If you would like a more functional PKGBUILD in the meantime while this is being worked on,
+> there is one floating around in the Discord/Matrix.
+:::
 
 ## From Source
 
@@ -43,7 +52,7 @@ Clone the repository.
 git clone https://github.com/pinnacle-comp/pinnacle
 ```
 
-To build Pinnacle, run `just`, passing `install` to install the Lua API with Luarocks.
+To build Pinnacle, run `just`, passing `install` to install the Lua API locally with Luarocks.
 This passes through arguments to Cargo.
 ```sh
 just install build [--release]
