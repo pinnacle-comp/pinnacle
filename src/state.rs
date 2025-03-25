@@ -261,6 +261,19 @@ impl State {
             }
         }
 
+        #[cfg(feature = "snowcap")]
+        if self
+            .pinnacle
+            .snowcap_join_handle
+            .as_ref()
+            .is_some_and(|handle| handle.is_finished())
+        {
+            // If Snowcap is dead, the config has most likely crashed or will crash if it's used.
+            // The embedded config will also fail to start.
+            // We'll exit here so people aren't stuck in the compositor.
+            self.pinnacle.shutdown();
+        }
+
         self.pinnacle
             .display_handle
             .flush_clients()
