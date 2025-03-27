@@ -23,7 +23,10 @@ use pinnacle::{
     state::State,
     util::increase_nofile_rlimit,
 };
-use smithay::reexports::{calloop::EventLoop, rustix::process::geteuid};
+use smithay::reexports::{
+    calloop::EventLoop,
+    rustix::process::{getegid, geteuid, getgid, getuid},
+};
 use tracing::{error, info, warn};
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -115,15 +118,18 @@ async fn main() -> anyhow::Result<()> {
 
     tracy_client::Client::start();
 
-    if geteuid().is_root() {
+    if has_elevated_privileges() {
         if !cli.allow_root {
-            warn!("You are trying to run Pinnacle as root.");
+            warn!("You are trying to run Pinnacle with elevated privileges (sudo or similar).");
             warn!("This is NOT recommended.");
-            warn!("To run Pinnacle as root, pass in the `--allow-root` flag.");
-            warn!("Again, this is NOT recommended.");
+            warn!("To run Pinnacle with elevated privileges, pass in the `--allow-root` flag.");
+            warn!("Again, this is NOT recommended. This will spawn root sockets in userspace");
+            warn!("and probably a few other non-ideal things.");
             return Ok(());
         } else {
-            warn!("Running Pinnacle as root. I hope you know what you're doing 🫡");
+            warn!(
+                "Running Pinnacle with elevated privileges. I hope you know what you're doing 🫡"
+            );
         }
     }
 
@@ -289,4 +295,24 @@ fn set_log_panic_hook() {
             hook(info);
         }
     }));
+}
+
+// From sway
+/// Returns whether the user has elevated their privileges through
+/// something like `sudo`.
+fn has_elevated_privileges() -> bool {
+    // User is not effectively root
+    if !geteuid().is_root() && !getegid().is_root() {
+        return false;
+    }
+
+    // User is actually root and therefore should be able to do whatever
+    if getuid() == geteuid() && getgid() == getegid() {
+        return false;
+    }
+
+    // User has used `sudo` or similar to raise their privileges.
+    // This is a nono as it will spawn root sockets and stuff
+    // in userspace.
+    true
 }
