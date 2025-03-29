@@ -926,9 +926,8 @@ impl Udev {
     ) {
         debug!(?node, ?connector, ?crtc, "Udev::connector_connected");
 
-        let device = if let Some(device) = self.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backends.get_mut(&node) else {
+            warn!(?node, "Device disappeared");
             return;
         };
 
@@ -1119,9 +1118,8 @@ impl Udev {
     ) {
         debug!(?node, ?crtc, "Udev::connector_disconnected");
 
-        let device = if let Some(device) = self.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backends.get_mut(&node) else {
+            warn!(?node, "Device disappeared");
             return;
         };
 
@@ -1146,9 +1144,8 @@ impl Udev {
     fn device_changed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
         debug!(?node, "Udev::device_changed");
 
-        let device = if let Some(device) = self.backends.get_mut(&node) {
-            device
-        } else {
+        let Some(device) = self.backends.get_mut(&node) else {
+            warn!(?node, "Device disappeared");
             return;
         };
 
@@ -1187,6 +1184,7 @@ impl Udev {
         debug!(?node, "Udev::device_removed");
 
         let Some(device) = self.backends.get(&node) else {
+            warn!(?node, "Device disappeared");
             return;
         };
 
