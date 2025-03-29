@@ -1,0 +1,42 @@
+name: Draft Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.4"
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Extract version from tag
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
+          _release_version_luarocks="$(echo "${GITHUB_REF#refs/*/v}" | sed -E "s/([0-9]+\.[0-9]+\.[0-9]+)-(.*)/\1\2/")
+          echo "RELEASE_VERSION_LUAROCKS=$_release_version_luarocks" >> $GITHUB_ENV
+      - name: Pack Lua API rock
+        run: |
+          cd api/lua
+          luarocks build --lua-version 5.4 --deps-mode none rockspecs/pinnacle-api-${{ env.RELEASE_VERSION_LUAROCKS }}-*.rockspec
+
+      - name: Draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
