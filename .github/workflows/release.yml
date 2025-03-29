@@ -40,4 +40,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: api/lua/*.rock
+          fail_on_unmatched_files: true
+          files: |
+            api/lua/*.rock
