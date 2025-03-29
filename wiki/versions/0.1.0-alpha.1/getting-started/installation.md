@@ -9,10 +9,6 @@ It is recommended that you install Pinnacle using your distro's package manager.
 ```sh
 yay -S pinnacle-comp-git
 ```
-> [!NOTE]
-> This package currently contains *only* the compositor i.e. no Lua API, session, or portal support.
-> If you would like a more functional PKGBUILD in the meantime while this is being worked on,
-> there is one floating around in the Discord/Matrix.
 :::
 
 ## From Source
