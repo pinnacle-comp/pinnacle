@@ -6,7 +6,7 @@ on:
     paths:
       - "api/rust/**"
     tags:
-      - "v*.*.*"
+      - "v*"
   workflow_dispatch:
 
 jobs:

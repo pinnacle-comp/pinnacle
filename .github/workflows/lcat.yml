@@ -6,7 +6,7 @@ on:
     paths:
       - "api/lua/**"
     tags:
-      - "v*.*.*"
+      - "v*"
   workflow_dispatch:
 
 env:
