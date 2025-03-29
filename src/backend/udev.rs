@@ -824,7 +824,7 @@ impl Udev {
         node: DrmNode,
         path: &Path,
     ) -> Result<(), DeviceAddError> {
-        let _span = tracy_client::span!("Udev::device_added");
+        debug!(?node, ?path, "Udev::device_added");
 
         // Try to open the device
         let fd = self
@@ -924,7 +924,7 @@ impl Udev {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
-        let _span = tracy_client::span!("Udev::connector_connected");
+        debug!(?node, ?connector, ?crtc, "Udev::connector_connected");
 
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
@@ -1117,9 +1117,7 @@ impl Udev {
         node: DrmNode,
         crtc: crtc::Handle,
     ) {
-        let _span = tracy_client::span!("Udev::connector_disconnected");
-
-        debug!(?crtc, "connector_disconnected");
+        debug!(?node, ?crtc, "Udev::connector_disconnected");
 
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
@@ -1146,7 +1144,7 @@ impl Udev {
     }
 
     fn device_changed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
-        let _span = tracy_client::span!("Udev::device_changed");
+        debug!(?node, "Udev::device_changed");
 
         let device = if let Some(device) = self.backends.get_mut(&node) {
             device
@@ -1186,7 +1184,7 @@ impl Udev {
 
     /// A GPU was unplugged.
     fn device_removed(&mut self, pinnacle: &mut Pinnacle, node: DrmNode) {
-        let _span = tracy_client::span!("Udev::device_removed");
+        debug!(?node, "Udev::device_removed");
 
         let Some(device) = self.backends.get(&node) else {
             return;
@@ -1604,7 +1602,7 @@ impl Udev {
         output: &Output,
         mut time_to_next_presentation: Duration,
     ) {
-        let span = tracy_client::span!("Udev::render_surface");
+        let span = tracy_client::span!("Udev::queue_estimated_vblank_timer");
         span.emit_text(&output.name());
 
         match mem::take(&mut surface.render_state) {
@@ -1647,7 +1645,7 @@ impl Udev {
     }
 
     fn on_estimated_vblank_timer(&mut self, pinnacle: &mut Pinnacle, output: &Output) {
-        let span = tracy_client::span!("Udev::render_surface");
+        let span = tracy_client::span!("Udev::on_estimated_vblank_timer");
         span.emit_text(&output.name());
 
         let Some(surface) = render_surface_for_output(output, &mut self.backends) else {
@@ -1688,6 +1686,8 @@ fn render_surface_for_output<'a>(
         .and_then(|device| device.surfaces.get_mut(crtc))
 }
 
+// FIXME: damage is completely wrong lol, totally didn't test that
+// Use an OutputDamageTracker or something
 fn handle_pending_screencopy<'a>(
     renderer: &mut UdevRenderer<'a>,
     output: &Output,
