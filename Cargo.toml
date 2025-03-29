@@ -90,12 +90,11 @@ dbg_macro = "warn"
 
 [package]
 name = "pinnacle"
-version = "0.0.1"
+version = "0.1.0-alpha.1"
 authors.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
-description = "A WIP Smithay-based Wayland compositor"
-readme = "README.md"
+description = "A Wayland compositor inspired by AwesomeWM"
 repository.workspace = true
 keywords = ["wayland", "compositor", "smithay", "lua"]
 rust-version.workspace = true

@@ -1,9 +1,9 @@
 [package]
 name = "pinnacle-api"
-version = "0.0.2"
+version = "0.1.0-alpha.1"
 edition.workspace = true
 authors.workspace = true
-description = "The Rust implementation of the Pinnacle compositor's configuration API"
+description = "The Rust configuration library for Pinnacle"
 license = "MPL-2.0"
 repository.workspace = true
 keywords = ["compositor", "pinnacle", "api", "config"]

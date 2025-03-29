@@ -1,7 +1,7 @@
 {
   "devDependencies": {
-    "@nolebase/vitepress-plugin-highlight-targeted-heading": "^2.13.0",
-    "@types/node": "^22.13.1",
+    "@nolebase/vitepress-plugin-highlight-targeted-heading": "^2.15.1",
+    "@types/node": "^22.13.14",
     "vitepress": "^1.6.3",
     "vitepress-plugin-tabs": "^0.6.0",
     "vue": "^3.5.13"
@@ -13,5 +13,10 @@
   },
   "dependencies": {
     "vitepress-versioning-plugin": "github:IMB11/vitepress-versioning-plugin#cdc91aa3b03bd594bda533e60b701d6828a251ae"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "vitepress-versioning-plugin": "patches/vitepress-versioning-plugin.patch"
+    }
   }
 }

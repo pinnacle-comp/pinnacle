@@ -4,13 +4,14 @@ import defineVersionedConfig from "vitepress-versioning-plugin"
 // https://vitepress.dev/reference/site-config
 export default defineVersionedConfig({
     title: "Pinnacle Wiki",
-    description: "Wiki for the Pinnacle Wayland compositor",
+    description: "The wiki for Pinnacle, a Wayland compositor",
+    cleanUrls: true,
     themeConfig: {
         // https://vitepress.dev/reference/default-theme-config
         nav: [
             { text: "Home", link: "/" },
             { text: "Wiki", link: "/getting-started/introduction" },
-            { text: "Lua Reference", link: "https://pinnacle-comp.github.io/lua-reference/" },
+            { text: "Lua Reference", link: "https://pinnacle-comp.github.io/lua-reference/main/classes/pinnacle" },
             { text: "Rust Reference", link: "https://pinnacle-comp.github.io/rust-reference/main" },
             { component: "VersionSwitcher" },
         ],
@@ -21,6 +22,37 @@ export default defineVersionedConfig({
         ],
         search: {
             provider: "local",
+            options: {
+                miniSearch: {
+                    searchOptions: {
+                        // Filter results for the current version
+                        filter: (result) => {
+                            let id = result.id as String
+                            let entryVersion = id.split("/")[2]
+                            let currentPath = window.location.pathname
+                            const semverRegex = /(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?/
+
+                            if (entryVersion) {
+                                let entryVersionIsSemver = entryVersion.match(semverRegex)?.length > 0
+                                if (entryVersionIsSemver) {
+                                    if (currentPath.includes(entryVersion)) {
+                                        return true
+                                    } else {
+                                        return false
+                                    }
+                                }
+                            }
+
+                            let currentPathIsVersioned = currentPath.match(semverRegex)?.length > 0
+                            if (currentPathIsVersioned) {
+                                return false
+                            } else {
+                                return true
+                            }
+                        }
+                    }
+                }
+            }
         },
         sidebar: {
             "/": [
