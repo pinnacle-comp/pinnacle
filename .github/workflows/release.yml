@@ -34,7 +34,8 @@ jobs:
       - name: Pack Lua API rock
         run: |
           cd api/lua
-          luarocks build --lua-version 5.4 --deps-mode none rockspecs/pinnacle-api-${{ env.RELEASE_VERSION_LUAROCKS }}-*.rockspec
+          luarocks build --lua-version 5.4 --deps-mode none --pack-binary-rock \
+              rockspecs/pinnacle-api-${{ env.RELEASE_VERSION_LUAROCKS }}-*.rockspec
 
       - name: Draft release
         uses: softprops/action-gh-release@v2
