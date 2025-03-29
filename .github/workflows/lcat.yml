@@ -5,6 +5,8 @@ on:
     branches: ["main"]
     paths:
       - "api/lua/**"
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 env:
@@ -13,9 +15,9 @@ env:
   SSH_DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY_LUA }}
 
 jobs:
-  build:
+  build-docs:
     runs-on: ubuntu-24.04
-    name: Build
+    name: Build docs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,10 +30,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache stuff
         uses: Swatinem/rust-cache@v2
+      - name: Extract possible tag version
+        if: startsWith(github.ref, "refs/tags/")
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
       - name: Generate docs
         run: |
           cd ./lcat
-          cargo run -- --dir "../api/lua" --base-url "/lua-reference/main/"
+          cargo run -- --dir "../api/lua" --base-url "/lua-reference/${{ env.RELEASE_VERSION || main }}/"
       - name: Push files
         uses: cpina/github-action-push-to-another-repository@v1.7.2
         with:
@@ -39,4 +44,4 @@ jobs:
           destination-github-username: "pinnacle-comp"
           destination-repository-name: "lua-reference"
           target-branch: main
-          target-directory: main
+          target-directory: ${{ env.RELEASE_VERSION || main }}

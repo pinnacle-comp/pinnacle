@@ -1,0 +1,31 @@
+diff --git a/src/components/VersionSwitcher.vue b/src/components/VersionSwitcher.vue
+index 7d0f065083c1710aa6e3667a69ee316dbd4690b1..3c3cdf8f04b9f86033d497fcb0fbed9ab161fe05 100644
+--- a/src/components/VersionSwitcher.vue
++++ b/src/components/VersionSwitcher.vue
+@@ -1,5 +1,5 @@
+ <script setup lang="ts">
+-import { useRouter } from "vitepress"
++import { useData, useRouter } from "vitepress"
+ import { computed, ref } from 'vue'
+ import VPMenuLink from 'vitepress/dist/client/theme-default/components/VPMenuLink.vue'
+ import VPFlyout from 'vitepress/dist/client/theme-default/components/VPFlyout.vue'
+@@ -9,12 +9,13 @@ const props = defineProps<{
+ }>();
+ 
+ const router = useRouter();
++const { site } = useData();
+ 
+ const currentVersion = computed(() => {
+   let version = props.versioningPlugin.latestVersion;
+ 
+   for (const v of props.versioningPlugin.versions) {
+-    if (router.route.path.startsWith(`/${v}/`)) {
++    if (router.route.path.startsWith(`${site.value.base}${v}/`)) {
+       version = v;
+       break;
+     }
+@@ -158,3 +159,4 @@ const toggle = () => {
+   padding-top: 4px;
+ }
+ </style>
++
