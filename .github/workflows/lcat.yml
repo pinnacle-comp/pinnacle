@@ -36,7 +36,7 @@ jobs:
       - name: Generate docs
         run: |
           cd ./lcat
-          cargo run -- --dir "../api/lua" --base-url "/lua-reference/${{ env.RELEASE_VERSION || main }}/"
+          cargo run -- --dir "../api/lua" --base-url "/lua-reference/${{ env.RELEASE_VERSION || 'main' }}/"
       - name: Push files
         uses: cpina/github-action-push-to-another-repository@v1.7.2
         with:
@@ -44,4 +44,4 @@ jobs:
           destination-github-username: "pinnacle-comp"
           destination-repository-name: "lua-reference"
           target-branch: main
-          target-directory: ${{ env.RELEASE_VERSION || main }}
+          target-directory: ${{ env.RELEASE_VERSION || 'main' }}

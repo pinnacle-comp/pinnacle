@@ -33,4 +33,4 @@ jobs:
           deploy_key: ${{ secrets.DOCS_DEPLOY_KEY_RUST }}
           external_repository: pinnacle-comp/rust-reference
           publish_dir: ./target/doc
-          destination_dir: ${{ env.RELEASE_VERSION || main }}
+          destination_dir: ${{ env.RELEASE_VERSION || 'main' }}
