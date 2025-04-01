@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
+    os::fd::OwnedFd,
     process::Stdio,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -30,7 +31,7 @@ use smithay::{
         X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     },
 };
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -348,9 +349,9 @@ impl XwmHandler for State {
         _xwm: XwmId,
         selection: SelectionTarget,
         mime_type: String,
-        fd: std::os::fd::OwnedFd,
+        fd: OwnedFd,
     ) {
-        let _span = tracy_client::span!("XwmHandler::send_selection");
+        debug!(?selection, ?mime_type, ?fd, "XwmHandler::send_selection");
 
         match selection {
             SelectionTarget::Clipboard => {
@@ -377,7 +378,7 @@ impl XwmHandler for State {
     }
 
     fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
-        let _span = tracy_client::span!("XwmHandler::new_selection");
+        debug!(?selection, ?mime_types, "XwmHandler::new_selection");
 
         match selection {
             SelectionTarget::Clipboard => {
@@ -400,7 +401,7 @@ impl XwmHandler for State {
     }
 
     fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
-        let _span = tracy_client::span!("XwmHandler::cleared_selection");
+        debug!(?selection, "XwmHandler::cleared_selection");
 
         match selection {
             SelectionTarget::Clipboard => {

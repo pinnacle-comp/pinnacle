@@ -505,6 +505,8 @@ impl SelectionHandler for State {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
+        debug!(?ty, ?source, "SelectionHandler::new_selection");
+
         if let Some(xwm) = self
             .pinnacle
             .xwayland_state
@@ -512,7 +514,7 @@ impl SelectionHandler for State {
             .and_then(|xwayland| xwayland.xwm.as_mut())
         {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
-                tracing::warn!(?err, ?ty, "Failed to set Xwayland selection");
+                warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
         }
     }
@@ -525,6 +527,8 @@ impl SelectionHandler for State {
         _seat: Seat<Self>,
         _user_data: &(),
     ) {
+        debug!(?ty, ?mime_type, ?fd, "SelectionHandler::send_selection");
+
         if let Some(xwm) = self
             .pinnacle
             .xwayland_state
@@ -534,7 +538,7 @@ impl SelectionHandler for State {
             if let Err(err) =
                 xwm.send_selection(ty, mime_type, fd, self.pinnacle.loop_handle.clone())
             {
-                tracing::warn!(?err, "Failed to send primary (X11 -> Wayland)");
+                warn!(?err, "Failed to send selection (X11 -> Wayland)");
             }
         }
     }
