@@ -21,6 +21,10 @@ enum Edge {
   EDGE_RELEASE = 2;
 }
 
+// ========================================= //
+// Binds                                     //
+// ========================================= //
+
 message Bind {
   repeated Modifier mods = 1;
   repeated Modifier ignore_mods = 2;
@@ -117,7 +121,9 @@ message EnterBindLayerRequest {
   optional string layer_name = 1;
 }
 
-//////
+// ========================================= //
+// Xkeyboard                                 //
+// ========================================= //
 
 message SetXkbConfigRequest {
   optional string rules = 1;
@@ -134,12 +140,30 @@ message SetRepeatRateRequest {
   optional int32 delay = 2;
 }
 
+message SetXkbKeymapRequest {
+  string keymap = 1;
+}
+
+message SwitchXkbLayoutRequest {
+  oneof action {
+    google.protobuf.Empty next = 1;
+    google.protobuf.Empty prev = 2;
+    uint32 index = 3;
+  }
+}
+
+// ========================================= //
+// Xcursor                                   //
+// ========================================= //
+
 message SetXcursorRequest {
   optional string theme = 1;
   optional uint32 size = 2;
 }
 
-// Libinput stuff
+// ========================================= //
+// Libinput                                  //
+// ========================================= //
 
 // The click method defines when to generate software-emulated
 // buttons, usually on a device that does not have a specific
@@ -284,6 +308,8 @@ message SetDeviceMapTargetRequest {
 }
 
 service InputService {
+  // Binds
+
   rpc Bind(BindRequest) returns (BindResponse);
   rpc GetBindInfos(GetBindInfosRequest) returns (GetBindInfosResponse);
   rpc SetBindGroup(SetBindGroupRequest) returns (google.protobuf.Empty);
@@ -301,8 +327,15 @@ service InputService {
   rpc KeybindOnPress(KeybindOnPressRequest) returns (google.protobuf.Empty);
   rpc MousebindOnPress(MousebindOnPressRequest) returns (google.protobuf.Empty);
 
+  // Xkb
+
   rpc SetXkbConfig(SetXkbConfigRequest) returns (google.protobuf.Empty);
   rpc SetRepeatRate(SetRepeatRateRequest) returns (google.protobuf.Empty);
+  rpc SetXkbKeymap(SetXkbKeymapRequest) returns (google.protobuf.Empty);
+  rpc SwitchXkbLayout(SwitchXkbLayoutRequest) returns (google.protobuf.Empty);
+
+  // Xcursor
+
   rpc SetXcursor(SetXcursorRequest) returns (google.protobuf.Empty);
 
   // Libinput

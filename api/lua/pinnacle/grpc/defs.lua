@@ -697,6 +697,14 @@ local pinnacle_v1_Backend = {
 ---@field rate integer?
 ---@field delay integer?
 
+---@class pinnacle.input.v1.SetXkbKeymapRequest
+---@field keymap string?
+
+---@class pinnacle.input.v1.SwitchXkbLayoutRequest
+---@field next google.protobuf.Empty?
+---@field prev google.protobuf.Empty?
+---@field index integer?
+
 ---@class pinnacle.input.v1.SetXcursorRequest
 ---@field theme string?
 ---@field size integer?
@@ -1196,6 +1204,8 @@ pinnacle.input.v1.GetBindLayerStackResponse = {}
 pinnacle.input.v1.EnterBindLayerRequest = {}
 pinnacle.input.v1.SetXkbConfigRequest = {}
 pinnacle.input.v1.SetRepeatRateRequest = {}
+pinnacle.input.v1.SetXkbKeymapRequest = {}
+pinnacle.input.v1.SwitchXkbLayoutRequest = {}
 pinnacle.input.v1.SetXcursorRequest = {}
 pinnacle.input.v1.CalibrationMatrix = {}
 pinnacle.input.v1.GetDevicesRequest = {}
@@ -1781,6 +1791,40 @@ pinnacle.input.v1.InputService.SetRepeatRate.response = ".google.protobuf.Empty"
 ---@return string | nil error An error string, if any
 function Client:pinnacle_input_v1_InputService_SetRepeatRate(data)
     return self:unary_request(pinnacle.input.v1.InputService.SetRepeatRate, data)
+end
+pinnacle.input.v1.InputService.SetXkbKeymap = {}
+pinnacle.input.v1.InputService.SetXkbKeymap.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.SetXkbKeymap.method = "SetXkbKeymap"
+pinnacle.input.v1.InputService.SetXkbKeymap.request = ".pinnacle.input.v1.SetXkbKeymapRequest"
+pinnacle.input.v1.InputService.SetXkbKeymap.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.SetXkbKeymapRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_input_v1_InputService_SetXkbKeymap(data)
+    return self:unary_request(pinnacle.input.v1.InputService.SetXkbKeymap, data)
+end
+pinnacle.input.v1.InputService.SwitchXkbLayout = {}
+pinnacle.input.v1.InputService.SwitchXkbLayout.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.SwitchXkbLayout.method = "SwitchXkbLayout"
+pinnacle.input.v1.InputService.SwitchXkbLayout.request = ".pinnacle.input.v1.SwitchXkbLayoutRequest"
+pinnacle.input.v1.InputService.SwitchXkbLayout.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.input.v1.SwitchXkbLayoutRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_input_v1_InputService_SwitchXkbLayout(data)
+    return self:unary_request(pinnacle.input.v1.InputService.SwitchXkbLayout, data)
 end
 pinnacle.input.v1.InputService.SetXcursor = {}
 pinnacle.input.v1.InputService.SetXcursor.service = "pinnacle.input.v1.InputService"

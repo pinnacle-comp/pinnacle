@@ -58,6 +58,9 @@ Read the corresponding API reference to see all possible settings.
 
 Keyboards have some extra settings separate from libinput.
 
+> [!NOTE]
+> All keyboard settings are currently global.
+
 ### xkeyboard-config
 
 You can set a custom xkb-config by doing the following:
@@ -78,8 +81,6 @@ input::set_xkb_config(XkbConfig::new()
 ```
 :::
 
-This currently only supports setting the xkb-config globally.
-
 ### Repeat rate and delay
 
 Setting the repeat rate and delay changes how long it takes a held down
@@ -96,4 +97,44 @@ input::set_repeat_rate(25, 500);
 ```
 :::
 
-This currently only supports setting the repeat rate and delay globally.
+### XKB keymap
+
+You can set an XKB keymap by providing a string of the keymap.
+If you have a keymap in a file, read it into a string and provide that.
+
+::: tabs key:langs
+== Lua
+```lua
+require("pinnacle.input").set_xkb_keymap("keymap here...")
+
+-- From a file
+require("pinnacle.input").set_xkb_keymap(io.open("/path/to/keymap.xkb"):read("*a"))
+```
+== Rust
+```rust
+input::set_xkb_keymap("keymap here...");
+
+// From a file
+input::set_xkb_keymap(std::fs::read_to_string("/path/to/keymap.xkb")?);
+```
+:::
+
+### Changing layouts
+
+You can change keyboard layouts by either switching to one via index or
+cycling them forward or backward.
+
+::: tabs key:langs
+== Lua
+```lua
+require("pinnacle.input").cycle_xkb_layout_forward()
+require("pinnacle.input").cycle_xkb_layout_backward()
+require("pinnacle.input").switch_xkb_layout(2)
+```
+== Rust
+```rust
+input::cycle_xkb_layout_forward();
+input::cycle_xkb_layout_backward();
+input::switch_xkb_layout(2);
+```
+:::

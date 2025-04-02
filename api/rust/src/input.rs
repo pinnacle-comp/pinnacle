@@ -10,10 +10,11 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        BindRequest, EnterBindLayerRequest, GetBindInfosRequest, KeybindOnPressRequest,
-        KeybindStreamRequest, MousebindOnPressRequest, MousebindStreamRequest,
-        SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
+        switch_xkb_layout_request, BindRequest, EnterBindLayerRequest, GetBindInfosRequest,
+        KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
+        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
         SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
+        SetXkbKeymapRequest, SwitchXkbLayoutRequest,
     },
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -572,6 +573,61 @@ pub fn set_xkb_config(xkb_config: XkbConfig) {
             layout: xkb_config.layout,
             model: xkb_config.model,
             options: xkb_config.options,
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Sets the XKB keymap.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use pinnacle_api::input;
+/// input::set_xkb_keymap("keymap here...");
+///
+/// // From a file
+/// # || {
+/// input::set_xkb_keymap(std::fs::read_to_string("/path/to/keymap.xkb")?);
+/// # Ok::<_, std::io::Error>(())
+/// # };
+/// ```
+pub fn set_xkb_keymap(keymap: impl ToString) {
+    Client::input()
+        .set_xkb_keymap(SetXkbKeymapRequest {
+            keymap: keymap.to_string(),
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Cycles the current XKB layout forward.
+pub fn cycle_xkb_layout_forward() {
+    Client::input()
+        .switch_xkb_layout(SwitchXkbLayoutRequest {
+            action: Some(switch_xkb_layout_request::Action::Next(())),
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Cycles the current XKB layout backward.
+pub fn cycle_xkb_layout_backward() {
+    Client::input()
+        .switch_xkb_layout(SwitchXkbLayoutRequest {
+            action: Some(switch_xkb_layout_request::Action::Prev(())),
+        })
+        .block_on_tokio()
+        .unwrap();
+}
+
+/// Switches the current XKB layout to the one at the provided `index`.
+///
+/// Fails if the index is out of bounds.
+pub fn switch_xkb_layout(index: u32) {
+    Client::input()
+        .switch_xkb_layout(SwitchXkbLayoutRequest {
+            action: Some(switch_xkb_layout_request::Action::Index(index)),
         })
         .block_on_tokio()
         .unwrap();

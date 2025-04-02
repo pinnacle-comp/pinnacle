@@ -143,6 +143,10 @@ fn test_with_lang(
         }
     })?;
 
+    event_loop
+        .dispatch(Some(Duration::from_millis(200)), &mut state)
+        .unwrap();
+
     join_handle
         .join()
         .map_err(|_| anyhow!("thread panicked"))??;

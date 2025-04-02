@@ -1,17 +1,17 @@
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        set_device_map_target_request::Target, AccelProfile, BindInfo, BindRequest, BindResponse,
-        ClickMethod, EnterBindLayerRequest, GetBindInfosRequest, GetBindInfosResponse,
-        GetBindLayerStackRequest, GetBindLayerStackResponse, GetDeviceCapabilitiesRequest,
-        GetDeviceCapabilitiesResponse, GetDeviceInfoRequest, GetDeviceInfoResponse,
-        GetDeviceTypeRequest, GetDeviceTypeResponse, GetDevicesRequest, GetDevicesResponse,
-        KeybindOnPressRequest, KeybindStreamRequest, KeybindStreamResponse,
-        MousebindOnPressRequest, MousebindStreamRequest, MousebindStreamResponse, ScrollMethod,
-        SendEventsMode, SetBindDescriptionRequest, SetBindGroupRequest,
-        SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetQuitBindRequest,
-        SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
-        TapButtonMap,
+        set_device_map_target_request::Target, switch_xkb_layout_request::Action, AccelProfile,
+        BindInfo, BindRequest, BindResponse, ClickMethod, EnterBindLayerRequest,
+        GetBindInfosRequest, GetBindInfosResponse, GetBindLayerStackRequest,
+        GetBindLayerStackResponse, GetDeviceCapabilitiesRequest, GetDeviceCapabilitiesResponse,
+        GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
+        GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
+        KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
+        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindDescriptionRequest,
+        SetBindGroupRequest, SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest,
+        SetQuitBindRequest, SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest,
+        SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest, TapButtonMap,
     },
 };
 use smithay::reexports::input as libinput;
@@ -21,7 +21,7 @@ use smithay::{
     utils::{Logical, Rectangle},
 };
 use tonic::{Request, Status};
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::{
     api::{run_server_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult},
@@ -536,6 +536,45 @@ impl input::v1::input_service_server::InputService for InputService {
             if let Some(kb) = state.pinnacle.seat.get_keyboard() {
                 kb.change_repeat_info(rate, delay);
             }
+        })
+        .await
+    }
+
+    async fn set_xkb_keymap(&self, request: Request<SetXkbKeymapRequest>) -> TonicResult<()> {
+        let keymap = request.into_inner().keymap;
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(kb) = state.pinnacle.seat.get_keyboard() else {
+                return;
+            };
+            if let Err(err) = kb.set_keymap_from_string(state, keymap) {
+                warn!("Failed to set keymap: {err}");
+            }
+        })
+        .await
+    }
+
+    async fn switch_xkb_layout(&self, request: Request<SwitchXkbLayoutRequest>) -> TonicResult<()> {
+        let Some(action) = request.into_inner().action else {
+            return Err(Status::invalid_argument("no layout specified"));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            let Some(kb) = state.pinnacle.seat.get_keyboard() else {
+                return;
+            };
+            kb.with_xkb_state(state, |mut xkb_context| match action {
+                Action::Next(()) => xkb_context.cycle_next_layout(),
+                Action::Prev(()) => xkb_context.cycle_prev_layout(),
+                Action::Index(index) => {
+                    let layout_count = xkb_context.xkb().lock().unwrap().layouts().count();
+                    if index as usize >= layout_count {
+                        warn!("Failed to set layout to index {index}, there are only {layout_count} layouts");
+                    } else {
+                        xkb_context.set_layout(smithay::input::keyboard::Layout(index));
+                    }
+                }
+            });
         })
         .await
     }

@@ -3317,3 +3317,118 @@ fn process_stdio() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+// INPUT //////////////////////////////////////////////////////////////
+
+#[test]
+fn input_set_xkb_config() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.set_xkb_config({
+                        layout = "us,fr,ge",
+                    })
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::set_xkb_config(
+                    pinnacle_api::input::XkbConfig::new().with_layout("us,fr,ge"),
+                );
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            let kb = state.pinnacle.seat.get_keyboard().unwrap();
+            let layouts = kb.with_xkb_state(state, |ctx| {
+                let xkb = ctx.xkb().lock().unwrap();
+                xkb.layouts()
+                    .map(|layout| xkb.layout_name(layout).to_string())
+                    .collect::<Vec<_>>()
+            });
+            assert_eq!(
+                layouts,
+                [
+                    "English (US)".to_string(),
+                    "French".to_string(),
+                    "Georgian".to_string()
+                ]
+            );
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn input_switch_xkb_layout() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.set_xkb_config({
+                        layout = "us,fr,ge",
+                    })
+                    Input.cycle_xkb_layout_backward()
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::set_xkb_config(
+                    pinnacle_api::input::XkbConfig::new().with_layout("us,fr,ge"),
+                );
+                pinnacle_api::input::cycle_xkb_layout_backward();
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            let kb = state.pinnacle.seat.get_keyboard().unwrap();
+            let layout_idx = kb.with_xkb_state(state, |ctx| {
+                let xkb = ctx.xkb().lock().unwrap();
+                xkb.active_layout().0
+            });
+            assert_eq!(layout_idx, 2);
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.cycle_xkb_layout_forward()
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::cycle_xkb_layout_forward();
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            let kb = state.pinnacle.seat.get_keyboard().unwrap();
+            let layout_idx = kb.with_xkb_state(state, |ctx| {
+                let xkb = ctx.xkb().lock().unwrap();
+                xkb.active_layout().0
+            });
+            assert_eq!(layout_idx, 0);
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.switch_xkb_layout(1)
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::switch_xkb_layout(1);
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            let kb = state.pinnacle.seat.get_keyboard().unwrap();
+            let layout_idx = kb.with_xkb_state(state, |ctx| {
+                let xkb = ctx.xkb().lock().unwrap();
+                xkb.active_layout().0
+            });
+            assert_eq!(layout_idx, 1);
+        });
+
+        Ok(())
+    })
+}

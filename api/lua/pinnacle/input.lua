@@ -592,6 +592,64 @@ function input.set_repeat_rate(rate, delay)
     end
 end
 
+---Sets the XKB keymap.
+---
+---#### Examples
+---```lua
+---Input.set_xkb_keymap("keymap here...")
+---
+----- From a file
+---Input.set_xkb_keymap(io.open("/path/to/keymap.xkb"):read("*a"))
+---```
+---
+---@param keymap string The keymap to set.
+function input.set_xkb_keymap(keymap)
+    local _, err = client:pinnacle_input_v1_InputService_SetXkbKeymap({
+        keymap = keymap,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Cycles the current XKB layout forward.
+function input.cycle_xkb_layout_forward()
+    local _, err = client:pinnacle_input_v1_InputService_SwitchXkbLayout({
+        next = {},
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Cycles the current XKB layout backward.
+function input.cycle_xkb_layout_backward()
+    local _, err = client:pinnacle_input_v1_InputService_SwitchXkbLayout({
+        prev = {},
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
+---Switches the current XKB layout to the one at the provided `index`.
+---
+---Fails if the index is out of bounds.
+---
+---@param index integer The index of the layout to switch to.
+function input.switch_xkb_layout(index)
+    local _, err = client:pinnacle_input_v1_InputService_SwitchXkbLayout({
+        index = index,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 ---Sets the current xcursor theme.
 ---
 ---Pinnacle reads `$XCURSOR_THEME` on startup to set the theme.

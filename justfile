@@ -5,6 +5,10 @@ xdg_data_dir := `echo "${XDG_DATA_HOME:-$HOME/.local/share}/pinnacle"`
 
 lua_version := "5.4"
 
+local_lua_path := x"$HOME/.luarocks/share/lua/" + lua_version + x"/?.lua;$HOME/.luarocks/share/lua/" + lua_version + "/?.init.lua;"
+export LUA_PATH := local_lua_path + env("LUA_PATH", "")
+export LUA_CPATH := x"$HOME/.luarocks/lib/lua/" + lua_version + x"/?.so;$LUA_CPATH"
+
 list:
     @just --list --unsorted
 
