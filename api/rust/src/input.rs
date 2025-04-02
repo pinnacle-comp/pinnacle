@@ -10,11 +10,10 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use pinnacle_api_defs::pinnacle::input::{
     self,
     v1::{
-        switch_xkb_layout_request, BindRequest, EnterBindLayerRequest, GetBindInfosRequest,
-        KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
-        MousebindStreamRequest, SetBindDescriptionRequest, SetBindGroupRequest, SetQuitBindRequest,
-        SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest, SetXkbConfigRequest,
-        SetXkbKeymapRequest, SwitchXkbLayoutRequest,
+        switch_xkb_layout_request, BindProperties, BindRequest, EnterBindLayerRequest,
+        GetBindInfosRequest, KeybindOnPressRequest, KeybindStreamRequest, MousebindOnPressRequest,
+        MousebindStreamRequest, SetBindPropertiesRequest, SetRepeatRateRequest, SetXcursorRequest,
+        SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
     },
 };
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -202,6 +201,8 @@ pub trait Bind {
     fn set_as_quit(&mut self) -> &mut Self;
     /// Sets this bind as a reload config bind.
     fn set_as_reload_config(&mut self) -> &mut Self;
+    /// Allows this bind to trigger when the session is locked.
+    fn allow_when_locked(&mut self) -> &mut Self;
 }
 
 macro_rules! bind_impl {
@@ -209,9 +210,12 @@ macro_rules! bind_impl {
         impl Bind for $ty {
             fn group(&mut self, group: impl ToString) -> &mut Self {
                 Client::input()
-                    .set_bind_group(SetBindGroupRequest {
+                    .set_bind_properties(SetBindPropertiesRequest {
                         bind_id: self.bind_id,
-                        group: Some(group.to_string()),
+                        properties: Some(BindProperties {
+                            group: Some(group.to_string()),
+                            ..Default::default()
+                        }),
                     })
                     .block_on_tokio()
                     .unwrap();
@@ -220,9 +224,12 @@ macro_rules! bind_impl {
 
             fn description(&mut self, desc: impl ToString) -> &mut Self {
                 Client::input()
-                    .set_bind_description(SetBindDescriptionRequest {
+                    .set_bind_properties(SetBindPropertiesRequest {
                         bind_id: self.bind_id,
-                        desc: Some(desc.to_string()),
+                        properties: Some(BindProperties {
+                            description: Some(desc.to_string()),
+                            ..Default::default()
+                        }),
                     })
                     .block_on_tokio()
                     .unwrap();
@@ -231,8 +238,12 @@ macro_rules! bind_impl {
 
             fn set_as_quit(&mut self) -> &mut Self {
                 Client::input()
-                    .set_quit_bind(SetQuitBindRequest {
+                    .set_bind_properties(SetBindPropertiesRequest {
                         bind_id: self.bind_id,
+                        properties: Some(BindProperties {
+                            quit: Some(true),
+                            ..Default::default()
+                        }),
                     })
                     .block_on_tokio()
                     .unwrap();
@@ -241,8 +252,26 @@ macro_rules! bind_impl {
 
             fn set_as_reload_config(&mut self) -> &mut Self {
                 Client::input()
-                    .set_reload_config_bind(SetReloadConfigBindRequest {
+                    .set_bind_properties(SetBindPropertiesRequest {
                         bind_id: self.bind_id,
+                        properties: Some(BindProperties {
+                            reload_config: Some(true),
+                            ..Default::default()
+                        }),
+                    })
+                    .block_on_tokio()
+                    .unwrap();
+                self
+            }
+
+            fn allow_when_locked(&mut self) -> &mut Self {
+                Client::input()
+                    .set_bind_properties(SetBindPropertiesRequest {
+                        bind_id: self.bind_id,
+                        properties: Some(BindProperties {
+                            allow_when_locked: Some(true),
+                            ..Default::default()
+                        }),
                     })
                     .block_on_tokio()
                     .unwrap();
@@ -311,8 +340,7 @@ async fn new_keybind(mods: Mod, key: impl ToKeysym, layer: &BindLayer) -> Keybin
                 mods: mods.into_iter().map(|m| m.into()).collect(),
                 ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                 layer_name: layer.name.clone(),
-                group: None,
-                description: None,
+                properties: Some(BindProperties::default()),
                 bind: Some(input::v1::bind::Bind::Key(input::v1::Keybind {
                     key_code: Some(key.to_keysym().raw()),
                     xkb_name: None,
@@ -432,8 +460,7 @@ async fn new_mousebind(mods: Mod, button: MouseButton, layer: &BindLayer) -> Mou
                 mods: mods.into_iter().map(|m| m.into()).collect(),
                 ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                 layer_name: layer.name.clone(),
-                group: None,
-                description: None,
+                properties: Some(BindProperties::default()),
                 bind: Some(input::v1::bind::Bind::Mouse(input::v1::Mousebind {
                     button: button.into(),
                 })),
@@ -638,14 +665,20 @@ pub fn switch_xkb_layout(index: u32) {
 /// Mainly used for the bind overlay.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BindInfo {
-    /// The group to place this bind in.
-    pub group: Option<String>,
-    /// The description of this bind.
-    pub description: Option<String>,
+    /// The group to place this bind in. Empty if it is not in one.
+    pub group: String,
+    /// The description of this bind. Empty if it does not have one.
+    pub description: String,
     /// The bind's modifiers.
     pub mods: Mod,
     /// The bind's layer.
     pub layer: BindLayer,
+    /// Whether this bind is a quit bind.
+    pub quit: bool,
+    /// Whether this bind is a reload config bind.
+    pub reload_config: bool,
+    /// Whether this bind is allowed when the session is locked.
+    pub allow_when_locked: bool,
     /// What kind of bind this is.
     pub kind: BindInfoKind,
 }
@@ -816,14 +849,40 @@ pub fn bind_infos() -> impl Iterator<Item = BindInfo> {
         let layer = BindLayer {
             name: info.layer_name,
         };
-        let group = info.group;
-        let description = info.description;
+        let group = info
+            .properties
+            .as_ref()
+            .and_then(|props| props.group.clone())
+            .unwrap_or_default();
+        let description = info
+            .properties
+            .as_ref()
+            .and_then(|props| props.description.clone())
+            .unwrap_or_default();
+        let quit = info
+            .properties
+            .as_ref()
+            .and_then(|props| props.quit)
+            .unwrap_or_default();
+        let reload_config = info
+            .properties
+            .as_ref()
+            .and_then(|props| props.reload_config)
+            .unwrap_or_default();
+        let allow_when_locked = info
+            .properties
+            .as_ref()
+            .and_then(|props| props.allow_when_locked)
+            .unwrap_or_default();
 
         Some(BindInfo {
             group,
             description,
             mods,
             layer,
+            quit,
+            reload_config,
+            allow_when_locked,
             kind: bind_kind,
         })
     })

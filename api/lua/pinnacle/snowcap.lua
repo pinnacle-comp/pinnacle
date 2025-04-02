@@ -189,7 +189,7 @@ function BindOverlay:show()
 
     local bind_infos = require("pinnacle.input").bind_infos()
 
-    ---@type { group: string?, keybinds: { keybind: string, descs: string[] }[], mousebinds: { mousebind: string, descs: string[] }[] }[]
+    ---@type { group: string, keybinds: { keybind: string, descs: string[] }[], mousebinds: { mousebind: string, descs: string[] }[] }[]
     local groups = {}
 
     for _, bind_info in ipairs(bind_infos) do
@@ -215,7 +215,7 @@ function BindOverlay:show()
             local repr = key_or_mousebind_to_string(bind_info.mods, bind_info.kind.key.xkb_name)
             for _, keybind in ipairs(bind_group.keybinds) do
                 if keybind.keybind == repr then
-                    if bind_info.description then
+                    if bind_info.description:len() > 0 then
                         table.insert(keybind.descs, bind_info.description)
                     end
                     goto continue
@@ -227,7 +227,7 @@ function BindOverlay:show()
             local repr = key_or_mousebind_to_string(bind_info.mods, bind_info.kind.mouse.button)
             for _, mousebind in ipairs(bind_group.mousebinds) do
                 if mousebind.mousebind == repr then
-                    if bind_info.description then
+                    if bind_info.description:len() > 0 then
                         table.insert(mousebind.descs, bind_info.description)
                     end
                     goto continue
@@ -247,7 +247,7 @@ function BindOverlay:show()
 
     local pos = nil
     for i, group in ipairs(groups) do
-        if not group.group then
+        if group.group:len() == 0 then
             pos = i
             break
         end
@@ -269,7 +269,10 @@ function BindOverlay:show()
     bold_font.weight = Widget.font.weight.BOLD
 
     for _, group in ipairs(groups) do
-        local group_name = group.group or "Other"
+        local group_name = group.group
+        if group_name:len() == 0 then
+            group_name = "Other"
+        end
 
         table.insert(sections, Widget.text({ text = group_name, font = bold_font, size = 19.0 }))
 

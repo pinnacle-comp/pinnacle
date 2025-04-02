@@ -29,8 +29,7 @@ message Bind {
   repeated Modifier mods = 1;
   repeated Modifier ignore_mods = 2;
   optional string layer_name = 3;
-  optional string group = 4;
-  optional string description = 5;
+  BindProperties properties = 4;
   oneof bind {
     Keybind key = 6;
     Mousebind mouse = 7;
@@ -44,18 +43,23 @@ message BindResponse {
   uint32 bind_id = 1;
 }
 
-message SetQuitBindRequest {
-  uint32 bind_id = 1;
+message BindProperties {
+  optional string group = 1;
+  optional string description = 2;
+  optional bool quit = 3;
+  optional bool reload_config = 4;
+  optional bool allow_when_locked = 5;
 }
 
-message SetReloadConfigBindRequest {
+message SetBindPropertiesRequest {
   uint32 bind_id = 1;
+  BindProperties properties = 2;
 }
 
 // A key for a keybind.
 // At least one of the two fields must be specified.
 // If both are specified, the key_code is used.
-// This is not a oneof both fields can be returned as bind info.
+// This is not a oneof so both fields can be returned as bind info.
 message Keybind {
   optional uint32 key_code = 1;
   optional string xkb_name = 2;
@@ -90,16 +94,6 @@ message MousebindOnPressRequest {
 }
 
 ///////
-
-message SetBindGroupRequest {
-  uint32 bind_id = 1;
-  optional string group = 2;
-}
-
-message SetBindDescriptionRequest {
-  uint32 bind_id = 1;
-  optional string desc = 2;
-}
 
 message GetBindInfosRequest {}
 
@@ -312,11 +306,7 @@ service InputService {
 
   rpc Bind(BindRequest) returns (BindResponse);
   rpc GetBindInfos(GetBindInfosRequest) returns (GetBindInfosResponse);
-  rpc SetBindGroup(SetBindGroupRequest) returns (google.protobuf.Empty);
-  rpc SetBindDescription(SetBindDescriptionRequest) returns (google.protobuf.Empty);
-
-  rpc SetQuitBind(SetQuitBindRequest) returns (google.protobuf.Empty);
-  rpc SetReloadConfigBind(SetReloadConfigBindRequest) returns (google.protobuf.Empty);
+  rpc SetBindProperties(SetBindPropertiesRequest) returns (google.protobuf.Empty);
 
   rpc GetBindLayerStack(GetBindLayerStackRequest) returns (GetBindLayerStackResponse);
   rpc EnterBindLayer(EnterBindLayerRequest) returns (google.protobuf.Empty);

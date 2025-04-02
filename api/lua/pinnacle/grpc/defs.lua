@@ -619,8 +619,7 @@ local pinnacle_v1_Backend = {
 ---@field mods pinnacle.input.v1.Modifier[]?
 ---@field ignore_mods pinnacle.input.v1.Modifier[]?
 ---@field layer_name string?
----@field group string?
----@field description string?
+---@field properties pinnacle.input.v1.BindProperties?
 ---@field key pinnacle.input.v1.Keybind?
 ---@field mouse pinnacle.input.v1.Mousebind?
 
@@ -630,11 +629,16 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.input.v1.BindResponse
 ---@field bind_id integer?
 
----@class pinnacle.input.v1.SetQuitBindRequest
----@field bind_id integer?
+---@class pinnacle.input.v1.BindProperties
+---@field group string?
+---@field description string?
+---@field quit boolean?
+---@field reload_config boolean?
+---@field allow_when_locked boolean?
 
----@class pinnacle.input.v1.SetReloadConfigBindRequest
+---@class pinnacle.input.v1.SetBindPropertiesRequest
 ---@field bind_id integer?
+---@field properties pinnacle.input.v1.BindProperties?
 
 ---@class pinnacle.input.v1.Keybind
 ---@field key_code integer?
@@ -660,14 +664,6 @@ local pinnacle_v1_Backend = {
 
 ---@class pinnacle.input.v1.MousebindOnPressRequest
 ---@field bind_id integer?
-
----@class pinnacle.input.v1.SetBindGroupRequest
----@field bind_id integer?
----@field group string?
-
----@class pinnacle.input.v1.SetBindDescriptionRequest
----@field bind_id integer?
----@field desc string?
 
 ---@class pinnacle.input.v1.GetBindInfosRequest
 
@@ -1184,8 +1180,8 @@ pinnacle.input.v1 = {}
 pinnacle.input.v1.Bind = {}
 pinnacle.input.v1.BindRequest = {}
 pinnacle.input.v1.BindResponse = {}
-pinnacle.input.v1.SetQuitBindRequest = {}
-pinnacle.input.v1.SetReloadConfigBindRequest = {}
+pinnacle.input.v1.BindProperties = {}
+pinnacle.input.v1.SetBindPropertiesRequest = {}
 pinnacle.input.v1.Keybind = {}
 pinnacle.input.v1.KeybindStreamRequest = {}
 pinnacle.input.v1.KeybindStreamResponse = {}
@@ -1194,8 +1190,6 @@ pinnacle.input.v1.Mousebind = {}
 pinnacle.input.v1.MousebindStreamRequest = {}
 pinnacle.input.v1.MousebindStreamResponse = {}
 pinnacle.input.v1.MousebindOnPressRequest = {}
-pinnacle.input.v1.SetBindGroupRequest = {}
-pinnacle.input.v1.SetBindDescriptionRequest = {}
 pinnacle.input.v1.GetBindInfosRequest = {}
 pinnacle.input.v1.GetBindInfosResponse = {}
 pinnacle.input.v1.BindInfo = {}
@@ -1584,73 +1578,22 @@ pinnacle.input.v1.InputService.GetBindInfos.response = ".pinnacle.input.v1.GetBi
 function Client:pinnacle_input_v1_InputService_GetBindInfos(data)
     return self:unary_request(pinnacle.input.v1.InputService.GetBindInfos, data)
 end
-pinnacle.input.v1.InputService.SetBindGroup = {}
-pinnacle.input.v1.InputService.SetBindGroup.service = "pinnacle.input.v1.InputService"
-pinnacle.input.v1.InputService.SetBindGroup.method = "SetBindGroup"
-pinnacle.input.v1.InputService.SetBindGroup.request = ".pinnacle.input.v1.SetBindGroupRequest"
-pinnacle.input.v1.InputService.SetBindGroup.response = ".google.protobuf.Empty"
+pinnacle.input.v1.InputService.SetBindProperties = {}
+pinnacle.input.v1.InputService.SetBindProperties.service = "pinnacle.input.v1.InputService"
+pinnacle.input.v1.InputService.SetBindProperties.method = "SetBindProperties"
+pinnacle.input.v1.InputService.SetBindProperties.request = ".pinnacle.input.v1.SetBindPropertiesRequest"
+pinnacle.input.v1.InputService.SetBindProperties.response = ".google.protobuf.Empty"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.input.v1.SetBindGroupRequest
+---@param data pinnacle.input.v1.SetBindPropertiesRequest
 ---
 ---@return google.protobuf.Empty | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_input_v1_InputService_SetBindGroup(data)
-    return self:unary_request(pinnacle.input.v1.InputService.SetBindGroup, data)
-end
-pinnacle.input.v1.InputService.SetBindDescription = {}
-pinnacle.input.v1.InputService.SetBindDescription.service = "pinnacle.input.v1.InputService"
-pinnacle.input.v1.InputService.SetBindDescription.method = "SetBindDescription"
-pinnacle.input.v1.InputService.SetBindDescription.request = ".pinnacle.input.v1.SetBindDescriptionRequest"
-pinnacle.input.v1.InputService.SetBindDescription.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.input.v1.SetBindDescriptionRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_input_v1_InputService_SetBindDescription(data)
-    return self:unary_request(pinnacle.input.v1.InputService.SetBindDescription, data)
-end
-pinnacle.input.v1.InputService.SetQuitBind = {}
-pinnacle.input.v1.InputService.SetQuitBind.service = "pinnacle.input.v1.InputService"
-pinnacle.input.v1.InputService.SetQuitBind.method = "SetQuitBind"
-pinnacle.input.v1.InputService.SetQuitBind.request = ".pinnacle.input.v1.SetQuitBindRequest"
-pinnacle.input.v1.InputService.SetQuitBind.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.input.v1.SetQuitBindRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_input_v1_InputService_SetQuitBind(data)
-    return self:unary_request(pinnacle.input.v1.InputService.SetQuitBind, data)
-end
-pinnacle.input.v1.InputService.SetReloadConfigBind = {}
-pinnacle.input.v1.InputService.SetReloadConfigBind.service = "pinnacle.input.v1.InputService"
-pinnacle.input.v1.InputService.SetReloadConfigBind.method = "SetReloadConfigBind"
-pinnacle.input.v1.InputService.SetReloadConfigBind.request = ".pinnacle.input.v1.SetReloadConfigBindRequest"
-pinnacle.input.v1.InputService.SetReloadConfigBind.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.input.v1.SetReloadConfigBindRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_input_v1_InputService_SetReloadConfigBind(data)
-    return self:unary_request(pinnacle.input.v1.InputService.SetReloadConfigBind, data)
+function Client:pinnacle_input_v1_InputService_SetBindProperties(data)
+    return self:unary_request(pinnacle.input.v1.InputService.SetBindProperties, data)
 end
 pinnacle.input.v1.InputService.GetBindLayerStack = {}
 pinnacle.input.v1.InputService.GetBindLayerStack.service = "pinnacle.input.v1.InputService"

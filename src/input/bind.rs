@@ -45,7 +45,7 @@ impl BindState {
         self.layer_stack.pop();
     }
 
-    pub fn set_bind_group(&self, bind_id: u32, group: Option<String>) {
+    pub fn set_bind_group(&self, bind_id: u32, group: String) {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.group = group;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
@@ -53,7 +53,7 @@ impl BindState {
         }
     }
 
-    pub fn set_bind_desc(&self, bind_id: u32, desc: Option<String>) {
+    pub fn set_bind_desc(&self, bind_id: u32, desc: String) {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
             bind.borrow_mut().bind_data.desc = desc;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
@@ -61,19 +61,27 @@ impl BindState {
         }
     }
 
-    pub fn set_quit_bind(&self, bind_id: u32) {
+    pub fn set_quit(&self, bind_id: u32, quit: bool) {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
-            bind.borrow_mut().bind_data.is_quit_bind = true;
+            bind.borrow_mut().bind_data.is_quit_bind = quit;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
-            bind.borrow_mut().bind_data.is_quit_bind = true;
+            bind.borrow_mut().bind_data.is_quit_bind = quit;
         }
     }
 
-    pub fn set_reload_config_bind(&self, bind_id: u32) {
+    pub fn set_reload_config(&self, bind_id: u32, reload_config: bool) {
         if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
-            bind.borrow_mut().bind_data.is_reload_config_bind = true;
+            bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
         } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
-            bind.borrow_mut().bind_data.is_reload_config_bind = true;
+            bind.borrow_mut().bind_data.is_reload_config_bind = reload_config;
+        }
+    }
+
+    pub fn set_allow_when_locked(&self, bind_id: u32, allow_when_locked: bool) {
+        if let Some(bind) = self.keybinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
+        } else if let Some(bind) = self.mousebinds.id_map.get(&bind_id) {
+            bind.borrow_mut().bind_data.allow_when_locked = allow_when_locked;
         }
     }
 }
@@ -127,10 +135,11 @@ pub struct BindData {
     pub id: u32,
     pub mods: ModMask,
     pub layer: Option<String>,
-    pub group: Option<String>,
-    pub desc: Option<String>,
+    pub group: String,
+    pub desc: String,
     pub is_quit_bind: bool,
     pub is_reload_config_bind: bool,
+    pub allow_when_locked: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -149,7 +158,7 @@ pub struct Keybind {
     pub key: Keysym,
     sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
-    has_on_press: bool,
+    pub has_on_press: bool,
 }
 
 #[derive(Debug, Default)]
@@ -192,7 +201,9 @@ impl Keybinds {
                     if kb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
                     }
-                    if shortcuts_inhibited || is_locked {
+                    if shortcuts_inhibited
+                        || (is_locked && !kb_entry.get().borrow().bind_data.allow_when_locked)
+                    {
                         return BindAction::Forward;
                     }
                     if kb_entry.get().borrow().has_on_press {
@@ -248,7 +259,9 @@ impl Keybinds {
                     bind_action = BindAction::Quit;
                 } else if keybind.bind_data.is_reload_config_bind {
                     bind_action = BindAction::ReloadConfig;
-                } else if keybind.has_on_press && same_layer && (!shortcuts_inhibited && !is_locked)
+                } else if keybind.has_on_press
+                    && same_layer
+                    && (!shortcuts_inhibited && (!is_locked || keybind.bind_data.allow_when_locked))
                 {
                     retain = keybind.sender.send(edge).is_ok();
                     bind_action = BindAction::Suppress;
@@ -273,8 +286,11 @@ impl Keybinds {
         key: Keysym,
         mods: ModMask,
         layer: Option<String>,
-        group: Option<String>,
-        desc: Option<String>,
+        group: String,
+        desc: String,
+        is_quit_bind: bool,
+        is_reload_config_bind: bool,
+        allow_when_locked: bool,
     ) -> u32 {
         let id = BIND_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
@@ -287,8 +303,9 @@ impl Keybinds {
                 layer,
                 group,
                 desc,
-                is_quit_bind: false,
-                is_reload_config_bind: false,
+                is_quit_bind,
+                is_reload_config_bind,
+                allow_when_locked,
             },
             key,
             sender,
@@ -329,7 +346,7 @@ pub struct Mousebind {
     pub button: u32,
     sender: UnboundedSender<Edge>,
     pub recv: Option<UnboundedReceiver<Edge>>,
-    has_on_press: bool,
+    pub has_on_press: bool,
 }
 
 #[derive(Debug, Default)]
@@ -374,7 +391,7 @@ impl Mousebinds {
                     if mb_entry.get().borrow().bind_data.is_reload_config_bind {
                         return BindAction::ReloadConfig;
                     }
-                    if is_locked {
+                    if is_locked && !mb_entry.get().borrow().bind_data.allow_when_locked {
                         return BindAction::Forward;
                     }
                     if mb_entry.get().borrow().has_on_press {
@@ -430,7 +447,10 @@ impl Mousebinds {
                     bind_action = BindAction::Quit;
                 } else if mousebind.bind_data.is_reload_config_bind {
                     bind_action = BindAction::ReloadConfig;
-                } else if mousebind.has_on_press && same_layer && !is_locked {
+                } else if mousebind.has_on_press
+                    && same_layer
+                    && (!is_locked || mousebind.bind_data.allow_when_locked)
+                {
                     retain = mousebind.sender.send(edge).is_ok();
                     bind_action = BindAction::Suppress;
                 };
@@ -454,8 +474,11 @@ impl Mousebinds {
         button: u32,
         mods: ModMask,
         layer: Option<String>,
-        group: Option<String>,
-        desc: Option<String>,
+        group: String,
+        desc: String,
+        is_quit_bind: bool,
+        is_reload_config_bind: bool,
+        allow_when_locked: bool,
     ) -> u32 {
         let id = BIND_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
@@ -468,8 +491,9 @@ impl Mousebinds {
                 layer,
                 group,
                 desc,
-                is_quit_bind: false,
-                is_reload_config_bind: false,
+                is_quit_bind,
+                is_reload_config_bind,
+                allow_when_locked,
             },
             button,
             sender,

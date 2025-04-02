@@ -8,10 +8,10 @@ use pinnacle_api_defs::pinnacle::input::{
         GetDeviceInfoRequest, GetDeviceInfoResponse, GetDeviceTypeRequest, GetDeviceTypeResponse,
         GetDevicesRequest, GetDevicesResponse, KeybindOnPressRequest, KeybindStreamRequest,
         KeybindStreamResponse, MousebindOnPressRequest, MousebindStreamRequest,
-        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindDescriptionRequest,
-        SetBindGroupRequest, SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest,
-        SetQuitBindRequest, SetReloadConfigBindRequest, SetRepeatRateRequest, SetXcursorRequest,
-        SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest, TapButtonMap,
+        MousebindStreamResponse, ScrollMethod, SendEventsMode, SetBindPropertiesRequest,
+        SetDeviceLibinputSettingRequest, SetDeviceMapTargetRequest, SetRepeatRateRequest,
+        SetXcursorRequest, SetXkbConfigRequest, SetXkbKeymapRequest, SwitchXkbLayoutRequest,
+        TapButtonMap,
     },
 };
 use smithay::reexports::input as libinput;
@@ -71,8 +71,31 @@ impl input::v1::input_service_server::InputService for InputService {
         }
 
         let layer = bind.layer_name;
-        let group = bind.group;
-        let desc = bind.description;
+        let group = bind
+            .properties
+            .as_ref()
+            .and_then(|props| props.group.clone())
+            .unwrap_or_default();
+        let desc = bind
+            .properties
+            .as_ref()
+            .and_then(|props| props.description.clone())
+            .unwrap_or_default();
+        let quit = bind
+            .properties
+            .as_ref()
+            .and_then(|props| props.quit)
+            .unwrap_or_default();
+        let reload_config = bind
+            .properties
+            .as_ref()
+            .and_then(|props| props.reload_config)
+            .unwrap_or_default();
+        let allow_when_locked = bind
+            .properties
+            .as_ref()
+            .and_then(|props| props.allow_when_locked)
+            .unwrap_or_default();
 
         let Some(bind) = bind.bind else {
             return Err(Status::invalid_argument("bind.bind was not specified"));
@@ -105,12 +128,16 @@ impl input::v1::input_service_server::InputService for InputService {
                         return Err(Status::invalid_argument("no key was specified"));
                     };
 
-                    let bind_id = state
-                        .pinnacle
-                        .input_state
-                        .bind_state
-                        .keybinds
-                        .add_keybind(keysym, mods, layer, group, desc);
+                    let bind_id = state.pinnacle.input_state.bind_state.keybinds.add_keybind(
+                        keysym,
+                        mods,
+                        layer,
+                        group,
+                        desc,
+                        quit,
+                        reload_config,
+                        allow_when_locked,
+                    );
 
                     bind_id
                 }
@@ -121,13 +148,81 @@ impl input::v1::input_service_server::InputService for InputService {
                         .input_state
                         .bind_state
                         .mousebinds
-                        .add_mousebind(button, mods, layer, group, desc);
+                        .add_mousebind(
+                            button,
+                            mods,
+                            layer,
+                            group,
+                            desc,
+                            quit,
+                            reload_config,
+                            allow_when_locked,
+                        );
 
                     bind_id
                 }
             };
 
             Ok(BindResponse { bind_id })
+        })
+        .await
+    }
+
+    async fn set_bind_properties(
+        &self,
+        request: Request<SetBindPropertiesRequest>,
+    ) -> TonicResult<()> {
+        let request = request.into_inner();
+
+        let bind_id = request.bind_id;
+        let Some(properties) = request.properties else {
+            return Err(Status::invalid_argument("no properties specified"));
+        };
+
+        let input::v1::BindProperties {
+            group,
+            description,
+            quit,
+            reload_config,
+            allow_when_locked,
+        } = properties;
+
+        run_unary_no_response(&self.sender, move |state| {
+            if let Some(group) = group {
+                state
+                    .pinnacle
+                    .input_state
+                    .bind_state
+                    .set_bind_group(bind_id, group);
+            }
+            if let Some(desc) = description {
+                state
+                    .pinnacle
+                    .input_state
+                    .bind_state
+                    .set_bind_desc(bind_id, desc);
+            }
+            if let Some(quit) = quit {
+                state
+                    .pinnacle
+                    .input_state
+                    .bind_state
+                    .set_quit(bind_id, quit);
+            }
+            if let Some(reload_config) = reload_config {
+                state
+                    .pinnacle
+                    .input_state
+                    .bind_state
+                    .set_reload_config(bind_id, reload_config);
+            }
+            if let Some(allow_when_locked) = allow_when_locked {
+                state
+                    .pinnacle
+                    .input_state
+                    .bind_state
+                    .set_allow_when_locked(bind_id, allow_when_locked);
+            }
         })
         .await
     }
@@ -210,8 +305,13 @@ impl input::v1::input_service_server::InputService for InputService {
                             mods: mods.into_iter().map(|m| m.into()).collect(),
                             ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                             layer_name: keybind.bind_data.layer.clone(),
-                            group: keybind.bind_data.group.clone(),
-                            description: keybind.bind_data.desc.clone(),
+                            properties: Some(input::v1::BindProperties {
+                                group: Some(keybind.bind_data.group.clone()),
+                                description: Some(keybind.bind_data.desc.clone()),
+                                quit: Some(keybind.bind_data.is_quit_bind),
+                                reload_config: Some(keybind.bind_data.is_reload_config_bind),
+                                allow_when_locked: Some(keybind.bind_data.allow_when_locked),
+                            }),
                             bind: Some(input::v1::bind::Bind::Key(input::v1::Keybind {
                                 key_code: Some(keybind.key.into()),
                                 xkb_name: Some(xkbcommon::xkb::keysym_get_name(keybind.key)),
@@ -276,8 +376,13 @@ impl input::v1::input_service_server::InputService for InputService {
                             mods: mods.into_iter().map(|m| m.into()).collect(),
                             ignore_mods: ignore_mods.into_iter().map(|m| m.into()).collect(),
                             layer_name: mousebind.bind_data.layer.clone(),
-                            group: mousebind.bind_data.group.clone(),
-                            description: mousebind.bind_data.desc.clone(),
+                            properties: Some(input::v1::BindProperties {
+                                group: Some(mousebind.bind_data.group.clone()),
+                                description: Some(mousebind.bind_data.desc.clone()),
+                                quit: Some(mousebind.bind_data.is_quit_bind),
+                                reload_config: Some(mousebind.bind_data.is_reload_config_bind),
+                                allow_when_locked: Some(mousebind.bind_data.allow_when_locked),
+                            }),
                             bind: Some(input::v1::bind::Bind::Mouse(input::v1::Mousebind {
                                 button: mousebind.button,
                             })),
@@ -288,64 +393,6 @@ impl input::v1::input_service_server::InputService for InputService {
             Ok(GetBindInfosResponse {
                 bind_infos: keybind_infos.chain(mousebind_infos).collect(),
             })
-        })
-        .await
-    }
-
-    async fn set_quit_bind(&self, request: Request<SetQuitBindRequest>) -> TonicResult<()> {
-        let bind_id = request.into_inner().bind_id;
-
-        run_unary_no_response(&self.sender, move |state| {
-            state.pinnacle.input_state.bind_state.set_quit_bind(bind_id);
-        })
-        .await
-    }
-
-    async fn set_reload_config_bind(
-        &self,
-        request: Request<SetReloadConfigBindRequest>,
-    ) -> TonicResult<()> {
-        let bind_id = request.into_inner().bind_id;
-
-        run_unary_no_response(&self.sender, move |state| {
-            state
-                .pinnacle
-                .input_state
-                .bind_state
-                .set_reload_config_bind(bind_id);
-        })
-        .await
-    }
-
-    async fn set_bind_group(&self, request: Request<SetBindGroupRequest>) -> TonicResult<()> {
-        let request = request.into_inner();
-        let bind_id = request.bind_id;
-        let group = request.group;
-
-        run_unary_no_response(&self.sender, move |state| {
-            state
-                .pinnacle
-                .input_state
-                .bind_state
-                .set_bind_group(bind_id, group);
-        })
-        .await
-    }
-
-    async fn set_bind_description(
-        &self,
-        request: Request<SetBindDescriptionRequest>,
-    ) -> TonicResult<()> {
-        let request = request.into_inner();
-        let bind_id = request.bind_id;
-        let desc = request.desc;
-
-        run_unary_no_response(&self.sender, move |state| {
-            state
-                .pinnacle
-                .input_state
-                .bind_state
-                .set_bind_desc(bind_id, desc);
         })
         .await
     }

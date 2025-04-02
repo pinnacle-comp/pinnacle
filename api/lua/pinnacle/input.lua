@@ -131,6 +131,8 @@ input.mouse_button_values = mouse_button_values
 ---@field quit boolean?
 ---Sets this bind as a reload config bind.
 ---@field reload_config boolean?
+---Allows this bind to trigger when the session is locked.
+---@field allow_when_locked boolean?
 
 ---A keybind.
 ---@class pinnacle.input.Keybind : pinnacle.input.Bind
@@ -167,8 +169,13 @@ local function keybind_inner(kb)
             mods = modifs,
             ignore_mods = ignore_modifs,
             layer_name = kb.bind_layer,
-            group = kb.group,
-            description = kb.description,
+            properties = {
+                group = kb.group,
+                description = kb.description,
+                quit = kb.quit,
+                reload_config = kb.reload_config,
+                allow_when_locked = kb.allow_when_locked,
+            },
             key = {
                 key_code = key_code,
                 xkb_name = xkb_name,
@@ -184,20 +191,6 @@ local function keybind_inner(kb)
     assert(response)
 
     local bind_id = response.bind_id or 0
-
-    if kb.quit then
-        local _, err = client:pinnacle_input_v1_InputService_SetQuitBind({
-            bind_id = bind_id,
-        })
-        return
-    end
-
-    if kb.reload_config then
-        local _, err = client:pinnacle_input_v1_InputService_SetReloadConfigBind({
-            bind_id = bind_id,
-        })
-        return
-    end
 
     local err = client:pinnacle_input_v1_InputService_KeybindStream({
         bind_id = bind_id,
@@ -271,6 +264,7 @@ end
 ---
 ---@overload fun(keybind: pinnacle.input.Keybind)
 function input.keybind(mods, key, on_press, bind_info)
+    ---@type pinnacle.input.Keybind
     local kb
 
     if mods.key then
@@ -314,8 +308,13 @@ local function mousebind_inner(mb)
             mods = modifs,
             ignore_mods = ignore_modifs,
             layer_name = mb.bind_layer,
-            group = mb.group,
-            description = mb.description,
+            properties = {
+                group = mb.group,
+                description = mb.description,
+                quit = mb.quit,
+                reload_config = mb.reload_config,
+                allow_when_locked = mb.allow_when_locked,
+            },
             mouse = {
                 button = mouse_button_values[mb.button],
             },
@@ -330,20 +329,6 @@ local function mousebind_inner(mb)
     assert(response)
 
     local bind_id = response.bind_id or 0
-
-    if mb.quit then
-        local _, err = client:pinnacle_input_v1_InputService_SetQuitBind({
-            bind_id = bind_id,
-        })
-        return
-    end
-
-    if mb.reload_config then
-        local _, err = client:pinnacle_input_v1_InputService_SetReloadConfigBind({
-            bind_id = bind_id,
-        })
-        return
-    end
 
     local err = client:pinnacle_input_v1_InputService_MousebindStream({
         bind_id = bind_id,
@@ -409,6 +394,7 @@ end
 ---
 ---@overload fun(mousebind: pinnacle.input.Mousebind)
 function input.mousebind(mods, button, on_press, bind_info)
+    ---@type pinnacle.input.Mousebind
     local mb
 
     if mods.button then
@@ -445,10 +431,16 @@ end
 ---@field ignore_mods pinnacle.input.Mod[]
 ---The bind's layer.
 ---@field bind_layer string?
----The bind's group.
----@field group string?
----The bind's description.
----@field description string?
+---The bind's group. Empty if it is not in one.
+---@field group string
+---The bind's description. Empty if it does not have one.
+---@field description string
+---Whether this bind is a quit bind.
+---@field quit boolean
+---Whether this bind is a reload config bind.
+---@field reload_config boolean
+---Whether this bind is allowed when the session is locked.
+---@field allow_when_locked boolean
 ---What kind of bind this is.
 ---@field kind pinnacle.input.BindInfoKind
 
@@ -509,8 +501,11 @@ function input.bind_infos()
         end
 
         local bind_layer = info.layer_name
-        local group = info.group
-        local description = info.description
+        local group = info.properties.group or ""
+        local description = info.properties.description or ""
+        local quit = info.properties.quit or false
+        local reload_config = info.properties.reload_config or false
+        local allow_when_locked = info.properties.allow_when_locked or false
 
         ---@type pinnacle.input.BindInfo
         local bind_info = {
@@ -519,6 +514,9 @@ function input.bind_infos()
             bind_layer = bind_layer,
             group = group,
             description = description,
+            quit = quit,
+            reload_config = reload_config,
+            allow_when_locked = allow_when_locked,
             kind = bind_kind,
         }
 

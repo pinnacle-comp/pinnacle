@@ -195,7 +195,7 @@ impl BindOverlay {
 
         let bind_infos = crate::input::bind_infos();
 
-        let mut groups = IndexMap::<Option<String>, GroupBinds>::new();
+        let mut groups = IndexMap::<String, GroupBinds>::new();
 
         for bind_info in bind_infos {
             let mods = bind_info.mods;
@@ -216,7 +216,9 @@ impl BindOverlay {
                         layer,
                     };
                     let descs = group.keybinds.entry(repr).or_default();
-                    descs.extend(desc);
+                    if !desc.is_empty() {
+                        descs.push(desc);
+                    }
                 }
                 BindInfoKind::Mouse { button } => {
                     let repr = MousebindRepr {
@@ -235,18 +237,20 @@ impl BindOverlay {
                         layer,
                     };
                     let descs = group.mousebinds.entry(repr).or_default();
-                    descs.extend(desc);
+                    if !desc.is_empty() {
+                        descs.push(desc);
+                    }
                 }
             }
         }
 
         // List keybinds with no group last
-        if let Some(data) = groups.shift_remove(&None) {
-            groups.insert(None, data);
+        if let Some(data) = groups.shift_remove("") {
+            groups.insert("".to_string(), data);
         }
 
         let sections = groups.into_iter().flat_map(|(group, data)| {
-            let group_title = Text::new(group.unwrap_or("Other".into()))
+            let group_title = Text::new(if !group.is_empty() { group } else { "Other".into() })
                 .font(self.font.clone().weight(Weight::Bold))
                 .size(19.0);
 

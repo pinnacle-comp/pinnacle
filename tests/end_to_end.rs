@@ -13,6 +13,7 @@ use common::{
     PINNACLE_1_OUTPUT_NAME, PINNACLE_1_OUTPUT_REFRESH, PINNACLE_1_OUTPUT_SIZE,
 };
 use pinnacle::{output::OutputName, state::WithState, window::window_state::LayoutModeKind};
+use pinnacle_api::input::Bind as _;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use test_log::test;
 
@@ -3380,6 +3381,8 @@ fn input_switch_xkb_layout() -> anyhow::Result<()> {
             }),
         }?;
 
+        sleep(SLEEP_DURATION);
+
         sender.with_state(|state| {
             let kb = state.pinnacle.seat.get_keyboard().unwrap();
             let layout_idx = kb.with_xkb_state(state, |ctx| {
@@ -3399,6 +3402,8 @@ fn input_switch_xkb_layout() -> anyhow::Result<()> {
                 pinnacle_api::input::cycle_xkb_layout_forward();
             }),
         }?;
+
+        sleep(SLEEP_DURATION);
 
         sender.with_state(|state| {
             let kb = state.pinnacle.seat.get_keyboard().unwrap();
@@ -3420,6 +3425,8 @@ fn input_switch_xkb_layout() -> anyhow::Result<()> {
             }),
         }?;
 
+        sleep(SLEEP_DURATION);
+
         sender.with_state(|state| {
             let kb = state.pinnacle.seat.get_keyboard().unwrap();
             let layout_idx = kb.with_xkb_state(state, |ctx| {
@@ -3427,6 +3434,129 @@ fn input_switch_xkb_layout() -> anyhow::Result<()> {
                 xkb.active_layout().0
             });
             assert_eq!(layout_idx, 1);
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn input_keybind() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.keybind({
+                        mods = { "super", "shift" },
+                        key = "c",
+                        bind_layer = "morb_layer",
+                        group = "Left",
+                        description = "Right",
+                        allow_when_locked = true,
+                        on_press = function() end,
+                    })
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::BindLayer::get("morb_layer")
+                    .keybind(
+                        pinnacle_api::input::Mod::SUPER | pinnacle_api::input::Mod::SHIFT,
+                        'c',
+                    )
+                    .group("Left")
+                    .description("Right")
+                    .allow_when_locked()
+                    .on_press(|| {});
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let keybind = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .keybinds
+                .id_map
+                .iter()
+                .next()
+                .unwrap()
+                .1
+                .clone();
+            let keybind = keybind.borrow();
+
+            assert_eq!(keybind.key, pinnacle_api::Keysym::c);
+            assert_eq!(keybind.bind_data.layer.as_deref(), Some("morb_layer"));
+            assert_eq!(keybind.bind_data.group, "Left");
+            assert_eq!(keybind.bind_data.desc, "Right");
+            assert!(!keybind.bind_data.is_quit_bind);
+            assert!(!keybind.bind_data.is_reload_config_bind);
+            assert!(keybind.bind_data.allow_when_locked);
+            assert!(keybind.has_on_press)
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn input_mousebind() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Input.mousebind({
+                        mods = { "super", "shift" },
+                        button = "btn_right",
+                        bind_layer = "morb_layer",
+                        group = "Left",
+                        description = "Right",
+                        allow_when_locked = true,
+                        on_press = function() end,
+                    })
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::input::BindLayer::get("morb_layer")
+                    .mousebind(
+                        pinnacle_api::input::Mod::SUPER | pinnacle_api::input::Mod::SHIFT,
+                        pinnacle_api::input::MouseButton::Right,
+                    )
+                    .group("Left")
+                    .description("Right")
+                    .allow_when_locked()
+                    .on_press(|| {});
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let mousebind = state
+                .pinnacle
+                .input_state
+                .bind_state
+                .mousebinds
+                .id_map
+                .iter()
+                .next()
+                .unwrap()
+                .1
+                .clone();
+            let mousebind = mousebind.borrow();
+
+            assert_eq!(
+                mousebind.button,
+                u32::from(pinnacle_api::input::MouseButton::Right)
+            );
+            assert_eq!(mousebind.bind_data.layer.as_deref(), Some("morb_layer"));
+            assert_eq!(mousebind.bind_data.group, "Left");
+            assert_eq!(mousebind.bind_data.desc, "Right");
+            assert!(!mousebind.bind_data.is_quit_bind);
+            assert!(!mousebind.bind_data.is_reload_config_bind);
+            assert!(mousebind.bind_data.allow_when_locked);
+            assert!(mousebind.has_on_press)
         });
 
         Ok(())
