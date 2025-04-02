@@ -148,6 +148,23 @@ BindLayer::DEFAULT.enter();
 ```
 :::
 
+## Allowing binds when locked
+
+You can allow binds to trigger when the session is locked using the `allow_when_locked` option.
+
+::: tabs key:langs
+== Lua
+```lua
+require("pinnacle.input").keybind({
+    -- Other keybind options
+    allow_when_locked = true,
+})
+```
+== Rust
+```rust
+input::keybind(...).allow_when_locked();
+```
+:::
 
 ## Keybinds
 
