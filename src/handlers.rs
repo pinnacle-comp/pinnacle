@@ -762,7 +762,7 @@ impl ScreencopyHandler for State {
         if !frame.with_damage() {
             self.schedule_render(&output);
         }
-        output.with_state_mut(|state| state.screencopy.replace(frame));
+        output.with_state_mut(|state| state.screencopies.push(frame));
     }
 }
 delegate_screencopy!(State);

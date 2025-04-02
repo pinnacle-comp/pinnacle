@@ -64,7 +64,7 @@ pub struct OutputState {
     pub tags: IndexSet<Tag>,
 
     pub focus_stack: WindowKeyboardFocusStack,
-    pub screencopy: Option<Screencopy>,
+    pub screencopies: Vec<Screencopy>,
     // This monitor's edid serial. "Unknown" if it doesn't have one.
     pub serial: String,
     pub modes: Vec<Mode>,
@@ -87,7 +87,7 @@ impl Default for OutputState {
         Self {
             tags: Default::default(),
             focus_stack: Default::default(),
-            screencopy: Default::default(),
+            screencopies: Default::default(),
             serial: Default::default(),
             modes: Default::default(),
             lock_surface: Default::default(),

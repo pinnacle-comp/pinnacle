@@ -264,10 +264,7 @@ impl Winit {
             || self.output.with_state(|state| {
                 // Don't draw cursor when screencopy without cursor is pending
                 //  FIXME: This causes the cursor to disappear (duh)
-                state
-                    .screencopy
-                    .as_ref()
-                    .is_none_or(|sc| sc.overlay_cursor())
+                state.screencopies.iter().all(|sc| sc.overlay_cursor())
             });
 
         if should_draw_cursor {
@@ -456,152 +453,153 @@ impl Winit {
     ) {
         let _span = tracy_client::span!("Winit::handle_pending_screencopy");
 
-        let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
-            return;
-        };
+        let screencopies =
+            output.with_state_mut(|state| state.screencopies.drain(..).collect::<Vec<_>>());
+        for mut screencopy in screencopies {
+            assert_eq!(screencopy.output(), output);
 
-        assert_eq!(screencopy.output(), output);
-
-        if screencopy.with_damage() {
-            match render_output_result.damage.as_ref() {
-                Some(damage) if !damage.is_empty() => screencopy.damage(damage),
-                _ => {
-                    output.with_state_mut(|state| state.screencopy.replace(screencopy));
-                    return;
+            if screencopy.with_damage() {
+                match render_output_result.damage.as_ref() {
+                    Some(damage) if !damage.is_empty() => screencopy.damage(damage),
+                    _ => {
+                        output.with_state_mut(|state| state.screencopies.push(screencopy));
+                        continue;
+                    }
                 }
             }
-        }
 
-        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
-            trace!("Dmabuf screencopy");
+            let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
+                trace!("Dmabuf screencopy");
 
-            backend
-                .renderer()
-                .blit_to(
-                    dmabuf,
-                    screencopy.physical_region(),
-                    Rectangle::from_size(screencopy.physical_region().size),
-                    TextureFilter::Nearest,
-                )
-                .map(|_| render_output_result.sync.clone())
-                .map_err(|err| anyhow!("{err}"))
-        } else if !matches!(
-            renderer::buffer_type(screencopy.buffer()),
-            Some(BufferType::Shm)
-        ) {
-            Err(anyhow!("not a shm buffer"))
-        } else {
-            trace!("Shm screencopy");
+                backend
+                    .renderer()
+                    .blit_to(
+                        dmabuf,
+                        screencopy.physical_region(),
+                        Rectangle::from_size(screencopy.physical_region().size),
+                        TextureFilter::Nearest,
+                    )
+                    .map(|_| render_output_result.sync.clone())
+                    .map_err(|err| anyhow!("{err}"))
+            } else if !matches!(
+                renderer::buffer_type(screencopy.buffer()),
+                Some(BufferType::Shm)
+            ) {
+                Err(anyhow!("not a shm buffer"))
+            } else {
+                trace!("Shm screencopy");
 
-            let sync_point = {
-                let renderer = backend.renderer();
-                let screencopy = &screencopy;
-                if !matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)) {
-                    warn!("screencopy does not have a shm buffer");
-                    return;
-                }
+                let sync_point = {
+                    let renderer = backend.renderer();
+                    let screencopy = &screencopy;
+                    if !matches!(buffer_type(screencopy.buffer()), Some(BufferType::Shm)) {
+                        warn!("screencopy does not have a shm buffer");
+                        continue;
+                    }
 
-                let res = smithay::wayland::shm::with_buffer_contents_mut(
-                    &screencopy.buffer().clone(),
-                    |shm_ptr, shm_len, buffer_data| {
-                        // yoinked from Niri (thanks yall)
-                        ensure!(
-                            // The buffer prefers pixels in little endian ...
-                            buffer_data.format == wl_shm::Format::Argb8888
-                                && buffer_data.stride == screencopy.physical_region().size.w * 4
-                                && buffer_data.height == screencopy.physical_region().size.h
-                                && shm_len as i32 == buffer_data.stride * buffer_data.height,
-                            "invalid buffer format or size"
-                        );
+                    let res = smithay::wayland::shm::with_buffer_contents_mut(
+                        &screencopy.buffer().clone(),
+                        |shm_ptr, shm_len, buffer_data| {
+                            // yoinked from Niri (thanks yall)
+                            ensure!(
+                                // The buffer prefers pixels in little endian ...
+                                buffer_data.format == wl_shm::Format::Argb8888
+                                    && buffer_data.stride
+                                        == screencopy.physical_region().size.w * 4
+                                    && buffer_data.height == screencopy.physical_region().size.h
+                                    && shm_len as i32 == buffer_data.stride * buffer_data.height,
+                                "invalid buffer format or size"
+                            );
 
-                        let buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
-                            1,
-                            Transform::Normal,
-                            &screencopy.physical_region().size.to_logical(1),
-                        );
+                            let buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
+                                1,
+                                Transform::Normal,
+                                &screencopy.physical_region().size.to_logical(1),
+                            );
 
-                        // On winit, we cannot just copy the EGL framebuffer because I get an
-                        // `UnsupportedPixelFormat` error. Therefore we'll blit
-                        // to this buffer and then copy it.
-                        let offscreen: GlesRenderbuffer = renderer.create_buffer(
-                            smithay::backend::allocator::Fourcc::Argb8888,
-                            buffer_rect.size,
-                        )?;
+                            // On winit, we cannot just copy the EGL framebuffer because I get an
+                            // `UnsupportedPixelFormat` error. Therefore we'll blit
+                            // to this buffer and then copy it.
+                            let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                                smithay::backend::allocator::Fourcc::Argb8888,
+                                buffer_rect.size,
+                            )?;
 
-                        renderer.blit_to(
-                            offscreen.clone(),
-                            screencopy.physical_region(),
-                            Rectangle::from_size(screencopy.physical_region().size),
-                            TextureFilter::Nearest,
-                        )?;
+                            renderer.blit_to(
+                                offscreen.clone(),
+                                screencopy.physical_region(),
+                                Rectangle::from_size(screencopy.physical_region().size),
+                                TextureFilter::Nearest,
+                            )?;
 
-                        renderer.bind(offscreen)?;
+                            renderer.bind(offscreen)?;
 
-                        let mapping = renderer.copy_framebuffer(
-                            Rectangle::from_size(buffer_rect.size),
-                            smithay::backend::allocator::Fourcc::Argb8888,
-                        )?;
+                            let mapping = renderer.copy_framebuffer(
+                                Rectangle::from_size(buffer_rect.size),
+                                smithay::backend::allocator::Fourcc::Argb8888,
+                            )?;
 
-                        let bytes = renderer.map_texture(&mapping)?;
+                            let bytes = renderer.map_texture(&mapping)?;
 
-                        ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
+                            ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
 
-                        // SAFETY:
-                        //      - `bytes.as_ptr()` is valid for reads of size `shm_len` because that was
-                        //        checked above and is properly aligned because it
-                        //        originated from safe Rust
-                        //      - We are assuming `shm_ptr` is valid for writes of `shm_len` and is
-                        //        properly aligned
-                        //      - Overlapping-ness: TODO:
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
-                        }
+                            // SAFETY:
+                            //      - `bytes.as_ptr()` is valid for reads of size `shm_len` because that was
+                            //        checked above and is properly aligned because it
+                            //        originated from safe Rust
+                            //      - We are assuming `shm_ptr` is valid for writes of `shm_len` and is
+                            //        properly aligned
+                            //      - Overlapping-ness: TODO:
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
+                            }
 
-                        Ok(())
-                    },
-                );
-
-                let Ok(res) = res else {
-                    unreachable!(
-                        "buffer is guaranteed to be shm from above and managed by smithay"
+                            Ok(())
+                        },
                     );
-                };
 
-                res
-            }
-            .map(|_| render_output_result.sync.clone());
-
-            // We must rebind to the underlying EGL surface for buffer swapping
-            // as it is bound to a `GlesRenderbuffer` above.
-            if let Err(err) = backend.bind() {
-                error!("Failed to rebind EGL surface after screencopy: {err}");
-            }
-
-            sync_point
-        };
-
-        match sync_point {
-            Ok(sync_point) if !sync_point.is_reached() => {
-                let Some(sync_fd) = sync_point.export() else {
-                    screencopy.submit(false);
-                    return;
-                };
-                let mut screencopy = Some(screencopy);
-                let source = Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
-                let res = loop_handle.insert_source(source, move |_, _, _| {
-                    let Some(screencopy) = screencopy.take() else {
-                        unreachable!("This source is removed after one run");
+                    let Ok(res) = res else {
+                        unreachable!(
+                            "buffer is guaranteed to be shm from above and managed by smithay"
+                        );
                     };
-                    screencopy.submit(false);
-                    trace!("Submitted screencopy");
-                    Ok(PostAction::Remove)
-                });
-                if res.is_err() {
-                    error!("Failed to schedule screencopy submission");
+
+                    res
                 }
+                .map(|_| render_output_result.sync.clone());
+
+                // We must rebind to the underlying EGL surface for buffer swapping
+                // as it is bound to a `GlesRenderbuffer` above.
+                if let Err(err) = backend.bind() {
+                    error!("Failed to rebind EGL surface after screencopy: {err}");
+                }
+
+                sync_point
+            };
+
+            match sync_point {
+                Ok(sync_point) if !sync_point.is_reached() => {
+                    let Some(sync_fd) = sync_point.export() else {
+                        screencopy.submit(false);
+                        continue;
+                    };
+                    let mut screencopy = Some(screencopy);
+                    let source = Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
+                    let res = loop_handle.insert_source(source, move |_, _, _| {
+                        let Some(screencopy) = screencopy.take() else {
+                            unreachable!("This source is removed after one run");
+                        };
+                        screencopy.submit(false);
+                        trace!("Submitted screencopy");
+                        Ok(PostAction::Remove)
+                    });
+                    if res.is_err() {
+                        error!("Failed to schedule screencopy submission");
+                    }
+                }
+                Ok(_) => screencopy.submit(false),
+                Err(err) => error!("Failed to submit screencopy: {err}"),
             }
-            Ok(_) => screencopy.submit(false),
-            Err(err) => error!("Failed to submit screencopy: {err}"),
         }
     }
 }

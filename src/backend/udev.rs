@@ -1697,287 +1697,289 @@ fn handle_pending_screencopy<'a>(
     let span = tracy_client::span!("udev::handle_pending_screencopy");
     span.emit_text(&output.name());
 
-    let Some(mut screencopy) = output.with_state_mut(|state| state.screencopy.take()) else {
-        return;
-    };
-    assert_eq!(screencopy.output(), output);
+    let screencopies =
+        output.with_state_mut(|state| state.screencopies.drain(..).collect::<Vec<_>>());
+    for mut screencopy in screencopies {
+        assert_eq!(screencopy.output(), output);
 
-    let untransformed_output_size = output.current_mode().expect("output no mode").size;
+        let untransformed_output_size = output.current_mode().expect("output no mode").size;
 
-    let scale = smithay::utils::Scale::from(output.current_scale().fractional_scale());
+        let scale = smithay::utils::Scale::from(output.current_scale().fractional_scale());
 
-    if screencopy.with_damage() {
-        if render_frame_result.is_empty {
-            output.with_state_mut(|state| state.screencopy.replace(screencopy));
-            return;
-        }
-
-        // Compute damage
-        //
-        // I have no idea if the damage event is supposed to send rects local to the output or to the
-        // region. Sway does the former, Hyprland the latter. Also, no one actually seems to be using the
-        // received damage. wf-recorder and wl-mirror have no-op handlers for the damage event.
-
-        let mut damage = match &render_frame_result.primary_element {
-            PrimaryPlaneElement::Swapchain(element) => {
-                let swapchain_commit = &mut surface.screencopy_commit_state.primary_plane_swapchain;
-                let damage = element.damage.damage_since(Some(*swapchain_commit));
-                *swapchain_commit = element.damage.current_commit();
-                damage.map(|dmg| {
-                    dmg.into_iter()
-                        .map(|rect| {
-                            rect.to_logical(1, Transform::Normal, &rect.size)
-                                .to_physical(1)
-                        })
-                        .collect()
-                })
+        if screencopy.with_damage() {
+            if render_frame_result.is_empty {
+                output.with_state_mut(|state| state.screencopies.push(screencopy));
+                continue;
             }
-            PrimaryPlaneElement::Element(element) => {
-                // INFO: Is this element guaranteed to be the same size as the
-                // |     output? If not this becomes a
-                // FIXME: offset the damage by the element's location
-                //
-                // also is this even ever reachable?
-                let element_commit = &mut surface.screencopy_commit_state.primary_plane_element;
-                let damage = element.damage_since(scale, Some(*element_commit));
-                *element_commit = element.current_commit();
-                Some(damage)
-            }
-        }
-        .unwrap_or_else(|| {
-            // Returning `None` means the previous CommitCounter is too old or damage
-            // was reset, so damage the whole output
-            DamageSet::from_slice(&[Rectangle::from_size(untransformed_output_size)])
-        });
 
-        let cursor_damage = render_frame_result
-            .cursor_element
-            .map(|cursor| {
-                let damage =
-                    cursor.damage_since(scale, Some(surface.screencopy_commit_state.cursor));
-                surface.screencopy_commit_state.cursor = cursor.current_commit();
-                damage
-            })
-            .unwrap_or_default();
+            // Compute damage
+            //
+            // I have no idea if the damage event is supposed to send rects local to the output or to the
+            // region. Sway does the former, Hyprland the latter. Also, no one actually seems to be using the
+            // received damage. wf-recorder and wl-mirror have no-op handlers for the damage event.
 
-        damage = damage.into_iter().chain(cursor_damage).collect();
-
-        // The primary plane and cursor had no damage but something got rendered,
-        // so it must be the cursor moving.
-        //
-        // We currently have overlay planes disabled, so we don't have to worry about that.
-        if damage.is_empty() && !render_frame_result.is_empty {
-            if let Some(cursor_elem) = render_frame_result.cursor_element {
-                damage = damage
-                    .into_iter()
-                    .chain([cursor_elem.geometry(scale)])
-                    .collect();
-            }
-        }
-
-        // INFO: Protocol states that `copy_with_damage` should wait until there is
-        // |     damage to be copied.
-        // |.
-        // |     Now, for region screencopies this currently submits the frame if there is
-        // |     *any* damage on the output, not just in the region. I've found that
-        // |     wf-recorder blocks until the last frame is submitted, and if I don't
-        // |     send a submission because its region isn't damaged it will hang.
-        // |     I'm fairly certain Sway is doing a similar thing.
-        if damage.is_empty() {
-            output.with_state_mut(|state| state.screencopy.replace(screencopy));
-            return;
-        }
-
-        screencopy.damage(&damage);
-    }
-
-    let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
-        trace!("Dmabuf screencopy");
-
-        let format_correct =
-            Some(dmabuf.format().code) == shm_format_to_fourcc(wl_shm::Format::Argb8888);
-        let width_correct = dmabuf.width() == screencopy.physical_region().size.w as u32;
-        let height_correct = dmabuf.height() == screencopy.physical_region().size.h as u32;
-
-        if !(format_correct && width_correct && height_correct) {
-            return;
-        }
-
-        (|| -> anyhow::Result<Option<SyncPoint>> {
-            if screencopy.physical_region() == Rectangle::from_size(untransformed_output_size) {
-                // Optimization to not have to do an extra blit;
-                // just blit the whole output
-                renderer.bind(dmabuf)?;
-
-                Ok(Some(render_frame_result.blit_frame_result(
-                    screencopy.physical_region().size,
-                    Transform::Normal,
-                    output.current_scale().fractional_scale(),
-                    renderer,
-                    [screencopy.physical_region()],
-                    if !screencopy.overlay_cursor() {
-                        cursor_ids
-                    } else {
-                        Vec::new()
-                    },
-                )?))
-            } else {
-                // `RenderFrameResult::blit_frame_result` doesn't expose a way to
-                // blit from a source rectangle, so blit into another buffer
-                // then blit from that into the dmabuf.
-
-                let output_buffer_size = untransformed_output_size
-                    .to_logical(1)
-                    .to_buffer(1, Transform::Normal);
-
-                let offscreen: GlesRenderbuffer = renderer.create_buffer(
-                    smithay::backend::allocator::Fourcc::Abgr8888,
-                    output_buffer_size,
-                )?;
-
-                renderer.bind(offscreen.clone())?;
-
-                let sync_point = render_frame_result.blit_frame_result(
-                    untransformed_output_size,
-                    Transform::Normal,
-                    output.current_scale().fractional_scale(),
-                    renderer,
-                    [Rectangle::from_size(untransformed_output_size)],
-                    if !screencopy.overlay_cursor() {
-                        cursor_ids
-                    } else {
-                        Vec::new()
-                    },
-                )?;
-
-                // ayo are we supposed to wait this here (granted it doesn't do anything
-                // because it's always ready but I want to be correct here)
-                //
-                // renderer.wait(&sync_point)?; // no-op
-
-                // INFO: I have literally no idea why but doing
-                // a blit_to offscreen -> dmabuf leads to some weird
-                // artifacting within the first few frames of a wf-recorder
-                // recording, but doing it with the targets reversed
-                // is completely fine???? Bruh that essentially runs the same internal
-                // code and I don't understand why there's different behavior.
-                // I can see in the code that `blit_to` is missing a `self.unbind()?`
-                // call, but adding that back in doesn't fix anything. So strange
-                renderer.bind(dmabuf)?;
-
-                renderer.blit_from(
-                    offscreen,
-                    screencopy.physical_region(),
-                    Rectangle::from_size(screencopy.physical_region().size),
-                    TextureFilter::Linear,
-                )?;
-
-                Ok(Some(sync_point))
-            }
-        })()
-    } else if !matches!(
-        renderer::buffer_type(screencopy.buffer()),
-        Some(BufferType::Shm)
-    ) {
-        Err(anyhow!("not a shm buffer"))
-    } else {
-        trace!("Shm screencopy");
-
-        let res = smithay::wayland::shm::with_buffer_contents_mut(
-            &screencopy.buffer().clone(),
-            |shm_ptr, shm_len, buffer_data| {
-                // yoinked from Niri (thanks yall)
-                ensure!(
-                    // The buffer prefers pixels in little endian ...
-                    buffer_data.format == wl_shm::Format::Argb8888
-                        && buffer_data.stride == screencopy.physical_region().size.w * 4
-                        && buffer_data.height == screencopy.physical_region().size.h
-                        && shm_len as i32 == buffer_data.stride * buffer_data.height,
-                    "invalid buffer format or size"
-                );
-
-                let src_buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
-                    1,
-                    Transform::Normal,
-                    &screencopy.physical_region().size.to_logical(1),
-                );
-
-                let output_buffer_size = untransformed_output_size
-                    .to_logical(1)
-                    .to_buffer(1, Transform::Normal);
-
-                let offscreen: GlesRenderbuffer = renderer.create_buffer(
-                    smithay::backend::allocator::Fourcc::Abgr8888,
-                    output_buffer_size,
-                )?;
-
-                renderer.bind(offscreen)?;
-
-                // Blit the entire output to `offscreen`.
-                // Only the needed region will be copied below
-                let sync_point = render_frame_result.blit_frame_result(
-                    untransformed_output_size,
-                    Transform::Normal,
-                    output.current_scale().fractional_scale(),
-                    renderer,
-                    [Rectangle::from_size(untransformed_output_size)],
-                    if !screencopy.overlay_cursor() {
-                        cursor_ids
-                    } else {
-                        Vec::new()
-                    },
-                )?;
-
-                // Can someone explain to me why it feels like some things are
-                // arbitrarily `Physical` or `Buffer`
-                let mapping = renderer.copy_framebuffer(
-                    src_buffer_rect,
-                    smithay::backend::allocator::Fourcc::Argb8888,
-                )?;
-
-                let bytes = renderer.map_texture(&mapping)?;
-
-                ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
-
-                // SAFETY: TODO: safety docs
-                unsafe {
-                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
+            let mut damage = match &render_frame_result.primary_element {
+                PrimaryPlaneElement::Swapchain(element) => {
+                    let swapchain_commit =
+                        &mut surface.screencopy_commit_state.primary_plane_swapchain;
+                    let damage = element.damage.damage_since(Some(*swapchain_commit));
+                    *swapchain_commit = element.damage.current_commit();
+                    damage.map(|dmg| {
+                        dmg.into_iter()
+                            .map(|rect| {
+                                rect.to_logical(1, Transform::Normal, &rect.size)
+                                    .to_physical(1)
+                            })
+                            .collect()
+                    })
                 }
+                PrimaryPlaneElement::Element(element) => {
+                    // INFO: Is this element guaranteed to be the same size as the
+                    // |     output? If not this becomes a
+                    // FIXME: offset the damage by the element's location
+                    //
+                    // also is this even ever reachable?
+                    let element_commit = &mut surface.screencopy_commit_state.primary_plane_element;
+                    let damage = element.damage_since(scale, Some(*element_commit));
+                    *element_commit = element.current_commit();
+                    Some(damage)
+                }
+            }
+            .unwrap_or_else(|| {
+                // Returning `None` means the previous CommitCounter is too old or damage
+                // was reset, so damage the whole output
+                DamageSet::from_slice(&[Rectangle::from_size(untransformed_output_size)])
+            });
 
-                Ok(Some(sync_point))
-            },
-        );
+            let cursor_damage = render_frame_result
+                .cursor_element
+                .map(|cursor| {
+                    let damage =
+                        cursor.damage_since(scale, Some(surface.screencopy_commit_state.cursor));
+                    surface.screencopy_commit_state.cursor = cursor.current_commit();
+                    damage
+                })
+                .unwrap_or_default();
 
-        let Ok(res) = res else {
-            unreachable!(
+            damage = damage.into_iter().chain(cursor_damage).collect();
+
+            // The primary plane and cursor had no damage but something got rendered,
+            // so it must be the cursor moving.
+            //
+            // We currently have overlay planes disabled, so we don't have to worry about that.
+            if damage.is_empty() && !render_frame_result.is_empty {
+                if let Some(cursor_elem) = render_frame_result.cursor_element {
+                    damage = damage
+                        .into_iter()
+                        .chain([cursor_elem.geometry(scale)])
+                        .collect();
+                }
+            }
+
+            // INFO: Protocol states that `copy_with_damage` should wait until there is
+            // |     damage to be copied.
+            // |.
+            // |     Now, for region screencopies this currently submits the frame if there is
+            // |     *any* damage on the output, not just in the region. I've found that
+            // |     wf-recorder blocks until the last frame is submitted, and if I don't
+            // |     send a submission because its region isn't damaged it will hang.
+            // |     I'm fairly certain Sway is doing a similar thing.
+            if damage.is_empty() {
+                output.with_state_mut(|state| state.screencopies.push(screencopy));
+                continue;
+            }
+
+            screencopy.damage(&damage);
+        }
+
+        let sync_point = if let Ok(dmabuf) = dmabuf::get_dmabuf(screencopy.buffer()).cloned() {
+            trace!("Dmabuf screencopy");
+
+            let format_correct =
+                Some(dmabuf.format().code) == shm_format_to_fourcc(wl_shm::Format::Argb8888);
+            let width_correct = dmabuf.width() == screencopy.physical_region().size.w as u32;
+            let height_correct = dmabuf.height() == screencopy.physical_region().size.h as u32;
+
+            if !(format_correct && width_correct && height_correct) {
+                continue;
+            }
+
+            (|| -> anyhow::Result<Option<SyncPoint>> {
+                if screencopy.physical_region() == Rectangle::from_size(untransformed_output_size) {
+                    // Optimization to not have to do an extra blit;
+                    // just blit the whole output
+                    renderer.bind(dmabuf)?;
+
+                    Ok(Some(render_frame_result.blit_frame_result(
+                        screencopy.physical_region().size,
+                        Transform::Normal,
+                        output.current_scale().fractional_scale(),
+                        renderer,
+                        [screencopy.physical_region()],
+                        if !screencopy.overlay_cursor() {
+                            cursor_ids.clone()
+                        } else {
+                            Vec::new()
+                        },
+                    )?))
+                } else {
+                    // `RenderFrameResult::blit_frame_result` doesn't expose a way to
+                    // blit from a source rectangle, so blit into another buffer
+                    // then blit from that into the dmabuf.
+
+                    let output_buffer_size = untransformed_output_size
+                        .to_logical(1)
+                        .to_buffer(1, Transform::Normal);
+
+                    let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                        smithay::backend::allocator::Fourcc::Abgr8888,
+                        output_buffer_size,
+                    )?;
+
+                    renderer.bind(offscreen.clone())?;
+
+                    let sync_point = render_frame_result.blit_frame_result(
+                        untransformed_output_size,
+                        Transform::Normal,
+                        output.current_scale().fractional_scale(),
+                        renderer,
+                        [Rectangle::from_size(untransformed_output_size)],
+                        if !screencopy.overlay_cursor() {
+                            cursor_ids.clone()
+                        } else {
+                            Vec::new()
+                        },
+                    )?;
+
+                    // ayo are we supposed to wait this here (granted it doesn't do anything
+                    // because it's always ready but I want to be correct here)
+                    //
+                    // renderer.wait(&sync_point)?; // no-op
+
+                    // INFO: I have literally no idea why but doing
+                    // a blit_to offscreen -> dmabuf leads to some weird
+                    // artifacting within the first few frames of a wf-recorder
+                    // recording, but doing it with the targets reversed
+                    // is completely fine???? Bruh that essentially runs the same internal
+                    // code and I don't understand why there's different behavior.
+                    // I can see in the code that `blit_to` is missing a `self.unbind()?`
+                    // call, but adding that back in doesn't fix anything. So strange
+                    renderer.bind(dmabuf)?;
+
+                    renderer.blit_from(
+                        offscreen,
+                        screencopy.physical_region(),
+                        Rectangle::from_size(screencopy.physical_region().size),
+                        TextureFilter::Linear,
+                    )?;
+
+                    Ok(Some(sync_point))
+                }
+            })()
+        } else if !matches!(
+            renderer::buffer_type(screencopy.buffer()),
+            Some(BufferType::Shm)
+        ) {
+            Err(anyhow!("not a shm buffer"))
+        } else {
+            trace!("Shm screencopy");
+
+            let res = smithay::wayland::shm::with_buffer_contents_mut(
+                &screencopy.buffer().clone(),
+                |shm_ptr, shm_len, buffer_data| {
+                    // yoinked from Niri (thanks yall)
+                    ensure!(
+                        // The buffer prefers pixels in little endian ...
+                        buffer_data.format == wl_shm::Format::Argb8888
+                            && buffer_data.stride == screencopy.physical_region().size.w * 4
+                            && buffer_data.height == screencopy.physical_region().size.h
+                            && shm_len as i32 == buffer_data.stride * buffer_data.height,
+                        "invalid buffer format or size"
+                    );
+
+                    let src_buffer_rect = screencopy.physical_region().to_logical(1).to_buffer(
+                        1,
+                        Transform::Normal,
+                        &screencopy.physical_region().size.to_logical(1),
+                    );
+
+                    let output_buffer_size = untransformed_output_size
+                        .to_logical(1)
+                        .to_buffer(1, Transform::Normal);
+
+                    let offscreen: GlesRenderbuffer = renderer.create_buffer(
+                        smithay::backend::allocator::Fourcc::Abgr8888,
+                        output_buffer_size,
+                    )?;
+
+                    renderer.bind(offscreen)?;
+
+                    // Blit the entire output to `offscreen`.
+                    // Only the needed region will be copied below
+                    let sync_point = render_frame_result.blit_frame_result(
+                        untransformed_output_size,
+                        Transform::Normal,
+                        output.current_scale().fractional_scale(),
+                        renderer,
+                        [Rectangle::from_size(untransformed_output_size)],
+                        if !screencopy.overlay_cursor() {
+                            cursor_ids.clone()
+                        } else {
+                            Vec::new()
+                        },
+                    )?;
+
+                    // Can someone explain to me why it feels like some things are
+                    // arbitrarily `Physical` or `Buffer`
+                    let mapping = renderer.copy_framebuffer(
+                        src_buffer_rect,
+                        smithay::backend::allocator::Fourcc::Argb8888,
+                    )?;
+
+                    let bytes = renderer.map_texture(&mapping)?;
+
+                    ensure!(bytes.len() == shm_len, "mapped buffer has wrong length");
+
+                    // SAFETY: TODO: safety docs
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(bytes.as_ptr(), shm_ptr, shm_len);
+                    }
+
+                    Ok(Some(sync_point))
+                },
+            );
+
+            let Ok(res) = res else {
+                unreachable!(
                 "buffer is guaranteed to be shm from above and should be managed by the shm global"
             );
+            };
+
+            res
         };
 
-        res
-    };
-
-    match sync_point {
-        Ok(Some(sync_point)) if !sync_point.is_reached() => {
-            let Some(sync_fd) = sync_point.export() else {
-                screencopy.submit(false);
-                return;
-            };
-            let mut screencopy = Some(screencopy);
-            let source = Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
-            let res = loop_handle.insert_source(source, move |_, _, _| {
-                let Some(screencopy) = screencopy.take() else {
-                    unreachable!("This source is removed after one run");
+        match sync_point {
+            Ok(Some(sync_point)) if !sync_point.is_reached() => {
+                let Some(sync_fd) = sync_point.export() else {
+                    screencopy.submit(false);
+                    continue;
                 };
-                screencopy.submit(false);
-                trace!("Submitted screencopy");
-                Ok(PostAction::Remove)
-            });
-            if res.is_err() {
-                error!("Failed to schedule screencopy submission");
+                let mut screencopy = Some(screencopy);
+                let source = Generic::new(sync_fd, Interest::READ, calloop::Mode::OneShot);
+                let res = loop_handle.insert_source(source, move |_, _, _| {
+                    let Some(screencopy) = screencopy.take() else {
+                        unreachable!("This source is removed after one run");
+                    };
+                    screencopy.submit(false);
+                    trace!("Submitted screencopy");
+                    Ok(PostAction::Remove)
+                });
+                if res.is_err() {
+                    error!("Failed to schedule screencopy submission");
+                }
             }
+            Ok(_) => screencopy.submit(false),
+            Err(err) => error!("Failed to submit screencopy: {err}"),
         }
-        Ok(_) => screencopy.submit(false),
-        Err(err) => error!("Failed to submit screencopy: {err}"),
     }
 }
