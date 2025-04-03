@@ -207,14 +207,14 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
+            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
             if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::fullscreen());
+                unmapped.window_rules.layout_mode = Some(LayoutMode::new_fullscreen_external());
             }
         }
     }
@@ -227,8 +227,16 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_fullscreen(false));
+            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
             self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(surface.wl_surface())
+        {
+            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
+                mode.client_requested_mode
+                    .take_if(|mode| mode.is_fullscreen());
+            }
         }
     }
 
@@ -240,14 +248,14 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_maximized(true));
+            window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
             if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::maximized());
+                unmapped.window_rules.layout_mode = Some(LayoutMode::new_maximized_external());
             }
         }
     }
@@ -260,8 +268,16 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_maximized(false));
+            window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
             self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(surface.wl_surface())
+        {
+            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
+                mode.client_requested_mode
+                    .take_if(|mode| mode.is_maximized());
+            }
         }
     }
 

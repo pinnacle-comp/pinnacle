@@ -29,7 +29,7 @@ use crate::{
 ///
 /// An empty string represents an invalid output.
 // TODO: maybe encode that in the type
-#[derive(Debug, Hash, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct OutputName(pub String);
 
 impl OutputName {

@@ -164,7 +164,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         .unmapped_window(&state.pinnacle)
                         .and_then(|unmapped| unmapped.window_rules.layout_mode)
                 })
-                .unwrap_or(LayoutMode::tiled());
+                .unwrap_or(LayoutMode::new_tiled());
 
             Ok(GetLayoutModeResponse {
                 layout_mode: match layout_mode.current() {
@@ -291,7 +291,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::fullscreen())
+                            .get_or_insert(LayoutMode::new_fullscreen())
                             .set_fullscreen(true);
                     }
                     Some(false) => {
@@ -303,7 +303,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::tiled())
+                            .get_or_insert(LayoutMode::new_tiled())
                             .toggle_fullscreen();
                     }
                 }
@@ -347,7 +347,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::maximized())
+                            .get_or_insert(LayoutMode::new_maximized())
                             .set_maximized(true);
                     }
                     Some(false) => {
@@ -359,7 +359,7 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::tiled())
+                            .get_or_insert(LayoutMode::new_tiled())
                             .toggle_maximized();
                     }
                 }
@@ -403,21 +403,21 @@ impl v1::window_service_server::WindowService for super::WindowService {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::floating())
+                            .get_or_insert(LayoutMode::new_floating())
                             .set_floating(true);
                     }
                     Some(false) => {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::floating())
+                            .get_or_insert(LayoutMode::new_floating())
                             .set_floating(false);
                     }
                     None => {
                         unmapped
                             .window_rules
                             .layout_mode
-                            .get_or_insert(LayoutMode::tiled())
+                            .get_or_insert(LayoutMode::new_tiled())
                             .toggle_floating();
                     }
                 }

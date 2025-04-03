@@ -59,7 +59,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
+        window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
         self.update_window_state_and_layout(&window);
     }
 
@@ -70,7 +70,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.layout_mode.set_fullscreen(false));
+        window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
         self.update_window_state_and_layout(&window);
     }
 
@@ -81,7 +81,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.layout_mode.set_maximized(true));
+        window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
         self.update_window_state_and_layout(&window);
     }
 
@@ -92,7 +92,7 @@ impl ForeignToplevelHandler for State {
             return;
         };
 
-        window.with_state_mut(|state| state.layout_mode.set_maximized(false));
+        window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
         self.update_window_state_and_layout(&window);
     }
 

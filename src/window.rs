@@ -498,7 +498,7 @@ impl Pinnacle {
             tags,
         } = &unmapped.window_rules;
 
-        let layout_mode = layout_mode.unwrap_or(LayoutMode::tiled());
+        let layout_mode = layout_mode.unwrap_or(LayoutMode::new_tiled());
 
         unmapped.window.with_state_mut(|state| {
             state.layout_mode = layout_mode;

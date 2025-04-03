@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::{
-    mem,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
@@ -26,13 +23,13 @@ use crate::{
 use super::{Unmapped, WindowElement};
 
 /// A unique identifier for each window.
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
 pub struct WindowId(pub u32);
 
 static WINDOW_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 impl WindowId {
-    /// Get the next available window id. This always starts at 0.
+    /// Gets the next available window id. This always starts at 0.
     pub fn next() -> Self {
         Self(WINDOW_ID_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
@@ -42,7 +39,7 @@ impl WindowId {
         WINDOW_ID_COUNTER.store(0, Ordering::Relaxed);
     }
 
-    /// Get the mapped window that has this WindowId.
+    /// Gets the mapped window that has this WindowId.
     pub fn window(&self, pinnacle: &Pinnacle) -> Option<WindowElement> {
         let _span = tracy_client::span!("WindowId::window");
 
@@ -112,71 +109,116 @@ impl LayoutModeKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LayoutMode {
-    current: LayoutModeKind,
-    previous: LayoutModeKind,
+    /// The base layout mode. This is either floating or tiled.
+    base_mode: FloatingOrTiled,
+    /// A semantically "elevated" layout mode that applies over the base mode.
+    elevated_mode: Option<FullscreenOrMaximized>,
+    /// An elevated layout mode requested external to the config, e.g. from a client or
+    /// wlr-foreign-toplevel-management.
+    pub client_requested_mode: Option<FullscreenOrMaximized>,
 }
 
 impl LayoutMode {
-    pub fn tiled() -> Self {
+    /// Creates a new layout mode that is tiled.
+    pub fn new_tiled() -> Self {
         Self {
-            current: LayoutModeKind::Tiled,
-            previous: LayoutModeKind::Floating,
+            base_mode: FloatingOrTiled::Tiled,
+            elevated_mode: None,
+            client_requested_mode: None,
         }
     }
 
-    pub fn floating() -> Self {
+    /// Creates a new layout mode that is floating.
+    pub fn new_floating() -> Self {
         Self {
-            current: LayoutModeKind::Floating,
-            previous: LayoutModeKind::Tiled,
+            base_mode: FloatingOrTiled::Floating,
+            elevated_mode: None,
+            client_requested_mode: None,
         }
     }
 
-    pub fn fullscreen() -> Self {
+    /// Creates a new layout mode that is fullscreen with a base mode of tiled.
+    pub fn new_fullscreen() -> Self {
         Self {
-            current: LayoutModeKind::Fullscreen,
-            previous: LayoutModeKind::Tiled,
+            base_mode: FloatingOrTiled::Tiled,
+            elevated_mode: Some(FullscreenOrMaximized::Fullscreen),
+            client_requested_mode: None,
         }
     }
 
-    pub fn maximized() -> Self {
+    /// Creates a new layout mode that is fullscreen with a base mode of tiled.
+    /// This mode should be created in response to a client requested mode.
+    pub fn new_fullscreen_external() -> Self {
         Self {
-            current: LayoutModeKind::Maximized,
-            previous: LayoutModeKind::Tiled,
+            base_mode: FloatingOrTiled::Tiled,
+            elevated_mode: None,
+            client_requested_mode: Some(FullscreenOrMaximized::Fullscreen),
         }
     }
 
+    /// Creates a new layout mode that is maximized with a base mode of tiled.
+    pub fn new_maximized() -> Self {
+        Self {
+            base_mode: FloatingOrTiled::Tiled,
+            elevated_mode: Some(FullscreenOrMaximized::Maximized),
+            client_requested_mode: None,
+        }
+    }
+
+    /// Creates a new layout mode that is maximized with a base mode of tiled.
+    /// This mode should be created in response to a client requested mode.
+    pub fn new_maximized_external() -> Self {
+        Self {
+            base_mode: FloatingOrTiled::Tiled,
+            elevated_mode: None,
+            client_requested_mode: Some(FullscreenOrMaximized::Maximized),
+        }
+    }
+
+    /// Returns the current layout mode.
     pub fn current(&self) -> LayoutModeKind {
-        self.current
+        self.client_requested_mode
+            .or(self.elevated_mode)
+            .map(|mode| match mode {
+                FullscreenOrMaximized::Fullscreen => LayoutModeKind::Fullscreen,
+                FullscreenOrMaximized::Maximized => LayoutModeKind::Maximized,
+            })
+            .unwrap_or_else(|| match self.base_mode {
+                FloatingOrTiled::Floating => LayoutModeKind::Floating,
+                FloatingOrTiled::Tiled => LayoutModeKind::Tiled,
+            })
     }
 
     pub fn is_tiled(&self) -> bool {
-        self.current.is_tiled()
+        self.current().is_tiled()
     }
 
     pub fn is_floating(&self) -> bool {
-        self.current.is_floating()
+        self.current().is_floating()
     }
 
     pub fn is_fullscreen(&self) -> bool {
-        self.current.is_fullscreen()
+        self.current().is_fullscreen()
     }
 
     pub fn is_maximized(&self) -> bool {
-        self.current.is_maximized()
+        self.current().is_maximized()
     }
 
     pub fn set_floating(&mut self, floating: bool) {
         match floating {
             true => {
                 if !self.is_floating() {
-                    self.previous = self.current;
-                    self.current = LayoutModeKind::Floating;
+                    self.client_requested_mode = None;
+                    self.elevated_mode = None;
+                    self.base_mode = FloatingOrTiled::Floating;
                 }
             }
             false => {
-                if !self.is_tiled() {
-                    self.previous = self.current;
-                    self.current = LayoutModeKind::Tiled;
+                if self.is_floating() {
+                    self.client_requested_mode = None;
+                    self.elevated_mode = None;
+                    self.base_mode = FloatingOrTiled::Tiled;
                 }
             }
         }
@@ -190,13 +232,38 @@ impl LayoutMode {
         match maximized {
             true => {
                 if !self.is_maximized() {
-                    self.previous = self.current;
-                    self.current = LayoutModeKind::Maximized;
+                    self.client_requested_mode = None;
+                    self.elevated_mode = Some(FullscreenOrMaximized::Maximized);
                 }
             }
             false => {
                 if self.is_maximized() {
-                    mem::swap(&mut self.current, &mut self.previous);
+                    if self.client_requested_mode == Some(FullscreenOrMaximized::Maximized) {
+                        self.client_requested_mode = None;
+                    } else {
+                        self.elevated_mode = None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sets maximized state. Use this in response to a client requested maximized mode.
+    pub fn set_client_maximized(&mut self, maximized: bool) {
+        match maximized {
+            true => {
+                if !self.is_maximized() {
+                    self.client_requested_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+            }
+            false => {
+                let took = self
+                    .client_requested_mode
+                    .take_if(|mode| mode.is_maximized())
+                    .is_some();
+
+                if !took {
+                    self.elevated_mode.take_if(|mode| mode.is_maximized());
                 }
             }
         }
@@ -210,13 +277,17 @@ impl LayoutMode {
         match fullscreen {
             true => {
                 if !self.is_fullscreen() {
-                    self.previous = self.current;
-                    self.current = LayoutModeKind::Fullscreen;
+                    self.client_requested_mode = None;
+                    self.elevated_mode = Some(FullscreenOrMaximized::Fullscreen);
                 }
             }
             false => {
                 if self.is_fullscreen() {
-                    mem::swap(&mut self.current, &mut self.previous);
+                    if self.client_requested_mode == Some(FullscreenOrMaximized::Fullscreen) {
+                        self.client_requested_mode = None;
+                    } else {
+                        self.elevated_mode = None;
+                    }
                 }
             }
         }
@@ -224,6 +295,27 @@ impl LayoutMode {
 
     pub fn toggle_fullscreen(&mut self) {
         self.set_fullscreen(!self.is_fullscreen());
+    }
+
+    /// Sets fullscreen state. Use this in response to a client requested fullscreen mode.
+    pub fn set_client_fullscreen(&mut self, fullscreen: bool) {
+        match fullscreen {
+            true => {
+                if !self.is_fullscreen() {
+                    self.client_requested_mode = Some(FullscreenOrMaximized::Fullscreen);
+                }
+            }
+            false => {
+                let took = self
+                    .client_requested_mode
+                    .take_if(|mode| mode.is_fullscreen())
+                    .is_some();
+
+                if !took {
+                    self.elevated_mode.take_if(|mode| mode.is_fullscreen());
+                }
+            }
+        }
     }
 }
 
@@ -399,7 +491,7 @@ impl Pinnacle {
                     }
                 }
             }
-            LayoutModeKind::Maximized { .. } => {
+            LayoutModeKind::Maximized => {
                 let non_exclusive_geo = {
                     let map = layer_map_for_output(&output);
                     map.non_exclusive_zone()
@@ -423,7 +515,7 @@ impl Pinnacle {
                     }
                 }
             }
-            LayoutModeKind::Fullscreen { .. } => {
+            LayoutModeKind::Fullscreen => {
                 window.set_fullscreen_states();
 
                 match window.underlying_surface() {
@@ -470,22 +562,13 @@ impl FloatingOrTiled {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FullscreenOrMaximized {
-    Neither,
     Fullscreen,
     Maximized,
 }
 
 impl FullscreenOrMaximized {
-    /// Returns `true` if the fullscreen or maximized is [`Neither`].
-    ///
-    /// [`Neither`]: FullscreenOrMaximized::Neither
-    #[must_use]
-    pub fn is_neither(&self) -> bool {
-        matches!(self, Self::Neither)
-    }
-
     /// Returns `true` if the fullscreen or maximized is [`Fullscreen`].
     ///
     /// [`Fullscreen`]: FullscreenOrMaximized::Fullscreen
@@ -508,7 +591,7 @@ impl WindowElementState {
         Self {
             id: WindowId::next(),
             tags: Default::default(),
-            layout_mode: LayoutMode::tiled(),
+            layout_mode: LayoutMode::new_tiled(),
             floating_loc: None,
             floating_size: Default::default(),
             minimized: false,
@@ -518,5 +601,119 @@ impl WindowElementState {
             decoration_mode: None,
             offscreen_elem_id: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn layout_mode_changes_correctly_user_only() {
+        let mut layout_mode = LayoutMode::new_tiled();
+        assert!(layout_mode.is_tiled());
+
+        // toggle_floating
+        layout_mode.toggle_floating();
+        assert!(layout_mode.is_floating());
+        layout_mode.toggle_floating();
+        assert!(layout_mode.is_tiled());
+
+        // set_floating
+        layout_mode.set_floating(false);
+        assert!(layout_mode.is_tiled());
+        layout_mode.set_floating(true);
+        assert!(layout_mode.is_floating());
+
+        // toggle_maximized
+        layout_mode.toggle_maximized();
+        assert!(layout_mode.is_maximized());
+        layout_mode.toggle_maximized();
+        assert!(layout_mode.is_floating());
+
+        // Make base mode tiled
+        layout_mode.set_floating(false);
+        assert!(layout_mode.is_tiled());
+
+        // set_maximized
+        layout_mode.set_maximized(true);
+        assert!(layout_mode.is_maximized());
+        layout_mode.set_maximized(false);
+        assert!(layout_mode.is_tiled());
+        layout_mode.set_maximized(false);
+        assert!(layout_mode.is_tiled());
+
+        // toggle_fullscreen
+        layout_mode.toggle_fullscreen();
+        assert!(layout_mode.is_fullscreen());
+        layout_mode.toggle_fullscreen();
+        assert!(layout_mode.is_tiled());
+
+        // set_fullscreen
+        layout_mode.set_fullscreen(false);
+        assert!(layout_mode.is_tiled());
+        layout_mode.set_fullscreen(true);
+        assert!(layout_mode.is_fullscreen());
+
+        // maximized to fullscreen
+        layout_mode.toggle_maximized();
+        assert!(layout_mode.is_maximized());
+        layout_mode.toggle_fullscreen();
+        assert!(layout_mode.is_fullscreen());
+    }
+
+    #[test]
+    fn layout_mode_changes_correctly_when_client_sets_maximized_when_already_maximized() {
+        let mut layout_mode = LayoutMode::new_tiled();
+        assert!(layout_mode.is_tiled());
+
+        layout_mode.set_maximized(true);
+        assert!(layout_mode.is_maximized());
+        layout_mode.set_client_maximized(true);
+        assert!(layout_mode.is_maximized());
+        assert!(layout_mode.client_requested_mode.is_none());
+    }
+
+    #[test]
+    fn layout_mode_changes_correctly_when_client_sets_maximized_when_not_already_maximized() {
+        let mut layout_mode = LayoutMode::new_tiled();
+        assert!(layout_mode.is_tiled());
+
+        layout_mode.set_fullscreen(true);
+        assert!(layout_mode.is_fullscreen());
+
+        layout_mode.set_client_maximized(true);
+        assert!(layout_mode.is_maximized());
+        assert_eq!(
+            layout_mode.client_requested_mode,
+            Some(FullscreenOrMaximized::Maximized)
+        );
+
+        layout_mode.set_client_maximized(false);
+        assert!(layout_mode.is_fullscreen());
+        assert_eq!(layout_mode.client_requested_mode, None);
+    }
+
+    #[test]
+    fn layout_mode_does_not_change_when_client_requests_to_unset_different_mode() {
+        let mut layout_mode = LayoutMode::new_tiled();
+        assert!(layout_mode.is_tiled());
+
+        layout_mode.set_fullscreen(true);
+        assert!(layout_mode.is_fullscreen());
+
+        layout_mode.set_client_maximized(true);
+        assert!(layout_mode.is_maximized());
+        assert_eq!(
+            layout_mode.client_requested_mode,
+            Some(FullscreenOrMaximized::Maximized)
+        );
+
+        layout_mode.set_client_fullscreen(false);
+        assert!(layout_mode.is_maximized());
+        assert_eq!(
+            layout_mode.client_requested_mode,
+            Some(FullscreenOrMaximized::Maximized)
+        );
     }
 }

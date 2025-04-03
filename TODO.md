@@ -6,10 +6,12 @@
 - Use xdg activation to activate new compositor-spawned windows
 - Work on `ConnectorSavedState`
 - Remove startup logs and globals print for CLI client
-- Refactor handling of client vs config window rules
-    - Track which is which eg whether a window's fullscreen mode is from the config
-      or the client
 - Encode window rules in an enum type for pre- and post-initial configure
+- Keyboard focus in Idea Xwayland is weird when creating a new Java file
+
+Testing
+- Test layout mode changing and how it interacts with client fullscreen/maximized requests
+    - Gonna need a test client for that
 
 Problems:
 - Pointer input to xwayland windows saturates at x=0, y=0, so windows on outputs at negative coords

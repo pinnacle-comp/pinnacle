@@ -71,7 +71,6 @@ impl XwmHandler for State {
     }
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::map_window_request");
         trace!(class = surface.class(), "XwmHandler::map_window_request");
 
         let exists = self
@@ -107,7 +106,6 @@ impl XwmHandler for State {
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::mapped_override_redirect_window");
         trace!(
             class = surface.class(),
             "XwmHandler::mapped_override_redirect_window"
@@ -138,7 +136,6 @@ impl XwmHandler for State {
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, window: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::map_window_notify");
         trace!(class = window.class(), "XwmHandler::map_window_notify");
 
         let Some(idx) = self
@@ -156,13 +153,11 @@ impl XwmHandler for State {
     }
 
     fn unmapped_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::unmapped_window");
         trace!(class = surface.class(), "XwmHandler::unmapped_window");
         self.remove_xwayland_window(surface);
     }
 
     fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::destroyed_window");
         trace!(class = surface.class(), "XwmHandler::destroyed_window");
         self.remove_xwayland_window(surface);
     }
@@ -177,7 +172,6 @@ impl XwmHandler for State {
         h: Option<u32>,
         _reorder: Option<Reorder>,
     ) {
-        let _span = tracy_client::span!("XwmHandler::configure_request");
         trace!(
             class = window.class(),
             ?x,
@@ -222,7 +216,6 @@ impl XwmHandler for State {
         geometry: Rectangle<i32, Logical>,
         _above: Option<smithay::reexports::x11rb::protocol::xproto::Window>,
     ) {
-        let _span = tracy_client::span!("XwmHandler::configure_notify");
         trace!(
             class = surface.class(),
             ?geometry,
@@ -246,55 +239,57 @@ impl XwmHandler for State {
     }
 
     fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::maximize_request");
         trace!(class = window.class(), "XwmHandler::maximize_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_maximized(true));
+            window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::maximized());
+                unmapped.window_rules.layout_mode = Some(LayoutMode::new_maximized_external());
             }
         }
     }
 
     fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::unmaximize_request");
         trace!(class = window.class(), "XwmHandler::unmaximize_request");
 
-        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.layout_mode.set_maximized(false));
-        self.update_window_state_and_layout(&window);
+        if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
+            window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
+            self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
+            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
+                mode.client_requested_mode
+                    .take_if(|mode| mode.is_maximized());
+            }
+        }
     }
 
     fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::fullscreen_request");
         trace!(class = window.class(), "XwmHandler::fullscreen_request");
 
         if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
-            window.with_state_mut(|state| state.layout_mode.set_fullscreen(true));
+            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
             if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::fullscreen());
+                unmapped.window_rules.layout_mode = Some(LayoutMode::new_fullscreen_external());
             }
         }
     }
 
     fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
-        let _span = tracy_client::span!("XwmHandler::unfullscreen_request");
         trace!(class = window.class(), "XwmHandler::unfullscreen_request");
 
-        let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() else {
-            return;
-        };
-
-        window.with_state_mut(|state| state.layout_mode.set_fullscreen(false));
-        self.update_window_state_and_layout(&window);
+        if let Some(window) = self.pinnacle.window_for_x11_surface(&window).cloned() {
+            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
+            self.update_window_state_and_layout(&window);
+        } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
+            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
+                mode.client_requested_mode
+                    .take_if(|mode| mode.is_fullscreen());
+            }
+        }
     }
 
     fn resize_request(
