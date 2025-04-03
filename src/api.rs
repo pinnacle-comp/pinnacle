@@ -120,9 +120,9 @@ where
 /// - `in_stream`: The incoming client stream
 /// - `on_client_request`: A callback that will be run with every received request.
 /// - `with_out_stream_and_in_stream_join_handle`:
-///     Do something with the outbound server-to-client stream.
-///     This also receives the join handle for the tokio task listening to
-///     the incoming client-to-server stream.
+///   Do something with the outbound server-to-client stream.
+///   This also receives the join handle for the tokio task listening to
+///   the incoming client-to-server stream.
 fn run_bidirectional_streaming<F1, F2, I, O>(
     fn_sender: StateFnSender,
     mut in_stream: Streaming<I>,
@@ -178,9 +178,9 @@ where
 /// - `in_stream`: The incoming client stream
 /// - `on_client_request`: A callback that will be run with every received request.
 /// - `with_out_stream_and_in_stream_join_handle`:
-///     Do something with the outbound server-to-client stream.
-///     This also receives the join handle for the tokio task listening to
-///     the incoming client-to-server stream.
+///   Do something with the outbound server-to-client stream.
+///   This also receives the join handle for the tokio task listening to
+///   the incoming client-to-server stream.
 /// - `map`: Maps sent messages to protobuf messages
 fn run_bidirectional_streaming_mapped<F1, F2, FM, I, O, M>(
     fn_sender: StateFnSender,
