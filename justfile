@@ -53,7 +53,7 @@ run *args: gen-lua-pb-defs
 
 # Run `cargo test`
 test *args: gen-lua-pb-defs
-    cargo test --no-default-features {{args}}
+    cargo test --no-default-features --all {{args}}
 
 compile-wlcs:
     #!/usr/bin/env bash
