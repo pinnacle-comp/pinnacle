@@ -102,14 +102,14 @@ impl TryFrom<layout::v1::LayoutNode> for crate::layout::tree::LayoutNode {
                 }
                 layout::v1::FlexDir::Column => taffy::FlexDirection::Column,
             },
-            flex_basis: taffy::Dimension::Percent(style.size_proportion),
+            flex_basis: taffy::Dimension::percent(style.size_proportion),
             margin: style
                 .gaps
                 .map(|gaps| taffy::Rect {
-                    left: taffy::LengthPercentageAuto::Length(gaps.left),
-                    right: taffy::LengthPercentageAuto::Length(gaps.right),
-                    top: taffy::LengthPercentageAuto::Length(gaps.top),
-                    bottom: taffy::LengthPercentageAuto::Length(gaps.bottom),
+                    left: taffy::LengthPercentageAuto::length(gaps.left),
+                    right: taffy::LengthPercentageAuto::length(gaps.right),
+                    top: taffy::LengthPercentageAuto::length(gaps.top),
+                    bottom: taffy::LengthPercentageAuto::length(gaps.bottom),
                 })
                 .unwrap_or(taffy::Rect::length(0.0)),
             ..Default::default()

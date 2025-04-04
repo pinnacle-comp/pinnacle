@@ -78,7 +78,7 @@ impl LayoutTree {
                 .new_leaf_with_context(
                     taffy::Style {
                         margin: prev_margin,
-                        flex_basis: taffy::Dimension::Percent(1.0),
+                        flex_basis: taffy::Dimension::percent(1.0),
                         ..Default::default()
                     },
                     NodeContext::default(),
@@ -124,8 +124,8 @@ impl LayoutTree {
             .new_with_children(
                 taffy::Style {
                     size: taffy::Size {
-                        width: taffy::Dimension::Percent(1.0),
-                        height: taffy::Dimension::Percent(1.0),
+                        width: taffy::Dimension::percent(1.0),
+                        height: taffy::Dimension::percent(1.0),
                     },
                     ..Default::default()
                 },
