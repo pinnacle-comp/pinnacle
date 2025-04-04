@@ -67,6 +67,7 @@ impl ProcessState {
         once: bool,
         envs: HashMap<String, String>,
         base_dirs: &BaseDirectories,
+        pipe_processes: bool,
     ) -> Option<SpawnData> {
         let arg0 = cmd.first()?.to_string();
 
@@ -100,12 +101,14 @@ impl ProcessState {
 
         let mut tokio_cmd = tokio::process::Command::new(OsString::from(program));
 
-        tokio_cmd
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .envs(envs)
-            .args(cmd);
+        tokio_cmd.envs(envs).args(cmd);
+
+        if pipe_processes {
+            tokio_cmd
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+        }
 
         if REMOVE_RUST_BACKTRACE.load(Ordering::Relaxed) {
             tokio_cmd.env_remove("RUST_BACKTRACE");

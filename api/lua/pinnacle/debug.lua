@@ -61,4 +61,38 @@ function debug.toggle_opaque_region_visualization()
     })
 end
 
+---Sets cursor plane scanout.
+---
+---@param set boolean
+function debug.set_cursor_plane_scanout(set)
+    local _, err = client:pinnacle_debug_v1_DebugService_SetCursorPlaneScanout({
+        set_or_toggle = set and util_v1.SetOrToggle.SET_OR_TOGGLE_SET
+            or util_v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    })
+end
+
+---Toggles cursor plane scanout.
+function debug.toggle_cursor_plane_scanout()
+    local _, err = client:pinnacle_debug_v1_DebugService_SetCursorPlaneScanout({
+        set_or_toggle = util_v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
+    })
+end
+
+---Enables or disables process spawning setting up pipes to give fds to the config.
+---
+---@param set boolean
+function debug.set_process_piping(set)
+    local _, err = client:pinnacle_debug_v1_DebugService_SetProcessPiping({
+        set_or_toggle = set and util_v1.SetOrToggle.SET_OR_TOGGLE_SET
+            or util_v1.SetOrToggle.SET_OR_TOGGLE_UNSET,
+    })
+end
+
+---Toggles process spawning setting up pipes to give fds to the config.
+function debug.toggle_process_piping()
+    local _, err = client:pinnacle_debug_v1_DebugService_SetProcessPiping({
+        set_or_toggle = util_v1.SetOrToggle.SET_OR_TOGGLE_TOGGLE,
+    })
+end
+
 return debug

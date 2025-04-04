@@ -814,6 +814,12 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
 ---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
+---@class pinnacle.debug.v1.SetCursorPlaneScanoutRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.debug.v1.SetProcessPipingRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
 ---@class pinnacle.tag.v1.GetRequest
 
 ---@class pinnacle.tag.v1.GetResponse
@@ -1227,6 +1233,8 @@ pinnacle.debug = {}
 pinnacle.debug.v1 = {}
 pinnacle.debug.v1.SetDamageVisualizationRequest = {}
 pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest = {}
+pinnacle.debug.v1.SetCursorPlaneScanoutRequest = {}
+pinnacle.debug.v1.SetProcessPipingRequest = {}
 pinnacle.tag = {}
 pinnacle.tag.v1 = {}
 pinnacle.tag.v1.GetRequest = {}
@@ -1944,6 +1952,40 @@ pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.response = ".google.
 ---@return string | nil error An error string, if any
 function Client:pinnacle_debug_v1_DebugService_SetOpaqueRegionVisualization(data)
     return self:unary_request(pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization, data)
+end
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout = {}
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.method = "SetCursorPlaneScanout"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.request = ".pinnacle.debug.v1.SetCursorPlaneScanoutRequest"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.debug.v1.SetCursorPlaneScanoutRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetCursorPlaneScanout(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetCursorPlaneScanout, data)
+end
+pinnacle.debug.v1.DebugService.SetProcessPiping = {}
+pinnacle.debug.v1.DebugService.SetProcessPiping.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetProcessPiping.method = "SetProcessPiping"
+pinnacle.debug.v1.DebugService.SetProcessPiping.request = ".pinnacle.debug.v1.SetProcessPipingRequest"
+pinnacle.debug.v1.DebugService.SetProcessPiping.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.debug.v1.SetProcessPipingRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetProcessPiping(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetProcessPiping, data)
 end
 pinnacle.tag.v1.TagService = {}
 pinnacle.tag.v1.TagService.Get = {}

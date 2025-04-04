@@ -227,10 +227,17 @@ pub struct Config {
     pub cli: Option<Cli>,
     socket_path: Option<PathBuf>,
 
-    pub visualize_damage: bool,
-    pub visualize_opaque_regions: bool,
+    pub debug: Debug,
 
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Debug {
+    pub visualize_damage: bool,
+    pub visualize_opaque_regions: bool,
+    pub disable_cursor_plane_scanout: bool,
+    pub disable_process_piping: bool,
 }
 
 impl Drop for Config {
@@ -251,8 +258,7 @@ impl Config {
             config_dir,
             cli,
             socket_path: None,
-            visualize_damage: false,
-            visualize_opaque_regions: false,
+            debug: Default::default(),
             last_error: None,
         }
     }
@@ -271,8 +277,7 @@ impl Config {
             loop_handle.remove(token);
         }
 
-        self.visualize_damage = false;
-        self.visualize_opaque_regions = false;
+        std::mem::take(&mut self.debug);
     }
 }
 

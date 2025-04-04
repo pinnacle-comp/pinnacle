@@ -13,9 +13,21 @@ message SetOpaqueRegionVisualizationRequest {
   pinnacle.util.v1.SetOrToggle set_or_toggle = 1;
 }
 
+message SetCursorPlaneScanoutRequest {
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 1;
+}
+
+message SetProcessPipingRequest {
+  pinnacle.util.v1.SetOrToggle set_or_toggle = 1;
+}
+
 service DebugService {
   // Sets whether output damage is visualized.
   rpc SetDamageVisualization(SetDamageVisualizationRequest) returns (google.protobuf.Empty);
   // Sets whether opaque regions are visualized.
   rpc SetOpaqueRegionVisualization(SetOpaqueRegionVisualizationRequest) returns (google.protobuf.Empty);
+  // Sets whether cursor plane scanout is enabled.
+  rpc SetCursorPlaneScanout(SetCursorPlaneScanoutRequest) returns (google.protobuf.Empty);
+  // Sets whether spawned processes have stdio piped to give them to the config.
+  rpc SetProcessPiping(SetProcessPipingRequest) returns (google.protobuf.Empty);
 }

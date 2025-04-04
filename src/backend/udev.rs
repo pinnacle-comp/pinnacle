@@ -1462,14 +1462,14 @@ impl Udev {
             ));
         }
 
-        if pinnacle.config.visualize_opaque_regions {
+        if pinnacle.config.debug.visualize_opaque_regions {
             crate::render::util::render_opaque_regions(
                 &mut output_render_elements,
                 smithay::utils::Scale::from(output.current_scale().fractional_scale()),
             );
         }
 
-        if pinnacle.config.visualize_damage {
+        if pinnacle.config.debug.visualize_damage {
             output.with_state_mut(|state| {
                 crate::render::util::render_damage(
                     &mut state.debug_damage_tracker,
@@ -1486,8 +1486,12 @@ impl Udev {
         };
 
         // No overlay planes cuz they wonk
-        let frame_flags =
+        let mut frame_flags =
             FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT;
+
+        if pinnacle.config.debug.disable_cursor_plane_scanout {
+            frame_flags.remove(FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT);
+        }
 
         let render_frame_result = surface.drm_output.render_frame(
             &mut renderer,

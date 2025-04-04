@@ -332,14 +332,14 @@ impl Winit {
             ));
         }
 
-        if pinnacle.config.visualize_opaque_regions {
+        if pinnacle.config.debug.visualize_opaque_regions {
             crate::render::util::render_opaque_regions(
                 &mut output_render_elements,
                 smithay::utils::Scale::from(self.output.current_scale().fractional_scale()),
             );
         }
 
-        if pinnacle.config.visualize_damage {
+        if pinnacle.config.debug.visualize_damage {
             self.output.with_state_mut(|state| {
                 crate::render::util::render_damage(
                     &mut state.debug_damage_tracker,

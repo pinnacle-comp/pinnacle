@@ -20,6 +20,7 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
         let envs = request.envs;
 
         run_unary(&self.sender, move |state| {
+            let pipe_processes = !state.pinnacle.config.debug.disable_process_piping;
             let fds = state.pinnacle.process_state.spawn(
                 &cmd,
                 &shell_cmd,
@@ -27,6 +28,7 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
                 once,
                 envs,
                 &state.pinnacle.xdg_base_dirs,
+                pipe_processes,
             );
 
             Ok(SpawnResponse {
