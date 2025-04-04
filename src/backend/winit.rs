@@ -353,12 +353,13 @@ impl Winit {
                 .collect();
         }
 
-        let age = if *full_redraw > 0 {
-            0
-        } else {
-            // FIXME: always errors and returns none, https://github.com/Smithay/smithay/issues/1672
-            self.backend.buffer_age().unwrap_or(0)
-        };
+        // FIXME: always errors and returns none, https://github.com/Smithay/smithay/issues/1672
+        // let age = if *full_redraw > 0 {
+        //     0
+        // } else {
+        //     self.backend.buffer_age().unwrap_or(0)
+        // };
+        let age = 0;
 
         let render_res = self.backend.bind().and_then(|(renderer, mut framebuffer)| {
             let clear_color = if pinnacle.lock_state.is_unlocked() {
