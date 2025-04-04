@@ -639,7 +639,6 @@ impl v1::window_service_server::WindowService for super::WindowService {
                                         toplevel.send_configure();
                                     }
                                     WindowSurface::X11(surface) => {
-                                        assert!(!surface.is_mapped());
                                         let _ = surface.set_mapped(true);
                                     }
                                 }
