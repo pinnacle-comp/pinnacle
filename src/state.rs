@@ -43,7 +43,7 @@ use smithay::{
         },
         PopupManager, Space,
     },
-    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatState},
+    input::{keyboard::XkbConfig, pointer::CursorImageStatus, Seat, SeatHandler, SeatState},
     output::Output,
     reexports::{
         calloop::{
@@ -59,7 +59,7 @@ use smithay::{
             Client, Display, DisplayHandle,
         },
     },
-    utils::{Clock, Monotonic},
+    utils::{Clock, Logical, Monotonic, Point},
     wayland::{
         compositor::{
             self, with_surface_tree_downward, CompositorClientState, CompositorState, SurfaceData,
@@ -220,6 +220,8 @@ pub struct Pinnacle {
 
     pub cursor_shape_manager_state: CursorShapeManagerState,
     pub cursor_state: CursorState,
+
+    pub pointer_focus: Option<(<State as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
 }
 
 #[cfg(feature = "snowcap")]
@@ -489,6 +491,8 @@ impl Pinnacle {
 
             cursor_shape_manager_state: CursorShapeManagerState::new::<State>(&display_handle),
             cursor_state: CursorState::new(),
+
+            pointer_focus: None,
         };
 
         Ok(pinnacle)

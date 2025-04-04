@@ -870,12 +870,7 @@ impl PointerConstraintsHandler for State {
         if with_pointer_constraint(surface, pointer, |constraint| {
             constraint.is_some_and(|c| c.is_active())
         }) {
-            // TODO: cache the current focus's location so you don't have to get it on demand
-            // through the current pointer location
-            let Some((current_focus, current_focus_loc)) = self
-                .pinnacle
-                .pointer_focus_target_under(pointer.current_location())
-            else {
+            let Some((current_focus, current_focus_loc)) = &self.pinnacle.pointer_focus else {
                 return;
             };
 
@@ -883,7 +878,7 @@ impl PointerConstraintsHandler for State {
                 return;
             }
 
-            pointer.set_location(current_focus_loc + location);
+            pointer.set_location(*current_focus_loc + location);
         }
     }
 }

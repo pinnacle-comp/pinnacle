@@ -257,11 +257,13 @@ impl State {
         let location = pointer.current_location();
         let surface_under = self.pinnacle.pointer_focus_target_under(location);
 
-        if pointer.current_focus().as_ref() == surface_under.as_ref().map(|s| &s.0) {
+        if self.pinnacle.pointer_focus == surface_under {
             return;
         }
 
         self.pinnacle.maybe_activate_pointer_constraint(location);
+
+        self.pinnacle.pointer_focus.clone_from(&surface_under);
 
         pointer.motion(
             self,
@@ -285,6 +287,8 @@ impl State {
         let loc: Point<f64, Logical> = loc.into();
         self.pinnacle.maybe_activate_pointer_constraint(loc);
         let new_under = self.pinnacle.pointer_focus_target_under(loc);
+
+        self.pinnacle.pointer_focus.clone_from(&new_under);
 
         pointer.motion(
             self,
@@ -671,6 +675,8 @@ impl State {
 
         let pointer_focus = self.pinnacle.pointer_focus_target_under(pointer_loc);
 
+        self.pinnacle.pointer_focus.clone_from(&pointer_focus);
+
         pointer.motion(
             self,
             pointer_focus,
@@ -704,10 +710,9 @@ impl State {
             Option<RegionAttributes>,
         )> = None;
 
-        let current_under = self.pinnacle.pointer_focus_target_under(pointer_loc);
+        let current_under = &self.pinnacle.pointer_focus;
 
-        // TODO: possibly cache the current pointer focus and location?
-        if let Some((surface, surface_loc)) = &current_under {
+        if let Some((surface, surface_loc)) = current_under {
             let surface_loc = *surface_loc;
             if let Some(wl_surface) = surface.wl_surface() {
                 let mut pointer_locked = false;
@@ -846,6 +851,8 @@ impl State {
         let focus_target = pointer_confined_to
             .map(|(focus, loc, _)| (focus, loc))
             .or(new_under);
+
+        self.pinnacle.pointer_focus.clone_from(&focus_target);
 
         pointer.motion(
             self,
