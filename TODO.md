@@ -8,6 +8,8 @@
 - Remove startup logs and globals print for CLI client
 - Encode window rules in an enum type for pre- and post-initial configure
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
+- Spawn unique when running `with_shell` using `systemd-run` doesn't dedup because systemd-run
+  renames the command to its full path
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests

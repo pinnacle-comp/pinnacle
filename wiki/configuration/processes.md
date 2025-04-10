@@ -1,6 +1,6 @@
 # Processes
 
-The process API allows you to spawn processes, capture their output, and wait on them to exit.
+The process API allows you to spawn processes, capture their output, and wait for them to exit.
 
 ## Spawning
 
@@ -12,18 +12,14 @@ To spawn a process, create a `Command` and `spawn` it.
 require("pinnacle.process").command({
     cmd = "alacritty",
 }):spawn()
+-- Or
+require("pinnacle.process").spawn("alacritty")
 ```
 == Rust
 ```rust
 Command::new("alacritty").spawn();
 ```
 :::
-
-Lua provides a shortcut for spawning:
-
-```lua
-require("pinnacle.process").spawn("alacritty")
-```
 
 `Command`s have the following properties:
 

@@ -37,10 +37,6 @@ To configure Pinnacle using Lua, you will also need:
 - [`lua`](https://www.lua.org/) 5.2 or newer
 - [`luarocks`](https://luarocks.org/) for API installation
 
-> [!NOTE]
-> You must run `eval $(luarocks path --lua-version <your-lua-version>)` so that your config can find the API
-> library files. It is recommended to place this command in your shell's startup script.
-
 ### Building
 
 Clone the repository.
@@ -48,18 +44,16 @@ Clone the repository.
 git clone https://github.com/pinnacle-comp/pinnacle
 ```
 
-To build Pinnacle, run `just`, passing `install` to install the Lua API locally with Luarocks.
-This passes through arguments to Cargo.
+To build Pinnacle, run `just build`. This passes through arguments to Cargo.
 ```sh
-just install build [--release]
+just build [Cargo arguments...]
 ```
 
-> [!IMPORTANT]
-> When compiling with Snowcap integration (on by default), if you do not have Vulkan set up properly,
-> Pinnacle will crash on startup.
->
-> For those using Nix outside of NixOS, you will need to run the built binary
-> with [nixGL](https://github.com/nix-community/nixGL) using *both* GL and Vulkan wrappers, nested inside one another:
-> ```
-> nix run --impure github:nix-community/nixGL -- nix run --impure github:nix-community/nixGL#nixVulkanIntel -- ./target/debug/pinnacle
+To use the Lua API, you will also need to run `just install`. This will install the protobuf files
+and Lua API locally.
+
+> [!TIP]
+> You can run multiple `just` recipes in one command, e.g.
+> ```sh
+> just install build
 > ```

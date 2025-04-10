@@ -13,4 +13,4 @@ language you want to use.
 
 > [!NOTE]
 > If you are rerunning the config generator, delete or rename any already existing files.
-> Otherwise, the config generator will fail (it does not overwrite files).
+> Otherwise, the config generator will fail (it will not overwrite files).

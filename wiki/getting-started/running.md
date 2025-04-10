@@ -2,7 +2,7 @@
 
 Run Pinnacle with `just`.
 ```sh
-just run [--release]
+just run [Cargo arguments...]
 ```
 
 You can run Pinnacle within another desktop environment, compositor, or window manager.
@@ -11,6 +11,16 @@ try Pinnacle out.
 
 On the first startup, assuming you haven't generated a config yet, Pinnacle will spin up
 the builtin Rust config.
+
+> [!IMPORTANT]
+> If Pinnacle was compiled with Snowcap integration (on by default), you will need Vulkan set up properly,
+> otherwise Pinnacle will crash on startup.
+>
+> For those using Nix outside of NixOS, you will need to run the built binary
+> with [nixGL](https://github.com/nix-community/nixGL) using *both* GL and Vulkan wrappers, nested inside one another:
+> ```
+> nix run --impure github:nix-community/nixGL -- nix run --impure github:nix-community/nixGL#nixVulkanIntel -- ./target/debug/pinnacle
+> ```
 
 ### Key and mousebinds
 
