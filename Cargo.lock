@@ -3244,7 +3244,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pinnacle"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3300,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "pinnacle-api"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "bitflags 2.9.0",
  "futures",
