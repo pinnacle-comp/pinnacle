@@ -23,10 +23,9 @@ use smithay::{
             compositor::{FrameFlags, PrimaryPlaneElement, RenderFrameResult},
             gbm::GbmFramebuffer,
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
-            CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata,
-            DrmNode, DrmSurface, NodeType,
+            DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmNode, DrmSurface, NodeType,
         },
-        egl::{self, context::ContextPriority, EGLDevice, EGLDisplay},
+        egl::{context::ContextPriority, EGLDevice, EGLDisplay},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             self,
@@ -39,11 +38,7 @@ use smithay::{
             Bind, Blit, BufferType, ExportMem, ImportDma, ImportEgl, ImportMemWl, Offscreen,
             Renderer, TextureFilter,
         },
-        session::{
-            self,
-            libseat::{self, LibSeatSession},
-            Session,
-        },
+        session::{self, libseat::LibSeatSession, Session},
         udev::{self, UdevBackend, UdevEvent},
         SwapBuffersError,
     },
@@ -184,7 +179,7 @@ impl Udev {
                 // GPU connected
                 UdevEvent::Added { device_id, path } => {
                     if let Err(err) = DrmNode::from_dev_id(device_id)
-                        .map_err(DeviceAddError::DrmNode)
+                        .context("failed to access drm node")
                         .and_then(|node| udev.device_added(pinnacle, node, &path))
                     {
                         error!("Skipping device {device_id}: {err}");
@@ -234,7 +229,7 @@ impl Udev {
                 // Create DrmNodes from already connected GPUs
                 for (device_id, path) in things {
                     if let Err(err) = DrmNode::from_dev_id(device_id)
-                        .map_err(DeviceAddError::DrmNode)
+                        .context("failed to access drm node")
                         .and_then(|node| udev.device_added(pinnacle, node, &path))
                     {
                         error!("Skipping device {device_id}: {err}");
@@ -666,20 +661,6 @@ struct UdevBackendData {
     registration_token: RegistrationToken,
 }
 
-#[derive(Debug, thiserror::Error)]
-enum DeviceAddError {
-    #[error("Failed to open device using libseat: {0}")]
-    DeviceOpen(libseat::Error),
-    #[error("Failed to initialize drm device: {0}")]
-    DrmDevice(DrmError),
-    #[error("Failed to initialize gbm device: {0}")]
-    GbmDevice(std::io::Error),
-    #[error("Failed to access drm node: {0}")]
-    DrmNode(CreateDrmNodeError),
-    #[error("Failed to add device to GpuManager: {0}")]
-    AddNode(egl::Error),
-}
-
 fn get_surface_dmabuf_feedback(
     primary_gpu: DrmNode,
     render_node: DrmNode,
@@ -823,7 +804,7 @@ impl Udev {
         pinnacle: &mut Pinnacle,
         node: DrmNode,
         path: &Path,
-    ) -> Result<(), DeviceAddError> {
+    ) -> anyhow::Result<()> {
         debug!(?node, ?path, "Udev::device_added");
 
         // Try to open the device
@@ -833,13 +814,13 @@ impl Udev {
                 path,
                 OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
             )
-            .map_err(DeviceAddError::DeviceOpen)?;
+            .context("failed to open device with libseat")?;
 
         let fd = DrmDeviceFd::new(DeviceFd::from(fd));
 
         let (drm, notifier) =
-            DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
-        let gbm = GbmDevice::new(fd).map_err(DeviceAddError::GbmDevice)?;
+            DrmDevice::new(fd.clone(), true).context("failed to init drm device")?;
+        let gbm = GbmDevice::new(fd).context("failed to init gbm device")?;
 
         let registration_token = pinnacle
             .loop_handle
@@ -872,7 +853,7 @@ impl Udev {
         self.gpu_manager
             .as_mut()
             .add_node(render_node, gbm.clone())
-            .map_err(DeviceAddError::AddNode)?;
+            .context("failed to add device to GpuManager")?;
 
         let allocator = GbmAllocator::new(
             gbm.clone(),

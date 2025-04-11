@@ -10,6 +10,8 @@
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 - Spawn unique when running `with_shell` using `systemd-run` doesn't dedup because systemd-run
   renames the command to its full path
+- Center children windows to parent windows
+- Wiki: portals and screensharing
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests

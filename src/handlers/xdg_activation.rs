@@ -72,50 +72,51 @@ impl XdgActivationHandler for State {
     ) {
         let _span = tracy_client::span!("XdgActivationHandler::request_activation");
 
-        let mut state = scopeguard::guard(self, |state| {
-            state.pinnacle.xdg_activation_state.remove_token(&token);
-        });
-
         if token_data.timestamp.elapsed() >= XDG_ACTIVATION_TOKEN_TIMEOUT {
             debug!("xdg-activation: token {} timed out", token.as_str());
+            self.pinnacle.xdg_activation_state.remove_token(&token);
             return;
         }
 
         let Some(context) = token_data.user_data.get::<ActivationContext>() else {
             debug!("xdg-activation: request without context");
+            self.pinnacle.xdg_activation_state.remove_token(&token);
             return;
         };
 
-        if let Some(window) = state.pinnacle.window_for_surface(&surface).cloned() {
+        if let Some(window) = self.pinnacle.window_for_surface(&surface).cloned() {
             match context {
                 ActivationContext::FocusIfPossible => {
                     if window.is_on_active_tag() {
-                        let Some(output) = window.output(&state.pinnacle) else {
+                        let Some(output) = window.output(&self.pinnacle) else {
                             // TODO: make "no tags" be all tags on an output
                             debug!("xdg-activation: focus-if-possible request on window but it had no tags");
+                            self.pinnacle.xdg_activation_state.remove_token(&token);
                             return;
                         };
 
-                        state.pinnacle.raise_window(window.clone(), true);
+                        self.pinnacle.raise_window(window.clone(), true);
 
                         output.with_state_mut(|state| {
                             state.focus_stack.set_focus(window);
                         });
 
-                        state.update_keyboard_focus(&output);
+                        self.update_keyboard_focus(&output);
 
-                        state.schedule_render(&output);
+                        self.schedule_render(&output);
                     }
                 }
                 ActivationContext::UrgentOnly => {
                     // TODO: add urgent state to windows, use in a focus border/taskbar flash
                 }
             }
-        } else if let Some(unmapped) = state.pinnacle.unmapped_window_for_surface_mut(&surface) {
+        } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_surface_mut(&surface) {
             unmapped.activation_token_data = Some(token_data);
         } else {
             debug!("xdg-activation: no window for request");
         }
+
+        self.pinnacle.xdg_activation_state.remove_token(&token);
     }
 }
 delegate_xdg_activation!(State);

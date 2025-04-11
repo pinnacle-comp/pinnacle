@@ -38,7 +38,6 @@ xkbcommon = "0.8.0"
 xdg = "2.5.2"
 bitflags = "2.9.0"
 clap = { version = "4.5.35", features = ["derive", "string"] }
-dircpy = "0.3.19"
 tempfile = "3.19.1"
 indexmap = "2.8.0"
 anyhow = { version = "1.0.97", features = ["backtrace"] }
@@ -109,11 +108,9 @@ tracing-subscriber = { workspace = true }
 tracing-appender = "0.2.3"
 # Errors
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 # xcursor stuff
 xcursor = { version = "0.3.8" }
 # gRPC
-prost = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 # Tokio
@@ -128,12 +125,10 @@ bitflags = { workspace = true }
 serde = { version = "1.0.219", features = ["derive"] }
 toml = "0.8.20"
 shellexpand = { version = "3.1.0", features = ["path"] }
-x11rb = { version = "0.13.1", default-features = false, features = ["composite"] }
 xkbcommon = { workspace = true }
 xdg = { workspace = true }
 sysinfo = "0.34.2"
 pinnacle-api-defs = { workspace = true }
-dircpy = { workspace = true }
 bytemuck = "1.22.0"
 pinnacle-api = { path = "./api/rust", default-features = false }
 gag = "1.0.0"
@@ -148,10 +143,9 @@ slab_tree = "0.3.2"
 bimap = "0.6.3"
 itertools = "0.14.0"
 passfd = { workspace = true }
-profiling = "1.0.16" # Only used to enable profiling within smithay
+profiling = { version = "1.0.16", optional = true } # Only used to enable profiling within smithay
 tracy-client = { workspace = true }
 sd-notify = "0.4.5"
-scopeguard = "1.2.0"
 
 [build-dependencies]
 vergen-gitcl = { version = "1.0.5", features = ["rustc", "cargo", "si"] }
