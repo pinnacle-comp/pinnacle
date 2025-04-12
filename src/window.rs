@@ -31,7 +31,6 @@ use window_state::{LayoutMode, LayoutModeKind};
 use crate::{
     state::{Pinnacle, State, WithState},
     tag::Tag,
-    util::centered_loc,
 };
 
 use self::window_state::WindowElementState;
