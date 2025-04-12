@@ -44,6 +44,7 @@ impl ProcessState {
     }
 }
 
+#[derive(Debug)]
 pub struct SpawnData {
     pub pid: u32,
     pub fd_socket_path: String,
@@ -192,7 +193,9 @@ impl ProcessState {
                     exit_msg: Some(status.to_string()),
                 })
                 .unwrap_or_default();
-            oneshot_send.send(exit_info).unwrap();
+            if oneshot_send.send(exit_info).is_err() {
+                warn!("Failed to send exit info to config");
+            }
         });
 
         self.spawned.insert(pid, oneshot_recv);

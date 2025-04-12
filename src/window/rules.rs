@@ -7,11 +7,14 @@ use smithay::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{state::WithState, tag::Tag};
+use crate::{
+    state::{Pinnacle, WithState},
+    tag::Tag,
+};
 
 use super::{
     window_state::{LayoutMode, WindowId},
-    WindowElement,
+    Unmapped, WindowElement,
 };
 
 use std::{
@@ -145,5 +148,65 @@ impl PendingWindowRuleRequest {
         self.waiting_on
             .iter()
             .all(|id| id.load(Ordering::Acquire) >= self.request_id)
+    }
+}
+
+impl Pinnacle {
+    pub fn apply_window_rules(&self, unmapped: &Unmapped) {
+        let WindowRules {
+            layout_mode,
+            focused: _,
+            floating_loc,
+            floating_size,
+            decoration_mode,
+            tags,
+        } = &unmapped.window_rules;
+
+        let layout_mode = layout_mode.unwrap_or(LayoutMode::new_tiled());
+
+        unmapped.window.with_state_mut(|state| {
+            state.layout_mode = layout_mode;
+            state.floating_loc = *floating_loc;
+            state.floating_size = floating_size.unwrap_or(state.floating_size);
+            state.decoration_mode = *decoration_mode;
+            state.tags = tags.clone();
+        });
+
+        self.configure_window_if_nontiled(&unmapped.window);
+
+        if let WindowSurface::Wayland(toplevel) = unmapped.window.underlying_surface() {
+            toplevel.with_pending_state(|state| {
+                state.decoration_mode = *decoration_mode;
+            });
+            crate::handlers::decoration::update_kde_decoration_mode(
+                toplevel.wl_surface(),
+                decoration_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide),
+            );
+        }
+    }
+
+    /// Request window rules from the config.
+    ///
+    /// If there are no window rules set, immediately sends the initial configure for toplevels
+    /// or maps x11 surfaces.
+    pub fn request_window_rules(&mut self, unmapped: &Unmapped) {
+        let window_rule_request_sent = self.window_rule_state.new_request(&unmapped.window);
+
+        // If the above is false, then there are either
+        //   a. No window rules in place, or
+        //   b. all clients with window rules are dead
+        //
+        // In this case, send the initial configure here instead of waiting.
+        if !window_rule_request_sent {
+            self.apply_window_rules(unmapped);
+            match unmapped.window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    toplevel.send_configure();
+                }
+                WindowSurface::X11(surface) => {
+                    let _ = surface.set_mapped(true);
+                }
+            }
+        }
     }
 }

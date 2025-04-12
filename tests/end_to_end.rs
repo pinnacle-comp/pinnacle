@@ -986,19 +986,12 @@ fn output_handle_focused() -> anyhow::Result<()> {
 #[test]
 fn output_handle_tags() -> anyhow::Result<()> {
     test_api(|sender, lang| {
-        sender.with_state(|state| {
-            let op = state.pinnacle.outputs.keys().next().unwrap().clone();
-
-            pinnacle::api::tag::add(state, ["1".into(), "2".into()], OutputName(op.name()));
-        });
-
         match lang {
             Lang::Lua => {
                 run_lua! {
                     local tags = Output.get_by_name($PINNACLE_1_OUTPUT_NAME):tags()
-                    assert(#tags == 2)
+                    assert(#tags == 1)
                     assert(tags[1]:name() == "1")
-                    assert(tags[2]:name() == "2")
                 }
             }
             Lang::Rust => run_rust(move || {
@@ -1006,9 +999,8 @@ fn output_handle_tags() -> anyhow::Result<()> {
                     .unwrap()
                     .tags()
                     .collect::<Vec<_>>();
-                assert_eq!(tags.len(), 2);
+                assert_eq!(tags.len(), 1);
                 assert_eq!(tags[0].name(), "1");
-                assert_eq!(tags[1].name(), "2");
             }),
         }?;
 
@@ -1164,7 +1156,7 @@ fn tag_get_all() -> anyhow::Result<()> {
         sender.with_state(|state| {
             let op = state.pinnacle.outputs.keys().next().unwrap().clone();
 
-            pinnacle::api::tag::add(state, ["1".into(), "2".into()], OutputName(op.name()));
+            pinnacle::api::tag::add(state, ["2".into()], OutputName(op.name()));
 
             let new_op = state.pinnacle.new_output(
                 "pinnacle-2",
@@ -1207,7 +1199,7 @@ fn tag_get() -> anyhow::Result<()> {
         sender.with_state(|state| {
             let op = state.pinnacle.outputs.keys().next().unwrap().clone();
 
-            pinnacle::api::tag::add(state, ["1".into(), "2".into()], OutputName(op.name()));
+            pinnacle::api::tag::add(state, ["2".into()], OutputName(op.name()));
 
             let new_op = state.pinnacle.new_output(
                 "pinnacle-2",
@@ -1269,13 +1261,13 @@ fn tag_add() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    Tag.add(Output.get_focused(), "1", "2", "3")
+                    Tag.add(Output.get_focused(), "2", "3")
                 }
             }
             Lang::Rust => run_rust(move || {
                 let _ = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
             }),
         }?;
@@ -1296,16 +1288,16 @@ fn tag_remove() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
-                    Tag.remove({ tags[2] })
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
+                    Tag.remove({ tags[1] })
                 }
             }
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
-                pinnacle_api::tag::remove([tags.nth(1).unwrap()]);
+                pinnacle_api::tag::remove([tags.next().unwrap()]);
             }),
         }?;
 
@@ -1329,16 +1321,16 @@ fn tag_handle_remove() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
-                    tags[2]:remove()
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
+                    tags[1]:remove()
                 }
             }
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
-                tags.nth(1).unwrap().remove();
+                tags.next().unwrap().remove();
             }),
         }?;
 
@@ -1360,19 +1352,17 @@ fn tag_handle_switch_to() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
                     tags[1]:set_active(true)
-                    tags[2]:set_active(true)
 
-                    tags[3]:switch_to()
+                    tags[2]:switch_to()
                 }
             }
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
-                tags.next().unwrap().set_active(true);
                 tags.next().unwrap().set_active(true);
 
                 tags.next().unwrap().switch_to();
@@ -1397,7 +1387,7 @@ fn tag_handle_set_active() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
                     tags[1]:set_active(true)
                     tags[2]:set_active(true)
                     tags[2]:set_active(false)
@@ -1406,7 +1396,7 @@ fn tag_handle_set_active() -> anyhow::Result<()> {
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 tags.next().unwrap().set_active(true);
                 let second = tags.next().unwrap();
@@ -1418,8 +1408,8 @@ fn tag_handle_set_active() -> anyhow::Result<()> {
         sender.with_state(|state| {
             let op = state.pinnacle.outputs.keys().next().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
-            assert!(tags[0].active());
-            assert!(!tags[1].active());
+            assert!(!tags[0].active());
+            assert!(tags[1].active());
             assert!(!tags[2].active());
         });
 
@@ -1433,7 +1423,7 @@ fn tag_handle_toggle_active() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
                     tags[1]:toggle_active()
                     tags[2]:toggle_active()
                     tags[2]:toggle_active()
@@ -1442,7 +1432,7 @@ fn tag_handle_toggle_active() -> anyhow::Result<()> {
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 tags.next().unwrap().toggle_active();
                 let second = tags.next().unwrap();
@@ -1454,8 +1444,8 @@ fn tag_handle_toggle_active() -> anyhow::Result<()> {
         sender.with_state(|state| {
             let op = state.pinnacle.outputs.keys().next().unwrap();
             let tags = op.with_state(|state| state.tags.clone());
-            assert!(tags[0].active());
-            assert!(!tags[1].active());
+            assert!(!tags[0].active());
+            assert!(tags[1].active());
             assert!(!tags[2].active());
         });
 
@@ -1469,7 +1459,7 @@ fn tag_handle_active() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
                     tags[1]:toggle_active()
                     assert(tags[1]:active())
                     tags[1]:toggle_active()
@@ -1479,7 +1469,7 @@ fn tag_handle_active() -> anyhow::Result<()> {
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 let first = tags.next().unwrap();
                 first.toggle_active();
@@ -1499,18 +1489,16 @@ fn tag_handle_name() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
-                    assert(tags[1]:name() == "1")
-                    assert(tags[2]:name() == "2")
-                    assert(tags[3]:name() == "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
+                    assert(tags[1]:name() == "2")
+                    assert(tags[2]:name() == "3")
                 }
             }
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
-                assert_eq!(tags.next().unwrap().name(), "1");
                 assert_eq!(tags.next().unwrap().name(), "2");
                 assert_eq!(tags.next().unwrap().name(), "3");
             }),
@@ -1526,14 +1514,14 @@ fn tag_handle_output() -> anyhow::Result<()> {
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    local tags = Tag.add(Output.get_focused(), "1", "2", "3")
+                    local tags = Tag.add(Output.get_focused(), "2", "3")
                     assert(tags[1]:output().name == $PINNACLE_1_OUTPUT_NAME)
                 }
             }
             Lang::Rust => run_rust(move || {
                 let mut tags = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 assert_eq!(tags.next().unwrap().output().name(), PINNACLE_1_OUTPUT_NAME);
             }),
@@ -1551,7 +1539,7 @@ fn tag_get_all_does_not_return_tags_cleared_after_config_reload() -> anyhow::Res
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    Tag.add(Output.get_focused(), "1", "2", "3")
+                    Tag.add(Output.get_focused(), "2", "3")
                     assert(#Tag.get_all() == 3)
                     Pinnacle.reload_config()
                     assert(#Tag.get_all() == 0)
@@ -1560,7 +1548,7 @@ fn tag_get_all_does_not_return_tags_cleared_after_config_reload() -> anyhow::Res
             Lang::Rust => run_rust(move || {
                 let _ = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 assert_eq!(pinnacle_api::tag::get_all().count(), 3);
                 pinnacle_api::pinnacle::reload_config();
@@ -1578,7 +1566,7 @@ fn tag_get_does_not_return_tags_cleared_after_config_reload() -> anyhow::Result<
         match lang {
             Lang::Lua => {
                 run_lua! {
-                    Tag.add(Output.get_focused(), "1", "2", "3")
+                    Tag.add(Output.get_focused(), "2", "3")
                     assert(Tag.get("1"))
                     Pinnacle.reload_config()
                     assert(not Tag.get("1"))
@@ -1587,7 +1575,7 @@ fn tag_get_does_not_return_tags_cleared_after_config_reload() -> anyhow::Result<
             Lang::Rust => run_rust(move || {
                 let _ = pinnacle_api::tag::add(
                     &pinnacle_api::output::get_focused().unwrap(),
-                    ["1", "2", "3"],
+                    ["2", "3"],
                 );
                 assert!(pinnacle_api::tag::get("1").is_some());
                 pinnacle_api::pinnacle::reload_config();
@@ -1605,14 +1593,12 @@ fn window_set_up_test(lang: Lang) -> anyhow::Result<()> {
     match lang {
         Lang::Lua => {
             run_lua! {
-                Tag.add(Output.get_focused(), "1")[1]:set_active(true)
+                Tag.get("1"):set_active(true)
                 Process.spawn("alacritty", "-o", "general.ipc_socket=false")
             }
         }
         Lang::Rust => run_rust(|| {
-            let mut tags =
-                pinnacle_api::tag::add(&pinnacle_api::output::get_focused().unwrap(), ["1"]);
-            tags.next().unwrap().set_active(true);
+            pinnacle_api::tag::get("1").unwrap().set_active(true);
             pinnacle_api::process::Command::new("alacritty")
                 .args(["-o", "general.ipc_socket=false"])
                 .spawn()
@@ -3037,6 +3023,61 @@ fn window_handle_tags() -> anyhow::Result<()> {
                 assert_eq!(tags[0].name(), "1");
             }),
         }?;
+
+        Ok(())
+    })
+}
+
+#[test]
+fn window_spawned_without_tags_gets_tags_after_add() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        sender.with_state(|state| {
+            for output in state.pinnacle.outputs.keys() {
+                output.with_state_mut(|state| state.tags.clear());
+            }
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Process.spawn("alacritty", "-o", "general.ipc_socket=false")
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::process::Command::new("alacritty")
+                    .args(["-o", "general.ipc_socket=false"])
+                    .spawn()
+                    .unwrap();
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            assert_eq!(state.pinnacle.windows.len(), 0);
+        });
+
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Tag.add(Output.get_focused(), "new_tag");
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                let _ = pinnacle_api::tag::add(
+                    &pinnacle_api::output::get_focused().unwrap(),
+                    ["new_tag"],
+                );
+            }),
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            assert_eq!(state.pinnacle.windows.len(), 1);
+            let tag_count = state.pinnacle.windows[0].with_state(|state| state.tags.len());
+            assert_eq!(tag_count, 1);
+        });
 
         Ok(())
     })

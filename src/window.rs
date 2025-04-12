@@ -10,9 +10,8 @@ use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::{
-        wayland_protocols::xdg::{
-            decoration::zv1::server::zxdg_toplevel_decoration_v1,
-            shell::server::xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+        wayland_protocols::xdg::shell::server::xdg_positioner::{
+            Anchor, ConstraintAdjustment, Gravity,
         },
         wayland_server::protocol::wl_surface::WlSurface,
     },
@@ -26,7 +25,7 @@ use smithay::{
     xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
-use window_state::{LayoutMode, LayoutModeKind};
+use window_state::LayoutModeKind;
 
 use crate::{
     state::{Pinnacle, State, WithState},
@@ -307,6 +306,7 @@ impl Pinnacle {
                 window: window.clone(),
                 activation_token_data: None,
                 window_rules: WindowRules::default(),
+                awaiting_tags: false,
             });
         }
 
@@ -364,7 +364,10 @@ impl State {
             window,
             activation_token_data: _, // TODO:
             window_rules,
+            awaiting_tags,
         } = unmapped;
+
+        assert!(!awaiting_tags, "tried to map new window without tags");
 
         self.pinnacle.windows.push(window.clone());
 
@@ -529,39 +532,5 @@ pub struct Unmapped {
     pub window: WindowElement,
     pub activation_token_data: Option<XdgActivationTokenData>,
     pub window_rules: WindowRules,
-}
-
-impl Pinnacle {
-    pub fn apply_window_rules(&self, unmapped: &Unmapped) {
-        let WindowRules {
-            layout_mode,
-            focused: _,
-            floating_loc,
-            floating_size,
-            decoration_mode,
-            tags,
-        } = &unmapped.window_rules;
-
-        let layout_mode = layout_mode.unwrap_or(LayoutMode::new_tiled());
-
-        unmapped.window.with_state_mut(|state| {
-            state.layout_mode = layout_mode;
-            state.floating_loc = *floating_loc;
-            state.floating_size = floating_size.unwrap_or(state.floating_size);
-            state.decoration_mode = *decoration_mode;
-            state.tags = tags.clone();
-        });
-
-        self.configure_window_if_nontiled(&unmapped.window);
-
-        if let WindowSurface::Wayland(toplevel) = unmapped.window.underlying_surface() {
-            toplevel.with_pending_state(|state| {
-                state.decoration_mode = *decoration_mode;
-            });
-            crate::handlers::decoration::update_kde_decoration_mode(
-                toplevel.wl_surface(),
-                decoration_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide),
-            );
-        }
-    }
+    pub awaiting_tags: bool,
 }

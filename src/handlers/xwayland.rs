@@ -81,19 +81,21 @@ impl XwmHandler for State {
             window: WindowElement::new(Window::new_x11_window(surface)),
             activation_token_data: None,
             window_rules: Default::default(),
+            awaiting_tags: false,
         };
 
         if let Some(output) = self.pinnacle.focused_output() {
             unmapped.window_rules.set_tags_to_output(output);
         }
 
-        let window_rule_request_sent = self
-            .pinnacle
-            .window_rule_state
-            .new_request(&unmapped.window);
-        if !window_rule_request_sent {
-            self.pinnacle.apply_window_rules(&unmapped);
-            let _ = unmapped.window.x11_surface().unwrap().set_mapped(true);
+        if !unmapped.window_rules.tags.is_empty() {
+            self.pinnacle.request_window_rules(&unmapped);
+        } else {
+            // There are no tags.
+            //
+            // In this case, hold off on window rules/the initial configure
+            // until we receive tags.
+            unmapped.awaiting_tags = true;
         }
 
         self.pinnacle.unmapped_windows.push(unmapped);

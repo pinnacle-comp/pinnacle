@@ -41,6 +41,7 @@ impl XdgShellHandler for State {
             window,
             activation_token_data: None,
             window_rules: Default::default(),
+            awaiting_tags: false,
         });
     }
 

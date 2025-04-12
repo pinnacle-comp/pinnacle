@@ -232,25 +232,20 @@ impl CompositorHandler for State {
                         }
                     }
 
-                    let unmapped = &self.pinnacle.unmapped_windows[idx];
+                    let mut unmapped = self.pinnacle.unmapped_windows.swap_remove(idx);
                     unmapped.window.on_commit();
 
-                    if let Some(toplevel) = unmapped.window.toplevel() {
-                        let window_rule_request_sent = self
-                            .pinnacle
-                            .window_rule_state
-                            .new_request(&unmapped.window);
-
-                        // If the above is false, then there are either
-                        //   a. No window rules in place, or
-                        //   b. all clients with window rules are dead
+                    if !unmapped.window_rules.tags.is_empty() {
+                        self.pinnacle.request_window_rules(&unmapped);
+                    } else {
+                        // There are no tags.
                         //
-                        // In this case, send the initial configure here instead of waiting.
-                        if !window_rule_request_sent {
-                            self.pinnacle.apply_window_rules(unmapped);
-                            toplevel.send_configure();
-                        }
+                        // In this case, hold off on window rules/the initial configure
+                        // until we receive tags.
+                        unmapped.awaiting_tags = true;
                     }
+
+                    self.pinnacle.unmapped_windows.push(unmapped);
                 }
 
                 return;

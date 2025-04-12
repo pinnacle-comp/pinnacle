@@ -12,7 +12,11 @@ use std::{
 };
 
 use anyhow::anyhow;
-use pinnacle::{state::State, tag::TagId, window::window_state::WindowId};
+use pinnacle::{
+    state::{State, WithState},
+    tag::TagId,
+    window::window_state::WindowId,
+};
 use smithay::{
     reexports::calloop::{
         self,
@@ -87,7 +91,7 @@ fn test_with_lang(
         None,
     )?;
 
-    state.pinnacle.new_output(
+    let op = state.pinnacle.new_output(
         PINNACLE_1_OUTPUT_NAME,
         PINNACLE_1_OUTPUT_MAKE,
         PINNACLE_1_OUTPUT_MODEL,
@@ -96,6 +100,12 @@ fn test_with_lang(
         PINNACLE_1_OUTPUT_REFRESH,
         PINNACLE_1_OUTPUT_SCALE,
         PINNACLE_1_OUTPUT_TRANSFORM,
+    );
+
+    pinnacle::api::tag::add(
+        &mut state,
+        ["1".into()],
+        pinnacle::output::OutputName(op.name()),
     );
 
     std::env::set_var("WAYLAND_DISPLAY", &state.pinnacle.socket_name);
@@ -143,13 +153,15 @@ fn test_with_lang(
         }
     })?;
 
+    join_handle
+        .join()
+        .map_err(|_| anyhow!("thread panicked"))??;
+
     event_loop
         .dispatch(Some(Duration::from_millis(200)), &mut state)
         .unwrap();
 
-    join_handle
-        .join()
-        .map_err(|_| anyhow!("thread panicked"))??;
+    state.on_event_loop_cycle_completion();
 
     let runtime_dir = state
         .pinnacle

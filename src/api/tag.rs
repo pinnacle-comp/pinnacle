@@ -1,5 +1,7 @@
 pub mod v1;
 
+use std::mem;
+
 use crate::{
     output::OutputName,
     state::{State, WithState},
@@ -87,6 +89,16 @@ pub fn add(
         output.with_state_mut(|state| {
             state.add_tags(new_tags.clone());
         });
+    }
+
+    if !new_tags.is_empty() {
+        let mut unmapped_windows = mem::take(&mut state.pinnacle.unmapped_windows);
+        for unmapped in unmapped_windows.iter_mut() {
+            unmapped.awaiting_tags = false;
+            unmapped.window_rules.tags = new_tags.first().cloned().into_iter().collect();
+            state.pinnacle.request_window_rules(unmapped);
+        }
+        state.pinnacle.unmapped_windows = unmapped_windows;
     }
 
     state.pinnacle.update_xwayland_stacking_order();
