@@ -12,6 +12,8 @@
   renames the command to its full path
 - Center children windows to parent windows
 - Wiki: portals and screensharing
+- Windows are lost if the rust config is compiling while autostart apps start
+    - Probably similar issue with Lua but rarer
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests

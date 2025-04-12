@@ -1,7 +1,6 @@
-use smithay::utils::Point;
-
 use crate::{
     state::{State, WithState},
+    util::centered_loc,
     window::WindowElement,
 };
 
@@ -27,13 +26,7 @@ impl State {
                             .element_location(window)
                             .map(|loc| loc.to_f64())
                     })
-                    .unwrap_or_else(|| {
-                        let centered_loc = Point::from((
-                            output_geo.loc.x + output_geo.size.w / 2 - size.w / 2,
-                            output_geo.loc.y + output_geo.size.h / 2 - size.h / 2,
-                        ));
-                        centered_loc.to_f64()
-                    });
+                    .unwrap_or_else(|| centered_loc(output_geo, size).to_f64());
                 window.with_state_mut(|state| {
                     state.floating_loc = Some(loc);
                 });

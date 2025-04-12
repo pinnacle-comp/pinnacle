@@ -5,7 +5,10 @@ use std::{
     time::Duration,
 };
 
-use smithay::reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit};
+use smithay::{
+    reexports::rustix::process::{getrlimit, setrlimit, Resource, Rlimit},
+    utils::{Point, Rectangle, Size},
+};
 use tracing::warn;
 
 static NOFILE_RLIMIT_CURRENT: AtomicU64 = AtomicU64::new(0);
@@ -43,6 +46,14 @@ pub fn cause_panic() {
     let a = Duration::from_secs(1);
     let b = Duration::from_secs(2);
     let _ = a - b;
+}
+
+/// Returns the locaation that centers the given `size` within a `rect`.
+pub fn centered_loc<Kind>(rect: Rectangle<i32, Kind>, size: Size<i32, Kind>) -> Point<i32, Kind> {
+    Point::from((
+        rect.loc.x + rect.size.w / 2 - size.w / 2,
+        rect.loc.y + rect.size.h / 2 - size.h / 2,
+    ))
 }
 
 /// Runs a closure every time the given duration passes with the amount of times

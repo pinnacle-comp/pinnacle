@@ -13,6 +13,7 @@ use tracing::warn;
 use crate::{
     state::{State, WithState},
     tag::Tag,
+    util::centered_loc,
     window::WindowElement,
 };
 
@@ -53,11 +54,7 @@ pub fn set_geometry(
         .or_else(|| {
             let output = window.output(&state.pinnacle)?;
             let output_geo = state.pinnacle.space.output_geometry(&output)?;
-            let centered_loc = Point::from((
-                output_geo.loc.x + output_geo.size.w / 2 - window_size.w / 2,
-                output_geo.loc.y + output_geo.size.h / 2 - window_size.h / 2,
-            ));
-            Some(centered_loc)
+            Some(centered_loc(output_geo, window_size))
         });
 
     let Some(mut window_loc) = window_loc else {

@@ -41,7 +41,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct XwaylandState {
-    pub xwm: Option<X11Wm>,
+    pub xwm: X11Wm,
     pub display_num: u32,
     pub client: Client,
     pub should_clients_self_scale: bool,
@@ -50,13 +50,7 @@ pub struct XwaylandState {
 
 impl XwmHandler for State {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-        self.pinnacle
-            .xwayland_state
-            .as_mut()
-            .unwrap()
-            .xwm
-            .as_mut()
-            .expect("xwm not in state")
+        &mut self.pinnacle.xwayland_state.as_mut().unwrap().xwm
     }
 
     fn new_window(&mut self, _xwm: XwmId, _window: X11Surface) {
@@ -453,7 +447,7 @@ impl Pinnacle {
         let Some(xwm) = self
             .xwayland_state
             .as_mut()
-            .and_then(|xwayland| xwayland.xwm.as_mut())
+            .map(|xwayland| &mut xwayland.xwm)
         else {
             return;
         };
@@ -502,14 +496,6 @@ impl Pinnacle {
                         x11_socket,
                         display_number,
                     } => {
-                        state.pinnacle.xwayland_state = Some(XwaylandState {
-                            xwm: None,
-                            display_num: display_number,
-                            client: client.clone(),
-                            should_clients_self_scale: false,
-                            current_scale: None,
-                        });
-
                         let mut wm = match X11Wm::start_wm(
                             state.pinnacle.loop_handle.clone(),
                             x11_socket,
@@ -537,10 +523,15 @@ impl Pinnacle {
                             warn!("Failed to set xwayland default cursor: {err}");
                         }
 
-                        state.pinnacle.xwayland_state.as_mut().unwrap().xwm = Some(wm);
-
-                        // FIXME: don't set here, spawn client with the var directly
                         std::env::set_var("DISPLAY", format!(":{display_number}"));
+
+                        state.pinnacle.xwayland_state = Some(XwaylandState {
+                            xwm: wm,
+                            display_num: display_number,
+                            client: client.clone(),
+                            should_clients_self_scale: false,
+                            current_scale: None,
+                        });
 
                         state.pinnacle.update_xwayland_scale();
 
@@ -588,18 +579,16 @@ impl Pinnacle {
             })
             .collect::<Vec<_>>();
 
-        if let Some(xwm) = xwayland_state.xwm.as_mut() {
-            let dpi = new_scale.abs() * 96 * 1024;
-            if let Err(err) = xwm.set_xsettings(
-                [
-                    ("Xft/DPI".into(), dpi.into()),
-                    ("Gdk/UnscaledDPI".into(), (dpi / new_scale).into()),
-                    ("Gdk/WindowScalingFactor".into(), new_scale.into()),
-                ]
-                .into_iter(),
-            ) {
-                warn!("Failed to update XSETTINGS on scale change: {err}");
-            }
+        let dpi = new_scale.abs() * 96 * 1024;
+        if let Err(err) = xwayland_state.xwm.set_xsettings(
+            [
+                ("Xft/DPI".into(), dpi.into()),
+                ("Gdk/UnscaledDPI".into(), (dpi / new_scale).into()),
+                ("Gdk/WindowScalingFactor".into(), new_scale.into()),
+            ]
+            .into_iter(),
+        ) {
+            warn!("Failed to update XSETTINGS on scale change: {err}");
         }
 
         xwayland_state

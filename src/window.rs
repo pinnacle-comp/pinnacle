@@ -10,14 +10,17 @@ use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
     output::Output,
     reexports::{
-        wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
+        wayland_protocols::xdg::{
+            decoration::zv1::server::zxdg_toplevel_decoration_v1,
+            shell::server::xdg_positioner::{Anchor, ConstraintAdjustment, Gravity},
+        },
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor,
         seat::WaylandFocus,
-        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+        shell::xdg::{PositionerState, SurfaceCachedState, XdgToplevelSurfaceData},
         xdg_activation::XdgActivationTokenData,
     },
     xwayland::xwm::WmWindowType,
@@ -28,6 +31,7 @@ use window_state::{LayoutMode, LayoutModeKind};
 use crate::{
     state::{Pinnacle, State, WithState},
     tag::Tag,
+    util::centered_loc,
 };
 
 use self::window_state::WindowElementState;
@@ -315,6 +319,25 @@ impl Pinnacle {
 
         self.space.unmap_elem(window);
     }
+
+    /// Returns the parent or parent-equivalent window, if any.
+    pub fn parent_window_for(&self, window: &WindowElement) -> Option<&WindowElement> {
+        match window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => toplevel
+                .parent()
+                .and_then(|parent| self.window_for_surface(&parent)),
+            WindowSurface::X11(surface) => {
+                let transient_for_id = surface.is_transient_for()?;
+                self.windows.iter().find(|win| {
+                    if let Some(surf) = win.x11_surface() {
+                        surf.window_id() == transient_for_id
+                    } else {
+                        false
+                    }
+                })
+            }
+        }
+    }
 }
 
 fn set_tags_to_output(tags: &mut IndexSet<Tag>, output: &Output) {
@@ -364,22 +387,41 @@ impl State {
             return;
         };
 
+        let mut working_output_geo = layer_map_for_output(&output).non_exclusive_zone();
+        working_output_geo.loc += output_geo.loc;
+
+        let center_rect = self
+            .pinnacle
+            .parent_window_for(&window)
+            .and_then(|parent| self.pinnacle.space.element_geometry(parent))
+            .unwrap_or(working_output_geo);
+
         if window.with_state(|state| state.layout_mode.is_floating()) {
             let size = window.geometry().size;
+
             let loc = window
                 .with_state(|state| state.floating_loc)
-                .or_else(|| {
-                    self.pinnacle
-                        .space
-                        .element_location(&window)
-                        .map(|loc| loc.to_f64())
-                })
                 .unwrap_or_else(|| {
-                    let centered_loc = Point::from((
-                        output_geo.loc.x + output_geo.size.w / 2 - size.w / 2,
-                        output_geo.loc.y + output_geo.size.h / 2 - size.h / 2,
-                    ));
-                    centered_loc.to_f64()
+                    // Attempt to center the window within its parent.
+                    // If it has no parent, center it within the non-exclusive zone of its output.
+                    //
+                    // We use a positioner to slide the window so that it isn't off screen.
+
+                    let positioner = PositionerState {
+                        rect_size: size,
+                        anchor_rect: center_rect,
+                        anchor_edges: Anchor::None,
+                        gravity: Gravity::None,
+                        constraint_adjustment: ConstraintAdjustment::SlideX
+                            | ConstraintAdjustment::SlideY,
+                        offset: (0, 0).into(),
+                        ..Default::default()
+                    };
+
+                    positioner
+                        .get_unconstrained_geometry(working_output_geo)
+                        .to_f64()
+                        .loc
                 });
 
             window.with_state_mut(|state| {
@@ -464,6 +506,8 @@ fn should_float(window: &WindowElement) -> bool {
                 )
             });
 
+            let is_transient = surface.is_transient_for().is_some();
+
             let requests_constrained_size = surface.size_hints().is_some_and(|size_hints| {
                 let Some((min_w, min_h)) = size_hints.min_size else {
                     return false;
@@ -474,7 +518,8 @@ fn should_float(window: &WindowElement) -> bool {
                 min_w > 0 && min_h > 0 && (min_w == max_w || min_h == max_h)
             });
 
-            let should_float = surface.is_popup() || is_popup_by_type || requests_constrained_size;
+            let should_float =
+                surface.is_popup() || is_popup_by_type || requests_constrained_size || is_transient;
             should_float
         }
     }

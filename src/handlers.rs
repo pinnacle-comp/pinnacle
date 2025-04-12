@@ -221,6 +221,15 @@ impl CompositorHandler for State {
                         // My borrows have been checked
                         let unmapped = &mut self.pinnacle.unmapped_windows[idx];
                         unmapped.window_rules.set_tags_to_output(&output);
+                        if let Some(toplevel) = unmapped.window.toplevel() {
+                            toplevel.with_pending_state(|state| {
+                                state.bounds = self
+                                    .pinnacle
+                                    .space
+                                    .output_geometry(&output)
+                                    .map(|geo| geo.size);
+                            });
+                        }
                     }
 
                     let unmapped = &self.pinnacle.unmapped_windows[idx];
@@ -511,7 +520,7 @@ impl SelectionHandler for State {
             .pinnacle
             .xwayland_state
             .as_mut()
-            .and_then(|xwayland| xwayland.xwm.as_mut())
+            .map(|xwayland| &mut xwayland.xwm)
         {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
                 warn!(?err, ?ty, "Failed to set Xwayland selection");
@@ -533,7 +542,7 @@ impl SelectionHandler for State {
             .pinnacle
             .xwayland_state
             .as_mut()
-            .and_then(|xwayland| xwayland.xwm.as_mut())
+            .map(|xwayland| &mut xwayland.xwm)
         {
             if let Err(err) =
                 xwm.send_selection(ty, mime_type, fd, self.pinnacle.loop_handle.clone())
