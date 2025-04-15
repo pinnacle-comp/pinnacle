@@ -1,7 +1,3 @@
----
-outline: [2, 5]
----
-
 # Layouts
 
 Pinnacle's layout system dynamically tiles windows according to a tree structure. More specifically, we use

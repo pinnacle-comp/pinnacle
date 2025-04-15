@@ -1,16 +1,15 @@
 # Running
 
+### From a package
+
+Pinnacle should show up in your display manager. Simply select it and log in.
+
+### From source
+
 Run Pinnacle with `just`.
 ```sh
 just run [Cargo arguments...]
 ```
-
-You can run Pinnacle within another desktop environment, compositor, or window manager.
-In this case, it will open as a nested window. This is useful if you want to quickly
-try Pinnacle out.
-
-On the first startup, assuming you haven't generated a config yet, Pinnacle will spin up
-the builtin Rust config.
 
 > [!IMPORTANT]
 > If Pinnacle was compiled with Snowcap integration (on by default), you will need Vulkan set up properly,
@@ -22,7 +21,27 @@ the builtin Rust config.
 > nix run --impure github:nix-community/nixGL -- nix run --impure github:nix-community/nixGL#nixVulkanIntel -- ./target/debug/pinnacle
 > ```
 
-### Key and mousebinds
+### Running as a session
+
+Running Pinnacle as a session allows D-Bus and XDG desktop portals to work for things like
+PipeWire screen capture and Flatpak apps.
+
+Starting Pinnacle from a display manager will automatically run it as a session.
+
+To run Pinnacle as a session outside of a display manager:
+
+- If you are on a systemd distribution, run `pinnacle-session`. This will start Pinnacle as a systemd service
+  in addition to running `pinnacle --session` as mentioned below.
+- Otherwise, run `pinnacle --session`. This will import the necessary environment variables into D-Bus
+  and systemd, it if is running.
+
+### Within another graphical environment
+
+You can run Pinnacle within another desktop environment, compositor, or window manager.
+In this case, it will open as a nested window. This is useful if you want to quickly
+try Pinnacle out.
+
+## Key and mousebinds
 
 You can press `Super`+`S` to bring up the bind overlay. Below are the default binds.
 

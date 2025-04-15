@@ -1,7 +1,3 @@
----
-outline: [2, 5]
----
-
 # Packaging
 
 ## Building

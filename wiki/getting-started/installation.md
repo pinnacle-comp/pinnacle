@@ -4,14 +4,15 @@
 
 It is recommended that you install Pinnacle using your distro's package manager.
 
-::: tabs
-== Arch (AUR)
-```sh
+::: code-group
+
+```sh [Arch (AUR)]
 yay -S pinnacle-comp-git
 ```
+
 :::
 
-## From Source
+## From source
 
 Alternatively, you can build and install Pinnacle from source.
 

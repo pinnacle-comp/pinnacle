@@ -69,6 +69,7 @@ export default defineVersionedConfig({
                     items: [
                         { text: "Window management", link: "/usage/window_management" },
                         { text: "IPC", link: "/usage/ipc" },
+                        { text: "Screencasting", link: "/usage/screencasting" },
                     ]
                 },
                 {
@@ -97,6 +98,7 @@ export default defineVersionedConfig({
             ],
         },
         versionSwitcher: false,
+        outline: "deep",
     },
     markdown: {
         config(md) {

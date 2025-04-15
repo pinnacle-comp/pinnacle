@@ -8,12 +8,6 @@
 - Remove startup logs and globals print for CLI client
 - Encode window rules in an enum type for pre- and post-initial configure
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
-- Spawn unique when running `with_shell` using `systemd-run` doesn't dedup because systemd-run
-  renames the command to its full path
-- Center children windows to parent windows
-- Wiki: portals and screensharing
-- Windows are lost if the rust config is compiling while autostart apps start
-    - Probably similar issue with Lua but rarer
 
 Testing
 - Test layout mode changing and how it interacts with client fullscreen/maximized requests
