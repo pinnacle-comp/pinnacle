@@ -59,9 +59,13 @@ impl SessionLockHandler for State {
     }
 
     fn lock(&mut self, confirmation: SessionLocker) {
-        let _span = tracy_client::span!("SessionLockHandler::lock");
-
         debug!("Received session lock request");
+
+        if self.pinnacle.lock_state.is_locking() || self.pinnacle.lock_state.is_locked() {
+            debug!("Denying lock request; another client has already locked the session");
+            return;
+        }
+
         self.pinnacle.lock_state = LockState::Locking(confirmation);
         self.pinnacle.schedule(
             |state| {
@@ -86,9 +90,8 @@ impl SessionLockHandler for State {
     }
 
     fn unlock(&mut self) {
-        let _span = tracy_client::span!("SessionLockHandler::unlock");
-
         debug!("Session lock unlocked");
+
         for output in self.pinnacle.space.outputs() {
             output.with_state_mut(|state| {
                 state.lock_surface.take();
@@ -99,8 +102,6 @@ impl SessionLockHandler for State {
     }
 
     fn new_surface(&mut self, surface: LockSurface, output: WlOutput) {
-        let _span = tracy_client::span!("SessionLockHandler::new_surface");
-
         let Some(output) = Output::from_resource(&output) else {
             warn!(
                 "Session lock surface received but output doesn't exist for wl_output {output:?}"
@@ -108,7 +109,20 @@ impl SessionLockHandler for State {
             return;
         };
 
-        debug!("Session lock surface received for output {}", output.name());
+        debug!(output = output.name(), "Session lock surface received");
+
+        if self.pinnacle.lock_state.is_unlocked() {
+            debug!(
+                output = output.name(),
+                "Lock surface received but session is unlocked"
+            );
+            return;
+        }
+
+        if output.with_state(|state| state.lock_surface.is_some()) {
+            debug!(output = output.name(), "Output already has a lock surface");
+            return;
+        }
 
         let Some(geo) = self.pinnacle.space.output_geometry(&output) else {
             return;
