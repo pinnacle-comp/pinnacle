@@ -21,6 +21,7 @@ use smithay::{
         },
         drm::{
             compositor::{FrameFlags, PrimaryPlaneElement, RenderFrameResult},
+            exporter::gbm::GbmFramebufferExporter,
             gbm::GbmFramebuffer,
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
             DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmNode, DrmSurface, NodeType,
@@ -652,7 +653,7 @@ struct UdevBackendData {
     surfaces: HashMap<crtc::Handle, RenderSurface>,
     drm_output_manager: DrmOutputManager<
         GbmAllocator<DrmDeviceFd>,
-        GbmDevice<DrmDeviceFd>,
+        GbmFramebufferExporter<DrmDeviceFd>,
         Option<OutputPresentationFeedback>,
         DrmDeviceFd,
     >,
@@ -760,7 +761,7 @@ struct RenderSurface {
     render_node: DrmNode,
     drm_output: DrmOutput<
         GbmAllocator<DrmDeviceFd>,
-        GbmDevice<DrmDeviceFd>,
+        GbmFramebufferExporter<DrmDeviceFd>,
         Option<OutputPresentationFeedback>,
         DrmDeviceFd,
     >,
@@ -875,7 +876,7 @@ impl Udev {
         let drm_output_manager = DrmOutputManager::new(
             drm,
             allocator,
-            gbm.clone(),
+            GbmFramebufferExporter::new(gbm.clone()),
             Some(gbm),
             color_formats.iter().copied(),
             render_formats,

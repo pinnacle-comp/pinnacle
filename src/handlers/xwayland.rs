@@ -45,7 +45,7 @@ pub struct XwaylandState {
     pub display_num: u32,
     pub client: Client,
     pub should_clients_self_scale: bool,
-    pub current_scale: Option<i32>,
+    pub current_scale: Option<f64>,
 }
 
 impl XwmHandler for State {
@@ -561,32 +561,29 @@ impl Pinnacle {
         let new_scale = if xwayland_state.should_clients_self_scale {
             self.outputs
                 .keys()
-                .map(|op| op.current_scale().integer_scale())
-                .max()
-                .unwrap_or(1)
+                .map(|op| op.current_scale().fractional_scale())
+                .max_by(|a, b| a.total_cmp(b))
+                .unwrap_or(1.0)
         } else {
-            1
+            1.0
         };
 
         if xwayland_state.current_scale == Some(new_scale) {
             return;
         }
 
-        let geos = self
-            .windows
-            .iter()
-            .filter_map(|win| {
-                win.x11_surface()
-                    .map(|surf| (surf.clone(), surf.geometry()))
-            })
-            .collect::<Vec<_>>();
-
-        let dpi = new_scale.abs() * 96 * 1024;
+        let dpi = new_scale.abs() * 96.0 * 1024.0;
         if let Err(err) = xwayland_state.xwm.set_xsettings(
             [
-                ("Xft/DPI".into(), dpi.into()),
-                ("Gdk/UnscaledDPI".into(), (dpi / new_scale).into()),
-                ("Gdk/WindowScalingFactor".into(), new_scale.into()),
+                ("Xft/DPI".into(), (dpi.round() as i32).into()),
+                (
+                    "Gdk/UnscaledDPI".into(),
+                    ((dpi / new_scale).round() as i32).into(),
+                ),
+                (
+                    "Gdk/WindowScalingFactor".into(),
+                    (new_scale.round() as i32).into(),
+                ),
             ]
             .into_iter(),
         ) {
@@ -598,11 +595,20 @@ impl Pinnacle {
             .get_data::<XWaylandClientData>()
             .unwrap()
             .compositor_state
-            .set_client_scale(new_scale as u32);
+            .set_client_scale(new_scale);
 
         for output in self.outputs.keys() {
             output.change_current_state(None, None, None, None);
         }
+
+        let geos = self
+            .windows
+            .iter()
+            .filter_map(|win| {
+                win.x11_surface()
+                    .map(|surf| (surf.clone(), surf.geometry()))
+            })
+            .collect::<Vec<_>>();
 
         for (surface, geo) in geos {
             if let Err(err) = surface.configure(geo) {

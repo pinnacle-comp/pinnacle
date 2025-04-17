@@ -985,7 +985,7 @@ fn output_handle_focused() -> anyhow::Result<()> {
 
 #[test]
 fn output_handle_tags() -> anyhow::Result<()> {
-    test_api(|sender, lang| {
+    test_api(|_sender, lang| {
         match lang {
             Lang::Lua => {
                 run_lua! {

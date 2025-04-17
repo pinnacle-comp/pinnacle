@@ -100,8 +100,10 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
         scale: Scale<f64>,
         alpha: f32,
     ) -> Option<SnapshotRenderElement<R>> {
-        let (texture, loc) = self.texture(renderer.as_gles_renderer())?;
-        let buffer = TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
+        let renderer = renderer.as_gles_renderer();
+        let (texture, loc) = self.texture(renderer)?;
+        let buffer: TextureBuffer<GlesTexture> =
+            TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
         let elem = TextureRenderElement::from_texture_buffer(
             loc.to_f64(),
             &buffer,
