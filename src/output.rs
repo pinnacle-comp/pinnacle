@@ -23,6 +23,7 @@ use crate::{
     render::util::snapshot::OutputSnapshots,
     state::{Pinnacle, State, WithState},
     tag::Tag,
+    util::centered_loc,
 };
 
 /// A unique identifier for an output.
@@ -230,13 +231,15 @@ impl Pinnacle {
             backend.set_output_mode(output, mode);
         }
 
+        let new_output_geo = self.space.output_geometry(output);
+
         if mode.is_some() || transform.is_some() || scale.is_some() {
             layer_map_for_output(output).arrange();
-            if let Some(geo) = self.space.output_geometry(output) {
+            if let Some(output_geo) = new_output_geo {
                 self.signal_state.output_resize.signal((
                     output,
-                    geo.size.w.try_into().unwrap_or_default(),
-                    geo.size.h.try_into().unwrap_or_default(),
+                    output_geo.size.w.try_into().unwrap_or_default(),
+                    output_geo.size.h.try_into().unwrap_or_default(),
                 ));
             }
         }
@@ -246,6 +249,8 @@ impl Pinnacle {
 
             let pos_multiplier = old_scale / scale.fractional_scale();
 
+            let output_loc = output.current_location();
+
             for win in self
                 .windows
                 .iter()
@@ -254,21 +259,27 @@ impl Pinnacle {
                 .cloned()
                 .collect::<Vec<_>>()
             {
-                let Some(output) = win.output(self) else { unreachable!() };
+                let old_floating_loc = win.with_state(|state| state.floating_loc);
 
-                let output_loc = output.current_location();
+                let loc = self
+                    .space
+                    .element_location(&win)
+                    .or(old_floating_loc.map(|loc| loc.to_i32_round()))
+                    .map(|loc| {
+                        let rescaled_loc = (loc - output_loc)
+                            .to_f64()
+                            .upscale(pos_multiplier)
+                            .to_i32_round()
+                            + output_loc;
+                        rescaled_loc
+                    })
+                    .or_else(|| new_output_geo.map(|geo| centered_loc(geo, win.geometry().size)));
 
-                let mut loc = self.space.element_location(&win).unwrap_or(output_loc);
+                if let Some(loc) = loc {
+                    self.space.map_element(win.clone(), loc, false);
+                }
 
-                // FIXME: space maps in i32
-                let mut loc_relative_to_output = loc - output_loc;
-                loc_relative_to_output = loc_relative_to_output
-                    .to_f64()
-                    .upscale(pos_multiplier)
-                    .to_i32_round();
-
-                loc = loc_relative_to_output + output_loc;
-                self.space.map_element(win.clone(), loc, false);
+                win.with_state_mut(|state| state.floating_loc = loc.map(|loc| loc.to_f64()));
             }
 
             self.loop_handle.insert_idle(|state| {
