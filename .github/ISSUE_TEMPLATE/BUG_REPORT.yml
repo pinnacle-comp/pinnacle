@@ -7,6 +7,9 @@ body:
     attributes:
       label: Describe the bug
       description: Provide a clear and detailed description of the bug.
+      placeholder: The bug has a U-shaped mask, wears a read cloak, and yells "SHAW" and "ADIDO" incessantly.
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Reproduction steps
