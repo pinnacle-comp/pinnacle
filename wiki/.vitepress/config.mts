@@ -67,7 +67,7 @@ export default defineVersionedConfig({
                 {
                     text: "Usage",
                     items: [
-                        { text: "Window management", link: "/usage/window_management" },
+                        { text: "Window management", link: "/usage/window-management" },
                         { text: "IPC", link: "/usage/ipc" },
                         { text: "Screencasting", link: "/usage/screencasting" },
                     ]
@@ -87,12 +87,14 @@ export default defineVersionedConfig({
                         { text: "Snowcap", link: "/configuration/snowcap" },
                         { text: "Integration with external applications", link: "/configuration/integration" },
                         { text: "Xwayland", link: "/configuration/xwayland" },
+                        { text: "API Stability", link: "/configuration/api-stability" },
                     ]
                 },
                 {
                     text: "Development",
                     items: [
                         { text: "Packaging", link: "/development/packaging" },
+                        { text: "API Stability", link: "/development/api-stability" },
                     ]
                 },
             ],
