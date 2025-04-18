@@ -1,0 +1,46 @@
+name: Bug Report
+description: File a bug report
+labels:
+  - bug
+body:
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: Provide a clear and detailed description of the bug.
+  - type: textarea
+    attributes:
+      label: Reproduction steps
+      description: Provide steps on how to reproduce the bug.
+      placeholder: I do not have reproduction steps. I understand this may slow down bug fixes.
+  - type: textarea
+    attributes:
+      label: Relevant parts of config
+      description: Attach or paste any relevant parts of your config.
+  - type: textarea
+    attributes:
+      label: Version info
+      description: "Paste the output of `pinnacle --version` here"
+      placeholder: "`$(pinnacle --version)`"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Distro
+      description: What distro are you using?
+      placeholder: Arch, Debian, Void, etc.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: GPU
+      description: What GPU are you using?
+      placeholder: AMD Radeon RX 5700 XT, Intel Core i5-11300H iGPU, etc.
+  - type: dropdown
+    attributes:
+      label: Config language
+      description: What config language are you using?
+      options:
+        - Lua
+        - Rust
+    validations:
+      required: true
