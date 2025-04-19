@@ -661,14 +661,19 @@ impl State {
         let pointer_loc = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
         let serial = SERIAL_COUNTER.next_serial();
 
-        if let Some(output) = self
+        let new_output = self
             .pinnacle
             .space
             .output_under(pointer_loc)
             .next()
-            .cloned()
-        {
-            self.pinnacle.output_focus_stack.set_focus(output);
+            .cloned();
+
+        if let Some(new_output) = new_output {
+            if let Some(old_output) = self.pinnacle.focused_output().cloned() {
+                self.schedule_render(&old_output);
+            }
+            self.schedule_render(&new_output);
+            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
         self.pinnacle.maybe_activate_pointer_constraint(pointer_loc);
@@ -688,10 +693,6 @@ impl State {
         );
 
         pointer.frame(self);
-
-        if let Some(output) = self.pinnacle.focused_output().cloned() {
-            self.schedule_render(&output);
-        }
     }
 
     fn on_pointer_motion<I: InputBackend>(&mut self, event: I::PointerMotionEvent) {
@@ -784,7 +785,6 @@ impl State {
 
         let new_under = self.pinnacle.pointer_focus_target_under(new_pointer_loc);
 
-        // FIXME: rework this for float locs
         if let Some((focus, surf_loc, region)) = &pointer_confined_to {
             let region = region
                 .clone()
@@ -838,14 +838,19 @@ impl State {
         self.pinnacle
             .maybe_activate_pointer_constraint(new_pointer_loc);
 
-        if let Some(output) = self
+        let new_output = self
             .pinnacle
             .space
             .output_under(new_pointer_loc)
             .next()
-            .cloned()
-        {
-            self.pinnacle.output_focus_stack.set_focus(output);
+            .cloned();
+
+        if let Some(new_output) = new_output {
+            if let Some(old_output) = self.pinnacle.focused_output().cloned() {
+                self.schedule_render(&old_output);
+            }
+            self.schedule_render(&new_output);
+            self.pinnacle.output_focus_stack.set_focus(new_output);
         }
 
         let focus_target = pointer_confined_to
@@ -875,10 +880,6 @@ impl State {
         );
 
         pointer.frame(self);
-
-        if let Some(output) = self.pinnacle.focused_output().cloned() {
-            self.schedule_render(&output);
-        }
     }
 
     fn on_gesture_swipe_begin<I: InputBackend>(&mut self, event: I::GestureSwipeBeginEvent) {
