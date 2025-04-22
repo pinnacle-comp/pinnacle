@@ -3,7 +3,7 @@ version = "0.1.0beta.1-1"
 source = {
     url = "git+https://github.com/pinnacle-comp/pinnacle",
     dir = "pinnacle/api/lua",
-    tag = "0.1.0-beta.1",
+    tag = "v0.1.0-beta.1",
 }
 description = {
     homepage = "https://github.com/pinnacle-comp/pinnacle",
