@@ -1,9 +1,9 @@
 package = "pinnacle-api"
-version = "0.1.0alpha.2-1"
+version = "0.1.0beta.1-1"
 source = {
     url = "git+https://github.com/pinnacle-comp/pinnacle",
     dir = "pinnacle/api/lua",
-    -- TODO: stick tag here
+    tag = "0.1.0-beta.1",
 }
 description = {
     homepage = "https://github.com/pinnacle-comp/pinnacle",
