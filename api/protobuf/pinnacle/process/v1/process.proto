@@ -8,6 +8,9 @@ message SpawnRequest {
   bool once = 3;
   repeated string shell_cmd = 4;
   map<string, string> envs = 5;
+  bool pipe_stdin = 6;
+  bool pipe_stdout = 7;
+  bool pipe_stderr = 8;
 }
 
 message SpawnData {

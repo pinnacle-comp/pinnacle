@@ -4,7 +4,10 @@ use pinnacle_api_defs::pinnacle::process::{
 };
 use tonic::Request;
 
-use crate::api::{run_server_streaming, run_unary, ResponseStream, TonicResult};
+use crate::{
+    api::{run_server_streaming, run_unary, ResponseStream, TonicResult},
+    process::PipeProcesses,
+};
 
 #[tonic::async_trait]
 impl process::v1::process_service_server::ProcessService for super::ProcessService {
@@ -13,11 +16,16 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
     async fn spawn(&self, request: Request<SpawnRequest>) -> TonicResult<SpawnResponse> {
         let request = request.into_inner();
 
-        let unique = request.unique;
-        let once = request.once;
-        let cmd = request.cmd;
-        let shell_cmd = request.shell_cmd;
-        let envs = request.envs;
+        let SpawnRequest {
+            cmd,
+            unique,
+            once,
+            shell_cmd,
+            envs,
+            pipe_stdin,
+            pipe_stdout,
+            pipe_stderr,
+        } = request;
 
         run_unary(&self.sender, move |state| {
             let pipe_processes = !state.pinnacle.config.debug.disable_process_piping;
@@ -28,7 +36,11 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
                 once,
                 envs,
                 &state.pinnacle.xdg_base_dirs,
-                pipe_processes,
+                PipeProcesses {
+                    stdin: pipe_processes && pipe_stdin,
+                    stdout: pipe_processes && pipe_stdout,
+                    stderr: pipe_processes && pipe_stderr,
+                },
             );
 
             Ok(SpawnResponse {

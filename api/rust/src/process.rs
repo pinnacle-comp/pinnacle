@@ -24,17 +24,26 @@ pub struct Command {
     shell_cmd: Vec<String>,
     unique: bool,
     once: bool,
+    pipe_stdin: bool,
+    pipe_stdout: bool,
+    pipe_stderr: bool,
 }
 
 /// The result of spawning a [`Command`].
 #[derive(Debug)]
 pub struct Child {
     pid: u32,
-    /// This process's standard in.
+    /// This process's standard input.
+    ///
+    /// This will only be `Some` if [`Command::pipe_stdin`] was called before spawning.
     pub stdin: Option<tokio::process::ChildStdin>,
-    /// This process's standard out.
+    /// This process's standard output.
+    ///
+    /// This will only be `Some` if [`Command::pipe_stdout`] was called before spawning.
     pub stdout: Option<tokio::process::ChildStdout>,
     /// This process's standard error.
+    ///
+    /// This will only be `Some` if [`Command::pipe_stderr`] was called before spawning.
     pub stderr: Option<tokio::process::ChildStderr>,
 }
 
@@ -97,6 +106,9 @@ impl Command {
             shell_cmd: Vec::new(),
             unique: false,
             once: false,
+            pipe_stdin: false,
+            pipe_stdout: false,
+            pipe_stderr: false,
         }
     }
 
@@ -122,6 +134,9 @@ impl Command {
                 .collect(),
             unique: false,
             once: false,
+            pipe_stdin: false,
+            pipe_stdout: false,
+            pipe_stderr: false,
         }
     }
 
@@ -169,6 +184,30 @@ impl Command {
         self
     }
 
+    /// Sets up a pipe to allow the config to write to the process's stdin.
+    ///
+    /// The pipe will be available through the spawned child's [`stdin`][Child::stdin].
+    pub fn pipe_stdin(&mut self) -> &mut Self {
+        self.pipe_stdin = true;
+        self
+    }
+
+    /// Sets up a pipe to allow the config to read from the process's stdout.
+    ///
+    /// The pipe will be available through the spawned child's [`stdout`][Child::stdout].
+    pub fn pipe_stdout(&mut self) -> &mut Self {
+        self.pipe_stdout = true;
+        self
+    }
+
+    /// Sets up a pipe to allow the config to read from the process's stderr.
+    ///
+    /// The pipe will be available through the spawned child's [`stderr`][Child::stderr].
+    pub fn pipe_stderr(&mut self) -> &mut Self {
+        self.pipe_stderr = true;
+        self
+    }
+
     /// Spawns this command, returning the spawned process's standard io, if any.
     pub fn spawn(&mut self) -> Option<Child> {
         let data = Client::process()
@@ -178,6 +217,9 @@ impl Command {
                 once: self.once,
                 shell_cmd: self.shell_cmd.clone(),
                 envs: self.envs.clone(),
+                pipe_stdin: self.pipe_stdin,
+                pipe_stdout: self.pipe_stdout,
+                pipe_stderr: self.pipe_stderr,
             })
             .block_on_tokio()
             .unwrap()
@@ -196,6 +238,7 @@ impl Command {
 
         if data.has_stdin {
             let fd = stream.recv_fd().unwrap();
+            // SAFETY: Fds are dup'd in over the socket
             let child_stdin =
                 tokio::process::ChildStdin::from_std(std::process::ChildStdin::from(unsafe {
                     OwnedFd::from_raw_fd(fd)

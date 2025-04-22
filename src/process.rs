@@ -59,6 +59,12 @@ pub struct WaitOutput {
     pub exit_msg: Option<String>,
 }
 
+pub struct PipeProcesses {
+    pub stdin: bool,
+    pub stdout: bool,
+    pub stderr: bool,
+}
+
 impl ProcessState {
     pub fn spawn(
         &mut self,
@@ -68,7 +74,7 @@ impl ProcessState {
         once: bool,
         envs: HashMap<String, String>,
         base_dirs: &BaseDirectories,
-        pipe_processes: bool,
+        pipe_processes: PipeProcesses,
     ) -> Option<SpawnData> {
         let arg0 = cmd.first()?.to_string();
 
@@ -104,12 +110,19 @@ impl ProcessState {
 
         tokio_cmd.envs(envs).args(cmd);
 
-        if pipe_processes {
-            tokio_cmd
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-        }
+        tokio_cmd
+            .stdin(match pipe_processes.stdin {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            })
+            .stdout(match pipe_processes.stdout {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            })
+            .stderr(match pipe_processes.stderr {
+                true => Stdio::piped(),
+                false => Stdio::null(),
+            });
 
         if REMOVE_RUST_BACKTRACE.load(Ordering::Relaxed) {
             tokio_cmd.env_remove("RUST_BACKTRACE");

@@ -25,10 +25,16 @@ local condition = require("cqueues.condition")
 ---The pid of the spawned command.
 ---@field pid integer
 ---This process's standard input, if any.
+---
+---This will only exist if `pipe_stdin` was set on the `Command` before spawning.
 ---@field stdin pinnacle.process.ChildStdin?
 ---This process's standard output, if any.
+---
+---This will only exist if `pipe_stdout` was set on the `Command` before spawning.
 ---@field stdout pinnacle.process.ChildStdout?
 ---This process's standard error, if any.
+---
+---This will only exist if `pipe_stderr` was set on the `Command` before spawning.
 ---@field stderr pinnacle.process.ChildStderr?
 local Child = {}
 
@@ -56,6 +62,9 @@ end
 ---@field private envs table<string, string>?
 ---@field private unique boolean?
 ---@field private once boolean?
+---@field private pipe_stdin boolean?
+---@field private pipe_stdout boolean?
+---@field private pipe_stderr boolean?
 local Command = {}
 
 ---Options for a command.
@@ -71,6 +80,18 @@ local Command = {}
 ---Causes the command to only spawn the process if it hasn't been spawned before within the
 ---lifetime of the compositor.
 ---@field once boolean?
+---Sets up a pipe to allow the config to write to the process's stdin.
+---
+---The pipe will be available through the spawned child's `stdin`.
+---@field pipe_stdin boolean?
+---Sets up a pipe to allow the config to read from the process's stdout.
+---
+---The pipe will be available through the spawned child's `stdout`.
+---@field pipe_stdout boolean?
+---Sets up a pipe to allow the config to read from the process's stderr.
+---
+---The pipe will be available through the spawned child's `stderr`.
+---@field pipe_stderr boolean?
 
 ---Spawns this process, returning a `Child` that contains the process's standard IO if successful.
 ---
@@ -82,6 +103,9 @@ function Command:spawn()
         unique = self.unique,
         once = self.once,
         envs = self.envs,
+        pipe_stdin = self.pipe_stdin,
+        pipe_stdout = self.pipe_stdout,
+        pipe_stderr = self.pipe_stderr,
     })
 
     if err then

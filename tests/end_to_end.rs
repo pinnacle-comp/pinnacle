@@ -3299,6 +3299,7 @@ fn process_stdio() -> anyhow::Result<()> {
                     local child = Process.command({
                         cmd = "echo 'hello there'",
                         shell_cmd = { "bash", "-c" },
+                        pipe_stdout = true,
                     }):spawn()
                     local out = child.stdout:read()
                     assert(out == "hello there")
@@ -3306,12 +3307,15 @@ fn process_stdio() -> anyhow::Result<()> {
                     local child = Process.command({
                         cmd = "echo 'hello there' 1>&2",
                         shell_cmd = { "bash", "-c" },
+                        pipe_stderr = true,
                     }):spawn()
                     local err = child.stderr:read()
                     assert(err == "hello there")
 
                     local child = Process.command({
                         cmd = "cat",
+                        pipe_stdin = true,
+                        pipe_stdout = true,
                     }):spawn()
                     child.stdin:write("sussus amogus")
                     child.stdin:flush()
@@ -3327,6 +3331,7 @@ fn process_stdio() -> anyhow::Result<()> {
                     ["bash", "-c"],
                     "echo 'hello there'",
                 )
+                .pipe_stdout()
                 .spawn()
                 .unwrap();
                 let mut out = String::new();
@@ -3338,6 +3343,7 @@ fn process_stdio() -> anyhow::Result<()> {
                     ["bash", "-c"],
                     "echo 'hello there' 1>&2",
                 )
+                .pipe_stderr()
                 .spawn()
                 .unwrap();
                 let mut err = String::new();
@@ -3345,7 +3351,11 @@ fn process_stdio() -> anyhow::Result<()> {
                 stderr.read_to_string(&mut err).unwrap();
                 assert_eq!(err, "hello there\n");
 
-                let mut child = pinnacle_api::process::Command::new("cat").spawn().unwrap();
+                let mut child = pinnacle_api::process::Command::new("cat")
+                    .pipe_stdin()
+                    .pipe_stdout()
+                    .spawn()
+                    .unwrap();
                 let mut stdin: File = child.stdin.take().unwrap().into_owned_fd().unwrap().into();
                 stdin.write_all(b"sussus amogus").unwrap();
                 drop(stdin);
@@ -3353,6 +3363,35 @@ fn process_stdio() -> anyhow::Result<()> {
                 let mut stdout: File = child.stdout.take().unwrap().into_owned_fd().unwrap().into();
                 stdout.read_to_string(&mut out).unwrap();
                 assert_eq!(out, "sussus amogus");
+            }),
+        }?;
+
+        Ok(())
+    })
+}
+
+#[test]
+fn process_stdio_with_no_pipes_has_no_child_stdio() -> anyhow::Result<()> {
+    test_api(|_sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    local child = Process.command({
+                        cmd = "echo 'hello there'",
+                        shell_cmd = { "bash", "-c" },
+                    }):spawn()
+                    assert(child.stdout == nil)
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                let child = pinnacle_api::process::Command::with_shell(
+                    ["bash", "-c"],
+                    "echo 'hello there'",
+                )
+                .spawn()
+                .unwrap();
+
+                assert!(child.stdout.is_none());
             }),
         }?;
 

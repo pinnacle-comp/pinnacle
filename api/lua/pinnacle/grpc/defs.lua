@@ -866,6 +866,9 @@ local pinnacle_v1_Backend = {
 ---@field once boolean?
 ---@field shell_cmd string[]?
 ---@field envs pinnacle.process.v1.SpawnRequest.EnvsEntry[]?
+---@field pipe_stdin boolean?
+---@field pipe_stdout boolean?
+---@field pipe_stderr boolean?
 
 ---@class pinnacle.process.v1.SpawnRequest.EnvsEntry
 ---@field key string?
