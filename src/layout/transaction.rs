@@ -170,6 +170,7 @@ impl LayoutTransaction {
                 let loc = space.element_location(window).unwrap_or_default() - output_loc;
                 window
                     .render_elements(renderer, loc, scale, alpha)
+                    .surface_elements
                     .into_iter()
                     .map(SnapshotRenderElement::Window)
                     .collect()

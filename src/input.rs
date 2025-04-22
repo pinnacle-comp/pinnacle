@@ -115,91 +115,113 @@ impl Pinnacle {
 
         let mut fullscreen_and_up_split_at = 0;
 
-        for (i, win) in self
+        let windows = self
             .space
             .elements_for_output(output)
             .rev()
             .filter(|win| win.is_on_active_tag())
             .enumerate()
-        {
-            if win.with_state(|state| state.layout_mode.is_fullscreen()) {
-                fullscreen_and_up_split_at = i + 1;
-            }
-        }
+            .inspect(|(i, win)| {
+                if win.with_state(|state| state.layout_mode.is_fullscreen()) {
+                    fullscreen_and_up_split_at = *i + 1;
+                }
+            })
+            .map(|(_, win)| win)
+            .collect::<Vec<_>>();
 
-        let layer_under =
-            |layers: &[wlr_layer::Layer]| -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
-                let layer_map = layer_map_for_output(output);
-                let layer = layers.iter().find_map(|layer| {
-                    layer_map.layer_under(*layer, point - output_geo.loc.to_f64())
-                })?;
+        let layer_under = |layers: &[wlr_layer::Layer],
+                           surface_type: WindowSurfaceType|
+         -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
+            let layer_map = layer_map_for_output(output);
 
-                let layer_loc = layer_map.layer_geometry(layer)?.loc.to_f64();
+            let layer_under = layers.iter().find_map(|wlr_layer| {
+                layer_map.layers_on(*wlr_layer).rev().find_map(|layer| {
+                    let layer_loc = layer_map.layer_geometry(layer)?.loc.to_f64();
 
-                layer
-                    .surface_under(
-                        point - layer_loc.to_f64() - output_geo.loc.to_f64(),
-                        WindowSurfaceType::ALL,
-                    )
-                    .map(|(surf, surf_loc)| {
-                        (
-                            PointerFocusTarget::WlSurface(surf),
-                            surf_loc.to_f64() + layer_loc + output_geo.loc.to_f64(),
+                    layer
+                        .surface_under(
+                            point - layer_loc.to_f64() - output_geo.loc.to_f64(),
+                            surface_type,
                         )
-                    })
-            };
-
-        let window_under =
-            |windows: &[&WindowElement]| -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
-                windows.iter().find_map(|win| {
-                    let loc = self
-                        .space
-                        .element_location(win)
-                        .expect("called elem loc on unmapped win")
-                        - win.geometry().loc;
-                    // FIXME: i32 -> f64
-                    let loc = loc.to_f64();
-
-                    win.surface_under(point - loc, WindowSurfaceType::ALL).map(
-                        |(surf, surf_loc)| {
-                            (PointerFocusTarget::WlSurface(surf), surf_loc.to_f64() + loc)
-                        },
-                    )
+                        .map(|(surf, surf_loc)| {
+                            (
+                                PointerFocusTarget::WlSurface(surf),
+                                surf_loc.to_f64() + layer_loc + output_geo.loc.to_f64(),
+                            )
+                        })
                 })
-            };
+            });
+
+            layer_under
+        };
+
+        let window_under = |windows: &[&WindowElement],
+                            surface_type: WindowSurfaceType|
+         -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
+            windows.iter().find_map(|win| {
+                let loc = self
+                    .space
+                    .element_location(win)
+                    .expect("called elem loc on unmapped win")
+                    - win.geometry().loc;
+                // FIXME: i32 -> f64
+                let loc = loc.to_f64();
+
+                win.surface_under(point - loc, surface_type)
+                    .map(|(surf, surf_loc)| {
+                        (PointerFocusTarget::WlSurface(surf), surf_loc.to_f64() + loc)
+                    })
+            })
+        };
 
         // Input and rendering go, from top to bottom,
+        // - Popups
         // - Overlay layer surfaces
         // - All windows down to the bottom-most fullscreen window (this mimics Awesome)
         // - Top layer surfaces
         // - The rest of the windows
         // - Bottom and background layer surfaces
 
-        layer_under(&[wlr_layer::Layer::Overlay])
-            .or_else(|| {
-                window_under(
-                    &self
-                        .space
-                        .elements()
-                        .rev()
-                        .filter(|win| win.is_on_active_tag())
-                        .take(fullscreen_and_up_split_at)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .or_else(|| layer_under(&[wlr_layer::Layer::Top]))
-            .or_else(|| {
-                window_under(
-                    &self
-                        .space
-                        .elements()
-                        .rev()
-                        .filter(|win| win.is_on_active_tag())
-                        .skip(fullscreen_and_up_split_at)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .or_else(|| layer_under(&[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background]))
+        layer_under(
+            &[
+                wlr_layer::Layer::Overlay,
+                wlr_layer::Layer::Top,
+                wlr_layer::Layer::Bottom,
+                wlr_layer::Layer::Background,
+            ],
+            WindowSurfaceType::POPUP,
+        )
+        .or_else(|| window_under(&windows, WindowSurfaceType::POPUP))
+        .or_else(|| {
+            layer_under(
+                &[wlr_layer::Layer::Overlay],
+                WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+            )
+        })
+        .or_else(|| {
+            window_under(
+                &windows[..fullscreen_and_up_split_at],
+                WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+            )
+        })
+        .or_else(|| {
+            layer_under(
+                &[wlr_layer::Layer::Top],
+                WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+            )
+        })
+        .or_else(|| {
+            window_under(
+                &windows[fullscreen_and_up_split_at..],
+                WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+            )
+        })
+        .or_else(|| {
+            layer_under(
+                &[wlr_layer::Layer::Bottom, wlr_layer::Layer::Background],
+                WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+            )
+        })
     }
 }
 

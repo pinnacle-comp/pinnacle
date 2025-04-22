@@ -5,13 +5,13 @@ pub mod render_elements;
 pub mod texture;
 pub mod util;
 
-use std::ops::Deref;
-
 use smithay::{
     backend::renderer::{
         element::{
-            solid::SolidColorRenderElement, surface::WaylandSurfaceRenderElement, AsRenderElements,
-            RenderElementStates,
+            self,
+            solid::SolidColorRenderElement,
+            surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
+            AsRenderElements, RenderElementStates,
         },
         gles::GlesRenderer,
         ImportAll, ImportMem, Renderer, RendererSuper, Texture,
@@ -26,7 +26,8 @@ use smithay::{
         PopupManager, Space, WindowSurface,
     },
     output::Output,
-    utils::{Logical, Point, Scale},
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    utils::{Logical, Physical, Point, Scale},
     wayland::shell::wlr_layer,
 };
 use util::surface::WlSurfaceTextureRenderElement;
@@ -98,22 +99,92 @@ impl AsGlesRenderer for UdevRenderer<'_> {
     }
 }
 
+#[derive(Debug)]
+pub struct SplitRenderElements<E> {
+    pub surface_elements: Vec<E>,
+    pub popup_elements: Vec<E>,
+}
+
+impl<E> Default for SplitRenderElements<E> {
+    fn default() -> Self {
+        Self {
+            surface_elements: Default::default(),
+            popup_elements: Default::default(),
+        }
+    }
+}
+
+// Renders popup elements for the given toplevel surface.
+fn popup_render_elements<R: PRenderer>(
+    surface: &WlSurface,
+    renderer: &mut R,
+    location: Point<i32, Physical>,
+    scale: Scale<f64>,
+    alpha: f32,
+) -> Vec<WaylandSurfaceRenderElement<R>> {
+    let popup_elements = PopupManager::popups_for_surface(surface)
+        .flat_map(|(popup, popup_offset)| {
+            let offset = (popup_offset - popup.geometry().loc).to_physical_precise_round(scale);
+
+            render_elements_from_surface_tree(
+                renderer,
+                popup.wl_surface(),
+                location + offset,
+                scale,
+                alpha,
+                element::Kind::Unspecified,
+            )
+        })
+        .collect();
+
+    popup_elements
+}
+
 impl WindowElement {
-    /// Render elements for this window at the given *logical* location in the space,
+    /// Renders surface and popup elements for this window at the given *logical* location in the space,
     /// output-relative.
     pub fn render_elements<R: PRenderer>(
         &self,
         renderer: &mut R,
-        location: Point<i32, Logical>, // TODO: make f64
+        location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Vec<WaylandSurfaceRenderElement<R>> {
+    ) -> SplitRenderElements<WaylandSurfaceRenderElement<R>> {
         let _span = tracy_client::span!("WindowElement::render_elements");
 
-        let location = location - self.geometry().loc;
-        let phys_loc = location.to_f64().to_physical_precise_round(scale);
-        self.deref()
-            .render_elements(renderer, phys_loc, scale, alpha)
+        let popup_location = location.to_physical_precise_round(scale);
+        let location = (location - self.geometry().loc).to_physical_precise_round(scale);
+
+        match self.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                let surface = toplevel.wl_surface();
+
+                let surface_elements = render_elements_from_surface_tree(
+                    renderer,
+                    surface,
+                    location,
+                    scale,
+                    alpha,
+                    element::Kind::Unspecified,
+                );
+
+                let popup_elements =
+                    popup_render_elements(surface, renderer, popup_location, scale, alpha);
+
+                SplitRenderElements {
+                    surface_elements,
+                    popup_elements,
+                }
+            }
+            WindowSurface::X11(s) => {
+                let surface_elements =
+                    AsRenderElements::render_elements(s, renderer, location, scale, alpha);
+                SplitRenderElements {
+                    surface_elements,
+                    popup_elements: Vec::new(),
+                }
+            }
+        }
     }
 
     /// Render elements for this window as textures.
@@ -123,18 +194,26 @@ impl WindowElement {
         location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Vec<WlSurfaceTextureRenderElement> {
+    ) -> SplitRenderElements<WlSurfaceTextureRenderElement> {
         let _span = tracy_client::span!("WindowElement::texture_render_elements");
 
         let location = location - self.geometry().loc;
-        let location = location.to_f64().to_physical_precise_round(scale);
+        let location = location.to_physical_precise_round(scale);
 
         match self.underlying_surface() {
-            WindowSurface::Wayland(s) => {
-                let mut render_elements = Vec::new();
-                let surface = s.wl_surface();
-                let popup_render_elements =
-                    PopupManager::popups_for_surface(surface).flat_map(|(popup, popup_offset)| {
+            WindowSurface::Wayland(toplevel) => {
+                let surface = toplevel.wl_surface();
+
+                let surface_elements = texture_render_elements_from_surface_tree(
+                    renderer.as_gles_renderer(),
+                    surface,
+                    location,
+                    scale,
+                    alpha,
+                );
+
+                let popup_elements = PopupManager::popups_for_surface(surface)
+                    .flat_map(|(popup, popup_offset)| {
                         let offset = (self.geometry().loc + popup_offset - popup.geometry().loc)
                             .to_physical_precise_round(scale);
 
@@ -145,31 +224,30 @@ impl WindowElement {
                             scale,
                             alpha,
                         )
-                    });
+                    })
+                    .collect();
 
-                render_elements.extend(popup_render_elements);
-
-                render_elements.extend(texture_render_elements_from_surface_tree(
-                    renderer.as_gles_renderer(),
-                    surface,
-                    location,
-                    scale,
-                    alpha,
-                ));
-
-                render_elements
+                SplitRenderElements {
+                    surface_elements,
+                    popup_elements,
+                }
             }
             WindowSurface::X11(s) => {
                 if let Some(surface) = s.wl_surface() {
-                    texture_render_elements_from_surface_tree(
+                    let surface_elements = texture_render_elements_from_surface_tree(
                         renderer.as_gles_renderer(),
                         &surface,
                         location,
                         scale,
                         alpha,
-                    )
+                    );
+
+                    SplitRenderElements {
+                        surface_elements,
+                        popup_elements: Vec::new(),
+                    }
                 } else {
-                    Vec::new()
+                    Default::default()
                 }
             }
         }
@@ -177,6 +255,7 @@ impl WindowElement {
 }
 
 struct LayerRenderElements<R: PRenderer> {
+    popup: Vec<WaylandSurfaceRenderElement<R>>,
     background: Vec<WaylandSurfaceRenderElement<R>>,
     bottom: Vec<WaylandSurfaceRenderElement<R>>,
     top: Vec<WaylandSurfaceRenderElement<R>>,
@@ -191,10 +270,11 @@ fn layer_render_elements<R: PRenderer>(
     let _span = tracy_client::span!("layer_render_elements");
 
     let layer_map = layer_map_for_output(output);
-    let mut overlay = vec![];
-    let mut top = vec![];
-    let mut bottom = vec![];
-    let mut background = vec![];
+    let mut popup = Vec::new();
+    let mut overlay = Vec::new();
+    let mut top = Vec::new();
+    let mut bottom = Vec::new();
+    let mut background = Vec::new();
 
     let layer_elements = layer_map
         .layers()
@@ -206,21 +286,42 @@ fn layer_render_elements<R: PRenderer>(
         })
         .map(|(surface, loc)| {
             let loc = loc.to_physical_precise_round(scale);
-            let render_elements = surface
-                .render_elements::<WaylandSurfaceRenderElement<R>>(renderer, loc, scale, 1.0);
-            (surface.layer(), render_elements)
+            let surface_elements = render_elements_from_surface_tree(
+                renderer,
+                surface.wl_surface(),
+                loc,
+                scale,
+                1.0,
+                element::Kind::Unspecified,
+            );
+            let popup_elements =
+                popup_render_elements(surface.wl_surface(), renderer, loc, scale, 1.0);
+
+            let elements = SplitRenderElements {
+                surface_elements,
+                popup_elements,
+            };
+
+            (surface.layer(), elements)
         });
 
     for (layer, elements) in layer_elements {
+        let SplitRenderElements {
+            surface_elements,
+            popup_elements,
+        } = elements;
+
+        popup.extend(popup_elements);
         match layer {
-            wlr_layer::Layer::Background => background.extend(elements),
-            wlr_layer::Layer::Bottom => bottom.extend(elements),
-            wlr_layer::Layer::Top => top.extend(elements),
-            wlr_layer::Layer::Overlay => overlay.extend(elements),
+            wlr_layer::Layer::Background => background.extend(surface_elements),
+            wlr_layer::Layer::Bottom => bottom.extend(surface_elements),
+            wlr_layer::Layer::Top => top.extend(surface_elements),
+            wlr_layer::Layer::Overlay => overlay.extend(surface_elements),
         }
     }
 
     LayerRenderElements {
+        popup,
         background,
         bottom,
         top,
@@ -228,21 +329,26 @@ fn layer_render_elements<R: PRenderer>(
     }
 }
 
-/// Get render elements for windows on active tags.
-///
-/// ret.1 contains render elements for the windows at and above the first fullscreen window.
-/// ret.2 contains the rest.
+struct WindowRenderElements<R: PRenderer> {
+    popups: Vec<OutputRenderElement<R>>,
+    fullscreen_and_up: Vec<OutputRenderElement<R>>,
+    rest: Vec<OutputRenderElement<R>>,
+}
+
+/// Renders surface and popup elements for windows on active tags.
 fn window_render_elements<R: PRenderer>(
     output: &Output,
     space: &Space<WindowElement>,
     renderer: &mut R,
     scale: Scale<f64>,
-) -> (Vec<OutputRenderElement<R>>, Vec<OutputRenderElement<R>>) {
+) -> WindowRenderElements<R> {
     let _span = tracy_client::span!("window_render_elements");
 
     let windows = space.elements_for_output(output);
 
     let mut last_fullscreen_split_at = 0;
+
+    let mut popups = Vec::new();
 
     let mut fullscreen_and_up = windows
         .rev()
@@ -257,24 +363,56 @@ fn window_render_elements<R: PRenderer>(
 
             let loc = space.element_location(win).unwrap_or_default() - output.current_location();
 
-            win.render_elements(renderer, loc, scale, 1.0)
-                .into_iter()
-                .map(OutputRenderElement::from)
+            let SplitRenderElements {
+                surface_elements,
+                popup_elements,
+            } = win.render_elements(renderer, loc, scale, 1.0);
+
+            popups.extend(popup_elements.into_iter().map(OutputRenderElement::from));
+
+            surface_elements.into_iter().map(OutputRenderElement::from)
         })
         .collect::<Vec<_>>();
 
     let rest = fullscreen_and_up.split_off(last_fullscreen_split_at);
 
-    (
-        fullscreen_and_up.into_iter().flatten().collect(),
-        rest.into_iter().flatten().collect(),
-    )
+    WindowRenderElements {
+        popups,
+        fullscreen_and_up: fullscreen_and_up.into_iter().flatten().collect(),
+        rest: rest.into_iter().flatten().collect(),
+    }
 }
 
-/// Generate render elements for the given output.
-///
-/// Render elements will be pulled from the provided windows,
-/// with the first window being at the top and subsequent ones beneath.
+/// Renders *only* popup elements for windows on active tags.
+fn window_popup_render_elements<R: PRenderer>(
+    output: &Output,
+    space: &Space<WindowElement>,
+    renderer: &mut R,
+    scale: Scale<f64>,
+) -> Vec<WaylandSurfaceRenderElement<R>> {
+    let _span = tracy_client::span!("window_popup_render_elements");
+
+    let windows = space.elements_for_output(output);
+
+    windows
+        .rev()
+        .filter(|win| win.is_on_active_tag())
+        .flat_map(|win| {
+            let loc = space.element_location(win).unwrap_or_default() - output.current_location();
+            let loc = loc.to_f64().to_physical_precise_round(scale);
+
+            win.toplevel()
+                .map(|toplevel| {
+                    let surface = toplevel.wl_surface();
+                    let popups = popup_render_elements(surface, renderer, loc, scale, 1.0);
+                    popups
+                })
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+}
+
+/// Renders elements for the given output.
 pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
     output: &Output,
     renderer: &mut R,
@@ -286,31 +424,17 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
 
     let mut output_render_elements: Vec<OutputRenderElement<_>> = Vec::new();
 
-    // // draw input method surface if any
-    // let rectangle = input_method.coordinates();
-    // let position = Point::from((
-    //     rectangle.loc.x + rectangle.size.w,
-    //     rectangle.loc.y + rectangle.size.h,
-    // ));
-    // input_method.with_surface(|surface| {
-    //     custom_render_elements.extend(AsRenderElements::<R>::render_elements(
-    //         &SurfaceTree::from_surface(surface),
-    //         renderer,
-    //         position.to_physical_precise_round(scale),
-    //         scale,
-    //         1.0,
-    //     ));
-    // });
-
     let output_loc = output.current_location();
 
     let LayerRenderElements {
+        popup: layer_popups,
         background,
         bottom,
         top,
         overlay,
     } = layer_render_elements(output, renderer, scale);
 
+    let window_popups;
     let fullscreen_and_up_elements;
     let rest_of_window_elements;
 
@@ -321,6 +445,10 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             .as_ref()
             .map(|ts| ts.render_elements(renderer, space, output_loc, scale, 1.0))
     }) {
+        window_popups = window_popup_render_elements(output, space, renderer, scale)
+            .into_iter()
+            .map(OutputRenderElement::from)
+            .collect();
         fullscreen_and_up_elements = fs_and_up_elements
             .into_iter()
             .map(OutputRenderElement::from)
@@ -330,12 +458,17 @@ pub fn output_render_elements<R: PRenderer + AsGlesRenderer>(
             .map(OutputRenderElement::from)
             .collect();
     } else {
-        (fullscreen_and_up_elements, rest_of_window_elements) =
-            window_render_elements::<R>(output, space, renderer, scale);
+        WindowRenderElements {
+            popups: window_popups,
+            fullscreen_and_up: fullscreen_and_up_elements,
+            rest: rest_of_window_elements,
+        } = window_render_elements::<R>(output, space, renderer, scale);
     }
 
     // Elements render from top to bottom
 
+    output_render_elements.extend(layer_popups.into_iter().map(OutputRenderElement::from));
+    output_render_elements.extend(window_popups);
     output_render_elements.extend(overlay.into_iter().map(OutputRenderElement::from));
     output_render_elements.extend(fullscreen_and_up_elements);
     output_render_elements.extend(top.into_iter().map(OutputRenderElement::from));

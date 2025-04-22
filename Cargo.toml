@@ -52,7 +52,7 @@ tracy-client = { version = "0.18.0", default-features = false }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/Smithay/smithay"
-rev = "16b0416"
+rev = "1c3b5e1"
 # path = "../../git/smithay"
 default-features = false
 features = [
@@ -101,7 +101,7 @@ rust-version.workspace = true
 [dependencies]
 # Smithay
 smithay = { workspace = true }
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "16b0416" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay", rev = "1c3b5e1" }
 # Tracing
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

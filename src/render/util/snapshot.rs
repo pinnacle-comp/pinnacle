@@ -139,8 +139,8 @@ impl WindowElement {
     ) -> Option<LayoutSnapshot> {
         self.with_state_mut(|state| {
             let elements = self.texture_render_elements(renderer, location, scale, alpha);
-            if !elements.is_empty() {
-                state.snapshot = Some(RenderSnapshot::new(elements, scale));
+            if !elements.surface_elements.is_empty() {
+                state.snapshot = Some(RenderSnapshot::new(elements.surface_elements, scale));
             }
             state.snapshot.clone()
         })
