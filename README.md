@@ -29,7 +29,7 @@ for Wayland.
 Read the [wiki](https://pinnacle-comp.github.io/pinnacle/getting-started/introduction.html) to get started.
 
 ## Roadmap
-- See [#142](https://github.com/pinnacle-comp/pinnacle/issues/142)
+- See [#308](https://github.com/pinnacle-comp/pinnacle/issues/308)
 
 
 ## API references
