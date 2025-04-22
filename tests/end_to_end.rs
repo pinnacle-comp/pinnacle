@@ -3399,6 +3399,31 @@ fn process_stdio_with_no_pipes_has_no_child_stdio() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn process_set_env() -> anyhow::Result<()> {
+    test_api(|sender, lang| {
+        match lang {
+            Lang::Lua => {
+                run_lua! {
+                    Process.set_env("SILK", "SONG")
+                }
+            }
+            Lang::Rust => run_rust(|| {
+                pinnacle_api::process::set_env("SILK", "SONG");
+            }),
+        }?;
+
+        sender.with_state(|state| {
+            assert_eq!(
+                state.pinnacle.config.process_envs.get("SILK"),
+                Some(&"SONG".to_string())
+            );
+        });
+
+        Ok(())
+    })
+}
+
 // INPUT //////////////////////////////////////////////////////////////
 
 #[test]

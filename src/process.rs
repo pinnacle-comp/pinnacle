@@ -30,6 +30,7 @@ pub struct ExitInfo {
 #[derive(Debug)]
 pub struct ProcessState {
     pub system_processes: sysinfo::System,
+    // FIXME: If we reload the config then this doesn't get cleared
     spawned: HashMap<u32, tokio::sync::oneshot::Receiver<ExitInfo>>,
     spawned_already: HashSet<String>,
 }

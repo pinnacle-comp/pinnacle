@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package pinnacle.process.v1;
 
+import "google/protobuf/empty.proto";
+
 message SpawnRequest {
   repeated string cmd = 1;
   bool unique = 2;
@@ -33,7 +35,13 @@ message WaitOnSpawnResponse {
   optional string exit_msg = 2;
 }
 
+message SetEnvRequest {
+  string key = 1;
+  string value = 2;
+}
+
 service ProcessService {
   rpc Spawn(SpawnRequest) returns (SpawnResponse);
   rpc WaitOnSpawn(WaitOnSpawnRequest) returns (stream WaitOnSpawnResponse);
+  rpc SetEnv(SetEnvRequest) returns (google.protobuf.Empty);
 }

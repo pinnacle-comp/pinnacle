@@ -891,6 +891,10 @@ local pinnacle_v1_Backend = {
 ---@field exit_code integer?
 ---@field exit_msg string?
 
+---@class pinnacle.process.v1.SetEnvRequest
+---@field key string?
+---@field value string?
+
 ---@class pinnacle.window.v1.GetRequest
 
 ---@class pinnacle.window.v1.GetResponse
@@ -1261,6 +1265,7 @@ pinnacle.process.v1.SpawnData = {}
 pinnacle.process.v1.SpawnResponse = {}
 pinnacle.process.v1.WaitOnSpawnRequest = {}
 pinnacle.process.v1.WaitOnSpawnResponse = {}
+pinnacle.process.v1.SetEnvRequest = {}
 pinnacle.window = {}
 pinnacle.window.v1 = {}
 pinnacle.window.v1.GetRequest = {}
@@ -2163,6 +2168,23 @@ pinnacle.process.v1.ProcessService.WaitOnSpawn.response = ".pinnacle.process.v1.
 ---@return string | nil An error string, if any
 function Client:pinnacle_process_v1_ProcessService_WaitOnSpawn(data, callback)
     return self:server_streaming_request(pinnacle.process.v1.ProcessService.WaitOnSpawn, data, callback)
+end
+pinnacle.process.v1.ProcessService.SetEnv = {}
+pinnacle.process.v1.ProcessService.SetEnv.service = "pinnacle.process.v1.ProcessService"
+pinnacle.process.v1.ProcessService.SetEnv.method = "SetEnv"
+pinnacle.process.v1.ProcessService.SetEnv.request = ".pinnacle.process.v1.SetEnvRequest"
+pinnacle.process.v1.ProcessService.SetEnv.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.process.v1.SetEnvRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_process_v1_ProcessService_SetEnv(data)
+    return self:unary_request(pinnacle.process.v1.ProcessService.SetEnv, data)
 end
 pinnacle.window.v1.WindowService = {}
 pinnacle.window.v1.WindowService.Get = {}

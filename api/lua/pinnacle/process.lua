@@ -326,4 +326,19 @@ function process.command(cmd)
     return cmd --[[@as pinnacle.process.Command]]
 end
 
+---Adds an environment variable that all newly spawned processes will inherit.
+---
+---@param key string The environment variable's key.
+---@param value string The environment variable's value.
+function process.set_env(key, value)
+    local _, err = client:pinnacle_process_v1_ProcessService_SetEnv({
+        key = key,
+        value = value,
+    })
+
+    if err then
+        log.error(err)
+    end
+end
+
 return process

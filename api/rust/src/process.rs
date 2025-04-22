@@ -12,10 +12,21 @@ use std::{
 };
 
 use passfd::FdPassingExt;
-use pinnacle_api_defs::pinnacle::process::v1::{SpawnRequest, WaitOnSpawnRequest};
+use pinnacle_api_defs::pinnacle::process::v1::{SetEnvRequest, SpawnRequest, WaitOnSpawnRequest};
 use tokio_stream::StreamExt;
 
 use crate::{client::Client, BlockOnTokio};
+
+/// Adds an environment variable that all newly spawned [`Command`]s will inherit.
+pub fn set_env(key: impl ToString, value: impl ToString) {
+    Client::process()
+        .set_env(SetEnvRequest {
+            key: key.to_string(),
+            value: value.to_string(),
+        })
+        .block_on_tokio()
+        .unwrap();
+}
 
 /// A process builder that allows you to spawn programs.
 pub struct Command {

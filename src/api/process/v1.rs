@@ -1,11 +1,11 @@
 use pinnacle_api_defs::pinnacle::process::{
     self,
-    v1::{SpawnRequest, SpawnResponse, WaitOnSpawnRequest, WaitOnSpawnResponse},
+    v1::{SetEnvRequest, SpawnRequest, SpawnResponse, WaitOnSpawnRequest, WaitOnSpawnResponse},
 };
 use tonic::Request;
 
 use crate::{
-    api::{run_server_streaming, run_unary, ResponseStream, TonicResult},
+    api::{run_server_streaming, run_unary, run_unary_no_response, ResponseStream, TonicResult},
     process::PipeProcesses,
 };
 
@@ -21,7 +21,7 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
             unique,
             once,
             shell_cmd,
-            envs,
+            mut envs,
             pipe_stdin,
             pipe_stdout,
             pipe_stderr,
@@ -29,6 +29,9 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
 
         run_unary(&self.sender, move |state| {
             let pipe_processes = !state.pinnacle.config.debug.disable_process_piping;
+
+            envs.extend(state.pinnacle.config.process_envs.clone());
+
             let fds = state.pinnacle.process_state.spawn(
                 &cmd,
                 &shell_cmd,
@@ -82,6 +85,17 @@ impl process::v1::process_service_server::ProcessService for super::ProcessServi
             });
 
             Ok(())
+        })
+        .await
+    }
+
+    async fn set_env(&self, request: Request<SetEnvRequest>) -> TonicResult<()> {
+        let request = request.into_inner();
+
+        let SetEnvRequest { key, value } = request;
+
+        run_unary_no_response(&self.sender, move |state| {
+            state.pinnacle.config.process_envs.insert(key, value);
         })
         .await
     }

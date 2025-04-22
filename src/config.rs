@@ -230,6 +230,8 @@ pub struct Config {
     pub debug: Debug,
 
     pub last_error: Option<String>,
+
+    pub process_envs: HashMap<String, String>,
 }
 
 #[derive(Debug, Default)]
@@ -260,6 +262,7 @@ impl Config {
             socket_path: None,
             debug: Default::default(),
             last_error: None,
+            process_envs: Default::default(),
         }
     }
 
@@ -278,6 +281,8 @@ impl Config {
         }
 
         std::mem::take(&mut self.debug);
+
+        self.process_envs.clear();
     }
 }
 
