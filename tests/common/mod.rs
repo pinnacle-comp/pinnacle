@@ -122,9 +122,6 @@ fn test_with_lang(
 
     let tempdir = tempfile::tempdir()?;
 
-    WindowId::reset();
-    TagId::reset();
-
     state.pinnacle.start_grpc_server(tempdir.path())?;
 
     let loop_signal = event_loop.get_signal();
@@ -172,6 +169,9 @@ fn test_with_lang(
     let _ = std::fs::remove_file(runtime_dir.join(std::env::var("WAYLAND_DISPLAY").unwrap()));
     let _ =
         std::fs::remove_file(runtime_dir.join(std::env::var("WAYLAND_DISPLAY").unwrap() + ".lock"));
+
+    WindowId::reset();
+    TagId::reset();
 
     Ok(())
 }
