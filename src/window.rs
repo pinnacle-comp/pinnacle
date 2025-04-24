@@ -360,7 +360,13 @@ impl Pinnacle {
             output.with_state_mut(|state| state.focus_stack.remove(window));
         }
 
+        let to_schedule = self.space.outputs_for_element(window);
         self.space.unmap_elem(window);
+        self.loop_handle.insert_idle(move |state| {
+            for output in to_schedule {
+                state.schedule_render(&output);
+            }
+        });
     }
 
     /// Returns the parent or parent-equivalent window, if any.

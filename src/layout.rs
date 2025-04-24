@@ -48,7 +48,13 @@ impl Pinnacle {
                     win.with_state_mut(|state| state.floating_loc = Some(loc.to_f64()));
                 }
             }
+            let to_schedule = self.space.outputs_for_element(&win);
             self.space.unmap_elem(&win);
+            self.loop_handle.insert_idle(move |state| {
+                for output in to_schedule {
+                    state.schedule_render(&output);
+                }
+            });
         }
 
         let tiled_windows = windows_on_foc_tags
@@ -87,7 +93,13 @@ impl Pinnacle {
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
         for win in remaining_wins {
+            let to_schedule = self.space.outputs_for_element(&win);
             self.space.unmap_elem(&win);
+            self.loop_handle.insert_idle(move |state| {
+                for output in to_schedule {
+                    state.schedule_render(&output);
+                }
+            });
         }
 
         let mut pending_wins = Vec::<(WindowElement, Serial)>::new();
