@@ -32,6 +32,7 @@ use crate::{
         run_bidirectional_streaming_mapped, run_unary, run_unary_no_response, ResponseStream,
         TonicResult,
     },
+    focus::keyboard::KeyboardFocusTarget,
     state::WithState,
     tag::TagId,
     window::window_state::{LayoutMode, LayoutModeKind, WindowId},
@@ -136,11 +137,17 @@ impl v1::window_service_server::WindowService for super::WindowService {
             let focused = window_id
                 .window(&state.pinnacle)
                 .and_then(|win| {
-                    let focused = state
+                    let current_keyboard_focus = state
                         .pinnacle
-                        .focused_window(state.pinnacle.focused_output()?)?
-                        == win;
-                    Some(focused)
+                        .seat
+                        .get_keyboard()
+                        .unwrap()
+                        .current_focus()?;
+
+                    Some(matches!(
+                        current_keyboard_focus,
+                        KeyboardFocusTarget::Window(window) if window == win
+                    ))
                 })
                 .unwrap_or_default();
 
