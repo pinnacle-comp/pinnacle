@@ -67,16 +67,10 @@ jobs:
         run: echo "XDG_DATA_HOME=$HOME/.local/share" >> $GITHUB_ENV
       - name: Test
         if: ${{ runner.debug != '1' }}
-        run: just install test
-      - name: Test (ignored)
-        if: ${{ runner.debug != '1' }}
-        run: just install test -- --ignored
+        run: just install test -- --include-ignored
       - name: Test (debug)
         if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture
-      - name: Test (ignored) (debug)
-        if: ${{ runner.debug == '1' }}
-        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --ignored
+        run: RUST_LOG=debug RUST_BACKTRACE=1 just install test -- --nocapture --include-ignored
   check-format:
     runs-on: ubuntu-24.04
     name: Check formatting
