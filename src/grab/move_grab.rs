@@ -62,13 +62,6 @@ impl PointerGrab<State> for MoveSurfaceGrab {
             .with_state(|state| state.layout_mode.is_floating());
 
         if is_floating {
-            let tag_output = self.window.output(&state.pinnacle);
-            if let Some(focused_output) = state.pinnacle.focused_output() {
-                if Some(focused_output) != tag_output.as_ref() {
-                    self.window.set_tags_to_output(focused_output);
-                }
-            }
-
             let delta = event.location - self.start_data.location;
             let new_loc = self.initial_window_loc.to_f64() + delta;
             // FIXME: space maps locs as i32 not f64

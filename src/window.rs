@@ -2,13 +2,13 @@
 
 pub mod rules;
 
-use std::{cell::RefCell, ops::Deref};
+use std::{cell::RefCell, collections::HashMap, ops::Deref};
 
 use indexmap::IndexSet;
 use rules::WindowRules;
 use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
-    output::Output,
+    output::{Output, WeakOutput},
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_positioner::{
             Anchor, ConstraintAdjustment, Gravity,
@@ -194,6 +194,12 @@ impl WindowElement {
     }
 }
 
+#[derive(Default)]
+struct OutputOverlapState {
+    current_output: Option<WeakOutput>,
+    overlaps: HashMap<WeakOutput, Rectangle<i32, Logical>>,
+}
+
 impl SpaceElement for WindowElement {
     fn bbox(&self) -> Rectangle<i32, Logical> {
         self.0.bbox()
@@ -208,10 +214,28 @@ impl SpaceElement for WindowElement {
     }
 
     fn output_enter(&self, output: &Output, overlap: Rectangle<i32, Logical>) {
+        let overlap_state = self
+            .user_data()
+            .get_or_insert(RefCell::<OutputOverlapState>::default);
+
+        {
+            let mut overlap_state = overlap_state.borrow_mut();
+            overlap_state.overlaps.insert(output.downgrade(), overlap);
+        }
+
         self.0.output_enter(output, overlap)
     }
 
     fn output_leave(&self, output: &Output) {
+        let overlap_state = self
+            .user_data()
+            .get_or_insert(RefCell::<OutputOverlapState>::default);
+
+        {
+            let mut overlap_state = overlap_state.borrow_mut();
+            overlap_state.overlaps.retain(|weak, _| weak != output);
+        }
+
         self.0.output_leave(output)
     }
 
@@ -224,6 +248,26 @@ impl SpaceElement for WindowElement {
     }
 
     fn refresh(&self) {
+        let overlap_state = self
+            .user_data()
+            .get_or_insert(RefCell::<OutputOverlapState>::default);
+
+        {
+            let mut overlap_state = overlap_state.borrow_mut();
+
+            overlap_state.overlaps.retain(|weak, _| weak.is_alive());
+
+            let new_output = overlap_state
+                .overlaps
+                .iter()
+                .max_by_key(|(_, overlap)| overlap.size.w * overlap.size.h)
+                .map(|(output, _)| output.clone());
+
+            if let Some(new_output) = new_output {
+                overlap_state.current_output.replace(new_output);
+            }
+        }
+
         self.0.refresh();
     }
 }
@@ -334,6 +378,40 @@ impl Pinnacle {
                         false
                     }
                 })
+            }
+        }
+    }
+
+    /// Updates the tags of windows that have moved to another output.
+    ///
+    /// A window "moves" to another output when it has more of its area over the new output
+    /// than the old output.
+    ///
+    /// Needs to be called after `Space::refresh`.
+    pub fn update_window_tags(&self) {
+        let _span = tracy_client::span!("Pinnacle::refresh_window_tags");
+
+        for win in self.windows.iter() {
+            let Some(tag_output) = win.output(self) else {
+                continue;
+            };
+
+            let Some(overlapping_output) = win
+                .user_data()
+                .get_or_insert(RefCell::<OutputOverlapState>::default)
+                .borrow()
+                .current_output
+                .as_ref()
+                .and_then(|op| op.upgrade())
+            else {
+                continue;
+            };
+
+            if tag_output != overlapping_output {
+                win.set_tags_to_output(&overlapping_output);
+
+                tag_output.with_state_mut(|state| state.focus_stack.remove(win));
+                overlapping_output.with_state_mut(|state| state.focus_stack.set_focus(win.clone()));
             }
         }
     }

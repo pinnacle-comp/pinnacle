@@ -239,6 +239,7 @@ impl State {
 
         self.pinnacle.fixup_z_layering();
         self.pinnacle.space.refresh();
+        self.pinnacle.update_window_tags();
         self.pinnacle.cursor_state.cleanup();
         self.pinnacle.popup_manager.cleanup();
         self.update_pointer_focus();

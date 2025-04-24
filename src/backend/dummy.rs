@@ -117,7 +117,7 @@ impl Pinnacle {
 
         self.outputs.insert(output.clone(), Some(global));
 
-        self.space.map_output(&output, (0, 0));
+        self.space.map_output(&output, loc);
 
         self.signal_state.output_connect.signal(&output);
 

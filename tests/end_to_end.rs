@@ -3083,6 +3083,150 @@ fn window_spawned_without_tags_gets_tags_after_add() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn window_tags_update_after_set_geometry() -> anyhow::Result<()> {
+    test_api(|sender, _lang| {
+        sender.with_state(|state| {
+            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
+            let mut new_op_loc = init_output_geo.loc;
+            new_op_loc.x += init_output_geo.size.w;
+            state.pinnacle.new_output(
+                "Other",
+                "",
+                "",
+                new_op_loc,
+                (1920, 1080).into(),
+                60000,
+                1.0,
+                smithay::utils::Transform::Normal,
+            );
+        });
+
+        setup_lua! {
+            Tag.add(Output.get_by_name("Other"), "other_tag")[1]:set_active(true)
+
+            Window.add_window_rule(function(window)
+                window:set_floating(true)
+            end)
+
+            Process.spawn("alacritty", "-o", "general.ipc_socket=false")
+        }
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let tag = state.pinnacle.windows[0].with_state(|state| state.tags[0].clone());
+            assert_eq!(tag.name(), "other_tag");
+        });
+
+        run_lua! {
+            Window.get_all()[1]:set_geometry({ x = 200 })
+        }?;
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let win = &state.pinnacle.windows[0];
+            let tag = win.with_state(|state| state.tags[0].clone());
+            assert_eq!(tag.name(), "1");
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn window_overlapping_output_overrides_window_rule_tags_on_different_output() -> anyhow::Result<()>
+{
+    test_api(|sender, _lang| {
+        sender.with_state(|state| {
+            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
+            let mut new_op_loc = init_output_geo.loc;
+            new_op_loc.x += init_output_geo.size.w;
+            state.pinnacle.new_output(
+                "Other",
+                "",
+                "",
+                new_op_loc,
+                (1920, 1080).into(),
+                60000,
+                1.0,
+                smithay::utils::Transform::Normal,
+            );
+        });
+
+        setup_lua! {
+            local tag = Tag.add(Output.get_by_name("Other"), "other_tag")[1]
+            tag:set_active(true)
+
+            Window.add_window_rule(function(window)
+                window:set_floating(true)
+                window:move_to_tag(tag)
+                window:set_geometry({ x = 200 })
+            end)
+
+            Process.spawn("alacritty", "-o", "general.ipc_socket=false")
+        }
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let tag = state.pinnacle.windows[0].with_state(|state| state.tags[0].clone());
+            assert_eq!(tag.name(), "1");
+        });
+
+        Ok(())
+    })
+}
+
+#[test]
+fn window_overlapping_output_does_not_override_window_rule_tags_on_same_output(
+) -> anyhow::Result<()> {
+    test_api(|sender, _lang| {
+        sender.with_state(|state| {
+            let init_output = state.pinnacle.outputs.keys().next().unwrap();
+            let init_output_geo = state.pinnacle.space.output_geometry(init_output).unwrap();
+            let mut new_op_loc = init_output_geo.loc;
+            new_op_loc.x += init_output_geo.size.w;
+            state.pinnacle.new_output(
+                "Other",
+                "",
+                "",
+                new_op_loc,
+                (1920, 1080).into(),
+                60000,
+                1.0,
+                smithay::utils::Transform::Normal,
+            );
+        });
+
+        setup_lua! {
+            local tags = Tag.add(Output.get_by_name("Other"), "other_tag1", "other_tag2")
+            tags[1]:set_active(true)
+            tags[2]:set_active(true)
+
+            Window.add_window_rule(function(window)
+                window:set_floating(true)
+                window:move_to_tag(tags[1])
+            end)
+
+            Process.spawn("alacritty", "-o", "general.ipc_socket=false")
+        }
+
+        sleep(SLEEP_DURATION);
+
+        sender.with_state(|state| {
+            let tags = state.pinnacle.windows[0].with_state(|state| state.tags.clone());
+            assert_eq!(tags.len(), 1);
+            assert_eq!(tags[0].name(), "other_tag1");
+        });
+
+        Ok(())
+    })
+}
+
 // PROCESS //////////////////////////////////////////
 
 #[test]
