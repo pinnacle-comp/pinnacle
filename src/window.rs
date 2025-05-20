@@ -398,6 +398,10 @@ impl Pinnacle {
         let _span = tracy_client::span!("Pinnacle::refresh_window_tags");
 
         for win in self.windows.iter() {
+            if win.with_state(|state| !state.layout_mode.is_floating()) {
+                continue;
+            }
+
             let Some(tag_output) = win.output(self) else {
                 continue;
             };
