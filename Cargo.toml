@@ -84,6 +84,8 @@ new_without_default = "allow"
 type_complexity = "allow"
 let_and_return = "allow"
 dbg_macro = "warn"
+result_large_err = "allow"
+large_enum_variant = "allow"
 
 ########################################################################yo😎###########
 
