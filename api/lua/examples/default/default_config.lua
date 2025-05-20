@@ -147,58 +147,6 @@ Pinnacle.setup(function()
         description = "Toggle maximized on the focused window",
     })
 
-    ----------------------
-    -- Tags and Outputs --
-    ----------------------
-
-    local tag_names = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
-
-    Output.for_each_output(function(output)
-        local tags = Tag.add(output, tag_names)
-        tags[1]:set_active(true)
-    end)
-
-    -- Tag keybinds
-    for _, tag_name in ipairs(tag_names) do
-        -- mod_key + 1-9 = Switch to tags 1-9
-        Input.keybind({ mod_key }, tag_name, function()
-            Tag.get(tag_name):switch_to()
-        end, {
-            group = "Tag",
-            description = "Switch to tag " .. tag_name,
-        })
-
-        -- mod_key + ctrl + 1-9 = Toggle tags 1-9
-        Input.keybind({ mod_key, "ctrl" }, tag_name, function()
-            Tag.get(tag_name):toggle_active()
-        end, {
-            group = "Tag",
-            description = "Toggle tag " .. tag_name,
-        })
-
-        -- mod_key + shift + 1-9 = Move window to tags 1-9
-        Input.keybind({ mod_key, "shift" }, tag_name, function()
-            local focused = Window.get_focused()
-            if focused then
-                focused:move_to_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
-            end
-        end, {
-            group = "Tag",
-            description = "Move the focused window to tag " .. tag_name,
-        })
-
-        -- mod_key + ctrl + shift + 1-9 = Toggle tags 1-9 on window
-        Input.keybind({ mod_key, "ctrl", "shift" }, tag_name, function()
-            local focused = Window.get_focused()
-            if focused then
-                focused:toggle_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
-            end
-        end, {
-            group = "Tag",
-            description = "Toggle tag " .. tag_name .. " on the focused window",
-        })
-    end
-
     --------------------
     -- Layouts        --
     --------------------
@@ -323,12 +271,72 @@ Pinnacle.setup(function()
         description = "Cycle the layout backward on the first active tag",
     })
 
+    ----------------------
+    -- Tags and Outputs --
+    ----------------------
+
+    local tag_names = { "1", "2", "3", "4", "5", "6", "7", "8", "9" }
+
+    Output.for_each_output(function(output)
+        local tags = Tag.add(output, tag_names)
+        tags[1]:set_active(true)
+    end)
+
+    -- Tag keybinds
+    for _, tag_name in ipairs(tag_names) do
+        -- mod_key + 1-9 = Switch to tags 1-9
+        Input.keybind({ mod_key }, tag_name, function()
+            Tag.get(tag_name):switch_to()
+        end, {
+            group = "Tag",
+            description = "Switch to tag " .. tag_name,
+        })
+
+        -- mod_key + ctrl + 1-9 = Toggle tags 1-9
+        Input.keybind({ mod_key, "ctrl" }, tag_name, function()
+            Tag.get(tag_name):toggle_active()
+        end, {
+            group = "Tag",
+            description = "Toggle tag " .. tag_name,
+        })
+
+        -- mod_key + shift + 1-9 = Move window to tags 1-9
+        Input.keybind({ mod_key, "shift" }, tag_name, function()
+            local focused = Window.get_focused()
+            if focused then
+                focused:move_to_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
+            end
+        end, {
+            group = "Tag",
+            description = "Move the focused window to tag " .. tag_name,
+        })
+
+        -- mod_key + ctrl + shift + 1-9 = Toggle tags 1-9 on window
+        Input.keybind({ mod_key, "ctrl", "shift" }, tag_name, function()
+            local focused = Window.get_focused()
+            if focused then
+                focused:toggle_tag(Tag.get(tag_name) --[[@as pinnacle.tag.TagHandle]])
+            end
+        end, {
+            group = "Tag",
+            description = "Toggle tag " .. tag_name .. " on the focused window",
+        })
+    end
+
+    -----------------------
+    -- Libinput settings --
+    -----------------------
+
     Libinput.for_each_device(function(device)
         -- Enable natural scroll for touchpads
         if device:device_type() == "touchpad" then
             device:set_natural_scroll(true)
         end
     end)
+
+    -----------------------
+    -- Other stuff       --
+    -----------------------
 
     -- There are no server-side decorations yet, so request all clients use client-side decorations.
     Window.add_window_rule(function(window)
