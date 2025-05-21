@@ -25,6 +25,7 @@ pub struct Wgpu {
 pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
+        flags: wgpu::InstanceFlags::default().with_env(),
         ..Default::default()
     });
 
