@@ -4,11 +4,18 @@
 
 It is recommended that you install Pinnacle using your distro's package manager.
 
-::: code-group
+::: tabs
 
-```sh [Arch (AUR)]
+== Arch (AUR)
+```sh
+yay -S pinnacle-comp
+
+# Or latest commit
 yay -S pinnacle-comp-git
 ```
+
+> [!IMPORTANT]
+> The `-git` package is currently broken. Use the non `-git` version or build from source.
 
 :::
 
