@@ -11,7 +11,7 @@ hero:
       link: ./getting-started/introduction
     - theme: alt
       text: Read the wiki (latest release)
-      link: ./0.1.0-beta.1/getting-started/introduction
+      link: ./0.1.0/getting-started/introduction
 
 features:
   - title: Configurable

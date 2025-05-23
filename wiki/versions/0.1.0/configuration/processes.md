@@ -30,6 +30,7 @@ Command::new("alacritty").spawn();
 | Envs | Map\<String, String> | Environment variables to spawn the command with |
 | Unique | Bool | Causes the command to not spawn if an instance of it is already running |
 | Once | Bool | Causes the command to not spawn it has been spawned at any time during the current session |
+| Pipe std\{in,out,err} | Bool | Sets up a pipe so that the config can interact with the process's stdio |
 
 ### Special spawn options
 
@@ -94,10 +95,33 @@ Command::with_shell(["bash", "-c"], "echo hello | cat").spawn();
 ```
 :::
 
-## Capturing output
+## Capturing standard IO
+
+To capture the process's standard IO, you must pipe the descriptors you want to capture:
+
+::: tabs key:langs
+== Lua
+```lua
+local child = require("pinnacle.process").command({
+    cmd = "alacritty",
+    pipe_stdin = true,
+    pipe_stdout = true,
+    pipe_stderr = true,
+}):spawn()
+```
+== Rust
+```rust
+let child = Command::new("alacritty")
+    .pipe_stdin()
+    .pipe_stdout()
+    .pipe_stderr()
+    .spawn()?;
+```
+:::
+
 
 If the command spawns successfully and has standard IO, a `Child` object will be returned with the process's
-`stdin`, `stdout`, and `stderr`.
+`stdin`, `stdout`, and `stderr` for those that were piped.
 
 ::: tabs key:langs
 == Lua
