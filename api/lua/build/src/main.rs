@@ -379,7 +379,7 @@ fn main() {
 
     let mut proto_paths = Vec::new();
 
-    for entry in walkdir::WalkDir::new(&proto_dir) {
+    for entry in walkdir::WalkDir::new(&proto_dir).sort_by_file_name() {
         let entry = entry.unwrap();
 
         if entry.file_type().is_file() && entry.path().extension().is_some_and(|ext| ext == "proto")

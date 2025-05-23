@@ -483,6 +483,8 @@ local snowcap_layer_v0alpha1_Layer = {
 }
 
 
+---@alias google.protobuf.Empty nil
+
 ---@class snowcap.input.v0alpha1.Modifiers
 ---@field shift boolean?
 ---@field ctrl boolean?
@@ -503,8 +505,6 @@ local snowcap_layer_v0alpha1_Layer = {
 ---@class snowcap.input.v0alpha1.PointerButtonResponse
 ---@field button integer?
 ---@field pressed boolean?
-
----@alias google.protobuf.Empty nil
 
 ---@class snowcap.widget.v0alpha1.Padding
 ---@field top number?
@@ -623,6 +623,9 @@ local snowcap_layer_v0alpha1_Layer = {
 
 ---@class snowcap.v0alpha1.Nothing
 
+local google = {}
+google.protobuf = {}
+google.protobuf.Empty = {}
 local snowcap = {}
 snowcap.input = {}
 snowcap.input.v0alpha1 = {}
@@ -631,9 +634,6 @@ snowcap.input.v0alpha1.KeyboardKeyRequest = {}
 snowcap.input.v0alpha1.KeyboardKeyResponse = {}
 snowcap.input.v0alpha1.PointerButtonRequest = {}
 snowcap.input.v0alpha1.PointerButtonResponse = {}
-local google = {}
-google.protobuf = {}
-google.protobuf.Empty = {}
 snowcap.widget = {}
 snowcap.widget.v0alpha1 = {}
 snowcap.widget.v0alpha1.Padding = {}
@@ -740,8 +740,8 @@ function Client:snowcap_layer_v0alpha1_LayerService_Close(data)
     return self:unary_request(snowcap.layer.v0alpha1.LayerService.Close, data)
 end
 return {
-    snowcap = snowcap,
     google = google,
+    snowcap = snowcap,
     grpc_client = grpc_client,
 }
 

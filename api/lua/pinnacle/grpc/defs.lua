@@ -401,13 +401,6 @@ end
 ---@field request string The fully-qualified request type
 ---@field response string The fully-qualified response type
 
----@enum pinnacle.signal.v1.StreamControl
-local pinnacle_signal_v1_StreamControl = {
-    STREAM_CONTROL_UNSPECIFIED = 0,
-    STREAM_CONTROL_READY = 1,
-    STREAM_CONTROL_DISCONNECT = 2,
-}
-
 ---@enum pinnacle.util.v1.SetOrToggle
 local pinnacle_util_v1_SetOrToggle = {
     SET_OR_TOGGLE_UNSPECIFIED = 0,
@@ -498,6 +491,40 @@ local pinnacle_layout_v1_FlexDir = {
     FLEX_DIR_COLUMN = 2,
 }
 
+---@enum pinnacle.output.v1.Transform
+local pinnacle_output_v1_Transform = {
+    TRANSFORM_UNSPECIFIED = 0,
+    TRANSFORM_NORMAL = 1,
+    TRANSFORM_90 = 2,
+    TRANSFORM_180 = 3,
+    TRANSFORM_270 = 4,
+    TRANSFORM_FLIPPED = 5,
+    TRANSFORM_FLIPPED_90 = 6,
+    TRANSFORM_FLIPPED_180 = 7,
+    TRANSFORM_FLIPPED_270 = 8,
+}
+
+---@enum pinnacle.render.v1.Filter
+local pinnacle_render_v1_Filter = {
+    FILTER_UNSPECIFIED = 0,
+    FILTER_BILINEAR = 1,
+    FILTER_NEAREST_NEIGHBOR = 2,
+}
+
+---@enum pinnacle.signal.v1.StreamControl
+local pinnacle_signal_v1_StreamControl = {
+    STREAM_CONTROL_UNSPECIFIED = 0,
+    STREAM_CONTROL_READY = 1,
+    STREAM_CONTROL_DISCONNECT = 2,
+}
+
+---@enum pinnacle.v1.Backend
+local pinnacle_v1_Backend = {
+    BACKEND_UNSPECIFIED = 0,
+    BACKEND_WINDOW = 1,
+    BACKEND_TTY = 2,
+}
+
 ---@enum pinnacle.window.v1.LayoutMode
 local pinnacle_window_v1_LayoutMode = {
     LAYOUT_MODE_UNSPECIFIED = 0,
@@ -514,94 +541,8 @@ local pinnacle_window_v1_DecorationMode = {
     DECORATION_MODE_SERVER_SIDE = 2,
 }
 
----@enum pinnacle.render.v1.Filter
-local pinnacle_render_v1_Filter = {
-    FILTER_UNSPECIFIED = 0,
-    FILTER_BILINEAR = 1,
-    FILTER_NEAREST_NEIGHBOR = 2,
-}
-
----@enum pinnacle.output.v1.Transform
-local pinnacle_output_v1_Transform = {
-    TRANSFORM_UNSPECIFIED = 0,
-    TRANSFORM_NORMAL = 1,
-    TRANSFORM_90 = 2,
-    TRANSFORM_180 = 3,
-    TRANSFORM_270 = 4,
-    TRANSFORM_FLIPPED = 5,
-    TRANSFORM_FLIPPED_90 = 6,
-    TRANSFORM_FLIPPED_180 = 7,
-    TRANSFORM_FLIPPED_270 = 8,
-}
-
----@enum pinnacle.v1.Backend
-local pinnacle_v1_Backend = {
-    BACKEND_UNSPECIFIED = 0,
-    BACKEND_WINDOW = 1,
-    BACKEND_TTY = 2,
-}
-
 
 ---@alias google.protobuf.Empty nil
-
----@class pinnacle.signal.v1.OutputConnectRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.OutputConnectResponse
----@field output_name string?
-
----@class pinnacle.signal.v1.OutputDisconnectRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.OutputDisconnectResponse
----@field output_name string?
-
----@class pinnacle.signal.v1.OutputResizeRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.OutputResizeResponse
----@field output_name string?
----@field logical_width integer?
----@field logical_height integer?
-
----@class pinnacle.signal.v1.OutputMoveRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.OutputMoveResponse
----@field output_name string?
----@field x integer?
----@field y integer?
-
----@class pinnacle.signal.v1.WindowPointerEnterRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.WindowPointerEnterResponse
----@field window_id integer?
-
----@class pinnacle.signal.v1.WindowPointerLeaveRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.WindowPointerLeaveResponse
----@field window_id integer?
-
----@class pinnacle.signal.v1.WindowFocusedRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.WindowFocusedResponse
----@field window_id integer?
-
----@class pinnacle.signal.v1.TagActiveRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.TagActiveResponse
----@field tag_id integer?
----@field active boolean?
-
----@class pinnacle.signal.v1.InputDeviceAddedRequest
----@field control pinnacle.signal.v1.StreamControl?
-
----@class pinnacle.signal.v1.InputDeviceAddedResponse
----@field device_sysname string?
 
 ---@class pinnacle.util.v1.Point
 ---@field x integer?
@@ -614,6 +555,18 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.util.v1.Rect
 ---@field loc pinnacle.util.v1.Point?
 ---@field size pinnacle.util.v1.Size?
+
+---@class pinnacle.debug.v1.SetDamageVisualizationRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.debug.v1.SetCursorPlaneScanoutRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.debug.v1.SetProcessPipingRequest
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
 
 ---@class pinnacle.input.v1.Bind
 ---@field mods pinnacle.input.v1.Modifier[]?
@@ -808,207 +761,6 @@ local pinnacle_v1_Backend = {
 ---@field window_count integer?
 ---@field tag_ids integer[]?
 
----@class pinnacle.debug.v1.SetDamageVisualizationRequest
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.debug.v1.SetCursorPlaneScanoutRequest
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.debug.v1.SetProcessPipingRequest
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.tag.v1.GetRequest
-
----@class pinnacle.tag.v1.GetResponse
----@field tag_ids integer[]?
-
----@class pinnacle.tag.v1.AddRequest
----@field output_name string?
----@field tag_names string[]?
-
----@class pinnacle.tag.v1.AddResponse
----@field tag_ids integer[]?
-
----@class pinnacle.tag.v1.RemoveRequest
----@field tag_ids integer[]?
-
----@class pinnacle.tag.v1.GetActiveRequest
----@field tag_id integer?
-
----@class pinnacle.tag.v1.GetActiveResponse
----@field active boolean?
-
----@class pinnacle.tag.v1.GetNameRequest
----@field tag_id integer?
-
----@class pinnacle.tag.v1.GetNameResponse
----@field name string?
-
----@class pinnacle.tag.v1.GetOutputNameRequest
----@field tag_id integer?
-
----@class pinnacle.tag.v1.GetOutputNameResponse
----@field output_name string?
-
----@class pinnacle.tag.v1.SetActiveRequest
----@field tag_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.tag.v1.SwitchToRequest
----@field tag_id integer?
-
----@class pinnacle.process.v1.SpawnRequest
----@field cmd string[]?
----@field unique boolean?
----@field once boolean?
----@field shell_cmd string[]?
----@field envs pinnacle.process.v1.SpawnRequest.EnvsEntry[]?
----@field pipe_stdin boolean?
----@field pipe_stdout boolean?
----@field pipe_stderr boolean?
-
----@class pinnacle.process.v1.SpawnRequest.EnvsEntry
----@field key string?
----@field value string?
-
----@class pinnacle.process.v1.SpawnData
----@field pid integer?
----@field fd_socket_path string?
----@field has_stdin boolean?
----@field has_stdout boolean?
----@field has_stderr boolean?
-
----@class pinnacle.process.v1.SpawnResponse
----@field spawn_data pinnacle.process.v1.SpawnData?
-
----@class pinnacle.process.v1.WaitOnSpawnRequest
----@field pid integer?
-
----@class pinnacle.process.v1.WaitOnSpawnResponse
----@field exit_code integer?
----@field exit_msg string?
-
----@class pinnacle.process.v1.SetEnvRequest
----@field key string?
----@field value string?
-
----@class pinnacle.window.v1.GetRequest
-
----@class pinnacle.window.v1.GetResponse
----@field window_ids integer[]?
-
----@class pinnacle.window.v1.GetAppIdRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetAppIdResponse
----@field app_id string?
-
----@class pinnacle.window.v1.GetTitleRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetTitleResponse
----@field title string?
-
----@class pinnacle.window.v1.GetLocRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetLocResponse
----@field loc pinnacle.util.v1.Point?
-
----@class pinnacle.window.v1.GetSizeRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetSizeResponse
----@field size pinnacle.util.v1.Size?
-
----@class pinnacle.window.v1.GetFocusedRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetFocusedResponse
----@field focused boolean?
-
----@class pinnacle.window.v1.GetLayoutModeRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetLayoutModeResponse
----@field layout_mode pinnacle.window.v1.LayoutMode?
-
----@class pinnacle.window.v1.GetTagIdsRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.GetTagIdsResponse
----@field tag_ids integer[]?
-
----@class pinnacle.window.v1.CloseRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.SetGeometryRequest
----@field window_id integer?
----@field x integer?
----@field y integer?
----@field w integer?
----@field h integer?
-
----@class pinnacle.window.v1.SetFullscreenRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetMaximizedRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetFloatingRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetFocusedRequest
----@field window_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.SetDecorationModeRequest
----@field window_id integer?
----@field decoration_mode pinnacle.window.v1.DecorationMode?
-
----@class pinnacle.window.v1.MoveToTagRequest
----@field window_id integer?
----@field tag_id integer?
-
----@class pinnacle.window.v1.SetTagRequest
----@field window_id integer?
----@field tag_id integer?
----@field set_or_toggle pinnacle.util.v1.SetOrToggle?
-
----@class pinnacle.window.v1.RaiseRequest
----@field window_id integer?
-
----@class pinnacle.window.v1.MoveGrabRequest
----@field button integer?
-
----@class pinnacle.window.v1.ResizeGrabRequest
----@field button integer?
-
----@class pinnacle.window.v1.WindowRuleRequest
----@field finished pinnacle.window.v1.WindowRuleRequest.Finished?
-
----@class pinnacle.window.v1.WindowRuleRequest.Finished
----@field request_id integer?
-
----@class pinnacle.window.v1.WindowRuleResponse
----@field new_window pinnacle.window.v1.WindowRuleResponse.NewWindowRequest?
-
----@class pinnacle.window.v1.WindowRuleResponse.NewWindowRequest
----@field request_id integer?
----@field window_id integer?
-
----@class pinnacle.render.v1.SetUpscaleFilterRequest
----@field filter pinnacle.render.v1.Filter?
-
----@class pinnacle.render.v1.SetDownscaleFilterRequest
----@field filter pinnacle.render.v1.Filter?
-
 ---@class pinnacle.output.v1.SetLocRequest
 ---@field output_name string?
 ---@field x integer?
@@ -1135,6 +887,146 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.output.v1.GetFocusStackWindowIdsResponse
 ---@field window_ids integer[]?
 
+---@class pinnacle.process.v1.SpawnRequest
+---@field cmd string[]?
+---@field unique boolean?
+---@field once boolean?
+---@field shell_cmd string[]?
+---@field envs pinnacle.process.v1.SpawnRequest.EnvsEntry[]?
+---@field pipe_stdin boolean?
+---@field pipe_stdout boolean?
+---@field pipe_stderr boolean?
+
+---@class pinnacle.process.v1.SpawnRequest.EnvsEntry
+---@field key string?
+---@field value string?
+
+---@class pinnacle.process.v1.SpawnData
+---@field pid integer?
+---@field fd_socket_path string?
+---@field has_stdin boolean?
+---@field has_stdout boolean?
+---@field has_stderr boolean?
+
+---@class pinnacle.process.v1.SpawnResponse
+---@field spawn_data pinnacle.process.v1.SpawnData?
+
+---@class pinnacle.process.v1.WaitOnSpawnRequest
+---@field pid integer?
+
+---@class pinnacle.process.v1.WaitOnSpawnResponse
+---@field exit_code integer?
+---@field exit_msg string?
+
+---@class pinnacle.process.v1.SetEnvRequest
+---@field key string?
+---@field value string?
+
+---@class pinnacle.render.v1.SetUpscaleFilterRequest
+---@field filter pinnacle.render.v1.Filter?
+
+---@class pinnacle.render.v1.SetDownscaleFilterRequest
+---@field filter pinnacle.render.v1.Filter?
+
+---@class pinnacle.signal.v1.OutputConnectRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputConnectResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputDisconnectRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputDisconnectResponse
+---@field output_name string?
+
+---@class pinnacle.signal.v1.OutputResizeRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputResizeResponse
+---@field output_name string?
+---@field logical_width integer?
+---@field logical_height integer?
+
+---@class pinnacle.signal.v1.OutputMoveRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.OutputMoveResponse
+---@field output_name string?
+---@field x integer?
+---@field y integer?
+
+---@class pinnacle.signal.v1.WindowPointerEnterRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowPointerEnterResponse
+---@field window_id integer?
+
+---@class pinnacle.signal.v1.WindowPointerLeaveRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowPointerLeaveResponse
+---@field window_id integer?
+
+---@class pinnacle.signal.v1.WindowFocusedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.WindowFocusedResponse
+---@field window_id integer?
+
+---@class pinnacle.signal.v1.TagActiveRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.TagActiveResponse
+---@field tag_id integer?
+---@field active boolean?
+
+---@class pinnacle.signal.v1.InputDeviceAddedRequest
+---@field control pinnacle.signal.v1.StreamControl?
+
+---@class pinnacle.signal.v1.InputDeviceAddedResponse
+---@field device_sysname string?
+
+---@class pinnacle.tag.v1.GetRequest
+
+---@class pinnacle.tag.v1.GetResponse
+---@field tag_ids integer[]?
+
+---@class pinnacle.tag.v1.AddRequest
+---@field output_name string?
+---@field tag_names string[]?
+
+---@class pinnacle.tag.v1.AddResponse
+---@field tag_ids integer[]?
+
+---@class pinnacle.tag.v1.RemoveRequest
+---@field tag_ids integer[]?
+
+---@class pinnacle.tag.v1.GetActiveRequest
+---@field tag_id integer?
+
+---@class pinnacle.tag.v1.GetActiveResponse
+---@field active boolean?
+
+---@class pinnacle.tag.v1.GetNameRequest
+---@field tag_id integer?
+
+---@class pinnacle.tag.v1.GetNameResponse
+---@field name string?
+
+---@class pinnacle.tag.v1.GetOutputNameRequest
+---@field tag_id integer?
+
+---@class pinnacle.tag.v1.GetOutputNameResponse
+---@field output_name string?
+
+---@class pinnacle.tag.v1.SetActiveRequest
+---@field tag_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.tag.v1.SwitchToRequest
+---@field tag_id integer?
+
 ---@class pinnacle.v1.QuitRequest
 
 ---@class pinnacle.v1.ReloadConfigRequest
@@ -1159,35 +1051,129 @@ local pinnacle_v1_Backend = {
 ---@class pinnacle.v1.TakeLastErrorResponse
 ---@field error string?
 
+---@class pinnacle.window.v1.GetRequest
+
+---@class pinnacle.window.v1.GetResponse
+---@field window_ids integer[]?
+
+---@class pinnacle.window.v1.GetAppIdRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetAppIdResponse
+---@field app_id string?
+
+---@class pinnacle.window.v1.GetTitleRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetTitleResponse
+---@field title string?
+
+---@class pinnacle.window.v1.GetLocRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetLocResponse
+---@field loc pinnacle.util.v1.Point?
+
+---@class pinnacle.window.v1.GetSizeRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetSizeResponse
+---@field size pinnacle.util.v1.Size?
+
+---@class pinnacle.window.v1.GetFocusedRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetFocusedResponse
+---@field focused boolean?
+
+---@class pinnacle.window.v1.GetLayoutModeRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetLayoutModeResponse
+---@field layout_mode pinnacle.window.v1.LayoutMode?
+
+---@class pinnacle.window.v1.GetTagIdsRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.GetTagIdsResponse
+---@field tag_ids integer[]?
+
+---@class pinnacle.window.v1.CloseRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.SetGeometryRequest
+---@field window_id integer?
+---@field x integer?
+---@field y integer?
+---@field w integer?
+---@field h integer?
+
+---@class pinnacle.window.v1.SetFullscreenRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetMaximizedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetFloatingRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetFocusedRequest
+---@field window_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.SetDecorationModeRequest
+---@field window_id integer?
+---@field decoration_mode pinnacle.window.v1.DecorationMode?
+
+---@class pinnacle.window.v1.MoveToTagRequest
+---@field window_id integer?
+---@field tag_id integer?
+
+---@class pinnacle.window.v1.SetTagRequest
+---@field window_id integer?
+---@field tag_id integer?
+---@field set_or_toggle pinnacle.util.v1.SetOrToggle?
+
+---@class pinnacle.window.v1.RaiseRequest
+---@field window_id integer?
+
+---@class pinnacle.window.v1.MoveGrabRequest
+---@field button integer?
+
+---@class pinnacle.window.v1.ResizeGrabRequest
+---@field button integer?
+
+---@class pinnacle.window.v1.WindowRuleRequest
+---@field finished pinnacle.window.v1.WindowRuleRequest.Finished?
+
+---@class pinnacle.window.v1.WindowRuleRequest.Finished
+---@field request_id integer?
+
+---@class pinnacle.window.v1.WindowRuleResponse
+---@field new_window pinnacle.window.v1.WindowRuleResponse.NewWindowRequest?
+
+---@class pinnacle.window.v1.WindowRuleResponse.NewWindowRequest
+---@field request_id integer?
+---@field window_id integer?
+
 local google = {}
 google.protobuf = {}
 google.protobuf.Empty = {}
 local pinnacle = {}
-pinnacle.signal = {}
-pinnacle.signal.v1 = {}
-pinnacle.signal.v1.OutputConnectRequest = {}
-pinnacle.signal.v1.OutputConnectResponse = {}
-pinnacle.signal.v1.OutputDisconnectRequest = {}
-pinnacle.signal.v1.OutputDisconnectResponse = {}
-pinnacle.signal.v1.OutputResizeRequest = {}
-pinnacle.signal.v1.OutputResizeResponse = {}
-pinnacle.signal.v1.OutputMoveRequest = {}
-pinnacle.signal.v1.OutputMoveResponse = {}
-pinnacle.signal.v1.WindowPointerEnterRequest = {}
-pinnacle.signal.v1.WindowPointerEnterResponse = {}
-pinnacle.signal.v1.WindowPointerLeaveRequest = {}
-pinnacle.signal.v1.WindowPointerLeaveResponse = {}
-pinnacle.signal.v1.WindowFocusedRequest = {}
-pinnacle.signal.v1.WindowFocusedResponse = {}
-pinnacle.signal.v1.TagActiveRequest = {}
-pinnacle.signal.v1.TagActiveResponse = {}
-pinnacle.signal.v1.InputDeviceAddedRequest = {}
-pinnacle.signal.v1.InputDeviceAddedResponse = {}
 pinnacle.util = {}
 pinnacle.util.v1 = {}
 pinnacle.util.v1.Point = {}
 pinnacle.util.v1.Size = {}
 pinnacle.util.v1.Rect = {}
+pinnacle.debug = {}
+pinnacle.debug.v1 = {}
+pinnacle.debug.v1.SetDamageVisualizationRequest = {}
+pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest = {}
+pinnacle.debug.v1.SetCursorPlaneScanoutRequest = {}
+pinnacle.debug.v1.SetProcessPipingRequest = {}
 pinnacle.input = {}
 pinnacle.input.v1 = {}
 pinnacle.input.v1.Bind = {}
@@ -1236,74 +1222,6 @@ pinnacle.layout.v1.LayoutRequest = {}
 pinnacle.layout.v1.LayoutRequest.TreeResponse = {}
 pinnacle.layout.v1.LayoutRequest.ForceLayout = {}
 pinnacle.layout.v1.LayoutResponse = {}
-pinnacle.debug = {}
-pinnacle.debug.v1 = {}
-pinnacle.debug.v1.SetDamageVisualizationRequest = {}
-pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest = {}
-pinnacle.debug.v1.SetCursorPlaneScanoutRequest = {}
-pinnacle.debug.v1.SetProcessPipingRequest = {}
-pinnacle.tag = {}
-pinnacle.tag.v1 = {}
-pinnacle.tag.v1.GetRequest = {}
-pinnacle.tag.v1.GetResponse = {}
-pinnacle.tag.v1.AddRequest = {}
-pinnacle.tag.v1.AddResponse = {}
-pinnacle.tag.v1.RemoveRequest = {}
-pinnacle.tag.v1.GetActiveRequest = {}
-pinnacle.tag.v1.GetActiveResponse = {}
-pinnacle.tag.v1.GetNameRequest = {}
-pinnacle.tag.v1.GetNameResponse = {}
-pinnacle.tag.v1.GetOutputNameRequest = {}
-pinnacle.tag.v1.GetOutputNameResponse = {}
-pinnacle.tag.v1.SetActiveRequest = {}
-pinnacle.tag.v1.SwitchToRequest = {}
-pinnacle.process = {}
-pinnacle.process.v1 = {}
-pinnacle.process.v1.SpawnRequest = {}
-pinnacle.process.v1.SpawnRequest.EnvsEntry = {}
-pinnacle.process.v1.SpawnData = {}
-pinnacle.process.v1.SpawnResponse = {}
-pinnacle.process.v1.WaitOnSpawnRequest = {}
-pinnacle.process.v1.WaitOnSpawnResponse = {}
-pinnacle.process.v1.SetEnvRequest = {}
-pinnacle.window = {}
-pinnacle.window.v1 = {}
-pinnacle.window.v1.GetRequest = {}
-pinnacle.window.v1.GetResponse = {}
-pinnacle.window.v1.GetAppIdRequest = {}
-pinnacle.window.v1.GetAppIdResponse = {}
-pinnacle.window.v1.GetTitleRequest = {}
-pinnacle.window.v1.GetTitleResponse = {}
-pinnacle.window.v1.GetLocRequest = {}
-pinnacle.window.v1.GetLocResponse = {}
-pinnacle.window.v1.GetSizeRequest = {}
-pinnacle.window.v1.GetSizeResponse = {}
-pinnacle.window.v1.GetFocusedRequest = {}
-pinnacle.window.v1.GetFocusedResponse = {}
-pinnacle.window.v1.GetLayoutModeRequest = {}
-pinnacle.window.v1.GetLayoutModeResponse = {}
-pinnacle.window.v1.GetTagIdsRequest = {}
-pinnacle.window.v1.GetTagIdsResponse = {}
-pinnacle.window.v1.CloseRequest = {}
-pinnacle.window.v1.SetGeometryRequest = {}
-pinnacle.window.v1.SetFullscreenRequest = {}
-pinnacle.window.v1.SetMaximizedRequest = {}
-pinnacle.window.v1.SetFloatingRequest = {}
-pinnacle.window.v1.SetFocusedRequest = {}
-pinnacle.window.v1.SetDecorationModeRequest = {}
-pinnacle.window.v1.MoveToTagRequest = {}
-pinnacle.window.v1.SetTagRequest = {}
-pinnacle.window.v1.RaiseRequest = {}
-pinnacle.window.v1.MoveGrabRequest = {}
-pinnacle.window.v1.ResizeGrabRequest = {}
-pinnacle.window.v1.WindowRuleRequest = {}
-pinnacle.window.v1.WindowRuleRequest.Finished = {}
-pinnacle.window.v1.WindowRuleResponse = {}
-pinnacle.window.v1.WindowRuleResponse.NewWindowRequest = {}
-pinnacle.render = {}
-pinnacle.render.v1 = {}
-pinnacle.render.v1.SetUpscaleFilterRequest = {}
-pinnacle.render.v1.SetDownscaleFilterRequest = {}
 pinnacle.output = {}
 pinnacle.output.v1 = {}
 pinnacle.output.v1.SetLocRequest = {}
@@ -1340,6 +1258,54 @@ pinnacle.output.v1.GetPoweredRequest = {}
 pinnacle.output.v1.GetPoweredResponse = {}
 pinnacle.output.v1.GetFocusStackWindowIdsRequest = {}
 pinnacle.output.v1.GetFocusStackWindowIdsResponse = {}
+pinnacle.process = {}
+pinnacle.process.v1 = {}
+pinnacle.process.v1.SpawnRequest = {}
+pinnacle.process.v1.SpawnRequest.EnvsEntry = {}
+pinnacle.process.v1.SpawnData = {}
+pinnacle.process.v1.SpawnResponse = {}
+pinnacle.process.v1.WaitOnSpawnRequest = {}
+pinnacle.process.v1.WaitOnSpawnResponse = {}
+pinnacle.process.v1.SetEnvRequest = {}
+pinnacle.render = {}
+pinnacle.render.v1 = {}
+pinnacle.render.v1.SetUpscaleFilterRequest = {}
+pinnacle.render.v1.SetDownscaleFilterRequest = {}
+pinnacle.signal = {}
+pinnacle.signal.v1 = {}
+pinnacle.signal.v1.OutputConnectRequest = {}
+pinnacle.signal.v1.OutputConnectResponse = {}
+pinnacle.signal.v1.OutputDisconnectRequest = {}
+pinnacle.signal.v1.OutputDisconnectResponse = {}
+pinnacle.signal.v1.OutputResizeRequest = {}
+pinnacle.signal.v1.OutputResizeResponse = {}
+pinnacle.signal.v1.OutputMoveRequest = {}
+pinnacle.signal.v1.OutputMoveResponse = {}
+pinnacle.signal.v1.WindowPointerEnterRequest = {}
+pinnacle.signal.v1.WindowPointerEnterResponse = {}
+pinnacle.signal.v1.WindowPointerLeaveRequest = {}
+pinnacle.signal.v1.WindowPointerLeaveResponse = {}
+pinnacle.signal.v1.WindowFocusedRequest = {}
+pinnacle.signal.v1.WindowFocusedResponse = {}
+pinnacle.signal.v1.TagActiveRequest = {}
+pinnacle.signal.v1.TagActiveResponse = {}
+pinnacle.signal.v1.InputDeviceAddedRequest = {}
+pinnacle.signal.v1.InputDeviceAddedResponse = {}
+pinnacle.tag = {}
+pinnacle.tag.v1 = {}
+pinnacle.tag.v1.GetRequest = {}
+pinnacle.tag.v1.GetResponse = {}
+pinnacle.tag.v1.AddRequest = {}
+pinnacle.tag.v1.AddResponse = {}
+pinnacle.tag.v1.RemoveRequest = {}
+pinnacle.tag.v1.GetActiveRequest = {}
+pinnacle.tag.v1.GetActiveResponse = {}
+pinnacle.tag.v1.GetNameRequest = {}
+pinnacle.tag.v1.GetNameResponse = {}
+pinnacle.tag.v1.GetOutputNameRequest = {}
+pinnacle.tag.v1.GetOutputNameResponse = {}
+pinnacle.tag.v1.SetActiveRequest = {}
+pinnacle.tag.v1.SwitchToRequest = {}
 pinnacle.v1 = {}
 pinnacle.v1.QuitRequest = {}
 pinnacle.v1.ReloadConfigRequest = {}
@@ -1351,7 +1317,40 @@ pinnacle.v1.SetXwaylandClientSelfScaleRequest = {}
 pinnacle.v1.SetLastErrorRequest = {}
 pinnacle.v1.TakeLastErrorRequest = {}
 pinnacle.v1.TakeLastErrorResponse = {}
-pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
+pinnacle.window = {}
+pinnacle.window.v1 = {}
+pinnacle.window.v1.GetRequest = {}
+pinnacle.window.v1.GetResponse = {}
+pinnacle.window.v1.GetAppIdRequest = {}
+pinnacle.window.v1.GetAppIdResponse = {}
+pinnacle.window.v1.GetTitleRequest = {}
+pinnacle.window.v1.GetTitleResponse = {}
+pinnacle.window.v1.GetLocRequest = {}
+pinnacle.window.v1.GetLocResponse = {}
+pinnacle.window.v1.GetSizeRequest = {}
+pinnacle.window.v1.GetSizeResponse = {}
+pinnacle.window.v1.GetFocusedRequest = {}
+pinnacle.window.v1.GetFocusedResponse = {}
+pinnacle.window.v1.GetLayoutModeRequest = {}
+pinnacle.window.v1.GetLayoutModeResponse = {}
+pinnacle.window.v1.GetTagIdsRequest = {}
+pinnacle.window.v1.GetTagIdsResponse = {}
+pinnacle.window.v1.CloseRequest = {}
+pinnacle.window.v1.SetGeometryRequest = {}
+pinnacle.window.v1.SetFullscreenRequest = {}
+pinnacle.window.v1.SetMaximizedRequest = {}
+pinnacle.window.v1.SetFloatingRequest = {}
+pinnacle.window.v1.SetFocusedRequest = {}
+pinnacle.window.v1.SetDecorationModeRequest = {}
+pinnacle.window.v1.MoveToTagRequest = {}
+pinnacle.window.v1.SetTagRequest = {}
+pinnacle.window.v1.RaiseRequest = {}
+pinnacle.window.v1.MoveGrabRequest = {}
+pinnacle.window.v1.ResizeGrabRequest = {}
+pinnacle.window.v1.WindowRuleRequest = {}
+pinnacle.window.v1.WindowRuleRequest.Finished = {}
+pinnacle.window.v1.WindowRuleResponse = {}
+pinnacle.window.v1.WindowRuleResponse.NewWindowRequest = {}
 pinnacle.util.v1.SetOrToggle = pinnacle_util_v1_SetOrToggle
 pinnacle.util.v1.AbsOrRel = pinnacle_util_v1_AbsOrRel
 pinnacle.input.v1.Modifier = pinnacle_input_v1_Modifier
@@ -1363,201 +1362,81 @@ pinnacle.input.v1.TapButtonMap = pinnacle_input_v1_TapButtonMap
 pinnacle.input.v1.SendEventsMode = pinnacle_input_v1_SendEventsMode
 pinnacle.input.v1.DeviceType = pinnacle_input_v1_DeviceType
 pinnacle.layout.v1.FlexDir = pinnacle_layout_v1_FlexDir
+pinnacle.output.v1.Transform = pinnacle_output_v1_Transform
+pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
+pinnacle.signal.v1.StreamControl = pinnacle_signal_v1_StreamControl
+pinnacle.v1.Backend = pinnacle_v1_Backend
 pinnacle.window.v1.LayoutMode = pinnacle_window_v1_LayoutMode
 pinnacle.window.v1.DecorationMode = pinnacle_window_v1_DecorationMode
-pinnacle.render.v1.Filter = pinnacle_render_v1_Filter
-pinnacle.output.v1.Transform = pinnacle_output_v1_Transform
-pinnacle.v1.Backend = pinnacle_v1_Backend
 
-pinnacle.signal.v1.SignalService = {}
-pinnacle.signal.v1.SignalService.OutputConnect = {}
-pinnacle.signal.v1.SignalService.OutputConnect.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.OutputConnect.method = "OutputConnect"
-pinnacle.signal.v1.SignalService.OutputConnect.request = ".pinnacle.signal.v1.OutputConnectRequest"
-pinnacle.signal.v1.SignalService.OutputConnect.response = ".pinnacle.signal.v1.OutputConnectResponse"
+pinnacle.debug.v1.DebugService = {}
+pinnacle.debug.v1.DebugService.SetDamageVisualization = {}
+pinnacle.debug.v1.DebugService.SetDamageVisualization.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.method = "SetDamageVisualization"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.request = ".pinnacle.debug.v1.SetDamageVisualizationRequest"
+pinnacle.debug.v1.DebugService.SetDamageVisualization.response = ".google.protobuf.Empty"
 
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
+---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param callback fun(response: pinnacle.signal.v1.OutputConnectResponse, stream: grpc_client.h2.Stream)
+---@param data pinnacle.debug.v1.SetDamageVisualizationRequest
 ---
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputConnect(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputConnect, callback)
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetDamageVisualization(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetDamageVisualization, data)
 end
-pinnacle.signal.v1.SignalService.OutputDisconnect = {}
-pinnacle.signal.v1.SignalService.OutputDisconnect.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.OutputDisconnect.method = "OutputDisconnect"
-pinnacle.signal.v1.SignalService.OutputDisconnect.request = ".pinnacle.signal.v1.OutputDisconnectRequest"
-pinnacle.signal.v1.SignalService.OutputDisconnect.response = ".pinnacle.signal.v1.OutputDisconnectResponse"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization = {}
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.method = "SetOpaqueRegionVisualization"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.request = ".pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest"
+pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.response = ".google.protobuf.Empty"
 
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
+---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param callback fun(response: pinnacle.signal.v1.OutputDisconnectResponse, stream: grpc_client.h2.Stream)
+---@param data pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
 ---
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputDisconnect(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputDisconnect, callback)
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetOpaqueRegionVisualization(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization, data)
 end
-pinnacle.signal.v1.SignalService.OutputResize = {}
-pinnacle.signal.v1.SignalService.OutputResize.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.OutputResize.method = "OutputResize"
-pinnacle.signal.v1.SignalService.OutputResize.request = ".pinnacle.signal.v1.OutputResizeRequest"
-pinnacle.signal.v1.SignalService.OutputResize.response = ".pinnacle.signal.v1.OutputResizeResponse"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout = {}
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.method = "SetCursorPlaneScanout"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.request = ".pinnacle.debug.v1.SetCursorPlaneScanoutRequest"
+pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.response = ".google.protobuf.Empty"
 
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
+---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param callback fun(response: pinnacle.signal.v1.OutputResizeResponse, stream: grpc_client.h2.Stream)
+---@param data pinnacle.debug.v1.SetCursorPlaneScanoutRequest
 ---
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputResize(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputResize, callback)
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetCursorPlaneScanout(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetCursorPlaneScanout, data)
 end
-pinnacle.signal.v1.SignalService.OutputMove = {}
-pinnacle.signal.v1.SignalService.OutputMove.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.OutputMove.method = "OutputMove"
-pinnacle.signal.v1.SignalService.OutputMove.request = ".pinnacle.signal.v1.OutputMoveRequest"
-pinnacle.signal.v1.SignalService.OutputMove.response = ".pinnacle.signal.v1.OutputMoveResponse"
+pinnacle.debug.v1.DebugService.SetProcessPiping = {}
+pinnacle.debug.v1.DebugService.SetProcessPiping.service = "pinnacle.debug.v1.DebugService"
+pinnacle.debug.v1.DebugService.SetProcessPiping.method = "SetProcessPiping"
+pinnacle.debug.v1.DebugService.SetProcessPiping.request = ".pinnacle.debug.v1.SetProcessPipingRequest"
+pinnacle.debug.v1.DebugService.SetProcessPiping.response = ".google.protobuf.Empty"
 
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
+---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param callback fun(response: pinnacle.signal.v1.OutputMoveResponse, stream: grpc_client.h2.Stream)
+---@param data pinnacle.debug.v1.SetProcessPipingRequest
 ---
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_OutputMove(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback)
-end
-pinnacle.signal.v1.SignalService.WindowPointerEnter = {}
-pinnacle.signal.v1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.WindowPointerEnter.method = "WindowPointerEnter"
-pinnacle.signal.v1.SignalService.WindowPointerEnter.request = ".pinnacle.signal.v1.WindowPointerEnterRequest"
-pinnacle.signal.v1.SignalService.WindowPointerEnter.response = ".pinnacle.signal.v1.WindowPointerEnterResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.signal.v1.WindowPointerEnterResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowPointerEnter(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerEnter, callback)
-end
-pinnacle.signal.v1.SignalService.WindowPointerLeave = {}
-pinnacle.signal.v1.SignalService.WindowPointerLeave.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.WindowPointerLeave.method = "WindowPointerLeave"
-pinnacle.signal.v1.SignalService.WindowPointerLeave.request = ".pinnacle.signal.v1.WindowPointerLeaveRequest"
-pinnacle.signal.v1.SignalService.WindowPointerLeave.response = ".pinnacle.signal.v1.WindowPointerLeaveResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.signal.v1.WindowPointerLeaveResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowPointerLeave(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerLeave, callback)
-end
-pinnacle.signal.v1.SignalService.WindowFocused = {}
-pinnacle.signal.v1.SignalService.WindowFocused.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.WindowFocused.method = "WindowFocused"
-pinnacle.signal.v1.SignalService.WindowFocused.request = ".pinnacle.signal.v1.WindowFocusedRequest"
-pinnacle.signal.v1.SignalService.WindowFocused.response = ".pinnacle.signal.v1.WindowFocusedResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.signal.v1.WindowFocusedResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_WindowFocused(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowFocused, callback)
-end
-pinnacle.signal.v1.SignalService.TagActive = {}
-pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.TagActive.method = "TagActive"
-pinnacle.signal.v1.SignalService.TagActive.request = ".pinnacle.signal.v1.TagActiveRequest"
-pinnacle.signal.v1.SignalService.TagActive.response = ".pinnacle.signal.v1.TagActiveResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.signal.v1.TagActiveResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_TagActive(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagActive, callback)
-end
-pinnacle.signal.v1.SignalService.InputDeviceAdded = {}
-pinnacle.signal.v1.SignalService.InputDeviceAdded.service = "pinnacle.signal.v1.SignalService"
-pinnacle.signal.v1.SignalService.InputDeviceAdded.method = "InputDeviceAdded"
-pinnacle.signal.v1.SignalService.InputDeviceAdded.request = ".pinnacle.signal.v1.InputDeviceAddedRequest"
-pinnacle.signal.v1.SignalService.InputDeviceAdded.response = ".pinnacle.signal.v1.InputDeviceAddedResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.signal.v1.InputDeviceAddedResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_signal_v1_SignalService_InputDeviceAdded(callback)
-    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.InputDeviceAdded, callback)
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_debug_v1_DebugService_SetProcessPiping(data)
+    return self:unary_request(pinnacle.debug.v1.DebugService.SetProcessPiping, data)
 end
 pinnacle.input.v1.InputService = {}
 pinnacle.input.v1.InputService.Bind = {}
@@ -1926,74 +1805,608 @@ pinnacle.layout.v1.LayoutService.Layout.response = ".pinnacle.layout.v1.LayoutRe
 function Client:pinnacle_layout_v1_LayoutService_Layout(callback)
     return self:bidirectional_streaming_request(pinnacle.layout.v1.LayoutService.Layout, callback)
 end
-pinnacle.debug.v1.DebugService = {}
-pinnacle.debug.v1.DebugService.SetDamageVisualization = {}
-pinnacle.debug.v1.DebugService.SetDamageVisualization.service = "pinnacle.debug.v1.DebugService"
-pinnacle.debug.v1.DebugService.SetDamageVisualization.method = "SetDamageVisualization"
-pinnacle.debug.v1.DebugService.SetDamageVisualization.request = ".pinnacle.debug.v1.SetDamageVisualizationRequest"
-pinnacle.debug.v1.DebugService.SetDamageVisualization.response = ".google.protobuf.Empty"
+pinnacle.output.v1.OutputService = {}
+pinnacle.output.v1.OutputService.Get = {}
+pinnacle.output.v1.OutputService.Get.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.Get.method = "Get"
+pinnacle.output.v1.OutputService.Get.request = ".pinnacle.output.v1.GetRequest"
+pinnacle.output.v1.OutputService.Get.response = ".pinnacle.output.v1.GetResponse"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.debug.v1.SetDamageVisualizationRequest
+---@param data pinnacle.output.v1.GetRequest
 ---
----@return google.protobuf.Empty | nil response
+---@return pinnacle.output.v1.GetResponse | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_debug_v1_DebugService_SetDamageVisualization(data)
-    return self:unary_request(pinnacle.debug.v1.DebugService.SetDamageVisualization, data)
+function Client:pinnacle_output_v1_OutputService_Get(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.Get, data)
 end
-pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization = {}
-pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.service = "pinnacle.debug.v1.DebugService"
-pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.method = "SetOpaqueRegionVisualization"
-pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.request = ".pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest"
-pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization.response = ".google.protobuf.Empty"
+pinnacle.output.v1.OutputService.SetLoc = {}
+pinnacle.output.v1.OutputService.SetLoc.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetLoc.method = "SetLoc"
+pinnacle.output.v1.OutputService.SetLoc.request = ".pinnacle.output.v1.SetLocRequest"
+pinnacle.output.v1.OutputService.SetLoc.response = ".google.protobuf.Empty"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.debug.v1.SetOpaqueRegionVisualizationRequest
+---@param data pinnacle.output.v1.SetLocRequest
 ---
 ---@return google.protobuf.Empty | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_debug_v1_DebugService_SetOpaqueRegionVisualization(data)
-    return self:unary_request(pinnacle.debug.v1.DebugService.SetOpaqueRegionVisualization, data)
+function Client:pinnacle_output_v1_OutputService_SetLoc(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetLoc, data)
 end
-pinnacle.debug.v1.DebugService.SetCursorPlaneScanout = {}
-pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.service = "pinnacle.debug.v1.DebugService"
-pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.method = "SetCursorPlaneScanout"
-pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.request = ".pinnacle.debug.v1.SetCursorPlaneScanoutRequest"
-pinnacle.debug.v1.DebugService.SetCursorPlaneScanout.response = ".google.protobuf.Empty"
+pinnacle.output.v1.OutputService.SetMode = {}
+pinnacle.output.v1.OutputService.SetMode.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetMode.method = "SetMode"
+pinnacle.output.v1.OutputService.SetMode.request = ".pinnacle.output.v1.SetModeRequest"
+pinnacle.output.v1.OutputService.SetMode.response = ".google.protobuf.Empty"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.debug.v1.SetCursorPlaneScanoutRequest
+---@param data pinnacle.output.v1.SetModeRequest
 ---
 ---@return google.protobuf.Empty | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_debug_v1_DebugService_SetCursorPlaneScanout(data)
-    return self:unary_request(pinnacle.debug.v1.DebugService.SetCursorPlaneScanout, data)
+function Client:pinnacle_output_v1_OutputService_SetMode(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetMode, data)
 end
-pinnacle.debug.v1.DebugService.SetProcessPiping = {}
-pinnacle.debug.v1.DebugService.SetProcessPiping.service = "pinnacle.debug.v1.DebugService"
-pinnacle.debug.v1.DebugService.SetProcessPiping.method = "SetProcessPiping"
-pinnacle.debug.v1.DebugService.SetProcessPiping.request = ".pinnacle.debug.v1.SetProcessPipingRequest"
-pinnacle.debug.v1.DebugService.SetProcessPiping.response = ".google.protobuf.Empty"
+pinnacle.output.v1.OutputService.SetModeline = {}
+pinnacle.output.v1.OutputService.SetModeline.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetModeline.method = "SetModeline"
+pinnacle.output.v1.OutputService.SetModeline.request = ".pinnacle.output.v1.SetModelineRequest"
+pinnacle.output.v1.OutputService.SetModeline.response = ".google.protobuf.Empty"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.debug.v1.SetProcessPipingRequest
+---@param data pinnacle.output.v1.SetModelineRequest
 ---
 ---@return google.protobuf.Empty | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_debug_v1_DebugService_SetProcessPiping(data)
-    return self:unary_request(pinnacle.debug.v1.DebugService.SetProcessPiping, data)
+function Client:pinnacle_output_v1_OutputService_SetModeline(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetModeline, data)
+end
+pinnacle.output.v1.OutputService.SetScale = {}
+pinnacle.output.v1.OutputService.SetScale.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetScale.method = "SetScale"
+pinnacle.output.v1.OutputService.SetScale.request = ".pinnacle.output.v1.SetScaleRequest"
+pinnacle.output.v1.OutputService.SetScale.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.SetScaleRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_SetScale(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetScale, data)
+end
+pinnacle.output.v1.OutputService.SetTransform = {}
+pinnacle.output.v1.OutputService.SetTransform.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetTransform.method = "SetTransform"
+pinnacle.output.v1.OutputService.SetTransform.request = ".pinnacle.output.v1.SetTransformRequest"
+pinnacle.output.v1.OutputService.SetTransform.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.SetTransformRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_SetTransform(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetTransform, data)
+end
+pinnacle.output.v1.OutputService.SetPowered = {}
+pinnacle.output.v1.OutputService.SetPowered.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.SetPowered.method = "SetPowered"
+pinnacle.output.v1.OutputService.SetPowered.request = ".pinnacle.output.v1.SetPoweredRequest"
+pinnacle.output.v1.OutputService.SetPowered.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.SetPoweredRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_SetPowered(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.SetPowered, data)
+end
+pinnacle.output.v1.OutputService.GetInfo = {}
+pinnacle.output.v1.OutputService.GetInfo.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetInfo.method = "GetInfo"
+pinnacle.output.v1.OutputService.GetInfo.request = ".pinnacle.output.v1.GetInfoRequest"
+pinnacle.output.v1.OutputService.GetInfo.response = ".pinnacle.output.v1.GetInfoResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetInfoRequest
+---
+---@return pinnacle.output.v1.GetInfoResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetInfo(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetInfo, data)
+end
+pinnacle.output.v1.OutputService.GetLoc = {}
+pinnacle.output.v1.OutputService.GetLoc.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetLoc.method = "GetLoc"
+pinnacle.output.v1.OutputService.GetLoc.request = ".pinnacle.output.v1.GetLocRequest"
+pinnacle.output.v1.OutputService.GetLoc.response = ".pinnacle.output.v1.GetLocResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetLocRequest
+---
+---@return pinnacle.output.v1.GetLocResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetLoc(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetLoc, data)
+end
+pinnacle.output.v1.OutputService.GetLogicalSize = {}
+pinnacle.output.v1.OutputService.GetLogicalSize.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetLogicalSize.method = "GetLogicalSize"
+pinnacle.output.v1.OutputService.GetLogicalSize.request = ".pinnacle.output.v1.GetLogicalSizeRequest"
+pinnacle.output.v1.OutputService.GetLogicalSize.response = ".pinnacle.output.v1.GetLogicalSizeResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetLogicalSizeRequest
+---
+---@return pinnacle.output.v1.GetLogicalSizeResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetLogicalSize(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetLogicalSize, data)
+end
+pinnacle.output.v1.OutputService.GetPhysicalSize = {}
+pinnacle.output.v1.OutputService.GetPhysicalSize.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetPhysicalSize.method = "GetPhysicalSize"
+pinnacle.output.v1.OutputService.GetPhysicalSize.request = ".pinnacle.output.v1.GetPhysicalSizeRequest"
+pinnacle.output.v1.OutputService.GetPhysicalSize.response = ".pinnacle.output.v1.GetPhysicalSizeResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetPhysicalSizeRequest
+---
+---@return pinnacle.output.v1.GetPhysicalSizeResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetPhysicalSize(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetPhysicalSize, data)
+end
+pinnacle.output.v1.OutputService.GetModes = {}
+pinnacle.output.v1.OutputService.GetModes.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetModes.method = "GetModes"
+pinnacle.output.v1.OutputService.GetModes.request = ".pinnacle.output.v1.GetModesRequest"
+pinnacle.output.v1.OutputService.GetModes.response = ".pinnacle.output.v1.GetModesResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetModesRequest
+---
+---@return pinnacle.output.v1.GetModesResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetModes(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetModes, data)
+end
+pinnacle.output.v1.OutputService.GetFocused = {}
+pinnacle.output.v1.OutputService.GetFocused.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetFocused.method = "GetFocused"
+pinnacle.output.v1.OutputService.GetFocused.request = ".pinnacle.output.v1.GetFocusedRequest"
+pinnacle.output.v1.OutputService.GetFocused.response = ".pinnacle.output.v1.GetFocusedResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetFocusedRequest
+---
+---@return pinnacle.output.v1.GetFocusedResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetFocused(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetFocused, data)
+end
+pinnacle.output.v1.OutputService.GetTagIds = {}
+pinnacle.output.v1.OutputService.GetTagIds.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetTagIds.method = "GetTagIds"
+pinnacle.output.v1.OutputService.GetTagIds.request = ".pinnacle.output.v1.GetTagIdsRequest"
+pinnacle.output.v1.OutputService.GetTagIds.response = ".pinnacle.output.v1.GetTagIdsResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetTagIdsRequest
+---
+---@return pinnacle.output.v1.GetTagIdsResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetTagIds(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetTagIds, data)
+end
+pinnacle.output.v1.OutputService.GetScale = {}
+pinnacle.output.v1.OutputService.GetScale.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetScale.method = "GetScale"
+pinnacle.output.v1.OutputService.GetScale.request = ".pinnacle.output.v1.GetScaleRequest"
+pinnacle.output.v1.OutputService.GetScale.response = ".pinnacle.output.v1.GetScaleResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetScaleRequest
+---
+---@return pinnacle.output.v1.GetScaleResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetScale(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetScale, data)
+end
+pinnacle.output.v1.OutputService.GetTransform = {}
+pinnacle.output.v1.OutputService.GetTransform.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetTransform.method = "GetTransform"
+pinnacle.output.v1.OutputService.GetTransform.request = ".pinnacle.output.v1.GetTransformRequest"
+pinnacle.output.v1.OutputService.GetTransform.response = ".pinnacle.output.v1.GetTransformResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetTransformRequest
+---
+---@return pinnacle.output.v1.GetTransformResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetTransform(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetTransform, data)
+end
+pinnacle.output.v1.OutputService.GetEnabled = {}
+pinnacle.output.v1.OutputService.GetEnabled.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetEnabled.method = "GetEnabled"
+pinnacle.output.v1.OutputService.GetEnabled.request = ".pinnacle.output.v1.GetEnabledRequest"
+pinnacle.output.v1.OutputService.GetEnabled.response = ".pinnacle.output.v1.GetEnabledResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetEnabledRequest
+---
+---@return pinnacle.output.v1.GetEnabledResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetEnabled(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetEnabled, data)
+end
+pinnacle.output.v1.OutputService.GetPowered = {}
+pinnacle.output.v1.OutputService.GetPowered.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetPowered.method = "GetPowered"
+pinnacle.output.v1.OutputService.GetPowered.request = ".pinnacle.output.v1.GetPoweredRequest"
+pinnacle.output.v1.OutputService.GetPowered.response = ".pinnacle.output.v1.GetPoweredResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetPoweredRequest
+---
+---@return pinnacle.output.v1.GetPoweredResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetPowered(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetPowered, data)
+end
+pinnacle.output.v1.OutputService.GetFocusStackWindowIds = {}
+pinnacle.output.v1.OutputService.GetFocusStackWindowIds.service = "pinnacle.output.v1.OutputService"
+pinnacle.output.v1.OutputService.GetFocusStackWindowIds.method = "GetFocusStackWindowIds"
+pinnacle.output.v1.OutputService.GetFocusStackWindowIds.request = ".pinnacle.output.v1.GetFocusStackWindowIdsRequest"
+pinnacle.output.v1.OutputService.GetFocusStackWindowIds.response = ".pinnacle.output.v1.GetFocusStackWindowIdsResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.output.v1.GetFocusStackWindowIdsRequest
+---
+---@return pinnacle.output.v1.GetFocusStackWindowIdsResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_output_v1_OutputService_GetFocusStackWindowIds(data)
+    return self:unary_request(pinnacle.output.v1.OutputService.GetFocusStackWindowIds, data)
+end
+pinnacle.process.v1.ProcessService = {}
+pinnacle.process.v1.ProcessService.Spawn = {}
+pinnacle.process.v1.ProcessService.Spawn.service = "pinnacle.process.v1.ProcessService"
+pinnacle.process.v1.ProcessService.Spawn.method = "Spawn"
+pinnacle.process.v1.ProcessService.Spawn.request = ".pinnacle.process.v1.SpawnRequest"
+pinnacle.process.v1.ProcessService.Spawn.response = ".pinnacle.process.v1.SpawnResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.process.v1.SpawnRequest
+---
+---@return pinnacle.process.v1.SpawnResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_process_v1_ProcessService_Spawn(data)
+    return self:unary_request(pinnacle.process.v1.ProcessService.Spawn, data)
+end
+pinnacle.process.v1.ProcessService.WaitOnSpawn = {}
+pinnacle.process.v1.ProcessService.WaitOnSpawn.service = "pinnacle.process.v1.ProcessService"
+pinnacle.process.v1.ProcessService.WaitOnSpawn.method = "WaitOnSpawn"
+pinnacle.process.v1.ProcessService.WaitOnSpawn.request = ".pinnacle.process.v1.WaitOnSpawnRequest"
+pinnacle.process.v1.ProcessService.WaitOnSpawn.response = ".pinnacle.process.v1.WaitOnSpawnResponse"
+
+---Performs a server-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---@nodiscard
+---
+---@param data pinnacle.process.v1.WaitOnSpawnRequest
+---@param callback fun(response: pinnacle.process.v1.WaitOnSpawnResponse)
+---
+---@return string | nil An error string, if any
+function Client:pinnacle_process_v1_ProcessService_WaitOnSpawn(data, callback)
+    return self:server_streaming_request(pinnacle.process.v1.ProcessService.WaitOnSpawn, data, callback)
+end
+pinnacle.process.v1.ProcessService.SetEnv = {}
+pinnacle.process.v1.ProcessService.SetEnv.service = "pinnacle.process.v1.ProcessService"
+pinnacle.process.v1.ProcessService.SetEnv.method = "SetEnv"
+pinnacle.process.v1.ProcessService.SetEnv.request = ".pinnacle.process.v1.SetEnvRequest"
+pinnacle.process.v1.ProcessService.SetEnv.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.process.v1.SetEnvRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_process_v1_ProcessService_SetEnv(data)
+    return self:unary_request(pinnacle.process.v1.ProcessService.SetEnv, data)
+end
+pinnacle.render.v1.RenderService = {}
+pinnacle.render.v1.RenderService.SetUpscaleFilter = {}
+pinnacle.render.v1.RenderService.SetUpscaleFilter.service = "pinnacle.render.v1.RenderService"
+pinnacle.render.v1.RenderService.SetUpscaleFilter.method = "SetUpscaleFilter"
+pinnacle.render.v1.RenderService.SetUpscaleFilter.request = ".pinnacle.render.v1.SetUpscaleFilterRequest"
+pinnacle.render.v1.RenderService.SetUpscaleFilter.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.render.v1.SetUpscaleFilterRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_render_v1_RenderService_SetUpscaleFilter(data)
+    return self:unary_request(pinnacle.render.v1.RenderService.SetUpscaleFilter, data)
+end
+pinnacle.render.v1.RenderService.SetDownscaleFilter = {}
+pinnacle.render.v1.RenderService.SetDownscaleFilter.service = "pinnacle.render.v1.RenderService"
+pinnacle.render.v1.RenderService.SetDownscaleFilter.method = "SetDownscaleFilter"
+pinnacle.render.v1.RenderService.SetDownscaleFilter.request = ".pinnacle.render.v1.SetDownscaleFilterRequest"
+pinnacle.render.v1.RenderService.SetDownscaleFilter.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.render.v1.SetDownscaleFilterRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_render_v1_RenderService_SetDownscaleFilter(data)
+    return self:unary_request(pinnacle.render.v1.RenderService.SetDownscaleFilter, data)
+end
+pinnacle.signal.v1.SignalService = {}
+pinnacle.signal.v1.SignalService.OutputConnect = {}
+pinnacle.signal.v1.SignalService.OutputConnect.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputConnect.method = "OutputConnect"
+pinnacle.signal.v1.SignalService.OutputConnect.request = ".pinnacle.signal.v1.OutputConnectRequest"
+pinnacle.signal.v1.SignalService.OutputConnect.response = ".pinnacle.signal.v1.OutputConnectResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputConnectResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputConnect(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputConnect, callback)
+end
+pinnacle.signal.v1.SignalService.OutputDisconnect = {}
+pinnacle.signal.v1.SignalService.OutputDisconnect.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputDisconnect.method = "OutputDisconnect"
+pinnacle.signal.v1.SignalService.OutputDisconnect.request = ".pinnacle.signal.v1.OutputDisconnectRequest"
+pinnacle.signal.v1.SignalService.OutputDisconnect.response = ".pinnacle.signal.v1.OutputDisconnectResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputDisconnectResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputDisconnect(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputDisconnect, callback)
+end
+pinnacle.signal.v1.SignalService.OutputResize = {}
+pinnacle.signal.v1.SignalService.OutputResize.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputResize.method = "OutputResize"
+pinnacle.signal.v1.SignalService.OutputResize.request = ".pinnacle.signal.v1.OutputResizeRequest"
+pinnacle.signal.v1.SignalService.OutputResize.response = ".pinnacle.signal.v1.OutputResizeResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputResizeResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputResize(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputResize, callback)
+end
+pinnacle.signal.v1.SignalService.OutputMove = {}
+pinnacle.signal.v1.SignalService.OutputMove.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.OutputMove.method = "OutputMove"
+pinnacle.signal.v1.SignalService.OutputMove.request = ".pinnacle.signal.v1.OutputMoveRequest"
+pinnacle.signal.v1.SignalService.OutputMove.response = ".pinnacle.signal.v1.OutputMoveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.OutputMoveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_OutputMove(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.OutputMove, callback)
+end
+pinnacle.signal.v1.SignalService.WindowPointerEnter = {}
+pinnacle.signal.v1.SignalService.WindowPointerEnter.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowPointerEnter.method = "WindowPointerEnter"
+pinnacle.signal.v1.SignalService.WindowPointerEnter.request = ".pinnacle.signal.v1.WindowPointerEnterRequest"
+pinnacle.signal.v1.SignalService.WindowPointerEnter.response = ".pinnacle.signal.v1.WindowPointerEnterResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowPointerEnterResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowPointerEnter(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerEnter, callback)
+end
+pinnacle.signal.v1.SignalService.WindowPointerLeave = {}
+pinnacle.signal.v1.SignalService.WindowPointerLeave.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowPointerLeave.method = "WindowPointerLeave"
+pinnacle.signal.v1.SignalService.WindowPointerLeave.request = ".pinnacle.signal.v1.WindowPointerLeaveRequest"
+pinnacle.signal.v1.SignalService.WindowPointerLeave.response = ".pinnacle.signal.v1.WindowPointerLeaveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowPointerLeaveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowPointerLeave(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowPointerLeave, callback)
+end
+pinnacle.signal.v1.SignalService.WindowFocused = {}
+pinnacle.signal.v1.SignalService.WindowFocused.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.WindowFocused.method = "WindowFocused"
+pinnacle.signal.v1.SignalService.WindowFocused.request = ".pinnacle.signal.v1.WindowFocusedRequest"
+pinnacle.signal.v1.SignalService.WindowFocused.response = ".pinnacle.signal.v1.WindowFocusedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.WindowFocusedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_WindowFocused(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.WindowFocused, callback)
+end
+pinnacle.signal.v1.SignalService.TagActive = {}
+pinnacle.signal.v1.SignalService.TagActive.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.TagActive.method = "TagActive"
+pinnacle.signal.v1.SignalService.TagActive.request = ".pinnacle.signal.v1.TagActiveRequest"
+pinnacle.signal.v1.SignalService.TagActive.response = ".pinnacle.signal.v1.TagActiveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.TagActiveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_TagActive(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.TagActive, callback)
+end
+pinnacle.signal.v1.SignalService.InputDeviceAdded = {}
+pinnacle.signal.v1.SignalService.InputDeviceAdded.service = "pinnacle.signal.v1.SignalService"
+pinnacle.signal.v1.SignalService.InputDeviceAdded.method = "InputDeviceAdded"
+pinnacle.signal.v1.SignalService.InputDeviceAdded.request = ".pinnacle.signal.v1.InputDeviceAddedRequest"
+pinnacle.signal.v1.SignalService.InputDeviceAdded.response = ".pinnacle.signal.v1.InputDeviceAddedResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.signal.v1.InputDeviceAddedResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_signal_v1_SignalService_InputDeviceAdded(callback)
+    return self:bidirectional_streaming_request(pinnacle.signal.v1.SignalService.InputDeviceAdded, callback)
 end
 pinnacle.tag.v1.TagService = {}
 pinnacle.tag.v1.TagService.Get = {}
@@ -2132,59 +2545,129 @@ pinnacle.tag.v1.TagService.SwitchTo.response = ".google.protobuf.Empty"
 function Client:pinnacle_tag_v1_TagService_SwitchTo(data)
     return self:unary_request(pinnacle.tag.v1.TagService.SwitchTo, data)
 end
-pinnacle.process.v1.ProcessService = {}
-pinnacle.process.v1.ProcessService.Spawn = {}
-pinnacle.process.v1.ProcessService.Spawn.service = "pinnacle.process.v1.ProcessService"
-pinnacle.process.v1.ProcessService.Spawn.method = "Spawn"
-pinnacle.process.v1.ProcessService.Spawn.request = ".pinnacle.process.v1.SpawnRequest"
-pinnacle.process.v1.ProcessService.Spawn.response = ".pinnacle.process.v1.SpawnResponse"
+pinnacle.v1.PinnacleService = {}
+pinnacle.v1.PinnacleService.Quit = {}
+pinnacle.v1.PinnacleService.Quit.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.Quit.method = "Quit"
+pinnacle.v1.PinnacleService.Quit.request = ".pinnacle.v1.QuitRequest"
+pinnacle.v1.PinnacleService.Quit.response = ".google.protobuf.Empty"
 
 ---Performs a unary request.
 ---
 ---@nodiscard
 ---
----@param data pinnacle.process.v1.SpawnRequest
----
----@return pinnacle.process.v1.SpawnResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_process_v1_ProcessService_Spawn(data)
-    return self:unary_request(pinnacle.process.v1.ProcessService.Spawn, data)
-end
-pinnacle.process.v1.ProcessService.WaitOnSpawn = {}
-pinnacle.process.v1.ProcessService.WaitOnSpawn.service = "pinnacle.process.v1.ProcessService"
-pinnacle.process.v1.ProcessService.WaitOnSpawn.method = "WaitOnSpawn"
-pinnacle.process.v1.ProcessService.WaitOnSpawn.request = ".pinnacle.process.v1.WaitOnSpawnRequest"
-pinnacle.process.v1.ProcessService.WaitOnSpawn.response = ".pinnacle.process.v1.WaitOnSpawnResponse"
-
----Performs a server-streaming request.
----
----`callback` will be called with every streamed response.
----
----@nodiscard
----
----@param data pinnacle.process.v1.WaitOnSpawnRequest
----@param callback fun(response: pinnacle.process.v1.WaitOnSpawnResponse)
----
----@return string | nil An error string, if any
-function Client:pinnacle_process_v1_ProcessService_WaitOnSpawn(data, callback)
-    return self:server_streaming_request(pinnacle.process.v1.ProcessService.WaitOnSpawn, data, callback)
-end
-pinnacle.process.v1.ProcessService.SetEnv = {}
-pinnacle.process.v1.ProcessService.SetEnv.service = "pinnacle.process.v1.ProcessService"
-pinnacle.process.v1.ProcessService.SetEnv.method = "SetEnv"
-pinnacle.process.v1.ProcessService.SetEnv.request = ".pinnacle.process.v1.SetEnvRequest"
-pinnacle.process.v1.ProcessService.SetEnv.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.process.v1.SetEnvRequest
+---@param data pinnacle.v1.QuitRequest
 ---
 ---@return google.protobuf.Empty | nil response
 ---@return string | nil error An error string, if any
-function Client:pinnacle_process_v1_ProcessService_SetEnv(data)
-    return self:unary_request(pinnacle.process.v1.ProcessService.SetEnv, data)
+function Client:pinnacle_v1_PinnacleService_Quit(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.Quit, data)
+end
+pinnacle.v1.PinnacleService.ReloadConfig = {}
+pinnacle.v1.PinnacleService.ReloadConfig.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.ReloadConfig.method = "ReloadConfig"
+pinnacle.v1.PinnacleService.ReloadConfig.request = ".pinnacle.v1.ReloadConfigRequest"
+pinnacle.v1.PinnacleService.ReloadConfig.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.ReloadConfigRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_ReloadConfig(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.ReloadConfig, data)
+end
+pinnacle.v1.PinnacleService.Keepalive = {}
+pinnacle.v1.PinnacleService.Keepalive.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.Keepalive.method = "Keepalive"
+pinnacle.v1.PinnacleService.Keepalive.request = ".pinnacle.v1.KeepaliveRequest"
+pinnacle.v1.PinnacleService.Keepalive.response = ".pinnacle.v1.KeepaliveResponse"
+
+---Performs a bidirectional-streaming request.
+---
+---`callback` will be called with every streamed response.
+---
+---The raw client-to-server stream is returned to allow you to send encoded messages.
+---
+---@nodiscard
+---
+---@param callback fun(response: pinnacle.v1.KeepaliveResponse, stream: grpc_client.h2.Stream)
+---
+---@return grpc_client.h2.Stream | nil
+---@return string | nil An error string, if any
+function Client:pinnacle_v1_PinnacleService_Keepalive(callback)
+    return self:bidirectional_streaming_request(pinnacle.v1.PinnacleService.Keepalive, callback)
+end
+pinnacle.v1.PinnacleService.Backend = {}
+pinnacle.v1.PinnacleService.Backend.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.Backend.method = "Backend"
+pinnacle.v1.PinnacleService.Backend.request = ".pinnacle.v1.BackendRequest"
+pinnacle.v1.PinnacleService.Backend.response = ".pinnacle.v1.BackendResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.BackendRequest
+---
+---@return pinnacle.v1.BackendResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_Backend(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.Backend, data)
+end
+pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale = {}
+pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.method = "SetXwaylandClientSelfScale"
+pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.request = ".pinnacle.v1.SetXwaylandClientSelfScaleRequest"
+pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.SetXwaylandClientSelfScaleRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_SetXwaylandClientSelfScale(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale, data)
+end
+pinnacle.v1.PinnacleService.SetLastError = {}
+pinnacle.v1.PinnacleService.SetLastError.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.SetLastError.method = "SetLastError"
+pinnacle.v1.PinnacleService.SetLastError.request = ".pinnacle.v1.SetLastErrorRequest"
+pinnacle.v1.PinnacleService.SetLastError.response = ".google.protobuf.Empty"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.SetLastErrorRequest
+---
+---@return google.protobuf.Empty | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_SetLastError(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.SetLastError, data)
+end
+pinnacle.v1.PinnacleService.TakeLastError = {}
+pinnacle.v1.PinnacleService.TakeLastError.service = "pinnacle.v1.PinnacleService"
+pinnacle.v1.PinnacleService.TakeLastError.method = "TakeLastError"
+pinnacle.v1.PinnacleService.TakeLastError.request = ".pinnacle.v1.TakeLastErrorRequest"
+pinnacle.v1.PinnacleService.TakeLastError.response = ".pinnacle.v1.TakeLastErrorResponse"
+
+---Performs a unary request.
+---
+---@nodiscard
+---
+---@param data pinnacle.v1.TakeLastErrorRequest
+---
+---@return pinnacle.v1.TakeLastErrorResponse | nil response
+---@return string | nil error An error string, if any
+function Client:pinnacle_v1_PinnacleService_TakeLastError(data)
+    return self:unary_request(pinnacle.v1.PinnacleService.TakeLastError, data)
 end
 pinnacle.window.v1.WindowService = {}
 pinnacle.window.v1.WindowService.Get = {}
@@ -2547,489 +3030,6 @@ pinnacle.window.v1.WindowService.WindowRule.response = ".pinnacle.window.v1.Wind
 ---@return string | nil An error string, if any
 function Client:pinnacle_window_v1_WindowService_WindowRule(callback)
     return self:bidirectional_streaming_request(pinnacle.window.v1.WindowService.WindowRule, callback)
-end
-pinnacle.render.v1.RenderService = {}
-pinnacle.render.v1.RenderService.SetUpscaleFilter = {}
-pinnacle.render.v1.RenderService.SetUpscaleFilter.service = "pinnacle.render.v1.RenderService"
-pinnacle.render.v1.RenderService.SetUpscaleFilter.method = "SetUpscaleFilter"
-pinnacle.render.v1.RenderService.SetUpscaleFilter.request = ".pinnacle.render.v1.SetUpscaleFilterRequest"
-pinnacle.render.v1.RenderService.SetUpscaleFilter.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.render.v1.SetUpscaleFilterRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_render_v1_RenderService_SetUpscaleFilter(data)
-    return self:unary_request(pinnacle.render.v1.RenderService.SetUpscaleFilter, data)
-end
-pinnacle.render.v1.RenderService.SetDownscaleFilter = {}
-pinnacle.render.v1.RenderService.SetDownscaleFilter.service = "pinnacle.render.v1.RenderService"
-pinnacle.render.v1.RenderService.SetDownscaleFilter.method = "SetDownscaleFilter"
-pinnacle.render.v1.RenderService.SetDownscaleFilter.request = ".pinnacle.render.v1.SetDownscaleFilterRequest"
-pinnacle.render.v1.RenderService.SetDownscaleFilter.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.render.v1.SetDownscaleFilterRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_render_v1_RenderService_SetDownscaleFilter(data)
-    return self:unary_request(pinnacle.render.v1.RenderService.SetDownscaleFilter, data)
-end
-pinnacle.output.v1.OutputService = {}
-pinnacle.output.v1.OutputService.Get = {}
-pinnacle.output.v1.OutputService.Get.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.Get.method = "Get"
-pinnacle.output.v1.OutputService.Get.request = ".pinnacle.output.v1.GetRequest"
-pinnacle.output.v1.OutputService.Get.response = ".pinnacle.output.v1.GetResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetRequest
----
----@return pinnacle.output.v1.GetResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_Get(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.Get, data)
-end
-pinnacle.output.v1.OutputService.SetLoc = {}
-pinnacle.output.v1.OutputService.SetLoc.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetLoc.method = "SetLoc"
-pinnacle.output.v1.OutputService.SetLoc.request = ".pinnacle.output.v1.SetLocRequest"
-pinnacle.output.v1.OutputService.SetLoc.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetLocRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetLoc(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetLoc, data)
-end
-pinnacle.output.v1.OutputService.SetMode = {}
-pinnacle.output.v1.OutputService.SetMode.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetMode.method = "SetMode"
-pinnacle.output.v1.OutputService.SetMode.request = ".pinnacle.output.v1.SetModeRequest"
-pinnacle.output.v1.OutputService.SetMode.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetModeRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetMode(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetMode, data)
-end
-pinnacle.output.v1.OutputService.SetModeline = {}
-pinnacle.output.v1.OutputService.SetModeline.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetModeline.method = "SetModeline"
-pinnacle.output.v1.OutputService.SetModeline.request = ".pinnacle.output.v1.SetModelineRequest"
-pinnacle.output.v1.OutputService.SetModeline.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetModelineRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetModeline(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetModeline, data)
-end
-pinnacle.output.v1.OutputService.SetScale = {}
-pinnacle.output.v1.OutputService.SetScale.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetScale.method = "SetScale"
-pinnacle.output.v1.OutputService.SetScale.request = ".pinnacle.output.v1.SetScaleRequest"
-pinnacle.output.v1.OutputService.SetScale.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetScaleRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetScale(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetScale, data)
-end
-pinnacle.output.v1.OutputService.SetTransform = {}
-pinnacle.output.v1.OutputService.SetTransform.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetTransform.method = "SetTransform"
-pinnacle.output.v1.OutputService.SetTransform.request = ".pinnacle.output.v1.SetTransformRequest"
-pinnacle.output.v1.OutputService.SetTransform.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetTransformRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetTransform(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetTransform, data)
-end
-pinnacle.output.v1.OutputService.SetPowered = {}
-pinnacle.output.v1.OutputService.SetPowered.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.SetPowered.method = "SetPowered"
-pinnacle.output.v1.OutputService.SetPowered.request = ".pinnacle.output.v1.SetPoweredRequest"
-pinnacle.output.v1.OutputService.SetPowered.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.SetPoweredRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_SetPowered(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.SetPowered, data)
-end
-pinnacle.output.v1.OutputService.GetInfo = {}
-pinnacle.output.v1.OutputService.GetInfo.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetInfo.method = "GetInfo"
-pinnacle.output.v1.OutputService.GetInfo.request = ".pinnacle.output.v1.GetInfoRequest"
-pinnacle.output.v1.OutputService.GetInfo.response = ".pinnacle.output.v1.GetInfoResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetInfoRequest
----
----@return pinnacle.output.v1.GetInfoResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetInfo(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetInfo, data)
-end
-pinnacle.output.v1.OutputService.GetLoc = {}
-pinnacle.output.v1.OutputService.GetLoc.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetLoc.method = "GetLoc"
-pinnacle.output.v1.OutputService.GetLoc.request = ".pinnacle.output.v1.GetLocRequest"
-pinnacle.output.v1.OutputService.GetLoc.response = ".pinnacle.output.v1.GetLocResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetLocRequest
----
----@return pinnacle.output.v1.GetLocResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetLoc(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetLoc, data)
-end
-pinnacle.output.v1.OutputService.GetLogicalSize = {}
-pinnacle.output.v1.OutputService.GetLogicalSize.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetLogicalSize.method = "GetLogicalSize"
-pinnacle.output.v1.OutputService.GetLogicalSize.request = ".pinnacle.output.v1.GetLogicalSizeRequest"
-pinnacle.output.v1.OutputService.GetLogicalSize.response = ".pinnacle.output.v1.GetLogicalSizeResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetLogicalSizeRequest
----
----@return pinnacle.output.v1.GetLogicalSizeResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetLogicalSize(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetLogicalSize, data)
-end
-pinnacle.output.v1.OutputService.GetPhysicalSize = {}
-pinnacle.output.v1.OutputService.GetPhysicalSize.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetPhysicalSize.method = "GetPhysicalSize"
-pinnacle.output.v1.OutputService.GetPhysicalSize.request = ".pinnacle.output.v1.GetPhysicalSizeRequest"
-pinnacle.output.v1.OutputService.GetPhysicalSize.response = ".pinnacle.output.v1.GetPhysicalSizeResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetPhysicalSizeRequest
----
----@return pinnacle.output.v1.GetPhysicalSizeResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetPhysicalSize(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetPhysicalSize, data)
-end
-pinnacle.output.v1.OutputService.GetModes = {}
-pinnacle.output.v1.OutputService.GetModes.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetModes.method = "GetModes"
-pinnacle.output.v1.OutputService.GetModes.request = ".pinnacle.output.v1.GetModesRequest"
-pinnacle.output.v1.OutputService.GetModes.response = ".pinnacle.output.v1.GetModesResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetModesRequest
----
----@return pinnacle.output.v1.GetModesResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetModes(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetModes, data)
-end
-pinnacle.output.v1.OutputService.GetFocused = {}
-pinnacle.output.v1.OutputService.GetFocused.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetFocused.method = "GetFocused"
-pinnacle.output.v1.OutputService.GetFocused.request = ".pinnacle.output.v1.GetFocusedRequest"
-pinnacle.output.v1.OutputService.GetFocused.response = ".pinnacle.output.v1.GetFocusedResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetFocusedRequest
----
----@return pinnacle.output.v1.GetFocusedResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetFocused(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetFocused, data)
-end
-pinnacle.output.v1.OutputService.GetTagIds = {}
-pinnacle.output.v1.OutputService.GetTagIds.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetTagIds.method = "GetTagIds"
-pinnacle.output.v1.OutputService.GetTagIds.request = ".pinnacle.output.v1.GetTagIdsRequest"
-pinnacle.output.v1.OutputService.GetTagIds.response = ".pinnacle.output.v1.GetTagIdsResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetTagIdsRequest
----
----@return pinnacle.output.v1.GetTagIdsResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetTagIds(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetTagIds, data)
-end
-pinnacle.output.v1.OutputService.GetScale = {}
-pinnacle.output.v1.OutputService.GetScale.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetScale.method = "GetScale"
-pinnacle.output.v1.OutputService.GetScale.request = ".pinnacle.output.v1.GetScaleRequest"
-pinnacle.output.v1.OutputService.GetScale.response = ".pinnacle.output.v1.GetScaleResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetScaleRequest
----
----@return pinnacle.output.v1.GetScaleResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetScale(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetScale, data)
-end
-pinnacle.output.v1.OutputService.GetTransform = {}
-pinnacle.output.v1.OutputService.GetTransform.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetTransform.method = "GetTransform"
-pinnacle.output.v1.OutputService.GetTransform.request = ".pinnacle.output.v1.GetTransformRequest"
-pinnacle.output.v1.OutputService.GetTransform.response = ".pinnacle.output.v1.GetTransformResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetTransformRequest
----
----@return pinnacle.output.v1.GetTransformResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetTransform(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetTransform, data)
-end
-pinnacle.output.v1.OutputService.GetEnabled = {}
-pinnacle.output.v1.OutputService.GetEnabled.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetEnabled.method = "GetEnabled"
-pinnacle.output.v1.OutputService.GetEnabled.request = ".pinnacle.output.v1.GetEnabledRequest"
-pinnacle.output.v1.OutputService.GetEnabled.response = ".pinnacle.output.v1.GetEnabledResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetEnabledRequest
----
----@return pinnacle.output.v1.GetEnabledResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetEnabled(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetEnabled, data)
-end
-pinnacle.output.v1.OutputService.GetPowered = {}
-pinnacle.output.v1.OutputService.GetPowered.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetPowered.method = "GetPowered"
-pinnacle.output.v1.OutputService.GetPowered.request = ".pinnacle.output.v1.GetPoweredRequest"
-pinnacle.output.v1.OutputService.GetPowered.response = ".pinnacle.output.v1.GetPoweredResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetPoweredRequest
----
----@return pinnacle.output.v1.GetPoweredResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetPowered(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetPowered, data)
-end
-pinnacle.output.v1.OutputService.GetFocusStackWindowIds = {}
-pinnacle.output.v1.OutputService.GetFocusStackWindowIds.service = "pinnacle.output.v1.OutputService"
-pinnacle.output.v1.OutputService.GetFocusStackWindowIds.method = "GetFocusStackWindowIds"
-pinnacle.output.v1.OutputService.GetFocusStackWindowIds.request = ".pinnacle.output.v1.GetFocusStackWindowIdsRequest"
-pinnacle.output.v1.OutputService.GetFocusStackWindowIds.response = ".pinnacle.output.v1.GetFocusStackWindowIdsResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.output.v1.GetFocusStackWindowIdsRequest
----
----@return pinnacle.output.v1.GetFocusStackWindowIdsResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_output_v1_OutputService_GetFocusStackWindowIds(data)
-    return self:unary_request(pinnacle.output.v1.OutputService.GetFocusStackWindowIds, data)
-end
-pinnacle.v1.PinnacleService = {}
-pinnacle.v1.PinnacleService.Quit = {}
-pinnacle.v1.PinnacleService.Quit.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.Quit.method = "Quit"
-pinnacle.v1.PinnacleService.Quit.request = ".pinnacle.v1.QuitRequest"
-pinnacle.v1.PinnacleService.Quit.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.QuitRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_Quit(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.Quit, data)
-end
-pinnacle.v1.PinnacleService.ReloadConfig = {}
-pinnacle.v1.PinnacleService.ReloadConfig.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.ReloadConfig.method = "ReloadConfig"
-pinnacle.v1.PinnacleService.ReloadConfig.request = ".pinnacle.v1.ReloadConfigRequest"
-pinnacle.v1.PinnacleService.ReloadConfig.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.ReloadConfigRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_ReloadConfig(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.ReloadConfig, data)
-end
-pinnacle.v1.PinnacleService.Keepalive = {}
-pinnacle.v1.PinnacleService.Keepalive.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.Keepalive.method = "Keepalive"
-pinnacle.v1.PinnacleService.Keepalive.request = ".pinnacle.v1.KeepaliveRequest"
-pinnacle.v1.PinnacleService.Keepalive.response = ".pinnacle.v1.KeepaliveResponse"
-
----Performs a bidirectional-streaming request.
----
----`callback` will be called with every streamed response.
----
----The raw client-to-server stream is returned to allow you to send encoded messages.
----
----@nodiscard
----
----@param callback fun(response: pinnacle.v1.KeepaliveResponse, stream: grpc_client.h2.Stream)
----
----@return grpc_client.h2.Stream | nil
----@return string | nil An error string, if any
-function Client:pinnacle_v1_PinnacleService_Keepalive(callback)
-    return self:bidirectional_streaming_request(pinnacle.v1.PinnacleService.Keepalive, callback)
-end
-pinnacle.v1.PinnacleService.Backend = {}
-pinnacle.v1.PinnacleService.Backend.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.Backend.method = "Backend"
-pinnacle.v1.PinnacleService.Backend.request = ".pinnacle.v1.BackendRequest"
-pinnacle.v1.PinnacleService.Backend.response = ".pinnacle.v1.BackendResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.BackendRequest
----
----@return pinnacle.v1.BackendResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_Backend(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.Backend, data)
-end
-pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale = {}
-pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.method = "SetXwaylandClientSelfScale"
-pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.request = ".pinnacle.v1.SetXwaylandClientSelfScaleRequest"
-pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.SetXwaylandClientSelfScaleRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_SetXwaylandClientSelfScale(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.SetXwaylandClientSelfScale, data)
-end
-pinnacle.v1.PinnacleService.SetLastError = {}
-pinnacle.v1.PinnacleService.SetLastError.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.SetLastError.method = "SetLastError"
-pinnacle.v1.PinnacleService.SetLastError.request = ".pinnacle.v1.SetLastErrorRequest"
-pinnacle.v1.PinnacleService.SetLastError.response = ".google.protobuf.Empty"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.SetLastErrorRequest
----
----@return google.protobuf.Empty | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_SetLastError(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.SetLastError, data)
-end
-pinnacle.v1.PinnacleService.TakeLastError = {}
-pinnacle.v1.PinnacleService.TakeLastError.service = "pinnacle.v1.PinnacleService"
-pinnacle.v1.PinnacleService.TakeLastError.method = "TakeLastError"
-pinnacle.v1.PinnacleService.TakeLastError.request = ".pinnacle.v1.TakeLastErrorRequest"
-pinnacle.v1.PinnacleService.TakeLastError.response = ".pinnacle.v1.TakeLastErrorResponse"
-
----Performs a unary request.
----
----@nodiscard
----
----@param data pinnacle.v1.TakeLastErrorRequest
----
----@return pinnacle.v1.TakeLastErrorResponse | nil response
----@return string | nil error An error string, if any
-function Client:pinnacle_v1_PinnacleService_TakeLastError(data)
-    return self:unary_request(pinnacle.v1.PinnacleService.TakeLastError, data)
 end
 return {
     google = google,
