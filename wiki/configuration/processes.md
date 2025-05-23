@@ -30,7 +30,7 @@ Command::new("alacritty").spawn();
 | Envs | Map\<String, String> | Environment variables to spawn the command with |
 | Unique | Bool | Causes the command to not spawn if an instance of it is already running |
 | Once | Bool | Causes the command to not spawn it has been spawned at any time during the current session |
-| Pipe std{in,out,err} | Bool | Sets up a pipe so that the config can interact with the process's stdio |
+| Pipe std\{in,out,err} | Bool | Sets up a pipe so that the config can interact with the process's stdio |
 
 ### Special spawn options
 
