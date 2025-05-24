@@ -10,8 +10,6 @@ local pb = require("pb")
 local protobuf = {}
 
 function protobuf.build_protos()
-    require("pinnacle.log").debug("Building protos")
-
     local version = "v1"
     -- FIXME: walk the directory instead of hardcoding
     local proto_file_paths = {

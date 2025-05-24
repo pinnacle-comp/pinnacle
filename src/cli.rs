@@ -444,14 +444,16 @@ pub fn start_lua_repl(execute: Option<String>) {
     let mut lua = std::process::Command::new("lua");
     lua.args(libraries);
 
+    let mut exec = "_PROMPT = 'pinnacle> '; Pinnacle.init();".to_string();
+
     if execute.is_none() {
         lua.arg("-i");
+        exec.push_str(
+            "print('Available globals: Pinnacle, Input, Libinput, \
+        Process, Output, Tag, Window, Layout, Util, Snowcap');",
+        );
     }
 
-    let mut exec = "_PROMPT = 'pinnacle> '; Pinnacle.init(); \
-        print('Available globals: Pinnacle, Input, Libinput, \
-        Process, Output, Tag, Window, Layout, Util, Snowcap')"
-        .to_string();
     exec.extend(execute);
 
     lua.args(["-e", &exec]);

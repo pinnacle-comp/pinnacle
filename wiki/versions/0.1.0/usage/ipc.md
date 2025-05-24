@@ -12,8 +12,6 @@ allowing you to run most API functions on demand.
 ```
 $ pinnacle client
 Lua 5.4.7  Copyright (C) 1994-2024 Lua.org, PUC-Rio
-DEBUG Building protos
-INFO Connected to socket at /run/user/1000/pinnacle-grpc-25293.sock
 Available globals: Pinnacle, Input, Libinput, Process, Output, Tag, Window, Layout, Util, Snowcap
 pinnacle> Window.get_focused():app_id()
 Alacritty
@@ -39,18 +37,8 @@ pipe a Lua string into the client or use the `-e` flag:
 
 ```
 $ echo "print(Output.get_focused().name)" | pinnacle client
-DEBUG Building protos
-INFO Connected to socket at /run/user/1000/pinnacle-grpc-25293.sock
-Available globals: Pinnacle, Input, Libinput, Process, Output, Tag, Window, Layout, Util, Snowcap
 DP-1
 
 $ pinnacle client -e "print(Output.get_focused().name)"
-DEBUG Building protos
-INFO Connected to socket at /run/user/1000/pinnacle-grpc-25293.sock
-Available globals: Pinnacle, Input, Libinput, Process, Output, Tag, Window, Layout, Util, Snowcap
 DP-1
 ```
-
-> [!NOTE]
-> The logs and globals print makes it difficult to easily retrieve information from the function call.
-> This will be fixed soon™️.
