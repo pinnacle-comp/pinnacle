@@ -24,7 +24,10 @@ use smithay::{
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{State, WithState},
-    window::{window_state::LayoutMode, Unmapped, WindowElement},
+    window::{
+        rules::ClientRequests, window_state::FullscreenOrMaximized, Unmapped, UnmappedState,
+        WindowElement,
+    },
 };
 
 impl XdgShellHandler for State {
@@ -40,8 +43,9 @@ impl XdgShellHandler for State {
         self.pinnacle.unmapped_windows.push(Unmapped {
             window,
             activation_token_data: None,
-            window_rules: Default::default(),
-            awaiting_tags: false,
+            state: UnmappedState::WaitingForTags {
+                client_requests: ClientRequests::default(),
+            },
         });
     }
 
@@ -214,8 +218,27 @@ impl XdgShellHandler for State {
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
-            if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::new_fullscreen_external());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Fullscreen);
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Fullscreen);
+                }
+                UnmappedState::PostInitialConfigure {
+                    attempt_float_on_map,
+                    ..
+                } => {
+                    // guys i think some of these methods borrowing all of pinnacle isn't good
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
+                    *attempt_float_on_map = false;
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                    window.toplevel().expect("in xdgshell").send_configure();
+                }
             }
         }
     }
@@ -234,9 +257,26 @@ impl XdgShellHandler for State {
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
-            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
-                mode.client_requested_mode
-                    .take_if(|mode| mode.is_fullscreen());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Fullscreen));
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Fullscreen));
+                }
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                    window.toplevel().expect("in xdgshell").send_configure();
+                }
             }
         }
     }
@@ -255,8 +295,26 @@ impl XdgShellHandler for State {
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
-            if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::new_maximized_external());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::PostInitialConfigure {
+                    attempt_float_on_map,
+                    ..
+                } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
+                    *attempt_float_on_map = false;
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                    window.toplevel().expect("in xdgshell").send_configure();
+                }
             }
         }
     }
@@ -275,9 +333,22 @@ impl XdgShellHandler for State {
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
         {
-            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
-                mode.client_requested_mode
-                    .take_if(|mode| mode.is_maximized());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                    window.toplevel().expect("in xdgshell").send_configure();
+                }
             }
         }
     }

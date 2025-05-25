@@ -20,12 +20,10 @@ use pinnacle_api_defs::pinnacle::{
     },
 };
 use smithay::{
-    desktop::WindowSurface,
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Point, Size},
 };
 use tonic::{Request, Status, Streaming};
-use tracing::error;
 
 use crate::{
     api::{
@@ -35,7 +33,10 @@ use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::WithState,
     tag::TagId,
-    window::window_state::{LayoutMode, LayoutModeKind, WindowId},
+    window::{
+        window_state::{LayoutMode, LayoutModeKind, WindowId},
+        UnmappedState,
+    },
 };
 
 #[tonic::async_trait]
@@ -165,12 +166,12 @@ impl v1::window_service_server::WindowService for super::WindowService {
         run_unary(&self.sender, move |state| {
             let layout_mode = window_id
                 .window(&state.pinnacle)
-                .map(|win| win.with_state(|state| state.layout_mode))
                 .or_else(|| {
                     window_id
                         .unmapped_window(&state.pinnacle)
-                        .and_then(|unmapped| unmapped.window_rules.layout_mode)
+                        .map(|unmapped| unmapped.window.clone())
                 })
+                .map(|win| win.with_state(|state| state.layout_mode))
                 .unwrap_or(LayoutMode::new_tiled());
 
             Ok(GetLayoutModeResponse {
@@ -246,18 +247,21 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_geometry(state, &window, x, y, w, h);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                let loc = if x.is_some() || y.is_some() {
-                    // FIXME: Only specifying one of x or y will cause the other to become
-                    // zero, maybe split up the point into two options
-                    Some(Point::from((x.unwrap_or_default(), y.unwrap_or_default())))
-                } else {
-                    None
-                };
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    let loc = if x.is_some() || y.is_some() {
+                        // FIXME: Only specifying one of x or y will cause the other to become
+                        // zero, maybe split up the point into two options
+                        Some(Point::from((x.unwrap_or_default(), y.unwrap_or_default())))
+                    } else {
+                        None
+                    };
 
-                let size = Size::from((w.unwrap_or_default() as i32, h.unwrap_or_default() as i32));
+                    let size =
+                        Size::from((w.unwrap_or_default() as i32, h.unwrap_or_default() as i32));
 
-                unmapped.window_rules.floating_loc = loc.map(|loc| loc.to_f64());
-                unmapped.window_rules.floating_size = Some(size);
+                    rules.floating_loc = loc.map(|loc| loc.to_f64());
+                    rules.floating_size = Some(size);
+                }
             }
         })
         .await
@@ -293,25 +297,25 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
                 state.update_window_state_and_layout(&window);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                match fullscreen {
-                    Some(true) => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_fullscreen())
-                            .set_fullscreen(true);
-                    }
-                    Some(false) => {
-                        if let Some(layout_mode) = unmapped.window_rules.layout_mode.as_mut() {
-                            layout_mode.set_fullscreen(false);
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    match fullscreen {
+                        Some(true) => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_fullscreen())
+                                .set_fullscreen(true);
                         }
-                    }
-                    None => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_tiled())
-                            .toggle_fullscreen();
+                        Some(false) => {
+                            if let Some(layout_mode) = rules.layout_mode.as_mut() {
+                                layout_mode.set_fullscreen(false);
+                            }
+                        }
+                        None => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_tiled())
+                                .toggle_fullscreen();
+                        }
                     }
                 }
             }
@@ -349,25 +353,25 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
                 state.update_window_state_and_layout(&window);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                match maximized {
-                    Some(true) => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_maximized())
-                            .set_maximized(true);
-                    }
-                    Some(false) => {
-                        if let Some(layout_mode) = unmapped.window_rules.layout_mode.as_mut() {
-                            layout_mode.set_maximized(false);
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    match maximized {
+                        Some(true) => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_maximized())
+                                .set_maximized(true);
                         }
-                    }
-                    None => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_tiled())
-                            .toggle_maximized();
+                        Some(false) => {
+                            if let Some(layout_mode) = rules.layout_mode.as_mut() {
+                                layout_mode.set_maximized(false);
+                            }
+                        }
+                        None => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_tiled())
+                                .toggle_maximized();
+                        }
                     }
                 }
             }
@@ -405,27 +409,26 @@ impl v1::window_service_server::WindowService for super::WindowService {
                 }
                 state.update_window_state_and_layout(&window);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                match floating {
-                    Some(true) => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_floating())
-                            .set_floating(true);
-                    }
-                    Some(false) => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_floating())
-                            .set_floating(false);
-                    }
-                    None => {
-                        unmapped
-                            .window_rules
-                            .layout_mode
-                            .get_or_insert(LayoutMode::new_tiled())
-                            .toggle_floating();
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    match floating {
+                        Some(true) => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_floating())
+                                .set_floating(true);
+                        }
+                        Some(false) => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_floating())
+                                .set_floating(false);
+                        }
+                        None => {
+                            rules
+                                .layout_mode
+                                .get_or_insert(LayoutMode::new_tiled())
+                                .toggle_floating();
+                        }
                     }
                 }
             }
@@ -455,11 +458,13 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_focused(state, &window, set);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                match set {
-                    Some(set) => unmapped.window_rules.focused = Some(set),
-                    None => {
-                        let focused = unmapped.window_rules.focused.get_or_insert(true);
-                        *focused = !*focused;
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    match set {
+                        Some(set) => rules.focused = Some(set),
+                        None => {
+                            let focused = rules.focused.get_or_insert(true);
+                            *focused = !*focused;
+                        }
                     }
                 }
             }
@@ -487,7 +492,9 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_decoration_mode(state, &window, mode);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                unmapped.window_rules.decoration_mode = Some(mode);
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    rules.decoration_mode = Some(mode);
+                }
             }
         })
         .await
@@ -505,7 +512,9 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::move_to_tag(state, &window, &tag);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                unmapped.window_rules.tags = [tag].into_iter().collect();
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    rules.tags = Some([tag].into_iter().collect());
+                }
             }
         })
         .await
@@ -536,21 +545,24 @@ impl v1::window_service_server::WindowService for super::WindowService {
             if let Some(window) = window_id.window(&state.pinnacle) {
                 crate::api::window::set_tag(state, &window, &tag, set);
             } else if let Some(unmapped) = window_id.unmapped_window_mut(&mut state.pinnacle) {
-                match set {
-                    Some(true) => {
-                        unmapped.window_rules.tags.insert(tag.clone());
-                    }
-                    Some(false) => {
-                        unmapped.window_rules.tags.shift_remove(&tag);
-                    }
-                    None => {
-                        if unmapped.window_rules.tags.contains(&tag) {
-                            // Prevent toggling that would leave a window tagless
-                            if unmapped.window_rules.tags.len() > 1 {
-                                unmapped.window_rules.tags.shift_remove(&tag);
+                if let UnmappedState::WaitingForRules { rules, .. } = &mut unmapped.state {
+                    let tags = rules.tags.get_or_insert(Default::default());
+                    match set {
+                        Some(true) => {
+                            tags.insert(tag.clone());
+                        }
+                        Some(false) => {
+                            tags.shift_remove(&tag);
+                        }
+                        None => {
+                            if tags.contains(&tag) {
+                                // Prevent toggling that would leave a window tagless
+                                if tags.len() > 1 {
+                                    tags.shift_remove(&tag);
+                                }
+                            } else {
+                                tags.insert(tag.clone());
                             }
-                        } else {
-                            unmapped.window_rules.tags.insert(tag.clone());
                         }
                     }
                 }
@@ -618,37 +630,23 @@ impl v1::window_service_server::WindowService for super::WindowService {
                             id_ctr.store(id, Ordering::Release);
 
                             for win in state.pinnacle.window_rule_state.finished_windows() {
-                                let Some(unmapped) = state
+                                let Some(unmapped_idx) = state
                                     .pinnacle
                                     .unmapped_windows
-                                    .iter()
-                                    .find(|unmapped| unmapped.window == win)
+                                    .iter_mut()
+                                    .position(|unmapped| unmapped.window == win)
                                 else {
                                     continue;
                                 };
 
-                                state.pinnacle.apply_window_rules(unmapped);
+                                let mut unmapped =
+                                    state.pinnacle.unmapped_windows.swap_remove(unmapped_idx);
 
-                                match unmapped.window.underlying_surface() {
-                                    WindowSurface::Wayland(toplevel) => {
-                                        // This should be an assert, but currently Smithay does not
-                                        // raise a protocol error when a client commits a buffer
-                                        // before the initial configure
-                                        if toplevel.is_initial_configure_sent() {
-                                            error!(
-                                                app_id = ?win.class(),
-                                                "toplevel already configured after window rules; \
-                                                this is either a bug with Pinnacle or the client application \
-                                                committed a buffer before receiving an initial configure, \
-                                                which is a protocol error"
-                                            );
-                                        }
-                                        toplevel.send_configure();
-                                    }
-                                    WindowSurface::X11(surface) => {
-                                        let _ = surface.set_mapped(true);
-                                    }
-                                }
+                                state
+                                    .pinnacle
+                                    .apply_window_rules_and_send_initial_configure(&mut unmapped);
+
+                                state.pinnacle.unmapped_windows.push(unmapped);
                             }
                         }
                     }

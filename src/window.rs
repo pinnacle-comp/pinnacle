@@ -5,7 +5,7 @@ pub mod rules;
 use std::{cell::RefCell, collections::HashMap, ops::Deref};
 
 use indexmap::IndexSet;
-use rules::WindowRules;
+use rules::{ClientRequests, WindowRules};
 use smithay::{
     desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
     output::{Output, WeakOutput},
@@ -349,8 +349,9 @@ impl Pinnacle {
             self.unmapped_windows.push(Unmapped {
                 window: window.clone(),
                 activation_token_data: None,
-                window_rules: WindowRules::default(),
-                awaiting_tags: false,
+                state: UnmappedState::WaitingForTags {
+                    client_requests: Default::default(),
+                },
             });
         }
 
@@ -451,25 +452,28 @@ impl State {
         let Unmapped {
             window,
             activation_token_data: _, // TODO:
-            window_rules,
-            awaiting_tags,
-        } = unmapped;
-
-        assert!(!awaiting_tags, "tried to map new window without tags");
+            state:
+                UnmappedState::PostInitialConfigure {
+                    attempt_float_on_map,
+                    focus,
+                },
+        } = unmapped
+        else {
+            panic!("tried to map window pre initial configure");
+        };
 
         self.pinnacle.windows.push(window.clone());
 
         self.pinnacle
             .raise_window(window.clone(), window.is_on_active_tag());
 
-        if window_rules.layout_mode.is_none() && should_float(&window) {
+        if attempt_float_on_map && should_float(&window) {
             window.with_state_mut(|state| {
                 state.layout_mode.set_floating(true);
             });
         }
 
         let Some(output) = window.output(&self.pinnacle) else {
-            // FIXME: If the window has no tags for whatever reason, it will never map
             return;
         };
 
@@ -525,7 +529,7 @@ impl State {
 
         // TODO: xdg activation
 
-        if window_rules.focused != Some(false) {
+        if focus {
             output.with_state_mut(|state| state.focus_stack.set_focus(window.clone()));
             self.update_keyboard_focus(&output);
         } else {
@@ -616,9 +620,23 @@ fn should_float(window: &WindowElement) -> bool {
 }
 
 #[derive(Debug, Clone)]
+pub enum UnmappedState {
+    WaitingForTags {
+        client_requests: ClientRequests,
+    },
+    WaitingForRules {
+        rules: WindowRules,
+        client_requests: ClientRequests,
+    },
+    PostInitialConfigure {
+        attempt_float_on_map: bool,
+        focus: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
 pub struct Unmapped {
     pub window: WindowElement,
     pub activation_token_data: Option<XdgActivationTokenData>,
-    pub window_rules: WindowRules,
-    pub awaiting_tags: bool,
+    pub state: UnmappedState,
 }

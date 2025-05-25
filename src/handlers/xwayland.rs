@@ -36,7 +36,10 @@ use tracing::{debug, error, info, trace, warn};
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
     state::{Pinnacle, State, WithState},
-    window::{window_state::LayoutMode, Unmapped, WindowElement},
+    window::{
+        rules::ClientRequests, window_state::FullscreenOrMaximized, Unmapped, UnmappedState,
+        WindowElement,
+    },
 };
 
 #[derive(Debug)]
@@ -80,22 +83,16 @@ impl XwmHandler for State {
         let mut unmapped = Unmapped {
             window: WindowElement::new(Window::new_x11_window(surface)),
             activation_token_data: None,
-            window_rules: Default::default(),
-            awaiting_tags: false,
+            state: UnmappedState::WaitingForTags {
+                client_requests: ClientRequests::default(),
+            },
         };
 
         if let Some(output) = self.pinnacle.focused_output() {
-            unmapped.window_rules.set_tags_to_output(output);
-        }
-
-        if !unmapped.window_rules.tags.is_empty() {
-            self.pinnacle.request_window_rules(&unmapped);
-        } else {
-            // There are no tags.
-            //
-            // In this case, hold off on window rules/the initial configure
-            // until we receive tags.
-            unmapped.awaiting_tags = true;
+            if output.with_state(|state| !state.tags.is_empty()) {
+                unmapped.window.set_tags_to_output(output);
+                self.pinnacle.request_window_rules(&mut unmapped);
+            }
         }
 
         self.pinnacle.unmapped_windows.push(unmapped);
@@ -241,8 +238,25 @@ impl XwmHandler for State {
             window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
-            if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::new_maximized_external());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Maximized);
+                }
+                UnmappedState::PostInitialConfigure {
+                    attempt_float_on_map,
+                    ..
+                } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
+                    *attempt_float_on_map = false;
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                }
             }
         }
     }
@@ -254,9 +268,25 @@ impl XwmHandler for State {
             window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
-            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
-                mode.client_requested_mode
-                    .take_if(|mode| mode.is_maximized());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Maximized));
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Maximized));
+                }
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                }
             }
         }
     }
@@ -268,8 +298,25 @@ impl XwmHandler for State {
             window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
-            if unmapped.window_rules.layout_mode.is_none() {
-                unmapped.window_rules.layout_mode = Some(LayoutMode::new_fullscreen_external());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Fullscreen);
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.layout_mode = Some(FullscreenOrMaximized::Fullscreen);
+                }
+                UnmappedState::PostInitialConfigure {
+                    attempt_float_on_map,
+                    ..
+                } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
+                    *attempt_float_on_map = false;
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                }
             }
         }
     }
@@ -281,9 +328,25 @@ impl XwmHandler for State {
             window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
             self.update_window_state_and_layout(&window);
         } else if let Some(unmapped) = self.pinnacle.unmapped_window_for_x11_surface_mut(&window) {
-            if let Some(mode) = unmapped.window_rules.layout_mode.as_mut() {
-                mode.client_requested_mode
-                    .take_if(|mode| mode.is_fullscreen());
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Fullscreen));
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests
+                        .layout_mode
+                        .take_if(|mode| matches!(mode, FullscreenOrMaximized::Fullscreen));
+                }
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = unmapped.window.clone();
+                    window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
+                    self.pinnacle.configure_window_if_nontiled(&window);
+                }
             }
         }
     }

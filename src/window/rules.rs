@@ -1,11 +1,11 @@
 use indexmap::IndexSet;
 use smithay::{
     desktop::WindowSurface,
-    output::Output,
     reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1,
     utils::{Logical, Point, Size},
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::error;
 
 use crate::{
     state::{Pinnacle, WithState},
@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    window_state::{LayoutMode, WindowId},
-    Unmapped, WindowElement,
+    window_state::{FullscreenOrMaximized, LayoutMode, WindowId},
+    Unmapped, UnmappedState, WindowElement,
 };
 
 use std::{
@@ -39,13 +39,13 @@ pub struct WindowRules {
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Option<Size<i32, Logical>>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
-    pub tags: IndexSet<Tag>,
+    pub tags: Option<IndexSet<Tag>>,
 }
 
-impl WindowRules {
-    pub fn set_tags_to_output(&mut self, output: &Output) {
-        super::set_tags_to_output(&mut self.tags, output);
-    }
+#[derive(Debug, Clone, Default)]
+pub struct ClientRequests {
+    pub layout_mode: Option<FullscreenOrMaximized>,
+    pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
 }
 
 impl WindowRuleState {
@@ -152,24 +152,48 @@ impl PendingWindowRuleRequest {
 }
 
 impl Pinnacle {
-    pub fn apply_window_rules(&self, unmapped: &Unmapped) {
+    pub fn apply_window_rules_and_send_initial_configure(&self, unmapped: &mut Unmapped) {
+        let UnmappedState::WaitingForRules {
+            rules,
+            client_requests,
+        } = &unmapped.state
+        else {
+            panic!("applied window rules but state wasn't waiting for them");
+        };
+
         let WindowRules {
             layout_mode,
-            focused: _,
+            focused,
             floating_loc,
             floating_size,
             decoration_mode,
             tags,
-        } = &unmapped.window_rules;
+        } = rules;
 
-        let layout_mode = layout_mode.unwrap_or(LayoutMode::new_tiled());
+        let ClientRequests {
+            layout_mode: client_layout_mode,
+            decoration_mode: client_decoration_mode,
+        } = client_requests;
+
+        let attempt_float_on_map = layout_mode.is_none() && client_layout_mode.is_none();
+
+        let layout_mode = layout_mode
+            .or_else(|| {
+                client_layout_mode.map(|mode| match mode {
+                    FullscreenOrMaximized::Fullscreen => LayoutMode::new_fullscreen_external(),
+                    FullscreenOrMaximized::Maximized => LayoutMode::new_maximized_external(),
+                })
+            })
+            .unwrap_or(LayoutMode::new_tiled());
 
         unmapped.window.with_state_mut(|state| {
             state.layout_mode = layout_mode;
             state.floating_loc = *floating_loc;
             state.floating_size = floating_size.unwrap_or(state.floating_size);
-            state.decoration_mode = *decoration_mode;
-            state.tags = tags.clone();
+            state.decoration_mode = (*decoration_mode).or(*client_decoration_mode);
+            if let Some(tags) = tags {
+                state.tags = tags.clone();
+            }
         });
 
         self.configure_window_if_nontiled(&unmapped.window);
@@ -183,30 +207,57 @@ impl Pinnacle {
                 decoration_mode.unwrap_or(zxdg_toplevel_decoration_v1::Mode::ClientSide),
             );
         }
+
+        match unmapped.window.underlying_surface() {
+            WindowSurface::Wayland(toplevel) => {
+                // This should be an assert, but currently Smithay does not
+                // raise a protocol error when a client commits a buffer
+                // before the initial configure
+                if toplevel.is_initial_configure_sent() {
+                    error!(
+                        app_id = ?unmapped.window.class(),
+                        "toplevel already configured after window rules; \
+                        this is either a bug with Pinnacle or the client application \
+                        committed a buffer before receiving an initial configure, \
+                        which is a protocol error"
+                    );
+                }
+                toplevel.send_configure();
+            }
+            WindowSurface::X11(surface) => {
+                let _ = surface.set_mapped(true);
+            }
+        }
+
+        unmapped.state = UnmappedState::PostInitialConfigure {
+            attempt_float_on_map,
+            focus: *focused != Some(false),
+        };
     }
 
     /// Request window rules from the config.
     ///
     /// If there are no window rules set, immediately sends the initial configure for toplevels
     /// or maps x11 surfaces.
-    pub fn request_window_rules(&mut self, unmapped: &Unmapped) {
+    pub fn request_window_rules(&mut self, unmapped: &mut Unmapped) {
+        let UnmappedState::WaitingForTags { client_requests } = &unmapped.state else {
+            panic!("tried to request_window_rules but not waiting for tags");
+        };
+
+        unmapped.state = UnmappedState::WaitingForRules {
+            rules: Default::default(),
+            client_requests: client_requests.clone(),
+        };
+
         let window_rule_request_sent = self.window_rule_state.new_request(&unmapped.window);
 
         // If the above is false, then there are either
         //   a. No window rules in place, or
         //   b. all clients with window rules are dead
         //
-        // In this case, send the initial configure here instead of waiting.
+        // In this case, apply rules and send the initial configure here instead of waiting.
         if !window_rule_request_sent {
-            self.apply_window_rules(unmapped);
-            match unmapped.window.underlying_surface() {
-                WindowSurface::Wayland(toplevel) => {
-                    toplevel.send_configure();
-                }
-                WindowSurface::X11(surface) => {
-                    let _ = surface.set_mapped(true);
-                }
-            }
+            self.apply_window_rules_and_send_initial_configure(unmapped);
         }
     }
 }

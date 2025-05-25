@@ -2,10 +2,13 @@ pub mod v1;
 
 use std::mem;
 
+use tracing::warn;
+
 use crate::{
     output::OutputName,
     state::{State, WithState},
     tag::Tag,
+    window::UnmappedState,
 };
 
 use super::{signal::Signal, StateFnSender};
@@ -74,28 +77,31 @@ pub fn add(
     tag_names: impl IntoIterator<Item = String>,
     output_name: OutputName,
 ) -> Vec<Tag> {
+    let Some(output) = output_name.output(&state.pinnacle) else {
+        warn!(
+            "Tried to add tags to output {} but it doesn't exist",
+            output_name.0
+        );
+        return Vec::new();
+    };
+
     let new_tags = tag_names.into_iter().map(Tag::new).collect::<Vec<_>>();
 
-    state
-        .pinnacle
-        .config
-        .connector_saved_states
-        .entry(output_name.clone())
-        .or_default()
-        .tags
-        .extend(new_tags.clone());
-
-    if let Some(output) = output_name.output(&state.pinnacle) {
-        output.with_state_mut(|state| {
-            state.add_tags(new_tags.clone());
-        });
-    }
+    output.with_state_mut(|state| {
+        state.add_tags(new_tags.clone());
+    });
 
     if !new_tags.is_empty() {
         let mut unmapped_windows = mem::take(&mut state.pinnacle.unmapped_windows);
         for unmapped in unmapped_windows.iter_mut() {
-            unmapped.awaiting_tags = false;
-            unmapped.window_rules.tags = new_tags.first().cloned().into_iter().collect();
+            if !matches!(unmapped.state, UnmappedState::WaitingForTags { .. }) {
+                continue;
+            };
+
+            unmapped.window.with_state_mut(|state| {
+                state.tags = new_tags.first().cloned().into_iter().collect();
+            });
+
             state.pinnacle.request_window_rules(unmapped);
         }
         state.pinnacle.unmapped_windows = unmapped_windows;

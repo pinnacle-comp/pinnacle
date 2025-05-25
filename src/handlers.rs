@@ -102,6 +102,7 @@ use crate::{
         screencopy::{Screencopy, ScreencopyHandler},
     },
     state::{ClientState, Pinnacle, State, WithState},
+    window::UnmappedState,
 };
 
 impl BufferHandler for State {
@@ -217,10 +218,17 @@ impl CompositorHandler for State {
                 } else {
                     // Still unmapped
 
+                    let mut unmapped = self.pinnacle.unmapped_windows.swap_remove(idx);
+                    unmapped.window.on_commit();
+
                     if let Some(output) = self.pinnacle.focused_output().cloned() {
-                        // My borrows have been checked
-                        let unmapped = &mut self.pinnacle.unmapped_windows[idx];
-                        unmapped.window_rules.set_tags_to_output(&output);
+                        if output.with_state(|state| !state.tags.is_empty())
+                            && matches!(unmapped.state, UnmappedState::WaitingForTags { .. })
+                        {
+                            unmapped.window.set_tags_to_output(&output);
+                            self.pinnacle.request_window_rules(&mut unmapped);
+                        }
+
                         if let Some(toplevel) = unmapped.window.toplevel() {
                             toplevel.with_pending_state(|state| {
                                 state.bounds = self
@@ -230,19 +238,6 @@ impl CompositorHandler for State {
                                     .map(|geo| geo.size);
                             });
                         }
-                    }
-
-                    let mut unmapped = self.pinnacle.unmapped_windows.swap_remove(idx);
-                    unmapped.window.on_commit();
-
-                    if !unmapped.window_rules.tags.is_empty() {
-                        self.pinnacle.request_window_rules(&unmapped);
-                    } else {
-                        // There are no tags.
-                        //
-                        // In this case, hold off on window rules/the initial configure
-                        // until we receive tags.
-                        unmapped.awaiting_tags = true;
                     }
 
                     self.pinnacle.unmapped_windows.push(unmapped);

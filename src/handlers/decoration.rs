@@ -21,6 +21,7 @@ use smithay::{
 use tracing::debug;
 
 use crate::state::{State, WithState};
+use crate::window::UnmappedState;
 
 impl State {
     fn new_decoration(
@@ -82,15 +83,39 @@ impl State {
             .pinnacle
             .unmapped_window_for_surface_mut(toplevel.wl_surface())
         {
-            if unmapped.window_rules.decoration_mode.is_none() {
-                unmapped.window_rules.decoration_mode = Some(mode);
-            }
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests }
+                | UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.decoration_mode = Some(mode);
 
-            match unmapped.window_rules.decoration_mode.unwrap_or(mode) {
-                zxdg_toplevel_decoration_v1::Mode::ServerSide => {
-                    org_kde_kwin_server_decoration::Mode::Server
+                    match mode {
+                        zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                            org_kde_kwin_server_decoration::Mode::Server
+                        }
+                        _ => org_kde_kwin_server_decoration::Mode::Client,
+                    }
                 }
-                _ => org_kde_kwin_server_decoration::Mode::Client,
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = &unmapped.window;
+
+                    let window_rule_mode = window.with_state(|state| state.decoration_mode);
+
+                    toplevel.with_pending_state(|state| {
+                        state.decoration_mode = Some(window_rule_mode.unwrap_or(mode));
+                    });
+
+                    toplevel.send_configure();
+
+                    match window_rule_mode.unwrap_or(mode) {
+                        zxdg_toplevel_decoration_v1::Mode::ServerSide => {
+                            org_kde_kwin_server_decoration::Mode::Server
+                        }
+                        _ => org_kde_kwin_server_decoration::Mode::Client,
+                    }
+                }
             }
         } else {
             org_kde_kwin_server_decoration::Mode::Client
@@ -108,11 +133,33 @@ impl State {
             });
 
             toplevel.send_pending_configure();
+        } else if let Some(unmapped) = self
+            .pinnacle
+            .unmapped_window_for_surface_mut(toplevel.wl_surface())
+        {
+            match &mut unmapped.state {
+                UnmappedState::WaitingForTags { client_requests } => {
+                    client_requests.decoration_mode = None;
+                }
+                UnmappedState::WaitingForRules {
+                    rules: _,
+                    client_requests,
+                } => {
+                    client_requests.decoration_mode = None;
+                }
+                UnmappedState::PostInitialConfigure { .. } => {
+                    let window = &unmapped.window;
+
+                    let window_rule_mode = window.with_state(|state| state.decoration_mode);
+
+                    toplevel.with_pending_state(|state| {
+                        state.decoration_mode = window_rule_mode;
+                    });
+
+                    toplevel.send_pending_configure();
+                }
+            }
         }
-        // FIXME: for unmapped windows:
-        // An unset cannot tell whether the decoration mode in a window rule
-        // was set by the config or by a decoration protocol.
-        // We are ignoring unsets here until this is fixed.
     }
 }
 
