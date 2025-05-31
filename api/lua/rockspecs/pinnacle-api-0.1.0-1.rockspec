@@ -1,5 +1,5 @@
 package = "pinnacle-api"
-version = "0.1.0"
+version = "0.1.0-1"
 source = {
     url = "git+https://github.com/pinnacle-comp/pinnacle",
     dir = "pinnacle/api/lua",
