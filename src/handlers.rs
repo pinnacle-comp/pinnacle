@@ -43,7 +43,7 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{HookId, Logical, Point, Rectangle},
+    utils::{Logical, Point, Rectangle},
     wayland::{
         buffer::BufferHandler,
         compositor::{
@@ -110,6 +110,10 @@ impl BufferHandler for State {
 }
 
 impl Pinnacle {
+    /// Adds the default dmabuf pre-commit hook to a surface.
+    ///
+    /// If the surface belongs to a mapped window, this hook needs to be removed and
+    /// the mapped hook added using [`add_mapped_toplevel_pre_commit_hook`].
     pub fn add_default_dmabuf_pre_commit_hook(&mut self, surface: &WlSurface) {
         let hook = compositor::add_pre_commit_hook::<State, _>(
             surface,
@@ -275,6 +279,7 @@ impl CompositorHandler for State {
                         {
                             compositor::remove_pre_commit_hook(surface, hook_id);
                         }
+                        self.pinnacle.add_default_dmabuf_pre_commit_hook(surface);
 
                         let output = window.output(&self.pinnacle);
 

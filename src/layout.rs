@@ -4,7 +4,7 @@ pub mod transaction;
 pub mod tree;
 
 use std::{
-    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     rc::Rc,
     time::Duration,
 };
@@ -17,7 +17,6 @@ use smithay::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::warn;
-use transaction::LayoutSnapshot;
 use tree::{LayoutNode, LayoutTree};
 
 use crate::{
@@ -25,7 +24,7 @@ use crate::{
     output::OutputName,
     state::{Pinnacle, State, WithState},
     tag::TagId,
-    util::transaction::{PendingTransaction, TransactionBase},
+    util::transaction::{PendingTransaction, TransactionBuilder},
     window::{window_state::LayoutModeKind, UnmappingWindow, WindowElement, ZIndexElement},
 };
 
@@ -139,12 +138,12 @@ impl Pinnacle {
             }
         }
 
-        let mut transaction_base = TransactionBase::new(self.layout_state.pending_swap);
+        let mut transaction_builder = TransactionBuilder::new(self.layout_state.pending_swap);
 
         for (win, geo) in wins_and_geos {
             if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
                 let serial = toplevel.send_pending_configure();
-                transaction_base.add(&win, geo.loc, serial, &self.loop_handle);
+                transaction_builder.add(&win, geo.loc, serial, &self.loop_handle);
 
                 // Send a frame to get unmapped windows to update
                 win.send_frame(
@@ -154,15 +153,15 @@ impl Pinnacle {
                     surface_primary_scanout_output,
                 );
             } else {
-                transaction_base.add(&win, geo.loc, None, &self.loop_handle);
+                transaction_builder.add(&win, geo.loc, None, &self.loop_handle);
             }
         }
 
-        let mut unmapping = if !self.pending_unmaps.is_empty() {
-            self.pending_unmaps.remove(0)
-        } else {
-            Vec::new()
-        };
+        let mut unmapping = self
+            .layout_state
+            .pending_unmaps
+            .take_next_for_output(output)
+            .unwrap_or_default();
 
         unmapping.extend(snapshot_windows);
 
@@ -170,7 +169,7 @@ impl Pinnacle {
             .pending_transactions
             .entry(output.downgrade())
             .or_default()
-            .push(transaction_base.into_pending(unmapping));
+            .push(transaction_builder.into_pending(unmapping));
 
         let (remaining_wins, _remaining_geos) = zipped.unzip::<_, _, Vec<_>, Vec<_>>();
 
@@ -203,8 +202,6 @@ impl Pinnacle {
                 }
             }
         }
-
-        self.fixup_z_layering();
     }
 
     pub fn swap_window_positions(&mut self, win1: &WindowElement, win2: &WindowElement) {
@@ -236,9 +233,34 @@ pub struct LayoutState {
     current_id: LayoutRequestId,
     pub layout_trees: HashMap<u32, LayoutTree>,
 
+    /// Currently pending transactions.
     pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
 
-    pub unmapping_windows: BTreeMap<u32, LayoutSnapshot>,
+    pub pending_unmaps: PendingUnmaps,
+}
+
+/// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
+/// windows closing.
+///
+/// Pending unmapping windows are picked up by the next requested layout.
+#[derive(Debug, Default)]
+pub struct PendingUnmaps {
+    pending_unmaps: HashMap<WeakOutput, Vec<Vec<Rc<UnmappingWindow>>>>,
+}
+
+impl PendingUnmaps {
+    pub fn add_for_output(&mut self, output: &Output, pending: Vec<Rc<UnmappingWindow>>) {
+        self.pending_unmaps
+            .entry(output.downgrade())
+            .or_default()
+            .push(pending);
+    }
+
+    pub fn take_next_for_output(&mut self, output: &Output) -> Option<Vec<Rc<UnmappingWindow>>> {
+        let entry = self.pending_unmaps.entry(output.downgrade()).or_default();
+
+        (!entry.is_empty()).then(|| entry.remove(0))
+    }
 }
 
 impl LayoutState {
@@ -251,6 +273,9 @@ impl LayoutState {
         self.pending_requests.remove(&output.downgrade());
         self.fulfilled_requests.remove(&output.downgrade());
         self.pending_transactions.remove(&output.downgrade());
+        self.pending_unmaps
+            .pending_unmaps
+            .remove(&output.downgrade());
     }
 }
 
@@ -263,6 +288,7 @@ pub struct LayoutInfo {
 }
 
 impl State {
+    /// Updates the layouts of outputs whose transactions have completed.
     pub fn update_layout(&mut self) {
         let _span = tracy_client::span!("State::update_layout");
 
@@ -289,6 +315,8 @@ impl State {
                 }
             }
 
+            // Only map the latest transaction that has finished;
+            // no need to do that for older ones.
             if let Some(transaction) = transaction {
                 let mut outputs = Vec::new();
                 for (window, loc) in transaction.target_locs {

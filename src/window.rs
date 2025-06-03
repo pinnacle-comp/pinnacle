@@ -154,17 +154,15 @@ impl WindowElement {
         });
     }
 
-    pub fn has_pending_transaction(&self) -> bool {
-        self.with_state(|state| !state.pending_transactions.is_empty())
-    }
-
+    /// Takes and returns the most recent transaction that has been committed.
     pub fn take_pending_transaction(&self, commit_serial: Serial) -> Option<Transaction> {
         let mut ret = None;
 
-        while let Some(serial) =
+        while let Some(previous_txn_serial) =
             self.with_state(|state| state.pending_transactions.first().map(|tx| tx.0))
         {
-            if commit_serial.is_no_older_than(&serial) {
+            // This drops all transactions older than the most recently committed to release them.
+            if previous_txn_serial <= commit_serial {
                 let (_, transaction) =
                     self.with_state_mut(|state| state.pending_transactions.remove(0));
 
@@ -337,6 +335,8 @@ impl Pinnacle {
             self.add_default_dmabuf_pre_commit_hook(toplevel.wl_surface());
         }
 
+        let maybe_output = window.output(self);
+
         let (idx, z) = self
             .z_index_stack
             .iter_mut()
@@ -344,18 +344,33 @@ impl Pinnacle {
             .find(|(_, win)| matches!(win, ZIndexElement::Window(win) if win == window))
             .expect("unmapped win is not in x index stack");
 
+        let mut should_remove = true;
+
+        // TODO: Replace with if-let chains in Rust 1.88
         if let Some(snap) = window.with_state_mut(|state| state.snapshot.take()) {
-            if let Some(loc) = self.space.element_location(window) {
-                let unmapping = Rc::new(UnmappingWindow {
-                    snapshot: snap,
-                    fullscreen: window.with_state(|state| state.layout_mode.is_fullscreen()),
-                    space_loc: loc,
-                });
-                let weak = Rc::downgrade(&unmapping);
-                self.pending_unmaps.push(vec![unmapping]);
-                *z = ZIndexElement::Unmapping(weak);
+            if window.with_state(|state| state.layout_mode.is_tiled()) {
+                if let Some(output) = maybe_output {
+                    // Add an unmapping window to the z_index_stack that will be displayed
+                    // in place of the removed window until a transaction finishes.
+                    if let Some(loc) = self.space.element_location(window) {
+                        let unmapping = Rc::new(UnmappingWindow {
+                            snapshot: snap,
+                            fullscreen: window
+                                .with_state(|state| state.layout_mode.is_fullscreen()),
+                            space_loc: loc,
+                        });
+                        let weak = Rc::downgrade(&unmapping);
+                        self.layout_state
+                            .pending_unmaps
+                            .add_for_output(&output, vec![unmapping]);
+                        *z = ZIndexElement::Unmapping(weak);
+                        should_remove = false;
+                    }
+                }
             }
-        } else {
+        }
+
+        if should_remove {
             self.z_index_stack.remove(idx);
         }
 
@@ -631,21 +646,32 @@ fn should_float(window: &WindowElement) -> bool {
     }
 }
 
+/// The state of an unmapped window.
 #[derive(Debug, Clone)]
 pub enum UnmappedState {
-    WaitingForTags {
-        client_requests: ClientRequests,
-    },
+    /// This window is waiting for tags to be added.
+    ///
+    /// This usually doesn't happen, but can occur for things like XDG autostart apps.
+    /// In that case, once tags are added this state advances to `WaitingForRules`.
+    WaitingForTags { client_requests: ClientRequests },
+    /// This window is waiting for window rules to complete.
     WaitingForRules {
         rules: WindowRules,
         client_requests: ClientRequests,
     },
+    /// Window rules are complete and the initial configure has been sent.
     PostInitialConfigure {
+        /// Whether to use heuristics to float the window on map.
+        ///
+        /// This is true when the client hasn't requested fullscreen/maximized and
+        /// there were no window rules dictating the layout mode.
         attempt_float_on_map: bool,
+        /// Whether to focus the window on map.
         focus: bool,
     },
 }
 
+/// An unmapped window.
 #[derive(Debug, Clone)]
 pub struct Unmapped {
     pub window: WindowElement,
@@ -656,12 +682,16 @@ pub struct Unmapped {
 /// A renderable element.
 ///
 /// We need to keep track of the z-index of snapshots alongside regular windows.
-/// While it's probably not the *best* idea to reuse the [`Pinnacle::z_index_stack`] for this, I'd rather not do something like change the space to
+/// While it's probably not the *best* idea to reuse the [`Pinnacle::z_index_stack`] for this,
+/// I'd rather not do something like change the space to
 /// take in this enum, as that's a lot more refactoring.
 pub enum ZIndexElement {
     /// A window.
     Window(WindowElement),
     /// A snapshot of a window that's unmapping.
+    ///
+    /// This is a weak pointer to the owning allocation in a
+    /// [`PendingTransaction`][crate::util::transaction::PendingTransaction].
     Unmapping(std::rc::Weak<UnmappingWindow>),
 }
 

@@ -1,3 +1,7 @@
+//! A blocker-based transaction implementation.
+//!
+//! Based on [Niri's implementation](https://github.com/YaLTeR/niri/blob/abac28a65c6c742114ef292221dd26e2a3a2f04b/src/utils/transaction.rs).
+
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -30,42 +34,59 @@ use crate::{
     window::{UnmappingWindow, WindowElement},
 };
 
-const TIMEOUT: Duration = Duration::from_millis(1500);
+/// Timeout before a transaction is considered finished.
+///
+/// Prevents windows form hanging.
+const TIMEOUT: Duration = Duration::from_millis(150);
 
+/// A builder for transactions.
 #[derive(Debug)]
-pub struct TransactionBase {
+pub struct TransactionBuilder {
     inner: Arc<Inner>,
     deadline: Rc<RefCell<Deadline>>,
     map_tos: HashMap<WindowElement, Point<i32, Logical>>,
     is_swap: bool,
 }
 
+/// A pending transaction that contains the target locations of windows once they finish
+/// committing.
 #[derive(Debug)]
 pub struct PendingTransaction {
+    /// The windows in this transactions along with their target locations.
     pub target_locs: HashMap<WindowElement, Point<i32, Logical>>,
     inner: Weak<Inner>,
+    /// Whether this transaction was for a window swap.
+    ///
+    /// This is used to throttle swapping until the transaction finishes
+    /// to prevent rapid window swaps.
     pub is_swap: bool,
-    // Held until this transaction drops, at which point the `UnmappingWindow`s in the
-    // z_index_stack are no longer valid
+    /// Held until this transaction drops, at which point the `UnmappingWindow`s in the
+    /// z_index_stack are no longer valid
     _unmapping: Vec<Rc<UnmappingWindow>>,
 }
 
 impl PendingTransaction {
+    /// Whether this transaction has finished.
     pub fn is_completed(&self) -> bool {
         self.inner
             .upgrade()
             .is_none_or(|inner| inner.is_completed())
     }
 
+    /// Whether this transaction is now invalid due to a window disappearing.
     pub fn is_cancelled(&self) -> bool {
         !self.is_completed() && self.target_locs.keys().any(|win| !win.alive())
     }
 }
 
-impl TransactionBase {
+impl TransactionBuilder {
+    /// Creates a new `TransactionBuilder`.
+    ///
+    /// `is_swap` determines whether swapping will be unthrottled once this
+    /// transaction finishes.
     pub fn new(is_swap: bool) -> Self {
         Self {
-            inner: Arc::new(Inner::new(None::<fn()>)),
+            inner: Arc::new(Inner::new()),
             deadline: Rc::new(RefCell::new(Deadline::NotRegistered(
                 Instant::now() + TIMEOUT,
             ))),
@@ -74,6 +95,7 @@ impl TransactionBase {
         }
     }
 
+    /// Adds a window to this transaction.
     pub fn add(
         &mut self,
         window: &WindowElement,
@@ -82,17 +104,21 @@ impl TransactionBase {
         loop_handle: &LoopHandle<'static, State>,
     ) {
         if let Some(serial) = serial {
-            let tx = Transaction {
+            let txn = Transaction {
                 inner: self.inner.clone(),
                 deadline: self.deadline.clone(),
             };
-            tx.register_deadline_timer(loop_handle);
-            window.with_state_mut(|state| state.pending_transactions.push((serial, tx)));
+            // While niri schedules the timer on a case-by-case basis,
+            // doing it here unconditionally is easier, albeit less performant
+            txn.register_deadline_timer(loop_handle);
+            window.with_state_mut(|state| state.pending_transactions.push((serial, txn)));
         }
 
         self.map_tos.insert(window.clone(), target_loc);
     }
 
+    /// Consumes this transaction builder and returns a pending transaction containing
+    /// added windows and their target locations.
     pub fn into_pending(self, unmapping: Vec<Rc<UnmappingWindow>>) -> PendingTransaction {
         PendingTransaction {
             target_locs: self.map_tos,
@@ -103,36 +129,36 @@ impl TransactionBase {
     }
 }
 
+/// A transaction for a window.
 #[derive(Debug)]
 pub struct Transaction {
     inner: Arc<Inner>,
     deadline: Rc<RefCell<Deadline>>,
 }
 
+/// A blocker that prevents a window's state from being merged until a
+/// transaction finishes.
 pub struct TransactionBlocker {
     inner: Weak<Inner>,
 }
 
 #[derive(Debug)]
 enum Deadline {
+    /// The deadline to complete a transaction has not yet been scheduled on the event loop.
     NotRegistered(Instant),
-    Registered { remove: Ping },
+    /// The deadline has been scheduled.
+    Registered {
+        /// The ping that removes the timer source.
+        ///
+        /// I believe this is to prevent calloop from getting overwhelmed with sources.
+        remove: Ping,
+    },
 }
 
+#[derive(Debug)]
 struct Inner {
     completed: AtomicBool,
     notifications: Mutex<Option<(Sender<Client>, Vec<Client>)>>,
-    on_completion: Option<Box<dyn Fn() + Sync + Send>>,
-}
-
-impl std::fmt::Debug for Inner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Inner")
-            .field("completed", &self.completed)
-            .field("notifications", &self.notifications)
-            .field("on_completion", &"...")
-            .finish()
-    }
 }
 
 impl Transaction {
@@ -156,12 +182,12 @@ impl Transaction {
     }
 
     /// Registers this transaction's deadline timer on an event loop.
-    fn register_deadline_timer<T: 'static>(&self, event_loop: &LoopHandle<'static, T>) {
+    fn register_deadline_timer<T: 'static>(&self, loop_handle: &LoopHandle<'static, T>) {
         let mut cell = self.deadline.borrow_mut();
         if let Deadline::NotRegistered(deadline) = *cell {
             let timer = Timer::from_deadline(deadline);
             let inner = Arc::downgrade(&self.inner);
-            let token = event_loop
+            let token = loop_handle
                 .insert_source(timer, move |_, _, _| {
                     let _span = trace_span!("deadline timer", transaction = ?Weak::as_ptr(&inner))
                         .entered();
@@ -181,10 +207,12 @@ impl Transaction {
 
             // Add a ping source that will be used to remove the timer automatically.
             let (ping, source) = calloop::ping::make_ping().unwrap();
-            let loop_handle = event_loop.clone();
-            event_loop
-                .insert_source(source, move |_, _, _| {
-                    loop_handle.remove(token);
+            loop_handle
+                .insert_source(source, {
+                    let loop_handle = loop_handle.clone();
+                    move |_, _, _| {
+                        loop_handle.remove(token);
+                    }
                 })
                 .unwrap();
 
@@ -220,29 +248,21 @@ impl Drop for Transaction {
     }
 }
 
-// impl TransactionBlocker {
-//     pub fn completed() -> Self {
-//         Self(Weak::new())
-//     }
-// }
-
 impl Blocker for TransactionBlocker {
     fn state(&self) -> BlockerState {
-        let ret = if self.inner.upgrade().is_none_or(|x| x.is_completed()) {
+        if self.inner.upgrade().is_none_or(|x| x.is_completed()) {
             BlockerState::Released
         } else {
             BlockerState::Pending
-        };
-        ret
+        }
     }
 }
 
 impl Inner {
-    fn new(on_completion: Option<impl Fn() + Send + Sync + 'static>) -> Self {
+    fn new() -> Self {
         Self {
             completed: AtomicBool::new(false),
             notifications: Mutex::new(None),
-            on_completion: on_completion.map(|f| Box::new(f) as _),
         }
     }
 
@@ -260,10 +280,6 @@ impl Inner {
                     warn!("error sending blocker notification: {err:?}");
                 };
             }
-        }
-
-        if let Some(f) = self.on_completion.as_ref() {
-            f();
         }
     }
 }

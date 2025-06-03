@@ -26,7 +26,7 @@ use crate::{
         output_power_management::OutputPowerManagementState,
         screencopy::ScreencopyManagerState,
     },
-    window::{rules::WindowRuleState, Unmapped, UnmappingWindow, WindowElement, ZIndexElement},
+    window::{rules::WindowRuleState, Unmapped, WindowElement, ZIndexElement},
 };
 use anyhow::Context;
 use indexmap::IndexMap;
@@ -101,7 +101,6 @@ use std::{
     collections::{HashMap, HashSet},
     ffi::OsString,
     path::PathBuf,
-    rc::Rc,
     sync::Arc,
     time::Duration,
 };
@@ -230,8 +229,6 @@ pub struct Pinnacle {
     pub blocker_cleared_rx: std::sync::mpsc::Receiver<Client>,
 
     pub dmabuf_hooks: HashMap<WlSurface, HookId>,
-
-    pub pending_unmaps: Vec<Vec<Rc<UnmappingWindow>>>,
 }
 
 #[cfg(feature = "snowcap")]
@@ -506,8 +503,6 @@ impl Pinnacle {
             blocker_cleared_rx,
 
             dmabuf_hooks: Default::default(),
-
-            pending_unmaps: Default::default(),
         };
 
         Ok(pinnacle)

@@ -375,13 +375,19 @@ impl XdgShellHandler for State {
 }
 delegate_xdg_shell!(State);
 
+/// Adds a pre-commit hook for mapped toplevels that blocks windows when transactions are pending.
+///
+/// It also takes over the role of the default dmabuf pre-commit hook, so when adding this
+/// be sure to remove the default hook.
+//
+// Yoinked from niri
 pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId {
     add_pre_commit_hook::<State, _>(toplevel.wl_surface(), move |state, _dh, surface| {
         let _span = tracy_client::span!("mapped toplevel pre-commit");
         let span =
             trace_span!("toplevel pre-commit", surface = %surface.id(), serial = Empty).entered();
 
-        let Some(mapped) = state.pinnacle.window_for_surface(surface) else {
+        let Some(window) = state.pinnacle.window_for_surface(surface) else {
             error!("pre-commit hook for mapped surfaces must be removed upon unmapping");
             return;
         };
@@ -416,7 +422,7 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
             }
 
             trace!("taking pending transaction");
-            if let Some(transaction) = mapped.take_pending_transaction(serial) {
+            if let Some(transaction) = window.take_pending_transaction(serial) {
                 // Transaction can be already completed if it ran past the deadline.
                 if !transaction.is_completed() {
                     let is_last = transaction.is_last();
@@ -436,8 +442,6 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                             );
                             compositor::add_blocker(surface, transaction.blocker());
                         }
-                    } else {
-                        // tx not finished but this is the last window with it
                     }
 
                     // Delay dropping (and completing) the transaction until the dmabuf is ready.
@@ -475,7 +479,6 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
             }
         }
 
-        let window = mapped;
         if got_unmapped {
             let Some(output) = window.output(&state.pinnacle) else {
                 return;
