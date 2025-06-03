@@ -1,15 +1,12 @@
 //! Utilities for capturing snapshots of windows and other elements.
 
 use std::cell::OnceCell;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element;
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
 use smithay::backend::renderer::element::utils::RescaleRenderElement;
-use smithay::output::Output;
-use smithay::utils::Logical;
 use smithay::{
     backend::renderer::{
         element::RenderElement,
@@ -19,10 +16,10 @@ use smithay::{
 };
 use tracing::debug;
 
-use crate::layout::transaction::{LayoutSnapshot, SnapshotRenderElement, SnapshotTarget};
+use crate::layout::transaction::{LayoutSnapshot, SnapshotRenderElement};
 use crate::render::texture::CommonTextureRenderElement;
 use crate::render::{AsGlesRenderer, PRenderer};
-use crate::state::{Pinnacle, State, WithState};
+use crate::state::WithState;
 use crate::window::WindowElement;
 
 use super::surface::WlSurfaceTextureRenderElement;
@@ -97,11 +94,13 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
     pub fn render_elements<R: PRenderer + AsGlesRenderer>(
         &self,
         renderer: &mut R,
+        location: Point<i32, Physical>,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Option<SnapshotRenderElement<R>> {
+    ) -> Option<SnapshotRenderElement> {
         let renderer = renderer.as_gles_renderer();
-        let (texture, loc) = self.texture(renderer)?;
+        let (texture, offset) = self.texture(renderer)?;
+        let loc = location + offset;
         let buffer: TextureBuffer<GlesTexture> =
             TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
         let elem = TextureRenderElement::from_texture_buffer(
@@ -118,12 +117,10 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
         // Scale in the opposite direction from the original scale to have it be the same size
         let scale = Scale::from((1.0 / scale.x, 1.0 / scale.y));
 
-        Some(SnapshotRenderElement::Snapshot(
-            RescaleRenderElement::from_element(
-                WlSurfaceTextureRenderElement::Texture(common),
-                loc,
-                scale,
-            ),
+        Some(RescaleRenderElement::from_element(
+            WlSurfaceTextureRenderElement::Texture(common),
+            loc,
+            scale,
         ))
     }
 }
@@ -133,107 +130,15 @@ impl WindowElement {
     pub fn capture_snapshot_and_store(
         &self,
         renderer: &mut GlesRenderer,
-        location: Point<i32, Logical>,
         scale: Scale<f64>,
         alpha: f32,
     ) -> Option<LayoutSnapshot> {
         self.with_state_mut(|state| {
-            let elements = self.texture_render_elements(renderer, location, scale, alpha);
+            let elements = self.texture_render_elements(renderer, (0, 0).into(), scale, alpha);
             if !elements.surface_elements.is_empty() {
                 state.snapshot = Some(RenderSnapshot::new(elements.surface_elements, scale));
             }
             state.snapshot.clone()
         })
     }
-}
-
-impl State {
-    /// Capture snapshots for all tiled windows on this output.
-    ///
-    /// Any windows in `also_include` are also included in the capture.
-    pub fn capture_snapshots_on_output(
-        &mut self,
-        output: &Output,
-        also_include: impl IntoIterator<Item = WindowElement>,
-    ) {
-        self.backend.with_renderer(|renderer| {
-            capture_snapshots_on_output(&mut self.pinnacle, renderer, output, also_include);
-        });
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct OutputSnapshots {
-    pub fullscreen_and_above: Vec<SnapshotTarget>,
-    pub under_fullscreen: Vec<SnapshotTarget>,
-}
-
-fn capture_snapshots_on_output(
-    pinnacle: &mut Pinnacle,
-    renderer: &mut GlesRenderer,
-    output: &Output,
-    also_include: impl IntoIterator<Item = WindowElement>,
-) {
-    let split_index = pinnacle
-        .space
-        .elements()
-        .filter(|win| {
-            win.is_on_active_tag_on_output(output)
-                || (win.is_on_active_tag()
-                    && win.with_state(|state| state.layout_mode.is_floating()))
-        })
-        .position(|win| win.with_state(|state| state.layout_mode.is_fullscreen()));
-
-    let mut under_fullscreen = pinnacle
-        .space
-        .elements()
-        .filter(|win| {
-            win.is_on_active_tag_on_output(output)
-                || (win.is_on_active_tag()
-                    && win.with_state(|state| state.layout_mode.is_floating()))
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-
-    let fullscreen_and_up =
-        under_fullscreen.split_off(split_index.unwrap_or(under_fullscreen.len()));
-
-    #[allow(clippy::mutable_key_type)]
-    let also_include = also_include.into_iter().collect::<HashSet<_>>();
-
-    let mut flat_map = |win: WindowElement| {
-        if win.with_state(|state| state.layout_mode.is_tiled()) || also_include.contains(&win) {
-            let loc = pinnacle.space.element_location(&win)? - output.current_location();
-            let snapshot = win.capture_snapshot_and_store(
-                renderer,
-                loc,
-                output.current_scale().fractional_scale().into(),
-                1.0,
-            );
-
-            snapshot.map(|snapshot| SnapshotTarget::Snapshot {
-                snapshot,
-                window: win.clone(),
-            })
-        } else {
-            Some(SnapshotTarget::Window(win))
-        }
-    };
-
-    let under_fullscreen_snapshots = under_fullscreen
-        .into_iter()
-        .rev()
-        .flat_map(&mut flat_map)
-        .collect();
-
-    let fullscreen_and_up_snapshots = fullscreen_and_up
-        .into_iter()
-        .rev()
-        .flat_map(&mut flat_map)
-        .collect();
-
-    output.with_state_mut(|state| {
-        state.snapshots.fullscreen_and_above = fullscreen_and_up_snapshots;
-        state.snapshots.under_fullscreen = under_fullscreen_snapshots;
-    });
 }

@@ -6,20 +6,25 @@ use smithay::{
     },
     input::{pointer::Focus, Seat},
     reexports::{
+        calloop::Interest,
         wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge,
         wayland_server::{
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
-            DisplayHandle,
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
+            Resource,
         },
     },
-    utils::Serial,
+    utils::{HookId, Serial},
     wayland::{
-        compositor::{self, BufferAssignment, SurfaceAttributes},
+        compositor::{
+            self, add_pre_commit_hook, BufferAssignment, CompositorHandler, SurfaceAttributes,
+        },
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+            XdgToplevelSurfaceData,
         },
     },
 };
+use tracing::{error, field::Empty, trace, trace_span};
 
 use crate::{
     focus::keyboard::KeyboardFocusTarget,
@@ -39,6 +44,11 @@ impl XdgShellHandler for State {
         let _span = tracy_client::span!("XdgShellHandler::new_toplevel");
 
         let window = WindowElement::new(Window::new_wayland_window(surface.clone()));
+
+        // Gets wleird-slow-ack-configure working
+        // surface.with_pending_state(|state| {
+        //     state.size = Some((600, 400).into());
+        // });
 
         self.pinnacle.unmapped_windows.push(Unmapped {
             window,
@@ -64,17 +74,20 @@ impl XdgShellHandler for State {
 
         let output = window.output(&self.pinnacle);
 
-        if is_tiled {
-            if let Some(output) = output.as_ref() {
-                self.capture_snapshots_on_output(output, []);
-            }
+        if let Some(output) = output.as_ref() {
+            self.backend.with_renderer(|renderer| {
+                window.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
         }
 
         self.pinnacle.remove_window(&window, false);
 
         if let Some(output) = output {
             if is_tiled {
-                self.pinnacle.begin_layout_transaction(&output);
                 self.pinnacle.request_layout(&output);
             }
 
@@ -362,42 +375,121 @@ impl XdgShellHandler for State {
 }
 delegate_xdg_shell!(State);
 
-pub fn snapshot_pre_commit_hook(
-    state: &mut State,
-    _display_handle: &DisplayHandle,
-    surface: &WlSurface,
-) {
-    let _span = tracy_client::span!("snapshot_pre_commit_hook");
+pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId {
+    add_pre_commit_hook::<State, _>(toplevel.wl_surface(), move |state, _dh, surface| {
+        let _span = tracy_client::span!("mapped toplevel pre-commit");
+        let span =
+            trace_span!("toplevel pre-commit", surface = %surface.id(), serial = Empty).entered();
 
-    let Some(window) = state.pinnacle.window_for_surface(surface) else {
-        return;
-    };
-
-    let got_unmapped = compositor::with_states(surface, |states| {
-        let mut guard = states.cached_state.get::<SurfaceAttributes>();
-        let buffer = &guard.pending().buffer;
-        matches!(buffer, Some(BufferAssignment::Removed))
-    });
-
-    if got_unmapped {
-        let Some(output) = window.output(&state.pinnacle) else {
-            return;
-        };
-        let Some(loc) = state.pinnacle.space.element_location(window) else {
+        let Some(mapped) = state.pinnacle.window_for_surface(surface) else {
+            error!("pre-commit hook for mapped surfaces must be removed upon unmapping");
             return;
         };
 
-        let loc = loc - output.current_location();
+        let (got_unmapped, dmabuf, commit_serial) = compositor::with_states(surface, |states| {
+            let (got_unmapped, dmabuf) = {
+                let mut guard = states.cached_state.get::<SurfaceAttributes>();
+                match guard.pending().buffer.as_ref() {
+                    Some(BufferAssignment::NewBuffer(buffer)) => {
+                        let dmabuf = smithay::wayland::dmabuf::get_dmabuf(buffer).cloned().ok();
+                        (false, dmabuf)
+                    }
+                    Some(BufferAssignment::Removed) => (true, None),
+                    None => (false, None),
+                }
+            };
 
-        state.backend.with_renderer(|renderer| {
-            window.capture_snapshot_and_store(
-                renderer,
-                loc,
-                output.current_scale().fractional_scale().into(),
-                1.0,
-            );
+            let role = states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap();
+
+            (got_unmapped, dmabuf, role.configure_serial)
         });
-    } else {
-        window.with_state_mut(|state| state.snapshot.take());
-    }
+
+        let mut transaction_for_dmabuf = None;
+        if let Some(serial) = commit_serial {
+            if !span.is_disabled() {
+                span.record("serial", format!("{serial:?}"));
+            }
+
+            trace!("taking pending transaction");
+            if let Some(transaction) = mapped.take_pending_transaction(serial) {
+                // Transaction can be already completed if it ran past the deadline.
+                if !transaction.is_completed() {
+                    let is_last = transaction.is_last();
+
+                    // If this is the last transaction, we don't need to add a separate
+                    // notification, because the transaction will complete in our dmabuf blocker
+                    // callback, which already calls blocker_cleared(), or by the end of this
+                    // function, in which case there would be no blocker in the first place.
+                    if !is_last {
+                        // Waiting for some other surface; register a notification and add a
+                        // transaction blocker.
+
+                        if let Some(client) = surface.client() {
+                            transaction.add_notification(
+                                state.pinnacle.blocker_cleared_tx.clone(),
+                                client.clone(),
+                            );
+                            compositor::add_blocker(surface, transaction.blocker());
+                        }
+                    } else {
+                        // tx not finished but this is the last window with it
+                    }
+
+                    // Delay dropping (and completing) the transaction until the dmabuf is ready.
+                    // If there's no dmabuf, this will be dropped by the end of this pre-commit
+                    // hook.
+                    transaction_for_dmabuf = Some(transaction);
+                }
+            }
+        } else {
+            error!("commit on a mapped surface without a configured serial");
+        };
+
+        if let Some((blocker, source)) =
+            dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
+        {
+            if let Some(client) = surface.client() {
+                let res = state
+                    .pinnacle
+                    .loop_handle
+                    .insert_source(source, move |_, _, state| {
+                        // This surface is now ready for the transaction.
+                        drop(transaction_for_dmabuf.take());
+
+                        let display_handle = state.pinnacle.display_handle.clone();
+                        state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(state, &display_handle);
+
+                        Ok(())
+                    });
+                if res.is_ok() {
+                    compositor::add_blocker(surface, blocker);
+                    trace!("added dmabuf blocker");
+                }
+            }
+        }
+
+        let window = mapped;
+        if got_unmapped {
+            let Some(output) = window.output(&state.pinnacle) else {
+                return;
+            };
+
+            state.backend.with_renderer(|renderer| {
+                window.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
+        } else {
+            window.with_state_mut(|state| state.snapshot.take());
+        }
+    })
 }

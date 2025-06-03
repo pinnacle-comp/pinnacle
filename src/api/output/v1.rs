@@ -77,8 +77,6 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
             };
             let loc = (x, y).into();
 
-            state.capture_snapshots_on_output(&output, []);
-
             state.pinnacle.change_output_state(
                 &mut state.backend,
                 &output,
@@ -87,8 +85,9 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 None,
                 Some(loc),
             );
+
             debug!("Mapping output {} to {loc:?}", output.name());
-            state.pinnacle.begin_layout_transaction(&output);
+
             state.pinnacle.request_layout(&output);
             state
                 .pinnacle
@@ -229,8 +228,6 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
 
             current_scale = f64::max(current_scale, 0.25);
 
-            state.capture_snapshots_on_output(&output, []);
-
             state.pinnacle.change_output_state(
                 &mut state.backend,
                 &output,
@@ -240,7 +237,6 @@ impl output::v1::output_service_server::OutputService for super::OutputService {
                 None,
             );
 
-            state.pinnacle.begin_layout_transaction(&output);
             state.pinnacle.request_layout(&output);
 
             state.schedule_render(&output);

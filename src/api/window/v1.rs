@@ -224,7 +224,6 @@ impl v1::window_service_server::WindowService for super::WindowService {
 
         run_unary_no_response(&self.sender, move |state| {
             let Some(window) = window_id.window(&state.pinnacle) else {
-                println!("window doesn't exist");
                 return;
             };
 

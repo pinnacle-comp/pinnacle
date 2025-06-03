@@ -10,8 +10,6 @@ impl State {
 
         let output = window.output(&self.pinnacle);
         if let Some(output) = output.as_ref() {
-            self.capture_snapshots_on_output(output, [window.clone()]);
-
             let output_geo = self.pinnacle.space.output_geometry(output);
             if let Some(output_geo) = output_geo {
                 let mut size = window.with_state(|state| state.floating_size);
@@ -47,7 +45,6 @@ impl State {
         }
 
         if let Some(output) = window.output(&self.pinnacle) {
-            self.pinnacle.begin_layout_transaction(&output);
             self.pinnacle.request_layout(&output);
         }
 

@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use indexmap::IndexSet;
 use smithay::{
-    backend::renderer::element::Id,
     desktop::{layer_map_for_output, WindowSurface},
     reexports::wayland_protocols::xdg::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
@@ -18,6 +17,7 @@ use crate::{
     layout::transaction::LayoutSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
+    util::transaction::Transaction,
 };
 
 use super::{Unmapped, WindowElement};
@@ -328,24 +328,13 @@ pub struct WindowElementState {
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
     pub minimized: bool,
-    /// The most recent serial that has been committed.
-    pub committed_serial: Option<Serial>,
     pub snapshot: Option<LayoutSnapshot>,
-    pub snapshot_hook_id: Option<HookId>,
+    pub mapped_hook_id: Option<HookId>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_loc: Option<Point<f64, Logical>>,
     pub floating_size: Size<i32, Logical>,
 
-    /// The id of a snapshot element if any.
-    ///
-    /// When updating the primary scanout output, Smithay looks at the ids of all elements drawn on
-    /// screen. If it matches the ids of this window's elements, the primary output is updated.
-    /// However, when a snapshot is rendering, the snapshot's element id is different from this
-    /// window's ids. Therefore, we clone that snapshot's id into this field and use it to update
-    /// the primary output when necessary.
-    ///
-    /// See [`Pinnacle::update_primary_scanout_output`] for more details.
-    pub offscreen_elem_id: Option<Id>,
+    pub pending_transactions: Vec<(Serial, Transaction)>,
 }
 
 impl WindowElement {
@@ -595,11 +584,10 @@ impl WindowElementState {
             floating_loc: None,
             floating_size: Default::default(),
             minimized: false,
-            committed_serial: None,
             snapshot: None,
-            snapshot_hook_id: None,
+            mapped_hook_id: None,
             decoration_mode: None,
-            offscreen_elem_id: None,
+            pending_transactions: Default::default(),
         }
     }
 }

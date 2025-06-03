@@ -1,3 +1,4 @@
+pub mod transaction;
 pub mod treediff;
 
 use std::{

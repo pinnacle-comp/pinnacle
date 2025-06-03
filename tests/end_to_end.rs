@@ -2552,7 +2552,13 @@ fn window_handle_raise() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let top = state.pinnacle.z_index_stack.last().unwrap();
+            let top = state
+                .pinnacle
+                .z_index_stack
+                .last()
+                .unwrap()
+                .window()
+                .unwrap();
             let second = &state.pinnacle.windows[1];
             assert_eq!(top, second);
         });
@@ -2571,7 +2577,13 @@ fn window_handle_raise() -> anyhow::Result<()> {
         sleep(SLEEP_DURATION);
 
         sender.with_state(move |state| {
-            let top = state.pinnacle.z_index_stack.last().unwrap();
+            let top = state
+                .pinnacle
+                .z_index_stack
+                .last()
+                .unwrap()
+                .window()
+                .unwrap();
             let first = &state.pinnacle.windows[0];
             assert_eq!(top, first);
         });

@@ -481,19 +481,10 @@ impl State {
             let should_layout = !win.is_x11_override_redirect()
                 && win.with_state(|state| state.layout_mode.is_tiled());
 
-            let output = win.output(&self.pinnacle);
-
-            if should_layout {
-                if let Some(output) = output.as_ref() {
-                    self.capture_snapshots_on_output(output, []);
-                }
-            }
-
             self.pinnacle.remove_window(&win, false);
 
             if let Some(output) = win.output(&self.pinnacle) {
                 if should_layout {
-                    self.pinnacle.begin_layout_transaction(&output);
                     self.pinnacle.request_layout(&output);
                 }
 
@@ -520,6 +511,7 @@ impl Pinnacle {
         let (active_windows, non_active_windows) = self
             .z_index_stack
             .iter()
+            .filter_map(|z| z.window())
             .filter(|win| !win.is_x11_override_redirect())
             .partition::<Vec<_>, _>(|win| win.is_on_active_tag());
 

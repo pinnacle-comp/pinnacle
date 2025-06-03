@@ -43,12 +43,12 @@ use smithay::{
             Client, Resource,
         },
     },
-    utils::{Logical, Point, Rectangle},
+    utils::{HookId, Logical, Point, Rectangle},
     wayland::{
         buffer::BufferHandler,
         compositor::{
-            self, add_pre_commit_hook, BufferAssignment, CompositorClientState, CompositorHandler,
-            CompositorState, SurfaceAttributes,
+            self, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
+            SurfaceAttributes,
         },
         dmabuf,
         fractional_scale::{self, FractionalScaleHandler},
@@ -85,13 +85,13 @@ use smithay::{
     xwayland::XWaylandClientData,
 };
 use tracing::{debug, error, trace, warn};
+use xdg_shell::add_mapped_toplevel_pre_commit_hook;
 
 use crate::{
     backend::Backend,
     delegate_gamma_control, delegate_output_management, delegate_output_power_management,
     delegate_screencopy,
     focus::{keyboard::KeyboardFocusTarget, pointer::PointerFocusTarget},
-    handlers::xdg_shell::snapshot_pre_commit_hook,
     output::OutputMode,
     protocol::{
         gamma_control::{GammaControlHandler, GammaControlManagerState},
@@ -109,50 +109,61 @@ impl BufferHandler for State {
     fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {}
 }
 
+impl Pinnacle {
+    pub fn add_default_dmabuf_pre_commit_hook(&mut self, surface: &WlSurface) {
+        let hook = compositor::add_pre_commit_hook::<State, _>(
+            surface,
+            |state, _display_handle, surface| {
+                let maybe_dmabuf = compositor::with_states(surface, |surface_data| {
+                    surface_data
+                        .cached_state
+                        .get::<SurfaceAttributes>()
+                        .pending()
+                        .buffer
+                        .as_ref()
+                        .and_then(|assignment| match assignment {
+                            BufferAssignment::NewBuffer(buffer) => {
+                                dmabuf::get_dmabuf(buffer).cloned().ok()
+                            }
+                            _ => None,
+                        })
+                });
+                if let Some(dmabuf) = maybe_dmabuf {
+                    if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
+                        if let Some(client) = surface.client() {
+                            let res = state.pinnacle.loop_handle.insert_source(
+                                source,
+                                move |_, _, state| {
+                                    state.client_compositor_state(&client).blocker_cleared(
+                                        state,
+                                        &state.pinnacle.display_handle.clone(),
+                                    );
+                                    Ok(())
+                                },
+                            );
+                            if res.is_ok() {
+                                compositor::add_blocker(surface, blocker);
+                            }
+                        }
+                    }
+                }
+            },
+        );
+
+        if let Some(prev_hook) = self.dmabuf_hooks.insert(surface.clone(), hook) {
+            error!("tried to add dmabuf pre-commit hook when there already was one");
+            compositor::remove_pre_commit_hook(surface, prev_hook);
+        }
+    }
+}
+
 impl CompositorHandler for State {
     fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.pinnacle.compositor_state
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
-        let _span = tracy_client::span!("CompositorHandler::new_surface");
-
-        compositor::add_pre_commit_hook::<Self, _>(surface, |state, _display_handle, surface| {
-            let maybe_dmabuf = compositor::with_states(surface, |surface_data| {
-                surface_data
-                    .cached_state
-                    .get::<SurfaceAttributes>()
-                    .pending()
-                    .buffer
-                    .as_ref()
-                    .and_then(|assignment| match assignment {
-                        BufferAssignment::NewBuffer(buffer) => {
-                            dmabuf::get_dmabuf(buffer).cloned().ok()
-                        }
-                        _ => None,
-                    })
-            });
-            if let Some(dmabuf) = maybe_dmabuf {
-                if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
-                    if let Some(client) = surface.client() {
-                        let res =
-                            state
-                                .pinnacle
-                                .loop_handle
-                                .insert_source(source, move |_, _, state| {
-                                    state.client_compositor_state(&client).blocker_cleared(
-                                        state,
-                                        &state.pinnacle.display_handle.clone(),
-                                    );
-                                    Ok(())
-                                });
-                        if res.is_ok() {
-                            compositor::add_blocker(surface, blocker);
-                        }
-                    }
-                }
-            }
-        });
+        self.pinnacle.add_default_dmabuf_pre_commit_hook(surface);
     }
 
     fn commit(&mut self, surface: &WlSurface) {
@@ -176,10 +187,6 @@ impl CompositorHandler for State {
         self.pinnacle
             .root_surface_cache
             .insert(surface.clone(), root.clone());
-
-        if let Some(window) = self.pinnacle.window_for_surface(&root) {
-            window.mark_serial_as_committed();
-        }
 
         // TODO: maps here, is that good?
         self.pinnacle.move_surface_if_resized(surface);
@@ -206,12 +213,15 @@ impl CompositorHandler for State {
                     unmapped.window.on_commit();
 
                     if let Some(toplevel) = unmapped.window.toplevel() {
-                        let hook_id =
-                            add_pre_commit_hook(toplevel.wl_surface(), snapshot_pre_commit_hook);
+                        if let Some(hook) = self.pinnacle.dmabuf_hooks.remove(surface) {
+                            compositor::remove_pre_commit_hook(surface, hook);
+                        }
+
+                        let hook_id = add_mapped_toplevel_pre_commit_hook(toplevel);
 
                         unmapped
                             .window
-                            .with_state_mut(|state| state.snapshot_hook_id = Some(hook_id));
+                            .with_state_mut(|state| state.mapped_hook_id = Some(hook_id));
                     }
 
                     self.map_new_window(unmapped);
@@ -261,17 +271,12 @@ impl CompositorHandler for State {
                     // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
                     if !is_mapped {
                         if let Some(hook_id) =
-                            window.with_state_mut(|state| state.snapshot_hook_id.take())
+                            window.with_state_mut(|state| state.mapped_hook_id.take())
                         {
                             compositor::remove_pre_commit_hook(surface, hook_id);
                         }
 
                         let output = window.output(&self.pinnacle);
-
-                        if let Some(output) = output.as_ref() {
-                            self.capture_snapshots_on_output(output, []);
-                            self.pinnacle.begin_layout_transaction(output);
-                        }
 
                         self.pinnacle.remove_window(&window, true);
 
@@ -360,7 +365,6 @@ impl CompositorHandler for State {
 
             let layer_changed = layer_map_for_output(&output).arrange();
             if layer_changed {
-                self.capture_snapshots_on_output(&output, []);
                 self.pinnacle.request_layout(&output);
             }
 
@@ -430,16 +434,10 @@ impl CompositorHandler for State {
         let Some(output) = window.output(&self.pinnacle) else {
             return;
         };
-        let Some(loc) = self.pinnacle.space.element_location(window) else {
-            return;
-        };
-
-        let loc = loc - output.current_location();
 
         self.backend.with_renderer(|renderer| {
             window.capture_snapshot_and_store(
                 renderer,
-                loc,
                 output.current_scale().fractional_scale().into(),
                 1.0,
             );
@@ -741,7 +739,6 @@ impl WlrLayerShellHandler for State {
         }
 
         if let Some(output) = output {
-            self.capture_snapshots_on_output(&output, []);
             self.pinnacle.request_layout(&output);
         }
     }
@@ -914,8 +911,6 @@ impl OutputManagementHandler for State {
                     self.pinnacle.set_output_enabled(&output, true);
                     self.set_output_powered(&output, true);
 
-                    self.capture_snapshots_on_output(&output, []);
-
                     let mode = mode.map(|(size, refresh)| {
                         if let Some(refresh) = refresh {
                             Mode {
@@ -948,7 +943,6 @@ impl OutputManagementHandler for State {
                         position,
                     );
 
-                    self.pinnacle.begin_layout_transaction(&output);
                     self.pinnacle.request_layout(&output);
 
                     self.schedule_render(&output);

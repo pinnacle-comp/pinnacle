@@ -2,7 +2,7 @@
 
 pub mod rules;
 
-use std::{cell::RefCell, collections::HashMap, ops::Deref};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 
 use indexmap::IndexSet;
 use rules::{ClientRequests, WindowRules};
@@ -28,8 +28,10 @@ use tracing::{error, warn};
 use window_state::LayoutModeKind;
 
 use crate::{
+    layout::transaction::LayoutSnapshot,
     state::{Pinnacle, State, WithState},
     tag::Tag,
+    util::transaction::Transaction,
 };
 
 use self::window_state::WindowElementState;
@@ -142,55 +144,37 @@ impl WindowElement {
         self.with_state(|state| state.tags.iter().any(|tag| tag.active()))
     }
 
-    pub fn is_on_active_tag_on_output(&self, output: &Output) -> bool {
-        let _span = tracy_client::span!("WindowElement::is_on_active_tag_on_output");
-
-        let win_tags = self.with_state(|state| state.tags.clone());
-        output.with_state(|state| {
-            state
-                .focused_tags()
-                .cloned()
-                .collect::<IndexSet<_>>()
-                .intersection(&win_tags)
-                .next()
-                .is_some()
-        })
-    }
-
     pub fn is_x11_override_redirect(&self) -> bool {
         matches!(self.x11_surface(), Some(surface) if surface.is_override_redirect())
-    }
-
-    /// Marks the currently acked configure as committed.
-    pub fn mark_serial_as_committed(&self) {
-        let _span = tracy_client::span!("WindowElement::mark_serial_as_committed");
-
-        let Some(toplevel) = self.toplevel() else { return };
-        let serial = compositor::with_states(toplevel.wl_surface(), |states| {
-            states
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .configure_serial
-        });
-
-        self.with_state_mut(|state| state.committed_serial = serial);
-    }
-
-    /// Returns whether the currently committed serial is >= the given serial.
-    pub fn is_serial_committed(&self, serial: Serial) -> bool {
-        match self.with_state(|state| state.committed_serial) {
-            Some(committed_serial) => committed_serial >= serial,
-            None => false,
-        }
     }
 
     pub fn set_tags_to_output(&self, output: &Output) {
         self.with_state_mut(|state| {
             set_tags_to_output(&mut state.tags, output);
         });
+    }
+
+    pub fn has_pending_transaction(&self) -> bool {
+        self.with_state(|state| !state.pending_transactions.is_empty())
+    }
+
+    pub fn take_pending_transaction(&self, commit_serial: Serial) -> Option<Transaction> {
+        let mut ret = None;
+
+        while let Some(serial) =
+            self.with_state(|state| state.pending_transactions.first().map(|tx| tx.0))
+        {
+            if commit_serial.is_no_older_than(&serial) {
+                let (_, transaction) =
+                    self.with_state_mut(|state| state.pending_transactions.remove(0));
+
+                ret = Some(transaction);
+            } else {
+                break;
+            }
+        }
+
+        ret
     }
 }
 
@@ -343,6 +327,38 @@ impl Pinnacle {
     pub fn remove_window(&mut self, window: &WindowElement, unmap: bool) {
         let _span = tracy_client::span!("Pinnacle::remove_window");
 
+        let hook = window.with_state_mut(|state| state.mapped_hook_id.take());
+
+        // TODO: xwayland?
+        if let Some(toplevel) = window.toplevel() {
+            if let Some(hook) = hook {
+                compositor::remove_pre_commit_hook(toplevel.wl_surface(), hook);
+            }
+            self.add_default_dmabuf_pre_commit_hook(toplevel.wl_surface());
+        }
+
+        let (idx, z) = self
+            .z_index_stack
+            .iter_mut()
+            .enumerate()
+            .find(|(_, win)| matches!(win, ZIndexElement::Window(win) if win == window))
+            .expect("unmapped win is not in x index stack");
+
+        if let Some(snap) = window.with_state_mut(|state| state.snapshot.take()) {
+            if let Some(loc) = self.space.element_location(window) {
+                let unmapping = Rc::new(UnmappingWindow {
+                    snapshot: snap,
+                    fullscreen: window.with_state(|state| state.layout_mode.is_fullscreen()),
+                    space_loc: loc,
+                });
+                let weak = Rc::downgrade(&unmapping);
+                self.pending_unmaps.push(vec![unmapping]);
+                *z = ZIndexElement::Unmapping(weak);
+            }
+        } else {
+            self.z_index_stack.remove(idx);
+        }
+
         self.windows.retain(|win| win != window);
         self.unmapped_windows.retain(|win| win.window != window);
         if unmap {
@@ -354,8 +370,6 @@ impl Pinnacle {
                 },
             });
         }
-
-        self.z_index_stack.retain(|win| win != window);
 
         for output in self.outputs.keys() {
             output.with_state_mut(|state| state.focus_stack.remove(window));
@@ -542,8 +556,6 @@ impl State {
 
         match window.with_state(|state| state.layout_mode.current()) {
             LayoutModeKind::Tiled => {
-                self.capture_snapshots_on_output(&output, []);
-                self.pinnacle.begin_layout_transaction(&output);
                 self.pinnacle.request_layout(&output);
             }
             LayoutModeKind::Floating => {
@@ -639,4 +651,37 @@ pub struct Unmapped {
     pub window: WindowElement,
     pub activation_token_data: Option<XdgActivationTokenData>,
     pub state: UnmappedState,
+}
+
+/// A renderable element.
+///
+/// We need to keep track of the z-index of snapshots alongside regular windows.
+/// While it's probably not the *best* idea to reuse the [`Pinnacle::z_index_stack`] for this, I'd rather not do something like change the space to
+/// take in this enum, as that's a lot more refactoring.
+pub enum ZIndexElement {
+    /// A window.
+    Window(WindowElement),
+    /// A snapshot of a window that's unmapping.
+    Unmapping(std::rc::Weak<UnmappingWindow>),
+}
+
+impl ZIndexElement {
+    /// If this element is an actual window, returns a reference to it.
+    pub fn window(&self) -> Option<&WindowElement> {
+        match self {
+            ZIndexElement::Window(window_element) => Some(window_element),
+            ZIndexElement::Unmapping(_) => None,
+        }
+    }
+}
+
+/// A window (more correctly its snapshot) in the process of unmapping.
+#[derive(Debug)]
+pub struct UnmappingWindow {
+    /// The snapshot of the window.
+    pub snapshot: LayoutSnapshot,
+    /// Whether the window this is for is/was fullscreen.
+    pub fullscreen: bool,
+    /// The location of the original window in the space.
+    pub space_loc: Point<i32, Logical>,
 }

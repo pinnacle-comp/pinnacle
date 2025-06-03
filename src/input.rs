@@ -119,7 +119,6 @@ impl Pinnacle {
             .space
             .elements_for_output(output)
             .rev()
-            .filter(|win| win.is_on_active_tag())
             .enumerate()
             .inspect(|(i, win)| {
                 if win.with_state(|state| state.layout_mode.is_fullscreen()) {

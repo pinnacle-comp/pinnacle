@@ -152,18 +152,12 @@ pub fn set_decoration_mode(
 pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
     let source_output = window.output(&state.pinnacle);
 
-    if let Some(output) = source_output.as_ref() {
-        state.capture_snapshots_on_output(output, [window.clone()]);
-    }
-
     window.with_state_mut(|state| {
         state.tags = std::iter::once(tag.clone()).collect();
     });
 
     if let Some(output) = source_output.as_ref() {
-        state.pinnacle.begin_layout_transaction(output);
         state.pinnacle.request_layout(output);
-
         state.schedule_render(output);
     }
 
@@ -173,11 +167,7 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
     };
 
     if source_output.as_ref() != Some(&target_output) && tag.active() {
-        state.capture_snapshots_on_output(&target_output, [window.clone()]);
-
-        state.pinnacle.begin_layout_transaction(&target_output);
         state.pinnacle.request_layout(&target_output);
-
         state.schedule_render(&target_output);
     }
 
@@ -186,12 +176,6 @@ pub fn move_to_tag(state: &mut State, window: &WindowElement, tag: &Tag) {
 
 pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl Into<Option<bool>>) {
     let set = set.into();
-
-    let output = window.output(&state.pinnacle);
-
-    if let Some(output) = output.as_ref() {
-        state.capture_snapshots_on_output(output, [window.clone()]);
-    }
 
     match set {
         Some(true) => {
@@ -218,11 +202,8 @@ pub fn set_tag(state: &mut State, window: &WindowElement, tag: &Tag, set: impl I
         return;
     };
 
-    state.pinnacle.begin_layout_transaction(&output);
     state.pinnacle.request_layout(&output);
-
     state.schedule_render(&output);
-
     state.pinnacle.update_xwayland_stacking_order();
 }
 

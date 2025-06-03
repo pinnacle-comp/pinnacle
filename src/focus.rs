@@ -6,7 +6,7 @@ use smithay::{desktop::space::SpaceElement, output::Output, utils::SERIAL_COUNTE
 use crate::{
     api::signal::Signal,
     state::{Pinnacle, State, WithState},
-    window::WindowElement,
+    window::{WindowElement, ZIndexElement},
 };
 
 pub mod keyboard;
@@ -92,9 +92,13 @@ impl Pinnacle {
     pub fn fixup_z_layering(&mut self) {
         let _span = tracy_client::span!("Pinnacle::fixup_z_layering");
 
-        for win in self.z_index_stack.iter() {
-            self.space.raise_element(win, false);
-        }
+        self.z_index_stack.retain(|z| match z {
+            ZIndexElement::Window(win) => {
+                self.space.raise_element(win, false);
+                true
+            }
+            ZIndexElement::Unmapping(weak) => weak.upgrade().is_some(),
+        });
     }
 
     /// Raise a window to the top of the z-index stack.
@@ -103,8 +107,9 @@ impl Pinnacle {
 
         self.space.raise_element(&window, activate);
 
-        self.z_index_stack.retain(|win| win != window);
-        self.z_index_stack.push(window);
+        self.z_index_stack
+            .retain(|win| !matches!(win, ZIndexElement::Window(win) if win == window));
+        self.z_index_stack.push(ZIndexElement::Window(window));
 
         self.update_xwayland_stacking_order();
     }

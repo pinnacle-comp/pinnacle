@@ -2,11 +2,8 @@
     - AKA wl-compositor v6
 - Properly stack x11 windows relative to each other
 - Use env for snowcap socket dir
-- Don't log to local/state
 - Use xdg activation to activate new compositor-spawned windows
 - Work on `ConnectorSavedState`
-- Remove startup logs and globals print for CLI client
-- Encode window rules in an enum type for pre- and post-initial configure
 - Keyboard focus in Idea Xwayland is weird when creating a new Java file
 
 Testing

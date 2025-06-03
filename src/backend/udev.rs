@@ -1406,16 +1406,6 @@ impl Udev {
                 .map(OutputRenderElement::from),
         );
 
-        output.with_state_mut(|state| {
-            if state
-                .layout_transaction
-                .as_ref()
-                .is_some_and(|ts| ts.ready())
-            {
-                state.layout_transaction.take();
-            }
-        });
-
         if should_blank {
             output.with_state_mut(|state| {
                 if let BlankingState::NotBlanked = state.blanking_state {
@@ -1441,6 +1431,7 @@ impl Udev {
                 output,
                 &mut renderer,
                 &pinnacle.space,
+                &pinnacle.z_index_stack,
             ));
         }
 
