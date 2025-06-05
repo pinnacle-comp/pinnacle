@@ -274,16 +274,9 @@ impl CompositorHandler for State {
                     // Toplevel has become unmapped,
                     // see https://wayland.app/protocols/xdg-shell#xdg_toplevel
                     if !is_mapped {
-                        if let Some(hook_id) =
-                            window.with_state_mut(|state| state.mapped_hook_id.take())
-                        {
-                            compositor::remove_pre_commit_hook(surface, hook_id);
-                        }
-                        self.pinnacle.add_default_dmabuf_pre_commit_hook(surface);
+                        self.pinnacle.remove_window(&window, true);
 
                         let output = window.output(&self.pinnacle);
-
-                        self.pinnacle.remove_window(&window, true);
 
                         if let Some(output) = output {
                             self.update_keyboard_focus(&output);

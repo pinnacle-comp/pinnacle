@@ -71,7 +71,7 @@ impl PointerGrab<State> for MoveSurfaceGrab {
                 .map_element(self.window.clone(), new_loc.to_i32_round(), true);
 
             self.window.with_state_mut(|state| {
-                state.floating_loc = Some(new_loc);
+                state.set_floating_loc(new_loc.to_i32_round());
             });
 
             if let Some(surface) = self.window.x11_surface() {

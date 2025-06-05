@@ -225,8 +225,9 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(true));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(true);
+            });
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
@@ -264,8 +265,9 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_client_fullscreen(false));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_fullscreen(false);
+            });
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
@@ -302,8 +304,9 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_client_maximized(true));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_maximized(true);
+            });
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())
@@ -340,8 +343,9 @@ impl XdgShellHandler for State {
             .window_for_surface(surface.wl_surface())
             .cloned()
         {
-            window.with_state_mut(|state| state.layout_mode.set_client_maximized(false));
-            self.update_window_state_and_layout(&window);
+            self.update_window_layout_mode_and_layout(&window, |layout_mode| {
+                layout_mode.set_client_maximized(false);
+            });
         } else if let Some(unmapped) = self
             .pinnacle
             .unmapped_window_for_surface_mut(surface.wl_surface())

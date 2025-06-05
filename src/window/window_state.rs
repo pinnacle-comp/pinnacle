@@ -331,7 +331,8 @@ pub struct WindowElementState {
     pub snapshot: Option<LayoutSnapshot>,
     pub mapped_hook_id: Option<HookId>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
-    pub floating_loc: Option<Point<f64, Logical>>,
+    pub floating_x: Option<i32>,
+    pub floating_y: Option<i32>,
     pub floating_size: Size<i32, Logical>,
 
     pub pending_transactions: Vec<(Serial, Transaction)>,
@@ -457,7 +458,7 @@ impl Pinnacle {
                 window.set_floating_states();
 
                 let (size, loc) =
-                    window.with_state(|state| (state.floating_size, state.floating_loc));
+                    window.with_state(|state| (state.floating_size, state.floating_loc()));
 
                 match window.underlying_surface() {
                     WindowSurface::Wayland(toplevel) => {
@@ -471,10 +472,8 @@ impl Pinnacle {
                             // Setting a zero size seems to be a nono
                             return;
                         }
-                        let loc = loc.unwrap_or_else(|| surface.geometry().loc.to_f64());
-                        if let Err(err) =
-                            surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)))
-                        {
+                        let loc = loc.unwrap_or_else(|| surface.geometry().loc);
+                        if let Err(err) = surface.configure(Some(Rectangle::new(loc, size))) {
                             warn!("Failed to configure xwayland window: {err}");
                         }
                     }
@@ -581,7 +580,8 @@ impl WindowElementState {
             id: WindowId::next(),
             tags: Default::default(),
             layout_mode: LayoutMode::new_tiled(),
-            floating_loc: None,
+            floating_x: Default::default(),
+            floating_y: Default::default(),
             floating_size: Default::default(),
             minimized: false,
             snapshot: None,
@@ -589,6 +589,20 @@ impl WindowElementState {
             decoration_mode: None,
             pending_transactions: Default::default(),
         }
+    }
+
+    pub fn floating_loc(&self) -> Option<Point<i32, Logical>> {
+        if let (Some(x), Some(y)) = (self.floating_x, self.floating_y) {
+            Some(Point::from((x, y)))
+        } else {
+            None
+        }
+    }
+
+    pub fn set_floating_loc(&mut self, loc: impl Into<Option<Point<i32, Logical>>>) {
+        let loc: Option<Point<_, _>> = loc.into();
+        self.floating_x = loc.map(|loc| loc.x);
+        self.floating_y = loc.map(|loc| loc.y);
     }
 }
 

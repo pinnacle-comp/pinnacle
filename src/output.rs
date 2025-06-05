@@ -219,12 +219,12 @@ impl Pinnacle {
                 .cloned()
                 .collect::<Vec<_>>()
             {
-                let old_floating_loc = win.with_state(|state| state.floating_loc);
+                let old_floating_loc = win.with_state(|state| state.floating_loc());
 
                 let loc = self
                     .space
                     .element_location(&win)
-                    .or(old_floating_loc.map(|loc| loc.to_i32_round()))
+                    .or(old_floating_loc)
                     .map(|loc| {
                         let rescaled_loc = (loc - output_loc)
                             .to_f64()
@@ -237,11 +237,11 @@ impl Pinnacle {
 
                 if let Some(loc) = loc {
                     self.space.map_element(win.clone(), loc, false);
+                    win.with_state_mut(|state| state.set_floating_loc(loc));
                 }
-
-                win.with_state_mut(|state| state.floating_loc = loc.map(|loc| loc.to_f64()));
             }
 
+            // FIXME: why is this in an idle
             self.loop_handle.insert_idle(|state| {
                 state.pinnacle.update_xwayland_scale();
             });

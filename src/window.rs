@@ -7,25 +7,19 @@ use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
 use indexmap::IndexSet;
 use rules::{ClientRequests, WindowRules};
 use smithay::{
-    desktop::{layer_map_for_output, space::SpaceElement, Window, WindowSurface},
+    desktop::{space::SpaceElement, Window, WindowSurface},
     output::{Output, WeakOutput},
-    reexports::{
-        wayland_protocols::xdg::shell::server::xdg_positioner::{
-            Anchor, ConstraintAdjustment, Gravity,
-        },
-        wayland_server::protocol::wl_surface::WlSurface,
-    },
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Logical, Point, Rectangle, Serial},
     wayland::{
         compositor,
         seat::WaylandFocus,
-        shell::xdg::{PositionerState, SurfaceCachedState, XdgToplevelSurfaceData},
+        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
         xdg_activation::XdgActivationTokenData,
     },
     xwayland::xwm::WmWindowType,
 };
 use tracing::{error, warn};
-use window_state::LayoutModeKind;
 
 use crate::{
     layout::transaction::LayoutSnapshot,
@@ -506,54 +500,12 @@ impl State {
             return;
         };
 
-        let Some(output_geo) = self.pinnacle.space.output_geometry(&output) else {
-            return;
-        };
-
-        let mut working_output_geo = layer_map_for_output(&output).non_exclusive_zone();
-        working_output_geo.loc += output_geo.loc;
-
-        let center_rect = self
-            .pinnacle
-            .parent_window_for(&window)
-            .and_then(|parent| self.pinnacle.space.element_geometry(parent))
-            .unwrap_or(working_output_geo);
-
-        if window.with_state(|state| state.layout_mode.is_floating()) {
-            let size = window.geometry().size;
-
-            let loc = window
-                .with_state(|state| state.floating_loc)
-                .unwrap_or_else(|| {
-                    // Attempt to center the window within its parent.
-                    // If it has no parent, center it within the non-exclusive zone of its output.
-                    //
-                    // We use a positioner to slide the window so that it isn't off screen.
-
-                    let positioner = PositionerState {
-                        rect_size: size,
-                        anchor_rect: center_rect,
-                        anchor_edges: Anchor::None,
-                        gravity: Gravity::None,
-                        constraint_adjustment: ConstraintAdjustment::SlideX
-                            | ConstraintAdjustment::SlideY,
-                        offset: (0, 0).into(),
-                        ..Default::default()
-                    };
-
-                    positioner
-                        .get_unconstrained_geometry(working_output_geo)
-                        .to_f64()
-                        .loc
-                });
-
-            window.with_state_mut(|state| {
-                state.floating_loc = Some(loc);
-            });
-
-            if let Some(surface) = window.x11_surface() {
-                let _ = surface.configure(Some(Rectangle::new(loc.to_i32_round(), size)));
-            }
+        self.update_window_layout_mode_and_layout(&window, |_| ());
+        // `update_window_layout_mode_and_layout` won't request a layout because
+        // the mode isn't updated. As a consequence of the method doing 3 different
+        // things, we do a manual request here.
+        if window.with_state(|state| state.layout_mode.is_tiled()) {
+            self.pinnacle.request_layout(&output);
         }
 
         // TODO: xdg activation
@@ -564,37 +516,6 @@ impl State {
         } else {
             output.with_state_mut(|state| state.focus_stack.add_focus(window.clone()));
         }
-
-        if !window.is_on_active_tag() {
-            return;
-        }
-
-        match window.with_state(|state| state.layout_mode.current()) {
-            LayoutModeKind::Tiled => {
-                self.pinnacle.request_layout(&output);
-            }
-            LayoutModeKind::Floating => {
-                let loc = window.with_state(|state| state.floating_loc.expect("initialized above"));
-                self.pinnacle
-                    .space
-                    .map_element(window.clone(), loc.to_i32_round(), true);
-            }
-            LayoutModeKind::Maximized => {
-                let non_exclusive_geo = {
-                    let map = layer_map_for_output(&output);
-                    map.non_exclusive_zone()
-                };
-                let loc = output_geo.loc + non_exclusive_geo.loc;
-                self.pinnacle.space.map_element(window, loc, true);
-            }
-            LayoutModeKind::Fullscreen => {
-                self.pinnacle
-                    .space
-                    .map_element(window, output_geo.loc, true);
-            }
-        }
-
-        self.schedule_render(&output);
     }
 }
 
