@@ -480,22 +480,39 @@ impl State {
     fn remove_xwayland_window(&mut self, surface: X11Surface) {
         let _span = tracy_client::span!("State::remove_xwayland_window");
 
-        let win = self.pinnacle.window_for_x11_surface(&surface).cloned();
-        if let Some(win) = win {
-            let should_layout = !win.is_x11_override_redirect()
-                && win.with_state(|state| state.layout_mode.is_tiled());
+        let Some(win) = self.pinnacle.window_for_x11_surface(&surface).cloned() else {
+            return;
+        };
 
-            self.pinnacle.remove_window(&win, false);
+        let should_layout =
+            !win.is_x11_override_redirect() && win.with_state(|state| state.layout_mode.is_tiled());
 
-            if let Some(output) = win.output(&self.pinnacle) {
-                if should_layout {
-                    self.pinnacle.request_layout(&output);
-                }
+        let output = win.output(&self.pinnacle);
 
-                self.update_keyboard_focus(&output);
-                // FIXME: schedule renders on all the outputs this window intersected
-                self.schedule_render(&output);
+        if let Some(output) = output.as_ref() {
+            self.backend.with_renderer(|renderer| {
+                win.capture_snapshot_and_store(
+                    renderer,
+                    output.current_scale().fractional_scale().into(),
+                    1.0,
+                );
+            });
+        }
+
+        let outputs = self.pinnacle.space.outputs_for_element(&win);
+
+        self.pinnacle.remove_window(&win, false);
+
+        if let Some(output) = win.output(&self.pinnacle) {
+            if should_layout {
+                self.pinnacle.request_layout(&output);
             }
+
+            self.update_keyboard_focus(&output);
+        }
+
+        for output in outputs {
+            self.schedule_render(&output);
         }
     }
 }
