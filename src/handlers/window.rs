@@ -125,7 +125,7 @@ impl State {
             if let Some(geo) = geo {
                 self.pinnacle
                     .layout_state
-                    .pending_latched
+                    .pending_window_updates
                     .add_for_output(&output, vec![(window.clone(), geo)]);
             }
             self.pinnacle.request_layout(&output);

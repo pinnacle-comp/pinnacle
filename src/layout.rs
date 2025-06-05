@@ -125,7 +125,7 @@ impl Pinnacle {
         let wins_and_geos_tiled = zipped.by_ref().map(|(win, geo)| (win, geo, true));
         let wins_and_geos_other = self
             .layout_state
-            .pending_latched
+            .pending_window_updates
             .take_next_for_output(output)
             .unwrap_or_default()
             .into_iter()
@@ -230,55 +230,65 @@ pub struct LayoutState {
     pub pending_transactions: HashMap<WeakOutput, Vec<PendingTransaction>>,
 
     pub pending_unmaps: PendingUnmaps,
-    pub pending_latched: PendingLatched,
+    pub pending_window_updates: PendingWindowUpdates,
 }
 
 /// Pending [`UnmappingWindow`][crate::window::UnmappingWindow]s from things like
 /// windows closing.
 ///
 /// Pending unmapping windows are picked up by the next requested layout.
+/// Once that layout completes, these windows are dropped and no longer rendered.
 #[derive(Debug, Default)]
 pub struct PendingUnmaps {
-    pending_unmaps: HashMap<WeakOutput, Vec<Vec<Rc<UnmappingWindow>>>>,
+    pending: HashMap<WeakOutput, Vec<Vec<Rc<UnmappingWindow>>>>,
 }
 
 impl PendingUnmaps {
+    /// Adds a set of [`UnmappingWindow`]s that should be displayed until the next layout finishes.
     pub fn add_for_output(&mut self, output: &Output, pending: Vec<Rc<UnmappingWindow>>) {
-        self.pending_unmaps
+        self.pending
             .entry(output.downgrade())
             .or_default()
             .push(pending);
     }
 
+    /// Takes the next set of [`UnmappingWindow`]s.
     pub fn take_next_for_output(&mut self, output: &Output) -> Option<Vec<Rc<UnmappingWindow>>> {
-        let entry = self.pending_unmaps.entry(output.downgrade()).or_default();
+        let entry = self.pending.entry(output.downgrade()).or_default();
 
         (!entry.is_empty()).then(|| entry.remove(0))
     }
 }
 
+/// Pending window updates.
+///
+/// These are sets of windows and target geometries that are meant to be
+/// synchronized with the next incoming layout.
 #[derive(Debug, Default)]
-pub struct PendingLatched {
-    pending_latched: HashMap<WeakOutput, Vec<Vec<(WindowElement, Rectangle<i32, Logical>)>>>,
+pub struct PendingWindowUpdates {
+    pending: HashMap<WeakOutput, Vec<Vec<(WindowElement, Rectangle<i32, Logical>)>>>,
 }
 
-impl PendingLatched {
+impl PendingWindowUpdates {
+    /// Adds a set of windows and target geometries that should be updated in tandem
+    /// with the next incoming layout.
     pub fn add_for_output(
         &mut self,
         output: &Output,
         latched: Vec<(WindowElement, Rectangle<i32, Logical>)>,
     ) {
-        self.pending_latched
+        self.pending
             .entry(output.downgrade())
             .or_default()
             .push(latched);
     }
 
+    /// Takes the next set of windows and target geometries.
     pub fn take_next_for_output(
         &mut self,
         output: &Output,
     ) -> Option<Vec<(WindowElement, Rectangle<i32, Logical>)>> {
-        let entry = self.pending_latched.entry(output.downgrade()).or_default();
+        let entry = self.pending.entry(output.downgrade()).or_default();
 
         (!entry.is_empty()).then(|| entry.remove(0))
     }
@@ -292,9 +302,7 @@ impl LayoutState {
 
     pub fn remove_output(&mut self, output: &Output) {
         self.pending_transactions.remove(&output.downgrade());
-        self.pending_unmaps
-            .pending_unmaps
-            .remove(&output.downgrade());
+        self.pending_unmaps.pending.remove(&output.downgrade());
     }
 }
 
