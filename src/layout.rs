@@ -152,7 +152,8 @@ impl Pinnacle {
             }
         }
 
-        let mut transaction_builder = TransactionBuilder::new(self.layout_state.pending_swap);
+        let mut transaction_builder =
+            TransactionBuilder::new(self.layout_state.pending_swap, false);
 
         for (win, geo, _) in wins_and_geos {
             if let WindowSurface::Wayland(toplevel) = win.underlying_surface() {
@@ -222,6 +223,7 @@ impl LayoutRequestId {
 pub struct LayoutState {
     pub layout_request_sender: Option<UnboundedSender<LayoutInfo>>,
     pub pending_swap: bool,
+    pub pending_resize: bool,
     current_id: LayoutRequestId,
     pub layout_trees: HashMap<u32, LayoutTree>,
 
@@ -336,6 +338,9 @@ impl State {
                 if tx.is_swap {
                     self.pinnacle.layout_state.pending_swap = false;
                 }
+                if tx.is_resize {
+                    self.pinnacle.layout_state.pending_resize = false;
+                }
                 if tx.is_completed() {
                     transactions.push(tx);
                 }
@@ -343,12 +348,24 @@ impl State {
 
             for transaction in transactions {
                 let mut outputs = Vec::new();
-                for (window, loc) in transaction.target_locs {
+                for (window, mut loc) in transaction.target_locs {
                     if !window.is_on_active_tag() {
                         warn!("Attempted to map a window without active tags");
                         continue;
                     }
                     outputs.extend(window.output(&self.pinnacle));
+
+                    // Windows in resize transactions have their target loc set to the bottom right
+                    // corner of the geometry at the resize's start, so subtract the current
+                    // size here to get the location of the top left corner.
+                    if transaction.is_resize {
+                        loc = loc - window.geometry().size;
+                    }
+
+                    if let Some(surface) = window.x11_surface() {
+                        let _ = surface.configure(Rectangle::new(loc, surface.geometry().size));
+                    }
+
                     self.pinnacle.space.map_element(window, loc, false);
                 }
                 for output in outputs {
@@ -359,6 +376,8 @@ impl State {
 
         let mut wins_to_update = Vec::new();
 
+        // Update and map unmapped non-tiled windows
+        // Probably a better way to do this
         for win in self.pinnacle.windows.iter() {
             let is_tiled = win.with_state(|state| state.layout_mode.is_tiled());
             let is_on_active_tag = win.is_on_active_tag();

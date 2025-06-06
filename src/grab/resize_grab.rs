@@ -16,13 +16,14 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Point, Rectangle, Size},
-    wayland::{compositor, seat::WaylandFocus, shell::xdg::SurfaceCachedState},
+    wayland::{compositor, shell::xdg::SurfaceCachedState},
     xwayland,
 };
 use tracing::warn;
 
 use crate::{
-    state::{Pinnacle, State, WithState},
+    state::{State, WithState},
+    util::transaction::TransactionBuilder,
     window::WindowElement,
 };
 
@@ -84,13 +85,6 @@ impl ResizeSurfaceGrab {
         initial_window_geo: Rectangle<i32, Logical>,
         button_used: u32,
     ) -> Option<Self> {
-        window.wl_surface()?.with_state_mut(|state| {
-            state.resize_state = ResizeSurfaceState::Resizing {
-                edges,
-                initial_window_geo,
-            };
-        });
-
         Some(Self {
             start_data,
             window,
@@ -106,35 +100,12 @@ impl ResizeSurfaceGrab {
             return;
         }
 
-        match self.window.underlying_surface() {
-            WindowSurface::Wayland(toplevel) => {
-                toplevel.with_pending_state(|state| {
-                    state.states.unset(xdg_toplevel::State::Resizing);
-                    state.size = Some(self.last_window_size);
-                });
+        if let Some(toplevel) = self.window.toplevel() {
+            toplevel.with_pending_state(|state| {
+                state.states.unset(xdg_toplevel::State::Resizing);
+            });
 
-                toplevel.send_pending_configure();
-
-                toplevel.wl_surface().with_state_mut(|state| {
-                    // TODO: validate resize state
-                    state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
-                        edges: self.edges,
-                        initial_window_geo: self.initial_window_geo,
-                    };
-                });
-            }
-            WindowSurface::X11(surface) => {
-                if surface.is_override_redirect() {
-                    return;
-                }
-                let Some(surface) = surface.wl_surface() else { return };
-                surface.with_state_mut(|state| {
-                    state.resize_state = ResizeSurfaceState::WaitingForLastCommit {
-                        edges: self.edges,
-                        initial_window_geo: self.initial_window_geo,
-                    };
-                });
-            }
+            toplevel.send_pending_configure();
         }
     }
 }
@@ -153,13 +124,24 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
     ) {
         handle.motion(data, None, event);
 
-        if !self.window.alive() {
+        if data.pinnacle.layout_state.pending_resize {
+            return;
+        }
+
+        // TODO: if-let chains in 1.88
+        let output = self.window.output(&data.pinnacle);
+
+        if !self.window.alive() || output.is_none() {
             data.pinnacle
                 .cursor_state
                 .set_cursor_image(CursorImageStatus::default_named());
             handle.unset_grab(self, data, event.serial, event.time, true);
             return;
         }
+
+        let Some(output) = output else {
+            unreachable!();
+        };
 
         let delta = (event.location - self.start_data.location).to_i32_round::<i32>();
 
@@ -219,28 +201,43 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         self.window
             .with_state_mut(|state| state.floating_size = self.last_window_size);
 
-        match self.window.underlying_surface() {
+        let serial = match self.window.underlying_surface() {
             WindowSurface::Wayland(toplevel) => {
                 toplevel.with_pending_state(|state| {
                     state.states.set(xdg_toplevel::State::Resizing);
                     state.size = Some(self.last_window_size);
                 });
 
-                toplevel.send_pending_configure();
+                toplevel.send_pending_configure()
             }
             WindowSurface::X11(surface) => {
                 if !surface.is_override_redirect() {
-                    let loc = data
-                        .pinnacle
-                        .space
-                        .element_location(&self.window)
-                        .expect("failed to get x11 win loc");
-                    surface
-                        .configure(Rectangle::new(loc, self.last_window_size))
-                        .expect("failed to configure x11 win");
+                    let loc = self.initial_window_geo.loc + delta;
+                    let _ = surface.configure(Rectangle::new(loc, self.last_window_size));
                 }
+
+                None
             }
-        }
+        };
+
+        data.pinnacle.layout_state.pending_resize = true;
+
+        let mut transaction_builder = TransactionBuilder::new(false, true);
+        transaction_builder.add(
+            &self.window,
+            // We need the updated window size to correctly map the window, so set
+            // the target_loc to the bottom right corner then subtract the
+            // updated size when updating the layout.
+            self.initial_window_geo.loc + self.initial_window_geo.size,
+            serial,
+            &data.pinnacle.loop_handle,
+        );
+        data.pinnacle
+            .layout_state
+            .pending_transactions
+            .entry(output.downgrade())
+            .or_default()
+            .push(transaction_builder.into_pending(Vec::new()));
     }
 
     fn relative_motion(
@@ -356,113 +353,6 @@ impl PointerGrab<State> for ResizeSurfaceGrab {
         event: &GestureHoldEndEvent,
     ) {
         handle.gesture_hold_end(data, event);
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub enum ResizeSurfaceState {
-    #[default]
-    Idle,
-    Resizing {
-        edges: ResizeEdge,
-        initial_window_geo: Rectangle<i32, Logical>,
-    },
-    WaitingForLastCommit {
-        edges: ResizeEdge,
-        initial_window_geo: Rectangle<i32, Logical>,
-    },
-}
-
-impl ResizeSurfaceState {
-    fn on_commit(&mut self) -> Option<(ResizeEdge, Rectangle<i32, Logical>)> {
-        match *self {
-            Self::Idle => None,
-            Self::Resizing {
-                edges,
-                initial_window_geo,
-            } => Some((edges, initial_window_geo)),
-            Self::WaitingForLastCommit {
-                edges,
-                initial_window_geo,
-            } => {
-                *self = Self::Idle;
-                Some((edges, initial_window_geo))
-            }
-        }
-    }
-}
-
-impl Pinnacle {
-    pub fn move_surface_if_resized(&mut self, surface: &WlSurface) {
-        let Some(window) = self.window_for_surface(surface).cloned() else {
-            return;
-        };
-
-        if window.with_state(|state| !state.layout_mode.is_floating()) {
-            return;
-        }
-
-        let Some(mut window_loc) = self.space.element_location(&window) else {
-            return;
-        };
-        let geometry = window.geometry();
-
-        let new_loc: Option<(Option<i32>, Option<i32>)> = surface.with_state_mut(|state| {
-            state
-                .resize_state
-                .on_commit()
-                .map(|(edges, initial_window_geo)| {
-                    let mut new_x = None;
-                    let mut new_y = None;
-                    if let xdg_toplevel::ResizeEdge::Left
-                    | xdg_toplevel::ResizeEdge::TopLeft
-                    | xdg_toplevel::ResizeEdge::BottomLeft = edges.0
-                    {
-                        new_x = Some(
-                            initial_window_geo.loc.x
-                                + (initial_window_geo.size.w - geometry.size.w),
-                        );
-                    }
-                    if let xdg_toplevel::ResizeEdge::Top
-                    | xdg_toplevel::ResizeEdge::TopLeft
-                    | xdg_toplevel::ResizeEdge::TopRight = edges.0
-                    {
-                        new_y = Some(
-                            initial_window_geo.loc.y
-                                + (initial_window_geo.size.h - geometry.size.h),
-                        );
-                    }
-
-                    (new_x, new_y)
-                })
-        });
-
-        let Some(new_loc) = new_loc else { return };
-
-        if let Some(new_x) = new_loc.0 {
-            window_loc.x = new_x;
-        }
-        if let Some(new_y) = new_loc.1 {
-            window_loc.y = new_y;
-        }
-
-        window.with_state_mut(|state| {
-            state.set_floating_loc(window_loc);
-        });
-
-        if new_loc.0.is_some() || new_loc.1.is_some() {
-            if let Some(surface) = window.x11_surface() {
-                if !surface.is_override_redirect() {
-                    let geo = surface.geometry();
-                    let new_geo = Rectangle::new(window_loc, geo.size);
-                    surface
-                        .configure(new_geo)
-                        .expect("failed to configure x11 win");
-                }
-            }
-
-            self.space.map_element(window, window_loc, false);
-        }
     }
 }
 

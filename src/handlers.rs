@@ -192,9 +192,6 @@ impl CompositorHandler for State {
             .root_surface_cache
             .insert(surface.clone(), root.clone());
 
-        // TODO: maps here, is that good?
-        self.pinnacle.move_surface_if_resized(surface);
-
         // Root surface commit
         if surface == &root {
             // Unmapped window commit

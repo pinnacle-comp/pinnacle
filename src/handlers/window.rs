@@ -131,7 +131,7 @@ impl State {
             self.pinnacle.request_layout(&output);
         } else if let Some(geo) = geo {
             self.pinnacle.configure_window_if_nontiled(window);
-            let mut transaction_builder = TransactionBuilder::new(false);
+            let mut transaction_builder = TransactionBuilder::new(false, false);
             let serial = window
                 .toplevel()
                 .and_then(|toplevel| toplevel.send_pending_configure());

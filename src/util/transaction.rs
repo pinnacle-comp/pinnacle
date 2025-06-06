@@ -46,6 +46,7 @@ pub struct TransactionBuilder {
     deadline: Rc<RefCell<Deadline>>,
     map_tos: HashMap<WindowElement, Point<i32, Logical>>,
     is_swap: bool,
+    is_resize: bool,
 }
 
 /// A pending transaction that contains the target locations of windows once they finish
@@ -60,6 +61,10 @@ pub struct PendingTransaction {
     /// This is used to throttle swapping until the transaction finishes
     /// to prevent rapid window swaps.
     pub is_swap: bool,
+    /// Whether this transaction was for a window resize.
+    ///
+    /// This is used to throttle resizing.
+    pub is_resize: bool,
     /// Held until this transaction drops, at which point the `UnmappingWindow`s in the
     /// z_index_stack are no longer valid
     _unmapping: Vec<Rc<UnmappingWindow>>,
@@ -84,7 +89,7 @@ impl TransactionBuilder {
     ///
     /// `is_swap` determines whether swapping will be unthrottled once this
     /// transaction finishes.
-    pub fn new(is_swap: bool) -> Self {
+    pub fn new(is_swap: bool, is_resize: bool) -> Self {
         Self {
             inner: Arc::new(Inner::new()),
             deadline: Rc::new(RefCell::new(Deadline::NotRegistered(
@@ -92,6 +97,7 @@ impl TransactionBuilder {
             ))),
             map_tos: Default::default(),
             is_swap,
+            is_resize,
         }
     }
 
@@ -124,6 +130,7 @@ impl TransactionBuilder {
             target_locs: self.map_tos,
             inner: Arc::downgrade(&self.inner),
             is_swap: self.is_swap,
+            is_resize: self.is_resize,
             _unmapping: unmapping,
         }
     }

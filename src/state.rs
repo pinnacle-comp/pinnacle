@@ -12,7 +12,6 @@ use crate::{
     config::Config,
     cursor::CursorState,
     focus::OutputFocusStack,
-    grab::resize_grab::ResizeSurfaceState,
     handlers::{
         session_lock::LockState, xdg_activation::XDG_ACTIVATION_TOKEN_TIMEOUT,
         xwayland::XwaylandState,
@@ -949,43 +948,4 @@ pub trait WithState {
     fn with_state_mut<F, T>(&self, func: F) -> T
     where
         F: FnOnce(&mut Self::State) -> T;
-}
-
-#[derive(Default, Debug)]
-pub struct WlSurfaceState {
-    pub resize_state: ResizeSurfaceState,
-}
-
-impl WithState for WlSurface {
-    type State = WlSurfaceState;
-
-    fn with_state<F, T>(&self, func: F) -> T
-    where
-        F: FnOnce(&Self::State) -> T,
-    {
-        let _span = tracy_client::span!("WlSurface: WithState::with_state");
-
-        compositor::with_states(self, |states| {
-            let state = states
-                .data_map
-                .get_or_insert(RefCell::<Self::State>::default);
-
-            func(&state.borrow())
-        })
-    }
-
-    fn with_state_mut<F, T>(&self, func: F) -> T
-    where
-        F: FnOnce(&mut Self::State) -> T,
-    {
-        let _span = tracy_client::span!("WlSurface: WithState::with_state_mut");
-
-        compositor::with_states(self, |states| {
-            let state = states
-                .data_map
-                .get_or_insert(RefCell::<Self::State>::default);
-
-            func(&mut state.borrow_mut())
-        })
-    }
 }
