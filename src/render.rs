@@ -30,11 +30,10 @@ use smithay::{
     utils::{Logical, Physical, Point, Scale},
     wayland::shell::wlr_layer,
 };
-use util::surface::WlSurfaceTextureRenderElement;
+use util::{snapshot::SnapshotRenderElement, surface::WlSurfaceTextureRenderElement};
 
 use crate::{
     backend::{udev::UdevRenderer, Backend},
-    layout::transaction::SnapshotRenderElement,
     pinnacle_render_elements,
     state::{State, WithState},
     window::{WindowElement, ZIndexElement},

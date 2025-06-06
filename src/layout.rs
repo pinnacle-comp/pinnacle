@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod transaction;
 pub mod tree;
 
 use std::{

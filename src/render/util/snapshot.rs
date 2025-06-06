@@ -16,7 +16,6 @@ use smithay::{
 };
 use tracing::debug;
 
-use crate::layout::transaction::{LayoutSnapshot, SnapshotRenderElement};
 use crate::render::texture::CommonTextureRenderElement;
 use crate::render::{AsGlesRenderer, PRenderer};
 use crate::state::WithState;
@@ -24,6 +23,11 @@ use crate::window::WindowElement;
 
 use super::surface::WlSurfaceTextureRenderElement;
 use super::{render_to_encompassing_texture, EncompassingTexture};
+
+/// Type for window snapshots.
+pub type WindowSnapshot = RenderSnapshot<WlSurfaceTextureRenderElement>;
+
+pub type SnapshotRenderElement = RescaleRenderElement<WlSurfaceTextureRenderElement>;
 
 /// A snapshot of given elements that can be rendered at some point in the future.
 #[derive(Debug)]
@@ -115,6 +119,8 @@ impl<E: RenderElement<GlesRenderer>> RenderSnapshot<E> {
         let common = CommonTextureRenderElement::new(elem);
 
         // Scale in the opposite direction from the original scale to have it be the same size
+        // INFO: This scale is currently unused as we aren't using snapshots
+        // when changing output scale.
         let scale = Scale::from((1.0 / scale.x, 1.0 / scale.y));
 
         Some(RescaleRenderElement::from_element(
@@ -132,7 +138,7 @@ impl WindowElement {
         renderer: &mut GlesRenderer,
         scale: Scale<f64>,
         alpha: f32,
-    ) -> Option<LayoutSnapshot> {
+    ) -> Option<WindowSnapshot> {
         self.with_state_mut(|state| {
             let elements = self.texture_render_elements(renderer, (0, 0).into(), scale, alpha);
             if !elements.surface_elements.is_empty() {

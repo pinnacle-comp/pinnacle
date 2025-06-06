@@ -22,7 +22,7 @@ use smithay::{
 use tracing::{error, warn};
 
 use crate::{
-    layout::transaction::LayoutSnapshot,
+    render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, State, WithState},
     tag::Tag,
     util::transaction::Transaction,
@@ -630,7 +630,7 @@ impl ZIndexElement {
 #[derive(Debug)]
 pub struct UnmappingWindow {
     /// The snapshot of the window.
-    pub snapshot: LayoutSnapshot,
+    pub snapshot: WindowSnapshot,
     /// Whether the window this is for is/was fullscreen.
     pub fullscreen: bool,
     /// The location of the original window in the space.

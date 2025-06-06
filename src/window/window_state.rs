@@ -14,7 +14,7 @@ use smithay::{
 use tracing::warn;
 
 use crate::{
-    layout::transaction::LayoutSnapshot,
+    render::util::snapshot::WindowSnapshot,
     state::{Pinnacle, WithState},
     tag::Tag,
     util::transaction::Transaction,
@@ -328,7 +328,7 @@ pub struct WindowElementState {
     pub tags: IndexSet<Tag>,
     pub layout_mode: LayoutMode,
     pub minimized: bool,
-    pub snapshot: Option<LayoutSnapshot>,
+    pub snapshot: Option<WindowSnapshot>,
     pub mapped_hook_id: Option<HookId>,
     pub decoration_mode: Option<zxdg_toplevel_decoration_v1::Mode>,
     pub floating_x: Option<i32>,
